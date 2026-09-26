@@ -32,7 +32,7 @@ const esCall = {
   'call.hangup': 'Colgar',
   'call.minimize': 'Minimizar llamada',
   'call.expand': 'Volver a la llamada',
-  'call.captions.on': 'Mostrar subtítulos',
+  'call.captions.on': 'Mostrar subtítulos traducidos',
   'call.captions.off': 'Ocultar subtítulos',
   'call.quality.poor': 'Conexión inestable',
   'call.ended.local': 'Llamada finalizada',

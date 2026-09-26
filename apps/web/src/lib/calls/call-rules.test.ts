@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import { decodeAck, decodeInitiated, decodeSessionMembers, decodeSignal, mapServerEndReason } from './call-decode';
 import { callNoticeTarget } from './call-notice';
-import { formatCallClock, meshPhase, withCaption, type CallMember } from './call-store';
+import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
 import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statusPills } from './call-view';
 
@@ -100,13 +100,6 @@ describe('ce que l’écran dit', () => {
     expect(meshPhase({ a: member(), b: member({ link: 'reconnecting' }) })).toBe('connected');
     expect(meshPhase({ a: member({ link: 'reconnecting' }) })).toBe('reconnecting');
   });
-
-  test('un segment final remplace son brouillon, trois restent', () => {
-    const at = 0;
-    const one = withCaption([], { id: 's', speakerId: 'a', speakerName: 'A', text: 'bon', original: 'good', isFinal: false, at });
-    const two = withCaption(one, { id: 's', speakerId: 'a', speakerName: 'A', text: 'bonjour', original: 'good morning', isFinal: true, at });
-    expect(two.map((c) => c.text)).toEqual(['bonjour']);
-  });
 });
 
 describe('la file des événements', () => {
@@ -134,9 +127,16 @@ describe('la file des événements', () => {
 
 describe('la bulle d’appel', () => {
   test('un résumé terminé se rappelle ; un appel en cours se rejoint', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false });
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', callType: 'audio' } })).toMatchObject({ live: true, media: 'audio' });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
+  });
+
+  test('seul un appel TERMINÉ, identifié et qui a DURÉ offre sa transcription (#8048)', () => {
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 272 } })?.transcript).toBe(true);
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 0 } })?.transcript).toBe(false);
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', durationSeconds: 60 } })?.transcript).toBe(false);
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', durationSeconds: 60 } })?.transcript).toBe(false);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { CallSession } from './call-sessions';
+import type { CallTranscript } from '@/lib/calls/call-transcript';
 import type { CallHistoryFilter, CallHistoryPage, CallRecord } from './calls';
 
 /**
@@ -139,6 +140,29 @@ export const FIXTURE_PHONE = '+221770000001';
 
 export function fixturePhoneLookup(phone: string): { readonly id: string; readonly username: string; readonly displayName: string; readonly avatar: null } | null {
   return phone.replace(/\D/g, '') === FIXTURE_PHONE.replace(/\D/g, '') ? { id: 'u-amina', username: 'amina.diallo', displayName: 'Amina Diallo', avatar: null } : null;
+}
+
+/**
+ * LA TRANSCRIPTION GRAVÉE D'UN APPEL (#8048) — celle de `call-1`, la bulle
+ * d'appel vidéo de Kwame dans `c-states`. Trois lignes et pas une : Kwame
+ * traduit en français (le Prisme du lecteur la sert), le lecteur lui-même (sa
+ * parole reste la sienne), et Kwame traduit SEULEMENT en espagnol — l'original
+ * anglais doit alors s'afficher, jamais la première traduction venue.
+ */
+export const FIXTURE_TRANSCRIPT_CALL_ID = 'call-1';
+
+export function fixtureCallTranscript(callId: string): CallTranscript | null {
+  if (callId !== FIXTURE_TRANSCRIPT_CALL_ID) return { callId, startedAtMs: null, segments: [] };
+  const startedAtMs = Date.parse('2026-09-26T09:00:00.000Z');
+  return {
+    callId,
+    startedAtMs,
+    segments: [
+      { id: 't-1', speakerId: 'u-kwame', speakerDisplayName: 'Kwame Mensah', text: 'Hi, can you hear me?', language: 'en', capturedAtMs: startedAtMs + 4_000, translations: [{ targetLanguage: 'fr', translatedText: 'Salut, tu m’entends ?' }, { targetLanguage: 'es', translatedText: 'Hola, ¿me oyes?' }] },
+      { id: 't-2', speakerId: 'u-viewer', speakerDisplayName: null, text: 'Oui, très bien.', language: 'fr', capturedAtMs: startedAtMs + 9_000, translations: [{ targetLanguage: 'en', translatedText: 'Yes, very well.' }] },
+      { id: 't-3', speakerId: 'u-kwame', speakerDisplayName: 'Kwame Mensah', text: 'Great, let’s go over the plan.', language: 'en', capturedAtMs: startedAtMs + 75_000, translations: [{ targetLanguage: 'es', translatedText: 'Genial, repasemos el plan.' }] },
+    ],
+  };
 }
 
 /** Un appel du journal (terminé) ou l'appel vivant, par son identifiant — `null` sinon, comme un 404. */

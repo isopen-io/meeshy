@@ -32,6 +32,8 @@ export type PeerLinkDeps = {
   readonly send: (signal: OutgoingSignal) => void;
   readonly onRemoteStream: (stream: MediaStream) => void;
   readonly onState: (state: LinkState) => void;
+  /** Le canal de données `transcription` (#8048) : créé avant l'offre par l'offrant (m=application), reçu par l'autre — comme iOS. */
+  readonly onChannel?: (channel: RTCDataChannel) => void;
   readonly createConnection?: (config: RTCConfiguration) => RTCPeerConnection;
   readonly createStream?: () => MediaStream;
   readonly schedule?: (fn: () => void, ms: number) => unknown;
@@ -168,6 +170,10 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
     deps.onRemoteStream(remote);
   };
 
+  pc.ondatachannel = (event) => {
+    if (event.channel.label === 'transcription') deps.onChannel?.(event.channel);
+  };
+
   pc.onnegotiationneeded = () => {
     if (!autoNegotiate) return;
     void makeOffer().catch(() => undefined);
@@ -243,6 +249,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       preferOpusRed(audioTransceiver);
       const video = videoTrack();
       videoTransceiver = pc.addTransceiver(video ?? 'video', { direction: video === null ? 'recvonly' : 'sendrecv', streams: [deps.localStream] });
+      if (deps.onChannel !== undefined && typeof pc.createDataChannel === 'function') deps.onChannel(pc.createDataChannel('transcription', { ordered: true }));
       deps.onState('connecting');
       await makeOffer();
     },
@@ -306,6 +313,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       restartTimer = clearTimer(restartTimer);
       pc.onicecandidate = null;
       pc.ontrack = null;
+      pc.ondatachannel = null;
       pc.onnegotiationneeded = null;
       pc.onconnectionstatechange = null;
       pc.onsignalingstatechange = null;

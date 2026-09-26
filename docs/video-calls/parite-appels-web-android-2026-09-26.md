@@ -47,7 +47,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | B7 | `call:check-active` à chaque connexion (reprise) | ✅ | ✅ | ❌ | ❌ | 1 | |
 | B8 | `presence:app-state` (sonnerie socket ou poussée) | ✅ | ❌ | ❌ | ❌ | 0 | serveur `CallEventsHandler.ts` |
 | B9 | `call:end` / `call:leave` avec ack et fin en attente | ✅ | 🟡 sans ack | ❌ | ❌ | 1 | iOS `CallManager.swift:5328` |
-| B10 | Canal de données (sous-titres, ping, « bye ») | ✅ | 🟡 réception | ❌ | ❌ | 6 | iOS `P2PWebRTCClient.swift:1133` · legacy `call-transcript-channel.ts` |
+| B10 | Canal de données (sous-titres, ping, « bye ») | ✅ | 🟡 réception | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `P2PWebRTCClient.swift:1133` · legacy `call-transcript-channel.ts` · web `peer-link.ts` (canal `transcription` ouvert par l'offrant avant l'offre) + `call-captions-controller.ts` (`transcript-entry`, `ping` 15 s, `bye`) (#8048, `check-calls-captions.mjs`) |
 | B11 | Simulcast | ❌ | 🟡 jamais appelé | ❌ | ❌ | — | |
 
 ### C. Appel entrant
@@ -123,12 +123,12 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 
 | # | Fonction | iOS | Legacy | Web | Coque | Lot | Sources |
 |---|---|---|---|---|---|---|---|
-| G1 | Sous-titres traduits en direct (`call:translated-segment`) | ✅ | ✅ | ❌ | ❌ | 6 | iOS `CallTranscriptionService.swift` · legacy `use-call-captions.ts` |
-| G2 | Modes off / original / traduit | ✅ | 🟡 traduit seul | ❌ | ❌ | 6 | iOS `CaptionsMode.swift` |
-| G3 | **Le web transcrit son propre micro** (`call:transcription-segment`) | ✅ sur l'appareil | ❌ | ❌ | ❌ | 6 | web : Web Speech API ; coque : reconnaissance Android |
-| G4 | Journal de transcription en direct | ✅ | ✅ | ❌ | ❌ | 6 | legacy `CallTranscriptPanel.tsx` |
-| G5 | `call:transcription-active` (invitation à écouter) | ✅ | ✅ | ❌ | ❌ | 6 | |
-| G6 | Transcription après l'appel (`GET /calls/:id/transcript`) | ✅ | ❌ | ❌ | ❌ | 6 | iOS `BubbleCallNoticeView.swift:400` |
+| G1 | Sous-titres traduits en direct (`call:translated-segment`) | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `CallTranscriptionService.swift` · legacy `use-call-captions.ts` · web `call-captions.ts` + `call-captions-panel.tsx` (`aria-live` polie, `dir="auto"`) (#8048) |
+| G2 | Modes off / original / traduit | ✅ | 🟡 traduit seul | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `CaptionsMode.swift` · web `nextCaptionsMode` : off → traduit → original → off, le cycle d'iOS (#8048) |
+| G3 | **Le web transcrit son propre micro** (`call:transcription-segment`) | ✅ sur l'appareil | ❌ | ✅ où le navigateur a la Web Speech API (Chrome, Edge, Safari) ; ailleurs l'écran le dit et le web reçoit | ❌ la WebView n'a pas `SpeechRecognition` : reçoit, n'émet pas (reconnaissance Android native à brancher) | 6 | web `call-speech.ts` (détectée, jamais supposée) : finals au socket et au canal, brouillons au canal seul, langue = rang 1 du Prisme (#8048) |
+| G4 | Journal de transcription en direct | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | legacy `CallTranscriptPanel.tsx` · web `call-captions-panel.tsx` (200 lignes gardées, fusion par énoncé) (#8048) |
+| G5 | `call:transcription-active` (invitation à écouter) | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | web : émis à chaque bascule on/off ; reçu, le bouton CC l'annonce et la voix du lecteur est transcrite (politique de capture d'iOS) (#8048) |
+| G6 | Transcription après l'appel (`GET /calls/:id/transcript`) | ✅ | ❌ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `BubbleCallNoticeView.swift:400` · web `call-transcript.ts` + `call-transcript-panel.tsx`, dépliée dans la bulle d'appel du fil, servie par le Prisme du lecteur (#8048) |
 
 ### H. Appels dans le fil, la liste et le journal
 

@@ -33,7 +33,9 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   localStream: null,
   remoteStreams: {},
   captions: [],
-  captionsOn: false,
+  captionsMode: 'off',
+  captionPeers: [],
+  transcription: 'idle',
   quality: null,
   ...overrides,
 });

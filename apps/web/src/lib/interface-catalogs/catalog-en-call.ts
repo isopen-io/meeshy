@@ -32,7 +32,7 @@ const enCall = {
   'call.hangup': 'Hang up',
   'call.minimize': 'Minimize call',
   'call.expand': 'Return to call',
-  'call.captions.on': 'Show captions',
+  'call.captions.on': 'Show translated captions',
   'call.captions.off': 'Hide captions',
   'call.quality.poor': 'Unstable connection',
   'call.ended.local': 'Call ended',

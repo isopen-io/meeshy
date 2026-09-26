@@ -96,6 +96,10 @@ function RoundButton({
   );
 }
 
+const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.original', original: 'call.captions.off' } as const satisfies Record<ActiveCall['captionsMode'], PlainCallKey>;
+
+const CallCaptionsPanel = lazy(() => import('./call-captions-panel').then((module) => ({ default: module.CallCaptionsPanel })));
+
 const CallDeclineSheet = lazy(() => import('./call-decline-entry').then((module) => ({ default: module.ConnectedCallDeclineSheet })));
 
 const screenGlyph = (name: CallScreenGlyphName, size = 24) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
@@ -122,7 +126,6 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
   const live = phase !== 'ended' && phase !== 'incoming';
   const clock = call.connectedAt === null ? null : formatCallClock(elapsedSeconds(call, now));
   const endedClock = phase === 'ended' && call.endedDurationSec !== null && call.endedDurationSec > 0 ? formatCallClock(call.endedDurationSec) : null;
-  const caption = call.captionsOn ? call.captions.at(-1) : undefined;
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const selfMirrored = call.facing === 'user' && !call.screenSharing;
 
@@ -295,7 +298,7 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
         </div>
       );
     }
-    const hasCaptions = call.captions.length > 0;
+    const invited = call.captionsMode === 'off' && call.captionPeers.length > 0;
     const shareOffered = canShare && (phase === 'connected' || phase === 'reconnecting');
     return (
       <div className="flex flex-wrap items-start justify-center gap-4 px-4">
@@ -325,13 +328,19 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
             marker="data-call-screen-share"
           />
         ) : null}
-        {hasCaptions ? (
+        {phase === 'connected' || phase === 'reconnecting' ? (
           <RoundButton
-            label={t(call.captionsOn ? 'call.captions.off' : 'call.captions.on')}
-            pressed={call.captionsOn}
-            tone={call.captionsOn ? 'active' : 'plain'}
-            glyph={screenGlyph('closedCaptioning')}
+            label={t(invited ? 'call.captions.invited' : CAPTIONS_KEY[call.captionsMode])}
+            pressed={call.captionsMode !== 'off'}
+            tone={call.captionsMode === 'off' ? 'plain' : 'active'}
+            glyph={
+              <span className="relative">
+                {screenGlyph('closedCaptioning')}
+                {invited ? <span className="absolute -right-1 -top-1 size-2.5 rounded-full" style={{ background: ANSWER }} /> : null}
+              </span>
+            }
             onPress={callActions.toggleCaptions}
+            marker="data-call-captions"
           />
         ) : null}
         <RoundButton label={t('call.hangup')} tone="danger" glyph={screenGlyph('phoneDisconnect', 26)} onPress={callActions.hangup} />
@@ -378,11 +387,10 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
           </div>
         )}
         {overlayVideo || layout === 'grid' ? <div className="flex-1" /> : null}
-        {caption === undefined ? null : (
-          <p className="mx-4 self-center rounded-card px-3 py-2 text-center text-body" style={{ background: 'rgba(0,0,0,0.55)' }} aria-live="polite" data-call-caption="">
-            {call.isGroup ? <strong>{caption.speakerName} · </strong> : null}
-            {caption.text}
-          </p>
+        {call.captionsMode === 'off' ? null : (
+          <Suspense fallback={null}>
+            <CallCaptionsPanel call={call} language={language} />
+          </Suspense>
         )}
         <div className="pb-6">{controls}</div>
         {declineOpen && phase === 'incoming' ? (

@@ -1,3 +1,5 @@
+import { lazy, Suspense, useState } from 'react';
+
 import { callActions } from '@/lib/calls/call-actions';
 import { callIdentityOf, type CallNoticeTarget } from '@/lib/calls/call-notice';
 import { translate } from '@/lib/i18n-catalog';
@@ -145,22 +147,50 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
  * tap de la carte pour qu'un doigt qui défile ne sonne chez personne ; au web,
  * un bouton NOMMÉ sous la capsule porte le même geste sans rien de caché.
  */
+const CallTranscriptPanel = lazy(() => import('./call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
+
 function CallNoticeAction({ target }: { readonly target: CallNoticeTarget }) {
   const language = currentInterfaceLanguage();
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const transcriptId = target.callId === null ? undefined : `call-transcript-${target.callId}`;
   const onClick = () => {
     const request = { conversationId: target.conversationId, media: target.media, ...callIdentityOf(target.conversationId) };
     if (target.live) callActions.join({ ...request, callId: target.callId });
     else callActions.start(request);
   };
   return (
-    <button
-      type="button"
-      data-call-notice-action={target.live ? 'join' : 'call-back'}
-      onClick={onClick}
-      className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold"
-      style={{ color: 'var(--accent)' }}
-    >
-      {translate(language, target.live ? 'call.bubble.join' : 'call.bubble.callBack')}
-    </button>
+    <>
+      <span className="flex flex-wrap items-center justify-center gap-1">
+        <button
+          type="button"
+          data-call-notice-action={target.live ? 'join' : 'call-back'}
+          onClick={onClick}
+          className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold"
+          style={{ color: 'var(--accent)' }}
+        >
+          {translate(language, target.live ? 'call.bubble.join' : 'call.bubble.callBack')}
+        </button>
+        {target.transcript ? (
+          <button
+            type="button"
+            data-call-transcript-toggle=""
+            aria-expanded={transcriptOpen}
+            aria-controls={transcriptOpen ? transcriptId : undefined}
+            onClick={() => setTranscriptOpen((open) => !open)}
+            className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold"
+            style={{ color: 'var(--accent)' }}
+          >
+            {translate(language, transcriptOpen ? 'callTranscript.hide' : 'callTranscript.show')}
+          </button>
+        ) : null}
+      </span>
+      {transcriptOpen && target.callId !== null ? (
+        <div id={transcriptId} className="flex w-full justify-center">
+          <Suspense fallback={null}>
+            <CallTranscriptPanel callId={target.callId} language={language} />
+          </Suspense>
+        </div>
+      ) : null}
+    </>
   );
 }

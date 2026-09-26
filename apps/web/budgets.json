@@ -183,6 +183,41 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,73 Ko -- la boucle de qualite d un appel (`lib/calls/call-quality-loop.ts` : getStats sur chaque lien, `call-quality.ts` : niveaux et paliers d encodage par pair, `call-survival.ts` : gel puis suspension de la video). Chargee A LA DEMANDE par `engine-defaults.ts` au premier releve d un appel CONNECTE : elle ne pese ni sur qui n appelle pas, ni sur la sonnerie. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,25 mesures ; 10,54 si la boucle y restait). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
+    "call_captions": {
+      "pattern": "^assets/call-captions-runtime-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,96 Ko -- les sous-titres d un appel (`lib/calls/call-captions-runtime.ts` : langue du lecteur et nom de l emetteur ; `call-captions-controller.ts` : journal, modes, data channel `transcription`, emission de `call:transcription-segment` et `call:transcription-active` ; `call-speech.ts` : la Web Speech API et sa detection). Charge A LA DEMANDE par `engine-defaults.ts` (`lazyCaptions`) au premier evenement de sous-titres, au premier canal de transcription ou au premier appui sur CC : il ne pese ni sur qui n appelle pas, ni sur un appel ou personne ne sous-titre. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,84 mesures apres fusion de dev, contre 9,41 avant #8048). La loi pure qu il partage avec le panneau est comptee a part (`call_captions_law`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+      }
+    },
+    "call_captions_law": {
+      "pattern": "^assets/call-captions-[A-Za-z0-9_-]{8}\\.js$",
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 0,94 Ko -- la loi PURE des sous-titres (`lib/calls/call-captions.ts` : fusion du journal, texte selon le mode, decodeurs du segment traduit, de l etat de transcription et du canal). Rolldown la sort en chunk commun parce que DEUX chunks a la demande l importent statiquement : `call_captions` (le controleur) et `call_captions_panel` (l affichage). Pas `dynamic_only` pour cette seule raison : ses deux importeurs statiques sont eux-memes a la demande, et `measure-weight.mjs` verifie qu ils le restent. Ni `engine` ni `call-overlay` ne l importent (seulement nomme dans leur table de prechargement). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+      }
+    },
+    "call_captions_panel": {
+      "pattern": "^assets/call-captions-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,09 Ko -- le panneau des sous-titres de l ecran d appel (`components/call-captions-panel.tsx` : deux lignes en `aria-live` polite, mode, etat de la transcription, journal deplie). Charge A LA DEMANDE par `call-screen.tsx` des que le mode n est plus `off` : il ne pese pas sur `call_overlay` (6,87 mesures, plafond 7). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
+    "call_transcript_panel": {
+      "pattern": "^assets/call-transcript-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,77 Ko -- la transcription d apres l appel dans la bulle d appel du fil (`components/call-transcript-panel.tsx`, `lib/calls/call-transcript.ts` : `GET /calls/:callId/transcript`, decodage, Prisme du lecteur). Charge A LA DEMANDE par `system-notice.tsx` au premier appui sur « Transcription » : le fil ne la paie pas. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
     "call_overlay": {
       "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
