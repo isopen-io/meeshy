@@ -754,3 +754,44 @@ export function createPhoneTransferResendRateLimiter(redis?: Redis): RateLimiter
     redis
   );
 }
+
+/**
+ * `POST /auth/verify-email` par ADRESSE IP (#8033) — depuis que la preuve y
+ * ouvre une session, cette route est une porte de connexion. 20 essais par
+ * quart d'heure et par IP.
+ */
+export function createVerifyEmailIpRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 20,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:verify-email:ip',
+      message: 'Trop de tentatives de vérification. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => `ip:${request.ip || 'unknown'}`
+    },
+    redis
+  );
+}
+
+/**
+ * `POST /auth/verify-email` par ADRESSE E-MAIL (#8033) — la borne qui compte
+ * contre un code à six chiffres : 5 essais par quart d'heure et par adresse,
+ * quelle que soit l'IP. Même sur la durée de vie la plus longue d'un code
+ * (24 h), cela laisse moins d'une chance sur deux mille de le deviner.
+ */
+export function createVerifyEmailAddressRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:verify-email:email',
+      message: 'Trop de tentatives de vérification pour cette adresse. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as { email?: unknown } | undefined;
+        const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : 'none';
+        return `email:${email}`;
+      }
+    },
+    redis
+  );
+}

@@ -62,6 +62,7 @@ import { registrationLanguages } from './registration-languages';
 import { derivedNames, displayNameDepuisEmail, generateUsername } from './registration-identity';
 import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-block';
 import { RegistrationRefusal } from './registration-refusal';
+import { hashEmailCode, verificationTtlMinutes } from './email-code';
 
 const logger = enhancedLogger.child({ module: 'RegistrationService' });
 
@@ -71,9 +72,6 @@ const SUGGESTIONS_RENDUES = 3;
 /** Le pays par défaut quand ni la saisie ni la géolocalisation n'en donnent un. */
 const PAYS_PAR_DEFAUT = 'FR';
 
-/** Durée de validité du jeton de vérification d'e-mail, en heures. */
-const heuresDeValidite = (): number =>
-  parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400', 10) / 3600;
 
 /**
  * La charge d'inscription — TOUS les champs d'identité sont facultatifs sauf
@@ -136,6 +134,8 @@ export type RegistrationDeps = {
       verificationLink: string;
       verificationCode: string;
       expiryHours: number;
+      /** Posé quand la paire vit moins d'une heure (porte « e-mail seul », #8033). */
+      expiryMinutes?: number;
       language: string;
       /**
        * L'identité DÉRIVÉE et ses liens (#6424) — déclarée ici parce que ce
@@ -161,6 +161,12 @@ export type RegistrationDeps = {
   /** Jeton + code de vérification d'e-mail — passés pour rester testables sans stub de `crypto`. */
   readonly verificationToken: () => { raw: string; hash: string };
   readonly verificationCode: () => string;
+  /**
+   * Durée de vie de la paire code + lien, en minutes (#8033). Absente ⇒
+   * `EMAIL_VERIFICATION_TOKEN_EXPIRY` — la vérification d'une inscription.
+   * La porte « e-mail seul » la raccourcit : sa paire ouvre une session.
+   */
+  readonly verificationTtlMinutes?: number;
   /**
    * Où partent les travaux qui ne conditionnent pas la réponse — l'e-mail de
    * vérification, l'annonce d'arrivée dans le salon global.
@@ -403,8 +409,9 @@ export async function registerAccount(
   const hashedPassword = data.password ? await hashPassword(data.password) : null;
   const { raw: verificationToken, hash: verificationTokenHash } = deps.verificationToken();
   const verificationCode = deps.verificationCode();
-  const expiryHours = heuresDeValidite();
-  const verificationExpiry = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+  const expiryMinutes = deps.verificationTtlMinutes ?? verificationTtlMinutes();
+  const expiryHours = expiryMinutes / 60;
+  const verificationExpiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
   const languages = registrationLanguages(data);
 
@@ -450,7 +457,8 @@ export async function registerAccount(
       termsAcceptedAt: new Date(),
       termsVersion: CURRENT_TERMS_VERSION,
       emailVerificationToken: verificationTokenHash,
-      emailVerificationCode: verificationCode,
+      // L'EMPREINTE du code, jamais le code : depuis #8033 il ouvre une session.
+      emailVerificationCode: hashEmailCode(verificationCode),
       emailVerificationExpiry: verificationExpiry,
       registrationIp: requestContext?.ip || null,
       registrationLocation: requestContext?.geoData?.location || null,
@@ -493,6 +501,7 @@ export async function registerAccount(
       verificationLink,
       verificationCode,
       expiryHours,
+      ...(expiryMinutes < 60 ? { expiryMinutes } : {}),
       // Le rang SERVI, pas `data.systemLanguage` : le premier e-mail d'un
       // compte partait en français à qui n'avait renseigné que son rang 2.
       language: languages.systemLanguage,
