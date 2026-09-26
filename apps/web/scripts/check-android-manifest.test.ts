@@ -177,12 +177,14 @@ describe('les permissions de l appel natif de la coque (#8049)', () => {
     'android.permission.VIBRATE',
   ];
 
-  test.each(CALL_PERMISSIONS)('%s est requise : son absence est une violation nommée', (permission) => {
-    expect(REQUIRED_PERMISSIONS).toContain(permission);
-    expect(auditManifestPermissions({ manifest: manifestWith(othersThan(permission)) })).toEqual([
-      { permission, count: 0 },
-    ]);
-  });
+  for (const permission of CALL_PERMISSIONS) {
+    test(`${permission} est requise : son absence est une violation nommée`, () => {
+      expect(REQUIRED_PERMISSIONS).toContain(permission);
+      expect(auditManifestPermissions({ manifest: manifestWith(othersThan(permission)) })).toEqual([
+        { permission, count: 0 },
+      ]);
+    });
+  }
 });
 
 const CALL_COMPONENTS: readonly string[] = [

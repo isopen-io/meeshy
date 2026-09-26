@@ -4,6 +4,7 @@ import itIdentity from './catalog-it-identity';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
+import itCallShell from './catalog-it-call-shell';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
@@ -193,6 +194,7 @@ const it = {
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
+  ...itCallShell,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
