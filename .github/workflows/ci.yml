@@ -963,6 +963,14 @@ jobs:
           cd apps/web
           node scripts/check-reading-mode.mjs
 
+      # #8147 — LE MESSAGE LONG : extrait au quart, dépliage en place, verre
+      # Focal flouté, voisins atténués, mouvement réduit — mesurés au navigateur.
+      - name: Gate message long (dépliage en place, verre Focal)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-long-message.mjs
+
       # #5774 — LE CHROME DU FIL : escamotage au geste, pilule de jour
       # collante, bouton « revenir en bas ». Mesure des `opacity`,
       # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux

@@ -96,18 +96,66 @@ main[data-scene='idle'] .focus-stamp {
   pointer-events: none;
 }
 
-.focus-card {
+/* LE BLOC DE VERRE DU FOCAL (#8147) — directive porteur 2026-09-26 : « le
+   Focal est un bloc de verre sur lequel le message vient grossir ». La carte
+   teintée (un `color-mix` de l'accent à 10/16 %) cède la place à la matière
+   UNIQUE de `glass.css` (`glass glass-card`, posée par `FocusCard`) : ni fond
+   ni densité ne se réécrivent ici (`scripts/lib/glass-site.mjs`). L'accent de
+   la conversation survit en FILET, pas en fond — le verre à 80 % porte le
+   contraste du texte (`glass-contrast.mjs`, entrée #8147).
+
+   `z-index: -1` dans la colonne ISOLÉE (`focal-row.tsx`, `isolate`) : le
+   verre est presque opaque, et une superposition positionnée se peint
+   au-dessus du texte en flux — il doit passer DESSOUS. */
+.focus-card,
+.unfold-glass {
   position: absolute;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--color-ios-ink) 10%, transparent);
+}
+.focus-card {
   inset-inline-start: calc(-1 * (var(--focus-text-indent) + var(--focus-card-inset-x)));
   inset-inline-end: calc(-1 * var(--focus-card-inset-x));
   inset-block: calc(-1 * var(--focus-card-inset-y));
   border-radius: var(--focus-card-radius);
-  pointer-events: none;
-  --focus-fill: var(--focus-fill-dark);
-  background-color: color-mix(in srgb, var(--accent) calc(var(--focus-fill) * 100%), transparent);
+  z-index: -1;
 }
-:root.light .focus-card {
-  --focus-fill: var(--focus-fill-light);
+
+/* LE MESSAGE LONG DÉPLIÉ (#8147, `unfold-stage.tsx`) reçoit le même verre ;
+   le contenu, positionné APRÈS lui, se peint dessus. Les voisins
+   s'atténuent (`--unfold-dim`, `FOCAL_METRICS.neighborOpacity`) tant qu'une
+   rangée du fil est dépliée — `:has`, pour que l'hôte n'ait pas à redessiner
+   toute la liste à chaque bascule. Le verre de l'élue ne se double pas sur
+   une rangée dépliée. */
+.unfold-stage,
+.unfold-content {
+  position: relative;
+}
+.unfold-stage {
+  transition: opacity var(--unfold-enter-ms, 250ms) ease-out;
+}
+.unfold-glass {
+  animation: unfold-glass-in var(--unfold-enter-ms, 250ms) ease-out;
+}
+ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
+  opacity: var(--unfold-dim, 0.62);
+}
+.unfold-stage[data-unfolded] .focus-card {
+  display: none;
+}
+@keyframes unfold-glass-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .unfold-stage {
+    transition: none;
+  }
+  .unfold-glass {
+    animation: none;
+  }
 }
 
 .focus-identity {

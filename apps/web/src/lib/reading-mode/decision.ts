@@ -18,12 +18,12 @@ import { apiConfig } from '@/lib/api/config';
  * loi gelée avec le stockage local.
  *
  * `THREAD_RENDERABLE_MODES` est le catalogue que la v3.1 sait DESSINER
- * aujourd'hui : `focal` (D-7, le défaut), `script` (même rangée plate, sans
- * perspective) et `summary` (le Résumé Vivant, #5695 — D-21 : un corpus qui
+ * aujourd'hui : `script` (le défaut depuis D-132, #8147), `focal` (même rangée plate, avec
+ * scène et verre) et `summary` (le Résumé Vivant, #5695 — D-21 : un corpus qui
  * l'ATTEINT, le gate DOM inversé, le cadrage des dates par la langue du
  * lecteur). `river` (Rivière) reste LISTÉ au menu (`catalog.ts`) mais hors
  * de ce catalogue de rendu — la loi partagée le CLAMPE donc elle-même sur
- * `focal`/`clamped-unavailable` (D-8 : jamais un mode qu'on ne sait pas
+ * `script`/`clamped-unavailable` (D-8 : jamais un mode qu'on ne sait pas
  * rendre). Aucune réécriture de la loi n'est nécessaire : c'est le
  * mécanisme même que `resolveOrchestratorDecision` expose pour ça.
  */
