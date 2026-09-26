@@ -24,6 +24,7 @@ import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../..
 import { candidatsDePseudo } from '../../utils/username-candidates';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -413,7 +414,8 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // transféré depuis un autre compte — active le compte tout de suite.
       const avecNumero = Boolean(user.phoneNumber) || phoneTransferValidated;
       if (!avecNumero) {
-        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: user.email });
+        const attente = await pendingSessionTokenFor(context.prisma, user.email);
+        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: user.email, ...attente });
       }
 
       // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée

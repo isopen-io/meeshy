@@ -2681,6 +2681,32 @@ model PhonePasswordResetToken {
   @@index([createdAt])
 }
 
+/// Email Verification Watch (#8083) - lets the device that asked for a code
+/// learn that the address was proven ELSEWHERE (link opened on a computer).
+/// It carries STATE only ("pending" / "proven"): it never opens a session, and
+/// never names the address. Handed out with every `verification-required`
+/// response as `pendingSessionToken`; only its SHA-256 is stored.
+model EmailVerificationWatch {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// SHA-256 of the opaque token handed to the requesting device
+  tokenHash String @unique
+
+  /// The account whose address awaits proof; null when no active account
+  /// carries the address (the watch then stays "pending" until it expires,
+  /// so its answer never says whether an account exists)
+  userId String? @db.ObjectId
+
+  createdAt DateTime  @default(now())
+  /// Expiry of the code that was pending when the watch was issued
+  expiresAt DateTime
+  /// Set when the address is proven (code or link) after the watch was issued
+  provenAt  DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 /// Magic Link Token - Stores hashed tokens for passwordless login
 /// Token expires after 1 minute for security
 model MagicLinkToken {

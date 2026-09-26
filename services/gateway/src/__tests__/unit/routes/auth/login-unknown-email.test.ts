@@ -12,6 +12,9 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify from 'fastify';
 
+jest.mock('../../../../services/auth/email-verification-watch', () => ({
+  pendingSessionTokenFor: jest.fn(async () => ({ pendingSessionToken: 'attente-opaque' })),
+}));
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() })) },
 }));
@@ -76,7 +79,7 @@ describe('adresse valide sans compte', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      data: { status: 'verification-required', accountCreated: true, email: 'nouvelle@example.com' },
+      data: { status: 'verification-required', accountCreated: true, email: 'nouvelle@example.com', pendingSessionToken: 'attente-opaque' },
     });
     await app.close();
   });
@@ -143,7 +146,7 @@ describe('compte sans mot de passe', () => {
     const res = await connecter(app, 'attente@example.com');
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ status: 'verification-required', accountCreated: false, email: 'attente@example.com' });
+    expect(res.json().data).toEqual({ status: 'verification-required', accountCreated: false, email: 'attente@example.com', pendingSessionToken: 'attente-opaque' });
     await app.close();
   });
 
@@ -177,7 +180,7 @@ describe('bon mot de passe, compte NON vérifié et SANS numéro (#8055)', () =>
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      data: { status: 'verification-required', accountCreated: false, email: 'lena@example.com' },
+      data: { status: 'verification-required', accountCreated: false, email: 'lena@example.com', pendingSessionToken: 'attente-opaque' },
     });
     await app.close();
   });

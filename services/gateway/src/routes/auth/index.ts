@@ -9,6 +9,7 @@ import { registerRegistrationRoutes } from './register';
 import { registerMagicLinkRoutes } from './magic-link';
 import { registerPhoneTransferRoutes } from './phone-transfer';
 import { registerRevokeAllSessionsRoute } from './revoke-all-sessions';
+import { registerVerificationStatusRoute } from './verification-status';
 import { getJwtSecret } from '../../utils/secrets';
 
 /**
@@ -54,4 +55,5 @@ export async function authRoutes(fastify: FastifyInstance) {
   registerMagicLinkRoutes(context);
   registerPhoneTransferRoutes(context);
   registerRevokeAllSessionsRoute(context);
+  registerVerificationStatusRoute(context);
 }

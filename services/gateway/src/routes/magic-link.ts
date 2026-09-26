@@ -8,7 +8,8 @@ import { initSessionService, markSessionTrusted } from '../services/SessionServi
 import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
-import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { userSchema, sessionSchema, errorResponseSchema, pendingSessionTokenProperty } from '@meeshy/shared/types/api-schemas';
+import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
 import { AuthService } from '../services/AuthService';
 import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
 import { getJwtSecret } from '../utils/secrets';
@@ -102,7 +103,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' }
+                expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' },
+                pendingSessionToken: pendingSessionTokenProperty
               }
             }
           }
@@ -150,9 +152,14 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendError(reply, 429, 'Too many requests. Please try again in about an hour.', { code: 'RATE_LIMITED' });
       }
 
+      // #8083 — le jeton d'attente de CET appareil, dans TOUS les cas servis :
+      // une adresse sans compte actif en reçoit un aussi (non lié, toujours
+      // `pending`), sans quoi sa présence dirait si le compte existe.
+      const attente = await pendingSessionTokenFor(fastify.prisma, email);
+
       return sendSuccess(
         reply,
-        { expiresInSeconds: LOGIN_CODE_TTL_MINUTES * 60 },
+        { expiresInSeconds: LOGIN_CODE_TTL_MINUTES * 60, ...attente },
         { message: 'If an account exists, a login link has been sent.' }
       );
 

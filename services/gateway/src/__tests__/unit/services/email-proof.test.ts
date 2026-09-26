@@ -46,14 +46,19 @@ const compte = (extra: Row = {}): Row => ({
   ...extra,
 });
 
-const verifier = async (ligne: Row | null, preuve: { code?: string; token?: string; password?: string }, consume = 1) => {
+const verifier = async (
+  ligne: Row | null,
+  preuve: { code?: string; token?: string; password?: string },
+  consume = 1,
+  watchUpdateMany: jest.Mock<any> = jest.fn(async () => ({ count: 1 })) as jest.Mock<any>,
+) => {
   const findFirst = jest.fn(async () => ligne) as jest.Mock<any>;
   const updateMany = jest.fn(async () => ({ count: consume })) as jest.Mock<any>;
-  const prisma = { user: { findFirst, updateMany } };
+  const prisma = { user: { findFirst, updateMany }, emailVerificationWatch: { updateMany: watchUpdateMany } };
   const service = new AuthService(prisma as never, 'secret');
   const resultat = await service.verifyEmail({ email: 'Marie@Example.com', ...preuve });
   const ecrit = (updateMany.mock.calls[0] as [{ where: Row; data: Row }] | undefined)?.[0];
-  return { resultat, findFirst, updateMany, ecrit };
+  return { resultat, findFirst, updateMany, ecrit, watchUpdateMany };
 };
 
 beforeEach(() => jest.clearAllMocks());
@@ -64,7 +69,14 @@ describe('le code', () => {
 
     expect(resultat).toMatchObject({ success: true, userId: 'user-1', alreadyVerified: false, secondFactor: 'absent' });
     expect(ecrit?.data.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(ecrit?.data).toMatchObject({ emailVerificationToken: null, emailVerificationCode: null, emailVerificationExpiry: null });
+    expect(ecrit?.data).toMatchObject({ emailVerificationCode: null });
+  });
+
+  it('ne consomme PAS le lien (#8083) : deux clés distinctes, chacune ouvre la session de SON appareil', async () => {
+    const { ecrit } = await verifier(compte(), { code: '123456' });
+
+    expect(ecrit?.data).not.toHaveProperty('emailVerificationToken');
+    expect(ecrit?.data).not.toHaveProperty('emailVerificationExpiry');
   });
 
   it('ne se compare jamais par la base : la requête ne porte pas le code saisi', async () => {
@@ -111,6 +123,76 @@ describe('le lien', () => {
     const { resultat } = await verifier(compte(), { token: 'autre' });
 
     expect(resultat.success).toBe(false);
+  });
+
+  it('ne BRÛLE PAS le code (#8083) : ouvert sur un ordinateur, le code reste à saisir sur le téléphone', async () => {
+    const { ecrit } = await verifier(compte(), { token: 'jeton-brut' });
+
+    expect(ecrit?.data).toMatchObject({ emailVerificationToken: null });
+    expect(ecrit?.data).not.toHaveProperty('emailVerificationCode');
+    expect(ecrit?.data).not.toHaveProperty('emailVerificationExpiry');
+  });
+
+  it('le code saisi APRÈS le lien ouvre encore la voie, une seule fois', async () => {
+    const apresLeLien = compte({ emailVerifiedAt: new Date('2026-09-26T12:35:39Z'), emailVerificationToken: null });
+    const { resultat, ecrit } = await verifier(apresLeLien, { code: '123456' });
+
+    expect(resultat).toMatchObject({ success: true, alreadyVerified: true });
+    expect(ecrit?.where).toMatchObject({ emailVerificationToken: null, emailVerificationCode: sha256('123456') });
+    expect(ecrit?.data).toMatchObject({ emailVerificationCode: null });
+  });
+
+  it('le lien ouvert APRÈS le code ouvre encore la voie', async () => {
+    const apresLeCode = compte({ emailVerifiedAt: new Date('2026-09-26T12:35:39Z'), emailVerificationCode: null });
+    const { resultat, ecrit } = await verifier(apresLeCode, { token: 'jeton-brut' });
+
+    expect(resultat).toMatchObject({ success: true, alreadyVerified: true });
+    expect(ecrit?.data).toMatchObject({ emailVerificationToken: null });
+  });
+
+  it('un code DÉJÀ saisi ne se ressaisit pas', async () => {
+    const { resultat } = await verifier(compte({ emailVerificationCode: null }), { code: '123456' });
+
+    expect(resultat.success).toBe(false);
+  });
+
+  it('un lien DÉJÀ ouvert ne se rouvre pas', async () => {
+    const { resultat } = await verifier(compte({ emailVerificationToken: null }), { token: 'jeton-brut' });
+
+    expect(resultat.success).toBe(false);
+  });
+});
+
+describe('les appareils en attente apprennent la preuve (#8083)', () => {
+  it.each([
+    ['le code', { code: '123456' }],
+    ['le lien', { token: 'jeton-brut' }],
+  ])('%s marque « prouvée » chaque attente VIVANTE du compte', async (_cas, preuve) => {
+    const { watchUpdateMany } = await verifier(compte(), preuve);
+    const appel = (watchUpdateMany.mock.calls[0] as [{ where: Row; data: Row }])[0];
+
+    expect(appel.where).toMatchObject({ userId: 'user-1', provenAt: null });
+    expect((appel.where.expiresAt as { gt: Date }).gt).toBeInstanceOf(Date);
+    expect(appel.data.provenAt).toBeInstanceOf(Date);
+  });
+
+  it('une preuve refusée ne marque rien', async () => {
+    const { watchUpdateMany } = await verifier(compte(), { code: '000000' });
+
+    expect(watchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('une paire déjà consommée par une présentation concurrente ne marque rien', async () => {
+    const { watchUpdateMany } = await verifier(compte(), { code: '123456' }, 0);
+
+    expect(watchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('une panne du marquage ne coûte pas la preuve', async () => {
+    const panne = jest.fn(async () => { throw new Error('mongo'); }) as jest.Mock<any>;
+    const { resultat } = await verifier(compte(), { code: '123456' }, 1, panne);
+
+    expect(resultat).toMatchObject({ success: true, userId: 'user-1' });
   });
 });
 

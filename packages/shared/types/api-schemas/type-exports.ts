@@ -84,6 +84,16 @@ export type LoginVerificationRequiredData = {
   readonly status: 'verification-required';
   readonly accountCreated: boolean;
   readonly email: string;
+  /** #8083 — jeton d'attente de CET appareil, pour `POST /auth/verification/status`. */
+  readonly pendingSessionToken?: string;
+};
+
+/**
+ * `POST /auth/verification/status` (#8083) : l'adresse a-t-elle été prouvée
+ * depuis que CET appareil a demandé son code ? Un état, jamais une session.
+ */
+export type VerificationStatusData = {
+  readonly status: 'pending' | 'proven';
 };
 
 /**
