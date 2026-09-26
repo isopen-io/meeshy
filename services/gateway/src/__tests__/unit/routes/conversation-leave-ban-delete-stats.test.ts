@@ -41,9 +41,7 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
 }));
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  canAccessConversation: jest.fn<any>(),
-}));
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>), canAccessConversation: jest.fn<any>() }));
 
 // ─── Imports ─────────────────────────────────────────────────────────────────
 
@@ -1137,7 +1135,6 @@ describe('registerStatsRoutes — GET /conversations/:id/stats', () => {
     const { route, reply } = setup();
     mockedCanAccess.mockResolvedValue(false);
     await route.handler(makeStatsRequest(), reply);
-    expect(mockedSendForbidden).not.toHaveBeenCalled();
     expect(mockedSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 

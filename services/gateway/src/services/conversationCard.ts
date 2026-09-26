@@ -255,7 +255,7 @@ export async function composeShareLinkCard(params: {
     viewer: {
       isMember,
       canJoin: !isMember,
-      requiresAccount: !isMember && link.requireAccount,
+      requiresAccount: link.requireAccount,
       canJoinAnonymously: !isMember && !link.requireAccount
     },
     inviter: inviterOf(link.creator),
