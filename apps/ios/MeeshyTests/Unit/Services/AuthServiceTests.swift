@@ -414,6 +414,22 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(AuthManager.shared.currentUser?.id, "user-123")
     }
 
+    /// #8076 — prouver le lien de connexion ne pose PAS la session : un lien
+    /// ouvert pendant qu'une feuille d'accès est affichée attend qu'elle parte.
+    func test_verifyMagicLink_doesNotOpenTheSessionUntilAsked() async throws {
+        stubAuthService.validateMagicLinkResult = .success(makeLoginData(user: makeUser(id: "magic-proven"), token: "jwt-magic"))
+
+        let proven = try await AuthManager.shared.verifyMagicLink(token: "magic-token")
+
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(proven.token, "jwt-magic")
+
+        AuthManager.shared.openSession(proven)
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "magic-proven")
+    }
+
     func test_validateMagicLink_failure_setsErrorMessage() async {
         stubAuthService.validateMagicLinkResult = .failure(MeeshyError.auth(.sessionExpired))
 
