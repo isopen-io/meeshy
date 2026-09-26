@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deVerifyEmail from './catalog-de-verify-email';
+import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
 import deSignup from './catalog-de-signup';
 
@@ -190,6 +191,7 @@ const de = {
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
   ...deVerifyEmail,
+  ...dePassword,
   ...deCall,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
