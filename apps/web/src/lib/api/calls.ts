@@ -18,10 +18,12 @@ import type { ApiResult, HttpTransport } from './http';
  * inconnue se lit « reçu », comme `CallDirection(raw:)`.
  *
  * **Un appel décodé est une PROJECTION.** La charge porte le numéro de
- * téléphone du pair, sa présence et les octets échangés ; le cache de requêtes
- * est persisté (`query-client.ts`) et rien de cela n'y entre — le journal ne
- * les peint pas (D-61), et la présence d'autrui n'entre jamais dans un cache
- * persisté (D-60).
+ * téléphone du pair et sa présence ; le cache de requêtes est persisté
+ * (`query-client.ts`) et ni l'un ni l'autre n'y entre — la présence d'autrui
+ * n'entre jamais dans un cache persisté (D-60), et le numéro du pair n'est
+ * servi par AUCUNE surface web (D-127, #6383 : la fiche d'un appel ne le montre
+ * pas). Les OCTETS échangés, eux, entrent depuis #6383 : ils décrivent l'appel
+ * du lecteur, pas le pair, et la fiche de détail les montre (« Données »).
  */
 
 export const CALL_HISTORY_PAGE_SIZE = 30;
@@ -49,6 +51,8 @@ export type CallRecord = {
   readonly isVideo: boolean;
   readonly startedAt: string;
   readonly durationSec: number;
+  /** Octets envoyés + reçus par le lecteur, `null` quand aucun client ne les a rapportés. */
+  readonly bytes: number | null;
   readonly peer: CallPeer | null;
 };
 
@@ -78,6 +82,8 @@ const WireRecord = z.object({
   isVideo: z.optional(z.nullable(z.boolean())),
   startedAt: z.string().check(z.refine((value) => Number.isFinite(Date.parse(value)))),
   durationSec: z.optional(z.nullable(z.number())),
+  bytesSent: z.optional(z.nullable(z.number())),
+  bytesReceived: z.optional(z.nullable(z.number())),
   peer: z.optional(z.unknown()),
 });
 
@@ -86,8 +92,16 @@ const textOrNull = (value: string | null | undefined): string | null =>
 
 const directionOf = (raw: string | null | undefined): CallDirection => CALL_DIRECTIONS.find((direction) => direction === raw) ?? 'incoming';
 
-const secondsOf = (raw: number | null | undefined): number =>
+const positiveIntOf = (raw: number | null | undefined): number =>
   typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+
+const secondsOf = positiveIntOf;
+
+/** `dataLabel` d'iOS : la somme des deux sens, `null` si aucun n'est rapporté ou si elle est nulle. */
+const bytesOf = (sent: number | null | undefined, received: number | null | undefined): number | null => {
+  const total = positiveIntOf(sent) + positiveIntOf(received);
+  return total > 0 ? total : null;
+};
 
 function decodePeer(raw: unknown): CallPeer | null {
   const parsed = WirePeer.safeParse(raw);
@@ -110,6 +124,7 @@ export function decodeCallRecord(raw: unknown): CallRecord | null {
     isVideo: wire.isVideo === true,
     startedAt: new Date(wire.startedAt).toISOString(),
     durationSec: secondsOf(wire.durationSec),
+    bytes: bytesOf(wire.bytesSent, wire.bytesReceived),
     peer: decodePeer(wire.peer),
   };
 }

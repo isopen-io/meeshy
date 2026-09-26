@@ -4,6 +4,7 @@ import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { outboxStore } from '@/lib/send/outbox-store';
 
+import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
@@ -50,7 +51,17 @@ let unbridgeCalls: (() => void) | null = null;
 
 function bridgeCalls(next: RealtimeConnection | null): void {
   unbridgeCalls?.();
-  unbridgeCalls = next === null ? null : bridgeCallEvents(next.socket);
+  if (next === null) {
+    unbridgeCalls = null;
+    return;
+  }
+  const unbridge = bridgeCallEvents(next.socket);
+  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
+  const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  unbridgeCalls = () => {
+    unbridge();
+    unwatch();
+  };
 }
 
 function currentViewerId(): string {
