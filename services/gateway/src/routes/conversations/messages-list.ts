@@ -324,7 +324,7 @@ export function registerMessagesListRoute(
 
       // #4340 — la SOUS-COLLECTION lue. Résolue APRÈS toutes les portes
       // (appartenance, lien de partage échu) : un refus de VALIDATION ne se
-      // sert jamais avant un refus de DROIT, sans quoi les quatre vues
+      // sert jamais avant un refus de DROIT, sans quoi les cinq vues
       // n'auraient plus le même ordre de gardes — ce que ce lot promet
       // précisément.
       //
@@ -911,7 +911,7 @@ export function registerMessagesListRoute(
       logger[level](`⏱️ GET /conversations/${conversationId}/messages`, {
         durationMs: Math.round(timings.total),
         messageCount: messages.length,
-        // #4340 — la vue servie : sans elle, quatre sous-collections aux profils
+        // #4340 — la vue servie : sans elle, cinq sous-collections aux profils
         // de coût très différents se confondent dans la même ligne de journal.
         view: vue.view,
         limit,
