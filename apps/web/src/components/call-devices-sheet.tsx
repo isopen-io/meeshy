@@ -185,10 +185,13 @@ export function CallDevicesSheet({ onClose }: { readonly onClose: () => void }) 
           deviceId,
         ),
       )
-      .then((ok) => {
-        setFailed(!ok);
-        setPreferences(readDevicePreferences(browserPreferenceStorage()));
-      });
+      .then(
+        (ok) => {
+          setFailed(!ok);
+          setPreferences(readDevicePreferences(browserPreferenceStorage()));
+        },
+        () => setFailed(true),
+      );
 
   const nothing = groups.camera.length === 0 && groups.microphone.length === 0 && groups.speaker.length === 0 && shellRoutes === null;
 

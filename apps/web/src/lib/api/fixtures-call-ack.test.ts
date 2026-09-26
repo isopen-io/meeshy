@@ -21,7 +21,7 @@ describe('fixtureCallAck', () => {
   });
 
   test('le client de fixtures sait accuser', async () => {
-    const client = createFixturesSocketClient('https://fixtures.invalid', { token: 'fixtures', sessionToken: 'fixtures' });
+    const client = createFixturesSocketClient({ base: 'https://fixtures.invalid', auth: { token: 'fixtures', sessionToken: 'fixtures' } });
     expect(decodeAck(await client.emitWithAck?.(CLIENT_EVENTS.CALL_INITIATE, { conversationId: 'c-1' }, 1000)).ok).toBe(true);
   });
 });
