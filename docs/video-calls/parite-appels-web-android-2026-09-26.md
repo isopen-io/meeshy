@@ -179,6 +179,28 @@ Chaque lot est testable seul et se déploie sur dev puis en production. L'ordre 
 | **8** | Au-delà de la parité, sur décision | Filtres vidéo et flou d'arrière-plan (parité iOS), effets de voix (legacy seul, retirés d'iOS), partage d'écran (ni l'un ni l'autre) | D12–D14 | #8050 (`décision-produit`) |
 | **9** | Recette et déploiement | E2E web↔web, iOS↔web, coque↔iOS ; survie au redémarrage du gateway ; appels de groupe en maillage (le serveur l'accepte déjà, `MAX_CALL_PARTICIPANTS = 9999`) ; déploiement dev puis production | E10, I1–I4 | #3572, #3573, #3578, #3721 |
 
+### Lot 10 — ce qui manque aussi à iOS
+
+Ajouté le 2026-09-26 à la demande du porteur : les fonctions absentes ou partielles sur iOS entrent au plan, à développer sur iOS, le web et la coque Android.
+
+| Fonction | État iOS | Issue |
+|---|---|---|
+| Partage d'écran | ❌ | #8063 |
+| Enregistrement d'un appel avec consentement | ❌ | #8064 |
+| Refuser avec un message rapide | ❌ | #8065 |
+| Journal complet : pagination, recherche, suppression, participants d'un groupe | 🟡 1re page seule | #8066 |
+| « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | 🟡 ouvre le fil | #8067, #7735 (Récents) |
+| Appels de groupe | ❌ 1 pair | #3585 (iOS), #3721 (web et coque) |
+| Ajouter une personne à un appel en cours | ❌ | #8068 |
+| SFU et simulcast au-delà de quatre | ❌ | #8069 |
+| Chiffrement de bout en bout par trame | 🟡 DTLS seul | #8070 |
+| Choix du micro et de la sortie, détail de qualité | 🟡 caméra, glyphe | #8071 |
+| Note après l'appel | ❌ | #8072 |
+| Réglage « Appels hors contacts » | 🟡 grisé | #8073 |
+| Règles communes : délais, plafond, texte de poussée, relance ICE | 🟡 | #8074 |
+| Reprendre l'appel après relance | 🟡 | #3586, #3578 |
+| Effets de voix (retirés d'iOS le 2026-07-05) | ❌ | #8050 (`décision-produit`) |
+
 ## Écarts relevés en chemin
 
 - **Délais de sonnerie incohérents** : 45 s côté clients, 60 s serveur, 120 s nettoyage (`CallService.ts`, `CallCleanupService.ts`).
