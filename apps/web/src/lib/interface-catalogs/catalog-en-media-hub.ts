@@ -30,9 +30,6 @@ const enMediaHub = {
   'media_hub.tile.image': 'Photo from {name}, {date}',
   'media_hub.tile.video': 'Video from {name}, {date}',
   'media_hub.open_link': 'Open {host}',
-  'media_hub.open_file': 'Open {name}',
-  'media_hub.contact.fallback': 'Contact card',
-  'media_hub.all_loaded': 'Everything is loaded',
 };
 
 export default enMediaHub;

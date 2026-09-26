@@ -30,9 +30,6 @@ const itMediaHub = {
   'media_hub.tile.image': 'Foto di {name}, {date}',
   'media_hub.tile.video': 'Video di {name}, {date}',
   'media_hub.open_link': 'Apri {host}',
-  'media_hub.open_file': 'Apri {name}',
-  'media_hub.contact.fallback': 'Scheda contatto',
-  'media_hub.all_loaded': 'Tutto caricato',
 };
 
 export default itMediaHub;

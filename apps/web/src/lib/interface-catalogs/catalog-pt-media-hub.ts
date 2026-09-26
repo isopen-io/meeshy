@@ -30,9 +30,6 @@ const ptMediaHub = {
   'media_hub.tile.image': 'Foto de {name}, {date}',
   'media_hub.tile.video': 'Vídeo de {name}, {date}',
   'media_hub.open_link': 'Abrir {host}',
-  'media_hub.open_file': 'Abrir {name}',
-  'media_hub.contact.fallback': 'Cartão de contato',
-  'media_hub.all_loaded': 'Tudo carregado',
 };
 
 export default ptMediaHub;

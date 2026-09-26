@@ -30,9 +30,6 @@ const arMediaHub = {
   'media_hub.tile.image': 'صورة من {name}، {date}',
   'media_hub.tile.video': 'فيديو من {name}، {date}',
   'media_hub.open_link': 'فتح {host}',
-  'media_hub.open_file': 'فتح {name}',
-  'media_hub.contact.fallback': 'بطاقة جهة اتصال',
-  'media_hub.all_loaded': 'تم تحميل كل شيء',
 };
 
 export default arMediaHub;

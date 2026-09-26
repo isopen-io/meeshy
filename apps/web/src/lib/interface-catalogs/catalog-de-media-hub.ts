@@ -30,9 +30,6 @@ const deMediaHub = {
   'media_hub.tile.image': 'Foto von {name}, {date}',
   'media_hub.tile.video': 'Video von {name}, {date}',
   'media_hub.open_link': '{host} öffnen',
-  'media_hub.open_file': '{name} öffnen',
-  'media_hub.contact.fallback': 'Kontaktkarte',
-  'media_hub.all_loaded': 'Alles geladen',
 };
 
 export default deMediaHub;

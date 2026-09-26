@@ -15,6 +15,7 @@ import { isAppPath } from '@/routes/app-paths';
 import { navigate } from '@/routes/route-table';
 
 import { Attachments } from './attachment-blocks';
+import { ConversationLinkCards } from './conversation-link-cards';
 import { Glyph } from './glyph';
 import { LocationCard } from './message-body-blocks';
 
@@ -23,9 +24,10 @@ import { LocationCard } from './message-body-blocks';
  *
  * Aucun lecteur n'est réécrit ici : un vocal se joue par le lecteur du fil
  * (`Attachments` → `VoiceAttachment`, reprise et rapport d'écoute compris), un
- * document ou une carte de contact s'ouvre par la rangée du fil (`<a
- * target="_blank">` qui télécharge à l'ouverture et rapporte l'ouverture), un
- * lieu par sa carte (`LocationCard`). Ce module ne pose que la GRILLE des
+ * document s'ouvre par la rangée du fil (`<a target="_blank">` qui télécharge
+ * à l'ouverture et rapporte l'ouverture), une carte de visite par la carte du
+ * fil (#8101, `Attachments` → `ContactCard`), une adresse de conversation par
+ * sa carte (#8099, `ConversationLinkCards`), un lieu par `LocationCard`. Ce module ne pose que la GRILLE des
  * vignettes et la ligne « qui, quand · aller au message » de chaque élément.
  *
  * Les octets d'un média ne partent qu'à l'ouverture : la grille ne charge que
@@ -185,24 +187,18 @@ export function MediaHubRow({ item, hosts }: { readonly item: MediaHubItem; read
       case 'contact':
       case 'visual':
         return (
-          <>
-            {item.kind === 'contact' ? (
-              <span className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {translate(hosts.language, 'media_hub.contact.fallback')}
-              </span>
-            ) : null}
-            <Attachments
-              attachments={[item.attachment]}
-              languages={hosts.languages}
-              fallbackLanguage={message.originalLanguage}
-              mediaFrame="tiles"
-              isMine={isMineOf(message, hosts.viewerId)}
-              {...(hosts.deps === undefined ? {} : { deps: hosts.deps })}
-            />
-          </>
+          <Attachments
+            attachments={[item.attachment]}
+            languages={hosts.languages}
+            fallbackLanguage={message.originalLanguage}
+            mediaFrame="tiles"
+            isMine={isMineOf(message, hosts.viewerId)}
+            {...(hosts.deps === undefined ? {} : { deps: hosts.deps })}
+          />
         );
-      case 'link':
       case 'conversation':
+        return <ConversationLinkCards text={item.href} trackingLinks={message.trackingLinks} />;
+      case 'link':
         return <LinkRow item={item} hosts={hosts} />;
       case 'location':
         return <LocationCard place={item.place} accent={hosts.accent} language={hosts.language} />;
