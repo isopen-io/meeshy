@@ -47,7 +47,7 @@
  *     son menu plutôt que de tomber sur le conteneur muet qui l'enveloppe.
  *  9. LE MENU NE DÉBORDE JAMAIS DU BAS DE L'ÉCRAN — #5559 revue-correction,
  *     défaut 7 : sur un viewport de 390×640, le menu de la DERNIÈRE rangée
- *     se RETOURNE au-dessus de son ancre et ses QUATRE lignes restent
+ *     se RETOURNE au-dessus de son ancre et ses SIX lignes restent
  *     atteignables.
  * 10. « 0 CONTRÔLE SANS GESTIONNAIRE » (#5652) — les trois boutons ronds de
  *     l'en-tête ont chacun leur effet MESURÉ (feuille ouverte + retour
@@ -147,7 +147,7 @@ const rowIds = (page) => page.$$eval('[data-row]', (els) => els.map((el) => el.d
 const menuItem = (label) => `[role="menu"] [role="menuitem"]:text-is("${label}")`;
 
 const browser = await launchChromium();
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
 const page = await context.newPage();
 await page.goto(`${BASE}/`, { waitUntil: 'load' });
 await page.waitForSelector('[data-row]');
@@ -275,11 +275,11 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('[role="menu"]');
 await page.waitForTimeout(120);
 const firstItem = await page.evaluate(() => document.activeElement?.textContent?.trim());
-check(firstItem === 'Épingler' || firstItem === 'Désépingler', `à l'ouverture, le focus entre DANS le menu (« ${firstItem} »)`);
+check(firstItem === 'Appel vocal', `à l'ouverture, le focus entre DANS le menu, sur « Appel vocal » (#8109) (« ${firstItem} »)`);
 await page.keyboard.press('ArrowDown');
 const secondItem = await page.evaluate(() => document.activeElement?.textContent?.trim());
 check(
-  secondItem !== firstItem && (secondItem === 'Silence' || secondItem === 'Son'),
+  secondItem !== firstItem && secondItem === 'Appel vidéo',
   `ArrowDown déplace RÉELLEMENT le focus vers la ligne suivante (« ${secondItem} »)`,
 );
 await page.keyboard.press('Escape');
@@ -609,8 +609,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 4 && menuFit.allInView,
-  `à 390×640, les QUATRE lignes du menu de la dernière rangée ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 6 && menuFit.allInView,
+  `à 390×640, les SIX lignes du menu de la dernière rangée (deux appels, quatre actions) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -921,6 +921,42 @@ check(
 );
 
 await bottomContext.close();
+
+// ------------- 12. appeler depuis le menu de la ligne, clic droit compris (#8109)
+/**
+ * Deux gestes lancent un appel depuis la liste, dans les DEUX schémas : le
+ * clic droit sur la rangée ouvre le MÊME menu que son bouton (jamais celui du
+ * navigateur), et « Appel vocal » / « Appel vidéo » ouvrent l'écran d'appel
+ * vers la conversation de la rangée, au-dessus de la liste.
+ */
+for (const scheme of ['light', 'dark']) {
+  for (const [label, media] of [
+    ['Appel vocal', 'audio'],
+    ['Appel vidéo', 'video'],
+  ]) {
+    const callContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, locale: 'fr-FR' });
+    const callPage = await callContext.newPage();
+    await callPage.goto(`${BASE}/`, { waitUntil: 'load' });
+    await callPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
+    const name = await callPage.$eval(`[data-row="${SUBJECT}"] [data-name]`, (el) => (el.textContent ?? '').trim());
+    await callPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
+    const menuOpened = await callPage.waitForSelector('[role="menu"]', { timeout: 2000 }).then(() => true, () => false);
+    const items = menuOpened ? await callPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
+    check(
+      menuOpened && items[0] === 'Appel vocal' && items[1] === 'Appel vidéo',
+      `${scheme} : le clic droit sur une rangée ouvre son menu, « Appel vocal » et « Appel vidéo » en tête (${JSON.stringify(items)})`,
+    );
+    if (menuOpened) await callPage.click(menuItem(label));
+    const screen = await callPage
+      .waitForSelector('[data-call-screen]', { timeout: 5000 })
+      .then(() => callPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')), () => null);
+    check(
+      screen === `Appel avec ${name}` && new URL(callPage.url()).pathname === '/',
+      `${scheme} : « ${label} » depuis le menu ouvre l'écran d'appel (${media}) vers « ${name} », au-dessus de la liste (${screen})`,
+    );
+    await callContext.close();
+  }
+}
 
 await browser.close();
 served.close();

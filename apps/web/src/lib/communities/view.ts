@@ -2,6 +2,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import type { InfiniteData } from '@tanstack/react-query';
 
 import { searchTermOf, type CommunityConversation, type CommunityPage, type CommunitySummary } from '@/lib/api/communities';
+import { letterWordsOf } from '@/lib/view/conversation';
 
 /**
  * **LES RÈGLES PURES DES ÉCRANS DE COMMUNAUTÉ** (#6364) — ce que la liste, la
@@ -27,10 +28,10 @@ export function communityAccent(name: string): string {
   return colorForName(name);
 }
 
+/** Une initiale par mot, deux au plus — des LETTRES seulement (#8131) : les
+ * mots viennent de `letterWordsOf`, la même découpe que les avatars. */
 export function initialsOf(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/u)
+  return letterWordsOf(name)
     .slice(0, 2)
     .map((word) => [...word][0]?.toUpperCase() ?? '')
     .join('');

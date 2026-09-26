@@ -111,7 +111,10 @@ function NotificationRowView({ notification, language, now, onOpen, onMarkRead, 
     children: (
       <>
         <span className="relative shrink-0">
-          <Avatar initials={initialsOf(title)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
+          {/* Les initiales d'une PERSONNE viennent de son nom, jamais du titre :
+              « Marie est sur Meeshy ! » y lisait « ME » (#8143). Le titre ne
+              sert qu'aux notifications sans acteur (annonces système). */}
+          <Avatar initials={initialsOf(notification.actor?.displayName ?? title)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
           {unread ? (
             <span
               aria-hidden="true"

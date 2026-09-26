@@ -105,6 +105,7 @@ const es = {
   'feed.post.media.next': 'Media siguiente',
   'feed.post.media.mosaic': 'Mosaico de {count} medios',
   'media.unavailable': 'Medio no disponible',
+  'media.retry': 'Reintentar',
   'feed.post.see_more': 'ver más',
   'feed.post.see_less': 'ver menos',
   'feed.post.more_options': 'Más opciones',

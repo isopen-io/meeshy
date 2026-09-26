@@ -40,3 +40,17 @@ describe('rowMenuItems — les libellés BASCULENT avec l’état (#5559 T13)', 
     expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'archive']);
   });
 });
+
+describe('rowMenuItems — appeler depuis la ligne (#8109)', () => {
+  const flags = { isPinned: false, isMuted: false, isArchived: false };
+
+  test('quand l’appel est permis, « Appel vocal » et « Appel vidéo » ouvrent le menu', () => {
+    const items = rowMenuItems({ flags, unread: false, call: { language: 'fr' } });
+    expect(items.map((i) => i.id)).toEqual(['callAudio', 'callVideo', 'pin', 'mute', 'read', 'archive']);
+    expect(items.slice(0, 2).map((i) => i.label)).toEqual(['Appel vocal', 'Appel vidéo']);
+  });
+
+  test('sans droit d’appeler, aucune entrée d’appel', () => {
+    expect(rowMenuItems({ flags, unread: false }).some((i) => i.id === 'callAudio' || i.id === 'callVideo')).toBe(false);
+  });
+});

@@ -146,8 +146,21 @@ export function ContactCardSheet({
             </button>
           </header>
 
+          <ul className="flex flex-col" aria-label={translate(language, 'contactCard.sheet.title')}>
+            {rows.map((row) => (
+              <FieldRow key={row.key} row={row} language={language} onCopy={copy} />
+            ))}
+          </ul>
+          <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {translate(language, 'contactCard.copyHint')}
+          </p>
+
+          {/* « Sur Meeshy » APRÈS les champs (#8101) — l'ordre d'iOS
+              (`ContactCardDetailSheet.swift` : champs, puis `meeshySection`),
+              la référence de disposition : on lit d'abord la carte telle que
+              l'auteur l'a partagée, puis ce que Meeshy en sait. */}
           {accounts.length > 0 ? (
-            <section aria-label={translate(language, 'contactCard.onMeeshy')} className="flex flex-col gap-3">
+            <section data-contact-on-meeshy="" aria-label={translate(language, 'contactCard.onMeeshy')} className="flex flex-col gap-3">
               <h3 className="text-caption font-semibold uppercase" style={{ color: 'var(--color-ios-ink-2)' }}>
                 {translate(language, 'contactCard.onMeeshy')}
               </h3>
@@ -161,16 +174,6 @@ export function ContactCardSheet({
               ))}
             </section>
           ) : null}
-
-          <ul className="flex flex-col" aria-label={translate(language, 'contactCard.sheet.title')}>
-            {rows.map((row) => (
-              <FieldRow key={row.key} row={row} language={language} onCopy={copy} />
-            ))}
-          </ul>
-
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {translate(language, 'contactCard.copyHint')}
-          </p>
         </section>
       </div>
       <p

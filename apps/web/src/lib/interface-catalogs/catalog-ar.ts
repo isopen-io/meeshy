@@ -105,6 +105,7 @@ const ar = {
   'feed.post.media.next': 'الوسائط التالية',
   'feed.post.media.mosaic': 'فسيفساء من {count} وسائط',
   'media.unavailable': 'الوسائط غير متوفرة',
+  'media.retry': 'إعادة المحاولة',
   'feed.post.see_more': 'عرض المزيد',
   'feed.post.see_less': 'عرض أقل',
   'feed.post.more_options': 'خيارات إضافية',

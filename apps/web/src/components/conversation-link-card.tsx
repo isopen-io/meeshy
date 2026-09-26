@@ -9,15 +9,19 @@ import {
   cardWithMembership,
   conversationCardQueryKey,
   conversationCardQueryOptions,
+  conversationCardsFilter,
   leaveConversation,
   type ConversationCardDeps,
 } from '@/lib/api/conversation-card';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { joinLinkAsMember } from '@/lib/api/link-join';
+import { attachmentSrc } from '@/lib/api/media-url';
+import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { languageName } from '@/lib/languages';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
+import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { ConfirmDialog } from './confirm-dialog';
@@ -142,6 +146,7 @@ export function ConversationLinkCard({ target, deps, language, signedIn, account
       return;
     }
     queryClient.setQueryData(key, cardWithMembership(card, { isMember: true, conversationId: result.data.conversationId }));
+    void queryClient.invalidateQueries(conversationCardsFilter(result.data.conversationId));
     void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   };
 
@@ -159,6 +164,7 @@ export function ConversationLinkCard({ target, deps, language, signedIn, account
       setFailure('leave');
       return;
     }
+    void queryClient.invalidateQueries(conversationCardsFilter(conversationId));
     void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   };
 
@@ -253,14 +259,6 @@ function ClosedNotice({ kind, title, body }: { readonly kind: 'private' | 'notFo
   );
 }
 
-const initialsOf = (name: string): string =>
-  name
-    .split(/\s+/u)
-    .filter((word) => word !== '')
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? '')
-    .join('');
-
 function InviteQuote({
   inviter,
   message,
@@ -310,6 +308,13 @@ function Portrait({
   readonly radius: number;
   readonly ring?: string;
 }) {
+  /* La passerelle sert une CLÉ de stockage (`avatars/user/<id>.jpg`, #8137) :
+     `attachmentSrc` est le site unique de la résolution, comme pour tout
+     avatar du fil. Une image qui échoue (fichier purgé, 404) cède la place
+     aux initiales — `failedSrc` retient QUELLE adresse a échoué, pour qu'une
+     nouvelle adresse retente d'elle-même. */
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const resolved = src === null ? null : attachmentSrc(src);
   const style: CSSProperties = {
     width: size,
     height: size,
@@ -318,15 +323,63 @@ function Portrait({
     overflow: 'hidden',
     ...(ring === undefined ? {} : { border: `2px solid ${ring}` }),
   };
-  if (src !== null) return <img src={src} alt="" aria-hidden="true" loading="lazy" style={{ ...style, objectFit: 'cover' }} />;
+  if (resolved !== null && resolved !== failedSrc) {
+    return (
+      <img
+        src={resolved}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        crossOrigin={mediaImageCrossOrigin(resolved)}
+        onError={() => setFailedSrc(resolved)}
+        style={{ ...style, objectFit: 'cover' }}
+      />
+    );
+  }
   return (
     <span
+      data-portrait-initials
       aria-hidden="true"
       className="grid place-items-center font-extrabold"
       style={{ ...style, backgroundColor: accent, color: inkOnAccent(accent), fontSize: Math.round(size * 0.36) }}
     >
       {initialsOf(name)}
     </span>
+  );
+}
+
+/**
+ * La bannière est une clé de stockage comme l'avatar (#8137) : résolue par
+ * `attachmentSrc`, posée SUR le dégradé d'accent. Un fichier absent retire
+ * l'image et laisse voir le dégradé — jamais un trou ni une icône brisée.
+ */
+function Banner({ src, accent }: { readonly src: string | null; readonly accent: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const resolved = src === null ? null : attachmentSrc(src);
+  return (
+    <div
+      aria-hidden="true"
+      data-conversation-card-banner
+      className="relative overflow-hidden"
+      style={{
+        height: BANNER_HEIGHT,
+        backgroundColor: accent,
+        backgroundImage: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, var(--color-ios-card)))`,
+      }}
+    >
+      {resolved !== null && resolved !== failedSrc ? (
+        <img
+          src={resolved}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          crossOrigin={mediaImageCrossOrigin(resolved)}
+          onError={() => setFailedSrc(resolved)}
+          className="absolute inset-0 size-full object-cover"
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -341,19 +394,9 @@ function GroupBody({
   readonly language: InterfaceLanguage;
   readonly expired: boolean;
 }) {
-  const banner: CSSProperties = {
-    height: BANNER_HEIGHT,
-    backgroundColor: card.bannerUrl !== null ? accent : 'var(--color-ios-card)',
-    backgroundImage:
-      card.bannerUrl !== null
-        ? `url("${encodeURI(card.bannerUrl)}")`
-        : `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, var(--color-ios-card)))`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-  };
   return (
     <div className="grid gap-1.5 pb-3">
-      <div aria-hidden="true" style={banner} />
+      <Banner src={card.bannerUrl} accent={accent} />
       <div className="flex items-end gap-2.5 px-3" style={{ marginTop: -AVATAR_SIDE / 2 }}>
         <Portrait src={card.avatarUrl} name={card.title} accent={accent} size={AVATAR_SIDE} radius={14} ring="var(--color-ios-card)" />
         <h3 className="m-0 min-w-0 pb-0.5 text-title font-extrabold" style={{ overflowWrap: 'anywhere' }}>

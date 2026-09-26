@@ -218,3 +218,32 @@ describe('une rangée', () => {
     expect(row(record({}))).not.toContain('data-notification-call-back');
   });
 });
+
+/**
+ * « X EST SUR MEESHY » (#8143, recette 2026-09-26) — le titre persisté est une
+ * PHRASE (« Marie est sur Meeshy ! ») : des initiales tirées du titre y lisaient
+ * « ME » (Marie, est). Elles viennent du NOM de l'acteur, en lettres seules, et
+ * la rangée s'annonce en entier au lecteur d'écran : qui, ce qui arrive, et
+ * l'invitation à lui écrire.
+ */
+describe('la rangée « a rejoint Meeshy »', () => {
+  const joined = (displayName: string) =>
+    record({
+      type: 'contact_joined',
+      title: `${displayName} est sur Meeshy !`,
+      content: 'Dites-lui bonjour 👋',
+      actor: { id: 'u-marie', username: 'marie', displayName, avatar: null },
+      context: {},
+    });
+
+  test('les initiales viennent du nom de l’acteur, jamais de la phrase du titre', () => {
+    expect(row(joined('Marie'))).toContain('>MA</span>');
+    expect(row(joined('Théo (foot)'))).toContain('>TF</span>');
+  });
+
+  test('le libellé lu dit qui, ce qui arrive et l’invitation', () => {
+    const html = row(joined('Marie'));
+    expect(html).toContain('Marie est sur Meeshy !');
+    expect(html).toContain('Dites-lui bonjour 👋');
+  });
+});

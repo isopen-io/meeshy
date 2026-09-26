@@ -48,13 +48,25 @@ const flagsOf = (overrides: Partial<ConversationFlags> = {}): ConversationFlags 
   ...overrides,
 });
 
-function mountRowActions(): { readonly actions: string[] } {
+function mountRowActions(options: { readonly canCall?: boolean } = {}): { readonly actions: string[] } {
   const actions: string[] = [];
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(<RowActions flags={flagsOf({ isPinned: true })} unread magnified onAction={(id) => actions.push(id)} />);
+    root.render(
+      <ul>
+        <li data-row>
+          <RowActions
+            flags={flagsOf({ isPinned: true })}
+            unread
+            magnified
+            {...(options.canCall === true ? { call: { language: 'fr' as const } } : {})}
+            onAction={(id) => actions.push(id)}
+          />
+        </li>
+      </ul>,
+    );
   });
   return { actions };
 }
@@ -109,5 +121,36 @@ describe('RowActions — le retour matériel consomme le menu, jamais la liste (
 
     expect(menuIsOpen()).toBe(false);
     expect(window.history.length).toBe(before);
+  });
+});
+
+describe('RowActions — appeler depuis la ligne, au clic droit comme à l’appui long (#8109)', () => {
+  const menuItem = (label: string): HTMLButtonElement | null =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === label) ?? null;
+
+  test('« Appel vocal » et « Appel vidéo » routent leur action', () => {
+    const { actions } = mountRowActions({ canCall: true });
+    openMenu();
+    act(() => {
+      menuItem('Appel vocal')?.click();
+    });
+    openMenu();
+    act(() => {
+      menuItem('Appel vidéo')?.click();
+    });
+    expect(actions).toEqual(['callAudio', 'callVideo']);
+  });
+
+  test('le menu contextuel de la ligne (clic droit, appui long) ouvre le même menu, sans le menu du navigateur', () => {
+    mountRowActions({ canCall: true });
+    const row = container.querySelector('li[data-row]');
+    if (row === null) throw new Error('ligne introuvable');
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    act(() => {
+      row.dispatchEvent(event);
+    });
+    expect(menuIsOpen()).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(menuItem('Appel vocal') !== null).toBe(true);
   });
 });

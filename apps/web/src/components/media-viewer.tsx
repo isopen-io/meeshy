@@ -10,6 +10,7 @@ import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
+import { useMediaLoadFailure } from '@/lib/media/media-failure';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
@@ -41,6 +42,7 @@ import '@/styles/media-viewer.css';
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
+import { MediaUnavailable } from './media-unavailable';
 import { ViewerScenePage } from './viewer-scene-page';
 
 /**
@@ -235,11 +237,13 @@ function ViewerImagePage({
   isActive,
   isMine,
   deps,
+  language,
 }: {
   readonly attachment: Attachment;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
+  readonly language: InterfaceLanguage;
   /** LA PAGE COURANTE (#7363, W6) — déclenche le rapport d'ouverture
    * (`useAttachmentOpenReport`) quand elle le devient. */
   readonly isActive: boolean;
@@ -251,6 +255,20 @@ function ViewerImagePage({
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
   const [zoomed, setZoomed] = useState(false);
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
+  const src = attachment.fileUrl === '' ? '' : attachmentSrc(attachment.fileUrl);
+  const failure = useMediaLoadFailure(src);
+
+  /* UN FICHIER INTROUVABLE (#8141) : l'état dessiné REMPLACE l'image — jamais
+     l'icône brisée du navigateur avec le nom de fichier (son `alt`) au
+     centre. Le fond ThumbHash, lui, est retiré : il peindrait un média qui
+     n'existe plus. « Réessayer » seulement si l'échec est transitoire. */
+  if (src === '' || failure.failed) {
+    return (
+      <div data-viewer-media-failed className="relative flex size-full items-center justify-center overflow-hidden">
+        <MediaUnavailable language={language} {...(failure.retryable ? { onRetry: failure.retry } : {})} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -261,21 +279,16 @@ function ViewerImagePage({
         setZoomed((z) => !z);
       }}
     >
-      {attachment.fileUrl === '' ? (
-        <div className="media-viewer-muted-text flex flex-col items-center gap-2">
-          <Glyph name="image" size={48} className="media-viewer-fallback-glyph" />
-          <span className="text-mini">Média indisponible</span>
-        </div>
-      ) : (
-        <img
-          src={attachmentSrc(attachment.fileUrl)}
-          alt={described.text}
-          {...(lang !== undefined ? { lang } : {})}
-          className="media-viewer-media transition-transform"
-          style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
-          draggable={false}
-        />
-      )}
+      <img
+        key={failure.attempt}
+        src={src}
+        onError={failure.onError}
+        alt={described.text}
+        {...(lang !== undefined ? { lang } : {})}
+        className="media-viewer-media transition-transform"
+        style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
+        draggable={false}
+      />
     </div>
   );
 }
@@ -347,6 +360,18 @@ function ViewerVideoPage({
 
   const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
   const paused = showsPausedBadge(presentation, true, status === 'playing');
+  const videoSrc = attachmentSrc(attachment.fileUrl);
+  const failure = useMediaLoadFailure(videoSrc);
+
+  /* Une vidéo introuvable (#8141) dessine le MÊME état qu'une image : ni
+     lecteur noir muet, ni chargement sans fin. */
+  if (attachment.fileUrl === '' || failure.failed) {
+    return (
+      <div data-viewer-media-failed className="relative flex size-full items-center justify-center bg-black">
+        <MediaUnavailable language={language} {...(failure.retryable ? { onRetry: failure.retry } : {})} />
+      </div>
+    );
+  }
 
   // `stopPropagation` seulement quand la zone latérale RÉCLAME le geste : au
   // centre, `lateralSeek` rend `null` et l'événement continue de remonter
@@ -363,12 +388,13 @@ function ViewerVideoPage({
   return (
     <div className="relative flex size-full items-center justify-center bg-black" onDoubleClick={isActive ? onLateralDoubleClick : undefined}>
       <video
-        key={attachment.fileUrl}
+        key={`${attachment.fileUrl}:${failure.attempt}`}
         ref={bind}
         playsInline
         preload="auto"
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
-        src={attachmentSrc(attachment.fileUrl)}
+        src={videoSrc}
+        onError={failure.onError}
         className="media-viewer-media"
       />
       {paused ? (
@@ -728,6 +754,7 @@ export default function MediaViewer({
                   fallbackLanguage={fallbackLanguage}
                   isActive={i === index}
                   isMine={isMineAt?.(i) ?? isMine}
+                  language={language}
                   {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                   {...(deps !== undefined ? { deps } : {})}
                 />
@@ -768,7 +795,7 @@ export default function MediaViewer({
         {/* La place de la barre de lecture (#6359) : la page vidéo ACTIVE y rend `MediaTransport` par un portail ; vide sur une image. */}
         <div ref={setTransportSlot} data-viewer-transport-slot />
 
-        {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}
+        {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
       </div>
     </div>,
     container ?? document.body,
