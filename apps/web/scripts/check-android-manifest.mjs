@@ -34,7 +34,9 @@ const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifes
  * Permissions que le WEB consomme et que la coque doit donc déclarer.
  * `ACCESS_NETWORK_STATE` (#7844) : useOnline() / socket.ts / receipts.ts /
  * media-absent.ts. `POST_NOTIFICATIONS` (#7307) : la bannière d'un push FCM
- * (`src/lib/push/shell-push.ts`) sur Android 13+. Les autres (`INTERNET`, `RECORD_AUDIO`,
+ * (`src/lib/push/shell-push.ts`) sur Android 13+. `ACCESS_COARSE_LOCATION` et
+ * `ACCESS_FINE_LOCATION` (#8007) : la tuile « Position » du composeur
+ * (`src/lib/view/use-location-request.ts`). Les autres (`INTERNET`, `RECORD_AUDIO`,
  * `MODIFY_AUDIO_SETTINGS`) sont déjà posées (#5668) et restent gardées ici
  * pour que ce témoin soit la référence UNIQUE des permissions de la coque.
  */
@@ -44,6 +46,8 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.MODIFY_AUDIO_SETTINGS',
   'android.permission.ACCESS_NETWORK_STATE',
   'android.permission.POST_NOTIFICATIONS',
+  'android.permission.ACCESS_COARSE_LOCATION',
+  'android.permission.ACCESS_FINE_LOCATION',
 ];
 
 const XML_COMMENT = /<!--[\s\S]*?-->/g;
