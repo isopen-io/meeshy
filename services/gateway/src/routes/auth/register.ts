@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import {
   userSchema,
   registerRequestSchema,
@@ -405,6 +406,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
 
       await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
+
+      // « X a rejoint Meeshy » (#8105) : le service n'apparie que des
+      // identifiants VÉRIFIÉS — un compte sans numéro n'annonce rien ici,
+      // son e-mail l'annoncera une fois prouvé.
+      scheduleContactJoinedAnnouncement(context.prisma, user.id, { afterResponse });
 
       // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
       // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code

@@ -120,6 +120,7 @@ const TYPES_DE_RELATION = new Set<string>([
   'contact_accepted',
   'friend_request',
   'friend_accepted',
+  'contact_joined',
 ] satisfies readonly TypeDeNotification[]);
 
 const TYPES_DE_REACTION = new Set<string>([

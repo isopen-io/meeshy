@@ -751,3 +751,4 @@ export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';
 // ===== LA LENTILLE — modes de lecture + pont ✦ (contrat §3.1-3.3, C-010) =====
 export * from './reading-modes.js';
 export * from './conversation-bridge.js';
+export * from './contact-card.js';
