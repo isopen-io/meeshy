@@ -1,7 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UnifiedAuthContext } from '../../../middleware/auth';
-import { sendForbidden, sendUnauthorized } from '../../../utils/response';
+import { sendNotFound, sendUnauthorized } from '../../../utils/response';
 import { unsetOrNull } from '../../../utils/prisma-unset';
 
 /**
@@ -141,7 +141,7 @@ export type RefusAccesConversation = RefusSansSession | RefusNonMembre;
 export type VerdictAccesConversation = AccesAccorde | RefusAccesConversation;
 
 const ACCES_ACCORDE: AccesAccorde = { genre: 'ok' };
-const SANS_SESSION: RefusSansSession = { genre: 'sans-session' };
+export const SANS_SESSION: RefusSansSession = { genre: 'sans-session' };
 const NON_MEMBRE: RefusNonMembre = { genre: 'non-membre' };
 
 /**
@@ -285,20 +285,32 @@ export async function canAccessConversation(
 export const CODE_SANS_SESSION = 'UNAUTHORIZED';
 export const CODE_NON_MEMBRE = 'CONVERSATION_ACCESS_DENIED';
 
-/** Ce que chaque route DIT de ses deux refus — la seule chose qui varie. */
+/** Ce que chaque route DIT d'une session absente — la seule prose qui varie. */
 export type MessagesDeRefusDAcces = {
   readonly sansSession: string;
-  readonly nonMembre: string;
 };
+
+/**
+ * La prose UNIQUE d'une conversation qu'on ne sert pas — qu'elle n'existe pas,
+ * ou qu'elle existe et que l'appelant n'en soit pas membre (#8099).
+ *
+ * Directive porteur 2026-09-26 : un lien DIRECT ne dit rien à un non-membre,
+ * pas même que la conversation existe. Les identifiants sont LISIBLES
+ * (`mee_meeshy`) : un 403 « pas pour toi » à côté d'un 404 « introuvable »
+ * était un oracle d'existence énumérable. Les deux refus partent donc
+ * identiques — même statut, même prose, aucun code.
+ */
+export const CONVERSATION_INTROUVABLE = 'Conversation not found';
+
+export function refuserCommeIntrouvable(reply: FastifyReply): void {
+  return sendNotFound(reply, CONVERSATION_INTROUVABLE);
+}
 
 /**
  * La TRADUCTION du refus en réponse — site UNIQUE.
  *
- * Écrire `if (genre === 'sans-session') sendUnauthorized(…) else sendForbidden(…)`
- * à chaque site remettrait cinq exemplaires d'une même règle en circulation ;
- * « une règle qui doit être retapée à chaque site est une règle qu'un site
- * finira par ne pas avoir » (`services/gateway/CLAUDE.md`). Les MESSAGES restent
- * au site, parce qu'eux seuls dépendent de ce que la route servait.
+ * Session absente ou morte ⇒ 401 `UNAUTHORIZED` (#4792). Non-membre ⇒ le même
+ * 404 qu'un identifiant inexistant (#8099).
  */
 export function refuserAccesConversation(
   reply: FastifyReply,
@@ -309,5 +321,5 @@ export function refuserAccesConversation(
     return sendUnauthorized(reply, messages.sansSession, { code: CODE_SANS_SESSION });
   }
 
-  return sendForbidden(reply, messages.nonMembre, { code: CODE_NON_MEMBRE });
+  return refuserCommeIntrouvable(reply);
 }

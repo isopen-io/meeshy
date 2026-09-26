@@ -204,9 +204,8 @@ export interface PrivacyPreferencesDefaults {
   saveMediaToGallery: boolean;
   allowAnalytics: boolean;
 
-  // Découvrabilité (#8101) : un compte masqué de la recherche n'est remonté
-  // par la résolution d'une carte de visite qu'à un ami. Postérieure à la
-  // fenêtre de janvier 2026 : aucune ligne kebab-case.
+  // Découvrabilité (#8104) — lue par `services/profile-discoverability.ts`.
+  // Postérieure à janvier 2026 : aucune ligne kebab-case héritée.
   hideProfileFromSearch: boolean;
 }
 
@@ -230,6 +229,7 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
   saveMediaToGallery: false, // disabled by default for privacy
   allowAnalytics: false, // #4578 — gardée par un consentement, donc jamais vraie par défaut
 
+  // Trouvable par défaut : se cacher est un OPT-IN.
   hideProfileFromSearch: false,
 };
 

@@ -11,8 +11,9 @@
  *
  * Ce qui SORT est une liste fermée (`PublicContactAccount`) : jamais
  * l'e-mail ni le téléphone du compte, jamais lequel des identifiants a
- * matché, jamais la présence, le rôle ni une date. Un compte qui s'est masqué
- * de la recherche (`hideProfileFromSearch`) n'est remonté qu'à un ami.
+ * matché, jamais la présence, le rôle ni une date. La découvrabilité
+ * (`hideProfileFromSearch`, #8104) est appliquée PAR l'appariement
+ * (`undiscoverableAmong`) : un compte masqué n'est remonté qu'à un ami.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -24,7 +25,6 @@ import {
 import { normalizeContacts, resolveDefaultCountry, type NormalizedContact } from '../utils/contact-identifiers.js';
 import { normalizeEmail } from '../utils/normalize.js';
 import { ContactDirectoryService } from './ContactDirectoryService.js';
-import { loadStoredPrivacyPreferences } from './preferences/privacy-storage.js';
 
 const PUBLIC_CONTACT_SELECT = {
   id: true,
@@ -137,7 +137,7 @@ export class ContactCardResolver {
     if (orderedIds.length === 0) return [];
 
     const others = orderedIds.filter((id) => id !== viewerId);
-    const [profiles, links, privacy] = await Promise.all([
+    const [profiles, links] = await Promise.all([
       this.prisma.user.findMany({ where: { id: { in: orderedIds } }, select: PUBLIC_CONTACT_SELECT }),
       others.length === 0
         ? Promise.resolve([] as FriendLink[])
@@ -150,7 +150,6 @@ export class ContactCardResolver {
             },
             select: { senderId: true, receiverId: true, status: true },
           }),
-      loadStoredPrivacyPreferences(this.prisma, others),
     ]);
 
     const relations = new Map<string, ContactRelation>(orderedIds.map((id) => [id, id === viewerId ? 'self' : 'none']));
@@ -167,8 +166,6 @@ export class ContactCardResolver {
         const row = profileById.get(id);
         const relation = relations.get(id) ?? 'none';
         if (!row) return [];
-        const hidden = privacy.get(id)?.hideProfileFromSearch === true;
-        if (hidden && relation !== 'friend' && relation !== 'self') return [];
         return [
           {
             userId: row.id,

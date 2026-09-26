@@ -8,7 +8,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -17,7 +17,11 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { ContactCardResolver } from '../../../services/ContactCardResolver';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
+
+/** Le cache de préférences est de MODULE : chaque témoin part de sa propre base. */
+beforeEach(() => clearPrivacyPreferencesCache());
 
 const VIEWER_ID = '507f1f77bcf86cd799439011';
 const AWA_ID = '507f1f77bcf86cd799439022';

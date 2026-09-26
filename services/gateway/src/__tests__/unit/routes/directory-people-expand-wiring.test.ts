@@ -67,6 +67,10 @@ function buildApp(lignes: Array<Record<string, unknown>> = []) {
     args?.where?.blockedUserIds ? [] : lignes
   );
   const prisma = {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findMany,
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),

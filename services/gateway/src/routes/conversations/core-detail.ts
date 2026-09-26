@@ -14,8 +14,8 @@ import {
   errorResponseSchema,
   validationErrorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { canAccessConversation, refuserCommeIntrouvable, resolveCallerParticipant } from './utils/access-control';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
@@ -364,7 +364,7 @@ export function registerConversationDetailRoute(
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
 
       if (!canAccess) {
-          return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
+        return refuserCommeIntrouvable(reply);
       }
 
       const conversation = await prisma.conversation.findFirst({
@@ -605,7 +605,7 @@ export function registerConversationAnalysisRoute(
 
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
-        return sendForbidden(reply, 'Access denied');
+        return refuserCommeIntrouvable(reply);
       }
 
       const TRAIT_FIELDS_MAP: Record<string, string[]> = {
