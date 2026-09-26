@@ -41,7 +41,10 @@ import { Glyph } from './glyph';
  *
  * Arrivé depuis la connexion par mot de passe d'un e-mail inconnu, l'écran
  * DIT ce qui vient de se passer (compte créé, code et lien envoyés), et le
- * mot de passe tapé voyage avec le code (`pending-verification.ts`).
+ * mot de passe tapé voyage avec le code (`pending-verification.ts`). Un
+ * compte EXISTANT à l'adresse non prouvée (#8055) entend pourquoi : le mot
+ * de passe est bon, le compte attend son activation, la boîte mail (et ses
+ * indésirables) porte le code (#8186).
  *
  * LE LIEN OUVERT SUR UN TÉLÉPHONE EST D'ABORD REMIS À L'APP (#8083, « SI ET
  * SEULEMENT SI ») — AVANT que le jeton, à usage unique, ne soit consommé ici
@@ -193,10 +196,11 @@ export function VerifyEmailFlow({
   }
 
   const pending = pendingVerificationFor(email);
+  const awaitsActivation = pending !== null && !pending.accountCreated;
   const lead =
     pending === null
       ? translate(language, 'verifyEmail.subtitle', { email })
-      : translate(language, pending.accountCreated ? 'verifyEmail.subtitle.created' : 'verifyEmail.subtitle.pending', { email });
+      : translate(language, awaitsActivation ? 'verifyEmail.subtitle.pending' : 'verifyEmail.subtitle.created', { email });
 
   return (
     <AuthColumn>
@@ -256,6 +260,11 @@ export function VerifyEmailFlow({
             {translate(language, 'verifyEmail.title')}
           </h2>
           <p style={{ color: 'var(--color-ios-ink-2)' }}>{withStrongEmail(lead, email)}</p>
+          {awaitsActivation ? (
+            <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translate(language, 'verifyEmail.subtitle.pending.inbox')}
+            </p>
+          ) : null}
 
           <EmailCodeForm
             email={email}
