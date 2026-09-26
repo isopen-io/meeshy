@@ -1376,6 +1376,22 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertNil(loaded, "deleting the call-summary message must sweep its local transcript")
     }
 
+    /// #8095 — un message supprimé quitte l'INDEX des médias : la galerie ne
+    /// doit plus feuilleter une photo que son auteur a retirée, même quand le
+    /// message n'est plus dans la fenêtre chargée.
+    func test_messageDeleted_removesCarrierFromConversationMediaIndex() async {
+        let kept = TestFactories.makeMessage(id: "m-media-kept", conversationId: "c-media-del", content: "")
+        let gone = TestFactories.makeMessage(id: "m-media-gone", conversationId: "c-media-del", content: "")
+        try? await CacheCoordinator.shared.conversationMedia.save([kept, gone], for: "c-media-del")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m-media-gone", conversationId: "c-media-del"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let index = await CacheCoordinator.shared.conversationMedia.load(for: "c-media-del").snapshot() ?? []
+        XCTAssertEqual(index.map(\.id), ["m-media-kept"])
+    }
+
     /// A deleted message with no `callSummary` (the overwhelmingly common
     /// case — a regular text message) must not crash or otherwise misbehave
     /// when the sweep runs its `callId` resolution.
