@@ -263,3 +263,71 @@ export const MEDIA_GRID_MESSAGES: readonly Message[] = [media11, media12, media1
 
 /** `media-15` est ANTÉRIEUR à `media-6` (09:22 < 09:25) — exporté à part pour que `fixtures-media.ts` l'insère à SA place. */
 export const MEDIA_SOLO_VIDEO_MESSAGE: Message = media15;
+
+/**
+ * ===== LES MÉDIAS PROTÉGÉS QU'ON TOUCHE (#8008) — 08:56, 08:58, 08:59 =====
+ *
+ * Trois messages de plus, avant `media-1` (09:00), pour que la matrice « un
+ * média caché s'ouvre directement en plein écran » soit jouable au rendu dans
+ * les trois modes :
+ * - `media-9v` — une VIDÉO à vue unique (reçue) ;
+ * - `media-8m` — une image floutée DE MOI, avec sa légende ;
+ * - `media-8g` — un texte ET une grille de deux images floutés (reçus).
+ *
+ * Les pièces portent la protection de leur message, comme la passerelle
+ * l'écrit à la liaison (#7498, `associateAttachmentsToMessage`).
+ */
+export const MEDIA_VIEW_ONCE_VIDEO_WITNESS_ID = 'media-9v';
+const media9vCreatedAt = dayAt(0, 8, 56);
+const media9v = mediaMessage({
+  id: MEDIA_VIEW_ONCE_VIDEO_WITNESS_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'video',
+  translations: [],
+  isViewOnce: true,
+  viewOnceCount: 0,
+  createdAt: media9vCreatedAt,
+  attachments: [{ ...gridVideo(MEDIA_VIEW_ONCE_VIDEO_WITNESS_ID, media9vCreatedAt), isViewOnce: true }],
+});
+
+export const MEDIA_MINE_BLURRED_WITNESS_ID = 'media-8m';
+const media8mCreatedAt = dayAt(0, 8, 58);
+const media8m = mediaMessage({
+  id: MEDIA_MINE_BLURRED_WITNESS_ID,
+  senderId: VIEWER_ID,
+  sender: viewer,
+  content: 'La maquette du salon, avant travaux',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  isBlurred: true,
+  createdAt: media8mCreatedAt,
+  attachments: [
+    gridImage({ id: `${MEDIA_MINE_BLURRED_WITNESS_ID}-a1`, createdAt: media8mCreatedAt, alt: 'Maquette du salon', isBlurred: true }),
+  ],
+});
+
+export const MEDIA_BLURRED_GRID_WITNESS_ID = 'media-8g';
+const media8gCreatedAt = dayAt(0, 8, 59);
+const media8g = mediaMessage({
+  id: MEDIA_BLURRED_GRID_WITNESS_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: 'Les deux plans du coffre, à garder pour toi',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  isBlurred: true,
+  createdAt: media8gCreatedAt,
+  attachments: [
+    gridImage({ id: `${MEDIA_BLURRED_GRID_WITNESS_ID}-a1`, createdAt: media8gCreatedAt, alt: 'Plan du coffre, face', isBlurred: true }),
+    gridImage({ id: `${MEDIA_BLURRED_GRID_WITNESS_ID}-a2`, createdAt: media8gCreatedAt, alt: 'Plan du coffre, dos', isBlurred: true }),
+  ],
+});
+
+/** `media-9v` suit `media-9` (08:55) ; `media-8m` et `media-8g` suivent `media-10` (08:57) — `fixtures-media.ts` les insère à LEUR place. */
+export const PROTECTED_MEDIA_AFTER_MEDIA_9: readonly Message[] = [media9v];
+export const PROTECTED_MEDIA_AFTER_MEDIA_10: readonly Message[] = [media8m, media8g];

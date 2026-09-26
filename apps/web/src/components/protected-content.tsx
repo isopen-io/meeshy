@@ -24,9 +24,11 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { attachmentSegments } from '@/lib/view/message-a11y-label';
+import { partitionAttachments } from '@/lib/view/media-grid-layout';
 
 import { Glyph } from './glyph';
-import { ViewOnceOpenedContext } from './view-once-opened';
+import { ProtectedMediaGrid, ProtectedMediaViewer, type ProtectedMediaContext } from './protected-media';
+import { ViewOnceOpenedContext, revealedAttachment } from './view-once-opened';
 
 /**
  * LE VOILE, LE TOMBSTONE ET LE MINUTEUR — miroir de `FocalProtectedContent.swift`
@@ -55,6 +57,7 @@ export function ProtectedContent({
   isMine = false,
   revealable = true,
   onConsumeViewOnce,
+  media,
   now = defaultNow,
   children,
 }: {
@@ -91,6 +94,16 @@ export function ProtectedContent({
    */
   readonly revealable?: boolean;
   readonly onConsumeViewOnce?: ((messageId: string) => Promise<boolean>) | undefined;
+  /**
+   * UN MÉDIA CACHÉ S'OUVRE DIRECTEMENT EN PLEIN ÉCRAN (#8008, demande porteur
+   * du 2026-09-26). Quand l'hôte le fournit et que le message porte une image
+   * ou une vidéo, toucher le message — la puce d'une vue unique, le voile ou
+   * une case d'un flou — ouvre la visionneuse sur CE média, en clair ; jamais
+   * un dévoilement dans la rangée suivi d'un second toucher. Une vue unique
+   * est consommée à la FERMETURE de la visionneuse, comme iOS (#7499) : c'est
+   * en sortant qu'on a vu.
+   */
+  readonly media?: ProtectedMediaContext | undefined;
   readonly now?: (() => number) | undefined;
   readonly children: ReactNode;
 }) {
@@ -214,6 +227,44 @@ export function ProtectedContent({
     setFrozen(null);
   }, [phase, frozen]);
 
+  /**
+   * LA VISIONNEUSE OUVERTE PAR LE TOUCHER (#8008) — les pièces y entrent EN
+   * CLAIR (`revealedAttachment`), figées à l'instant du geste pour la même
+   * raison que `frozen` ci-dessus, et n'existent dans le document que tant
+   * qu'elle est ouverte.
+   */
+  const visualPieces = partitionAttachments(attachments ?? []).visual;
+  const opensMedia = media !== undefined && visualPieces.length > 0;
+  const [viewing, setViewing] = useState<{
+    readonly items: readonly Attachment[];
+    readonly startIndex: number;
+    readonly urls: readonly string[];
+  } | null>(null);
+
+  const openMedia = useCallback((index: number) => {
+    const pieces = partitionAttachments(liveAttachments.current ?? []).visual;
+    if (pieces.length === 0) return;
+    setViewing({
+      items: pieces.map(revealedAttachment),
+      startIndex: Math.max(0, Math.min(index, pieces.length - 1)),
+      urls: viewOnceMediaUrlsOf(liveAttachments.current),
+    });
+  }, []);
+
+  const closeMedia = useCallback(() => {
+    const closed = viewing;
+    setViewing(null);
+    if (!isViewOnce || closed === null) return;
+    setPhase((current) => closeViewOnce(openViewOnce(current), { now: now(), immediate: true }));
+    void onConsumeViewOnce?.(messageId);
+    void purgeViewOnceMedia(closed.urls);
+  }, [viewing, isViewOnce, now, onConsumeViewOnce, messageId]);
+
+  const viewer =
+    viewing !== null && media !== undefined ? (
+      <ProtectedMediaViewer items={viewing.items} startIndex={viewing.startIndex} media={media} onClose={closeMedia} />
+    ) : null;
+
   if (kind === 'deleted') return <ProtectionNotice kind="deleted" surface={surface} isMine={isMine} />;
   if (kind === 'expired') return null;
 
@@ -252,6 +303,19 @@ export function ProtectedContent({
    * ne verraient pas (mesuré en revue : la loi était testée et n'était
    * appelée par aucun rendu).
    */
+  if (isViewOnceKind(kind) && opensMedia) {
+    if (viewing !== null) {
+      return (
+        <>
+          <ViewOnceChip state="viewing" />
+          {viewer}
+        </>
+      );
+    }
+    if (kind === 'opened' || !showsAffordance(kind, phase)) return <ViewOnceChip state="opened" />;
+    return <ViewOnceChip state="sealed" onTap={() => openMedia(0)} />;
+  }
+
   if (isViewOnceKind(kind)) {
     if (rendersContent(kind, phase) && frozen !== null) {
       if (frozen.media) {
@@ -265,6 +329,9 @@ export function ProtectedContent({
       return (
         <ViewOnceTextWindow fogging={phase.phase === 'fogging'} onClose={() => closeOpened(false)}>
           {frozen.children}
+          <ProtectedRest>
+            <ViewOnceChip state="opened" />
+          </ProtectedRest>
         </ViewOnceTextWindow>
       );
     }
@@ -291,6 +358,33 @@ export function ProtectedContent({
    * et `showsAffordance` (`reading-mode/protection.ts`) sont les DEUX seules
    * réponses au « quand monter les enfants » et au « quand offrir le tap ».
    */
+  const veilLanguage = currentInterfaceLanguage();
+
+  /**
+   * LE FLOU D'UN MÉDIA (#8008) — au repos, le voile du TEXTE (s'il y en a) et
+   * la grille des SUBSTITUTS ; tout toucher ouvre la visionneuse, le texte y
+   * vient en légende (`carrier.caption`). Rien n'est jamais dévoilé dans la
+   * rangée : la fenêtre de cinq secondes est celle du texte seul.
+   */
+  if (kind === 'veiled' && opensMedia) {
+    return (
+      <div data-protected="hidden" data-protected-media="" className="flex flex-col gap-1.5">
+        {contentLength > 0 ? (
+          <VeilButton
+            messageId={messageId}
+            surface={surface}
+            contentLength={contentLength}
+            language={veilLanguage}
+            hintKey="attachment.protected.open.hint"
+            onTap={() => openMedia(0)}
+          />
+        ) : null}
+        <ProtectedMediaGrid pieces={visualPieces} media={media} onOpen={openMedia} />
+        {viewer}
+      </div>
+    );
+  }
+
   if (rendersContent(kind, phase)) {
     // LE BROUILLARD JOUE À LA FERMETURE, PAS À L'OUVERTURE (D-23 §1.4 point 6,
     // revue #5676 défaut 5) : `data-protected` reste `"revealed"` pendant
@@ -299,6 +393,9 @@ export function ProtectedContent({
       <div data-protected="revealed" className="protected-revealed">
         {children}
         <span className="protected-fog" data-fog={phase.phase === 'fogging' ? 'closing' : 'clear'} aria-hidden />
+        <ProtectedRest>
+          <VeilSurrogate surface={surface} contentLength={contentLength} />
+        </ProtectedRest>
       </div>
     );
   }
@@ -307,50 +404,18 @@ export function ProtectedContent({
   // d'exister dans le DOM. Ses QUATRE textes viennent du catalogue (#7337) ;
   // la langue se lit ici pour la même raison que dans `ProtectionNotice`
   // ci-dessous (§ son doc-comment) — une lecture, jamais un abonnement.
-  const veilLanguage = currentInterfaceLanguage();
   return (
     <>
-      <button
-        type="button"
-        data-protected="hidden"
-        data-surface={surface}
-        className="protected-veil"
-        aria-label={translate(veilLanguage, 'message.veiled')}
-        /* iOS sert DEUX chaînes distinctes — l'étiquette `bubble.content.hidden`
-           et l'INDICE `bubble.content.hidden.hint` (`FocalProtectedContent.swift:56-73`).
-           Sur le web, `aria-label` REMPLACE le contenu dans le calcul du nom
-           accessible : le texte du `<span>` ci-dessous n'était donc annoncé par
-           PERSONNE (mesuré en revue). `aria-describedby` le rend à sa vraie
-           fonction — une description, lue APRÈS le nom, exactement comme un
-           `accessibilityHint`. */
-        aria-describedby={`${messageId}-reveal-hint`}
-        aria-busy={pending || undefined}
-        onClick={onTap}
-      >
-        {/* `text-bubble leading-[1.35]` — LA MÊME typographie que le texte
-            réel (`bubble.tsx:180`, `focal-row.tsx:262`), pas la police par
-            défaut du navigateur (revue #5676, résidu du défaut 4) : sans
-            elle, un message qui enjambe DEUX lignes voilait sur 24 px/ligne
-            (16 px/1,5 par défaut) et révélait sur 20,25 px/ligne
-            (`--ios-font-body` 15 px × 1,35) — un écart de 3,75 px par ligne,
-            invisible sur un message d'UNE ligne (le plancher commun de
-            44 px l'absorbe) et démasqué dès que le contenu enjambe deux
-            lignes dans la bulle, plus étroite que la rangée plate. */}
-        <span
-          data-surrogate
-          aria-hidden
-          className="text-bubble leading-[1.35]"
-          style={{ filter: `blur(${BLUR_RADIUS_PX}px)`, userSelect: 'none' }}
-        >
-          {surrogateOf(contentLength)}
-        </span>
-        <span className="sr-only" id={`${messageId}-reveal-hint`}>
-          {translate(veilLanguage, 'message.veiled.hint')}
-        </span>
-        {/* LE FLOU N'A NI PUCE NI ŒIL (#7580) : c'est la LIGNE qui est floutée.
-            Un média flouté garde sa place, sans libellé par-dessus. */}
-        {attachmentCount > 0 ? <span data-masked-media aria-hidden /> : null}
-      </button>
+      <VeilButton
+        messageId={messageId}
+        surface={surface}
+        contentLength={contentLength}
+        language={veilLanguage}
+        hintKey="message.veiled.hint"
+        pending={pending}
+        maskedMedia={attachmentCount > 0}
+        onTap={onTap}
+      />
       {/*
         LA GRAMMAIRE D'UN ÉCHEC, PAS CELLE D'UN CONTENU (revue #5676,
         défaut 6) : la légende vivait EN ENCRE DE CORPS, à l'intérieur du
@@ -372,6 +437,107 @@ export function ProtectedContent({
         </p>
       ) : null}
     </>
+  );
+}
+
+/**
+ * LE SUBSTITUT FLOUTÉ — dérivé de la seule LONGUEUR du contenu (`surrogateOf`),
+ * jamais de son texte : le vrai texte n'entre PAS dans le DOM avant la
+ * révélation (D-23 §1.4 point 1).
+ *
+ * `text-bubble leading-[1.35]` — LA MÊME typographie que le texte réel
+ * (`bubble.tsx`, `focal-row.tsx`), pas la police par défaut du navigateur
+ * (revue #5676, résidu du défaut 4) : sans elle, un message qui enjambe DEUX
+ * lignes voilait sur 24 px/ligne et révélait sur 20,25 px/ligne — un écart
+ * démasqué dès que le contenu enjambe deux lignes dans la bulle.
+ */
+function Surrogate({ contentLength }: { readonly contentLength: number }) {
+  return (
+    <span
+      data-surrogate
+      aria-hidden
+      className="text-bubble leading-[1.35]"
+      style={{ filter: `blur(${BLUR_RADIUS_PX}px)`, userSelect: 'none' }}
+    >
+      {surrogateOf(contentLength)}
+    </span>
+  );
+}
+
+/**
+ * LE VOILE — le bouton qui porte le substitut. iOS sert DEUX chaînes
+ * distinctes — l'étiquette `bubble.content.hidden` et l'INDICE
+ * `bubble.content.hidden.hint` (`FocalProtectedContent.swift:56-73`). Sur le
+ * web, `aria-label` REMPLACE le contenu dans le calcul du nom accessible :
+ * l'indice est donc rendu par `aria-describedby`, lu APRÈS le nom, exactement
+ * comme un `accessibilityHint`. L'indice dit ce que fait LE toucher : révéler
+ * à sa place (`message.veiled.hint`), ou ouvrir le plein écran d'un média
+ * (`attachment.protected.open.hint`, #8008).
+ */
+function VeilButton({
+  messageId,
+  surface,
+  contentLength,
+  language,
+  hintKey,
+  pending = false,
+  maskedMedia = false,
+  onTap,
+}: {
+  readonly messageId: string;
+  readonly surface: 'row' | 'bubble';
+  readonly contentLength: number;
+  readonly language: ReturnType<typeof currentInterfaceLanguage>;
+  readonly hintKey: 'message.veiled.hint' | 'attachment.protected.open.hint';
+  readonly pending?: boolean;
+  readonly maskedMedia?: boolean;
+  readonly onTap: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-protected="hidden"
+      data-surface={surface}
+      className="protected-veil"
+      aria-label={translate(language, 'message.veiled')}
+      aria-describedby={`${messageId}-reveal-hint`}
+      aria-busy={pending || undefined}
+      onClick={(event) => {
+        event.stopPropagation();
+        onTap();
+      }}
+    >
+      <Surrogate contentLength={contentLength} />
+      <span className="sr-only" id={`${messageId}-reveal-hint`}>
+        {translate(language, hintKey)}
+      </span>
+      {/* LE FLOU N'A NI PUCE NI ŒIL (#7580) : c'est la LIGNE qui est floutée.
+          Un média flouté garde sa place, sans libellé par-dessus. */}
+      {maskedMedia ? <span data-masked-media aria-hidden /> : null}
+    </button>
+  );
+}
+
+/** LE VOILE AU REPOS, SANS GESTE — la forme que l'aperçu de l'appui long reprend. */
+function VeilSurrogate({ surface, contentLength }: { readonly surface: 'row' | 'bubble'; readonly contentLength: number }) {
+  return (
+    <span data-protected="hidden" data-surface={surface} className="protected-veil">
+      <Surrogate contentLength={contentLength} />
+    </span>
+  );
+}
+
+/**
+ * LA FORME AU REPOS D'UNE FENÊTRE OUVERTE (#8008, complément porteur) — posée
+ * CACHÉE dans chaque fenêtre de lecture, SANS contenu ni geste. L'aperçu de
+ * l'appui long clone la rangée : il y prend cette forme à la place du texte
+ * en clair (`lib/view/message-preview.ts`). Rien d'autre ne la lit.
+ */
+function ProtectedRest({ children }: { readonly children: ReactNode }) {
+  return (
+    <div hidden data-protected-rest="">
+      {children}
+    </div>
   );
 }
 

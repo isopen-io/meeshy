@@ -1089,6 +1089,7 @@ const pt = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Áudio protegido',
   'attachment.protected.file': 'Anexo protegido',
+  'attachment.protected.open.hint': 'toque para ver em tela cheia',
   'media.reactions.badge.a11y': 'Reações',
   'media.reactions.badge.mine.a11y': 'incluindo a sua',
   'attachment.kind.image': 'Foto',

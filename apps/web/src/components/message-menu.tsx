@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { flag, languageName } from '@/lib/languages';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { translate } from '@/lib/i18n-catalog';
+import { projectMessagePreview } from '@/lib/view/message-preview';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
@@ -246,6 +247,10 @@ export function MessageMenu({
     const source = target.element;
     const clone = source.cloneNode(true) as HTMLElement;
     stripPreviewIdentity(clone);
+    /* LA FORME PROTÉGÉE ET LA PROPORTION D'ORIGINE (#8008) : le clone ne
+       recopie jamais une fenêtre de lecture ouverte, et ses pièces reprennent
+       leur rapport d'aspect — `lib/view/message-preview.ts`. */
+    projectMessagePreview(clone);
     clone.setAttribute('data-message-preview', '');
     host.replaceChildren(clone);
     const previousOpacity = source.style.opacity;

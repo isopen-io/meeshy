@@ -8,6 +8,7 @@ import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import {
   EXTENDED_REACTIONS,
   QUICK_REACTIONS,
+  messageDetailExposureOf,
   messageMenuContextOf,
   messageMenuItems,
   messageStarAction,
@@ -255,5 +256,22 @@ describe('starrableOf — ce que le serveur accepterait (règle 2 de #7377)', ()
 
   test('un message encore OPTIMISTE (`cid_…`) n’existe pas côté serveur', () => {
     expect(starrableOf({ ...base, id: 'cid_0f0e0d0c-0b0a-4908-8706-050403020100' }, { now: NOW })).toBe(false);
+  });
+});
+
+describe('messageDetailExposureOf — la feuille « Plus… » ne fait pas fuir un contenu non ouvert (#8008)', () => {
+  const base = { content: 'bonjour', isBlurred: false, isViewOnce: false, viewOnceCount: 0 };
+
+  test('un message ordinaire expose ses langues et ses pièces', () => {
+    expect(messageDetailExposureOf(base, { now: 1000 })).toBe(true);
+  });
+
+  test('flouté : ni langues à explorer, ni pièces nommées', () => {
+    expect(messageDetailExposureOf({ ...base, isBlurred: true }, { now: 1000 })).toBe(false);
+  });
+
+  test('à vue unique, scellée ou déjà ouverte : rien non plus', () => {
+    expect(messageDetailExposureOf({ ...base, isViewOnce: true }, { now: 1000 })).toBe(false);
+    expect(messageDetailExposureOf({ ...base, isViewOnce: true, viewOnceCount: 1 }, { now: 1000 })).toBe(false);
   });
 });

@@ -417,6 +417,14 @@ export function Bubble({
       isMine={isMine}
       revealable={revealable}
       onConsumeViewOnce={onConsumeViewOnce}
+      media={{
+        frame: 'box',
+        languages,
+        fallbackLanguage: message.originalLanguage,
+        carrier: mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto }),
+        isMine,
+        ...(displayLanguage !== undefined ? { displayLanguage } : {}),
+      }}
       now={now}
     >
       {contentBlock}
