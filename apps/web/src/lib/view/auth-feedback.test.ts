@@ -255,6 +255,19 @@ describe('resolveVerifyEmailOutcome — code faux ET code expiré rendent le MÊ
     expect(result).toEqual({ kind: 'verified' });
   });
 
+  test('une réponse qui porte une session ⇒ signed-in (#8034) : l’écran quitte la vérification', () => {
+    const result = resolveVerifyEmailOutcome({
+      ok: true,
+      data: { verified: true, token: 'jwt', sessionToken: 'sess', user: { id: 'u', username: 'ada', displayName: 'Ada' } },
+      status: 200,
+    });
+    expect(result).toEqual({ kind: 'signed-in' });
+  });
+
+  test('429 ⇒ rate-limited (#8034 : le code a 6 chiffres, la passerelle limite les essais)', () => {
+    expect(resolveVerifyEmailOutcome(failure({ status: 429, error: 'Too many' }))).toEqual({ kind: 'rate-limited' });
+  });
+
   test('400 ⇒ invalid-code, quel que soit le texte serveur', () => {
     for (const error of ['Invalid verification code', 'Verification code has expired']) {
       expect(resolveVerifyEmailOutcome(failure({ status: 400, error }))).toEqual({ kind: 'invalid-code' });

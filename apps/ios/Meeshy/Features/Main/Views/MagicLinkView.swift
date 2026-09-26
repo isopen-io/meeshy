@@ -21,6 +21,9 @@ struct MagicLinkView: View {
     @FocusState private var isEmailFocused: Bool
     /// Le (i) DÉPLIÉ — un seul à la fois, comme à l'inscription (#6626).
     @State private var expandedHint: Hint?
+    /// L'e-mail envoyé porte un code ET un lien (#8035) : la saisie du code
+    /// suit l'envoi, pour l'adresse à laquelle il est parti.
+    @State private var codeEntry: EmailVerificationViewModel?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
 
@@ -273,7 +276,7 @@ struct MagicLinkView: View {
                 .foregroundColor(theme.textPrimary)
 
             VStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Ouvrez le lien reçu à", bundle: .main))
+                Text(String(localized: "auth.magiclink.sent.codeAndLink", defaultValue: "Code et lien envoyés à", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -283,6 +286,10 @@ struct MagicLinkView: View {
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .accessibilityElement(children: .combine)
+
+            if let codeEntry {
+                EmailCodeEntry(viewModel: codeEntry)
+            }
 
             if linkExpired {
                 Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: .main))
@@ -378,6 +385,9 @@ struct MagicLinkView: View {
             do {
                 let expiresInSeconds = try await AuthService.shared.requestMagicLink(email: email)
 
+                if codeEntry?.email != email {
+                    codeEntry = EmailVerificationViewModel(email: email)
+                }
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .waiting
                     isLoading = false

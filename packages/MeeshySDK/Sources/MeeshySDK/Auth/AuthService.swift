@@ -14,6 +14,10 @@ public protocol AuthServiceProviding: Sendable {
     func verifyEmail(code: String) async throws
     func verifyEmailWithCode(code: String, email: String) async throws
     func resendVerificationEmail(email: String) async throws
+    /// #8035 — vérifie l'adresse par code OU par lien, et rend la SESSION que
+    /// la passerelle ouvre avec (`token`, `sessionToken`, `user`). Une réponse
+    /// sans session (passerelle antérieure) rend des champs vides.
+    func confirmEmail(_ request: EmailVerificationRequest) async throws -> LoginResponseData
     func checkAvailability(username: String?, email: String?, phone: String?) async throws -> AvailabilityResponse
     func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData
     func me() async throws -> MeeshyUser
@@ -44,6 +48,16 @@ public extension AuthServiceProviding {
 
     func logoutThrowing(token: String) async throws {
         try await logoutThrowing()
+    }
+
+    /// Repli des doubles qui ne l'implémentent pas : la vérification par code
+    /// d'avant #8035, sans session.
+    func confirmEmail(_ request: EmailVerificationRequest) async throws -> LoginResponseData {
+        guard let code = request.code else {
+            throw MeeshyError.server(statusCode: 400, message: "Verification failed")
+        }
+        try await verifyEmailWithCode(code: code, email: request.email)
+        return LoginResponseData(user: nil, token: nil, sessionToken: nil, expiresIn: nil, requires2FA: nil, twoFactorToken: nil)
     }
 }
 
@@ -168,6 +182,11 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         guard response.success else {
             throw MeeshyError.server(statusCode: 400, message: response.error ?? response.message ?? "Verification failed")
         }
+    }
+
+    public func confirmEmail(_ request: EmailVerificationRequest) async throws -> LoginResponseData {
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.verifyEmail, body: request)
+        return response.data
     }
 
     public func resendVerificationEmail(email: String) async throws {

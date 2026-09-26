@@ -33,10 +33,14 @@ const NOTHING_RECEIVED: InfoHint = { label: NOTHING_RECEIVED_LABEL, text: NOTHIN
 
 export function EmailSentNotice({
   email,
+  lead,
   status,
   children,
 }: {
   readonly email: string;
+  /** La phrase sous le titre, quand l'e-mail envoyé porte AUTRE CHOSE qu'un
+   * lien — le code à 6 chiffres de la connexion par e-mail (#8034). */
+  readonly lead?: ReactNode;
   readonly status?: ReactNode;
   readonly children?: ReactNode;
 }) {
@@ -55,7 +59,11 @@ export function EmailSentNotice({
         E-mail envoyé
       </h2>
       <p style={{ color: 'var(--color-ios-ink-2)' }}>
-        Ouvrez le lien reçu à <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
+        {lead ?? (
+          <>
+            Ouvrez le lien reçu à <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
+          </>
+        )}
       </p>
 
       {status}
