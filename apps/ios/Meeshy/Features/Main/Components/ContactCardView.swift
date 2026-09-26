@@ -111,7 +111,8 @@ struct ContactCardView: View, Equatable {
             ZStack {
                 Circle().fill(LinearGradient(colors: [accent, accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white)
             }
             .frame(width: 36, height: 36)
