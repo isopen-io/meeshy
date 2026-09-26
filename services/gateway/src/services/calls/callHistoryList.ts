@@ -27,6 +27,19 @@ const HISTORY_STATUSES: CallStatus[] = [
 ];
 
 /**
+ * CE QUE LE JOURNAL D'UN LECTEUR CONTIENT : les appels terminés de ses
+ * conversations sur la fenêtre glissante, moins ceux qu'il a effacés (#8066).
+ * La lecture et le « tout effacer » partagent cette portée : vider efface
+ * exactement ce que le journal montrait.
+ */
+const journalScope = (userId: string, windowStart: Date): Prisma.CallSessionWhereInput => ({
+  startedAt: { gte: windowStart },
+  status: { in: HISTORY_STATUSES },
+  conversation: { participants: { some: { userId, isActive: true } } },
+  NOT: { hiddenForUserIds: { has: userId } }
+});
+
+/**
  * Paginated call journal for a user: the terminal (ended/missed/rejected/
  * failed) calls in conversations they belong to, newest first, over a 3-month
  * sliding window. Cursor-paginated by call id.
@@ -53,11 +66,7 @@ export async function listCallHistory(
   const { limit, cursor, filter, viewer } = options;
   const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
 
-  const where: Prisma.CallSessionWhereInput = {
-    startedAt: { gte: windowStart },
-    status: { in: HISTORY_STATUSES },
-    conversation: { participants: { some: { userId, isActive: true } } }
-  };
+  const where: Prisma.CallSessionWhereInput = journalScope(userId, windowStart);
   if (filter === 'missed') {
     // A missed call, for THIS user, is either (a) the call-wide `missed`
     // status the ringing-timeout sets when nobody at all answered, or (b)
@@ -181,4 +190,34 @@ export async function listCallHistory(
   );
 
   return { items, hasMore, nextCursor };
+}
+
+/**
+ * Efface UN appel du journal de `userId` — pour lui seul. `not-found` quand
+ * l'appel n'appartient à aucune de ses conversations (même réponse qu'un id
+ * inexistant : on ne confirme pas l'existence d'un appel étranger).
+ */
+export async function hideCallFromHistory(
+  prisma: PrismaClient,
+  userId: string,
+  callId: string
+): Promise<'hidden' | 'not-found'> {
+  const call = await prisma.callSession.findFirst({
+    where: { id: callId, conversation: { participants: { some: { userId, isActive: true } } } },
+    select: { id: true, hiddenForUserIds: true }
+  });
+  if (call === null) return 'not-found';
+  if (call.hiddenForUserIds.includes(userId)) return 'hidden';
+  await prisma.callSession.update({ where: { id: callId }, data: { hiddenForUserIds: { push: userId } } });
+  return 'hidden';
+}
+
+/** Vide le journal de `userId` — pour lui seul — et rend le nombre d'appels effacés. */
+export async function clearCallHistory(prisma: PrismaClient, userId: string): Promise<number> {
+  const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
+  const result = await prisma.callSession.updateMany({
+    where: journalScope(userId, windowStart),
+    data: { hiddenForUserIds: { push: userId } }
+  });
+  return result.count;
 }

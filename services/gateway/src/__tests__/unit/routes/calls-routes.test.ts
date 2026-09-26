@@ -253,9 +253,9 @@ describe('callRoutes', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('route registration', () => {
-    it('registers all 9 routes', () => {
+    it('registers all 11 routes', () => {
       const { routes } = setup();
-      expect(routes).toHaveLength(9);
+      expect(routes).toHaveLength(11);
     });
 
     it('registers GET /calls/:callId/transcript', () => {
