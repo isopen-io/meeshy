@@ -14,7 +14,7 @@ import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statu
 
 afterEach(() => resetCallTransportForTests());
 
-const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, link: 'connected', ...overrides });
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected', ...overrides });
 
 describe('décodage', () => {
   test('call:initiated : appelant, type, groupe', () => {

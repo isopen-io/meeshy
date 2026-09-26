@@ -15,7 +15,7 @@ import type { ActiveCall, CallMember } from './call-store';
 
 const videoStream = (live = true) => ({ getVideoTracks: () => (live ? [{ readyState: 'live' }] : []) }) as unknown as MediaStream;
 
-const member = (userId: string, cameraOn: boolean): CallMember => ({ userId, name: userId, avatar: null, micMuted: false, cameraOn, link: 'connected' });
+const member = (userId: string, cameraOn: boolean): CallMember => ({ userId, name: userId, avatar: null, micMuted: false, cameraOn, screenSharing: false, link: 'connected' });
 
 const call = (patch: Partial<ActiveCall> = {}): Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'> => ({
   members: { peer: member('peer', true) },

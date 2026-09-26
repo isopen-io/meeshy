@@ -37,7 +37,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   ...overrides,
 });
 
-const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-peer', name: 'Amina Diallo', avatar: null, micMuted: false, cameraOn: false, link: 'connected', ...overrides });
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-peer', name: 'Amina Diallo', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected', ...overrides });
 
 const screen = (overrides: Partial<ActiveCall> = {}) => renderToStaticMarkup(<CallScreen call={call(overrides)} />);
 
