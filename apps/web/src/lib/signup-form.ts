@@ -8,6 +8,7 @@ import {
 } from '@meeshy/shared/utils/registration-identity';
 
 import type { RegisterBody } from './api/auth';
+import { isReferralCodeShaped, normalizeReferralCode } from './view/referral-code';
 import { countryOf, type Country } from './countries';
 
 /**
@@ -201,12 +202,32 @@ export function hasPhoneNumber(form: SignupFormState): boolean {
 }
 
 /**
- * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — sept clés
+ * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — neuf clés
  * au plus, jamais `username` / `firstName` / `lastName` (la passerelle les
  * dérive de `displayName`, #5218). Le couple téléphone est TOUT ou RIEN : un
  * numéro sans pays ne qualifierait rien.
  */
-export function composeRegisterBody(form: SignupFormState): RegisterBody {
+/**
+ * Le parrainage qui accompagne l'inscription (#8058). Depuis #8055, une
+ * inscription sans numéro ne rend AUCUNE session : le rattachement authentifié
+ * d'après-inscription (`POST /affiliate/register`) ne pouvait plus partir. Le
+ * code voyage donc DANS la création du compte, et la passerelle noue la
+ * relation au parrain, activé ou non. Un code mal formé n'est pas envoyé ; un
+ * code refusé par la passerelle ne bloque jamais l'inscription.
+ */
+export type RegisterReferral = {
+  readonly referralCode?: string;
+  readonly referralSessionKey?: string;
+};
+
+function referralFields(referral: RegisterReferral): Pick<RegisterBody, 'affiliateToken' | 'affiliateSessionKey'> {
+  const code = normalizeReferralCode(referral.referralCode ?? '');
+  if (!isReferralCodeShaped(code)) return {};
+  const sessionKey = (referral.referralSessionKey ?? '').trim();
+  return { affiliateToken: code, ...(sessionKey !== '' ? { affiliateSessionKey: sessionKey } : {}) };
+}
+
+export function composeRegisterBody(form: SignupFormState, referral: RegisterReferral = {}): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
   return {
     // OMISE quand le champ est vide, jamais `''` : `displayNameProperty` porte
@@ -225,6 +246,7 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
     ...(hasPhoneNumber(form) ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
     systemLanguage: form.systemLanguage,
     regionalLanguage: form.regionalLanguage,
+    ...referralFields(referral),
   };
 }
 

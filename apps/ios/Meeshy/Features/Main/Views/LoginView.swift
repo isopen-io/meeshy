@@ -27,6 +27,11 @@ struct LoginView: View {
     /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
     /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
     @State private var codeEntry: CodeEntryContext?
+    /// La session prouvée par un code (#8059), posée UNIQUEMENT dans le
+    /// `onDismiss` de la présentation qui l'a obtenue : la poser plus tôt
+    /// démonte cet écran pendant que sa feuille est encore là, et la feuille
+    /// reste orpheline — figée sur « Email vérifié ! », « Fermer » inerte.
+    @State private var provenSessionOpener: ProvenSessionOpener?
 
     private struct CodeEntryContext: Identifiable {
         let pending: PendingEmailVerification
@@ -182,25 +187,30 @@ struct LoginView: View {
         .sheet(isPresented: $showForgotPassword) {
             MeeshyForgotPasswordView()
         }
-        .sheet(item: $codeEntry) { entry in
+        .sheet(item: $codeEntry, onDismiss: openProvenSession) { entry in
             EmailVerificationView(
                 email: entry.pending.email,
                 password: entry.password,
-                accountCreated: entry.pending.accountCreated
+                accountCreated: entry.pending.accountCreated,
+                onVerified: { provenSessionOpener = $0 }
             )
         }
-        .sheet(isPresented: $showMagicLink) {
-            MagicLinkView()
+        .sheet(isPresented: $showMagicLink, onDismiss: openProvenSession) {
+            MagicLinkView(onVerified: { provenSessionOpener = $0 })
                 .environmentObject(authManager)
         }
-        .fullScreenCover(isPresented: $showRegister) {
+        .fullScreenCover(isPresented: $showRegister, onDismiss: openProvenSession) {
             // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
             // se contente de refermer : la session est déjà appliquée par
             // `AuthManager.registerThrowing`, et `MeeshyApp` bascule sur
             // `AdaptiveRootView` à l'instant où `isAuthenticated` passe.
             SignupView(
                 onComplete: { showRegister = false },
-                onSwitchToLogin: { showRegister = false }
+                onSwitchToLogin: { showRegister = false },
+                onVerified: { opener in
+                    provenSessionOpener = opener
+                    showRegister = false
+                }
             )
         }
         // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
@@ -695,6 +705,14 @@ struct LoginView: View {
             let outcome = await authManager.login(username: username, password: password)
             presentCodeEntryIfNeeded(outcome, password: password)
         }
+    }
+
+
+    /// Pose la session prouvée — la présentation qui l'a obtenue est partie (#8059).
+    private func openProvenSession() {
+        guard let open = provenSessionOpener else { return }
+        provenSessionOpener = nil
+        open()
     }
 
     private func presentCodeEntryIfNeeded(_ outcome: LoginOutcome, password: String) {

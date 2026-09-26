@@ -29,6 +29,12 @@ struct SignupView: View {
     /// Ramène à la connexion, depuis le pied de page ou depuis un refus
     /// « adresse déjà utilisée ».
     var onSwitchToLogin: (() -> Void)?
+    /// Compte créé SANS numéro, puis code vérifié (#8055, #8059) : reçoit de
+    /// quoi ouvrir la session, une fois la feuille du code REFERMÉE. L'hôte
+    /// referme alors l'inscription et ouvre la session dans SON `onDismiss` —
+    /// l'ouvrir plus tôt démonte l'écran qui présente l'inscription et la
+    /// laisse orpheline. `nil` ⇒ la session s'ouvre dès la feuille refermée.
+    var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
 
     @FocusState private var focusedField: SignupField?
     @State private var isShowingLanguageSheet = false
@@ -42,6 +48,7 @@ struct SignupView: View {
     @State private var isPasswordRevealed = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
+    @State private var provenSessionOpener: ProvenSessionOpener?
 
     var body: some View {
         ZStack {
@@ -104,9 +111,20 @@ struct SignupView: View {
         // #8055 — sans numéro, le compte attend son code : même écran que la
         // connexion (#8035). Le mot de passe est déjà sur le compte, il ne
         // repart pas ; la vérification ouvre la session et `MeeshyApp` bascule.
-        .sheet(item: $viewModel.pendingVerification) { pending in
-            EmailVerificationView(email: pending.email, accountCreated: pending.accountCreated)
+        .sheet(item: $viewModel.pendingVerification, onDismiss: handOffProvenSession) { pending in
+            EmailVerificationView(
+                email: pending.email,
+                accountCreated: pending.accountCreated,
+                onVerified: { provenSessionOpener = $0 }
+            )
         }
+    }
+
+    private func handOffProvenSession() {
+        guard let open = provenSessionOpener else { return }
+        provenSessionOpener = nil
+        guard let onVerified else { return open() }
+        onVerified(open)
     }
 
     // MARK: - Chrome

@@ -167,6 +167,24 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(stubAuthService.confirmEmailRequests, [.code("123456", email: "nouveau@exemple.com", password: "choisi")])
     }
 
+    /// #8059 — prouver l'adresse ne pose PAS la session : poser la session
+    /// démonte l'écran de connexion, et la feuille du code encore présentée
+    /// par lui resterait orpheline. La session s'ouvre quand l'écran l'a
+    /// refermée, par `openSession`.
+    func test_verifyEmail_servedSession_doesNotOpenItUntilAsked() async throws {
+        stubAuthService.confirmEmailResult = .success(makeLoginData(user: makeUser(id: "verified-2"), token: "jwt-proven"))
+
+        let proven = try await AuthManager.shared.verifyEmail(.code("123456", email: "nouveau@exemple.com"))
+
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(proven?.token, "jwt-proven")
+
+        AuthManager.shared.openSession(try XCTUnwrap(proven))
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "verified-2")
+    }
+
     func test_confirmEmail_verifiedWithoutSession_staysSignedOut() async throws {
         stubAuthService.confirmEmailResult = .success(makeLoginData(token: nil, sessionToken: nil))
 
