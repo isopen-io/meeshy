@@ -129,6 +129,15 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     expect(lastVideo(h.peers.get('a') as ReturnType<typeof fakeConnection>)).toMatchObject({ active: true });
   });
 
+  test('un relevé lent n’en chevauche pas un autre : le second rend null, la survie n’avance qu’une fois', async () => {
+    const h = harness();
+    h.add('a');
+    const [first, second] = await Promise.all([h.loop.tick(), h.loop.tick()]);
+    expect(first).not.toBeNull();
+    expect(second).toBeNull();
+    expect(await h.loop.tick()).not.toBeNull();
+  });
+
   test('le relevé rend le total, le niveau et le codec ; sans lien, rien', async () => {
     const h = harness();
     expect(await h.loop.tick()).toBeNull();

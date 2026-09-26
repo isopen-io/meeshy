@@ -57,7 +57,9 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
     return (await rewrite(senderOf(pc, 'video'), (encoding) => encodingFor(encoding, tier))) ? [userId, tier] : null;
   };
 
-  const tick = async (): Promise<QualityTick | null> => {
+  let inFlight = false;
+
+  const measureAll = async (): Promise<QualityTick | null> => {
     const reads = (await Promise.all(deps.links().map(measure))).filter((entry): entry is readonly [string, RTCPeerConnection, StatsRead] => entry !== null);
     const rates = reads.map(([userId, pc, read]) => [userId, pc, peerRate(read, previous.get(userId) ?? null)] as const);
     previous = new Map(reads.map(([userId, , read]) => [userId, read]));
@@ -69,6 +71,17 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
     const tiers = await Promise.all(rates.map(([userId, pc, rate]) => applyTier(userId, pc, wantsVideo ? appliedTier(rate.level, survival.stage) : 'high')));
     applied = new Map(tiers.filter((entry): entry is readonly [string, VideoTier] => entry !== null));
     return { total, stage: survival.stage, codec: reads.map(([, , read]) => read.codec).find((codec) => codec !== null) ?? null };
+  };
+
+  /** Un relevé lent n'en chevauche pas un autre : la survie n'avance qu'une fois par relevé. */
+  const tick = async (): Promise<QualityTick | null> => {
+    if (inFlight) return null;
+    inFlight = true;
+    try {
+      return await measureAll();
+    } finally {
+      inFlight = false;
+    }
   };
 
   return { tick };
