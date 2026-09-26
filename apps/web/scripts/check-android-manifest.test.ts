@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  auditCallComponents,
   auditManifestPermissions,
   formatViolations,
   REQUIRED_PERMISSIONS,
@@ -162,5 +163,79 @@ describe('formatViolations — le message du gate NOMME chaque permission en dé
     expect(lines).toHaveLength(3);
     expect(lines[1]).toContain(INTERNET);
     expect(lines[2]).toContain(ACCESS_NETWORK_STATE);
+  });
+});
+
+describe('les permissions de l appel natif de la coque (#8049)', () => {
+  const CALL_PERMISSIONS = [
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+    'android.permission.FOREGROUND_SERVICE_CAMERA',
+    'android.permission.USE_FULL_SCREEN_INTENT',
+    'android.permission.BLUETOOTH_CONNECT',
+    'android.permission.WAKE_LOCK',
+    'android.permission.VIBRATE',
+  ];
+
+  test.each(CALL_PERMISSIONS)('%s est requise : son absence est une violation nommée', (permission) => {
+    expect(REQUIRED_PERMISSIONS).toContain(permission);
+    expect(auditManifestPermissions({ manifest: manifestWith(othersThan(permission)) })).toEqual([
+      { permission, count: 0 },
+    ]);
+  });
+});
+
+const CALL_COMPONENTS: readonly string[] = [
+  '    <application>',
+  '        <service android:name="com.capacitorjs.plugins.pushnotifications.MessagingService" tools:node="remove" />',
+  '        <service android:name=".MeeshyMessagingService" android:exported="false">',
+  '            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>',
+  '        </service>',
+  '        <service android:name=".CallForegroundService" android:exported="false" android:foregroundServiceType="microphone|camera" />',
+  '        <receiver android:name=".DeclineCallReceiver" android:exported="false" />',
+  '    </application>',
+];
+
+const callComponentsWhere = (edit: (line: string) => string | null): string =>
+  manifestWith(CALL_COMPONENTS.map(edit).filter((line): line is string => line !== null));
+
+describe('auditCallComponents — la coque déclare les composants de l appel natif (#8049)', () => {
+  test('les quatre déclarations présentes → aucune violation', () => {
+    expect(auditCallComponents({ manifest: callComponentsWhere((line) => line) })).toEqual([]);
+  });
+
+  test('le service du plugin NON retiré → deux services MESSAGING_EVENT se concurrencent', () => {
+    const manifest = callComponentsWhere((line) => line.replace(' tools:node="remove"', ''));
+    expect(auditCallComponents({ manifest })).toEqual([
+      'com.capacitorjs.plugins.pushnotifications.MessagingService — non retiré (tools:node="remove") : deux services MESSAGING_EVENT se concurrencent',
+    ]);
+  });
+
+  test('le service de messagerie de la coque absent → l appel app tuée ne sonne pas', () => {
+    const manifest = manifestWith(CALL_COMPONENTS.filter((line) => !line.includes('MeeshyMessagingService')));
+    expect(auditCallComponents({ manifest })).toEqual([
+      '.MeeshyMessagingService — absent ou sans com.google.firebase.MESSAGING_EVENT',
+    ]);
+  });
+
+  test('le service au premier plan sans le type caméra → violation nommée', () => {
+    const manifest = callComponentsWhere((line) => line.replace('microphone|camera', 'microphone'));
+    expect(auditCallComponents({ manifest })).toEqual([
+      '.CallForegroundService — foregroundServiceType doit porter microphone ET camera',
+    ]);
+  });
+
+  test('le récepteur de refus exporté → n importe quelle app pourrait refuser un appel', () => {
+    const manifest = callComponentsWhere((line) =>
+      line.includes('DeclineCallReceiver') ? line.replace('"false"', '"true"') : line,
+    );
+    expect(auditCallComponents({ manifest })).toEqual(['.DeclineCallReceiver — absent ou exporté']);
+  });
+
+  test('un composant en commentaire ne compte pas', () => {
+    const manifest = callComponentsWhere((line) =>
+      line.includes('DeclineCallReceiver') ? `<!-- ${line.trim()} -->` : line,
+    );
+    expect(auditCallComponents({ manifest })).toEqual(['.DeclineCallReceiver — absent ou exporté']);
   });
 });

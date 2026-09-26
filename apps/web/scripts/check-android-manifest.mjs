@@ -39,6 +39,9 @@ const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifes
  * (`src/lib/view/use-location-request.ts`). Les autres (`INTERNET`, `RECORD_AUDIO`,
  * `MODIFY_AUDIO_SETTINGS`) sont déjà posées (#5668) et restent gardées ici
  * pour que ce témoin soit la référence UNIQUE des permissions de la coque.
+ * `FOREGROUND_SERVICE` (+ `_MICROPHONE`, `_CAMERA`), `USE_FULL_SCREEN_INTENT`,
+ * `BLUETOOTH_CONNECT`, `WAKE_LOCK`, `VIBRATE` (#8049) : l'appel natif de la
+ * coque (`src/lib/calls/shell-call.ts`, `MeeshyCallPlugin.java`).
  */
 export const REQUIRED_PERMISSIONS = [
   'android.permission.INTERNET',
@@ -49,6 +52,13 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.CAMERA',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+  'android.permission.FOREGROUND_SERVICE_CAMERA',
+  'android.permission.USE_FULL_SCREEN_INTENT',
+  'android.permission.BLUETOOTH_CONNECT',
+  'android.permission.WAKE_LOCK',
+  'android.permission.VIBRATE',
 ];
 
 const XML_COMMENT = /<!--[\s\S]*?-->/g;
