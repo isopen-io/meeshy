@@ -14,6 +14,7 @@ import type { UsernameParams } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsAroundViewer } from '../../services/ContactDirectoryService';
+import { undiscoverableAmong } from '../../services/profile-discoverability';
 import { parseFieldList, restrictFields, type FieldSet } from '../../utils/sparse-fieldset';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter';
@@ -343,7 +344,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         select: publicUserSelect
       });
 
-      if (!user) {
+      if (!user || (await undiscoverableAmong(fastify.prisma, viewerId, [user.id])).has(user.id)) {
         return sendNotFound(reply, 'User not found');
       }
 
@@ -477,7 +478,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         select: publicUserSelect
       });
 
-      if (!user) {
+      if (!user || (await undiscoverableAmong(fastify.prisma, viewerId, [user.id])).has(user.id)) {
         return sendNotFound(reply, 'User not found');
       }
 

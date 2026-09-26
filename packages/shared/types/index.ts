@@ -67,6 +67,7 @@ export * from './attachment.js';
 
 // Export des types unifiés Phase 6 - Video Calls
 export * from './video-call.js';
+export * from './call-rules.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';

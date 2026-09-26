@@ -768,6 +768,15 @@ jobs:
           cd apps/web
           node scripts/check-calls.mjs
 
+      # #6383 / #6454 / #3586 — rejoindre, rappeler, composer : le pavé trouve
+      # par nom et par numéro, la fiche /call/:id se lit sans numéro, un appel
+      # vivant se rejoint par lien profond, bannière et pastille « Rejoindre ».
+      - name: Gate appels rejoints (pavé, fiche, reprise)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-join.mjs
+
       # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
       # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
       # retirent la ligne et font baisser le compte de l'onglet ET du barreau au
@@ -1178,6 +1187,14 @@ jobs:
         run: |
           cd apps/web
           node scripts/build-shells.mjs --target android
+
+      # #8049 — les décisions PURES de l'appel natif (routage de la poussée,
+      # sorties audio, type du service au premier plan, refus sans socket) se
+      # testent sur la JVM : `app/src/test/java/me/meeshy/app/`.
+      - name: Tests JVM de la coque (testDebugUnitTest)
+        run: |
+          cd apps/web/android
+          ./gradlew testDebugUnitTest
 
       # L'APK de recette, installable tel quel (`adb install -r`) : la
       # régression se voit sur le runner, et le build vert se pose sur le

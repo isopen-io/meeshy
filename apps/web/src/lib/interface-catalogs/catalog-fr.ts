@@ -17,6 +17,8 @@ import frIdentity from './catalog-fr-identity';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
+import frCallShell from './catalog-fr-call-shell';
+import frCallJoin from './catalog-fr-call-join';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
@@ -184,6 +186,8 @@ const fr = {
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
+  ...frCallShell,
+  ...frCallJoin,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',

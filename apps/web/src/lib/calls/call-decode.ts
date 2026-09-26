@@ -127,6 +127,13 @@ export function decodeCallId(payload: unknown): string | null {
   return isRecord(payload) ? str(payload.callId) : null;
 }
 
+/** `call:force-leave` — `removed` quand un modérateur a retiré ce participant, toute autre fin forcée sinon. */
+export function decodeForceLeave(payload: unknown): { readonly callId: string; readonly removed: boolean } | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  return callId === null ? null : { callId, removed: payload.reason === 'removed' };
+}
+
 export function decodeMediaToggled(payload: unknown): { readonly callId: string; readonly userId: string | null; readonly participantId: string | null; readonly mediaType: 'audio' | 'video'; readonly enabled: boolean } | null {
   if (!isRecord(payload)) return null;
   const callId = str(payload.callId);

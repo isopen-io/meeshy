@@ -55,6 +55,11 @@ const esCall = {
   'call.bubble.join': 'Unirse',
   'call.callBack.named': 'Devolver la llamada a {name}',
   'call.you': 'Tú',
+  'call.ended.removed': 'Te han retirado de la llamada',
+  'call.spotlight.show': 'Destacar a {name}',
+  'call.spotlight.back': 'Volver a la cuadrícula',
+  'call.remove.named': 'Retirar a {name} de la llamada',
+  'call.remove.failed': 'No se pudo retirar a este participante',
 } as const;
 
 export default esCall;
