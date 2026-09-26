@@ -47,22 +47,40 @@ extension MessageListViewController {
 
         let anchor = LongMessageExpansionLaw.anchor(isExpanding: next == localId)
         let edgeBefore = visibleCell(forLocalId: localId).map { visualEdge(of: $0, anchor: anchor) }
-        let changes = { [weak self] in
+        let animated = !UIAccessibility.isReduceMotionEnabled
+        let resize = { [weak self] in
             guard let self else { return }
             self.applyToDataSource(snapshot) {}
+            // La cellule re-hébergée s'auto-dimensionne À LA PASSE de layout :
+            // l'invalider rend sa nouvelle hauteur effective dans la passe.
+            self.collectionView.collectionViewLayout.invalidateLayout()
             self.collectionView.layoutIfNeeded()
-            guard let edgeBefore, let cell = self.visibleCell(forLocalId: localId) else { return }
+        }
+        // Le layout du fil tient lui-même son ancre (le bas VISUEL, repère
+        // renversé) pendant la passe : le bord de lecture se recale donc au
+        // tour suivant, d'un glissé de la même durée — jamais d'un saut.
+        let reanchor = { [weak self] in
+            guard let self, let edgeBefore, let cell = self.visibleCell(forLocalId: localId) else { return }
             let inset = self.collectionView.adjustedContentInset
-            self.collectionView.contentOffset.y = LongMessageExpansionLaw.anchoredOffset(
+            let target = LongMessageExpansionLaw.anchoredOffset(
                 current: self.collectionView.contentOffset.y,
                 edgeBefore: edgeBefore,
                 edgeAfter: self.visualEdge(of: cell, anchor: anchor),
                 minOffset: -inset.top,
                 maxOffset: self.collectionView.contentSize.height - self.collectionView.bounds.height + inset.bottom
             )
+            guard abs(target - self.collectionView.contentOffset.y) > 0.5 else { return }
+            guard animated else { return self.collectionView.contentOffset.y = target }
+            UIView.animate(
+                withDuration: FocalMetrics.Focus.expandDuration,
+                delay: 0,
+                options: [.curveEaseInOut, .allowUserInteraction],
+                animations: { self.collectionView.contentOffset.y = target }
+            )
         }
-        guard !UIAccessibility.isReduceMotionEnabled else {
-            UIView.performWithoutAnimation(changes)
+        guard animated else {
+            UIView.performWithoutAnimation(resize)
+            reanchor()
             applyLongMessageExpansionPresentation(animated: false)
             return
         }
@@ -70,8 +88,9 @@ extension MessageListViewController {
             withDuration: FocalMetrics.Focus.expandDuration,
             delay: 0,
             options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction],
-            animations: changes
+            animations: resize
         )
+        DispatchQueue.main.async(execute: reanchor)
         applyLongMessageExpansionPresentation(animated: true)
     }
 

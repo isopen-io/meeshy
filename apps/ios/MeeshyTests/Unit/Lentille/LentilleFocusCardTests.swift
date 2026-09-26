@@ -108,11 +108,12 @@ final class LentilleFocusCardTests: XCTestCase {
         XCTAssertEqual(result.reason, .staleAbsence)
     }
 
-    /// Branche 5/5 : le défaut — peu de non-lus, lecture récente ⇒ Focal.
+    /// Branche 5/5 : le défaut — peu de non-lus, lecture récente ⇒ Script
+    /// (Focal jusqu'au 2026-09-26, #8147).
     func test_decision_branch5_default() {
         let conversation = makeConversation(unreadCount: 2, lastReadAt: Self.now)
         let result = decision(for: conversation)
-        XCTAssertEqual(result.mode, .focal)
+        XCTAssertEqual(result.mode, .script)
         XCTAssertEqual(result.reason, .default)
     }
 
@@ -122,11 +123,11 @@ final class LentilleFocusCardTests: XCTestCase {
     func test_notchText_whenAuto_showsAutoPrefixedWithTheRenderedMode() {
         let conversation = makeConversation(unreadCount: 2, lastReadAt: Self.now)
         let result = decision(for: conversation)
-        XCTAssertEqual(result.mode, .focal)
+        XCTAssertEqual(result.mode, .script)
 
         let text = LentilleModeLabels.notchText(decision: result, preference: .auto)
         XCTAssertEqual(
-            text, "AUTO · Focal",
+            text, "AUTO · Script",
             "L'utilisateur doit voir ce qui VA se passer (contrat LWS-8) — pas une " +
             "étiquette générique « Auto » seule."
         )
@@ -180,7 +181,7 @@ final class LentilleFocusCardTests: XCTestCase {
     func test_notchText_whenSuggestedModePresent_winsOverTheLocallyRecomputedDecision() {
         let conversation = makeConversation(unreadCount: 2, lastReadAt: Self.now)
         let localDecision = decision(for: conversation)
-        XCTAssertEqual(localDecision.mode, .focal, "Prérequis : le recalcul local, seul, dirait Focal.")
+        XCTAssertEqual(localDecision.mode, .script, "Prérequis : le recalcul local, seul, dirait Script.")
 
         let text = LentilleModeLabels.notchText(
             decision: localDecision,
@@ -217,7 +218,7 @@ final class LentilleFocusCardTests: XCTestCase {
 
         let text = LentilleModeLabels.notchText(decision: localDecision, preference: .auto)
 
-        XCTAssertEqual(text, "AUTO · Focal")
+        XCTAssertEqual(text, "AUTO · Script")
     }
 
     // MARK: - 2bis. Il n'y a plus de CARTE — la magnification EST la rangée
