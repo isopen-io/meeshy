@@ -259,6 +259,9 @@ export const API_ENDPOINTS = {
     root: '/api/v1/communities',
     search: '/api/v1/communities/search',
   },
+  contacts: {
+    resolve: '/api/v1/contacts/resolve',
+  },
   conversations: {
     byConversationIdActiveCall: (conversationId: string) => `/api/v1/conversations/${conversationId}/active-call`,
     byConversationIdAttachments: (conversationId: string) => `/api/v1/conversations/${conversationId}/attachments`,
@@ -810,6 +813,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/communities/check-identifier/:identifier',
   '/api/v1/communities/mine',
   '/api/v1/communities/search',
+  '/api/v1/contacts/resolve',
   '/api/v1/conversations',
   '/api/v1/conversations/:conversationId/active-call',
   '/api/v1/conversations/:conversationId/attachments',
@@ -1292,6 +1296,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/communities/check-identifier/:identifier': ['GET'],
   '/api/v1/communities/mine': ['GET'],
   '/api/v1/communities/search': ['GET'],
+  '/api/v1/contacts/resolve': ['POST'],
   '/api/v1/conversations': ['GET', 'POST'],
   '/api/v1/conversations/:conversationId/active-call': ['GET'],
   '/api/v1/conversations/:conversationId/attachments': ['GET'],

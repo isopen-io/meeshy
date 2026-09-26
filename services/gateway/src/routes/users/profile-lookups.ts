@@ -113,10 +113,14 @@ const QUERYSTRING_FIELDS = {
  * essai basculant entre email et téléphone rouvrirait le quota. Le cache par
  * instance `fastify` ci-dessous garantit UN SEUL `RateLimiter`, donc UN SEUL
  * compteur, quel que soit le backend.
+ *
+ * `POST /contacts/resolve` (#8101, carte de visite partagée) répond à la même
+ * question — « ces identifiants sont-ils un compte ? » — et puise dans le MÊME
+ * seau : alterner les trois routes n'ouvre aucun quota.
  */
 const LIMITEURS_ANNUAIRE_INVERSE = new WeakMap<FastifyInstance, ReturnType<typeof createCustomRateLimiter>>();
 
-function contactLookupRateLimiter(fastify: FastifyInstance) {
+export function contactLookupRateLimiter(fastify: FastifyInstance) {
   let limiteur = LIMITEURS_ANNUAIRE_INVERSE.get(fastify);
   if (!limiteur) {
     limiteur = createCustomRateLimiter(
