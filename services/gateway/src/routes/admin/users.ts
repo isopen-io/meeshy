@@ -36,6 +36,7 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserPasswordProposalRoutes } from './user-password-proposals';
 import { registerUserProfileReadRoutes } from './user-profile-reads';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
@@ -131,6 +132,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
+  // #8051 — les quatre niveaux de mot de passe proposés AVANT `reset-password`
+  // ci-dessous, sous les mêmes gardes : voir `user-password-proposals.ts`.
+  registerUserPasswordProposalRoutes(fastify);
 
   // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
   // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
