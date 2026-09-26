@@ -1,5 +1,5 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
@@ -12,10 +12,12 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * gigue, débits — dans les unités de la langue, `Intl.NumberFormat`), et les
  * alertes d'un pair (`call:quality-alert`, `call:screen-capture-alert`) dans
  * une région vivante : la capture d'écran est une ALERTE, un lien instable se
- * dit poliment.
+ * dit poliment. Le détail, ouvert d'un toucher, est un chunk à part
+ * (`call-quality-detail.tsx`) : l'écran d'appel n'en paie que l'`import()`.
  */
 
-const PANEL = 'rgba(17,16,24,0.94)';
+const CallQualityDetail = lazy(() => import('./call-quality-detail').then((module) => ({ default: module.CallQualityDetail })));
+
 const TONE: Readonly<Record<ConnectionQualityLevel, string>> = { excellent: '#34d399', good: '#34d399', fair: '#fbbf24', poor: '#f87171' };
 const LIT: Readonly<Record<ConnectionQualityLevel, number>> = { excellent: 4, good: 3, fair: 2, poor: 1 };
 const LEVEL_KEY = {
@@ -37,40 +39,6 @@ function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
   );
 }
 
-const measure = (language: InterfaceLanguage, value: number, options: Intl.NumberFormatOptions): string => new Intl.NumberFormat(language, { maximumFractionDigits: 0, ...options }).format(value);
-
-export function CallQualityDetail({ quality, language, onClose }: { readonly quality: CallQuality; readonly language: InterfaceLanguage; readonly onClose: () => void }) {
-  const rows = [
-    ['call.quality.loss', measure(language, quality.packetLoss / 100, { style: 'percent', maximumFractionDigits: 1 })],
-    ['call.quality.latency', measure(language, quality.rtt, { style: 'unit', unit: 'millisecond' })],
-    ['call.quality.jitter', measure(language, quality.jitter, { style: 'unit', unit: 'millisecond' })],
-    ['call.quality.audioRate', measure(language, quality.audioKbps, { style: 'unit', unit: 'kilobit-per-second' })],
-    ['call.quality.videoRate', measure(language, quality.videoKbps, { style: 'unit', unit: 'kilobit-per-second' })],
-  ] as const;
-  return (
-    <div role="dialog" aria-label={translate(language, 'call.quality.detail')} className="fixed inset-x-4 z-10 mx-auto max-w-xs rounded-card p-3 shadow-lg" style={{ background: PANEL, color: '#fff', top: 'calc(env(safe-area-inset-top) + 3.5rem)' }} data-call-quality-detail="">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-body font-semibold">{translate(language, 'call.quality.detail')}</span>
-        <button type="button" aria-label={translate(language, 'call.quality.close')} onClick={onClose} className="grid size-11 place-items-center rounded-full" data-call-quality-close="">
-          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-      <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-mini">
-        {rows.map(([key, value]) => (
-          <div key={key} className="contents">
-            <dt style={{ color: 'rgba(255,255,255,0.72)' }}>{translate(language, key)}</dt>
-            <dd className="text-end tabular-nums" data-call-quality-row={key}>
-              {value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
 export function CallQualityIndicator({ quality, language }: { readonly quality: CallQuality; readonly language: InterfaceLanguage }) {
   const [open, setOpen] = useState(false);
   const label = translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) });
@@ -79,7 +47,11 @@ export function CallQualityIndicator({ quality, language }: { readonly quality: 
       <button type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className="grid size-11 place-items-center rounded-full" data-call-quality={quality.level}>
         <SignalBars level={quality.level} />
       </button>
-      {open ? <CallQualityDetail quality={quality} language={language} onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        <Suspense fallback={null}>
+          <CallQualityDetail quality={quality} language={language} onClose={() => setOpen(false)} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallPeerAlerts, CallQualityDetail, CallQualityIndicator } from './call-quality';
+import { CallPeerAlerts, CallQualityIndicator } from './call-quality';
+import { CallQualityDetail } from './call-quality-detail';
 import { CallScreen } from './call-screen';
 
 /**
