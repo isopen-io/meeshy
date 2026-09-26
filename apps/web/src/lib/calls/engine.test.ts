@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { createCaptions } from './call-captions-controller';
 import { createCallStore, type CallStoreApi } from './call-store';
 import { callLayout } from './call-view';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from './call-transport';
@@ -128,6 +129,7 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
     tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
     ringLabel: () => 'Appel entrant',
     random: () => options.random ?? 0.99,
+    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', viewerName: () => 'Moi', newId: () => 'w-1' }),
   };
   const engine = createCallEngine(deps);
 
@@ -415,12 +417,30 @@ describe('en appel', () => {
     expect(h.requested.at(-1)?.[0]).toBe(CLIENT_EVENTS.CALL_JOIN);
   });
 
-  test('les sous-titres traduits gardent les trois derniers segments', async () => {
+  test('les sous-titres traduits entrent au journal de l’appel, dans l’ordre de capture (#8048)', async () => {
     const h = await connected();
-    for (const n of [1, 2, 3, 4]) {
-      h.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, { callId: 'call-1', segment: { id: `s${n}`, speakerId: PEER, text: `line ${n}`, translatedText: `phrase ${n}`, startMs: n, endMs: n + 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr' } });
+    for (const n of [3, 1, 2]) {
+      h.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, { callId: 'call-1', segment: { id: `s${n}`, speakerId: PEER, text: `line ${n}`, translatedText: `phrase ${n}`, startMs: n, endMs: n + 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr', capturedAtMs: n } });
     }
-    expect(h.call()?.captions.map((caption) => caption.text)).toEqual(['phrase 2', 'phrase 3', 'phrase 4']);
+    expect(h.call()?.captions.map((caption) => caption.translated)).toEqual(['phrase 1', 'phrase 2', 'phrase 3']);
+    h.engine.handle(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: 'call-1', speakerId: PEER, active: true });
+    expect(h.call()?.captionPeers).toEqual([PEER]);
+  });
+
+  test('le canal de données d’un lien est remis aux sous-titres ; un « bye » du pair raccroche aussitôt (#8048)', async () => {
+    const h = await connected();
+    const channel = { readyState: 'open', send: () => undefined, onmessage: null as ((event: { data: string }) => void) | null, onclose: null };
+    h.links[0]?.deps.onChannel?.(channel as unknown as RTCDataChannel);
+    channel.onmessage?.({ data: '{"type":"bye","reason":"completed"}' });
+    expect(h.call()?.phase).toEqual({ kind: 'ended', reason: 'remote', detail: null });
+  });
+
+  test('raccrocher prévient le pair en bande avant de fermer les liens (#8048)', async () => {
+    const h = await connected();
+    const sent: string[] = [];
+    h.links[0]?.deps.onChannel?.({ readyState: 'open', send: (raw: string) => void sent.push(raw), onmessage: null, onclose: null } as unknown as RTCDataChannel);
+    h.engine.hangup();
+    expect(sent.map((raw) => JSON.parse(raw) as unknown)).toContainEqual({ type: 'bye', reason: 'completed' });
   });
 
   test('éteindre la caméra repasse l’appel en vocal, sans le couper, et le pair l’apprend (D3)', async () => {

@@ -32,7 +32,7 @@ const frCall = {
   'call.hangup': 'Raccrocher',
   'call.minimize': 'Réduire l’appel',
   'call.expand': 'Revenir à l’appel',
-  'call.captions.on': 'Afficher les sous-titres',
+  'call.captions.on': 'Afficher les sous-titres traduits',
   'call.captions.off': 'Masquer les sous-titres',
   'call.quality.poor': 'Connexion instable',
   'call.ended.local': 'Appel terminé',

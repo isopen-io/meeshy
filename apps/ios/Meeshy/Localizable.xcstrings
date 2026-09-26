@@ -98910,6 +98910,100 @@
         }
       }
     },
+    "emailVerification.subtitle.activationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كلمة المرور صحيحة، لكن يجب أولًا تفعيل حسابك بإثبات أن هذا العنوان لك. أرسلنا للتو رمزًا إلى **%@**."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Passwort ist richtig, aber dein Konto muss zuerst aktiviert werden, indem du bestätigst, dass diese Adresse dir gehört. Wir haben gerade einen Code an **%@** gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your password is correct, but your account must first be activated by proving this address is yours. We just sent a code to **%@**."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contraseña es correcta, pero primero debes activar tu cuenta demostrando que esta dirección es tuya. Acabamos de enviar un código a **%@**."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre mot de passe est bon, mais votre compte doit d’abord être activé en prouvant que cette adresse est la vôtre. Nous venons d’envoyer un code à **%@**."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La password è corretta, ma prima devi attivare il tuo account dimostrando che questo indirizzo è tuo. Abbiamo appena inviato un codice a **%@**."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua senha está correta, mas sua conta precisa primeiro ser ativada, comprovando que este endereço é seu. Acabamos de enviar um código para **%@**."
+          }
+        }
+      }
+    },
+    "emailVerification.inboxHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "افتح بريدك الوارد، ولا تنسَ التحقق من مجلد الرسائل غير المرغوب فيها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne dein Postfach und sieh auch im Spam-Ordner nach."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open your inbox, and remember to check your spam folder."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre tu bandeja de entrada y revisa también la carpeta de correo no deseado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez votre boîte mail, et pensez à regarder dans les indésirables."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la tua casella di posta e controlla anche la cartella spam."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra sua caixa de entrada e verifique também a pasta de spam."
+          }
+        }
+      }
+    },
     "emoji.category.activities": {
       "extractionState": "manual",
       "localizations": {

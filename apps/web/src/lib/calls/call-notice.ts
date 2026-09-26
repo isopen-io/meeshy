@@ -15,6 +15,8 @@ export type CallNoticeTarget = {
   readonly callId: string | null;
   readonly media: CallMedia;
   readonly live: boolean;
+  /** Un appel TERMINÉ, identifié et qui a duré : sa transcription gravée peut se relire (#8048). */
+  readonly transcript: boolean;
 };
 
 export function callNoticeTarget(message: Pick<Message, 'conversationId' | 'metadata'>): CallNoticeTarget | null {
@@ -26,6 +28,7 @@ export function callNoticeTarget(message: Pick<Message, 'conversationId' | 'meta
     callId,
     media: metadata.callType === 'video' ? 'video' : 'audio',
     live: metadata.kind === 'call-live',
+    transcript: metadata.kind === 'call' && callId !== null && typeof metadata.durationSeconds === 'number' && metadata.durationSeconds > 0,
   };
 }
 

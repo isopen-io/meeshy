@@ -4236,3 +4236,53 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **Le gate** (`check-calls-quality.mjs`) : le pair de fixtures décroche un appel VIDÉO ; `getStats` est enveloppé pour simuler 20 % de perte et 600 ms. Il mesure CHEZ LE PAIR que la vidéo gelée arrive à quelques images par seconde, que la vidéo suspendue n'arrive plus, que la voix apporte des paquets CHAQUE seconde, puis que tout reprend. Ce qui est simulé est la MESURE du réseau (un réseau réellement dégradé ne se commute pas en cours d'appel dans un Chromium sans tête) ; la décision, l'encodage appliqué et ce que le pair reçoit sont réels. Il tombe si la suspension est retirée (`active: true`) et si le palier est posé sur l'émetteur audio.
 
 **Ce qui n'est pas fait.** La coque Android n'émet pas `call:screen-capture-detected` (il faudrait `DETECT_SCREEN_RECORDING`, natif, API 35) ; le web reçoit l'alerte, il ne la produit pas. Le relevé thermique d'iOS (paliers abaissés quand l'appareil chauffe) n'a pas d'équivalent navigateur.
+
+## D-136 — Les sous-titres traduits d'un appel marchent dans les deux sens : le web lit le pair traduit, transcrit son propre micro quand le navigateur le peut, et relit la transcription gravée dans la bulle d'appel du fil (2026-09-26, #8048)
+
+**Le constat.** Le moteur (`engine.ts`) recevait `call:translated-segment` et gardait trois lignes, sans mode, sans journal et sans canal de données. Il n'émettait ni `call:transcription-segment` ni `call:transcription-active`. Un pair iOS qui ouvrait ses sous-titres face à un client web ne recevait donc rien : la passerelle ne traduit que ce qu'on lui dit, et le web ne lui disait rien. La transcription gravée pendant l'appel (`GET /calls/:callId/transcript`) n'était lue nulle part sur le web. Aucun contrat de la passerelle ne manquait : les formes de `packages/shared/types/video-call.ts` et le schéma zod de `call-schemas.ts` suffisent.
+
+**Ce qui est tranché.**
+- **Une loi pure, un contrôleur, un adaptateur.**
+  - La loi pure est `call-captions.ts` : les modes, la fusion du journal par énoncé, le texte selon le mode, les décodeurs, et les charges `segmentEvent` et `transcriptEntryMessage`, bornées au schéma de la passerelle.
+  - Le contrôleur est `call-captions-controller.ts`. Il sait ce qui part, ce qui entre, quand transcrire et l'état de la transcription.
+  - L'adaptateur est `call-speech.ts`, autour de la Web Speech API.
+  - `engine.ts` n'en reçoit que des crochets : un `createCaptions` injecté, le routage des deux événements et le canal remis par `peer-link.ts`.
+- **Les modes suivent le cycle d'iOS** (`CaptionsMode.swift`) : off → traduit → original → off. `call:transcription-active` part à chaque bascule on/off, jamais entre traduit et original.
+  - Reçu d'un pair, ce signal fait dire au bouton CC « votre interlocuteur les lit déjà » (avec une pastille).
+  - Il fait aussi TRANSCRIRE le lecteur avant qu'il ouvre ses propres sous-titres. C'est la politique de capture d'iOS (`TranscriptionCapturePolicy`) : on transcrit dès que quelqu'un lit.
+  - La traduction vient du serveur ; ma propre parole reste la mienne.
+- **Ma parole part deux fois, par deux chemins, comme sur iOS.**
+  - Les brouillons ne passent que par le canal de données `transcription` (`transcript-entry`).
+  - Les finals passent par le canal ET par le socket (`call:transcription-segment`) : la passerelle traduit ces derniers pour chaque auditeur et les grave.
+  - Le canal est ouvert par l'OFFRANT avant l'offre (libellé `transcription`, ordonné). Il porte `ping` toutes les 15 s et `bye` au raccroché. Un `bye` reçu termine l'appel côté pair.
+- **La reconnaissance vocale est DÉTECTÉE, jamais supposée** (`SpeechRecognition` ou `webkitSpeechRecognition`).
+  - Chrome, Edge et Safari l'ont. Firefox et la WebView de la coque Android ne l'ont pas : l'écran le dit, et on y reçoit les sous-titres des autres sans rien émettre.
+  - Un refus du micro de reconnaissance (`not-allowed`) est dit comme tel.
+  - La reconnaissance continue est relancée après chaque silence, puis abandonnée après cinq relances sans résultat, pour qu'une boucle serrée ne tourne pas tout l'appel.
+- **La langue parlée est le rang 1 du Prisme du lecteur** (`resolveReaderLanguages`), la même descente que celle par laquelle la passerelle résout ses auditeurs. Aucune langue n'est reconstruite ici.
+- **La transcription après l'appel se lit dans la bulle d'appel du fil**, comme `CallSummaryDetailSheet` d'iOS.
+  - Un bouton « Transcription » (44 px, `aria-expanded`) la déplie sous « Rappeler ». Il n'est offert qu'à un appel TERMINÉ, identifié, qui a duré (`callNoticeTarget.transcript`).
+  - La ligne d'un autre descend le Prisme (`served`) : jamais `translations[0]`, et l'original quand aucune traduction ne sert. « Voir l'original » rend ce qui a été dit.
+  - Un refus (403) ou un appel inconnu (404) se lit « aucune transcription », sans détail : la donnée est sensible.
+- **L'accessibilité.**
+  - Le bandeau des deux dernières lignes est une région `aria-live` POLIE. Une ligne encore en révision y est `aria-hidden`, pour qu'un lecteur d'écran annonce la phrase dite et non chaque mot corrigé.
+  - Chaque texte porte `dir="auto"`, pour qu'une phrase arabe se lise de droite à gauche sous une interface française.
+  - Toutes les cibles font au moins 44 px, et les textes existent dans les sept langues.
+- **La télémétrie n'est pas dupliquée.** `transcriptionUsed` de `call:analytics` (D-135) est posé quand un sous-titre du pair a été AFFICHÉ (`shown` → `markCaptions`).
+- **Le poids.** Rien n'est pris au premier rendu : la première peinture reste à 57,45 Ko.
+  - `call_captions` (le contrôleur, l'adaptateur et l'entrée, 1,96 Ko) est chargé par `engine-defaults.ts` au premier besoin. Ses appels sont mis en file jusqu'au chargement.
+  - `call_captions_panel` (1,09 Ko) est chargé par l'écran d'appel au premier passage hors de off.
+  - `call_transcript_panel` (1,77 Ko) est chargé au premier appui sur « Transcription ».
+  - La loi pure (`call_captions_law`, 0,94 Ko) est commune aux deux premiers.
+  - `call_engine` passe de 9,41 à 9,84 Ko (plafond 10) et `call_overlay` de 6,78 à 6,87 Ko (plafond 7). Aucun plafond n'a été relevé.
+- **Le gate** (`check-calls-captions.mjs`) s'appuie sur le pair de fixtures, qui ouvre ses sous-titres et parle.
+  - Il vérifie les trois modes et le texte traduit puis original, `aria-live` et `dir="auto"`.
+  - Une `SpeechRecognition` SIMULÉE (la seule part simulée) fait dire au lecteur un brouillon puis un final. Le gate vérifie que le final SEUL part au socket, sous la forme exacte du schéma de la passerelle, et que les deux partent au canal.
+  - Il vérifie aussi le journal, le `bye` et `transcriptionUsed: true` au raccroché, puis la transcription dépliée dans la bulle `st-call` de `c-states`.
+  - Il repasse le parcours à 320 × 568 sans reconnaissance vocale.
+  - Il échoue quand le mode traduit rend l'original (`captionText`) et quand les finals ne partent plus au socket.
+
+**Ce qui n'est pas fait.**
+- La coque Android reçoit mais n'émet pas : sa WebView n'a pas `SpeechRecognition`, et la reconnaissance Android native reste à brancher.
+- La vérification croisée avec un vrai iOS (web fr ↔ iOS en, chacun lisant l'autre dans sa langue) appartient au lot 9. Ici, tout est prouvé contre le pair de fixtures, dont les charges se décodent par les MÊMES décodeurs que le moteur.
+- `engine.ts` compte 1 006 lignes, sous le plafond dur de 1 200 mais au-delà du seuil de 1 000 : le prochain lot qui y ajoute doit d'abord extraire.

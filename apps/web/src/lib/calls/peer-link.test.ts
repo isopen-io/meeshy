@@ -240,3 +240,49 @@ describe('reprise ICE', () => {
     expect(fake.pc.onconnectionstatechange).toBeNull();
   });
 });
+
+describe('le canal de données des sous-titres (#8048)', () => {
+  const channelLink = () => {
+    const fake = fakeConnection();
+    const created: Array<{ readonly label: string; readonly ordered: boolean | undefined; readonly beforeOffer: boolean }> = [];
+    const handed: string[] = [];
+    const pc = Object.assign(fake.pc, {
+      ondatachannel: null as ((event: { channel: { label: string } }) => void) | null,
+      createDataChannel: (label: string, init?: { ordered?: boolean }) => {
+        created.push({ label, ordered: init?.ordered, beforeOffer: !fake.calls.includes('setLocal:offer') });
+        return { label };
+      },
+    });
+    const localStream = { getAudioTracks: () => [{ kind: 'audio' }], getVideoTracks: () => [] } as unknown as MediaStream;
+    const peer = createPeerLink({
+      localUserId: 'u-a',
+      remoteUserId: 'u-b',
+      iceServers: [],
+      localStream,
+      send: () => undefined,
+      onRemoteStream: () => undefined,
+      onState: () => undefined,
+      onChannel: (channel) => void handed.push(channel.label),
+      createConnection: () => pc as unknown as RTCPeerConnection,
+      createStream: () => ({ getTracks: () => [], addTrack: () => undefined }) as unknown as MediaStream,
+    });
+    return { peer, pc, created, handed };
+  };
+
+  test('l’offrant crée le canal « transcription » AVANT l’offre (m=application), ordonné, et le remet', async () => {
+    const h = channelLink();
+    await h.peer.offer();
+    expect(h.created).toEqual([{ label: 'transcription', ordered: true, beforeOffer: true }]);
+    expect(h.handed).toEqual(['transcription']);
+  });
+
+  test('celui qui répond reçoit le canal du pair ; un autre libellé est ignoré ; fermer le débranche', () => {
+    const h = channelLink();
+    h.pc.ondatachannel?.({ channel: { label: 'autre' } });
+    h.pc.ondatachannel?.({ channel: { label: 'transcription' } });
+    expect(h.handed).toEqual(['transcription']);
+    expect(h.created).toEqual([]);
+    h.peer.close();
+    expect(h.pc.ondatachannel).toBeNull();
+  });
+});

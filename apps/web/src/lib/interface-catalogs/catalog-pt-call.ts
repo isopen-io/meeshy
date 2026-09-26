@@ -32,7 +32,7 @@ const ptCall = {
   'call.hangup': 'Desligar',
   'call.minimize': 'Minimizar chamada',
   'call.expand': 'Voltar à chamada',
-  'call.captions.on': 'Mostrar legendas',
+  'call.captions.on': 'Mostrar legendas traduzidas',
   'call.captions.off': 'Ocultar legendas',
   'call.quality.poor': 'Ligação instável',
   'call.ended.local': 'Chamada terminada',

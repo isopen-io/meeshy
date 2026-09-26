@@ -15,6 +15,7 @@ import arCallsErase from './catalog-ar-calls-erase';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arCallQuality from './catalog-ar-call-quality';
+import arCallCaptions from './catalog-ar-call-captions';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
@@ -218,6 +219,7 @@ const ar = {
   ...arCallDevices,
   ...arCallScreen,
   ...arCallQuality,
+  ...arCallCaptions,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',

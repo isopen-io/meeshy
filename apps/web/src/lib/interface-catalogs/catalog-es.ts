@@ -15,6 +15,7 @@ import esCallsErase from './catalog-es-calls-erase';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
 import esCallQuality from './catalog-es-call-quality';
+import esCallCaptions from './catalog-es-call-captions';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
@@ -218,6 +219,7 @@ const es = {
   ...esCallDevices,
   ...esCallScreen,
   ...esCallQuality,
+  ...esCallCaptions,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
