@@ -7,6 +7,7 @@ import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
+import { CallLayer } from './call-layer';
 import { ProfilePeekHost } from './profile-peek-host';
 
 /**
@@ -162,6 +163,10 @@ export default function Shell({ children }: { children: ReactNode }) {
           routes (`profile-peek-host.tsx`) — la feuille, elle, est chargée au
           premier toucher. */}
       <ProfilePeekHost />
+      {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
+          et un appel entrant s'affiche sur toutes les routes, comme
+          `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
+      <CallLayer />
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
           tranche, et un menu recouvert par l'écran qu'il commande serait le
           défaut le plus bête du lot. */}

@@ -1,3 +1,5 @@
+import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
+import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { outboxStore } from '@/lib/send/outbox-store';
@@ -43,6 +45,13 @@ let connectedToken: string | null = null;
 /** Garde la course : un second `syncConnection()` pendant que le `import()`
  * du bouchon résout ne doit pas ouvrir une SECONDE connexion de fixtures. */
 let fixturesConnecting = false;
+/** Le pont d'appel de la connexion courante (#6382) — refait à chaque connexion. */
+let unbridgeCalls: (() => void) | null = null;
+
+function bridgeCalls(next: RealtimeConnection | null): void {
+  unbridgeCalls?.();
+  unbridgeCalls = next === null ? null : bridgeCallEvents(next.socket);
+}
 
 function currentViewerId(): string {
   return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
@@ -78,12 +87,14 @@ function syncConnection(): void {
           onClearSession: () => undefined,
         },
       );
+      bridgeCalls(connection);
     });
     return;
   }
 
   const session = sessionStore.getState().session;
   if (session.status !== 'authenticated') {
+    bridgeCalls(null);
     connection?.destroy();
     connection = null;
     connectedToken = null;
@@ -105,6 +116,7 @@ function syncConnection(): void {
       onClearSession: () => sessionStore.getState().clearSession(),
     },
   );
+  bridgeCalls(connection);
 }
 
 sessionStore.subscribe(syncConnection);
@@ -130,3 +142,10 @@ syncConnection();
  * alors dans un socket détruit.
  */
 setTypingEmitter((conversationId, isTyping) => connection?.emitTyping(conversationId, isTyping));
+
+/**
+ * UN APPEL REÇU CHARGE LE MOTEUR (#6382) — le port d'appel garde en file tout
+ * `call:*` arrivé avant lui et appelle ceci ; le moteur (WebRTC, écrans) n'est
+ * donc jamais payé par qui ne reçoit ni ne passe d'appel.
+ */
+setCallEngineWake(() => void import('@/lib/calls/call-actions').then((module) => module.loadCallEngine()));

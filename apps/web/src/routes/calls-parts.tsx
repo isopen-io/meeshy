@@ -6,6 +6,7 @@ import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-a
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS, type CallsGlyphName } from '@/components/glyphs-calls';
 import { CALL_HISTORY_FILTERS, type CallDirection, type CallHistoryFilter, type CallRecord } from '@/lib/api/calls';
+import { callActions } from '@/lib/calls/call-actions';
 import { callAvatarOf, callDisplayNameOf, callDurationLabel } from '@/lib/calls/view';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -141,8 +142,8 @@ const DIRECTION_A11Y = {
 
 /**
  * UNE LIGNE — `CallJournalRow`. Elle est un LIEN vers le fil de sa conversation
- * (iOS ouvre une feuille de détail dont le seul geste est le rappel, que le web
- * ne sert pas). Son `aria-label` recompose TOUT ce que la ligne montre, comme
+ * ; le RAPPEL (le geste de la feuille de détail d'iOS) est le bouton à sa
+ * droite, du même type que l'appel d'origine (#6382). Son `aria-label` recompose TOUT ce que la ligne montre, comme
  * `rowAccessibilityLabel` d'iOS : nom, direction, type, heure, durée.
  */
 export const CallRow = memo(function CallRow({
@@ -168,13 +169,13 @@ export const CallRow = memo(function CallRow({
   ].join(', ');
 
   return (
-    <li data-call={record.callId} style={{ borderBottom: EDGE }}>
+    <li data-call={record.callId} className="flex items-center" style={{ borderBottom: EDGE }}>
       <Link
         to="thread"
         params={{ conversation: record.conversationId }}
         aria-label={label}
         data-call-row
-        className="flex items-center gap-3.5 px-5 py-3 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        className="flex min-w-0 flex-1 items-center gap-3.5 py-3 pl-5 pr-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
         style={{ minHeight: CALL_ROW_HEIGHT, outlineColor: BRAND }}
       >
         <Avatar initials={initialsOf(name)} color={colorForName(name)} size={44} {...(avatar === null ? {} : { src: avatar })} />
@@ -207,6 +208,24 @@ export const CallRow = memo(function CallRow({
           </span>
         </span>
       </Link>
+      <button
+        type="button"
+        data-call-back={record.isVideo ? 'video' : 'audio'}
+        aria-label={translate(language, 'call.callBack.named', { name })}
+        onClick={() =>
+          callActions.start({
+            conversationId: record.conversationId,
+            media: record.isVideo ? 'video' : 'audio',
+            title: name,
+            avatar,
+            isGroup: record.conversationType !== 'direct',
+          })
+        }
+        className="mr-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: BRAND, outlineColor: BRAND }}
+      >
+        {record.isVideo ? <CallGlyph name="videoCamera" size={20} /> : <Glyph name="phone" size={20} />}
+      </button>
     </li>
   );
 });

@@ -48,6 +48,7 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
+  'android.permission.CAMERA',
 ];
 
 const XML_COMMENT = /<!--[\s\S]*?-->/g;

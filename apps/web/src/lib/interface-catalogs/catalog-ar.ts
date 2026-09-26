@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
 import arVerifyEmail from './catalog-ar-verify-email';
+import arCall from './catalog-ar-call';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
@@ -189,6 +190,7 @@ const ar = {
   'feed.newPosts.other': 'منشورات جديدة {count}',
   ...arIdentity,
   ...arVerifyEmail,
+  ...arCall,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',

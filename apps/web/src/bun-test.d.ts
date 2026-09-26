@@ -58,6 +58,8 @@ declare module 'bun:test' {
   type Expectations = {
     toBe(expected: unknown): void;
     toEqual(expected: unknown): void;
+    /** `toMatchObject` (#8044) — les témoins du moteur d'appel lisent une charge PARTIELLE (le code d'un accusé, la raison d'une fin) sans recopier ce qui ne les concerne pas. */
+    toMatchObject(expected: object): void;
     toBeNull(): void;
     toBeUndefined(): void;
     toBeDefined(): void;
