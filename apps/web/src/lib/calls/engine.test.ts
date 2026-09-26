@@ -561,4 +561,24 @@ describe('partage d’écran (#8063)', () => {
     h.engine.handle(SERVER_EVENTS.CALL_MEDIA_TOGGLED, { callId: 'call-1', participantId: 'p-2', mediaType: 'screen', enabled: false });
     expect(h.call()?.members[PEER]?.screenSharing).toBe(false);
   });
+
+  test('deux touchers pendant que le sélecteur est ouvert n’ouvrent qu’un sélecteur', async () => {
+    const h = await connected();
+    await Promise.all([h.engine.toggleScreen(), h.engine.toggleScreen()]);
+    expect(h.displays).toHaveLength(1);
+    expect(h.call()?.screenSharing).toBe(true);
+  });
+
+  test('un pair qui arrive pendant le partage apprend qu’il regarde un écran', async () => {
+    const h = await connected({ ...DIRECT, isGroup: true });
+    await h.engine.toggleScreen();
+    const announced = () => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_TOGGLE_SCREEN);
+    expect(announced()).toHaveLength(1);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-3', userId: 'u-late', username: 'late' } });
+    expect(announced()).toEqual([
+      [CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }],
+      [CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }],
+    ]);
+  });
 });
+

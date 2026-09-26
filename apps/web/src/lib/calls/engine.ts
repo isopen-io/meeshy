@@ -186,6 +186,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   let endedTimer: unknown = null;
   let incomingTimer: unknown = null;
   let generation = 0;
+  let screenPicking = false;
 
   const read = (): ActiveCall | null => store.getState().call;
   const write = (call: ActiveCall | null): void => store.setState({ call });
@@ -595,6 +596,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     const link = linkTo(joined.person.userId);
     update((current) => patchMember(current, joined.person.userId, { link: 'connecting' }));
+    if (read()?.screenSharing === true) announceScreen(true);
     refreshPhase();
     void link?.offer().catch(() => onLinkState(joined.person.userId, 'failed'));
   };
@@ -757,7 +759,10 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
    * vocal). La caméra, si elle tournait, est relâchée : elle revient à l'arrêt.
    */
   const startScreen = async (call: ActiveCall): Promise<void> => {
+    if (screenPicking) return;
+    screenPicking = true;
     const display = await deps.acquireDisplay().catch(() => null);
+    screenPicking = false;
     if (display === null) return;
     const current = read();
     if (!sharable(current) || current.callId !== call.callId || current.screenSharing) {
