@@ -55,6 +55,11 @@ const enCall = {
   'call.bubble.join': 'Join',
   'call.callBack.named': 'Call {name} back',
   'call.you': 'You',
+  'call.ended.removed': 'You were removed from the call',
+  'call.spotlight.show': 'Spotlight {name}',
+  'call.spotlight.back': 'Back to grid',
+  'call.remove.named': 'Remove {name} from the call',
+  'call.remove.failed': 'Couldn’t remove this participant',
 } as const;
 
 export default enCall;

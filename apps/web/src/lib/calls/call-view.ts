@@ -9,7 +9,7 @@ import { type ActiveCall, type CallEndReason, type CallMember } from './call-sto
  */
 
 /** Les libellés d'appel SANS paramètre — ceux qu'un état choisit. */
-export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named'>;
+export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named'>;
 
 export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   local: 'call.ended.local',
@@ -20,6 +20,7 @@ export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   connectionLost: 'call.ended.connectionLost',
   failed: 'call.ended.failed',
   permission: 'call.ended.permission',
+  removed: 'call.ended.removed',
 };
 
 /** Le libellé sous le nom — `nil` une fois connecté : c'est la durée qui parle. */
@@ -88,6 +89,12 @@ export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'members' | 'qua
 export function orderedMembers(members: Readonly<Record<string, CallMember>>): readonly CallMember[] {
   const rank = (member: CallMember): number => (member.link === 'connected' ? 0 : member.link === 'reconnecting' ? 1 : 2);
   return Object.values(members).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+/** La mise en avant d'un participant — `null` rend la grille, y compris quand le participant choisi est parti. */
+export function spotlight(members: readonly CallMember[], featuredId: string | null): { readonly featured: CallMember; readonly others: readonly CallMember[] } | null {
+  const featured = members.find((member) => member.userId === featuredId);
+  return featured === undefined ? null : { featured, others: members.filter((member) => member !== featured) };
 }
 
 /** Colonnes d'une grille de `count` tuiles (soi compris). */

@@ -55,6 +55,11 @@ const itCall = {
   'call.bubble.join': 'Partecipa',
   'call.callBack.named': 'Richiama {name}',
   'call.you': 'Tu',
+  'call.ended.removed': 'Sei stato rimosso dalla chiamata',
+  'call.spotlight.show': 'Metti in evidenza {name}',
+  'call.spotlight.back': 'Torna alla griglia',
+  'call.remove.named': 'Rimuovi {name} dalla chiamata',
+  'call.remove.failed': 'Impossibile rimuovere questo partecipante',
 } as const;
 
 export default itCall;
