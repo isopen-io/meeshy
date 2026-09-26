@@ -36,8 +36,8 @@ export type PendingAttachment = {
 
 let counter = 0;
 
-/** TÉMOIN SEUL — même discipline que `debounceEntryCountForTests`
- * (`perform-send.ts`) : l'identifiant vit pour la durée du PROCESSUS. */
+/** TÉMOIN SEUL — même discipline que `resetSentMessagesForTests`
+ * (`api/fixtures.ts`) : l'identifiant vit pour la durée du PROCESSUS. */
 export function resetPendingAttachmentIdsForTests(): void {
   counter = 0;
 }

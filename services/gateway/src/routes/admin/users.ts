@@ -46,7 +46,8 @@ import { withAnonymousParticipantCounts } from '../../utils/share-link-participa
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
-import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
+import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
+import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
 
 const userConversationSortSchema = z.object({
@@ -681,33 +682,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const where: any = {
-        participants: {
-          some: { userId, isActive: true }
-        }
+      const where = {
+        participants: { some: { userId, isActive: true } },
+        ...(type ? { type } : {})
       };
-      if (type) {
-        where.type = type;
-      }
 
       const [conversations, total] = await Promise.all([
         fastify.prisma.conversation.findMany({
           where,
           select: {
-            id: true,
-            identifier: true,
-            title: true,
-            type: true,
-            avatar: true,
-            isActive: true,
-            // Même règle que `GET /conversations` : la colonne `memberCount`
-            // n'est écrite par personne, donc l'écran admin affichait
-            // « 0 membres » sur toute conversation créée depuis la migration
-            // héritée. Le compte vient de la base.
-            _count: { select: conversationActiveMemberCountSelect },
-            communityId: true,
-            createdAt: true,
-            lastMessageAt: true,
+            // Titre, description, images, réglages, effectif (recalculé depuis
+            // `_count` : la colonne `memberCount` n'est écrite par personne) et
+            // nombre de messages — la ligne que la feuille « Configurer » de la
+            // fiche pré-remplit (#7999). Jamais un contenu de message.
+            ...CONVERSATION_METADATA_SELECT,
             participants: {
               where: { isActive: true },
               take: 6,
@@ -733,15 +721,24 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.conversation.count({ where })
       ]);
 
-      // Keep a small participant preview (direct → the other member, group → a
-      // first slice; the full group list is paged via the dedicated endpoint),
-      // and surface the target user's membership separately for convenience.
-      const data = conversations.map((conv) => {
-        const { _count, ...convData } = conv as typeof conv & { _count: { participants: number } };
-        const participants = (convData as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
-        const membership = participants.find((p) => p.userId === userId) ?? null;
-        return { ...convData, memberCount: _count.participants, participants, membership };
-      });
+      // `membership` est lue À PART, en UNE requête pour la page : l'aperçu est
+      // borné à six participants, et y chercher la ligne du membre rendait
+      // `null` dès qu'il était entré septième — sur les groupes, précisément
+      // là où son rang compte (#7999).
+      const memberships = conversations.length === 0
+        ? []
+        : await fastify.prisma.participant.findMany({
+            where: { userId, isActive: true, conversationId: { in: conversations.map((c) => c.id) } },
+            select: { id: true, userId: true, conversationId: true, type: true, displayName: true, avatar: true, role: true, joinedAt: true, isActive: true, nickname: true },
+            take: conversations.length
+          });
+      const membershipOf = new Map(memberships.map((m) => [m.conversationId, m]));
+
+      const data = conversations.map(({ participants, ...conv }) => ({
+        ...serveConversationMetadata(conv),
+        participants,
+        membership: membershipOf.get(conv.id) ?? participants.find((p) => p.userId === userId) ?? null
+      }));
 
       return sendPaginatedSuccess(reply, data, {
         total,
@@ -962,4 +959,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // à qui, depuis quand et dans quels groupes est une lecture de la vie privée
   // de TOUS les membres — pas la fiche d'un seul, que `canViewUsers` ouvre.
   registerConversationsSovereignRoute(fastify);
+
+  // PATCH /admin/conversations/:id et ses deux gestes sur un membre (#7999) :
+  // configurer une conversation SANS en être membre — les routes de membre
+  // exigent d'y être (« une fois dans »). Rang d'administration, motif écrit,
+  // trace `AdminAuditLog`.
+  registerConversationSettingsSovereignRoutes(fastify);
 }

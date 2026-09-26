@@ -98,9 +98,12 @@ const ComposerStickerSheet = lazy(() =>
  * le construit en ligne »). */
 const NO_PREFERRED_LANGUAGES: readonly string[] = [];
 
-/** Ce que la barre d'outils réserve au cadre des emojis rapides : sa marge de
- * fin (`px-3`), le cadre, et 4 px d'air (miroir `quickEmojiSlotWidth + 4`). */
-const QUICK_EMOJI_TOOLBAR_RESERVE = 12 + QUICK_EMOJI_FRAME_WIDTH + 4;
+type DraftNow = {
+  readonly text: string;
+  readonly pending: readonly PendingAttachment[];
+  readonly place: SharedPlace | null;
+};
+const EMPTY_DRAFT: DraftNow = { text: '', pending: [], place: null };
 
 /**
  * `memo` (revue-correction #6175, défaut majeur 3) — `thread.tsx` re-rend à
@@ -236,9 +239,6 @@ export const Composer = memo(function Composer({
   const sendTarget = text.trim().length > 0 || pending.length > 0 || locator.place !== null;
   const hasReply = replyTo !== undefined;
   const isRecording = recorder.state.status === 'recording';
-  /** Le cadre des emojis rapides monte sur la barre d'outils : champ vide,
-   * NON focalisé, hors enregistrement (miroir `quickEmojiCoversToolbar`). */
-  const quickEmojiCoversToolbar = !sendTarget && !focused && !isRecording;
 
   /**
    * LA LANGUE D'ÉCRITURE (#5828) — décide ce qui PART, jamais le rang 1 du
@@ -410,7 +410,32 @@ export const Composer = memo(function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- volontairement la TRANSITION, pas l'identité de `replyTo` (voir le doc-comment).
   }, [hasReply]);
 
+  /**
+   * LE BROUILLON À L'INSTANT DU GESTE (#7985) — le dédoublonnage par CONTENU
+   * est retiré (`perform-send.ts`) : deux emojis identiques tapés en série
+   * sont deux messages. Ce qui protège le DOUBLE CLIC sur « Envoyer » est
+   * donc le brouillon VIDÉ au moment même de l'envoi : l'état React ne l'est
+   * qu'au rendu suivant, et un second clic servi avant lui relirait le texte
+   * déjà parti. Ce registre est vidé SYNCHRONIQUEMENT par `resetAfterSend`,
+   * et ressemé à chaque rendu depuis l'état.
+   */
+  const draftNow = useRef<DraftNow>(EMPTY_DRAFT);
+  draftNow.current = { text, pending, place: locator.place };
+
+  /**
+   * L'EMPLACEMENT D'ENVOI N'ANIME QUE SES BASCULES (#7985) — le bouton
+   * d'envoi qui arrive, les emojis qui reviennent après un envoi ; jamais le
+   * premier rendu, qui montre simplement ce qui est là. Le registre passe à
+   * vrai après le premier montage : lu au rendu d'une bascule, il pose la
+   * classe sur l'élément qui NAÎT, dont l'animation joue une fois.
+   */
+  const slotSettled = useRef(false);
+  useEffect(() => {
+    slotSettled.current = true;
+  }, []);
+
   const resetAfterSend = (opts?: { readonly keepFocus: boolean }) => {
+    draftNow.current = EMPTY_DRAFT;
     setText('');
     onTextChange?.('');
     compose.setText(''); // Le vidage réinitialise la détection (miroir `TextAnalyzer` texte vidé).
@@ -454,18 +479,23 @@ export const Composer = memo(function Composer({
     locator.clear();
   };
 
-  const send = (value: string, attachments: readonly PendingAttachment[] = pending) => {
+  const send = (value: string, attachments: readonly PendingAttachment[] = draftNow.current.pending) => {
     const own = value.trim();
-    if (!own && attachments.length === 0 && locator.place === null) return;
+    const { place } = draftNow.current;
+    if (!own && attachments.length === 0 && place === null) return;
     const keepFocus = document.activeElement === field.current;
     // LA VALEUR AFFICHÉE EST CELLE QUI PART (#5828, Q2) — capturée AVANT
     // `resetAfterSend`, qui vide le texte et donc changerait ce que
     // `compose.language` rendrait si on le relisait après.
     const language = compose.language;
-    onSend({ text: own, attachments, language, protection, place: locator.place });
+    onSend({ text: own, attachments, language, protection, place });
     compose.noteSent(); // Le choix cesse d'être ÉPINGLÉ, mais reste COLLANT (Q3).
     resetAfterSend({ keepFocus });
   };
+
+  /** Le bouton d'envoi et la touche Entrée envoient le brouillon TEL QU'IL
+   * EST — jamais la valeur capturée par le rendu qui a posé le gestionnaire. */
+  const sendDraft = () => send(draftNow.current.text, draftNow.current.pending);
 
   /** LA TUILE « PHOTOS »/« FICHIER » (`<input type="file">`, `composer-tray.tsx`)
    * AJOUTE À LA SÉLECTION, ne la remplace jamais — un second tap ajoute une
@@ -633,9 +663,8 @@ export const Composer = memo(function Composer({
       ) : null}
 
       {/* LES RAILS AU-DESSUS DE LA BARRE D'OUTILS (#7980, miroir #7966/#7967)
-          — la durée éphémère OU les effets, jamais les deux, posés HORS du
-          pont que couvre le cadre des emojis rapides, à 8 px du bord haut du
-          verre et de ses côtés. */}
+          — la durée éphémère OU les effets, jamais les deux, à 8 px du bord
+          haut du verre et de ses côtés. */}
       {!isRecording && ephemeralPickerOpen ? (
         <ComposerEphemeralRail
           {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
@@ -651,10 +680,6 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : null}
 
-      {/* LE PONT (#7980) — la barre d'outils et la ligne de saisie, sous un
-          même repère : le cadre des emojis rapides s'y pose en absolu sur
-          tout le côté droit. */}
-      <div data-composer-deck className="relative" style={{ containerType: 'inline-size' }}>
       {/* LA RANGÉE HAUTE (#5828, #6175) — miroir `topToolbar`
           (`UniversalComposerBar+Toolbar.swift:25-81`) : posée AU-DESSUS du
           champ, jamais DANS lui, et DÉMONTÉE pendant un enregistrement
@@ -695,7 +720,6 @@ export const Composer = memo(function Composer({
           languagePillRef={languagePillRef}
           text={text}
           {...(maxLength === undefined ? {} : { maxLength })}
-          reserveEnd={quickEmojiCoversToolbar ? QUICK_EMOJI_TOOLBAR_RESERVE : 0}
         />
       ) : null}
 
@@ -842,7 +866,7 @@ export const Composer = memo(function Composer({
                 // insere une ligne.
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  send(text);
+                  sendDraft();
                 }
               }}
               placeholder="Message…"
@@ -866,8 +890,8 @@ export const Composer = memo(function Composer({
                    avant que `send()` ne le lui rende, et cette image suffit à
                    voir le micro remonter et le champ rétrécir. */
                 onPointerDown={(e) => e.preventDefault()}
-                onClick={() => send(text)}
-                className="grid size-11 place-items-center rounded-chip"
+                onClick={sendDraft}
+                className={`grid size-11 place-items-center rounded-chip${slotSettled.current ? ' composer-slot-in' : ''}`}
                 style={{
                   background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white))',
                 }}
@@ -876,13 +900,12 @@ export const Composer = memo(function Composer({
                 <Glyph name="arrowUp" size={20} className="text-white" />
               </button>
             ) : (
-              <QuickEmojiFrame focused={focused} onSend={send} />
+              <QuickEmojiFrame onSend={send} animateIn={slotSettled.current} />
             )}
           </div>
         </div>
         </>
       )}
-      </div>
 
       {/* SOUS la rangée, à la place du clavier — `attachmentCarouselPanel`
           (`+Layout.swift:254-258`). */}

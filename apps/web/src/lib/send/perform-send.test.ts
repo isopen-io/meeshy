@@ -10,7 +10,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import { pendingAttachmentOf } from './attachments';
 import { entriesOf, createOutboxStore } from './outbox-store';
-import { debounceEntryCountForTests, performSend, retrySend, type SendDeps } from './perform-send';
+import { performSend, retrySend, type SendDeps } from './perform-send';
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
   const calls: { readonly url: string; readonly init: RequestInit }[] = [];
@@ -544,52 +544,18 @@ describe('performSend', () => {
   });
 
   /**
-   * LA CARTE DU DÉBOUNCE NE RETIENT RIEN (revue-correction #5813). Elle vit à
-   * l'échelle du MODULE et sa clé porte le TEXTE ENTIER du message : sans
-   * purge, une session de messagerie garde en mémoire tout ce que
-   * l'utilisateur a jamais écrit, pour une valeur dont la durée utile est de
-   * 600 ms (dimension 3, « aucun cache non borné »). Ce témoin ne regarde pas
-   * l'implémentation : il compte ce que le module RETIENT.
+   * LES EMOJIS PARTENT EN SÉRIE (#7985, directive porteur 2026-09-25) — plus
+   * aucun dédoublonnage par CONTENU : 😂 😂 😂 tapés à la suite sont TROIS
+   * messages. La seule déduplication qui reste est celle du MESSAGE, par son
+   * `clientMessageId` (un même message rejoué ne fait qu'une ligne — témoins
+   * « pas de doublon » et « retrySend REJOUE » ci-dessus) : chaque envoi en
+   * reçoit donc un NEUF.
    */
-  test('la carte du débounce est PURGÉE — trois envois distincts ne laissent pas trois clés vivantes', async () => {
-    const { impl } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
-    const outbox = createOutboxStore();
-    const queryClient = seededClient();
-    // Une horloge LOIN devant celle des témoins voisins (qui, eux, n'injectent
-    // pas `now` et prennent donc `Date.now()`) : leurs clés sont périmées dès
-    // le premier appel, et ce témoin ne compte que les siennes.
-    let clock = Date.now() + 10_000_000;
-    const deps: SendDeps = {
-      source: 'gateway',
-      transport: createHttpTransport({ base: '', fetchImpl: impl }),
-      queryClient,
-      outbox,
-      online: true,
-      now: () => clock,
-    };
-
-    for (const content of ['purge-a', 'purge-b', 'purge-c']) {
-      await performSend({ conversationId: 'c-a', draft: { content, originalLanguage: 'fr' }, viewerId: 'u-viewer', deps });
-      clock += 10;
-    }
-    expect(debounceEntryCountForTests()).toBe(3);
-
-    clock += 10_000;
-    await performSend({
-      conversationId: 'c-a',
-      draft: { content: 'purge-d', originalLanguage: 'fr' },
-      viewerId: 'u-viewer',
-      deps,
-    });
-    // Les trois clés périmées sont parties ; seule la courante reste.
-    expect(debounceEntryCountForTests()).toBe(1);
-  });
-
-  test('dédoublonnage 600ms : deux envois du même (content, replyToId) sous 600ms ⇒ UN appel ; au-delà ⇒ deux ; contenus différents ⇒ deux, jamais sérialisés', async () => {
+  test('deux envois IDENTIQUES à la même milliseconde ⇒ DEUX appels, chacun son clientMessageId', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
     const outbox = createOutboxStore();
     const queryClient = seededClient();
-    let clock = 10_000_000;
+    const clock = 10_000_000;
     const deps: SendDeps = {
       source: 'gateway',
       transport: createHttpTransport({ base: '', fetchImpl: impl }),
@@ -599,24 +565,33 @@ describe('performSend', () => {
       now: () => clock,
     };
 
-    const draft = { content: 'texte-debounce-a', originalLanguage: 'fr' } as const;
-    const p1 = performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps });
-    clock += 300;
-    const p2 = performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps });
-    // Aucune résolution n'a encore eu lieu : les deux appels, s'il y en a deux,
-    // sont déjà partis en parallèle — jamais sérialisés.
-    await Promise.all([p1, p2]);
-    expect(calls.length).toBe(1);
+    const draft = { content: '😂', originalLanguage: 'fr' } as const;
+    await Promise.all([
+      performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps }),
+      performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps }),
+      performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps }),
+    ]);
 
-    clock += 700;
+    expect(calls.length).toBe(3);
+    const ids = calls.map((c) => JSON.parse(String(c.init.body)).clientMessageId as string);
+    expect(new Set(ids).size).toBe(3);
+    expect(calls.every((c) => JSON.parse(String(c.init.body)).content === '😂')).toBe(true);
+  });
+
+  test('deux PIÈCES identiques envoyées à la suite ⇒ DEUX messages en file, jamais fusionnés', async () => {
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200, body: ackBody('m9', 'x') }).impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: false,
+      now: () => 10_000_000,
+    };
+    const draft = { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile('serie.png'))] } as const;
     await performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps });
-    expect(calls.length).toBe(2);
-
-    const draftB = { content: 'texte-debounce-b', originalLanguage: 'fr' } as const;
-    const p3 = performSend({ conversationId: 'c-a', draft: draftB, viewerId: 'u-viewer', deps });
-    const p4 = performSend({ conversationId: 'c-a', draft: draftB, viewerId: 'u-viewer', deps: { ...deps, now: () => clock + 100000 } });
-    await Promise.all([p3, p4]);
-    expect(calls.length).toBe(4);
+    await performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps });
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(2);
   });
 });
 
@@ -747,9 +722,6 @@ describe('performSend — pièces jointes (#5668)', () => {
     };
     await performSend({
       conversationId: 'c-a',
-      // Nom DISTINCT des autres témoins de ce bloc : la clé de dédoublonnage
-      // (`debounceKeyOf`) porte `nom:taille`, et deux envois identiques à
-      // moins de 600 ms n'en font qu'un — le second n'enquêterait rien.
       draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile('amputee.png'))] },
       viewerId: 'u-viewer',
       deps,

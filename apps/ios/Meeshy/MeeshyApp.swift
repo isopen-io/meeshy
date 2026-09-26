@@ -801,7 +801,7 @@ struct MeeshyApp: App {
                         // otherwise the call is orphaned locally: the peer
                         // keeps ringing/connecting to a device that vanished
                         // without sending a hangup signal.
-                        if CallManager.shared.callState.isActive {
+                        if CallManagerHost.shared.manager?.callState.isActive == true {
                             CallManager.shared.endCall()
                         }
                         MessageSocketManager.shared.disconnect()

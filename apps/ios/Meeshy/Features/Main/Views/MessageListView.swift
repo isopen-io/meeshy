@@ -500,6 +500,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// (`DeviceLayout.safeAreaTop`) — sous `ignoresSafeArea`, ni le
     /// `GeometryReader` ni le contrôleur hébergé ne le connaissent.
     var topInset: CGFloat = 0
+    /// Hauteur MESURÉE de la bande d'en-tête flottant (#7998) — ancre des
+    /// pilules de jour et de la réserve de la rangée plate.
+    var headerBandHeight: CGFloat = 0
     /// Ce que le chrome flottant montre en ce moment (#6013) : en rangée
     /// plate, le fil s'efface sous l'en-tête et le composeur tant qu'ils sont
     /// posés, et retrouve le bord de l'écran quand le défilement les escamote.
@@ -735,6 +738,7 @@ struct MessageListView: UIViewControllerRepresentable {
         // qui vient de naître ferait glisser le fil à chaque ouverture de
         // conversation. Seul `updateUIViewController` suit une courbe.
         vc.applyBottomInset(bottomInset)
+        vc.headerBandHeight = headerBandHeight
         vc.applyTopInset(topInset)
         return vc
     }
@@ -853,6 +857,7 @@ struct MessageListView: UIViewControllerRepresentable {
         // l'a causée (le clavier qui monte ou descend), jamais en un pas sec.
         // `transition == nil` retombe mot pour mot sur la pose sèche.
         vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)
+        vc.headerBandHeight = headerBandHeight
         vc.applyTopInset(topInset)
     }
 

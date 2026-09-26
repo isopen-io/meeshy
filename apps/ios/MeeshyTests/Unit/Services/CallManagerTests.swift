@@ -1351,10 +1351,25 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
             body.contains("removeDuplicates()"),
             "The binding must de-duplicate, so the thaw fires on real transitions only"
         )
+        // #7955 — `WebRTCService` is built lazily and kept in
+        // `builtWebRTCService`. Thawing through the optional is the SAME
+        // behaviour: an encoder that was never built carries no floor, and
+        // thawing through the `webRTCService` getter would build the whole
+        // WebRTC stack on the controller's initial `false` emission.
         XCTAssertTrue(
-            body.contains("if !suspended { self.webRTCService.unfreezeVideoAfterSurvival() }"),
+            body.contains("if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }"),
             "The falling edge of isVideoSuspended must thaw the encoder — a controller reset " +
             "clears the policy flag but never the encoder floor"
+        )
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("builtWebRTCService = service"),
+            "Every WebRTCService (hence every encoder that can be frozen) must be stored in " +
+            "`builtWebRTCService`, or the thaw above would miss it"
+        )
+        XCTAssertEqual(
+            source.components(separatedBy: "WebRTCService()").count - 1, 1,
+            "CallManager must build its WebRTCService in ONE place — the lazy getter that stores it"
         )
     }
 

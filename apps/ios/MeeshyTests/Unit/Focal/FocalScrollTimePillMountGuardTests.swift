@@ -192,11 +192,11 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     func test_pillAnchor_usesFocalMetricsPillTop_neverALiteral() throws {
         let code = try strippedSource()
         XCTAssertTrue(
-            code.contains("constant: topInset + FocalMetrics.Pill.top"),
-            "L'ancre verticale de la pilule doit venir de `FocalMetrics.Pill.top` (miroir du token `thread.pill.top`, 72) — jamais un littéral en dur (garde R15)."
+            code.contains("constant: topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)"),
+            "L'ancre verticale de la pilule doit venir de `FocalMetrics.Pill.top` (miroir du token `thread.pill.top`, 72), décalée de ce que l'en-tête mesuré gagne en Dynamic Type (#7998) — jamais un littéral en dur (garde R15)."
         )
         XCTAssertTrue(
-            code.contains("scrollTimePillTopConstraint?.constant = topInset + FocalMetrics.Pill.top"),
+            code.contains("scrollTimePillTopConstraint?.constant = topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)"),
             "applyTopInsetToViews doit recomposer l'ancre de la pilule quand `topInset` change — même discipline que la pill sticky de jour."
         )
     }

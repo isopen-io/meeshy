@@ -601,9 +601,9 @@ export function Bubble({
                   name={message.sender?.displayName ?? ''}
                   /* L'IDENTITÉ MÈNE AU PROFIL (#7241). Le pseudo vit sous
                      `sender.user.username`, JAMAIS à la racine du participant
-                     (`packages/shared/types/participant.ts:113`) — et il est
-                     bien SERVI : `MessagingService.ts:175` pose
-                     `username: true`. Absent (participant anonyme), l'avatar
+                     (`packages/shared/types/participant.ts:113`) — le socket le
+                     sert imbriqué, la liste REST à la racine, repliée par
+                     `withSenderAccount` (#7991). Absent (participant anonyme), l'avatar
                      reste muet plutôt que d'ouvrir `/u/`. */
                   {...(typeof message.sender?.user?.username === 'string' && message.sender.user.username !== ''
                     ? { profileUsername: message.sender.user.username }

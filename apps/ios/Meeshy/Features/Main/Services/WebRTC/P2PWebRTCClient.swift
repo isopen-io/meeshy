@@ -84,7 +84,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // `IceRestart: true` constraint, forcing new ICE credentials in the SDP.
     private var pendingIceRestart = false
 
-    let videoFilterPipeline = VideoFilterPipeline()
+    /// Paresseux (#7955) : une requête Vision de segmentation et un
+    /// `CIContext(mtlDevice:)` naissent ici — au premier appel vidéo filtré.
+    private(set) lazy var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
     private var toggleVideoTask: Task<Void, Never>?

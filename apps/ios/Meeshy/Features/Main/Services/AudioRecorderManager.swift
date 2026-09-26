@@ -75,7 +75,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // Audit P1-10 — refuse to start a voice-message recording while a
         // VoIP call is active: AVAudioRecorder activation overrides the
         // call's audio session and silences the WebRTC microphone path.
-        if CallManager.shared.callState.isActive {
+        if CallManagerHost.shared.isCallActiveForAudioGuard {
             return
         }
 
@@ -160,7 +160,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
     internal func deactivateAudioSessionAfterFailure() {
         // Only deactivate when no VoIP call is active — we never want to
         // tear down a session owned by the WebRTC stack.
-        guard !CallManager.shared.callState.isActive else { return }
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
         deactivateSharedAudioSession()
     }
 
@@ -173,7 +173,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
 
         // Call-aware (L3) : même garde que `cancelRecording` — un stop
         // mid-appel VoIP démontait sinon la session possédée par WebRTC.
-        if !CallManager.shared.callState.isActive {
+        if !CallManagerHost.shared.isCallActiveForAudioGuard {
             deactivateSharedAudioSession()
         }
 
@@ -199,7 +199,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // Audit P2-iOS-4 — deactivate the AVAudioSession so the mic indicator
         // turns off. Without this, cancelling a voice message left the
         // session active indefinitely (drained battery + kept mic icon on).
-        if !CallManager.shared.callState.isActive {
+        if !CallManagerHost.shared.isCallActiveForAudioGuard {
             deactivateSharedAudioSession()
         }
     }
