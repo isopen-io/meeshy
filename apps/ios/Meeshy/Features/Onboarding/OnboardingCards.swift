@@ -532,10 +532,24 @@ struct OnboardingSuggestionRow: View {
     }
 
     private var accessibilitySummary: String {
-        let names = suggestion.languages.map(LanguageFlagChip.spokenName(for:))
-        let languages = ListFormatter.localizedString(byJoining: names)
-        let base = String.localizedStringWithFormat(String(localized: "onboarding.friends.row.a11y", bundle: .main),
-                                                    suggestion.displayName, languages)
+        Self.accessibilitySummary(displayName: suggestion.displayName, username: suggestion.username,
+                                  languages: suggestion.languages, didFail: didFail)
+    }
+
+    /// Sans langue connue, la proposition « parle … » est OMISE (#8143) —
+    /// jamais un verbe sans complément : le nom et le @pseudo, tels qu'affichés.
+    static func accessibilitySummary(displayName: String, username: String, languages: [String], didFail: Bool) -> String {
+        let spoken = languages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map(LanguageFlagChip.spokenName(for:))
+        let base: String
+        if spoken.isEmpty {
+            base = username.isEmpty ? displayName : "\(displayName), @\(username)"
+        } else {
+            base = String.localizedStringWithFormat(String(localized: "onboarding.friends.row.a11y", bundle: .main),
+                                                    displayName, ListFormatter.localizedString(byJoining: spoken))
+        }
         return didFail ? base + ". " + String(localized: "onboarding.friends.failed", bundle: .main) : base
     }
 }

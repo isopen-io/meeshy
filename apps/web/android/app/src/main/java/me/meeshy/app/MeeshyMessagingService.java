@@ -4,7 +4,11 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
+import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 
 /**
  * LE SEUL service `MESSAGING_EVENT` de la coque (#8049). FCM ne remet un
@@ -17,7 +21,9 @@ import java.lang.reflect.Method;
  *   retirent ({@link CallPush}) ;
  * - TOUT le reste — et le renouvellement du jeton — est remis INCHANGE au
  *   plugin, exactement ce que faisait son propre service
- *   (`PushNotificationsPlugin.sendRemoteMessage` / `onNewToken`).
+ *   (`PushNotificationsPlugin.sendRemoteMessage` / `onNewToken`) ; et une
+ *   ARRIVEE de message y accuse sa remise ({@link PushDeliveryReceipt}, #8124),
+ *   comme le service worker web et la NSE iOS.
  *
  * Le plugin est atteint par reflexion, pas par heritage : `cap sync` ne
  * synchronise que `dependencies` et `devDependencies`, et le plugin est
@@ -30,6 +36,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
 
     private static final String TAG = "MeeshyMessaging";
     private static final String PLUGIN = "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin";
+    private static final int TIMEOUT_MS = 8_000;
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
@@ -53,6 +60,38 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
                 return;
             default:
                 forward("sendRemoteMessage", RemoteMessage.class, message);
+                acknowledgeDelivery(message);
+        }
+    }
+
+    /**
+     * Best-effort, comme `sw-push.js` : un accuse manque (pas de credential,
+     * reseau coupe) laisse le message « envoye » jusqu'a la reconnexion — l'etat
+     * d'avant #8124, jamais pire. `onMessageReceived` tourne deja hors du fil
+     * principal : l'appel reseau y est permis.
+     */
+    private void acknowledgeDelivery(RemoteMessage message) {
+        PushDeliveryReceipt receipt = PushDeliveryReceipt.of(message.getData(), CallShellStore.apiBase(this));
+        String[] header = CallShellStore.credentialHeader(this);
+        if (receipt == null || header == null) return;
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) URI.create(receipt.url).toURL().openConnection();
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(TIMEOUT_MS);
+            connection.setReadTimeout(TIMEOUT_MS);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty(header[0], header[1]);
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(receipt.body.getBytes(StandardCharsets.UTF_8));
+            }
+            int status = connection.getResponseCode();
+            if (status >= 400) Log.w(TAG, "accuse de remise rendu " + status);
+        } catch (Exception failure) {
+            Log.w(TAG, "accuse de remise non remis", failure);
+        } finally {
+            if (connection != null) connection.disconnect();
         }
     }
 

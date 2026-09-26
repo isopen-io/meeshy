@@ -506,7 +506,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // lisent `CallRules` (SDK) au lieu de les redire (−23) ; `CallManager.swift`
     // cède `CallEndReasonMapper` à son propre fichier avant de recevoir la
     // relance ICE sur identifiants TURN frais (−15 net).
-    private static let legacyLineCeiling = 50_683
+    //
+    // #8063 — 50 683 → 48 703, REMESURÉ. Le partage d'écran a payé sa place
+    // avant de la prendre : `CallManager.swift` cède ses deux fabriques de
+    // segments de transcription (−51 net), `P2PWebRTCClient.swift` son calcul
+    // de directions SDP (−16), `CallView.swift` ses libellés de fin d'appel et
+    // d'échec des sous-titres (−20). Le reste de l'écart (1 892) était du mou
+    // laissé par des lots antérieurs : un plafond cumulatif se remesure.
+    private static let legacyLineCeiling = 48_703
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
