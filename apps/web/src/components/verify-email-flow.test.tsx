@@ -6,6 +6,8 @@ import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ApiResult } from '@/lib/api/http';
 import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email';
+import { takeOnboardingWaiver } from '@/lib/onboarding/landing-waiver';
+import type { ArrivalDeps } from '@/lib/arrival/arrival';
 import { forgetPendingVerification, holdPendingVerification } from '@/lib/pending-verification';
 import { createIntervalClock, type IntervalClockScheduler } from '@/lib/view/interval-clock';
 
@@ -40,6 +42,7 @@ afterEach(() => {
   container.remove();
   Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
   forgetPendingVerification();
+  takeOnboardingWaiver();
   window.history.replaceState({}, '', '/auth/verify-email');
 });
 
@@ -279,14 +282,20 @@ const SESSION_DATA: VerifyEmailData = {
 
 const here = () => `${window.location.pathname}${window.location.search}`;
 
+/** La célébration (#8088) jouée sans attendre : ces témoins-ci jugent la DESTINATION. */
+const INSTANT_ARRIVAL: ArrivalDeps = { prefetch: async () => undefined, wait: async () => undefined, reducedMotion: () => true };
+const landed = async () => {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+};
+
 describe('VerifyEmailFlow — le lien de l’e-mail (`?token=`) connecte au montage (#8034)', () => {
   test('UN appel { email, token }, AUCUN mot de passe, puis l’accueil', async () => {
     const { clock, now } = fakeClock();
     holdPendingVerification({ email: 'neuf@meeshy.example', password: 'secret-1', accountCreated: true });
     const stub = verifyStub([{ ok: true, data: SESSION_DATA, status: 200 }]);
     await act(async () => {
-      mount('neuf@meeshy.example', { verifyEmail: stub.verifyEmail, resendVerification: resendStub().resendVerification, clock, now }, { token: 'tok-1' });
-      await Promise.resolve();
+      mount('neuf@meeshy.example', { verifyEmail: stub.verifyEmail, resendVerification: resendStub().resendVerification, clock, now, arrival: INSTANT_ARRIVAL }, { token: 'tok-1' });
+      await landed();
     });
 
     expect(stub.calls).toEqual([{ email: 'neuf@meeshy.example', token: 'tok-1' }]);
@@ -297,10 +306,11 @@ describe('VerifyEmailFlow — le lien de l’e-mail (`?token=`) connecte au mont
     const { clock, now } = fakeClock();
     const stub = verifyStub([{ ok: true, data: SESSION_DATA, status: 200 }]);
     await act(async () => {
-      mount('neuf@meeshy.example', { verifyEmail: stub.verifyEmail, resendVerification: resendStub().resendVerification, clock, now }, { token: 'tok-1', next: '/chat/mshy_x' });
-      await Promise.resolve();
+      mount('neuf@meeshy.example', { verifyEmail: stub.verifyEmail, resendVerification: resendStub().resendVerification, clock, now, arrival: INSTANT_ARRIVAL }, { token: 'tok-1', next: '/chat/mshy_x' });
+      await landed();
     });
     expect(here()).toBe('/chat/mshy_x');
+    expect(takeOnboardingWaiver()).toBe(false);
   });
 
   test('pendant l’appel : « Vérification du lien… », aucun formulaire', () => {

@@ -96,6 +96,46 @@ public struct SignupForm: Equatable {
         return trimmed.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
 
+    /// Les bornes d'un pseudo — miroir de `usernameMinLength` /
+    /// `usernameMaxLength` (`packages/shared/types/api-schemas/auth.ts`), LES
+    /// valeurs que le schéma Ajv de `POST /auth/register` applique (#8082).
+    /// Lues sur `RegistrationIdentity`, qui dérive le pseudo sous la même borne.
+    public static let usernameMinLength = RegistrationIdentity.pseudoMin
+    public static let usernameMaxLength = RegistrationIdentity.pseudoMax
+
+    /// Pourquoi un pseudo serait refusé — miroir de `UsernameRefusal`
+    /// (`packages/shared/utils/username-rule.ts`). Le MOTIF, jamais un booléen
+    /// nu : « pseudo invalide » n'apprend rien à qui a tapé un caractère de trop.
+    public enum UsernameRefusal: Equatable, Sendable {
+        case tooShort
+        case tooLong
+        case invalidCharacters
+    }
+
+    /// Le charset de `usernamePatternSource` (`^[a-zA-Z0-9_-]+$`) — ASCII
+    /// strict : `josé` est refusé ici comme par la passerelle.
+    private static let usernameAllowed = CharacterSet(
+        charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+    )
+
+    /// Le verdict de la passerelle, rendu avant l'envoi. La LONGUEUR se juge
+    /// avant les caractères (le premier défaut à corriger) ; elle se compte en
+    /// points de code, comme Ajv.
+    public static func usernameRefusal(_ value: String) -> UsernameRefusal? {
+        let length = value.unicodeScalars.count
+        if length < usernameMinLength { return .tooShort }
+        if length > usernameMaxLength { return .tooLong }
+        guard value.unicodeScalars.allSatisfy({ usernameAllowed.contains($0) }) else { return .invalidCharacters }
+        return nil
+    }
+
+    /// Le refus du pseudo QUI PARTIRA (#8082) — `nil` quand il est recevable,
+    /// ou absent : la passerelle le dérive alors elle-même.
+    public var usernameRefusal: UsernameRefusal? {
+        let pseudo = effectiveUsername
+        return pseudo.isEmpty ? nil : Self.usernameRefusal(pseudo)
+    }
+
     /// Rapprochement du `z.email` serveur : « a@b » et « alice@com. » le
     /// passaient quand la règle était « contient @ et . ».
     public static func isEmailValid(_ value: String) -> Bool {
@@ -164,6 +204,7 @@ public struct SignupForm: Equatable {
             && !effectiveDisplayName.isEmpty
             && Self.isDisplayNameValid(effectiveDisplayName)
             && !effectiveUsername.isEmpty
+            && usernameRefusal == nil
     }
 
     /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
@@ -184,7 +225,7 @@ public struct SignupForm: Equatable {
     /// le mot de passe ne sont exigés par la passerelle. Rien ici ne dépend du
     /// réseau — aucun appel de disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
-        isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid
+        isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid && usernameRefusal == nil
     }
 
     // MARK: - Téléphone

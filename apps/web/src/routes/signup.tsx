@@ -34,6 +34,7 @@ import {
   isEmailValid,
   isIdentityDefined,
   isPasswordValid,
+  usernameFieldRefusal,
   type SignupFormState,
 } from '@/lib/signup-form';
 import {
@@ -42,7 +43,7 @@ import {
   showsSignupRung,
   type SignupReveal,
 } from '@/lib/view/signup-rungs';
-import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
+import { placeSignupFailure, usernameRefusalMessage, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import {
   isReferralCodeShaped,
   normalizeReferralCode,
@@ -403,6 +404,11 @@ export default function SignupScreen({
   }
 
   const emailError = feedback.fieldErrors.email;
+  // #8082 — la borne du pseudo se dit PENDANT la frappe ; un refus serveur
+  // posé sur ce champ garde la priorité.
+  const usernameRefusal = usernameFieldRefusal(form);
+  const usernameError =
+    feedback.fieldErrors.username ?? (usernameRefusal !== null ? usernameRefusalMessage(usernameRefusal) : undefined);
   const canSend = canSubmit(form) && online;
   /** « OK » au sens de la directive : un mot de passe TAPÉ qui tient la borne
    * du schéma partagé. Un champ vide reste légitime (#6424) — il n'est pas
@@ -550,7 +556,7 @@ export default function SignupScreen({
             focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
             onFocus={(field) => setFocused(field)}
             onBlur={() => setFocused(null)}
-            usernameError={feedback.fieldErrors.username}
+            usernameError={usernameError}
             displayNameError={feedback.fieldErrors.displayName}
             suggestions={feedback.usernameSuggestions}
           />

@@ -138,6 +138,17 @@ export const personNamePatternSource = "^(?=.*\\p{L})[\\p{L}\\p{M}\\s'’ʼ.-]+$
 export const usernamePatternSource = "^[a-zA-Z0-9_-]+$";
 
 /**
+ * Les bornes d'un pseudo d'inscription — LA source (#8082). Le schéma Ajv
+ * ci-dessous, la dérivation (`utils/registration-identity.ts`), le changement
+ * de pseudo (`PATCH /users/me/username`) et le verdict client
+ * (`utils/username-rule.ts`) les citent ; le miroir Swift
+ * (`RegistrationIdentity.pseudoMin/pseudoMax`) est tenu par sa suite.
+ * Un pseudo de 17 caractères passait le formulaire iOS faute de les connaître.
+ */
+export const usernameMinLength = 2;
+export const usernameMaxLength = 16;
+
+/**
  * Les trois champs d'identité, déclarés UNE fois et cités deux — dans
  * `properties`, et dans la branche d'`anyOf` qui les exige.
  *
@@ -238,8 +249,8 @@ export const registerRequestSchema = {
     displayName: displayNameProperty,
     username: {
       type: 'string',
-      minLength: 2,
-      maxLength: 16,
+      minLength: usernameMinLength,
+      maxLength: usernameMaxLength,
       pattern: usernamePatternSource,
       description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces). Optional: generated from the display name when absent.'
     },

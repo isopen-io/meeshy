@@ -285,7 +285,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",  // 2
         "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
-        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 0
+        // #8081 — les refus de la preuve d'adresse ont quitté le ViewModel pour
+        // la table que partagent la saisie du code, le lien et l'envoi : le
+        // cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578).
+        "apps/ios/Meeshy/Features/Auth/EmailProofErrorText.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/ContactsSkeletonList.swift",  // 1

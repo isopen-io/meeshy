@@ -2,21 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { auth } from '@/lib/api/auth';
+import type { ArrivalDeps } from '@/lib/arrival/arrival';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { APP_HANDOFF_WAIT_MS, browserAppHandoff, type AppHandoff } from '@/lib/links/app-handoff';
 import { useOnline } from '@/lib/net/online';
-import { pendingVerificationFor } from '@/lib/pending-verification';
+import { waiveNextOnboardingOffer } from '@/lib/onboarding/landing-waiver';
+import { forgetPendingVerification, pendingVerificationFor } from '@/lib/pending-verification';
+import { landingAfterSession } from '@/lib/session-guard';
+import { prefersReducedMotion } from '@/lib/view/effects-runner';
 import { secondClock, type IntervalClock } from '@/lib/view/interval-clock';
 import { type MagicLinkDeadline } from '@/lib/view/magic-link';
 import { useCountdown } from '@/lib/view/use-countdown';
 import { resolveVerifyEmailOutcome } from '@/lib/view/auth-feedback';
-import { Link } from '@/routes/route-table';
+import { href, Link, navigate } from '@/routes/route-table';
 
+import { ArrivalCelebration } from './arrival-celebration';
 import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
-import { EmailCodeForm, goToLanding, verifyEmailErrorText, withStrongEmail } from './email-code-form';
+import { EmailCodeForm, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
 
 /**
@@ -44,6 +49,14 @@ import { Glyph } from './glyph';
  * ouverte : le navigateur valide et se connecte. La page est passée en
  * arrière-plan ⇒ l'app a le lien : rien n'est consommé, et « Continuer dans le
  * navigateur » reste offert à qui revient.
+ *
+ * LE LIEN QUI OUVRE LA SESSION EST CÉLÉBRÉ (#8088) — là où la session
+ * s'ouvre (le navigateur ; l'app a sa propre arrivée) : feu d'artifice (ou sa
+ * variante sobre) pendant que les premières données se préchargent, puis la
+ * liste des CONVERSATIONS — jamais le parcours d'accueil à la place
+ * (`landing-waiver.ts`) ; un `?next=` sûr garde la priorité. Le code saisi à
+ * la main mène toujours directement (`goToLanding`) ; un lien refusé ne
+ * célèbre rien.
  */
 
 const VERIFY_TINT = 'var(--color-ios-brand)';
@@ -58,7 +71,23 @@ export type VerifyEmailFlowDeps = {
   readonly verificationStatus?: typeof auth.verificationStatus;
   /** La remise du lien à l'app (#8083) — `browserAppHandoff` si absente. */
   readonly appHandoff?: AppHandoff;
+  /** L'arrivée célébrée (#8088) — `browserArrival` si absente. */
+  readonly arrival?: ArrivalDeps;
 };
+
+const browserArrival: ArrivalDeps = {
+  prefetch: () => import('@/lib/arrival/prefetch-entry').then(({ warmArrival }) => warmArrival()),
+  wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  reducedMotion: prefersReducedMotion,
+};
+
+function arriveAfterLink(next: string | null): void {
+  const home = href('list');
+  const destination = landingAfterSession(next, home);
+  forgetPendingVerification();
+  if (destination === home) waiveNextOnboardingOffer();
+  navigate(destination, true);
+}
 
 const defaultDeps: VerifyEmailFlowDeps = {
   verifyEmail: auth.verifyEmail,
@@ -67,7 +96,7 @@ const defaultDeps: VerifyEmailFlowDeps = {
   now: () => Date.now(),
 };
 
-type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'refused';
+type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'celebrating' | 'refused';
 
 export function VerifyEmailFlow({
   email,
@@ -119,7 +148,7 @@ export function VerifyEmailFlow({
     void deps.verifyEmail({ email, token }).then((result) => {
       const outcome = resolveVerifyEmailOutcome(result);
       if (outcome.kind === 'signed-in') {
-        goToLanding(next);
+        setLinkPhase('celebrating');
         return;
       }
       if (outcome.kind === 'verified') {
@@ -173,7 +202,9 @@ export function VerifyEmailFlow({
     <AuthColumn>
       <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
 
-      {verified ? (
+      {linkPhase === 'celebrating' ? (
+        <ArrivalCelebration deps={deps.arrival ?? browserArrival} language={language} onLand={() => arriveAfterLink(next)} />
+      ) : verified ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status">
           <span aria-hidden="true" style={{ color: 'var(--ios-success)' }}>
             <Glyph name="checks" size={48} />
