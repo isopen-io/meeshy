@@ -1,6 +1,3 @@
-import { z } from 'zod';
-import { PASSWORD_MIN_LENGTH } from '../utils/validation.js';
-
 /**
  * Les QUATRE niveaux de mot de passe qu'un administrateur peut proposer à un
  * membre depuis sa fiche (#8051), du plus lisible au plus sûr. Les trois
@@ -14,14 +11,5 @@ export const PASSWORD_PROPOSAL_LEVELS = ['simple', 'easy', 'medium', 'hard'] as 
 
 export type PasswordProposalLevel = (typeof PASSWORD_PROPOSAL_LEVELS)[number];
 
-const proposalSchema = z.string().min(PASSWORD_MIN_LENGTH);
-
 /** La réponse de `POST /admin/users/:userId/password-proposals` — un secret par niveau. */
-export const passwordProposalsSchema = z.object({
-  simple: proposalSchema,
-  easy: proposalSchema,
-  medium: proposalSchema,
-  hard: proposalSchema,
-}).strict();
-
-export type PasswordProposals = z.infer<typeof passwordProposalsSchema>;
+export type PasswordProposals = Readonly<Record<PasswordProposalLevel, string>>;
