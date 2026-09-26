@@ -10,6 +10,7 @@ import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
 import itStoriesMine from './catalog-it-stories-mine';
+import itContactCard from './catalog-it-contact-card';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -1124,6 +1125,7 @@ const it = {
 
   ...itMentions,
   ...itStoriesMine,
+  ...itContactCard,
 } satisfies InterfaceCatalog;
 
 export default it;

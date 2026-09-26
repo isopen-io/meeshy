@@ -10,6 +10,7 @@ import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
 import enStoriesMine from './catalog-en-stories-mine';
+import enContactCard from './catalog-en-contact-card';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1124,6 +1125,7 @@ const en = {
 
   ...enMentions,
   ...enStoriesMine,
+  ...enContactCard,
 } satisfies InterfaceCatalog;
 
 export default en;

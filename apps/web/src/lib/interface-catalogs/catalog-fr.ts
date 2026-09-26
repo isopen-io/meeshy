@@ -21,6 +21,7 @@ import frCallJoin from './catalog-fr-call-join';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
+import frContactCard from './catalog-fr-contact-card';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1152,6 +1153,7 @@ const fr = {
 
   ...frStoriesMine,
   ...frFeedPost,
+  ...frContactCard,
 } as const;
 
 export default fr;
