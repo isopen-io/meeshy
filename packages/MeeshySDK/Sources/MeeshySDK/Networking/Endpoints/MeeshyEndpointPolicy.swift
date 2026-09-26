@@ -40,9 +40,10 @@ public enum MeeshyEndpointPolicy {
     }
 
     /// Ce qu'un refus 4xx rend. Voir `MeeshyEndpointRejectionPolicy` —
-    /// l'inscription est la seule route dont le contrat DOCUMENTE ses codes.
+    /// l'inscription et la preuve d'adresse sont les routes dont le contrat
+    /// DOCUMENTE ses codes.
     public static func rejectionPolicy(forLegacyPath path: String) -> MeeshyEndpointRejectionPolicy {
-        path.hasPrefix("/auth/register") ? .structured : .opaque
+        path.hasPrefix("/auth/register") || path == "/auth/verify-email" ? .structured : .opaque
     }
 }
 
@@ -64,7 +65,7 @@ public extension AuthEndpoint {
         }
     }
 
-    /// **L'inscription est la SEULE route dont les refus sont typés** (#5218).
+    /// **Les routes dont les refus sont typés** — l'inscription d'abord (#5218).
     ///
     /// Son contrat documente quatre codes et le champ que chacun vise —
     /// `VALIDATION_ERROR` (+ `violations`), `PHONE_INVALID`, `USERNAME_TAKEN`
@@ -73,9 +74,14 @@ public extension AuthEndpoint {
     /// promet cela : les y basculer ferait de `MeeshyError.rejected` la forme
     /// courante d'un 400, et les sites qui filtrent `.server(400, _)`
     /// cesseraient de matcher sans qu'aucun d'eux ne rougisse.
+    ///
+    /// **La preuve d'adresse les rejoint (#8081)** : `POST /auth/verify-email`
+    /// pose `INVALID_VERIFICATION`, `VERIFICATION_EXPIRED` et `WEAK_PASSWORD`,
+    /// et sa phrase est écrite en français — l'écran de saisie du code doit
+    /// lire le CODE pour parler la langue de l'interface.
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .register: return .structured
+        case .register, .verifyEmail: return .structured
         default: return .opaque
         }
     }

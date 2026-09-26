@@ -99,7 +99,7 @@ final class EmailVerificationViewModel: ObservableObject {
             password = nil
             verificationSuccess = true
         } catch {
-            self.error = error.localizedDescription
+            self.error = EmailProofErrorText.codeMessage(for: error)
         }
     }
 
@@ -124,8 +124,7 @@ final class EmailVerificationViewModel: ObservableObject {
             try? await Task.sleep(for: .seconds(3))
             resendSuccess = false
         } catch {
-            self.error = (error as? MeeshyError)?.localizedDescription
-                ?? String(localized: "emailVerification.error.resendFailed", defaultValue: "Impossible de renvoyer le code de vérification")
+            self.error = EmailProofErrorText.resendMessage(for: error)
         }
 
         isResending = false

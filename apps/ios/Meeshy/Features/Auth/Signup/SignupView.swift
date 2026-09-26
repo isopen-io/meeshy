@@ -55,34 +55,39 @@ struct SignupView: View {
             theme.backgroundGradient
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                    header
-                    // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
-                    // puis l'adresse, puis l'identité — qui DÉCOULE de
-                    // l'adresse et n'a rien à montrer avant elle.
-                    phoneField
-                    emailField
-                    derivedIdentityBlock
-                    if isPasswordRevealed {
-                        passwordField
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+            // La croix vit dans SA zone (#8080) : empilée au-dessus du
+            // défilement, jamais en inset sans fond sous lequel le formulaire
+            // glissait.
+            VStack(spacing: 0) {
+                closeBar
+                ScrollView {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                        header
+                        // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
+                        // puis l'adresse, puis l'identité — qui DÉCOULE de
+                        // l'adresse et n'a rien à montrer avant elle.
+                        phoneField
+                        emailField
+                        derivedIdentityBlock
+                        if isPasswordRevealed {
+                            passwordField
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                        languageChip
+                        submitSection
+                        switchToLoginRow
                     }
-                    languageChip
-                    submitSection
-                    switchToLoginRow
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.xxl)
+                    .padding(.bottom, MeeshySpacing.xxxl)
+                    .iPadFormWidth()
                 }
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.xxl)
-                .padding(.bottom, MeeshySpacing.xxxl)
-                .iPadFormWidth()
+                // Le clavier suit le doigt et remonte si on relâche avant la fin —
+                // le mécanisme système, jamais un `DragGesture.onEnded` maison
+                // (directive porteur 2026-08-30).
+                .scrollDismissesKeyboard(.interactively)
             }
-            // Le clavier suit le doigt et remonte si on relâche avant la fin —
-            // le mécanisme système, jamais un `DragGesture.onEnded` maison
-            // (directive porteur 2026-08-30).
-            .scrollDismissesKeyboard(.interactively)
         }
-        .safeAreaInset(edge: .top) { closeBar }
         // Le mot de passe paraît quand l'identité est DÉFINIE (#7897) et ne se
         // referme plus : corriger son adresse ne fait pas disparaître ce
         // qu'on y a tapé.

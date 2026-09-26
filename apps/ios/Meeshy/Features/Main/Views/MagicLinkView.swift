@@ -412,12 +412,8 @@ struct MagicLinkView: View {
 
                 startCountdown(expiresInSeconds)
                 Self.logger.info("Magic link sent to \(email, privacy: .private)")
-            } catch let error as APIError {
-                errorMessage = error.errorDescription
-                isLoading = false
-                Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             } catch {
-                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez réessayer.", bundle: .main)
+                errorMessage = EmailProofErrorText.sendMessage(for: error)
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }

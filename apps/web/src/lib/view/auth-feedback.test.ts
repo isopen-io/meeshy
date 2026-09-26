@@ -74,6 +74,23 @@ describe('placeSignupFailure — le champ vise directement une saisie', () => {
   });
 });
 
+/**
+ * #8082 — un refus de SCHÉMA porte le texte d'Ajv (« body/username must NOT
+ * have more than 16 characters ») : anglais, technique. Il se pose sous son
+ * champ, mais dans la langue du lecteur.
+ */
+describe('placeSignupFailure — un refus de schéma sur le pseudo parle au lecteur', () => {
+  test('VALIDATION_ERROR sur username ⇒ la règle du pseudo, jamais le texte Ajv', () => {
+    const result = placeSignupFailure(
+      failure({ status: 400, code: 'VALIDATION_ERROR', field: 'username', error: 'body/username must NOT have more than 16 characters' }),
+    );
+    expect(result.fieldErrors.username).toBeDefined();
+    expect(result.fieldErrors.username).not.toContain('must NOT');
+    expect(result.fieldErrors.username).toContain('16');
+    expect(result.bannerError).toBeNull();
+  });
+});
+
 describe('placeSignupFailure — le CODE vise un champ quand la charge n’en nomme aucun', () => {
   test('EMAIL_TAKEN sans field ⇒ e-mail + showSignIn', () => {
     const result = placeSignupFailure(failure({ status: 409, code: 'EMAIL_TAKEN' }));
