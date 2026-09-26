@@ -637,7 +637,7 @@ export interface CallModeChangedEvent {
  * Event: call:media-toggled (Server → Client)
  */
 /**
- * Client → Server: `call:toggle-audio` / `call:toggle-video`.
+ * Client → Server: `call:toggle-audio` / `call:toggle-video` / `call:toggle-screen`.
  *
  * À ne pas confondre avec `CallMediaToggleEvent`, qui est la DIFFUSION
  * serveur→client du même geste. Le listener de la passerelle a déclaré le type
@@ -666,11 +666,21 @@ export interface CallModeChangedEvent {
  * l'aurait attendu indéfiniment — déclarer un ack qui n'existe pas est une
  * promesse, pas une tolérance.
  */
+/**
+ * Les médias qu'un participant bascule. `screen` (#8063) est le partage
+ * d'écran : il voyage sur la MÊME diffusion `call:media-toggled`, et il est
+ * INERTE pour les clients publiés avant lui — le décodeur web
+ * (`decodeMediaToggled`) rend `null` hors `audio`/`video`, iOS tombe dans
+ * `default: break`. Ce n'est PAS la caméra : la passerelle n'écrit jamais
+ * `isVideoEnabled` pour lui.
+ */
+export type CallMediaType = 'audio' | 'video' | 'screen';
+
 export interface CallMediaToggleClientEvent {
   readonly callId: string;
   readonly enabled: boolean;
   /** Toléré par le schéma, jamais lu : le NOM de l'événement porte le média. */
-  readonly mediaType?: 'audio' | 'video';
+  readonly mediaType?: CallMediaType;
   /** Toléré par le schéma, jamais lu : la passerelle résout le participant. */
   readonly participantId?: string;
 }
@@ -684,7 +694,7 @@ export interface CallMediaToggleEvent {
   // this value — only `.userId`/`.participantId` roster lookups do.
   /** See `CallScreenCaptureEvent.userId` — same rationale, added Vague 140. */
   readonly userId?: string;
-  readonly mediaType: 'audio' | 'video';
+  readonly mediaType: CallMediaType;
   readonly enabled: boolean;
 }
 
@@ -1101,6 +1111,8 @@ export const CALL_EVENTS = {
   SIGNAL: 'call:signal',
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
+  /** Partage d'écran (#8063) — même charge que `call:toggle-video`, même diffusion. */
+  TOGGLE_SCREEN: 'call:toggle-screen',
   END: 'call:end',
 
   // Client → Server (fire-and-forget)
