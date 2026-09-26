@@ -203,3 +203,52 @@ describe('extractCaptureTracks', () => {
     expect(tracks.map((t) => t.trackId)).toEqual(['t1', 't2', 't3']);
   });
 });
+
+/**
+ * #8012 — les clients publient en canvas v3 : les pistes vivent dans
+ * `scenes[].objects[kind=audio]`, le son de fond emprunté dans `sound`. Lire la
+ * seule forme v1 laissait la bibliothèque muette depuis la bascule.
+ */
+describe('extractCaptureTracks — canvas v3', () => {
+  const audio = (id: string, payload: Record<string, unknown>) => ({
+    id, kind: 'audio', plane: 'content', z: 0,
+    anchor: { t: 'free', x: 0.5, y: 0.5 },
+    transform: { scale: 1, rotation: 0, opacity: 1 },
+    payload,
+  });
+
+  it('test_audioObjectsOfEveryScene_becomeTracks_withTheirSourceWindow', () => {
+    const tracks = extractCaptureTracks({
+      v: 3,
+      scenes: [
+        { id: 's1', objects: [audio('a1', { postMediaId: 'm1', sourceStart: 2, duration: 5 })] },
+        { id: 's2', objects: [audio('a2', { soundId: 'snd1' })] },
+      ],
+    });
+    expect(tracks).toEqual([
+      expect.objectContaining({ trackId: 'a1', postMediaId: 'm1', startMs: 2000, endMs: 7000 }),
+      expect.objectContaining({ trackId: 'a2', soundId: 'snd1' }),
+    ]);
+  });
+
+  it('test_nonAudioObjects_areNotTracks', () => {
+    expect(extractCaptureTracks({
+      v: 3,
+      scenes: [{ id: 's1', objects: [{ ...audio('m', { postMediaId: 'm1' }), kind: 'media' }] }],
+    })).toEqual([]);
+  });
+
+  it('test_librarySceneSound_isABorrowedTrack', () => {
+    const tracks = extractCaptureTracks({
+      v: 3,
+      sound: { source: { t: 'library', soundId: 'snd9' }, volume: 1, bounds: { start: 1, end: 4 } },
+    });
+    expect(tracks).toEqual([
+      expect.objectContaining({ trackId: 'scene-sound', soundId: 'snd9', startMs: 1000, endMs: 4000 }),
+    ]);
+  });
+
+  it('test_originalSceneSound_isNotABorrowedTrack', () => {
+    expect(extractCaptureTracks({ v: 3, sound: { source: { t: 'original' }, volume: 1 } })).toEqual([]);
+  });
+});

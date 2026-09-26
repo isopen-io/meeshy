@@ -104,6 +104,21 @@ final class CanvasMediaAdoptionTests: XCTestCase {
                        ["orphelin-via-mediaId"],
                        "un fond référencé par mediaId, dans une scène ≥ 1, doit être vu comme les autres")
     }
+
+    // MARK: - Les mediaIds d'une publication (#8012)
+
+    /// **Un média PRÉ-téléversé et une piste audio partent dans `mediaIds`.**
+    /// Ne lister que les uploads du dispatch laissait ces lignes `postId: null`
+    /// côté serveur : hors de la bibliothèque de sons, puis balayées à 24 h.
+    func test_publicationMediaIds_ajouteLesPreMonteesEtLesPistesAudio_sansDoublon() {
+        var canvas = effects([media("pre-montee", background: true), media("televersee")])
+        canvas.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "piste"),
+                                     StoryAudioPlayerObject(postMediaId: "")]
+
+        XCTAssertEqual(
+            CanvasMediaAdoption.publicationMediaIds(uploaded: ["televersee"], effects: canvas),
+            ["televersee", "pre-montee", "piste"])
+    }
 }
 
 private extension CanvasMediaAdoption {

@@ -78,6 +78,27 @@ nonisolated enum CanvasMediaAdoption {
         return runtime + scenes
     }
 
+    /// **Les `mediaIds` d'une publication : ce que ce dispatch a téléversé,
+    /// PUIS tout ce que le document désigne** (#8012).
+    ///
+    /// Un média PRÉ-téléversé à la pose garde son `postMediaId` dans le canvas
+    /// et n'est pas re-téléversé à la publication : ne lister que les uploads
+    /// du dispatch le laissait hors de `mediaIds`, donc jamais rattaché au post
+    /// — invisible de la bibliothèque de sons, et balayé côté serveur
+    /// vingt-quatre heures plus tard comme un téléversement abandonné. Les
+    /// pistes audio (runtime et scènes) en font partie : ce sont elles que la
+    /// bibliothèque capture.
+    static func publicationMediaIds(uploaded: [String], effects: StoryEffects) -> [String] {
+        let audio = (effects.audioPlayerObjects ?? []).map(\.postMediaId)
+            + (effects.canvasV3?.scenes ?? [])
+                .flatMap(\.objects)
+                .filter { $0.kind == .audio }
+                .compactMap(\.mediaReference)
+        var seen = Set<String>()
+        return (uploaded + designatedIds(in: effects) + audio)
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
     /// `true` ⇔ tout ce que le canvas désigne est attaché au post.
     static func isCoherent(effects: StoryEffects, postMediaIds: [String]) -> Bool {
         orphanIds(in: effects, postMediaIds: postMediaIds).isEmpty
