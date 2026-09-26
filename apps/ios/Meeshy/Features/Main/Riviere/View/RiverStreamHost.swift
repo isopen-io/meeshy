@@ -598,7 +598,7 @@ struct RiverStreamHost: View {
     /// #8147 — « Lire la suite » / « Réduire » : la même loi que le fil
     /// (`LongMessageExpansionLaw`), la hauteur animée par la pile elle-même.
     private func expansion(for messageId: String) -> LongMessageExpansion {
-        LongMessageExpansion(isExpanded: expandedMessageId == messageId) {
+        LongMessageExpansion(messageId: messageId, isExpanded: expandedMessageId == messageId) {
             let next = LongMessageExpansionLaw.nextExpanded(current: expandedMessageId, toggled: messageId)
             let apply = {
                 expandedMessageId = next

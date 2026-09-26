@@ -75,7 +75,7 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
                 hashtagTint: .purple,
                 linkTint: .blue,
                 isDark: false,
-                expansion: LongMessageExpansion(isExpanded: isExpanded, toggle: {})
+                expansion: LongMessageExpansion(messageId: "m1", isExpanded: isExpanded, toggle: {})
             )
         }
         XCTAssertNotEqual(make(true), make(false))

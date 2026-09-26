@@ -47,6 +47,22 @@ nonisolated enum LongMessageExpansionLaw {
         return min(max(target, minOffset), max(minOffset, maxOffset))
     }
 
+    /// Le cadre du bloc de verre du déplié (#8161), dans le repère de la
+    /// rangée. En Bulles, le verre ÉPOUSE la bulle et en déborde des cotes
+    /// partagées (`FOCAL_METRICS` : 6 pt de côté, 3 pt en haut et en bas) —
+    /// jamais la largeur entière de la rangée, qui ferait d'une bulle de
+    /// 70 % un bandeau. Sans bulle mesurée (rangée plate, Rivière, première
+    /// passe), il retombe sur la rangée moins sa gouttière.
+    static func glassFrame(bubble: CGRect?, row: CGRect) -> CGRect {
+        guard let bubble, !bubble.isEmpty else {
+            return row.insetBy(dx: FocalScrollPerspective.focusCardHorizontalInset, dy: 0)
+        }
+        return bubble.insetBy(
+            dx: -FocalScrollPerspective.focusCardHorizontalInset,
+            dy: -FocalScrollPerspective.focusCardInnerMargin
+        )
+    }
+
     /// L'opacité d'une cellule : le déplié reste pleinement lisible, ses
     /// voisins s'atténuent — seulement tant que le déplié est VISIBLE. Hors
     /// champ, le fil redevient uniforme (le message reste déplié). La

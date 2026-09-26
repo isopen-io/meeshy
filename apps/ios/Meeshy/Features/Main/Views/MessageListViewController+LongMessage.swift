@@ -16,7 +16,7 @@ extension MessageListViewController {
     /// L'état de dépliage d'UNE cellule, remis à la bulle par l'environnement
     /// (la rangée plate le reçoit par `FocalRowInput.isExpanded`).
     func longMessageExpansion(for localId: String) -> LongMessageExpansion {
-        LongMessageExpansion(isExpanded: expandedLongMessageLocalId == localId) { [weak self] in
+        LongMessageExpansion(messageId: localId, isExpanded: expandedLongMessageLocalId == localId) { [weak self] in
             self?.toggleLongMessageExpansion(localId)
         }
     }
