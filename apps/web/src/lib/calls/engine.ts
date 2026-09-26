@@ -9,6 +9,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import {
   decodeAck,
   decodeCallId,
+  decodeForceLeave,
   decodeEnded,
   decodeError,
   decodeIceRefresh,
@@ -645,8 +646,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         return;
       }
       case SERVER_EVENTS.CALL_FORCE_LEAVE: {
-        const callId = decodeCallId(payload);
-        if (callId !== null && read()?.callId === callId) finish('remote');
+        const forced = decodeForceLeave(payload);
+        if (forced !== null && read()?.callId === forced.callId) finish(forced.removed ? 'removed' : 'remote');
         return;
       }
       case SERVER_EVENTS.CALL_ERROR: {

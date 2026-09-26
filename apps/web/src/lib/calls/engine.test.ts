@@ -323,6 +323,15 @@ describe('en appel', () => {
     expect(h.call()?.endedDurationSec).toBe(42);
   });
 
+  test('exclu par un modérateur : fin « retiré de l’appel », et une autre fin forcée reste « remote »', async () => {
+    const removed = await connected();
+    removed.engine.handle(SERVER_EVENTS.CALL_FORCE_LEAVE, { callId: 'call-1', reason: 'removed' });
+    expect(removed.call()?.phase).toMatchObject({ kind: 'ended', reason: 'removed' });
+    const cleaned = await connected();
+    cleaned.engine.handle(SERVER_EVENTS.CALL_FORCE_LEAVE, { callId: 'call-1', reason: 'membership_ended' });
+    expect(cleaned.call()?.phase).toMatchObject({ kind: 'ended', reason: 'remote' });
+  });
+
   test('un lien perdu dans un appel DIRECT termine l’appel sur « connexion perdue »', async () => {
     const h = await connected();
     h.linkState(h.links[0] as FakeLink, 'failed');

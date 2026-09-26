@@ -501,7 +501,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // que #7990 allège de son code mort pendant que #8009 en extrait la grille
     // d'aperçu, repasse SOUS le budget (1 194 lignes comptées) : il quitte la
     // liste, plafond compris.
-    private static let legacyLineCeiling = 50_721
+    //
+    // #8074 — 50 721 → 50 683 (−38). Les délais d'appel de `WebRTCTypes.swift`
+    // lisent `CallRules` (SDK) au lieu de les redire (−23) ; `CallManager.swift`
+    // cède `CallEndReasonMapper` à son propre fichier avant de recevoir la
+    // relance ICE sur identifiants TURN frais (−15 net).
+    private static let legacyLineCeiling = 50_683
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
