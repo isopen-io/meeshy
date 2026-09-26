@@ -169,7 +169,7 @@ export default function AdminUserScreen() {
               sont servies jusqu'à AUDIT, plus largement que les gestes
               d'écriture du profil qui exigent ADMIN+. La modale de lecture
               rend le fil dans le Prisme DU MEMBRE (#6862). */}
-          {onglet === 'conversations' ? <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} /> : null}
+          {onglet === 'conversations' ? <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} /> : null}
           {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} /> : null}
           {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} cible={cibleMembre} /> : null}
           {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} /> : null}

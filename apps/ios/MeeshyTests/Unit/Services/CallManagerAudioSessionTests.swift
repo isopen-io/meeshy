@@ -4641,7 +4641,9 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
     func test_callManager_sourceCode_startMediaServicesResetMonitoring_calledFromInit() throws {
         let source = try callManagerSource()
         // Find the private init body
-        guard let initRange = source.range(of: "private init(webRTCService: WebRTCService? = nil)") else {
+        // #7955 — l'init ne prend plus de `WebRTCService` (construit au premier
+        // appel) ; le monitoring, lui, démarre toujours à la naissance.
+        guard let initRange = source.range(of: "private init() {") else {
             XCTFail("private init not found in CallManager.swift")
             return
         }
