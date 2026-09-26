@@ -1725,6 +1725,7 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     }
 
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse { fatalError("Not used in tests") }
+    func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse { fatalError("Not used in tests") }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { fatalError("Not used in tests") }
     func edit(messageId: String, content: String) async throws -> APIMessage { fatalError("Not used in tests") }
     func delete(conversationId: String, messageId: String) async throws {}

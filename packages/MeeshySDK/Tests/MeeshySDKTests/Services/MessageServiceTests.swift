@@ -179,6 +179,35 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    // MARK: - listMedia (#8095)
+
+    func test_listMedia_withCursor_requestsMediaViewBeforeTheCursor() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        let result = try await service.listMedia(conversationId: convId, before: "msg_old", limit: 50, languages: ["fr", "en"])
+
+        XCTAssertEqual(result.data.count, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "view", value: "media")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "before", value: "msg_old")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "limit", value: "50")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "languages", value: "fr,en")), "\(items)")
+    }
+
+    func test_listMedia_withoutCursor_startsFromTheNewestAndSendsNoBefore() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "view", value: "media")), "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "before" }, "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "offset" }, "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "languages" }, "\(items)")
+    }
+
     // MARK: - listAfter
 
     func testListAfterCallsWithCorrectEndpoint() async throws {
