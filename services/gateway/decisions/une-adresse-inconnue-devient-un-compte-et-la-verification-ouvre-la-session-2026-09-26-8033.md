@@ -1,4 +1,4 @@
-# Une adresse inconnue devient un compte, et la vérification ouvre la session (2026-09-26, #8033, #8036)
+## Une adresse inconnue devient un compte, et la vérification ouvre la session (2026-09-26, #8033, #8036)
 
 ## Contexte
 
