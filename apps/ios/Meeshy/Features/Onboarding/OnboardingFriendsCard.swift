@@ -89,8 +89,12 @@ struct OnboardingFriendsCard: View {
             return (String(localized: "onboarding.contacts.found.title", bundle: .main),
                     String(localized: "onboarding.contacts.found.body", bundle: .main))
         case .found:
+            // Sans SMS (iPad, simulateur), l'invitation n'a pas de bouton : la
+            // phrase ne la promet pas.
             return (String(localized: "onboarding.contacts.none.title", bundle: .main),
-                    String(localized: "onboarding.contacts.none.body", bundle: .main))
+                    MFMessageComposeViewController.canSendText()
+                        ? String(localized: "onboarding.contacts.none.body", bundle: .main)
+                        : String(localized: "onboarding.contacts.none.body.nosms", bundle: .main))
         default:
             return (String(localized: "onboarding.friends.title", bundle: .main),
                     String.localizedStringWithFormat(String(localized: "onboarding.friends.body", bundle: .main),
