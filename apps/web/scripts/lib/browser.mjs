@@ -116,8 +116,9 @@ const surveil = (target, keys) =>
     },
   });
 
-export const launchChromium = async () => {
-  const browser = await chromium.launch(existsSync(CANDIDATE) ? { executablePath: CANDIDATE } : {});
+/** `options` passe au lancement (ex. `args` des faux micro et caméra du gate des appels, #8046). */
+export const launchChromium = async (options = {}) => {
+  const browser = await chromium.launch({ ...(existsSync(CANDIDATE) ? { executablePath: CANDIDATE } : {}), ...options });
   for (const signal of ['uncaughtException', 'unhandledRejection']) {
     process.on(signal, (cause) => {
       console.error(`\n  ${signal} : ${cause instanceof Error ? cause.message : String(cause)}`);
