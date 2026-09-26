@@ -110,4 +110,20 @@ private extension CanvasMediaAdoption {
     static func isCoherent(_ effects: StoryEffects, postMediaIds: [String]) -> Bool {
         isCoherent(effects: effects, postMediaIds: postMediaIds)
     }
+
+    // MARK: - Les mediaIds d'une publication (#8012)
+
+    /// **Un média PRÉ-téléversé et une piste audio partent dans `mediaIds`.**
+    /// Ne lister que les uploads du dispatch laissait ces lignes `postId: null`
+    /// côté serveur : hors de la bibliothèque de sons, puis balayées à 24 h.
+    func test_publicationMediaIds_ajouteLesPreMonteesEtLesPistesAudio_sansDoublon() {
+        var canvas = effects([media("pre-montee", background: true), media("televersee")])
+        canvas.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "piste"),
+                                     StoryAudioPlayerObject(postMediaId: "")]
+
+        XCTAssertEqual(
+            CanvasMediaAdoption.publicationMediaIds(uploaded: ["televersee"], effects: canvas),
+            ["televersee", "pre-montee", "piste"])
+    }
 }
+

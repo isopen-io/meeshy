@@ -18,12 +18,13 @@ final class SoundExtractionCollectionTests: XCTestCase {
 
     // MARK: - MediaAccessibilityStore
 
-    /// `test_allowsSoundExtraction_defaultsToFalse` rougit si le défaut
-    /// devient `true` : c'est un opt-in de l'auteur sur SON contenu, jamais
-    /// un opt-out.
-    func test_allowsSoundExtraction_defaultsToFalse() {
+    /// `test_allowsSoundExtraction_defaultsToTrue` rougit si l'interrupteur
+    /// affiche un refus que la passerelle n'applique pas : l'absence de choix
+    /// vaut accord (#8012), seul un refus explicite retient la bande-son.
+    func test_allowsSoundExtraction_defaultsToTrue() {
         let store = MediaAccessibilityStore()
-        XCTAssertFalse(store.allowsSoundExtraction())
+        XCTAssertTrue(store.allowsSoundExtraction())
+        XCTAssertNil(store.allowSoundExtractionPayload())
     }
 
     /// `test_setAllowsSoundExtraction_roundTrips` rougit si
@@ -60,9 +61,9 @@ final class SoundExtractionCollectionTests: XCTestCase {
     /// le post, tant qu'une autre vidéo peut rester dans la composition.
     func test_removingOneMedia_leavesSoundExtractionChoiceIntact() {
         let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
+        store.setAllowsSoundExtraction(false)
         store.remove(mediaId: "media-1")
-        XCTAssertTrue(store.allowsSoundExtraction())
+        XCTAssertFalse(store.allowsSoundExtraction())
     }
 
     // MARK: - Gardes de source
@@ -306,17 +307,17 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertTrue(store.allowsSoundExtraction())
     }
 
-    /// `test_restore_ofADraftWithoutAChoice_keepsTheConservativeDefault` rougit
-    /// si la reprise d'un brouillon muet fabriquait un choix : le défaut du
-    /// store est le refus, mais c'est un défaut, pas une décision de l'auteur —
-    /// le payload doit rester silencieux.
-    func test_restore_ofADraftWithoutAChoice_keepsTheConservativeDefault() {
+    /// `test_restore_ofADraftWithoutAChoice_keepsTheDefault` rougit si la
+    /// reprise d'un brouillon muet fabriquait un choix : le défaut du store est
+    /// l'accord, mais c'est un défaut, pas une décision de l'auteur — le
+    /// payload doit rester silencieux.
+    func test_restore_ofADraftWithoutAChoice_keepsTheDefault() {
         let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
+        store.setAllowsSoundExtraction(false)
 
         store.restore(from: .empty)
 
-        XCTAssertFalse(store.allowsSoundExtraction())
+        XCTAssertTrue(store.allowsSoundExtraction())
         XCTAssertNil(store.allowSoundExtractionPayload())
     }
 }

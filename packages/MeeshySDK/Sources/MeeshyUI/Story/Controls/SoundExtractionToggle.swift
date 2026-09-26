@@ -6,8 +6,9 @@ import SwiftUI
 ///
 /// Formulé à l'ENDROIT et nomme la CONSÉQUENCE, pas le champ technique — même
 /// patron que `ClipInspector.duckingToggle` (libellé positif + légende qui dit
-/// ce qui se passe si on active). Défaut CONSERVATEUR tenu par
-/// `MediaAccessibilityStore.allowsSoundExtraction()` (`false`) : cette vue ne
+/// ce qui se passe si on active). Défaut tenu par
+/// `MediaAccessibilityStore.allowsSoundExtraction()` (`true` depuis #8012 —
+/// le refus est explicite) : cette vue ne
 /// fait qu'afficher/relayer l'état, elle ne choisit pas le défaut. UN SEUL
 /// interrupteur pour tout le post (`Post.allowSoundExtraction`,
 /// `schema.prisma:3125`), jamais un par média — voir

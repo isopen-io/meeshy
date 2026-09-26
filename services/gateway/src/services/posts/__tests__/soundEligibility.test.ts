@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
-import { feedsSoundLibrary } from '../soundEligibility';
+import { feedsSoundLibrary, videoSoundExtractionAllowed } from '../soundEligibility';
 
 /**
  * La règle qui décide ce qui entre dans la bibliothèque. Elle vivait dupliquée
@@ -43,5 +43,26 @@ describe('feedsSoundLibrary', () => {
     expect(feedsSoundLibrary({ visibility: undefined })).toBe(false);
     expect(feedsSoundLibrary({ visibility: null })).toBe(false);
     expect(feedsSoundLibrary({ visibility: 'PUBLIQUE' })).toBe(false);
+  });
+});
+
+/**
+ * #8012 (directive porteur 2026-09-26) — un contenu PUBLIC verse la bande-son
+ * de ses vidéos (fond ET scène) à la bibliothèque. Les clients n'envoient
+ * `allowSoundExtraction` que si l'auteur a touché l'interrupteur : l'absence
+ * vaut donc accord, seul un refus EXPLICITE retient la bande-son.
+ */
+describe('videoSoundExtractionAllowed', () => {
+  it('test_absentChoice_allowsExtraction', () => {
+    expect(videoSoundExtractionAllowed(undefined)).toBe(true);
+    expect(videoSoundExtractionAllowed(null)).toBe(true);
+  });
+
+  it('test_explicitRefusal_isHonoured', () => {
+    expect(videoSoundExtractionAllowed(false)).toBe(false);
+  });
+
+  it('test_explicitConsent_allowsExtraction', () => {
+    expect(videoSoundExtractionAllowed(true)).toBe(true);
   });
 });
