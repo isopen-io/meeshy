@@ -3,8 +3,10 @@ import {
   maskedAttachment,
   protectedPreview,
   type NotificationActorProfile,
+  type NotificationAttachmentSummary,
   type PreviewPrismBasis,
 } from '../notifications/notification-preview';
+import { contactCardNameFromFileName, isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,
@@ -180,6 +182,26 @@ const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio'
   mimeType?.startsWith('image/') ? 'image' :
   mimeType?.startsWith('video/') ? 'video' :
   mimeType?.startsWith('audio/') ? 'audio' : 'document';
+
+type BannerAttachmentRow = {
+  readonly mimeType?: string | null;
+  readonly fileName?: string | null;
+  readonly originalName?: string | null;
+};
+
+/**
+ * Ce qu'une pièce jointe DIT dans une bannière (#8122). Une carte de visite se
+ * dit par son contact — le nom lu dans son nom d'ORIGINE, jamais le nom de
+ * fichier STOCKÉ (`contact_<…>_<uuid>.vcf`), qui ne part plus avec l'annonce ;
+ * `contact.vcf` quand aucun nom n'est lisible.
+ */
+function bannerAttachmentOf(att: BannerAttachmentRow): NotificationAttachmentSummary {
+  if (!isContactCardAttachment({ mimeType: att.mimeType, fileName: att.originalName ?? att.fileName })) {
+    return { type: attachmentTypeOf(att.mimeType), filename: att.fileName };
+  }
+  const contactName = contactCardNameFromFileName(att.originalName);
+  return { type: 'contact', filename: `${contactName ?? 'contact'}.vcf`, contactName };
+}
 
 /**
  * Un éventail, isolé de ses frères.
@@ -381,7 +403,7 @@ export async function notifyMessageRecipients(params: {
     const attachments = await prisma.messageAttachment.findMany({
       where: { messageId: message.id },
       select: {
-        mimeType: true, fileName: true, fileSize: true, duration: true,
+        mimeType: true, fileName: true, originalName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
         // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
         // vocal sert : elles vivent ici, jamais sur `Message.translations`.
@@ -424,10 +446,7 @@ export async function notifyMessageRecipients(params: {
     // membres du fil recevaient la transcription.
     const bannerMedia = mediaMayTravel
       ? {
-          attachments: attachments.map(att => ({
-            type: attachmentTypeOf(att.mimeType),
-            filename: att.fileName,
-          })),
+          attachments: attachments.map(bannerAttachmentOf),
           firstAttachmentFileSize: first?.fileSize,
           firstAttachmentDuration: first?.duration,
           firstAttachmentWidth: first?.width,
@@ -444,7 +463,7 @@ export async function notifyMessageRecipients(params: {
           hasAttachments: attachments.length > 0,
           attachmentCount: attachments.length,
           firstAttachmentType: attachmentTypeOf(first?.mimeType),
-          firstAttachmentFilename: first?.fileName,
+          firstAttachmentFilename: first ? bannerAttachmentOf(first).filename ?? undefined : undefined,
           firstAttachmentUrl: first?.fileUrl || undefined,
           firstAttachmentMimeType: first?.mimeType || undefined,
         }

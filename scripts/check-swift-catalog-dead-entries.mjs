@@ -308,7 +308,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `ConversationCardService` (iOS) passe encore par l'enum écrit à la main
 // `ConversationCardEndpoint`, dont l'en-tête annonce le retrait au profit de
 // ces cas générés. Valeur MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 → 278 (#8066) : `CallsEndpoint.historyByCallId` — `DELETE
+// /api/v1/calls/history/:callId`, effacer une ligne du journal d'appels,
+// GÉNÉRÉE depuis `route-manifest.json`. Le lot ne livre que le web ; l'app
+// iOS n'efface pas encore une ligne de son journal. Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 278;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
