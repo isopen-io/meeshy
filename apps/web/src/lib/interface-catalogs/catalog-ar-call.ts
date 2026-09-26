@@ -55,6 +55,11 @@ const arCall = {
   'call.bubble.join': 'انضمام',
   'call.callBack.named': 'معاودة الاتصال بـ {name}',
   'call.you': 'أنت',
+  'call.ended.removed': 'تمت إزالتك من المكالمة',
+  'call.spotlight.show': 'إبراز {name}',
+  'call.spotlight.back': 'العودة إلى الشبكة',
+  'call.remove.named': 'إزالة {name} من المكالمة',
+  'call.remove.failed': 'تعذّرت إزالة هذا المشارك',
 } as const;
 
 export default arCall;

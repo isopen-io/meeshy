@@ -56,11 +56,11 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
   }
 }));
 
-import { CallService, MAX_CALL_PARTICIPANTS, CallAlreadyEndedError } from '../../../services/CallService';
+import { CallService, CallAlreadyEndedError } from '../../../services/CallService';
+import { CALL_MAX_PARTICIPANTS as MAX_CALL_PARTICIPANTS } from '@meeshy/shared/types/call-rules';
 import { CallMode, CallStatus, ParticipantRole, CallEndReason } from '@meeshy/shared/prisma/client';
 import { buildCallSummaryWithMetadata } from '@meeshy/shared/utils/call-summary';
 
-// Mock logger to avoid console noise during tests
 jest.mock('../../../utils/logger', () => ({
   logger: {
     info: jest.fn(),
