@@ -2332,6 +2332,11 @@ model CallSession {
   /// Call metadata
   metadata Json? // { maxParticipants, recordingEnabled, etc. }
 
+  /// Les membres qui ont effacé cet appel de LEUR journal (#8066) : le
+  /// journal des autres n'en est pas touché. Écrit par
+  /// `DELETE /calls/history[/:callId]` (`services/calls/callHistoryList.ts`).
+  hiddenForUserIds String[] @db.ObjectId
+
   /// Optimistic locking version. Incremented on every status transition.
   /// Pattern: where: { id, version: known }, data: { ..., version: { increment: 1 } }.
   /// See docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.7.

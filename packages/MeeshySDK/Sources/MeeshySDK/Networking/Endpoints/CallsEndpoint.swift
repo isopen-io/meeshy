@@ -18,6 +18,7 @@ public enum CallsEndpoint: MeeshyEndpoint, Sendable {
     case byCallIdParticipantsByParticipantId(callId: String, participantId: String)
     case byCallIdTranscript(callId: String)
     case history
+    case historyByCallId(callId: String)
     case root
 
     public var path: String {
@@ -28,6 +29,7 @@ public enum CallsEndpoint: MeeshyEndpoint, Sendable {
         case .byCallIdParticipantsByParticipantId(let callId, let participantId): return "/api/v1/calls/\(callId)/participants/\(participantId)"
         case .byCallIdTranscript(let callId): return "/api/v1/calls/\(callId)/transcript"
         case .history: return "/api/v1/calls/history"
+        case .historyByCallId(let callId): return "/api/v1/calls/history/\(callId)"
         case .root: return "/api/v1/calls"
         }
     }
