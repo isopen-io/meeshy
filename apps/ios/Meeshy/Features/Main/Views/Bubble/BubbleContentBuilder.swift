@@ -42,6 +42,8 @@ extension BubbleContent {
         // #7579 — une vue unique DÉJÀ OUVERTE non plus : son contenu est purgé.
         let isSealed = message.isViewOnceSealed
         let withholdsContent = isSealed || message.isViewOnceOpened
+        // #8009 — ce que le toucher de la puce ouvrira, lu AVANT le sceau.
+        self.viewOnceOpensFullscreen = isSealed && message.openableViewOnceMedia != nil
         let message = message.sealedForDisplay
         let translations = withholdsContent ? [] : translations
         let preferredTranslation = withholdsContent ? nil : preferredTranslation

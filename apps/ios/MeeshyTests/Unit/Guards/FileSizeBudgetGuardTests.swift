@@ -488,7 +488,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `participants:` que `ConversationDashboardView` ne lisait plus. Les
     // deux hôtes RESTENT en dette ; le plafond baisse d'exactement ce que le
     // lot retire.
-    private static let legacyLineCeiling = 51_972
+    //
+    // **52 005 depuis #8009.** Le toucher d'un message protégé devait passer
+    // par `BubbleStandardLayout` et l'aperçu d'appui long par
+    // `MessageOverlayMenu`, tous deux hors budget : `BlurRevealModifier` a
+    // quitté le premier (−16), la grille d'images de l'aperçu a quitté le
+    // second pour `MessageOverlayPreviewMedia.swift` (−39). Le plafond reprend
+    // les 55 lignes, et les 2 que `ConversationView` rend (garde de l'appui
+    // long), dans le même lot.
+    //
+    // **51 915 à la réunion des deux lots** (52 062 à leur base commune) :
+    // G014 retire 90 lignes, #8009 en retire 57 ; aucun ne touche les lignes
+    // de l'autre, le plafond descend de la somme.
+    private static let legacyLineCeiling = 51_915
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

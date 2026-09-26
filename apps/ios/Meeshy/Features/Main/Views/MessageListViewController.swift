@@ -1830,9 +1830,9 @@ final class MessageListViewController: UIViewController {
                         peutEditer: canEdit?(messageId) ?? false,
                         editer: editHandler,
                         selectionner: selectHandler,
-                        composer: composeHandler,
+                        composer: message.holdsBlur ? nil : composeHandler,
                         repondre: swipeReplyHandler,
-                        transferer: swipeForwardHandler,
+                        transferer: message.holdsBlur ? nil : swipeForwardHandler,
                         plus: moreSheetHandler
                     )
                 ) {

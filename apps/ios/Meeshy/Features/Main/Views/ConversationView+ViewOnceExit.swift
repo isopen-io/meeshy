@@ -32,6 +32,9 @@ extension ConversationView {
     /// ViewModel tient ces trois portes. Rend `true` quand un texte vient
     /// d'être révélé sur place.
     func openViewOnce(messageId: String) -> Bool {
+        // #8009 — l'appui long sur la puce ouvre le MENU ; son relâcher ne doit
+        // ni ouvrir ni consommer la vue unique.
+        guard !overlayState.showOverlayMenu else { return false }
         switch viewModel.openViewOnce(messageId: messageId) {
         case .fullscreen(let attachment):
             GalleryPrewarm.warm(attachment)

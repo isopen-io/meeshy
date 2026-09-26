@@ -45,6 +45,7 @@ const frThreadStates = {
   'attachment.protected.video': 'Vidéo protégée',
   'attachment.protected.audio': 'Vocal protégé',
   'attachment.protected.file': 'Pièce protégée',
+  'attachment.protected.open.hint': 'toucher pour l’afficher en plein écran',
   /* LE GENRE D'UN MEDIA CITE (#7556) — miroir `AttachmentKind.shortLabel`
      (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) : le libelle
      COURT qui remplace un apercu VIDE dans une citation (« Photo », « Video »…).

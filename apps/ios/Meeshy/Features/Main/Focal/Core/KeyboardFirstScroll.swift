@@ -36,6 +36,10 @@ nonisolated enum KeyboardFirstScroll {
 /// ajoute le « systématiquement » — un défilement vers les anciens qui
 /// n'atteint pas le clavier le ferme aussi, sur l'animation système.
 final class KeyboardFirstScrollGate: NSObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free au démontage hors d'une tâche.
+    // Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private(set) var isKeyboardVisible = false
     private var keyboardOpenAtGestureStart = false

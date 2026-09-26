@@ -918,7 +918,7 @@ struct ConversationView: View {
                     // par un grisé.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce
+                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur
                 )
                 MessageMoreSheet(
                     message: msg,
@@ -1620,11 +1620,9 @@ struct ConversationView: View {
                     focalShareFileItem = FocalShareFileItem(url: url)
                 },
                 onMediaTap: { attachment in
-                    // Tap sur un média : on préchauffe ce que le plein écran
-                    // AFFICHE — la variante élue d'une image, le poster net
-                    // d'une vidéo déjà sur l'appareil — pas l'original
-                    // (`fileUrl`), sinon les deux se téléchargeaient ; puis on
-                    // met la pièce jointe en scène pour la galerie.
+                    // #8009 — le relâcher d'un appui long n'ouvre rien : son menu est déjà là.
+                    guard !overlayState.showOverlayMenu else { return }
+                    // Préchauffe ce que le plein écran AFFICHE (variante élue, poster net).
                     GalleryPrewarm.warm(attachment)
                     // #7499 — une vue unique s'OUVRE au toucher et se consomme
                     // à la FERMETURE. On arme ici, la galerie consomme en se
@@ -2635,7 +2633,7 @@ struct ConversationView: View {
             // tant que `primaryActions` ne le lisait pas. Le lot 5 le rend
             // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
             // unique, et la clause O13 tomberait par un simple défaut.
-            isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce
+            isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide
