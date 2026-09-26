@@ -124,13 +124,30 @@ describe('MediaGrid — tap sur la tuile k ⇒ onOpen(k) (critère 1)', () => {
 });
 
 describe('MediaGrid — la pièce MASQUÉE (isBlurred) occupe sa case sans rien exposer (#6189, critère 1)', () => {
-  test('media-14, index 2 (3ᵉ pièce) : aucune <img>, aucun <button>, la marque protégée est posée', () => {
-    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+  /* #8008 (demande porteur du 2026-09-26) : « un contenu média caché s'ouvre
+     directement en plein écran ». La case masquée n'est plus une image inerte
+     (#6189) : c'est un BOUTON qui ouvre SON index — et elle n'expose toujours
+     rien, ni `<img>` ni URL. */
+  test('media-14, index 2 (3ᵉ pièce) : aucune <img>, la marque protégée est posée, et le toucher ouvre SON index', () => {
+    const opened: number[] = [];
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), (index) => opened.push(index));
     const tiles = Array.from(el.querySelectorAll('[data-media-tile]'));
     const maskedTile = tiles[2]!;
-    expect(maskedTile.tagName).not.toBe('BUTTON');
+    expect(maskedTile.tagName).toBe('BUTTON');
     expect(maskedTile.getAttribute('data-protected-attachment')).toBe('hidden');
     expect(maskedTile.querySelector('img') === null).toBe(true);
+    act(() => {
+      maskedTile.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(opened).toEqual([2]);
+  });
+
+  test('une pièce masquée SANS fichier servi reste une image inerte — rien à ouvrir', () => {
+    const items = attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID).map((a, i) => (i === 2 ? { ...a, fileUrl: '' } : a));
+    const el = mount(items, () => {});
+    const maskedTile = el.querySelector('[data-protected-attachment="hidden"]')!;
+    expect(maskedTile.tagName).not.toBe('BUTTON');
+    expect(maskedTile.getAttribute('role')).toBe('img');
   });
 
   test('CONTRE-ÉPREUVE : les trois autres tuiles de media-14 restent des <button> avec <img>', () => {

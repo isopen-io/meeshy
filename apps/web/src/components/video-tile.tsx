@@ -1,5 +1,6 @@
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
+import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import {
   DURATION_BADGE_OPACITY,
   PLAY_DIAMETER_MULTI,
@@ -131,6 +132,7 @@ export function VideoTile({
          visionneuse » que `ImageTile`/`GridCellImage` remplissent en bouton
          — mais elle occupe une CASE de la grille au même titre qu'elles. */
       data-media-tile
+      {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}
       className={
         slot === undefined
           ? 'relative size-full overflow-hidden bg-black'

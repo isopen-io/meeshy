@@ -4087,3 +4087,18 @@ C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui t
 **Ce que ça coûte.** Six imports de plus (`PostRepostConfirm` dans `feed.tsx`, `post.tsx`, `bookmarks.tsx`, `hashtag.tsx`, `user-profile.tsx`, `reels.tsx`), trois clés de catalogue par langue (`feed.post.repost.confirm.title`, `.body`, et `feed.post.action.repost` / `common.cancel` déjà existants pour les deux boutons) — sept langues déjà tenues à parité par le contrat `satisfies InterfaceCatalog`. Aucun fichier ne franchit son budget : `use-post-gesture.ts` gagne une vingtaine de lignes (171 → ~195), les six routes gagnent une ligne d'import, une clé du destructuring et un élément JSX chacune.
 
 **Ce que ça ne tranche PAS.** « Citer » (#7463, hors tranche) et la forme exacte qu'aura la modale le jour où elle apprend un troisième choix — bouton supplémentaire dans `ConfirmDialog` ou une feuille dédiée : la question se pose quand le composeur prérempli existe, pas avant.
+
+## D-126 — Un média caché s'ouvre DIRECTEMENT en plein écran ; l'appui long garde la forme protégée — amendement de D-23 et de #7580 (2026-09-26, #8008)
+
+**Décision** — toucher un message protégé en montre le contenu, au premier geste, dans les trois modes :
+- **texte flouté** : révélé à sa place, cinq secondes, puis le brouillard le referme (D-23, inchangé) ;
+- **texte à vue unique** : affiché à sa place, consommé au toucher (#7580, inchangé) ;
+- **média flouté ou à vue unique** (image, vidéo, case de grille) : la visionneuse plein écran (`media-viewer.tsx`) s'ouvre sur CE média, en clair. Jamais un dévoilement dans la rangée suivi d'un second toucher. Une vue unique est consommée à la FERMETURE de la visionneuse (miroir d'iOS, #7499 : « c'est en sortant qu'on a vu ») et passe « Déjà ouvert ». La vue unique média ne passe plus par `ViewOnceStage`, qui ne sert plus qu'aux pièces non visuelles (vocal, fichier).
+
+Au repos, un message flouté qui porte des images montre le voile de son TEXTE et la grille de ses SUBSTITUTS (`MaskedAttachment`, désormais un `<button>` natif quand la pièce a un fichier à ouvrir) ; son texte vient en légende de la visionneuse. Les pièces passent par `veiledAttachment` : c'est la protection du MESSAGE qui décide, même si une charge ne l'a pas encore recopiée sur ses pièces (#7498). Une case masquée d'une grille ORDINAIRE s'ouvre aussi, et elle seule entre en clair dans la visionneuse (`revealedAttachment`).
+
+**Ce qui reste interdit** — le fichier n'entre dans le document qu'APRÈS le toucher, dans la visionneuse (chunk à la demande). Sans fichier servi (lecture souveraine, #6862), la case reste une image inerte (loi 4).
+
+**L'appui long** — l'aperçu du menu est un CLONE de la rangée (#5814). Il passe désormais par `projectMessagePreview` (`lib/view/message-preview.ts`) : une fenêtre de lecture ouverte y est remplacée par sa forme au repos (`[data-protected-rest]`, posée cachée et sans contenu par `ProtectedContent`), et chaque pièce reprend son rapport d'aspect d'origine (`data-piece-ratio`, repli carré), la grille se dépliant en colonne. La feuille « Plus… » d'un message protégé ne liste ni langues ni pièces (`messageDetailExposureOf`).
+
+**Écart iOS** — iOS dévoile encore un média FLOUTÉ dans la bulle (`handleReveal`, et un appui long en Focal) : la demande porteur vaut pour les deux plateformes, la jumelle est #8009.
