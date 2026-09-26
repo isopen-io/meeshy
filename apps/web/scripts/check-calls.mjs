@@ -20,13 +20,13 @@
  *     amenée au milieu de l'écran ;
  *  3. les trois directions se distinguent par un glyphe PROPRE et un libellé
  *     VISIBLE, et chaque ligne porte UN bouton, « Rappeler », du type de l'appel
- *     d'origine, hors du lien de la ligne (#6382, #8056) ;
+ *     d'origine, hors du bouton de la ligne (#6382, #8056) ;
  *  4. chaque texte tient AA dans les deux schémas — le nom ROUGE d'un manqué
  *     compris ;
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
  *     l'adresse porte `?filtre=missed`, et « Tous » rend les cinq ;
- *  6. une ligne ouvre la fiche de SON appel (#6383), la fiche le fil de sa
- *     conversation, et le retour ramène au journal ;
+ *  6. une ligne ouvre la fiche de SON appel (#6383) — nom, type, durée, deux
+ *     rappels —, la fiche le fil de sa conversation, et le retour ramène au journal ;
  *  6 bis. « Rappeler » a un EFFET (loi : un contrôle n'existe que s'il agit) —
  *     il ouvre l'écran d'appel vers la personne de la ligne, au-dessus du
  *     journal, et « Raccrocher » l'en retire ;
@@ -98,7 +98,7 @@ const reachRows = async (page) => {
   for (const id of ids) {
     out.push(
       await page.evaluate(async (callId) => {
-        const el = document.querySelector(`[data-call="${callId}"] a`);
+        const el = document.querySelector(`[data-call="${callId}"] [data-call-row]`);
         el.scrollIntoView({ block: 'center' });
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const r = el.getBoundingClientRect();
@@ -162,11 +162,11 @@ try {
           direction: el.querySelector('[data-call-direction]')?.getAttribute('data-call-direction') ?? null,
           libelle: (el.querySelector('[data-call-direction]')?.textContent ?? '').trim(),
           glyphe: el.querySelector('[data-call-meta] svg')?.innerHTML ?? '',
-          boutons: el.querySelectorAll('button').length,
+          boutons: el.querySelectorAll('button[data-call-back]').length,
           rappel: el.querySelector('button[data-call-back]')?.getAttribute('data-call-back') ?? null,
           rappelNomme: el.querySelector('button[data-call-back]')?.getAttribute('aria-label') ?? '',
           nom: (el.querySelector('[data-call-name]')?.textContent ?? '').trim(),
-          horsDuLien: el.querySelector('a [data-call-back], [data-call-back] a') === null,
+          horsDuLien: el.querySelector('[data-call-row] [data-call-back], [data-call-back] [data-call-row]') === null,
           video: el.querySelector('[data-call-video]') !== null,
         })),
       );
@@ -184,7 +184,7 @@ try {
       const videos = await page.$$eval('[data-call-video]', (els) => els.map((el) => el.closest('[data-call]')?.getAttribute('data-call')));
       check(JSON.stringify(videos) === JSON.stringify(['call-kwame-video', 'call-fatou-manque']), `${label} : les appels vidéo portent leur glyphe (${JSON.stringify(videos)})`);
       check(
-        (await page.getAttribute('[data-call="call-kwame-video"] a', 'aria-label')) === 'Kwame Mensah, appel émis, appel vidéo, 3h, durée 12:34',
+        (await page.getAttribute('[data-call="call-kwame-video"] [data-call-row]', 'aria-label')) === 'Kwame Mensah, appel émis, appel vidéo, 3h, durée 12:34',
         `${label} : une ligne annonce nom, direction, type, heure et durée`,
       );
       check((await textOf(page, '[data-call="call-annonces-groupe"] [data-call-name]')) === 'Annonces produit', `${label} : un appel de groupe se nomme par sa conversation`);
@@ -227,8 +227,21 @@ try {
       // ------------------------------------------------ 6. une ligne ouvre SA fiche (#6383), la fiche SON fil
       await page.click('[data-call="call-kwame-video"] a');
       await page.waitForURL('**/call/call-kwame-video');
-      await page.waitForSelector('[data-call-detail-name]', { timeout: 5000 }).catch(() => null);
-      check((await textOf(page, '[data-call-detail-name]')) === 'Kwame Mensah', `${label} : une ligne ouvre la fiche de son appel`);
+      const detail = await page
+        .waitForSelector('[data-call-detail="call-kwame-video"] [data-call-detail-name]', { timeout: 5000 })
+        .then(() =>
+          page.$eval('[data-call-detail]', (el) => ({
+            nom: (el.querySelector('[data-call-detail-name]')?.textContent ?? '').trim(),
+            type: (el.querySelector('[data-call-detail-row="type"] dd')?.textContent ?? '').trim(),
+            duree: (el.querySelector('[data-call-detail-row="duration"] dd')?.textContent ?? '').trim(),
+            rappels: [...el.querySelectorAll('[data-call-detail-redial]')].map((b) => b.getAttribute('data-call-detail-redial')),
+          })),
+          () => null,
+        );
+      check(
+        detail !== null && detail.nom === 'Kwame Mensah' && detail.type.toLowerCase() === 'appel vidéo' && detail.duree === '12:34' && JSON.stringify(detail.rappels) === '["audio","video"]',
+        `${label} : une ligne ouvre la fiche de son appel — nom, type, durée, deux rappels (${JSON.stringify(detail)})`,
+      );
       await page.click('[data-call-detail-open]');
       await page.waitForURL('**/c/c-kwame');
       check(true, `${label} : la fiche ouvre le fil de sa conversation`);
