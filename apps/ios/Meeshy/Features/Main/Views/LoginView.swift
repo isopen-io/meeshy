@@ -386,13 +386,17 @@ struct LoginView: View {
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
-                SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $accountPassword)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .accountPassword)
-                    .foregroundColor(theme.textPrimary)
-                    .submitLabel(.go)
-                    .onSubmit { attemptAccountLogin() }
-                    .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $accountPassword,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .accountPassword,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptAccountLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
@@ -483,13 +487,17 @@ struct LoginView: View {
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
-                SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $password)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .password)
-                    .foregroundColor(theme.textPrimary)
-                    .submitLabel(.go)
-                    .onSubmit { attemptLogin() }
-                    .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $password,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .password,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
