@@ -187,6 +187,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
         // dans le même commit (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
+        // #8095 — même geste que le #6145 : la légende servie et ses libellés
+        // VoiceOver ont quitté le fichier épinglé avec leurs deux clés.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Captions.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
@@ -783,6 +786,23 @@ final class LocalizationConsistencyTests: XCTestCase {
             "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
             + "plafond du cliquet borne une mesure partielle"
         )
+    }
+
+    /// Un `bundle:` PASSÉ EN PARAMÈTRE (`MeeshyPasswordField`, #8054) désigne le
+    /// catalogue que ses appelants lui donnent : `.module` seul ⇒ le SDK ; le
+    /// moindre `.main` ⇒ l'app, où la clé reste exigée.
+    func test_leScannerSuitUnBundlePasséEnParamètre() {
+        let forwarded = """
+        var label: String { label(bundle: .module) }
+        func label(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: forwarded).map(\.isModuleBundle), [true])
+
+        let mixed = forwarded + "\nlet b = label(bundle: .main)"
+        XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
+                       "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
     }
 
     /// Keys with at least one locale expressed as plural variations.
