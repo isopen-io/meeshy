@@ -19,9 +19,10 @@ import type { Conversation } from './types';
  * (`services/gateway/src/routes/conversations/core-list.ts:62-136`,
  * `optionalAuth`) — voir `loadConversationsPage`.
  *
- * `GET /api/v1/conversations/:id` (`core-detail.ts:244-358`, `optionalAuth`) —
- * 404 `'Conversation not found'` (SANS code, `code` reste `undefined`), 403
- * `CONVERSATION_ACCESS_DENIED`.
+ * `GET /api/v1/conversations/:id` (`core-detail.ts`, `optionalAuth`) —
+ * 404 `'Conversation not found'` (SANS code, `code` reste `undefined`) pour un
+ * identifiant inexistant ET pour une conversation dont le lecteur n'est pas
+ * membre (#8099, anti-énumération) ; 401 sans session.
  */
 export const CONVERSATIONS_QUERY_KEY = ['conversations'] as const;
 export const conversationQueryKey = (id: string) => ['conversations', id] as const;

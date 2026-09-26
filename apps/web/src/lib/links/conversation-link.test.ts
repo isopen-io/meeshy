@@ -14,19 +14,27 @@ import { conversationLinksIn, conversationLinkOfPath } from './conversation-link
 
 const CONTEXT = { origins: ['https://staging.meeshy.me'], isAppPath: (path: string) => /^\/(c|chat|u)\//u.test(path) };
 
-describe('conversationLinkOfPath', () => {
-  test.each([
-    ['/chat/mshy_beta', { kind: 'share-link', identifier: 'mshy_beta' }],
-    ['/join/mshy_beta', { kind: 'share-link', identifier: 'mshy_beta' }],
-    ['/c/507f1f77bcf86cd799439033', { kind: 'direct', identifier: '507f1f77bcf86cd799439033' }],
-    ['/chat/mshy%20espace', { kind: 'share-link', identifier: 'mshy espace' }],
-  ] as const)('%s ⇒ une conversation', (path, expected) => {
-    expect(conversationLinkOfPath(path)).toEqual(expected);
-  });
+const RECOGNISED: ReadonlyArray<readonly [string, { readonly kind: string; readonly identifier: string }]> = [
+  ['/chat/mshy_beta', { kind: 'share-link', identifier: 'mshy_beta' }],
+  ['/join/mshy_beta', { kind: 'share-link', identifier: 'mshy_beta' }],
+  ['/c/507f1f77bcf86cd799439033', { kind: 'direct', identifier: '507f1f77bcf86cd799439033' }],
+  ['/chat/mshy%20espace', { kind: 'share-link', identifier: 'mshy espace' }],
+];
 
-  test.each(['/u/alice', '/l/Ab12cd', '/c/', '/chat', '/c/abc/extra', '/'])('%s ⇒ rien', (path) => {
-    expect(conversationLinkOfPath(path)).toBeNull();
-  });
+const IGNORED: readonly string[] = ['/u/alice', '/l/Ab12cd', '/c/', '/chat', '/c/abc/extra', '/'];
+
+describe('conversationLinkOfPath', () => {
+  for (const [path, expected] of RECOGNISED) {
+    test(`${path} ⇒ une conversation`, () => {
+      expect(conversationLinkOfPath(path)).toEqual(expected);
+    });
+  }
+
+  for (const path of IGNORED) {
+    test(`${path} ⇒ rien`, () => {
+      expect(conversationLinkOfPath(path)).toBeNull();
+    });
+  }
 });
 
 describe('conversationLinksIn', () => {
