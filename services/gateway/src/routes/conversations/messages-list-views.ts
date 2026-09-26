@@ -60,8 +60,9 @@
  * donc rien à migrer côté client.
  */
 
-import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPersonalHistoryHiding, type PersonalHistoryHiding } from '../../services/personalHistoryFilter';
+import { GENRES_DE_MEDIA, lireGenres, predicatDeMedia } from './messages-media-kinds';
 
 /** Les cinq sous-collections que `?view=` sait désigner. */
 export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search' | 'media';
@@ -106,37 +107,42 @@ export type ParametresDeVue = {
   readonly parentId?: string;
   readonly replyToId?: string;
   readonly q?: string;
+  /** `view=media` seulement (#8098) : les genres de l'index, séparés par des virgules. */
+  readonly kinds?: string;
 };
 
 /**
- * Un message porteur d'au moins une image ou une vidéo que la galerie peut
- * feuilleter.
+ * Un message que l'index de la conversation peut feuilleter (#8095, #8098).
  *
  * La vue unique est exclue aux DEUX niveaux qui la déclarent — le message et la
- * pièce — parce qu'une galerie rouvre à volonté ce qu'une vue unique ne montre
+ * pièce — parce qu'un index rouvre à volonté ce qu'une vue unique ne montre
  * qu'une fois. Un message mixte (une image à vue unique, une vidéo ordinaire)
  * entre par sa pièce ordinaire ; c'est au sérialiseur, déjà gardé, de masquer
- * l'autre.
- *
- * `NOT: { isViewOnce: true }` et non `isViewOnce: false` : sur MongoDB, un
- * document écrit AVANT le champ ne le porte pas, et un champ ABSENT ne matche
- * pas `false` — la galerie perdrait en silence toute l'histoire ancienne.
- * La négation d'un filtre POSITIF, elle, rend vrai sur l'absent. `isSet`
- * n'est pas une option : le client Prisma ne l'expose que sur les champs
- * optionnels (leçon 622), et `isViewOnce` est requis.
- *
- * `satisfies` fait valider la forme par `tsc` contre le client GÉNÉRÉ — le
- * double Prisma des témoins accepterait n'importe quelle clé.
+ * l'autre. Les genres et leur traduction en clauses vivent dans
+ * `messages-media-kinds.ts`.
  */
-const PREDICAT_MEDIAS = {
-  NOT: { isViewOnce: true },
-  attachments: {
-    some: {
-      NOT: { isViewOnce: true },
-      OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }],
-    },
-  },
-} satisfies Prisma.MessageWhereInput;
+function vueDesMedias(params: ParametresDeVue): ResolutionDeVue {
+  const genres = lireGenres(params.kinds);
+  if ('genre' in genres) return genres;
+
+  const terme = params.q === undefined ? undefined : params.q.trim();
+  if (terme !== undefined && terme.length < LONGUEUR_MINIMALE_RECHERCHE) {
+    return {
+      genre: 'refus',
+      message: `view=media accepts q of at least ${LONGUEUR_MINIMALE_RECHERCHE} characters`,
+    };
+  }
+
+  return {
+    genre: 'ok',
+    view: 'media',
+    predicate: predicatDeMedia(genres, terme),
+    orderBy: { createdAt: 'desc' },
+    // Même raison que `pinned` : la fenêtre remplirait ses deux moitiés de
+    // messages hors de l'index, puis les perdrait au filtrage.
+    allowsAround: false,
+  };
+}
 
 const CHRONOLOGIE: VueResolue = {
   genre: 'ok',
@@ -161,6 +167,12 @@ export function resolveCollectionView(params: ParametresDeVue): ResolutionDeVue 
 
   // Sans `?view=`, `?replyToId=` reste le moyen historique de demander le fil
   // d'un message. Il désigne la MÊME sous-collection que `view=thread`.
+  // `?kinds=` ne sélectionne que dans l'index : ailleurs, il se REFUSE plutôt
+  // que de disparaître — même doctrine que `replyToId` plus bas.
+  if (params.kinds !== undefined && demandee !== 'media') {
+    return { genre: 'refus', message: `kinds requires view=media (got view=${demandee || 'timeline'})` };
+  }
+
   if (!demandee) {
     return params.replyToId ? filDeReponses(params.replyToId) : CHRONOLOGIE;
   }
@@ -191,17 +203,7 @@ export function resolveCollectionView(params: ParametresDeVue): ResolutionDeVue 
 
   if (view === 'timeline') return CHRONOLOGIE;
 
-  if (view === 'media') {
-    return {
-      genre: 'ok',
-      view,
-      predicate: PREDICAT_MEDIAS,
-      orderBy: { createdAt: 'desc' },
-      // Même raison que `pinned` : la fenêtre remplirait ses deux moitiés de
-      // messages sans média, puis les perdrait au filtrage.
-      allowsAround: false,
-    };
-  }
+  if (view === 'media') return vueDesMedias(params);
 
   if (view === 'pinned') {
     return {
@@ -260,7 +262,7 @@ export const MESSAGES_VIEW_QUERY_PROPERTIES = {
   view: {
     type: 'string',
     description:
-      "#4340 — sous-collection lue : 'timeline' (défaut), 'thread' (avec parentId), 'pinned', 'search' (avec q), 'media' (#8095 — messages portant au moins une image ou une vidéo non vue-unique, le message lui-même n'étant pas vue-unique ; createdAt desc, pagination par before, around ignoré). Les cinq passent par les mêmes gardes et le même sérialiseur. Une valeur inconnue est refusée en 400 plutôt que servie comme la chronologie.",
+      "#4340 — sous-collection lue : 'timeline' (défaut), 'thread' (avec parentId), 'pinned', 'search' (avec q), 'media' (#8095, #8098 — l'index de la conversation, filtré par kinds et q ; jamais un message ni une pièce à vue unique ; createdAt desc, pagination par before, around ignoré). Les cinq passent par les mêmes gardes et le même sérialiseur. Une valeur inconnue est refusée en 400 plutôt que servie comme la chronologie.",
   },
   parentId: {
     type: 'string',
@@ -268,7 +270,12 @@ export const MESSAGES_VIEW_QUERY_PROPERTIES = {
   },
   q: {
     type: 'string',
-    description: '#4340 — requis par view=search : le terme cherché dans le contenu ET les traductions (2 caractères minimum).',
+    description:
+      "#4340 — requis par view=search : le terme cherché dans le contenu ET les traductions (2 caractères minimum). #8098 — facultatif sur view=media : restreint l'index aux messages dont le contenu ou le nom d'origine d'une pièce contient le terme, sans tenir compte de la casse (2 caractères minimum, sinon 400 INVALID_VIEW). Ignoré par les autres vues.",
+  },
+  kinds: {
+    type: 'string',
+    description: `#8098 — view=media seulement : genres de l'index, séparés par des virgules, combinés en UNION — ${GENRES_DE_MEDIA.join(', ')}. visual = pièce image/* ou video/* ; audio = pièce audio/* ; contact = pièce text/vcard ou text/x-vcard ; document = toute autre pièce ; link = contenu portant http:// ou https:// ; conversation = contenu portant une adresse de conversation Meeshy (meeshy.me/chat/, /join/, /c/, /conversation/, ou meeshy://) ; location = message de type location. Absent ⇒ visual. Un genre inconnu, ou kinds sur une autre vue, est refusé en 400 INVALID_VIEW.`,
   },
 } as const;
 
