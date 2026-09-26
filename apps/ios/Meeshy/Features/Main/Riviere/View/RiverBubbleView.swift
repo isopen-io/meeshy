@@ -84,6 +84,15 @@ struct RiverBubbleContent: Equatable {
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
 
+    /// Le premier lien du texte servi et ce qu'il porte (carte de
+    /// conversation, façade vidéo, aperçu) — rendu par le MÊME
+    /// `BubbleLinkEmbed` que les autres modes (#8139). `nil` : aucun lien, ou
+    /// un texte voilé dont le lien ne doit pas fuir à côté.
+    let linkEmbed: BubbleContent.Text?
+    /// Les cartes de visite du message, rendues par `BubbleAttachmentView`
+    /// comme partout ailleurs (#8139).
+    let contactCards: RiverContactCards
+
     init(
         bubble: RiverLaneResolver.RiverBubble,
         senderDisplayName: String,
@@ -108,6 +117,8 @@ struct RiverBubbleContent: Equatable {
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
         isViewOnceRevealed: Bool = false,
+        linkEmbed: BubbleContent.Text? = nil,
+        contactCards: RiverContactCards = RiverContactCards(items: []),
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -126,6 +137,18 @@ struct RiverBubbleContent: Equatable {
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
         self.isViewOnceRevealed = isViewOnceRevealed
+        self.linkEmbed = linkEmbed
+        self.contactCards = contactCards
+    }
+}
+
+/// Les cartes de visite d'une bulle de rivière. `MeeshyMessageAttachment`
+/// n'est pas `Equatable` : l'égalité lit ce qui change le rendu d'une carte.
+struct RiverContactCards: Equatable {
+    let items: [MessageAttachment]
+
+    static func == (lhs: RiverContactCards, rhs: RiverContactCards) -> Bool {
+        lhs.items.map(\.id) == rhs.items.map(\.id) && lhs.items.map(\.fileUrl) == rhs.items.map(\.fileUrl)
     }
 }
 
@@ -554,6 +577,14 @@ struct RiverBubbleView: View, Equatable {
                         guard content.isViewOnceRevealed else { return }
                         onConsumeViewOnce?(content.bubble.messageId) { _ in }
                     }
+            }
+
+            // #8139 — les cartes, par les MÊMES points que les autres modes.
+            if let linkEmbed = content.linkEmbed {
+                BubbleLinkEmbed(text: linkEmbed, accentColor: colorHex, isDark: isDark)
+            }
+            ForEach(content.contactCards.items) { attachment in
+                BubbleAttachmentView(attachment: attachment, isMe: false, isDark: isDark, accentHex: colorHex)
             }
 
             // « L'heure d'une bulle doit TOUJOURS être en bas dans la bulle »

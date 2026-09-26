@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
@@ -15,7 +15,10 @@ import {
   filmstripScrollOffset,
 } from '@/lib/view/media-stage';
 
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
 import { Glyph } from './glyph';
+import { MediaUnavailable } from './media-unavailable';
 
 /**
  * `MediaFilmstrip` (#6221) — la pellicule en couloir bas de la visionneuse,
@@ -46,10 +49,12 @@ export function MediaFilmstrip({
   items,
   currentIndex,
   onSelect,
+  language,
 }: {
   readonly items: readonly Attachment[];
   readonly currentIndex: number;
   readonly onSelect: (index: number) => void;
+  readonly language: InterfaceLanguage;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -131,7 +136,7 @@ export function MediaFilmstrip({
               <Glyph name="eyeSlash" size={14} className="media-filmstrip-masked-glyph" />
             ) : (
               <>
-                {thumb !== undefined ? <img src={thumb} alt="" aria-hidden loading="lazy" decoding="async" className="size-full object-cover" /> : null}
+                {thumb !== undefined ? <FilmstripThumb src={thumb} language={language} /> : null}
                 {kindOf(attachment) === 'video' ? (
                   <Glyph name="fillPlay" size={16} className="absolute inset-0 m-auto text-white" />
                 ) : null}
@@ -142,4 +147,15 @@ export function MediaFilmstrip({
       })}
     </div>
   );
+}
+
+/**
+ * UNE VIGNETTE QUI NE SE CHARGE PAS (#8141) dit la même absence que la page :
+ * l'état dessiné compact, jamais l'icône brisée du navigateur. Retenue par
+ * adresse, pour qu'une case recyclée sur une autre pièce reparte d'elle-même.
+ */
+function FilmstripThumb({ src, language }: { readonly src: string; readonly language: InterfaceLanguage }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (failedSrc === src) return <MediaUnavailable language={language} compact />;
+  return <img src={src} alt="" aria-hidden loading="lazy" decoding="async" className="size-full object-cover" onError={() => setFailedSrc(src)} />;
 }

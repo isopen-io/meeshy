@@ -224,6 +224,15 @@ describe('la fiche de verre', () => {
     expect(sheet?.querySelector('[data-contact-action="connect"]')).not.toBeNull();
   });
 
+  test('« Sur Meeshy » vient APRÈS les champs de la carte, comme sur iOS (#8101)', async () => {
+    const { sheet } = await openSheet();
+    const fields = sheet?.querySelector('[data-contact-field]');
+    const onMeeshy = sheet?.querySelector('[data-contact-on-meeshy]');
+    expect(fields).not.toBeNull();
+    expect(onMeeshy).not.toBeNull();
+    expect(fields && onMeeshy ? fields.compareDocumentPosition(onMeeshy) & Node.DOCUMENT_POSITION_FOLLOWING : 0).toBeTruthy();
+  });
+
   test('le bouton Copier, nommé pour le lecteur d’écran, copie et le dit', async () => {
     const { sheet, copied } = await openSheet();
     const button = sheet?.querySelector<HTMLButtonElement>('[data-contact-field="phone"] [data-contact-copy]') ?? null;

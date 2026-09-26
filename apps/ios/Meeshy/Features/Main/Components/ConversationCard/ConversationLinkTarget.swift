@@ -13,14 +13,14 @@ import MeeshySDK
 /// réel ou un site externe — le présumer conversation ferait une carte fausse.
 enum ConversationLinkTarget {
 
-    static func target(for urlString: String) -> ConversationCardTarget? {
+    static func target(for urlString: String, environmentWebOrigin: String = MeeshyConfig.shared.webOrigin) -> ConversationCardTarget? {
         guard let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
-        return target(for: url)
+        return target(for: url, environmentWebOrigin: environmentWebOrigin)
     }
 
-    static func target(for url: URL) -> ConversationCardTarget? {
+    static func target(for url: URL, environmentWebOrigin: String = MeeshyConfig.shared.webOrigin) -> ConversationCardTarget? {
         guard isWebOrMeeshyScheme(url) else { return nil }
-        switch DeepLinkParser.parse(url) {
+        switch DeepLinkParser.parse(url, environmentWebOrigin: environmentWebOrigin) {
         case .joinLink(let identifier), .chatLink(let identifier):
             return .shareLink(identifier: identifier)
         case .conversation(let id, let draftText) where draftText == nil && isConversationPath(url):

@@ -169,7 +169,11 @@ public struct ConversationCard: Decodable, Sendable, Equatable {
             avatarUrl: avatarUrl,
             bannerUrl: bannerUrl,
             conversationType: conversationType,
-            stats: stats,
+            stats: ConversationCardStats(
+                memberCount: max(0, stats.memberCount + (isMember == viewer.isMember ? 0 : (isMember ? 1 : -1))),
+                messageCount: stats.messageCount,
+                languages: stats.languages
+            ),
             viewer: ConversationCardViewer(
                 isMember: isMember,
                 canJoin: kind == .shareLink && !isMember && !isLinkExpired,
@@ -205,14 +209,20 @@ public enum ConversationCardActions: Equatable, Sendable {
     /// Membre : « Quitter » EN PREMIER, puis « Ouvrir ».
     case leaveOrOpen(conversationId: String)
 
-    public static func resolve(for card: ConversationCard, target: ConversationCardTarget) -> ConversationCardActions {
+    /// `viewerHasAccount` : un lecteur CONNECTÉ ne rejoint qu'en son nom — la
+    /// page d'invitation du web ne lui offre rien d'autre, et « Rejoindre en
+    /// anonyme » n'est proposé qu'à un visiteur sans compte (loi 4 : un
+    /// contrôle n'existe que pour qui peut s'en servir).
+    public static func resolve(for card: ConversationCard, target: ConversationCardTarget,
+                               viewerHasAccount: Bool = false) -> ConversationCardActions {
         if card.isLinkExpired { return .none }
         if card.viewer.isMember, let conversationId = card.conversationId ?? target.directConversationId {
             return .leaveOrOpen(conversationId: conversationId)
         }
-        guard card.kind == .shareLink, card.viewer.canJoin || card.viewer.canJoinAnonymously else { return .none }
+        let allowsAnonymous = card.viewer.canJoinAnonymously && !viewerHasAccount
+        guard card.kind == .shareLink, card.viewer.canJoin || allowsAnonymous else { return .none }
         guard let identifier = card.link?.identifier ?? target.shareLinkIdentifier else { return .none }
-        return .join(identifier: identifier, allowsAnonymous: card.viewer.canJoinAnonymously)
+        return .join(identifier: identifier, allowsAnonymous: allowsAnonymous)
     }
 }
 

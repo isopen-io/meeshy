@@ -1,0 +1,12 @@
+{
+  "glassRadius": 18,
+  "glassHorizontalInset": 6,
+  "glassVerticalInset": 3,
+  "loupeMarginVertical": 8,
+  "loupeMarginHorizontal": 16,
+  "loupeGain": 0.05,
+  "neighborOpacity": 0.62,
+  "enterDurationMs": 250,
+  "flattenDurationMs": 450,
+  "expandDurationMs": 300
+}
