@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
@@ -6,8 +6,10 @@ import { useRovingMenu } from '@/lib/view/roving-menu';
 import { rowMenuItems, type RowActionId } from '@/lib/view/row-actions';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
+import { CALLS_GLYPHS } from './glyphs-calls';
 
 /**
  * LES ACTIONS DE RANGÉE — bouton + popover (#5559 §5.6), l'ADAPTATION web du
@@ -93,16 +95,19 @@ export function RowActions({
   flags,
   unread,
   magnified,
+  call,
   onAction,
 }: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
+  /** Présent quand l'appel est permis : le menu ouvre alors sur « Appel vocal » et « Appel vidéo » (#8109). */
+  readonly call?: { readonly language: InterfaceLanguage };
   /** Élue par la bande de focus — seule rangée où le bouton reste visible
    * SANS survol ni focus (`status.magnified` de `LensRow`). */
   readonly magnified: boolean;
   readonly onAction: (id: RowActionId) => void;
 }) {
-  const items = rowMenuItems({ flags, unread });
+  const items = rowMenuItems({ flags, unread, ...(call === undefined ? {} : { call }) });
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
 
   /**
@@ -152,6 +157,24 @@ export function RowActions({
     itemCount: items.length,
     onScroll: () => setOpen(false),
     onResize: () => setOpen(false),
+  });
+
+  /**
+   * LE MENU CONTEXTUEL DE LA LIGNE (#8109) — clic droit à la souris, appui
+   * long au doigt (Chromium Android émet `contextmenu` sur l'appui long) :
+   * iOS ouvre son menu par l'appui long, le web ouvre le MÊME panneau que le
+   * bouton, jamais le menu du navigateur.
+   */
+  useEffect(() => {
+    const row = buttonRef.current?.closest('li');
+    if (row === null || row === undefined) return;
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      measure();
+      setOpen(true);
+    };
+    row.addEventListener('contextmenu', onContextMenu);
+    return () => row.removeEventListener('contextmenu', onContextMenu);
   });
 
   const choose = (id: RowActionId) => {
@@ -270,7 +293,13 @@ export function RowActions({
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
                   style={{ color: 'var(--color-ios-ink)', minHeight: 44 }}
                 >
-                  <Glyph name={item.glyph} size={16} style={{ color: 'var(--color-ios-ink-2)' }} />
+                  {item.glyph === 'videoCamera' ? (
+                    <span className="grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={16} />
+                    </span>
+                  ) : (
+                    <Glyph name={item.glyph} size={16} style={{ color: 'var(--color-ios-ink-2)' }} />
+                  )}
                   {item.label}
                 </button>
               ))}
