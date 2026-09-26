@@ -1,10 +1,8 @@
 ## Une adresse inconnue devient un compte, et la vérification ouvre la session (2026-09-26, #8033, #8036)
 
-## Contexte
+**Contexte** : Directive porteur 2026-09-26 : « Lorsqu'on essaye de se connecter avec un email qui n'existe pas, il faut directement créer le compte et envoyer le code et le lien pour valider son compte ! », amendée le même jour : par la porte « e-mail seul », un compte EXISTANT reçoit lui aussi code + lien, avant toute session.
 
-Directive porteur 2026-09-26 : « Lorsqu'on essaye de se connecter avec un email qui n'existe pas, il faut directement créer le compte et envoyer le code et le lien pour valider son compte ! », amendée le même jour : par la porte « e-mail seul », un compte EXISTANT reçoit lui aussi code + lien, avant toute session.
-
-## Décision
+**Décision** :
 
 1. **Une fonction unique**, `startAccountFromEmail` (`src/services/auth/account-from-email.ts`), partagée par `POST /auth/login` (porte `password-login`) et `POST /auth/magic-link/request` (porte `email-only`).
 2. **Aucun mot de passe tapé à la connexion n'est stocké** : le compte naît sans (`User.password = null`, #6424). Sinon un tiers qui tape votre adresse vous imposerait son mot de passe.
@@ -15,7 +13,7 @@ Directive porteur 2026-09-26 : « Lorsqu'on essaye de se connecter avec un email
 7. **Débit** : envois (création, code) comptés par adresse ET par IP (3 et 10 par heure en production) ; `verify-email` limitée à 5 essais / 15 min par adresse et 20 / 15 min par IP. Par la porte « e-mail seul », le débit est compté AVANT la lecture du compte : le 429 ne dit rien de l'existence.
 8. **Staging (#8036)** : `MEESHY_ENV=staging`, lu une fois, marque chaque e-mail au point unique d'envoi (`src/services/email/staging-marker.ts`) — sujet `[STAGING] `, bandeau en tête du HTML, mention en tête du texte.
 
-## Conséquences
+**Conséquences** :
 
 - La porte « e-mail seul » n'honore plus `rememberDevice` ni `returnUrl` (le lien mène à `/auth/verify-email`) ; `MagicLinkService.requestMagicLink` n'a plus d'appelant — `/auth/magic-link/validate` reste valide pour les liens déjà partis.
 - La création à la connexion vaut acceptation des CGU comme l'inscription (`termsAcceptedAt`) : les clients doivent l'écrire sous le bouton.
