@@ -238,9 +238,13 @@ struct ConversationMediaHubView: View {
     private func rowBody(_ item: ConversationMediaHubItem) -> some View {
         switch item.payload {
         case .attachment(let attachment):
-            if item.kind == .audio, let carrier = model.carrier(item.messageId) {
+            let rendering = ConversationMediaHubRules.rendering(of: item)
+            if rendering == .audio, let carrier = model.carrier(item.messageId) {
                 AudioMediaView(attachment: attachment, message: carrier, contactColor: accentColor,
                                visualAttachments: [], isDark: isDark, accentColor: accentColor)
+                    .equatable()
+            } else if rendering == .contactCard {
+                ContactCardView(attachment: attachment, isMe: item.isMe, accentHex: accentColor)
                     .equatable()
             } else {
                 DocumentViewerView(attachment: attachment, context: .messageBubble,

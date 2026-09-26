@@ -698,6 +698,20 @@ emit({
  * `caretLeft`, `lock` et `warningCircle` restent au SOCLE. Charge avec la route
  * `/me/starred-messages`, jamais dans le socle.
  */
+/**
+ * LE JEU DE LA NOTE D'APRÈS-APPEL (#8072) — les étoiles de la carte qui
+ * suit un appel ; chargé avec cette carte, jamais dans le socle.
+ */
+const CALL_FEEDBACK = ['star', 'star-fill', 'x'];
+
+emit({
+  ids: CALL_FEEDBACK,
+  output: join(HERE, '../src/components/glyphs-call-feedback.ts'),
+  constant: 'CALL_FEEDBACK_GLYPHS',
+  type: 'CallFeedbackGlyphName',
+  role: "LE JEU de la note d'apres-appel (#8072) : charge avec sa carte, jamais dans le socle.",
+});
+
 const STARRED = ['star', 'star-fill', 'chats-circle'];
 
 emit({
@@ -767,7 +781,7 @@ emit({
   role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
 });
 
-const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank'];
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank', 'trash', 'x-circle'];
 
 emit({
   ids: CALLS,

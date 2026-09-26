@@ -186,6 +186,21 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
         XCTAssertEqual(reference.previewText, MediaKindLabel.summary(.audio))
     }
 
+    func test_optimisticReplyReference_contactCard_saysTheContactNameNeverTheFile() {
+        let sut = makeSUT()
+        let card = MessageAttachment(
+            id: "a-card", originalName: "contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf",
+            mimeType: "text/vcard", fileSize: 255
+        )
+        let quoted = makeQuoted(content: "", attachments: [card])
+        sut.messages = [quoted]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        XCTAssertEqual(reference.previewText, "👤 Zoé Sanscompte",
+                       "#8122 — la citation d'une carte de visite nomme son contact, comme l'écho serveur")
+    }
+
     func test_optimisticReplyReference_photoWithoutThumbnail_fallsBackToTheFileUrl() {
         let sut = makeSUT()
         let fresh = MessageAttachment(

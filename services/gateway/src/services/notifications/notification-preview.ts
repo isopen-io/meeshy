@@ -330,6 +330,8 @@ function extractExtension(filename: string | null | undefined): string | null {
   return filename.slice(dot + 1).toLowerCase();
 }
 
+const CONTACT_CARD_ICON = '👤';
+
 const DOC_LABELS: Record<string, string> = {
   pdf: '📄 PDF',
   doc: '📝 Word',
@@ -356,11 +358,18 @@ function formatDocumentLabel(ext: string): string {
   return DOC_LABELS[ext] ?? `📎 Fichier .${ext}`;
 }
 
-type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document';
+export type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document' | 'contact';
 
+/**
+ * `contactName` ne vaut que pour une carte de visite (#8122) : le nom tel que
+ * l'auteur l'a nommé, lu dans le nom d'ORIGINE du fichier
+ * (`contactCardNameFromFileName`) — la vCard elle-même n'est pas relue. `null`
+ * ⇒ la bannière dit « Carte de visite » dans la langue du destinataire.
+ */
 export type NotificationAttachmentSummary = {
   type: NotificationAttachmentType;
   filename?: string | null;
+  contactName?: string | null;
 };
 
 /**
@@ -370,6 +379,7 @@ export type NotificationAttachmentSummary = {
 export function formatSingleAttachmentLabelI18n(lang: string, params: {
   type: NotificationAttachmentType;
   filename?: string | null;
+  contactName?: string | null;
   fileSize?: number | null;
   /** Durée en MILLISECONDES (champ `duration` de MessageAttachment, cf. schema.prisma). */
   duration?: number | null;
@@ -377,6 +387,11 @@ export function formatSingleAttachmentLabelI18n(lang: string, params: {
   height?: number | null;
 }): string {
   const details: string[] = [];
+
+  if (params.type === 'contact') {
+    const name = params.contactName?.trim();
+    return name ? `${CONTACT_CARD_ICON} ${name}` : notificationString(lang, 'attachment.contact');
+  }
 
   if (params.type === 'audio') {
     if (params.duration) details.push(formatDuration(params.duration));
@@ -430,12 +445,14 @@ function buildAttachmentBadges(lang: string, rest: ReadonlyArray<NotificationAtt
   const audios = rest.filter(att => att.type === 'audio');
   const videos = rest.filter(att => att.type === 'video');
   const documents = rest.filter(att => att.type === 'document');
+  const contacts = rest.filter(att => att.type === 'contact');
 
   const segments: string[] = [];
   if (images.length > 0) segments.push(`+${images.length}📷`);
   if (audios.length > 0) segments.push(`+${audios.length}🎵`);
   if (videos.length > 0) segments.push(`+${videos.length}🎬`);
   if (documents.length > 0) segments.push(formatDocumentBadge(lang, documents));
+  if (contacts.length > 0) segments.push(`+${contacts.length}${CONTACT_CARD_ICON}`);
   return segments.join(' ');
 }
 
@@ -462,6 +479,7 @@ export function buildMessageNotificationBodyI18n(lang: string, params: {
   const base = text || formatSingleAttachmentLabelI18n(lang, {
     type: first.type,
     filename: first.filename,
+    contactName: first.contactName,
     fileSize: params.firstAttachmentFileSize,
     duration: params.firstAttachmentDuration,
     width: params.firstAttachmentWidth,

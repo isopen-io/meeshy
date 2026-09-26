@@ -53,3 +53,19 @@ export function seededCallHistory(cached: CallHistoryData | undefined, filter: C
   if (records.length === 0 && truncated) return undefined;
   return { pages: [{ records, nextCursor: null }], pageParams: [null] };
 }
+
+const foldForSearch = (text: string): string => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
+
+/**
+ * **LA RECHERCHE DU JOURNAL** (#8066) — le `.searchable` de `CallsTab.swift` :
+ * sur le nom AFFICHÉ (repli compris) et l'identifiant du pair, sans accents ni
+ * casse. Elle filtre ce qui est CHARGÉ ; l'écran charge la suite pendant qu'on
+ * cherche, pour qu'un appel ancien finisse par apparaître.
+ */
+export function searchCallRecords(records: readonly CallRecord[], query: string, unknown: string): readonly CallRecord[] {
+  const needle = foldForSearch(query);
+  if (needle === '') return records;
+  return records.filter((record) =>
+    [callDisplayNameOf(record, unknown), record.peer?.username].some((field) => nonEmpty(field) && foldForSearch(field).includes(needle)),
+  );
+}

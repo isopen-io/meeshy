@@ -159,4 +159,19 @@ final class ConversationCardServiceTests: XCTestCase {
         service.invalidate(conversationId: "c1", from: .shareLink(identifier: "abc"))
         wait(for: [posted], timeout: 1)
     }
+
+    /// #8120 — un changement de compte ne laisse ni carte ni verdict du compte
+    /// sortant : la carte « membre » de A ne se sert pas à B.
+    func test_invalidateAll_cardsAndVerdictsCached_emptiesEveryTarget() {
+        let service = makeService(MockAPIClient())
+        service.store(.card(Self.card), for: .shareLink(identifier: "abc"))
+        service.store(.privateConversation, for: .direct(conversationId: "c1"))
+
+        service.invalidateAll()
+
+        guard case .empty = service.cached(.shareLink(identifier: "abc")),
+              case .empty = service.cached(.direct(conversationId: "c1")) else {
+            return XCTFail("aucune carte ni aucun verdict ne survit à invalidateAll()")
+        }
+    }
 }

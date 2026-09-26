@@ -63,6 +63,7 @@ import {
   type MessageLiveness,
   type PreviewPrismBasis,
   type NotificationBannerMedia,
+  type NotificationAttachmentSummary,
   type NotificationActorProfile,
   EMPTY_PRISM_SOURCE,
   UNKNOWN_BANNER_SOURCE,
@@ -1443,10 +1444,7 @@ export class NotificationService {
     /** Résumé léger de TOUS les attachments, dans l'ordre d'envoi. Le 1er est
      *  affiché en média inline, les suivants sont agrégés en badges `+N` par
      *  type dans le corps de la notification. */
-    attachments?: ReadonlyArray<{
-      type: 'image' | 'video' | 'audio' | 'document';
-      filename?: string | null;
-    }>;
+    attachments?: ReadonlyArray<NotificationAttachmentSummary>;
     /** URL accessible publiquement pour le 1er attachment (image/audio/video).
      *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
      *  natif (waveform pour audio, preview pour image, thumbnail pour video). */

@@ -40,7 +40,7 @@ const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null } = {}) {
+function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -127,6 +127,7 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
     deviceModel: () => 'Chrome · Linux',
     tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
     ringLabel: () => 'Appel entrant',
+    random: () => options.random ?? 0.99,
   };
   const engine = createCallEngine(deps);
 
@@ -345,6 +346,35 @@ describe('en appel', () => {
     expect(h.call()?.phase).toEqual({ kind: 'ended', reason: 'local', detail: null });
     expect(h.call()?.endedDurationSec).toBe(65);
     expect(h.tones).toContain('cue:ended');
+  });
+
+  test('#8072 — un appel tiré dans l’échantillon demande sa note ; la note part et la demande se ferme', async () => {
+    const h = harness({ random: 0.05 });
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    h.advance(30_000);
+    h.engine.hangup();
+    expect(h.store.getState().feedback).toEqual({ callId: 'call-1', title: 'Amina', media: 'audio' });
+    h.engine.rate(2, ['echo']);
+    expect(h.emitted).toContainEqual([CLIENT_EVENTS.CALL_QUALITY_FEEDBACK, { callId: 'call-1', rating: 2, issues: ['echo'] }]);
+    expect(h.store.getState().feedback).toBeNull();
+  });
+
+  test('#8072 — hors échantillon, un appel sans souci ne demande rien ; une reprise suffit à demander', async () => {
+    const calm = await connected();
+    calm.advance(30_000);
+    calm.engine.hangup();
+    expect(calm.store.getState().feedback).toBeNull();
+    const shaky = await connected();
+    shaky.linkState(shaky.links[0] as FakeLink, 'reconnecting');
+    shaky.linkState(shaky.links[0] as FakeLink, 'connected');
+    shaky.advance(30_000);
+    shaky.engine.hangup();
+    expect(shaky.store.getState().feedback?.callId).toBe('call-1');
+    shaky.engine.skipRating();
+    expect(shaky.store.getState().feedback).toBeNull();
+    expect(shaky.names(shaky.emitted)).not.toContain(CLIENT_EVENTS.CALL_QUALITY_FEEDBACK);
   });
 
   test('le pair raccroche : fin « remote » avec la durée servie par la passerelle', async () => {
@@ -637,6 +667,19 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
     h.advance(3_000);
     await h.sampleQuality();
     expect(reports()).toHaveLength(2);
+  });
+
+  test('un relevé mauvais, même hors fenêtre de rapport, fait demander la note d’après-appel (#8072)', async () => {
+    const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8' } as const;
+    const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8' }, good]);
+    await h.sampleQuality();
+    h.advance(2_000);
+    await h.sampleQuality();
+    h.advance(2_000);
+    await h.sampleQuality();
+    h.advance(30_000);
+    h.engine.hangup();
+    expect(h.store.getState().feedback?.callId).toBe('call-1');
   });
 
   test('la boucle s’arrête avec l’appel : plus aucun relevé après le raccroché', async () => {

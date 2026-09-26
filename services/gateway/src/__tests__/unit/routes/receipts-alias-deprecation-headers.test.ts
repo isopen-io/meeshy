@@ -209,12 +209,12 @@ describe('message-read-status.ts — les cinq portes annoncent leur sursis', () 
       );
     });
 
-    it("l'annonce part MÊME sur un 403 (non membre)", async () => {
+    it("l'annonce part MÊME sur un refus (non membre — le 404 d'une conversation inexistante, #8116)", async () => {
       mockPrisma.participant.findFirst.mockResolvedValue(null);
 
       const res = await app.inject({ method: 'GET', url: url(), headers: { authorization: AUTH_HEADER } });
 
-      expect(res.statusCode).toBe(403);
+      expect(res.statusCode).toBe(404);
       expect(res.headers['deprecation']).toMatch(/^@\d+$/);
       expect(res.headers['link']).toBe(
         linkFor(`/api/v1/conversations/${CONVERSATION_ID}/receipts?detail=summary`)

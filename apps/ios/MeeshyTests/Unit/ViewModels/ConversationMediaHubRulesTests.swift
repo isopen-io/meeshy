@@ -103,4 +103,29 @@ final class ConversationMediaHubRulesTests: XCTestCase {
         XCTAssertTrue(ConversationMediaHubRules.matches(carrier, query: "facture-ete"))
         XCTAssertFalse(ConversationMediaHubRules.matches(carrier, query: "budget"))
     }
+
+    // MARK: - #8135 — le segment Contacts rend des cartes de visite
+
+    func test_rendering_contactSegmentPiece_isAContactCardNotADocument() {
+        let carrier = message("m1", attachments: [piece("card", mime: "text/vcard", name: "Zoé.vcf")])
+
+        let rendered = items([carrier], .contact).map(ConversationMediaHubRules.rendering(of:))
+
+        XCTAssertEqual(rendered, [.contactCard])
+    }
+
+    func test_rendering_vcfDroppedAsOctetStream_isAContactCardLikeTheBubble() {
+        let carrier = message("m1", attachments: [piece("card", mime: "application/octet-stream", name: "contact.vcf")])
+
+        let rendered = items([carrier], .document).map(ConversationMediaHubRules.rendering(of:))
+
+        XCTAssertEqual(rendered, [.contactCard])
+    }
+
+    func test_rendering_documentAndAudioPieces_keepTheirOwnRenderers() {
+        let carrier = message("m1", attachments: [piece("pdf", mime: "application/pdf", name: "a.pdf"), piece("voice", mime: "audio/m4a")])
+
+        XCTAssertEqual(items([carrier], .document).map(ConversationMediaHubRules.rendering(of:)), [.document])
+        XCTAssertEqual(items([carrier], .audio).map(ConversationMediaHubRules.rendering(of:)), [.audio])
+    }
 }

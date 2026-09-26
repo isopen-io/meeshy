@@ -32,6 +32,10 @@ jest.mock('../../../../services/CacheStore', () => ({
   resetCacheStore: jest.fn(),
 }));
 
+jest.mock('../../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({})),
+}));
+
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
     resolveForTarget: async () => ({ showOnline: false, showLastSeenTimestamp: false }),
@@ -49,11 +53,23 @@ import {
 } from '../../../../routes/conversations/core-detail';
 import { registerStatsRoutes } from '../../../../routes/conversations/stats';
 import { registerDirectConversationCardRoute } from '../../../../routes/conversations/card';
+import { registerThreadsRoutes } from '../../../../routes/conversations/threads';
+import { registerMessagePinRoutes } from '../../../../routes/conversations/messages-pin';
+import { registerMessagesAdvancedReadRoutes } from '../../../../routes/conversations/messages-advanced-reads';
+import { conversationReceiptsRoutes } from '../../../../routes/conversations/receipts';
+import messageReadStatusRoutes from '../../../../routes/message-read-status';
+import encryptionRoutes from '../../../../routes/conversation-encryption';
+import { registerCallsConsultationRoutes } from '../../../../routes/calls-consultation';
+import { registerMetadataRoutes } from '../../../../routes/attachments/metadata';
+import { registerSharingRoutes } from '../../../../routes/conversations/sharing';
+import { registerUserRoutes } from '../../../../routes/links/user';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const SESSION_ID = '507f1f77bcf86cd7994390aa';
 const EXISTING_CONV_ID = '507f1f77bcf86cd799439033';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439044';
+const UNKNOWN_CONV_ID = '507f1f77bcf86cd799439099';
+const MESSAGE_ID = '507f1f77bcf86cd799439055';
 const EXISTANTE = 'mee_existante_8099';
 const INEXISTANTE = 'mee_inexistante_8099';
 
@@ -102,10 +118,10 @@ const prismaNonMembre = () => ({
   participant: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
   conversation: {
     findFirst: jest.fn(async (args: OuConversation) =>
-      existe(args) ? { id: EXISTING_CONV_ID, identifier: EXISTANTE, type: 'group' } : null
+      existe(args) ? { id: EXISTING_CONV_ID, identifier: EXISTANTE, type: 'group', participants: [] } : null
     ),
     findUnique: jest.fn(async (args: OuConversation) =>
-      existe(args) ? { id: EXISTING_CONV_ID, identifier: EXISTANTE, type: 'group' } : null
+      existe(args) ? { id: EXISTING_CONV_ID, identifier: EXISTANTE, type: 'group', participants: [] } : null
     ),
   },
 });
@@ -122,6 +138,17 @@ const monter = async (prisma: unknown): Promise<FastifyInstance> => {
   registerConversationAnalysisRoute(app, prisma as never, requiredAuth);
   registerStatsRoutes(app, prisma as never, requiredAuth);
   registerDirectConversationCardRoute(app, prisma as never, optionalAuth);
+  registerThreadsRoutes(app, prisma as never, requiredAuth);
+  registerMessagePinRoutes(app, prisma as never, requiredAuth, null);
+  registerMessagesAdvancedReadRoutes(app, prisma as never, requiredAuth);
+  registerCallsConsultationRoutes(app, { prisma: prisma as never, callService: {} as never, requiredAuth });
+  app.decorate('authenticate', requiredAuth as never);
+  registerSharingRoutes(app, prisma as never, requiredAuth);
+  await registerMetadataRoutes(app, optionalAuth, prisma as never);
+  await app.register(conversationReceiptsRoutes);
+  await app.register(messageReadStatusRoutes);
+  await app.register(encryptionRoutes);
+  await app.register(registerUserRoutes);
   await app.ready();
   return app;
 };
@@ -151,6 +178,59 @@ const ROUTES: ReadonlyArray<readonly [string, (id: string) => string]> = [
   ['GET /conversations/:id/analysis', (id) => `/conversations/${id}/analysis`],
   ['GET /conversations/:id/card', (id) => `/conversations/${id}/card`],
 ];
+
+/**
+ * Les lectures SECONDAIRES d'une conversation (#8116) : fil, épingles, accusés,
+ * réactions, statuts, chiffrement, appel actif, galerie, liens de partage.
+ * Chacune rendait 403 à un non-membre — et, pour certaines, 404 à un
+ * identifiant inconnu : le même oracle, une porte plus loin.
+ */
+const ROUTES_SECONDAIRES: ReadonlyArray<readonly [string, (id: string) => string]> = [
+  ['GET /conversations/:id/threads/:messageId', (id) => `/conversations/${id}/threads/${MESSAGE_ID}`],
+  ['GET /conversations/:id/pinned-messages', (id) => `/conversations/${id}/pinned-messages`],
+  ['GET /conversations/:id/reactions', (id) => `/conversations/${id}/reactions`],
+  ['GET /conversations/:id/status', (id) => `/conversations/${id}/status`],
+  ['GET /conversations/:id/receipts', (id) => `/conversations/${id}/receipts`],
+  ['GET /conversations/:id/read-statuses', (id) => `/conversations/${id}/read-statuses`],
+];
+
+/** Les routes qui n'acceptent qu'un ObjectId : l'inconnu y est un ObjectId sans ligne. */
+const ROUTES_PAR_OBJECT_ID: ReadonlyArray<readonly [string, (id: string) => string]> = [
+  ['GET /conversations/:id/encryption-status', (id) => `/conversations/${id}/encryption-status`],
+  ['GET /conversations/:id/active-call', (id) => `/conversations/${id}/active-call`],
+  ['GET /conversations/:id/attachments', (id) => `/conversations/${id}/attachments`],
+  ['GET /conversations/:id/links', (id) => `/conversations/${id}/links`],
+  ['GET /links?conversationId=', (id) => `/links?conversationId=${id}`],
+];
+
+const CAS: ReadonlyArray<readonly [string, (id: string) => string, string, string]> = [
+  ...ROUTES.map(([nom, url]) => [nom, url, EXISTANTE, INEXISTANTE] as const),
+  ...ROUTES_SECONDAIRES.map(([nom, url]) => [nom, url, EXISTANTE, INEXISTANTE] as const),
+  ...ROUTES_SECONDAIRES.map(([nom, url]) => [`${nom} (ObjectId)`, url, EXISTING_CONV_ID, UNKNOWN_CONV_ID] as const),
+  ...ROUTES_PAR_OBJECT_ID.map(([nom, url]) => [nom, url, EXISTING_CONV_ID, UNKNOWN_CONV_ID] as const),
+];
+
+describe('non-membre sur lien direct ≡ conversation inexistante (#8099, #8116)', () => {
+  it.each(CAS)('%s — 404 « Conversation not found », identique pour un id inexistant', async (_nom, url, existante, inconnue) => {
+    const nonMembre = await lire(url(existante));
+    const inexistante = await lire(url(inconnue));
+
+    expect(nonMembre.statut).toBe(404);
+    expect(nonMembre.corps.error).toBe('Conversation not found');
+    expect(nonMembre.corps.code).toBeUndefined();
+    expect(nonMembre).toEqual(inexistante);
+  });
+
+  it.each(CAS)('%s — sans session, 401 avant toute lecture de la conversation', async (_nom, url, existante) => {
+    const app = await monter(prismaNonMembre());
+    try {
+      const reponse = await app.inject({ method: 'GET', url: url(existante) });
+      expect(reponse.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+});
 
 describe('non-membre sur lien direct ≡ conversation inexistante (#8099)', () => {
   it.each(ROUTES)('%s — même statut et même corps que pour un id inexistant', async (_nom, url) => {

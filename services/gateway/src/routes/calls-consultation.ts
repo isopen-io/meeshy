@@ -10,7 +10,7 @@ import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { logger } from '../utils/logger.js';
-import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
 import { validatePagination } from '../utils/pagination.js';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
@@ -21,6 +21,8 @@ import {
 } from '../validation/call-schemas.js';
 import { callSessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { viewerFromRequest } from './users/presence-gate';
+import { clearCallHistory, hideCallFromHistory } from '../services/calls/callHistoryList';
+import { refuserCommeIntrouvable } from './conversations/utils/access-control';
 import { CallParams, CallRouteDeps } from './calls-shared';
 
 interface ConversationParams {
@@ -308,8 +310,8 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
           description: 'Unauthorized - Authentication required',
           ...errorResponseSchema
         },
-        403: {
-          description: 'Forbidden - User not a member of conversation',
+        404: {
+          description: 'Conversation not found — or the caller is not a member (#8116: both answer the same)',
           ...errorResponseSchema
         },
         429: {
@@ -342,8 +344,9 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
         }
       });
 
+      // Un non-membre reçoit le 404 d'une conversation inexistante (#8116).
       if (!membership) {
-        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+        return refuserCommeIntrouvable(reply);
       }
 
       const callSession = await callService.getActiveCallForConversation(
@@ -550,6 +553,80 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
     } catch (error: any) {
       logger.error('❌ REST: Error listing call history', error);
       return sendInternalError(reply, 'INTERNAL_ERROR', { message: 'Failed to get call history' });
+    }
+  });
+  // ─── DELETE /api/calls/history/:callId — Effacer une ligne, pour soi (#8066) ───
+
+  fastify.delete<{ Params: CallParams }>('/calls/history/:callId', {
+    preValidation: [requiredAuth],
+    ...ROUTE_RATE_LIMITS.callOperations,
+    schema: {
+      description: 'Remove one call from the authenticated user\'s own call journal. Other members of the conversation keep it. 404 when the call belongs to none of the user\'s conversations.',
+      tags: ['calls'],
+      summary: 'Remove a call from my history',
+      params: {
+        type: 'object',
+        required: ['callId'],
+        properties: { callId: { type: 'string', pattern: OBJECT_ID_PATTERN } }
+      },
+      response: {
+        200: {
+          description: 'Call removed from the journal',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'object', properties: { callId: { type: 'string' }, hidden: { type: 'boolean' } } }
+          }
+        },
+        401: { description: 'Authentication required', ...errorResponseSchema },
+        404: { description: 'Call not found', ...errorResponseSchema },
+        500: { description: 'Internal server error', ...errorResponseSchema }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const userId = (request as unknown as UnifiedAuthRequest).authContext.userId;
+      if (!userId) return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
+      const outcome = await hideCallFromHistory(prisma, userId, request.params.callId);
+      if (outcome === 'not-found') return sendNotFound(reply, 'CALL_NOT_FOUND');
+      return sendSuccess(reply, { callId: request.params.callId, hidden: true });
+    } catch (error: unknown) {
+      logger.error('❌ REST: Error removing a call from history', error);
+      return sendInternalError(reply, 'INTERNAL_ERROR');
+    }
+  });
+
+  // ─── DELETE /api/calls/history — Vider son journal, pour soi (#8066) ───
+
+  fastify.delete('/calls/history', {
+    preValidation: [requiredAuth],
+    ...ROUTE_RATE_LIMITS.callOperations,
+    schema: {
+      description: 'Clear the authenticated user\'s own call journal (the 3-month window). Other members of the conversations keep theirs.',
+      tags: ['calls'],
+      summary: 'Clear my call history',
+      response: {
+        200: {
+          description: 'Journal cleared',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'object', properties: { cleared: { type: 'integer' } } }
+          }
+        },
+        401: { description: 'Authentication required', ...errorResponseSchema },
+        500: { description: 'Internal server error', ...errorResponseSchema }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const userId = (request as unknown as UnifiedAuthRequest).authContext.userId;
+      if (!userId) return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
+      const cleared = await clearCallHistory(prisma, userId);
+      return sendSuccess(reply, { cleared });
+    } catch (error: unknown) {
+      logger.error('❌ REST: Error clearing call history', error);
+      return sendInternalError(reply, 'INTERNAL_ERROR');
     }
   });
 }

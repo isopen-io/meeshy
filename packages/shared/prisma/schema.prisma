@@ -2332,8 +2332,10 @@ model CallSession {
   /// Call metadata
   metadata Json? // { maxParticipants, recordingEnabled, etc. }
 
-  /// Post-call quality feedback (rating + issues)
-  feedback Json?
+  /// Les membres qui ont effacé cet appel de LEUR journal (#8066) : le
+  /// journal des autres n'en est pas touché. Écrit par
+  /// `DELETE /calls/history[/:callId]` (`services/calls/callHistoryList.ts`).
+  hiddenForUserIds String[] @db.ObjectId
 
   /// Optimistic locking version. Incremented on every status transition.
   /// Pattern: where: { id, version: known }, data: { ..., version: { increment: 1 } }.
@@ -2374,6 +2376,14 @@ model CallParticipant {
   /// never clobber each other. Null when the client never reported
   /// (missed call, old build, crash).
   analytics Json?
+
+  /// La note d'après-appel de CE participant (`call:quality-feedback`,
+  /// #8072) : `{ rating: 1..5, issues: string[], comment?, ratedAt }`.
+  /// Une ligne par participant, comme `analytics` : deux notes d'un même
+  /// appel ne s'écrasent pas. Null quand il n'a pas noté (la demande est
+  /// échantillonnée). `CallSession.feedback`, qui ne pouvait porter qu'UNE
+  /// note, n'a jamais reçu d'écriture et a été retiré le 2026-09-26.
+  feedback Json?
 
   /// Media state
   isAudioEnabled Boolean @default(true)

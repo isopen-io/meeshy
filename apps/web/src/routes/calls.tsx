@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
@@ -11,10 +11,11 @@ import {
   refreshCallHistory,
   type CallHistoryFilter,
 } from '@/lib/api/calls';
+import { performClearCallHistory, performHideCall } from '@/lib/api/call-history-actions';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
-import { CALL_FILTER_PARAM, callFilterFromSearch, seededCallHistory, type CallHistoryData } from '@/lib/calls/view';
+import { CALL_FILTER_PARAM, callFilterFromSearch, searchCallRecords, seededCallHistory, type CallHistoryData } from '@/lib/calls/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
@@ -31,10 +32,13 @@ import {
   CALLS_TOP_RESERVE,
   CallFilterRail,
   CallRow,
+  CallsClearAll,
   CallsEmpty,
+  CallsEraseFailed,
   CallsError,
   CallsHeader,
   CallsOfflineNotice,
+  CallsSearchEmpty,
   CallsSkeleton,
 } from '@/routes/calls-parts';
 
@@ -57,6 +61,13 @@ import {
  * chaque ligne ; le web n'a aucune pile d'appel, et un bouton sans effet est un
  * contrôle qui ment (loi 4). Il ne s'affiche pas — l'appel depuis le web est
  * suivi par son issue (D-61). La ligne ouvre le FIL de la conversation.
+ *
+ * **Effacer et chercher (#8066).** « Modifier » passe les lignes en mode
+ * édition (une corbeille au lieu du rappel) et ouvre « Tout effacer », qui
+ * demande confirmation. Les deux gestes sont optimistes et effacent pour SOI
+ * seul (`call-history-actions.ts`). La recherche filtre ce qui est chargé et
+ * charge la page suivante tant qu'il en reste, pour qu'un appel ancien finisse
+ * par apparaître.
  *
  * **Le couloir des disques flottants.** En-tête (64) et filtre (52) finissent
  * au-dessus du couloir 126 → 178 ; la première ligne commence SOUS lui au repos
@@ -82,7 +93,15 @@ export default function CallsScreen() {
     appQueryClient,
   );
 
-  const records = history.data?.pages.flatMap((page) => page.records) ?? null;
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [eraseFailed, setEraseFailed] = useState(false);
+
+  const loaded = history.data?.pages.flatMap((page) => page.records) ?? null;
+  const unknownName = translate(language, 'calls.unknown');
+  const records = useMemo(() => (loaded === null ? null : searchCallRecords(loaded, query, unknownName)), [loaded, query, unknownName]);
+  const searching = query.trim() !== '';
   const cold = coldStateOf(history);
   const loading = cold === 'loading';
   const paginationState = paginationStateOf(history);
@@ -94,6 +113,31 @@ export default function CallsScreen() {
     },
     [search, setSearch],
   );
+  const actionDeps = useMemo(() => ({ ...apiDeps, queryClient: appQueryClient }), []);
+  const onHide = useCallback(
+    (callId: string) => {
+      setEraseFailed(false);
+      void performHideCall({ callId, deps: actionDeps }).then((done) => setEraseFailed(!done));
+    },
+    [actionDeps],
+  );
+  const onClear = useCallback(() => {
+    setConfirmingClear(false);
+    setEditing(false);
+    setEraseFailed(false);
+    void performClearCallHistory({ deps: actionDeps }).then((done) => setEraseFailed(!done));
+  }, [actionDeps]);
+  const onToggleEdit = useCallback(() => {
+    setEditing((value) => !value);
+    setConfirmingClear(false);
+  }, []);
+
+  const canFetchMore = history.hasNextPage && !history.isFetchingNextPage && !history.isPlaceholderData;
+  const { fetchNextPage } = history;
+  useEffect(() => {
+    if (searching && canFetchMore) void fetchNextPage({ cancelRefetch: false }).catch(() => undefined);
+  }, [searching, canFetchMore, fetchNextPage]);
+
   const onRefresh = useCallback(() => refreshCallHistory(appQueryClient, apiDeps, filter), [filter]);
   const pull = usePullToRefresh({ root: frame, onRefresh, threshold: PULL_THRESHOLD });
   const { observe: observeTail } = useLoadMoreSentinel({
@@ -115,16 +159,29 @@ export default function CallsScreen() {
         </li>
       )
     ) : records.length === 0 ? (
-      <CallsEmpty language={language} filter={filter} />
+      searching ? (
+        <CallsSearchEmpty language={language} query={query} />
+      ) : (
+        <CallsEmpty language={language} filter={filter} />
+      )
     ) : (
       <>
         {online ? null : <CallsOfflineNotice language={language} cold={false} />}
+        {editing ? (
+          <CallsClearAll
+            language={language}
+            confirming={confirmingClear}
+            onAsk={() => setConfirmingClear(true)}
+            onConfirm={onClear}
+            onCancel={() => setConfirmingClear(false)}
+          />
+        ) : null}
         {records.map((record) => (
-          <CallRow key={record.callId} language={language} record={record} now={now} />
+          <CallRow key={record.callId} language={language} record={record} now={now} {...(editing ? { onHide } : {})} />
         ))}
         <LensPaginationFooter
           state={paginationState}
-          showsAllLoadedHint={showsAllLoadedHint(records.length, CALL_HISTORY_PAGE_SIZE)}
+          showsAllLoadedHint={showsAllLoadedHint(loaded?.length ?? 0, CALL_HISTORY_PAGE_SIZE)}
           exhaustedLabel={translate(language, 'calls.allLoaded')}
           onRetry={() => void history.fetchNextPage()}
           sentinelRef={observeTail}
@@ -134,8 +191,11 @@ export default function CallsScreen() {
 
   return (
     <main className="relative flex h-dvh flex-col overflow-hidden pt-safe">
-      <CallsHeader language={language} />
-      <CallFilterRail language={language} selected={filter} onSelect={onSelect} />
+      <CallsHeader
+        language={language}
+        {...((loaded?.length ?? 0) > 0 || editing ? { edit: { editing, onToggle: onToggleEdit } } : {})}
+      />
+      <CallFilterRail language={language} selected={filter} onSelect={onSelect} search={{ value: query, onChange: setQuery }} />
       <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
       <ul
         ref={frame}
@@ -146,6 +206,7 @@ export default function CallsScreen() {
         {...(loading ? { 'aria-busy': true, 'aria-label': translate(language, 'calls.loading') } : {})}
       >
         <li aria-hidden="true" className="shrink-0" style={{ height: CALLS_TOP_RESERVE }} />
+        {eraseFailed ? <CallsEraseFailed language={language} /> : null}
         {body}
       </ul>
     </main>

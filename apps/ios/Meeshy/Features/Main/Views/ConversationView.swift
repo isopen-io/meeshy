@@ -475,7 +475,7 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil, forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil, forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil, landsOnMessage: Bool = false) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
@@ -528,7 +528,7 @@ struct ConversationView: View {
             unreadCount: conversation?.userState.unreadCount ?? 0,
             capabilities: capabilities,
             isFlagEnabled: isFlagEnabled,
-            forcedMode: forcedReadingMode
+            forcedMode: forcedReadingMode, landsOnMessage: landsOnMessage
         ))
         // Même `capabilities` locale que ci-dessus — pas de seconde résolution
         // (§WS-7 travail 5, arbitrage F-086bis) : le catalogue de la feuille

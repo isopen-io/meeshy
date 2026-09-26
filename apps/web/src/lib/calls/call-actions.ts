@@ -1,4 +1,5 @@
 import { primeTones } from './call-tones';
+import type { CallFeedbackIssue, CallFeedbackRating } from './call-feedback';
 import type { CallEngine, JoinCallRequest, StartCallRequest } from './engine';
 
 /**
@@ -42,4 +43,7 @@ export const callActions = {
   declineWaiting: (): void => run((engine) => engine.declineWaiting()),
   retry: (): void => run((engine) => engine.retry()),
   dismiss: (): void => run((engine) => engine.dismiss()),
+  /** La note d'après-appel (#8072). */
+  rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]): void => run((engine) => engine.rate(rating, issues)),
+  skipRating: (): void => run((engine) => engine.skipRating()),
 };

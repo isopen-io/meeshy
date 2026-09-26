@@ -35,6 +35,7 @@ import {
   type CallStoreApi,
   type WaitingCall,
 } from './call-store';
+import { feedbackPayload, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
 import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
@@ -103,6 +104,8 @@ export type CallEngineDeps = {
   readonly watchNetwork: (onChange: () => void) => () => void;
   readonly platform: () => string;
   readonly deviceModel: () => string;
+  /** Le tirage de l'échantillon de la note d'après-appel (#8072) ; `Math.random` par défaut. */
+  readonly random?: () => number;
 };
 
 export type CallEngine = {
@@ -124,6 +127,9 @@ export type CallEngine = {
   readonly declineWaiting: () => void;
   readonly retry: () => Promise<void>;
   readonly dismiss: () => void;
+  /** La note d'après-appel (#8072) : part par `call:quality-feedback` et ferme la demande. */
+  readonly rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]) => void;
+  readonly skipRating: () => void;
   readonly handle: (event: string, payload: unknown) => void;
   readonly reauthenticated: () => void;
   readonly pageHidden: () => void;
@@ -144,6 +150,8 @@ type Session = {
   telemetry: Telemetry;
   alertTimers: Map<string, unknown>;
   unwatchNetwork: (() => void) | null;
+  /** L'appel a souffert (qualité mauvaise ou reprise) : sa note est toujours demandée (#8072). */
+  troubled: boolean;
 };
 
 const emptySession = (): Session => ({
@@ -160,6 +168,7 @@ const emptySession = (): Session => ({
   telemetry: createTelemetry(0),
   alertTimers: new Map(),
   unwatchNetwork: null,
+  troubled: false,
 });
 
 function baseCall(request: StartCallRequest, direction: ActiveCall['direction'], phase: ActiveCall['phase']): ActiveCall {
@@ -262,6 +271,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting') deps.tones.cue('ended');
     const elapsed = durationSec ?? (call.connectedAt === null ? null : Math.max(0, Math.round((deps.now() - call.connectedAt) / 1000)));
     write({ ...call, phase: { kind: 'ended', reason, detail }, endedDurationSec: elapsed, localStream: null, remoteStreams: {}, screenSharing: false });
+    const feedback = feedbackPromptFor({ call, reason, durationSec: elapsed, troubled: session.troubled, random: (deps.random ?? Math.random)() });
+    if (feedback !== null) store.setState({ feedback });
     session = { ...emptySession(), retry };
     const retryable = retry !== null && (reason === 'failed' || reason === 'connectionLost' || reason === 'missed' || reason === 'busy');
     endedTimer = clear(endedTimer);
@@ -291,6 +302,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       return;
     }
     if (mesh === 'reconnecting' && call.phase.kind === 'connected') {
+      session.troubled = true;
       write({ ...call, phase: { kind: 'reconnecting' } });
       return;
     }
@@ -408,6 +420,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const { total, stage, codec } = tick;
     session.telemetry = withCodec(withSample(session.telemetry, total), codec);
     update((current) => ({ ...current, quality: { level: total.level, packetLoss: total.packetLoss, rtt: total.rtt, jitter: total.jitter, audioKbps: total.audioKbps, videoKbps: total.videoKbps, survival: stage } }));
+    if (total.level === 'poor') session.troubled = true;
     if (deps.now() - session.lastQualityReport < QUALITY_REPORT_MS) return;
     session.lastQualityReport = deps.now();
     emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, qualityReport(callId, total, deps.now()));
@@ -953,6 +966,13 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       resetToIdle();
       await start(retry);
     },
+    rate: (rating, issues) => {
+      const prompt = store.getState().feedback;
+      if (prompt === null) return;
+      emit(CLIENT_EVENTS.CALL_QUALITY_FEEDBACK, feedbackPayload({ callId: prompt.callId, rating, issues }));
+      store.setState({ feedback: null });
+    },
+    skipRating: () => store.setState({ feedback: null }),
     dismiss: () => {
       if (read()?.phase.kind === 'ended') resetToIdle();
       store.setState({ notice: null });

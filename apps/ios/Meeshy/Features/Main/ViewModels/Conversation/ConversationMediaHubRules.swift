@@ -98,6 +98,22 @@ enum ConversationMediaHubRules {
         return ConversationMediaKind.ofAttachment(mimeType: attachment.mimeType)
     }
 
+    /// Comment une PIÈCE se rend dans une rangée (#8135) : une vCard est une
+    /// carte de visite — `ContactCardView`, comme dans la bulle — jamais un
+    /// document. `nil` pour un lien ou un lieu, qui ne sont pas des pièces.
+    enum AttachmentRendering: Equatable {
+        case audio
+        case contactCard
+        case document
+    }
+
+    static func rendering(of item: ConversationMediaHubItem) -> AttachmentRendering? {
+        guard let attachment = item.attachment else { return nil }
+        if item.kind == .audio { return .audio }
+        if item.kind == .contact || attachment.isContactCard { return .contactCard }
+        return .document
+    }
+
     private static func attachmentItems(of message: MeeshyMessage, kind: ConversationMediaKind) -> [ConversationMediaHubItem] {
         message.attachments
             .filter { !$0.isViewOnce && Self.kind(of: $0) == kind }

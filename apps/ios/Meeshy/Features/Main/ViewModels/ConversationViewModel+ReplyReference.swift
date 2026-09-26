@@ -162,6 +162,13 @@ extension ConversationViewModel {
             return preferredTranslation(for: quoted.id)?.translatedContent ?? quoted.content
         }
         if let first = representative {
+            // #8122 — une carte de visite se dit par son contact, comme
+            // l'écho serveur (`APIMessageReplyTo`) : pas de saut à l'accusé.
+            if let contact = ContactCardFile.mediaLabel(
+                mimeType: first.mimeType, fileName: first.originalName.isEmpty ? first.fileName : first.originalName
+            ) {
+                return contact
+            }
             return MediaKindLabel.summary(MediaKindLabel.kind(for: first.type))
         }
         return ""

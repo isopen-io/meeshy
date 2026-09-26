@@ -9,6 +9,8 @@ import itRowActions from './catalog-it-row-actions';
 import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
 import itCallDecline from './catalog-it-call-decline';
+import itCallFeedback from './catalog-it-call-feedback';
+import itCallsErase from './catalog-it-calls-erase';
 import itCallDevices from './catalog-it-call-devices';
 import itCallScreen from './catalog-it-call-screen';
 import itCallQuality from './catalog-it-call-quality';
@@ -209,6 +211,8 @@ const it = {
   ...itCallShell,
   ...itCallJoin,
   ...itCallDecline,
+  ...itCallFeedback,
+  ...itCallsErase,
   ...itCallDevices,
   ...itCallScreen,
   ...itCallQuality,
