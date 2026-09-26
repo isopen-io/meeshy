@@ -428,7 +428,8 @@ struct SignupView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             fieldBlock(
                 field: .password,
-                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
+                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main),
+                labelsContent: false
             ) {
                 MeeshyPasswordField(
                     String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
@@ -436,6 +437,7 @@ struct SignupView: View {
                     role: .new,
                     focus: $focusedField,
                     equals: .password,
+                    accessibilityLabel: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main),
                     eyeColor: theme.textMuted
                 )
                 .submitLabel(.go)
@@ -682,6 +684,7 @@ struct SignupView: View {
         field: SignupField,
         label: String,
         hint: AuthInfoHint? = nil,
+        labelsContent: Bool = true,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -690,9 +693,11 @@ struct SignupView: View {
                 .foregroundColor(theme.textMuted)
 
             HStack(spacing: 0) {
+                // Un contenu qui porte plusieurs éléments (le champ de mot de
+                // passe et son œil, #8054) se libelle lui-même : un libellé
+                // posé ici écraserait celui de chacun.
                 content()
-                    .accessibilityLabel(label)
-                    .accessibilityHint(hint?.text ?? "")
+                    .modifier(FieldBlockAccessibility(label: label, hint: hint?.text ?? "", applies: labelsContent))
                 if let hint {
                     AuthInfoHintButton(hint: hint, isExpanded: hintExpansion(for: field), tint: theme.textMuted)
                 }
@@ -806,6 +811,21 @@ struct SignupCountrySheet: View {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private struct FieldBlockAccessibility: ViewModifier {
+    let label: String
+    let hint: String
+    let applies: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if applies {
+            content.accessibilityLabel(label).accessibilityHint(hint)
+        } else {
+            content
         }
     }
 }
