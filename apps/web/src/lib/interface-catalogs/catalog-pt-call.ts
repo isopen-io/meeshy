@@ -60,6 +60,11 @@ const ptCall = {
   'call.spotlight.back': 'Voltar à grade',
   'call.remove.named': 'Remover {name} da chamada',
   'call.remove.failed': 'Não foi possível remover este participante',
+  'calls.detail.title': 'Detalhes da chamada',
+  'calls.detail.type': 'Tipo',
+  'calls.detail.date': 'Data',
+  'calls.detail.duration': 'Duração',
+  'calls.detail.open': 'Abrir a conversa',
 } as const;
 
 export default ptCall;

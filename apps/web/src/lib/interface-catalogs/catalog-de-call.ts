@@ -60,6 +60,11 @@ const deCall = {
   'call.spotlight.back': 'Zurück zum Raster',
   'call.remove.named': '{name} aus dem Anruf entfernen',
   'call.remove.failed': 'Teilnehmer konnte nicht entfernt werden',
+  'calls.detail.title': 'Anrufdetails',
+  'calls.detail.type': 'Typ',
+  'calls.detail.date': 'Datum',
+  'calls.detail.duration': 'Dauer',
+  'calls.detail.open': 'Unterhaltung öffnen',
 } as const;
 
 export default deCall;

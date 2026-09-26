@@ -47,13 +47,13 @@ const BRAND = 'var(--color-ios-brand)';
 const BRAND_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
 const EDGE = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)';
 
-const DIRECTION_GLYPHS: Readonly<Record<CallDirection, CallsGlyphName>> = {
+export const DIRECTION_GLYPHS: Readonly<Record<CallDirection, CallsGlyphName>> = {
   incoming: 'arrowDownLeft',
   outgoing: 'arrowUpRight',
   missed: 'phoneX',
 };
 
-function CallGlyph({ name, size }: { readonly name: CallsGlyphName; readonly size: number }) {
+export function CallGlyph({ name, size }: { readonly name: CallsGlyphName; readonly size: number }) {
   return <GlyphSvg glyph={CALLS_GLYPHS[name]} size={size} />;
 }
 
@@ -128,7 +128,7 @@ export function CallFilterRail({
   );
 }
 
-const DIRECTION_LABEL = {
+export const DIRECTION_LABEL = {
   incoming: 'calls.direction.incoming',
   outgoing: 'calls.direction.outgoing',
   missed: 'calls.direction.missed',
@@ -141,19 +141,22 @@ const DIRECTION_A11Y = {
 } as const;
 
 /**
- * UNE LIGNE — `CallJournalRow`. Elle est un LIEN vers le fil de sa conversation
- * ; le RAPPEL (le geste de la feuille de détail d'iOS) est le bouton à sa
- * droite, du même type que l'appel d'origine (#6382). Son `aria-label` recompose TOUT ce que la ligne montre, comme
+ * UNE LIGNE — `CallJournalRow`. La toucher ouvre la FICHE de l'appel
+ * (`CallDetailSheet`, #6383), comme iOS ; le fil de la conversation s'ouvre
+ * depuis la fiche. Le RAPPEL direct est le bouton à sa droite, du même type
+ * que l'appel d'origine (#6382). Son `aria-label` recompose TOUT ce que la ligne montre, comme
  * `rowAccessibilityLabel` d'iOS : nom, direction, type, heure, durée.
  */
 export const CallRow = memo(function CallRow({
   language,
   record,
   now,
+  onOpen,
 }: {
   readonly language: InterfaceLanguage;
   readonly record: CallRecord;
   readonly now: Date;
+  readonly onOpen: (record: CallRecord) => void;
 }) {
   const name = callDisplayNameOf(record, translate(language, 'calls.unknown'));
   const avatar = callAvatarOf(record);
@@ -170,12 +173,13 @@ export const CallRow = memo(function CallRow({
 
   return (
     <li data-call={record.callId} className="flex items-center" style={{ borderBottom: EDGE }}>
-      <Link
-        to="thread"
-        params={{ conversation: record.conversationId }}
+      <button
+        type="button"
+        onClick={() => onOpen(record)}
         aria-label={label}
+        aria-haspopup="dialog"
         data-call-row
-        className="flex min-w-0 flex-1 items-center gap-3.5 py-3 pl-5 pr-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        className="flex min-w-0 flex-1 items-center gap-3.5 py-3 pl-5 pr-2 text-start focus-visible:outline-2 focus-visible:-outline-offset-2"
         style={{ minHeight: CALL_ROW_HEIGHT, outlineColor: BRAND }}
       >
         <Avatar initials={initialsOf(name)} color={colorForName(name)} size={44} {...(avatar === null ? {} : { src: avatar })} />
@@ -207,7 +211,7 @@ export const CallRow = memo(function CallRow({
             )}
           </span>
         </span>
-      </Link>
+      </button>
       <button
         type="button"
         data-call-back={record.isVideo ? 'video' : 'audio'}

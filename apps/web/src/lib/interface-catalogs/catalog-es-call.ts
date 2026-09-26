@@ -60,6 +60,11 @@ const esCall = {
   'call.spotlight.back': 'Volver a la cuadrícula',
   'call.remove.named': 'Retirar a {name} de la llamada',
   'call.remove.failed': 'No se pudo retirar a este participante',
+  'calls.detail.title': 'Detalles de la llamada',
+  'calls.detail.type': 'Tipo',
+  'calls.detail.date': 'Fecha',
+  'calls.detail.duration': 'Duración',
+  'calls.detail.open': 'Abrir la conversación',
 } as const;
 
 export default esCall;

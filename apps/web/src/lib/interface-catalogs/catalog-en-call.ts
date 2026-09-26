@@ -60,6 +60,11 @@ const enCall = {
   'call.spotlight.back': 'Back to grid',
   'call.remove.named': 'Remove {name} from the call',
   'call.remove.failed': 'Couldn’t remove this participant',
+  'calls.detail.title': 'Call details',
+  'calls.detail.type': 'Type',
+  'calls.detail.date': 'Date',
+  'calls.detail.duration': 'Duration',
+  'calls.detail.open': 'Open conversation',
 } as const;
 
 export default enCall;

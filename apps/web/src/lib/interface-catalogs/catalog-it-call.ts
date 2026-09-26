@@ -60,6 +60,11 @@ const itCall = {
   'call.spotlight.back': 'Torna alla griglia',
   'call.remove.named': 'Rimuovi {name} dalla chiamata',
   'call.remove.failed': 'Impossibile rimuovere questo partecipante',
+  'calls.detail.title': 'Dettagli della chiamata',
+  'calls.detail.type': 'Tipo',
+  'calls.detail.date': 'Data',
+  'calls.detail.duration': 'Durata',
+  'calls.detail.open': 'Apri la conversazione',
 } as const;
 
 export default itCall;

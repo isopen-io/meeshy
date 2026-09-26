@@ -60,6 +60,11 @@ const frCall = {
   'call.spotlight.back': 'Revenir à la grille',
   'call.remove.named': 'Retirer {name} de l’appel',
   'call.remove.failed': 'Impossible de retirer ce participant',
+  'calls.detail.title': 'Détails de l’appel',
+  'calls.detail.type': 'Type',
+  'calls.detail.date': 'Date',
+  'calls.detail.duration': 'Durée',
+  'calls.detail.open': 'Ouvrir la conversation',
 } as const;
 
 export default frCall;

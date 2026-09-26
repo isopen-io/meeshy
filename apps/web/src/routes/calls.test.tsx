@@ -33,7 +33,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
 });
 
 const row = (overrides: Partial<CallRecord> = {}, language: 'fr' | 'en' = 'fr') =>
-  renderToStaticMarkup(<CallRow language={language} record={record(overrides)} now={NOW} />);
+  renderToStaticMarkup(<CallRow language={language} record={record(overrides)} now={NOW} onOpen={noop} />);
 
 describe('l’en-tête et le filtre', () => {
   test('un retour NOMMÉ et le titre « Appels »', () => {
@@ -51,9 +51,9 @@ describe('l’en-tête et le filtre', () => {
 });
 
 describe('une ligne du journal', () => {
-  test('ouvre le fil de SA conversation', () => {
-    expect(row()).toContain('href="/c/c-amina"');
-    expect(row({ conversationId: 'c-annonces' })).toContain('href="/c/c-annonces"');
+  test('ouvre la FICHE de l’appel, comme iOS, et non plus le fil (#6383)', () => {
+    expect(row()).toMatch(/<button[^>]*data-call-row/);
+    expect(row()).not.toContain('href=');
   });
 
   test('manqué, reçu et émis se distinguent par le GLYPHE et par le LIBELLÉ, pas par la couleur seule', () => {
@@ -89,11 +89,11 @@ describe('une ligne du journal', () => {
     expect(row({ peer: null })).toContain('Inconnu');
   });
 
-  test('« Rappeler » rappelle du même type que l’appel d’origine, hors du lien de la ligne', () => {
+  test('« Rappeler » rappelle du même type que l’appel d’origine, hors du bouton de la ligne', () => {
     const audio = row({ direction: 'missed' });
     expect(audio).toContain('data-call-back="audio"');
     expect(audio).toContain('aria-label="Rappeler Amina Diallo"');
-    expect(audio.indexOf('data-call-back')).toBeGreaterThan(audio.indexOf('</a>'));
+    expect(audio.indexOf('data-call-back')).toBeGreaterThan(audio.indexOf('data-call-name'));
     expect(row({ isVideo: true })).toContain('data-call-back="video"');
   });
 
