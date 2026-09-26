@@ -424,13 +424,15 @@ struct SignupView: View {
                 field: .password,
                 label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
             ) {
-                SecureField(
+                MeeshyPasswordField(
                     String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                    text: $viewModel.form.password
+                    text: $viewModel.form.password,
+                    role: .new,
+                    focus: $focusedField,
+                    equals: .password,
+                    eyeColor: theme.textMuted
                 )
-                .textContentType(.newPassword)
                 .submitLabel(.go)
-                .focused($focusedField, equals: .password)
                 .onSubmit { attemptSubmit() }
                 .foregroundColor(theme.textPrimary)
             }

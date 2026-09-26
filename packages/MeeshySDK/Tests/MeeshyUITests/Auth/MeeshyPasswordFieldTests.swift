@@ -9,8 +9,12 @@ import UIKit
 @MainActor
 final class MeeshyPasswordFieldTests: XCTestCase {
 
-    private static let french = Locale(identifier: "fr")
-    private static let english = Locale(identifier: "en")
+    private static var french: Bundle { lproj("fr") }
+    private static var english: Bundle { lproj("en") }
+
+    private static func lproj(_ language: String) -> Bundle {
+        Bundle.module.path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:)) ?? .module
+    }
 
     // MARK: - Loi de la bascule
 
@@ -40,18 +44,18 @@ final class MeeshyPasswordFieldTests: XCTestCase {
     func test_reveal_accessibility_masked_offersToShowAndAnnouncesHidden() {
         let reveal = MeeshyPasswordReveal()
 
-        XCTAssertEqual(reveal.toggleLabel(in: Self.french), "Afficher le mot de passe")
-        XCTAssertEqual(reveal.stateValue(in: Self.french), "Masqué")
-        XCTAssertEqual(reveal.toggleLabel(in: Self.english), "Show password")
+        XCTAssertEqual(reveal.toggleLabel(bundle: Self.french), "Afficher le mot de passe")
+        XCTAssertEqual(reveal.stateValue(bundle: Self.french), "Masqué")
+        XCTAssertEqual(reveal.toggleLabel(bundle: Self.english), "Show password")
     }
 
     func test_reveal_accessibility_revealed_offersToHideAndAnnouncesShown() {
         var reveal = MeeshyPasswordReveal()
         reveal.toggle()
 
-        XCTAssertEqual(reveal.toggleLabel(in: Self.french), "Masquer le mot de passe")
-        XCTAssertEqual(reveal.stateValue(in: Self.french), "Affiché")
-        XCTAssertEqual(reveal.toggleLabel(in: Self.english), "Hide password")
+        XCTAssertEqual(reveal.toggleLabel(bundle: Self.french), "Masquer le mot de passe")
+        XCTAssertEqual(reveal.stateValue(bundle: Self.french), "Affiché")
+        XCTAssertEqual(reveal.toggleLabel(bundle: Self.english), "Hide password")
     }
 
     // MARK: - AutoFill
@@ -87,12 +91,12 @@ final class MeeshyPasswordFieldTests: XCTestCase {
     // MARK: - Garde de source : aucun SecureField nu hors du composant
 
     func test_sourceGuard_noBareSecureField_outsideTheComponent() throws {
-        let offenders = try Self.guardedRoots.flatMap { root in
-            try Self.swiftFiles(under: root).filter { url in
-                url.standardizedFileURL != Self.componentFile.standardizedFileURL
-                    && Self.declaresSecureField(try String(contentsOf: url, encoding: .utf8))
-            }.map { $0.path.replacingOccurrences(of: Self.repoRoot.path + "/", with: "") }
-        }
+        let component = Self.componentFile.standardizedFileURL
+        let files = try Self.guardedRoots.flatMap { try Self.swiftFiles(under: $0) }
+            .filter { $0.standardizedFileURL != component }
+        let offenders = try files
+            .filter { Self.declaresSecureField(try String(contentsOf: $0, encoding: .utf8)) }
+            .map { $0.path.replacingOccurrences(of: Self.repoRoot.path + "/", with: "") }
 
         XCTAssertEqual(offenders, [], "Un champ de mot de passe passe par MeeshyPasswordField (#8054) : \(offenders)")
     }
