@@ -26,6 +26,7 @@ const esCall = {
   'call.camera.on': 'Activar cámara',
   'call.camera.off': 'Desactivar cámara',
   'call.camera.switch': 'Cambiar de cámara',
+  'call.video.swap': 'Intercambiar vídeos',
   'call.camera.peerOff': 'Cámara desactivada',
   'call.video.connecting': 'Conectando vídeo…',
   'call.hangup': 'Colgar',

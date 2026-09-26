@@ -38,8 +38,8 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
   const label = statusKey === null ? formatCallClock(elapsedSeconds(call, now)) : translate(language, statusKey);
   return (
     <div
-      className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.5rem)] z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 pl-1 pr-1 shadow-lg"
-      style={{ background: PILL_BG, color: '#fff' }}
+      className="fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 pl-1 pr-1 shadow-lg"
+      style={{ background: PILL_BG, color: '#fff', top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
       data-call-pill-bar=""
     >
       <button type="button" onClick={callActions.expand} aria-label={translate(language, 'call.expand')} className="flex min-h-11 items-center gap-2 rounded-full px-2">
@@ -71,8 +71,8 @@ function WaitingBanner({ waiting }: { readonly waiting: WaitingCall }) {
     <div
       role="alertdialog"
       aria-label={translate(language, 'call.waiting.from', { caller: waiting.callerName })}
-      className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
-      style={{ background: PILL_BG, color: '#fff' }}
+      className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
+      style={{ background: PILL_BG, color: '#fff', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
       data-call-waiting=""
     >
       <Avatar initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
@@ -99,7 +99,7 @@ function Notice() {
     return () => clearTimeout(handle);
   }, []);
   return (
-    <div role="status" className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: '#fff' }}>
+    <div role="status" className="fixed inset-x-0 z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: '#fff', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}>
       {translate(language, 'call.notice.alreadyInCall')}
     </div>
   );

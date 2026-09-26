@@ -7,6 +7,7 @@ import { CALLS_GLYPHS } from './glyphs-calls';
 import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
 import { callActions } from '@/lib/calls/call-actions';
+import { rememberCallIdentity } from '@/lib/calls/call-notice';
 import { callStore, liveCallIn, type CallMedia } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -39,6 +40,10 @@ export function ThreadCallButton({
   /* La passerelle refuse l'appel à un invité anonyme (`CallEventsHandler.ts`,
      `allowAnonymous: false`) : un bouton qui échouerait à coup sûr ne s'affiche pas. */
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+
+  useEffect(() => {
+    rememberCallIdentity(conversationId, { title, avatar, isGroup: group });
+  }, [conversationId, title, avatar, group]);
 
   useEffect(() => {
     if (!open) return undefined;

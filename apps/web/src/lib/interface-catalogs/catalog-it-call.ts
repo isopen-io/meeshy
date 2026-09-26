@@ -26,6 +26,7 @@ const itCall = {
   'call.camera.on': 'Attiva fotocamera',
   'call.camera.off': 'Disattiva fotocamera',
   'call.camera.switch': 'Cambia fotocamera',
+  'call.video.swap': 'Scambia i video',
   'call.camera.peerOff': 'Fotocamera disattivata',
   'call.video.connecting': 'Connessione video…',
   'call.hangup': 'Riaggancia',

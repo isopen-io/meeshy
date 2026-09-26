@@ -218,9 +218,10 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
           {cornerOn ? (
             <button
               type="button"
-              aria-label={t('call.camera.switch')}
+              aria-label={t('call.video.swap')}
               onClick={() => setSwapped((value) => !value)}
-              className="absolute right-4 top-[calc(env(safe-area-inset-top)+4.5rem)] h-40 w-28 overflow-hidden rounded-card shadow-lg"
+              className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg"
+              style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}
               data-call-corner=""
             >
               <StreamVideo stream={corner} mirrored={!swapped && call.facing === 'user'} className="size-full" />

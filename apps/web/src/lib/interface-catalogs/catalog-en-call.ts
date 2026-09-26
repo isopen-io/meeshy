@@ -26,6 +26,7 @@ const enCall = {
   'call.camera.on': 'Turn camera on',
   'call.camera.off': 'Turn camera off',
   'call.camera.switch': 'Switch camera',
+  'call.video.swap': 'Swap videos',
   'call.camera.peerOff': 'Camera off',
   'call.video.connecting': 'Connecting video…',
   'call.hangup': 'Hang up',

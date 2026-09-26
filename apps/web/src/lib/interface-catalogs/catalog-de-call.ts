@@ -26,6 +26,7 @@ const deCall = {
   'call.camera.on': 'Kamera einschalten',
   'call.camera.off': 'Kamera ausschalten',
   'call.camera.switch': 'Kamera wechseln',
+  'call.video.swap': 'Videos tauschen',
   'call.camera.peerOff': 'Kamera aus',
   'call.video.connecting': 'Video wird verbunden…',
   'call.hangup': 'Auflegen',

@@ -26,6 +26,7 @@ const frCall = {
   'call.camera.on': 'Activer la caméra',
   'call.camera.off': 'Couper la caméra',
   'call.camera.switch': 'Changer de caméra',
+  'call.video.swap': 'Inverser les vidéos',
   'call.camera.peerOff': 'Caméra désactivée',
   'call.video.connecting': 'Connexion vidéo…',
   'call.hangup': 'Raccrocher',

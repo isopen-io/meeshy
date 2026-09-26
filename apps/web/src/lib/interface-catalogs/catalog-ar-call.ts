@@ -26,6 +26,7 @@ const arCall = {
   'call.camera.on': 'تشغيل الكاميرا',
   'call.camera.off': 'إيقاف الكاميرا',
   'call.camera.switch': 'تبديل الكاميرا',
+  'call.video.swap': 'تبديل مقاطع الفيديو',
   'call.camera.peerOff': 'الكاميرا متوقفة',
   'call.video.connecting': 'جارٍ توصيل الفيديو…',
   'call.hangup': 'إنهاء المكالمة',

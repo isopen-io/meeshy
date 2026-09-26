@@ -26,6 +26,7 @@ const ptCall = {
   'call.camera.on': 'Ativar câmara',
   'call.camera.off': 'Desativar câmara',
   'call.camera.switch': 'Trocar de câmara',
+  'call.video.swap': 'Trocar os vídeos',
   'call.camera.peerOff': 'Câmara desativada',
   'call.video.connecting': 'A ligar o vídeo…',
   'call.hangup': 'Desligar',

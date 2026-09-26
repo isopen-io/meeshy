@@ -89,10 +89,12 @@ describe('une ligne du journal', () => {
     expect(row({ peer: null })).toContain('Inconnu');
   });
 
-  test('« Rappeler » ne s’affiche pas : le web n’a pas de pile d’appel (loi du contrôle)', () => {
-    const html = row({ direction: 'missed' });
-    expect(html).not.toContain('<button');
-    expect(html).not.toMatch(/Rappeler/);
+  test('« Rappeler » rappelle du même type que l’appel d’origine, hors du lien de la ligne', () => {
+    const audio = row({ direction: 'missed' });
+    expect(audio).toContain('data-call-back="audio"');
+    expect(audio).toContain('aria-label="Rappeler Amina Diallo"');
+    expect(audio.indexOf('data-call-back')).toBeGreaterThan(audio.indexOf('</a>'));
+    expect(row({ isVideo: true })).toContain('data-call-back="video"');
   });
 
   test('en anglais, l’annonce est anglaise', async () => {
