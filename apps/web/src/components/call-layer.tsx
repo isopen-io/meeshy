@@ -12,13 +12,22 @@ import { callStore } from '@/lib/calls/call-store';
  */
 const loadOverlay = () => import('./call-overlay').then((module) => ({ default: module.CallOverlay }));
 const CallOverlay = lazy(loadOverlay);
+/* « Reprendre l'appel » (#3586) — son propre chunk, chargé APRÈS la première
+   peinture : la coquille n'en paie que l'`import()`. */
+const CallResumeBanner = lazy(() => import('./call-resume-banner'));
 
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
-  if (!active) return null;
   return (
-    <Suspense fallback={null}>
-      <CallOverlay />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <CallResumeBanner />
+      </Suspense>
+      {active ? (
+        <Suspense fallback={null}>
+          <CallOverlay />
+        </Suspense>
+      ) : null}
+    </>
   );
 }
