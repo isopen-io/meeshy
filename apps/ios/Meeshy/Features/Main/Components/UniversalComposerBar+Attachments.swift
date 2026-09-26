@@ -263,6 +263,12 @@ extension UniversalComposerBar {
                 label: String(localized: "composer.attach.file", defaultValue: "Fichier", bundle: .main)
             ) { fire { onFilePicker?() } })
         }
+        if onContactPicker != nil {
+            tiles.append(CarouselTile(
+                id: "contact", icon: "person.crop.circle.fill", color: "5B8DEF",
+                label: String(localized: "composer.attach.contact", defaultValue: "Contact", bundle: .main)
+            ) { fire { onContactPicker?() } })
+        }
         if showLocation && onLocationRequest != nil {
             tiles.append(CarouselTile(
                 id: "location", icon: "location.fill", color: "2ECC71",

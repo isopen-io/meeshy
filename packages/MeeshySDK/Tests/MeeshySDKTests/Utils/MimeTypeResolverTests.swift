@@ -22,6 +22,15 @@ struct MimeTypeResolverTests {
         #expect(MimeTypeResolver.mimeType(forExtension: "tif") == "image/tiff")
     }
 
+    // MARK: - Carte de visite (#8101)
+
+    @Test("un .vcf importé se lit text/vcard, et l'inverse rend .vcf")
+    func vcard_extensions() {
+        #expect(MimeTypeResolver.mimeType(forExtension: "vcf") == "text/vcard")
+        #expect(MimeTypeResolver.mimeType(forExtension: "VCARD") == "text/vcard")
+        #expect(MimeTypeResolver.preferredExtension(for: "text/vcard") == "vcf")
+    }
+
     // MARK: - Video extensions
 
     @Test("video extensions resolve to video/* mime types")
