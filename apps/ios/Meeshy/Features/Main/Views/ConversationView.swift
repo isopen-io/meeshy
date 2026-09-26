@@ -690,16 +690,10 @@ struct ConversationView: View {
                 .conversationListObject(conversationListViewModel)
                 .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
-            .sheet(isPresented: $composerState.showConversationInfo) {
-                if let conv = liveConversation {
-                    ConversationInfoSheet(
-                        conversation: conv,
-                        accentColor: accentColor,
-                        messages: viewModel.messages,
-                        onConversationUpdated: { conversationOverride = $0 }
-                    )
-                }
-            }
+            .modifier(ConversationInfoSheetLayer(
+                isPresented: $composerState.showConversationInfo, scrollState: $scrollState,
+                conversation: liveConversation, accentColor: accentColor, messages: viewModel.messages,
+                router: router, onConversationUpdated: { conversationOverride = $0 }))
             .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }

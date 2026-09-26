@@ -1084,9 +1084,8 @@ struct ConversationListView: View {
             .sheet(item: $sheetTargets.info) { conversation in
                 ConversationInfoSheet(
                     conversation: conversation,
-                    accentColor: conversation.accentColor,
-                    messages: []
-                )
+                    accentColor: conversation.accentColor, messages: [],
+                    mediaHubActions: ConversationMediaHubActions(goToMessage: { sheetTargets.info = nil; router.navigateToConversation(conversation, highlightMessageId: $0) }))
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
