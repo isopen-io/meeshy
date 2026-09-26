@@ -312,7 +312,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // /api/v1/calls/history/:callId`, effacer une ligne du journal d'appels,
 // GÉNÉRÉE depuis `route-manifest.json`. Le lot ne livre que le web ; l'app
 // iOS n'efface pas encore une ligne de son journal. Valeur MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 278;
+// 278 → 279 (#8051) : `AdminEndpoint.usersByUserIdPasswordProposals` — `POST
+// /api/v1/admin/users/:userId/password-proposals`, les mots de passe proposés
+// à un administrateur, GÉNÉRÉE depuis `route-manifest.json` ; seul le web
+// d'administration l'appelle, comme ses voisines `AdminEndpoint`. Valeur
+// MESURÉE le 2026-09-27.
+const BASELINE_DEAD_ENTRIES = 279;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

@@ -379,7 +379,11 @@ export const parseCatalogBlock = (blockLines) => {
 // d'appels ; son client web (`apps/web/src/lib/api/call-history-actions.ts`)
 // écrit l'adresse en littéral, comme tout `apps/web`, jusqu'à #7716. Valeur
 // MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 475;
+// 475 → 476 (#8051) : `admin.usersByUserIdPasswordProposals` — les mots de
+// passe proposés à un administrateur ; son client web
+// (`apps/web/src/lib/api/admin-user-password.ts`) écrit l'adresse en
+// littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27.
+const BASELINE_DEAD_ENTRIES = 476;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
