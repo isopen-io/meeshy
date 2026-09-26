@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ApiResult } from '@/lib/api/http';
 import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email';
+import { takeOnboardingWaiver } from '@/lib/onboarding/landing-waiver';
 import type { AppHandoff } from '@/lib/links/app-handoff';
 import { createIntervalClock } from '@/lib/view/interval-clock';
 
@@ -37,6 +38,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  takeOnboardingWaiver();
   window.history.replaceState({}, '', '/auth/verify-email');
 });
 
@@ -92,6 +94,7 @@ function mount(stub: ReturnType<typeof verifyStub>, appHandoff: AppHandoff): HTM
           clock: createIntervalClock(1_000, scheduler),
           now: () => 0,
           appHandoff,
+          arrival: { prefetch: async () => undefined, wait: async () => undefined, reducedMotion: () => true },
         }}
       />,
     );
@@ -118,7 +121,7 @@ describe('VerifyEmailFlow — remise du lien à l’app (#8083)', () => {
     const el = mount(stub, h.handoff);
     await act(async () => {
       h.verdicts[0]?.(false);
-      await Promise.resolve();
+      for (let i = 0; i < 10; i += 1) await Promise.resolve();
     });
     expect(stub.calls).toEqual([{ email: 'neuf@meeshy.example', token: 'tok-1' }]);
     expect(here()).toBe('/');
