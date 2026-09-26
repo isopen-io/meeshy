@@ -183,7 +183,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     }
     const call = live();
     if (call === null || message.callId !== ctx.callId) return;
-    add({ id: message.id, speakerId: userId, speakerName: call.members[userId]?.name || message.speakerName, original: message.text, translated: null, isFinal: message.isFinal, at: message.at, mine: false });
+    add({ id: message.id, speakerId: userId, speakerName: call.members[userId]?.name || message.speakerName, original: message.text, translated: null, isFinal: message.isFinal, at: message.at > 0 ? message.at : ctx.now(), mine: false });
   };
 
   const onTranslated = (payload: unknown): void => {
@@ -191,7 +191,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     const call = live();
     if (decoded === null || call === null || decoded.callId !== ctx.callId || decoded.caption.speakerId === ctx.viewerId()) return;
     const speakerName = decoded.speakerName ?? call.members[decoded.caption.speakerId]?.name ?? '';
-    add({ ...decoded.caption, speakerName, mine: false });
+    add({ ...decoded.caption, speakerName, at: decoded.caption.at > 0 ? decoded.caption.at : ctx.now(), mine: false });
   };
 
   const onActive = (payload: unknown): void => {

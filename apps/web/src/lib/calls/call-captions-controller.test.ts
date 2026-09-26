@@ -120,6 +120,16 @@ describe('recevoir les sous-titres (G1, G2, G4)', () => {
     expect(h.call()?.captions).toEqual([{ id: 'w-peer-1', speakerId: PEER, speakerName: 'Nadia Benali', original: 'Hello everyone', translated: 'Bonjour à tous', isFinal: true, at: 5_000, mine: false }]);
   });
 
+  test('un segment sans heure de capture (un client ancien) se range à l’heure où il arrive, jamais en tête du journal', () => {
+    const h = harness();
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated({ id: 'a', capturedAtMs: 9_000 }));
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated({ id: 'b', capturedAtMs: undefined }));
+    expect(h.call()?.captions.map((caption) => [caption.id, caption.at])).toEqual([
+      ['a', 9_000],
+      ['b', 10_000],
+    ]);
+  });
+
   test('un segment d’un AUTRE appel ou que je prétendrais avoir dit est écarté', () => {
     const h = harness();
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, { ...translated(), callId: 'call-2' });

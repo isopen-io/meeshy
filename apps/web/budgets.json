@@ -189,7 +189,7 @@
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,96 Ko -- les sous-titres d un appel (`lib/calls/call-captions-runtime.ts` : langue du lecteur et nom de l emetteur ; `call-captions-controller.ts` : journal, modes, data channel `transcription`, emission de `call:transcription-segment` et `call:transcription-active` ; `call-speech.ts` : la Web Speech API et sa detection). Charge A LA DEMANDE par `engine-defaults.ts` (`lazyCaptions`) au premier evenement de sous-titres, au premier canal de transcription ou au premier appui sur CC : il ne pese ni sur qui n appelle pas, ni sur un appel ou personne ne sous-titre. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,81 mesures, contre 9,41 avant #8048). La loi pure qu il partage avec le panneau est comptee a part (`call_captions_law`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,96 Ko -- les sous-titres d un appel (`lib/calls/call-captions-runtime.ts` : langue du lecteur et nom de l emetteur ; `call-captions-controller.ts` : journal, modes, data channel `transcription`, emission de `call:transcription-segment` et `call:transcription-active` ; `call-speech.ts` : la Web Speech API et sa detection). Charge A LA DEMANDE par `engine-defaults.ts` (`lazyCaptions`) au premier evenement de sous-titres, au premier canal de transcription ou au premier appui sur CC : il ne pese ni sur qui n appelle pas, ni sur un appel ou personne ne sous-titre. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,84 mesures apres fusion de dev, contre 9,41 avant #8048). La loi pure qu il partage avec le panneau est comptee a part (`call_captions_law`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
     "call_captions_law": {
@@ -206,7 +206,7 @@
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,09 Ko -- le panneau des sous-titres de l ecran d appel (`components/call-captions-panel.tsx` : deux lignes en `aria-live` polite, mode, etat de la transcription, journal deplie). Charge A LA DEMANDE par `call-screen.tsx` des que le mode n est plus `off` : il ne pese pas sur `call_overlay` (6,86 mesures, plafond 7). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,09 Ko -- le panneau des sous-titres de l ecran d appel (`components/call-captions-panel.tsx` : deux lignes en `aria-live` polite, mode, etat de la transcription, journal deplie). Charge A LA DEMANDE par `call-screen.tsx` des que le mode n est plus `off` : il ne pese pas sur `call_overlay` (6,87 mesures, plafond 7). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
     "call_transcript_panel": {
