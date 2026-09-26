@@ -32,6 +32,9 @@ const arVerifyEmail = {
   'verifyEmail.handoff.opened': 'تم فتح الرابط في تطبيق Meeshy.',
   'verifyEmail.handoff.stay': 'المتابعة في المتصفح',
   'verifyEmail.signingIn': 'جارٍ تسجيل الدخول…',
+  'verifyEmail.arrival.title': 'تم تأكيد العنوان!',
+  'verifyEmail.arrival.lead': 'نُجهّز محادثاتك…',
+  'verifyEmail.arrival.status': 'تم تأكيد العنوان — جارٍ تسجيل الدخول…',
   'emailSent.codeOrLink': 'أدخل الرمز المكوّن من 6 أرقام المرسل إلى {email}، أو افتح الرابط في البريد نفسه.',
 };
 
