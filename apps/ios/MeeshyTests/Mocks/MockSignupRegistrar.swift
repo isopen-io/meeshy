@@ -18,20 +18,20 @@ final class MockSignupRegistrar: SignupRegistering {
     // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    var registerResult: Result<Void, Error> = .success(())
+    var registerResult: Result<RegistrationOutcome, Error> = .success(.authenticated)
     private(set) var registerCallCount = 0
     /// La charge EXACTE que le ViewModel a composée — c'est elle que les
     /// témoins de contrat inspectent, pas un état interne.
     private(set) var lastRegisterRequest: RegisterRequest?
 
-    func register(_ request: RegisterRequest) async throws {
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
         registerCallCount += 1
         lastRegisterRequest = request
-        try registerResult.get()
+        return try registerResult.get()
     }
 
     func reset() {
-        registerResult = .success(())
+        registerResult = .success(.authenticated)
         registerCallCount = 0
         lastRegisterRequest = nil
     }

@@ -286,6 +286,17 @@ export const registerRequestSchema = {
     phoneTransferToken: {
       type: 'string',
       description: 'Token proving SMS verification when the phone number is being transferred from another account'
+    },
+    // #8058 — le parrainage voyage AVEC l'inscription : le rattachement se crée
+    // à la création du compte, qu'il soit actif ou non (#8055). Même valeur que
+    // `token` / `sessionKey` de `POST /affiliate/register`.
+    affiliateToken: {
+      type: 'string',
+      description: 'OPTIONAL. Affiliate (referral) token from the invitation link — the referral is recorded when the account is created, active or not. An invalid token never blocks the registration.'
+    },
+    affiliateSessionKey: {
+      type: 'string',
+      description: 'OPTIONAL. Session key returned by POST /affiliate/track-visit, linking the prior visit to this signup.'
     }
   }
 } as const;
@@ -361,14 +372,19 @@ export const verifyEmailRequestSchema = {
 } as const;
 
 /**
- * La branche « vérification requise » de `POST /auth/login` (#8033).
+ * La branche « vérification requise » de `POST /auth/login` (#8033) et de
+ * `POST /auth/register` (#8055) — UNE forme, deux routes.
  *
- * Servie quand l'identifiant est une adresse VALIDE sans compte actif (le
- * compte est alors créé, sans mot de passe) ou celle d'un compte ainsi créé et
- * jamais vérifié (le code est renvoyé). Aucune session, aucun jeton : la
- * session ne s'ouvre qu'à `POST /auth/verify-email`.
+ * Login : l'identifiant est une adresse VALIDE sans compte actif (le compte
+ * est alors créé, sans mot de passe), celle d'un compte ainsi créé et jamais
+ * vérifié, ou le BON mot de passe d'un compte non vérifié et sans numéro (le
+ * code est renvoyé, `accountCreated: false`).
+ * Register : inscription SANS numéro de téléphone — le compte est créé, mot
+ * de passe compris, mais n'est pas actif (`accountCreated: true`).
+ * Aucune session, aucun jeton : la session ne s'ouvre qu'à
+ * `POST /auth/verify-email`.
  */
-export const loginVerificationRequiredProperties = {
+export const verificationRequiredProperties = {
   status: {
     type: 'string',
     enum: ['verification-required'],
@@ -383,6 +399,9 @@ export const loginVerificationRequiredProperties = {
     description: 'The normalized address the code was sent to'
   }
 } as const;
+
+/** Nom historique (#8033) de `verificationRequiredProperties`. */
+export const loginVerificationRequiredProperties = verificationRequiredProperties;
 
 /**
  * Réponse de `POST /auth/verify-email` (#8033) — la vérification OUVRE la

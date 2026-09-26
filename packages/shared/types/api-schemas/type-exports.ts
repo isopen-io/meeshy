@@ -87,6 +87,12 @@ export type LoginVerificationRequiredData = {
 };
 
 /**
+ * `POST /auth/register` SANS numéro de téléphone (#8055) : le compte existe
+ * mais n'est pas actif — même forme que la connexion, `accountCreated: true`.
+ */
+export type RegisterVerificationRequiredData = LoginVerificationRequiredData;
+
+/**
  * `POST /auth/verify-email` (#8033) : la preuve de possession de l'adresse
  * ouvre la session — ou, pour un compte à second facteur, rend le défi.
  */

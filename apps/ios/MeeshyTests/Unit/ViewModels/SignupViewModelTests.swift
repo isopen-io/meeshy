@@ -324,7 +324,7 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.error(for: .email))
         XCTAssertTrue(sut.emailAlreadyRegistered)
 
-        registrar.registerResult = .success(())
+        registrar.registerResult = .success(.authenticated)
         sut.form.email = "autre@example.com"
         let created = await sut.submit()
 
@@ -478,5 +478,50 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertNil(registrar.lastRegisterRequest?.phoneNumber)
         XCTAssertNil(registrar.lastRegisterRequest?.phoneCountryCode)
         XCTAssertEqual(registrar.lastRegisterRequest?.email, "awa@example.com")
+    }
+
+    // MARK: - #8055 — sans numéro, le compte attend son code
+
+    /// « Continuer quand même » crée un compte SANS numéro, qui n'est pas encore
+    /// actif : le ViewModel expose l'adresse à vérifier pour que l'écran
+    /// présente la saisie du code — il ne rentre pas dans l'app.
+    func test_continueWithoutPhone_verificationRequired_exposesThePendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        let pending = PendingEmailVerification(email: "awa@example.com", accountCreated: true)
+        registrar.registerResult = .success(.verificationRequired(pending))
+        _ = await sut.requestSubmit()
+
+        let created = await sut.continueWithoutPhone()
+
+        XCTAssertTrue(created)
+        XCTAssertEqual(sut.pendingVerification, pending)
+        XCTAssertNil(sut.bannerError)
+    }
+
+    /// Avec un numéro, la session est ouverte : rien à vérifier avant d'entrer.
+    func test_requestSubmit_withPhone_authenticated_exposesNoPendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+        registrar.registerResult = .success(.authenticated)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .created)
+        XCTAssertNil(sut.pendingVerification)
+    }
+
+    /// Un nouvel envoi efface l'adresse en attente d'un envoi précédent.
+    func test_submit_clearsAPreviousPendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        await sut.submit()
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+
+        await sut.submit()
+
+        XCTAssertNil(sut.pendingVerification)
     }
 }

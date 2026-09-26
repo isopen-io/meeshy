@@ -88,7 +88,7 @@ const CONTEXTE = { ip: '203.0.113.7', userAgent: 'test', geoData: null, deviceIn
 
 const demarrer = async (options: {
   email: string;
-  door: 'password-login' | 'email-only';
+  door: 'password-login' | 'email-only' | 'proven-password';
   existant?: Row | null;
   cache?: ReturnType<typeof memoire>;
   deviceLocale?: string;
@@ -224,6 +224,59 @@ describe('connexion par mot de passe, compte EXISTANT', () => {
 
     expect(issue).toEqual({ kind: 'verification-required', accountCreated: false, email: 'attente@example.com' });
     expect(update).not.toHaveBeenCalled();
+    expect(mockSendEmailVerification).not.toHaveBeenCalled();
+  });
+});
+
+describe('mot de passe PROUVÉ sur un compte non vérifié et sans numéro (#8055)', () => {
+  it('renvoie un code de VÉRIFICATION neuf, accountCreated false, même si le compte a un mot de passe', async () => {
+    const { issue, create, miseAJour } = await demarrer({
+      email: 'attente@example.com',
+      door: 'proven-password',
+      existant: compteEnAttente({ password: '$2b$12$x' }),
+    });
+    const courriel = mockSendEmailVerification.mock.calls[0]?.[0] as Record<string, string>;
+
+    expect(issue).toEqual({ kind: 'verification-required', accountCreated: false, email: 'attente@example.com' });
+    expect(create).not.toHaveBeenCalled();
+    expect(miseAJour?.emailVerificationCode).toBe(sha256(courriel.verificationCode));
+    expect(miseAJour?.password).toBeUndefined();
+  });
+
+  it('le renvoi est LIMITÉ comme à la connexion : au-delà du quota, aucun e-mail, la réponse reste la même', async () => {
+    const cache = memoire();
+    for (let i = 0; i < ACCOUNT_EMAIL_SENDS_PER_HOUR; i += 1) {
+      await demarrer({ email: 'attente@example.com', door: 'proven-password', existant: compteEnAttente({ password: '$2b$12$x' }), cache });
+    }
+    mockSendEmailVerification.mockClear();
+
+    const { issue, update } = await demarrer({
+      email: 'attente@example.com',
+      door: 'proven-password',
+      existant: compteEnAttente({ password: '$2b$12$x' }),
+      cache,
+    });
+
+    expect(issue).toEqual({ kind: 'verification-required', accountCreated: false, email: 'attente@example.com' });
+    expect(update).not.toHaveBeenCalled();
+    expect(mockSendEmailVerification).not.toHaveBeenCalled();
+  });
+
+  it("ne crée jamais de compte : sans ligne, l'adresse est indisponible", async () => {
+    const { issue, create } = await demarrer({ email: 'absente@example.com', door: 'proven-password' });
+
+    expect(issue).toEqual({ kind: 'unavailable' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('un compte déjà VÉRIFIÉ entre-temps : rien à renvoyer', async () => {
+    const { issue } = await demarrer({
+      email: 'attente@example.com',
+      door: 'proven-password',
+      existant: compteEnAttente({ password: '$2b$12$x', emailVerifiedAt: new Date() }),
+    });
+
+    expect(issue).toEqual({ kind: 'existing-account' });
     expect(mockSendEmailVerification).not.toHaveBeenCalled();
   });
 });

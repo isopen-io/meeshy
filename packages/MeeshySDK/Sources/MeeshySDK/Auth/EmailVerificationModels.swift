@@ -26,6 +26,15 @@ public enum LoginOutcome: Equatable, Sendable {
     case failed
 }
 
+/// Ce que l'inscription a produit (#8055). Sans numéro de téléphone, le compte
+/// existe mais n'est pas ACTIF : la passerelle rend la même branche que la
+/// connexion d'une adresse inconnue — aucune session, un code est parti — et
+/// l'écran présente la saisie du code. Avec un numéro, la session s'ouvre.
+public enum RegistrationOutcome: Equatable, Sendable {
+    case authenticated
+    case verificationRequired(PendingEmailVerification)
+}
+
 public extension LoginResponseData {
     static let verificationRequiredStatus = "verification-required"
 

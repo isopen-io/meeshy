@@ -101,6 +101,12 @@ struct SignupView: View {
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
         .sheet(isPresented: $isShowingPrivacy) { PrivacyPolicyView() }
+        // #8055 — sans numéro, le compte attend son code : même écran que la
+        // connexion (#8035). Le mot de passe est déjà sur le compte, il ne
+        // repart pas ; la vérification ouvre la session et `MeeshyApp` bascule.
+        .sheet(item: $viewModel.pendingVerification) { pending in
+            EmailVerificationView(email: pending.email, accountCreated: pending.accountCreated)
+        }
     }
 
     // MARK: - Chrome
@@ -661,6 +667,8 @@ struct SignupView: View {
             return
         }
         HapticFeedback.success()
+        // Compte créé sans numéro (#8055) : on reste pour la saisie du code.
+        guard viewModel.pendingVerification == nil else { return }
         // IMMÉDIATEMENT : le wizard remplacé s'accordait une seconde de
         // félicitations avant de laisser entrer. Une pause posée sur un
         // succès est une lenteur, donc un bug (CLAUDE.md § roadmap).
