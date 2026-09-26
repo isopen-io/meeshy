@@ -4,8 +4,8 @@ import ptIdentity from './catalog-pt-identity';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
 import ptCall from './catalog-pt-call';
-import ptCallJoin from './catalog-pt-call-join';
 import ptCallShell from './catalog-pt-call-shell';
+import ptCallJoin from './catalog-pt-call-join';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptSignup from './catalog-pt-signup';
 
@@ -200,8 +200,8 @@ const pt = {
   ...ptVerifyEmail,
   ...ptPassword,
   ...ptCall,
-  ...ptCallJoin,
   ...ptCallShell,
+  ...ptCallJoin,
   ...ptCallDevices,
   ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',

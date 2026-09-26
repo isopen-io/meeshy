@@ -4,8 +4,8 @@ import deIdentity from './catalog-de-identity';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
-import deCallJoin from './catalog-de-call-join';
 import deCallShell from './catalog-de-call-shell';
+import deCallJoin from './catalog-de-call-join';
 import deCallDevices from './catalog-de-call-devices';
 import deSignup from './catalog-de-signup';
 
@@ -196,8 +196,8 @@ const de = {
   ...deVerifyEmail,
   ...dePassword,
   ...deCall,
-  ...deCallJoin,
   ...deCallShell,
+  ...deCallJoin,
   ...deCallDevices,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',

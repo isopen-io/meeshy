@@ -4,8 +4,8 @@ import itIdentity from './catalog-it-identity';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
-import itCallJoin from './catalog-it-call-join';
 import itCallShell from './catalog-it-call-shell';
+import itCallJoin from './catalog-it-call-join';
 import itCallDevices from './catalog-it-call-devices';
 import itSignup from './catalog-it-signup';
 
@@ -196,8 +196,8 @@ const it = {
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
-  ...itCallJoin,
   ...itCallShell,
+  ...itCallJoin,
   ...itCallDevices,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',

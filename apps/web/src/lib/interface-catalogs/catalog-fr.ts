@@ -16,8 +16,8 @@ import frIdentity from './catalog-fr-identity';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
-import frCallJoin from './catalog-fr-call-join';
 import frCallShell from './catalog-fr-call-shell';
+import frCallJoin from './catalog-fr-call-join';
 import frCallDevices from './catalog-fr-call-devices';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
@@ -186,8 +186,8 @@ const fr = {
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
-  ...frCallJoin,
   ...frCallShell,
+  ...frCallJoin,
   ...frCallDevices,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',

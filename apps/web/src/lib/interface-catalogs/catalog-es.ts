@@ -4,8 +4,8 @@ import esIdentity from './catalog-es-identity';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
-import esCallJoin from './catalog-es-call-join';
 import esCallShell from './catalog-es-call-shell';
+import esCallJoin from './catalog-es-call-join';
 import esCallDevices from './catalog-es-call-devices';
 import esSignup from './catalog-es-signup';
 
@@ -196,8 +196,8 @@ const es = {
   ...esVerifyEmail,
   ...esPassword,
   ...esCall,
-  ...esCallJoin,
   ...esCallShell,
+  ...esCallJoin,
   ...esCallDevices,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
