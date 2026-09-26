@@ -25,6 +25,8 @@ final class ScreenShareService: ScreenShareServiceProviding {
     private let server = ScreenShareFrameServer()
     private var observers: [ScreenShareDarwinObserver] = []
 
+    nonisolated deinit {}
+
     func startListening() -> Bool {
         guard observers.isEmpty else { return true }
         guard let path = ScreenShareIPC.socketURL()?.path, server.start(path: path) else { return false }
