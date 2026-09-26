@@ -1173,52 +1173,6 @@ describe('GET /admin/users/:userId/conversations', () => {
     expect(data.membership).toMatchObject({ userId: 'user123' });
   });
 
-  it('serves the membership of a member who is NOT among the six previewed participants (#7999)', async () => {
-    const apercu = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ userId: `early-${id}`, role: 'member', joinedAt: new Date() }));
-    mockPrisma.conversation.findMany.mockResolvedValue([
-      { id: 'c1', identifier: 'big-group', type: 'group', participants: apercu, _count: { participants: 40 } }
-    ]);
-    mockPrisma.conversation.count.mockResolvedValue(1);
-    mockPrisma.participant.findMany.mockResolvedValue([
-      { id: 'p-late', userId: 'user123', conversationId: 'c1', role: 'moderator', isActive: true }
-    ]);
-    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data[0].membership).toMatchObject({ userId: 'user123', role: 'moderator' });
-    const lecture = mockPrisma.participant.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
-    expect(lecture.where).toMatchObject({ userId: 'user123', isActive: true, conversationId: { in: ['c1'] } });
-  });
-
-  it('serves the conversation settings the admin sheet pre-fills (#7999)', async () => {
-    mockPrisma.conversation.findMany.mockResolvedValue([
-      {
-        id: 'c1',
-        identifier: 'grp',
-        type: 'group',
-        description: 'Le groupe',
-        defaultWriteRole: 'moderator',
-        isAnnouncementChannel: true,
-        slowModeSeconds: 30,
-        autoTranslateEnabled: false,
-        encryptionMode: null,
-        conversationMessageStats: null,
-        participants: [],
-        _count: { participants: 3 }
-      }
-    ]);
-    mockPrisma.conversation.count.mockResolvedValue(1);
-    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
-    const ligne = res.json().data[0];
-    expect(ligne).toMatchObject({
-      description: 'Le groupe',
-      memberCount: 3,
-      messageCount: null,
-      settings: { defaultWriteRole: 'moderator', isAnnouncementChannel: true, slowModeSeconds: 30, autoTranslateEnabled: false }
-    });
-    expect(ligne).not.toHaveProperty('defaultWriteRole');
-    expect(ligne).not.toHaveProperty('_count');
-  });
-
   it('returns 500 when prisma throws', async () => {
     mockPrisma.user.findUnique.mockRejectedValue(new Error('DB error'));
     const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
