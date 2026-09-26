@@ -641,6 +641,8 @@ final class MessageListViewController: UIViewController {
     /// La pill de jour suit la même règle en rangée plate ; Bulles :
     /// comportement historique, la pilule suit le défilement.
     private var isChromeHiddenForScroll = false
+    /// Le clavier part D'ABORD (#8000) — `KeyboardFirstScroll.swift`.
+    private let keyboardFirst = KeyboardFirstScrollGate()
     /// Offset d'arrivée de la décélération en cours (`nil` hors décélération).
     var decelerationTargetOffsetY: CGFloat?
 
@@ -2975,6 +2977,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         let frameHeight = scrollView.frame.height
 
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
+        keyboardFirst.noteScroll(offsetY: offset, isTracking: scrollView.isTracking)
         // Chrome (boutons, composeur, bulle « retour en bas », pilule) :
         // caché tant que le doigt est posé, puis tant que la décélération est
         // LOIN de son offset d'arrivée ; il revient « quand on s'approche de
@@ -2984,7 +2987,7 @@ extension MessageListViewController: UICollectionViewDelegate {
             isTracking: scrollView.isTracking,
             isDecelerating: scrollView.isDecelerating,
             remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y }
-        ))
+        ) && keyboardFirst.chromeMayCollapse)
 
         // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
         // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
@@ -3114,6 +3117,7 @@ extension MessageListViewController: UICollectionViewDelegate {
     /// jamais par-dessus un geste.
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         scrollSettleTarget = nil
+        keyboardFirst.gestureBegan(offsetY: scrollView.contentOffset.y)
     }
 
     /// **Adopter ce que le fil MESURE** (#4041) — à la POSE uniquement.

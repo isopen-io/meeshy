@@ -1985,14 +1985,13 @@ struct ConversationView: View {
             .animation(.easeInOut, value: viewModel.error)
 
             if scrollState.isNearBottom == false || viewModel.isSearchingQuotedMessage {
-                // Bulle « retour en bas » : elle disparaît VERS LE BAS (bord le
-                // plus proche) en fondant pendant le défilement et en revient
-                // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
-                // du bas) suivent la même direction.
+                // Bulle « retour en bas » : elle NE suit PAS le repli du
+                // défilement (#8002, directive porteur 2026-09-26) — c'est
+                // pendant qu'on remonte qu'on la cherche. Seules ses propres
+                // entrées/sorties (proximité du bas) la font glisser.
                 ConversationTypingRosterHost(store: viewModel.stateStore) { typing in
                     VStack { Spacer(); HStack { Spacer(); scrollToBottomButton(typing: typing).padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
                 }
-                    .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
