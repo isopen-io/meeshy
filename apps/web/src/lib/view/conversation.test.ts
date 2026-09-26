@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { avatarOf, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
+import { avatarOf, initialsOf, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
 import type { Conversation, Message, Participant } from '@/lib/api/types';
 
 const NOW = Date.parse('2026-09-07T12:00:00.000Z');
@@ -280,5 +280,35 @@ describe('participantAvatarOf — la loi partagée sur un participant seul (#697
 
   test('participant ABSENT ⇒ `undefined`', () => {
     expect(participantAvatarOf(undefined)).toBeUndefined();
+  });
+});
+
+describe('initialsOf — des LETTRES, jamais la ponctuation d’un nom de carnet (#8131, #8143)', () => {
+  test('« Théo (foot) » donne « TF », jamais « T( »', () => {
+    expect(initialsOf('Théo (foot)')).toBe('TF');
+  });
+
+  test('la ponctuation, les emojis et les chiffres autour des mots sont sautés', () => {
+    expect(initialsOf('« Maman » ❤️')).toBe('MA');
+    expect(initialsOf('Nadia 🎉 - Boulot')).toBe('NB');
+    expect(initialsOf('(Théo)')).toBe('TH');
+    expect(initialsOf('.Zoé 2024')).toBe('ZO');
+  });
+
+  test('un mot seul garde ses deux premières lettres, deux mots leurs initiales', () => {
+    expect(initialsOf('Alice')).toBe('AL');
+    expect(initialsOf('Fatou Bâ')).toBe('FB');
+  });
+
+  test('les écritures non latines restent des lettres', () => {
+    expect(initialsOf('سارة أحمد')).toBe('سأ');
+    expect(initialsOf('王小明')).toBe('王小');
+    expect(initialsOf('élodie écrit')).toBe('ÉÉ');
+  });
+
+  test('un nom sans aucune lettre rend « ? », jamais un signe', () => {
+    expect(initialsOf('')).toBe('?');
+    expect(initialsOf('   ')).toBe('?');
+    expect(initialsOf('(🎉) !!')).toBe('?');
   });
 });

@@ -7,6 +7,7 @@ import type { ConversationCard } from '@meeshy/shared/types/conversation-card';
 
 import { conversationCardQueryKey } from '@/lib/api/conversation-card';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -240,7 +241,10 @@ describe('ConversationLinkCard — actions', () => {
     const { host, calls } = await mount({
       target: SHARE,
       seed: member,
-      replies: { 'POST /api/v1/conversations/c-beta/leave': { ok: true, data: { conversationId: 'c-beta' } } },
+      replies: {
+        'POST /api/v1/conversations/c-beta/leave': { ok: true, data: { conversationId: 'c-beta' } },
+        'GET /api/v1/links/mshy_beta/card': { ok: true, data: card() },
+      },
     });
     await click(byText(host, 'Leave'));
     expect(calls().some((call) => call.method === 'POST')).toBe(false);
@@ -250,5 +254,150 @@ describe('ConversationLinkCard — actions', () => {
     await click(confirm);
     expect(calls().some((call) => call.method === 'POST' && call.path === '/api/v1/conversations/c-beta/leave')).toBe(true);
     expect(buttons(host)).toEqual(['Join']);
+  });
+});
+
+/**
+ * **LES PORTRAITS DE LA CARTE (#8137).** La passerelle sert `inviter.avatarUrl`,
+ * `avatarUrl` et `bannerUrl` comme les autres portraits : une CLÉ de stockage
+ * (`avatars/user/<id>.jpg`). Posée telle quelle, elle se résolvait contre le
+ * CHEMIN du document et peignait une image brisée. La carte passe par la même
+ * résolution que tous les avatars (`attachmentSrc`), et une image qui échoue
+ * cède la place aux initiales — jamais l'icône brisée du navigateur.
+ */
+describe('ConversationLinkCard — portraits', () => {
+  const INVITER_KEY = 'avatars/user/68f2a81417a557e8ce4ddfc1.jpg';
+
+  test('l’avatar de l’inviteur passe par la route de flux, jamais la clé nue', async () => {
+    const { host } = await mount({
+      target: SHARE,
+      seed: card({ inviter: { displayName: 'Alice Martin', username: 'alice', avatarUrl: INVITER_KEY } }),
+    });
+    const img = host.querySelector('[data-conversation-card-invite] img');
+    expect(img?.getAttribute('src')).toBe(attachmentSrc(INVITER_KEY));
+    expect(img?.getAttribute('src')).toContain('/api/v1/attachments/file/');
+  });
+
+  test('l’avatar et la bannière du groupe passent par la même résolution', async () => {
+    const { host } = await mount({
+      target: SHARE,
+      seed: card({ avatarUrl: 'avatars/conversation/c1.jpg', bannerUrl: 'banners/conversation/c1.jpg' }),
+    });
+    const images = [...host.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    expect(images).toContain(attachmentSrc('avatars/conversation/c1.jpg'));
+    const banner = host.querySelector('[data-conversation-card-banner] img');
+    expect(banner?.getAttribute('src')).toBe(attachmentSrc('banners/conversation/c1.jpg'));
+    await act(async () => {
+      banner?.dispatchEvent(new Event('error'));
+    });
+    expect(host.querySelector('[data-conversation-card-banner]')).not.toBeNull();
+    expect(host.querySelector('[data-conversation-card-banner] img')).toBeNull();
+  });
+
+  test('une image qui échoue cède la place aux initiales — jamais une image brisée', async () => {
+    const { host } = await mount({
+      target: SHARE,
+      seed: card({ inviter: { displayName: 'Théo (foot)', username: 'theo', avatarUrl: INVITER_KEY } }),
+    });
+    const img = host.querySelector('[data-conversation-card-invite] img');
+    expect(img).not.toBeNull();
+    await act(async () => {
+      img?.dispatchEvent(new Event('error'));
+    });
+    const invite = host.querySelector('[data-conversation-card-invite]');
+    expect(invite?.querySelector('img')).toBeNull();
+    expect(invite?.querySelector('[data-portrait-initials]')?.textContent).toBe('TF');
+  });
+});
+
+/**
+ * **DEUX CARTES, UNE CONVERSATION (#8138).** Un même fil peut porter la carte
+ * d'un lien de PARTAGE et celle du lien DIRECT d'une même conversation. Le
+ * geste de l'une changeait sa seule clé de cache : l'autre restait « Private
+ * conversation » après une jonction, « Leave | Open » après un départ. Le geste
+ * relit désormais toutes les cartes de la conversation.
+ */
+describe('ConversationLinkCard — les cartes d’une même conversation suivent le geste', () => {
+  const memberCard = (overrides: Partial<ConversationCard> = {}) =>
+    card({
+      conversationId: 'c-beta',
+      stats: { memberCount: 8, onlineCount: null, messageCount: 42, languages: ['fr', 'en'] },
+      viewer: { isMember: true, canJoin: false, requiresAccount: false, canJoinAnonymously: false },
+      ...overrides,
+    });
+
+  const directMember = (): ConversationCard => ({ ...memberCard(), kind: 'direct', link: null, inviter: null, inviteMessage: null });
+
+  const mountBoth = async (params: {
+    readonly share: ConversationCard | null;
+    readonly direct: ConversationCard | null;
+    readonly replies: Readonly<Record<string, Reply>>;
+  }) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(conversationCardQueryKey(SHARE), params.share);
+    client.setQueryData(conversationCardQueryKey(DIRECT), params.direct);
+    const { deps, calls } = transportOf(params.replies);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted.push({ root, host, client });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <div data-slot="share">
+            <ConversationLinkCard target={SHARE} deps={deps} language="en" signedIn accountLanguage="fr" />
+          </div>
+          <div data-slot="direct">
+            <ConversationLinkCard target={DIRECT} deps={deps} language="en" signedIn accountLanguage="fr" />
+          </div>
+        </QueryClientProvider>,
+      );
+    });
+    await settle();
+    const slot = (name: string): HTMLElement => {
+      const element = host.querySelector<HTMLElement>('[data-slot="' + name + '"]');
+      if (element === null) throw new Error('emplacement absent');
+      return element;
+    };
+    return { share: () => slot('share'), direct: () => slot('direct'), calls };
+  };
+
+  test('rejoindre par la carte de partage fait passer la carte directe « privée » à « membre »', async () => {
+    const { share, direct } = await mountBoth({
+      share: card(),
+      direct: null,
+      replies: {
+        'POST /api/v1/links/mshy_beta/members': { ok: true, data: { conversationId: 'c-beta' } },
+        'GET /api/v1/conversations/c-beta/card': { ok: true, data: directMember() },
+        'GET /api/v1/links/mshy_beta/card': { ok: true, data: memberCard() },
+      },
+    });
+    expect(direct().querySelector('[data-conversation-card="private"]')).not.toBeNull();
+    await click(byText(share(), 'Join'));
+    await settle();
+    expect(direct().querySelector('[data-conversation-card="member"]')).not.toBeNull();
+    expect(buttons(direct())).toEqual(['Leave', 'Open']);
+    expect(direct().textContent).toContain('8 members');
+  });
+
+  test('quitter par la carte directe remet la carte de partage à « Join »', async () => {
+    const { share, direct } = await mountBoth({
+      share: memberCard(),
+      direct: directMember(),
+      replies: {
+        'POST /api/v1/conversations/c-beta/leave': { ok: true, data: { conversationId: 'c-beta' } },
+        'GET /api/v1/links/mshy_beta/card': { ok: true, data: card() },
+        'GET /api/v1/conversations/c-beta/card': { ok: false, status: 404, error: 'not found' },
+      },
+    });
+    expect(buttons(share())).toEqual(['Leave', 'Open']);
+    await click(byText(direct(), 'Leave'));
+    const dialog = document.querySelector('[data-confirm-dialog="conversation-card-leave"]');
+    const confirm = [...(dialog?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Leave');
+    await click(confirm);
+    await settle();
+    expect(buttons(share())).toEqual(['Join']);
+    expect(share().textContent).toContain('7 members');
+    expect(direct().querySelector('[data-conversation-card="private"]')).not.toBeNull();
   });
 });
