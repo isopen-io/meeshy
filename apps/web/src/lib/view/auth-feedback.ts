@@ -1,4 +1,5 @@
 import type { ApiFailure, ApiResult } from '../api/http';
+import { verificationOpensSession, type VerifyEmailData } from '../api/verify-email';
 
 /**
  * LE PLACEMENT D'UN REFUS DE CONNEXION / D'INSCRIPTION (#5555, E5) — pur,
@@ -255,10 +256,11 @@ export function placeMagicLinkValidationFailure(failure: ApiFailure): MagicLinkV
 
 // --- Vérification d'e-mail (T-verify, miroir EmailVerificationView.swift) --
 
-type VerifyEmailData = { readonly message: string; readonly alreadyVerified?: boolean; readonly verifiedAt?: string };
 
 export type VerifyEmailOutcome =
+  | { readonly kind: 'signed-in' }
   | { readonly kind: 'verified' }
+  | { readonly kind: 'rate-limited' }
   | { readonly kind: 'invalid-code' }
   | { readonly kind: 'offline' }
   | { readonly kind: 'failed'; readonly message: string };
@@ -268,12 +270,15 @@ export type VerifyEmailOutcome =
  * (`AuthService.verifyEmail`, aucun champ ne les distingue) — un seul texte,
  * même doctrine que `placeMagicLinkValidationFailure`. La branche
  * `alreadyVerified` (magic-link.ts:349-354) est un SUCCÈS, jamais un refus :
- * l'écran affiche le même overlay de confirmation.
+ * l'écran affiche le même overlay de confirmation. Une réponse qui porte une
+ * SESSION (#8034, contrat #8033) est `signed-in` : l'écran quitte la
+ * vérification pour l'accueil, comme après une connexion.
  */
 export function resolveVerifyEmailOutcome(result: ApiResult<VerifyEmailData>): VerifyEmailOutcome {
-  if (result.ok) return { kind: 'verified' };
+  if (result.ok) return verificationOpensSession(result.data) ? { kind: 'signed-in' } : { kind: 'verified' };
   if (result.status === 0) return { kind: 'offline' };
   if (result.status === 400) return { kind: 'invalid-code' };
+  if (result.status === 429) return { kind: 'rate-limited' };
   return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
 }
 

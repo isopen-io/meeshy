@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
+import ptVerifyEmail from './catalog-pt-verify-email';
 
 import ptMentions from './catalog-pt-mentions';
 import ptStoriesMine from './catalog-pt-stories-mine';
@@ -190,6 +191,7 @@ const pt = {
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
   ...ptIdentity,
+  ...ptVerifyEmail,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',
   'report.body': 'Escolha o motivo da sua denúncia. A nossa equipa de moderação irá recebê-la.',

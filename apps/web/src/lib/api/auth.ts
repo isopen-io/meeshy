@@ -2,6 +2,9 @@ import { httpTransport } from './client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
 import { sessionStore } from './session';
+import { verificationOpensSession, verifyEmailBody, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
+
+export { verificationOpensSession, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
 
 /**
  * LE FLUX DE CONNEXION (#5605, T4) — compose les requêtes EXACTES de
@@ -37,11 +40,32 @@ type LoginTwoFactorData = {
   readonly message: string;
 };
 
-type LoginResponseData = LoginSuccessData | LoginTwoFactorData;
+/**
+ * UN E-MAIL INCONNU À LA CONNEXION DEVIENT UN COMPTE (#8034, contrat #8033) —
+ * la passerelle crée le compte SANS mot de passe ni session et envoie un code
+ * et un lien. `accountCreated:false` : le compte existait, jamais vérifié, et
+ * le code vient d'être renvoyé. AUCUN jeton : la reprise est à l'écran du
+ * code, jamais au magasin.
+ */
+export type LoginVerificationRequiredData = {
+  readonly status: 'verification-required';
+  readonly accountCreated: boolean;
+  readonly email: string;
+};
+
+export type LoginResponseData = LoginSuccessData | LoginTwoFactorData | LoginVerificationRequiredData;
 
 function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorData {
   return (data as LoginTwoFactorData).requires2FA === true;
 }
+
+export function isVerificationRequired(data: LoginResponseData): data is LoginVerificationRequiredData {
+  return (data as LoginVerificationRequiredData).status === 'verification-required';
+}
+
+/** L'horizon d'une session dont la passerelle ne sert pas `expiresIn` — le
+ * défaut de `login.ts` sans « se souvenir de cet appareil ». */
+const DEFAULT_SESSION_SECONDS = 24 * 60 * 60;
 
 /**
  * LA CHARGE EXACTE de `POST /auth/register` (`register.ts:133`,
@@ -138,6 +162,7 @@ export type AuthDeps = {
  * 206-212`).
  */
 function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): void {
+  if (isVerificationRequired(data)) return;
   if (isTwoFactorResponse(data)) {
     store.getState().beginTwoFactor({ user: data.user, twoFactorToken: data.twoFactorToken });
     return;
@@ -158,20 +183,6 @@ export type MagicLinkRequestData = { readonly expiresInSeconds?: number };
 /** `POST /auth/forgot-password` (`password-reset.ts:110-215`) — nominal SANS
  * `data`, erreur interne `{ message }` : aucun champ que ce client consulte. */
 export type ForgotPasswordData = { readonly message?: string } | undefined;
-
-/**
- * `POST /auth/verify-email` (`magic-link.ts:307-364`, `AuthSchemas.verifyEmail`)
- * — CE client n'envoie QUE la branche `code` (le champ à 6 chiffres de
- * `EmailVerificationView`, jamais `token` : la validation par LIEN reste hors
- * tranche, elle vit sur `/auth/magic-link/validate`). `alreadyVerified` +
- * `verifiedAt` distinguent la branche « déjà vérifié » (magic-link.ts:349-354)
- * d'une vérification neuve, sans que ce soit une erreur pour l'appelant.
- */
-export type VerifyEmailData = {
-  readonly message: string;
-  readonly alreadyVerified?: boolean;
-  readonly verifiedAt?: string;
-};
 
 /** `POST /auth/resend-verification` (`magic-link.ts:377-416`) — toujours 200
  * générique, même garde de non-révélation que `forgotPassword`. */
@@ -318,11 +329,24 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return result;
   }
 
-  /** `POST /auth/verify-email` (T-verify) — AUCUNE écriture de magasin : la
-   * session existe déjà, posée par `register()` au moment de l'inscription
-   * (#4264) ; vérifier l'e-mail ne (re)connecte personne. */
-  async function verifyEmail(request: { readonly email: string; readonly code: string }): Promise<ApiResult<VerifyEmailData>> {
-    return transport.request<VerifyEmailData>({ method: 'POST', path: '/api/v1/auth/verify-email', body: request });
+  /** `POST /auth/verify-email` — une réponse qui porte une session l'ÉTABLIT
+   * (#8034), par le même `establish` que la connexion ; sans session (ancienne
+   * passerelle), le magasin reste tel quel. */
+  async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
+    const result = await transport.request<VerifyEmailData>({
+      method: 'POST',
+      path: '/api/v1/auth/verify-email',
+      body: verifyEmailBody(request),
+    });
+    if (!result.ok || !verificationOpensSession(result.data)) return result;
+
+    store.getState().establish({
+      user: result.data.user,
+      token: result.data.token,
+      sessionToken: result.data.sessionToken,
+      expiresIn: result.data.expiresIn ?? DEFAULT_SESSION_SECONDS,
+    });
+    return result;
   }
 
   /** `POST /auth/resend-verification` (T-verify) — même garde de non-révélation
