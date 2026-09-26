@@ -469,7 +469,7 @@ check(
 // ------------------------------------------------------- 7. le second schéma
 await page.close();
 await context.close();
-const light = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+const light = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'fr-FR' });
 const pageLight = await light.newPage();
 await pageLight.goto(`${BASE}/`, { waitUntil: 'load' });
 await pageLight.waitForSelector('[data-row]');
@@ -511,6 +511,7 @@ const touchContext = await browser.newContext({
   hasTouch: true,
   isMobile: true,
   colorScheme: 'dark',
+  locale: 'fr-FR',
 });
 const touchPage = await touchContext.newPage();
 await touchPage.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -580,7 +581,7 @@ await touchContext.close();
  * tombaient hors écran et rien — pas même un défilement, qui REFERME le
  * menu — ne les ramenait.
  */
-const shortContext = await browser.newContext({ viewport: { width: 390, height: 640 }, colorScheme: 'dark' });
+const shortContext = await browser.newContext({ viewport: { width: 390, height: 640 }, colorScheme: 'dark', locale: 'fr-FR' });
 const shortPage = await shortContext.newPage();
 await shortPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await shortPage.waitForSelector('[data-row]');
@@ -634,7 +635,7 @@ await shortContext.close();
  * cellule « soi » (#6150), qui a imposé de reformuler le compte — voir
  * l'invariant lui-même plus bas.
  */
-const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
 const enTetePage = await enTeteContext.newPage();
 await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
@@ -849,7 +850,7 @@ await enTeteContext.close();
  * raison : seul un défilement REÇU COMME UNE INTENTION vaut le geste d'un
  * doigt.
  */
-const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
 const bottomPage = await bottomContext.newPage();
 await bottomPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await bottomPage.waitForSelector('[data-row]');
@@ -956,6 +957,22 @@ for (const scheme of ['light', 'dark']) {
     );
     await callContext.close();
   }
+}
+
+// ------------- 13. le menu parle la langue d'interface du lecteur (#8150)
+{
+  const enContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'en-US' });
+  const enPage = await enContext.newPage();
+  await enPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await enPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
+  await enPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
+  const opened = await enPage.waitForSelector('[role="menu"][aria-label="Conversation actions"]', { timeout: 2000 }).then(() => true, () => false);
+  const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
+  check(
+    JSON.stringify(labels) === JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Archive']),
+    `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
+  );
+  await enContext.close();
 }
 
 await browser.close();

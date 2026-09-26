@@ -6,6 +6,7 @@ import { useRovingMenu } from '@/lib/view/roving-menu';
 import { rowMenuItems, type RowActionId } from '@/lib/view/row-actions';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
+import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -95,19 +96,23 @@ export function RowActions({
   flags,
   unread,
   magnified,
-  call,
+  language,
+  canCall = false,
   onAction,
 }: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
-  /** Présent quand l'appel est permis : le menu ouvre alors sur « Appel vocal » et « Appel vidéo » (#8109). */
-  readonly call?: { readonly language: InterfaceLanguage };
+  /** La langue d'interface du lecteur : chaque libellé du menu la parle (#8150). */
+  readonly language: InterfaceLanguage;
+  /** Vrai quand l'appel est permis : le menu ouvre alors sur « Appel vocal » et « Appel vidéo » (#8109). */
+  readonly canCall?: boolean;
   /** Élue par la bande de focus — seule rangée où le bouton reste visible
    * SANS survol ni focus (`status.magnified` de `LensRow`). */
   readonly magnified: boolean;
   readonly onAction: (id: RowActionId) => void;
 }) {
-  const items = rowMenuItems({ flags, unread, ...(call === undefined ? {} : { call }) });
+  const items = rowMenuItems({ flags, unread, language, canCall });
+  const menuLabel = translate(language, 'rowActions.menu');
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
 
   /**
@@ -198,7 +203,7 @@ export function RowActions({
       <button
         ref={buttonRef}
         type="button"
-        aria-label="Actions de conversation"
+        aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={(event) => {
@@ -264,7 +269,7 @@ export function RowActions({
             <div
               ref={menuRef}
               role="menu"
-              aria-label="Actions de conversation"
+              aria-label={menuLabel}
               onKeyDown={onMenuKeyDown}
               className="fixed z-30 overflow-hidden rounded-card py-1 shadow-cast"
               style={{

@@ -61,7 +61,8 @@ function mountRowActions(options: { readonly canCall?: boolean } = {}): { readon
             flags={flagsOf({ isPinned: true })}
             unread
             magnified
-            {...(options.canCall === true ? { call: { language: 'fr' as const } } : {})}
+            language="fr"
+            canCall={options.canCall === true}
             onAction={(id) => actions.push(id)}
           />
         </li>
