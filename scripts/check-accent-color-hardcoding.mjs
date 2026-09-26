@@ -156,8 +156,16 @@
 // (`ContactCardView`, deux appels, `ContactCardDetailSheet`). Chacun peint
 // l'accent de la carte reçu de son hôte, jamais une couleur en dur. Aucun
 // littéral ne bouge (118). Valeur MESURÉE sur `dev` le 2026-09-26.
+//
+// 2026-09-26 (#8103) — variables inconnues 437 → 439. DEUX appels neufs dans
+// `MediaHub/ConversationMediaHubCells.swift`, l'écran « Médias, liens et
+// documents » : l'icône d'une ligne de document et la capsule du segment
+// choisi, toutes deux à l'accent de la conversation reçu sous le nom ÉTABLI
+// `accentHex` (même vocabulaire que #6793, #7945, #8099). La vignette
+// `attachment.thumbnailColor` n'est qu'un DÉPLACEMENT depuis
+// `ConversationInfoSheet` (compte inchangé). Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 437;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 439;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
