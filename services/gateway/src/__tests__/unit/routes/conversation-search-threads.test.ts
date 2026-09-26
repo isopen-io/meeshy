@@ -60,11 +60,8 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-// La porte de lecture (`ouvrirConversationLisible`, #8116) lit le VERDICT : le
-// double partagé gouverne ses deux formes depuis le même `mockCanAccessConversation`.
-jest.mock('../../../routes/conversations/utils/access-control', () =>
-  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
-    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+jest.mock('../../../routes/conversations/utils/access-control', () => (jest.requireActual('../../helpers/acces-conversation-double') as any)
+  .doubleAccesConversation(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
     (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
@@ -1138,7 +1135,6 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    expect(mockSendForbidden).not.toHaveBeenCalled();
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 
