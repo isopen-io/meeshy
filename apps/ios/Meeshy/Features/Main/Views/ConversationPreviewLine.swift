@@ -242,6 +242,7 @@ struct ConversationPreviewLine: View {
         case .video?: return "film"
         case .photo?: return "photo"
         case .file?: return "doc"
+        case .contact?: return "person.crop.circle"
         case .location?: return "mappin.and.ellipse"
         case .sticker?: return "face.smiling"
         case .attachments?: return "paperclip"
