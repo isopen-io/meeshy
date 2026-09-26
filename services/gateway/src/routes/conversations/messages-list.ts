@@ -23,7 +23,6 @@ import {
 } from '../../services/historyFloor';
 import { shareLinkHasExpired } from '../../services/shareLinkReadGate';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding,
@@ -35,11 +34,8 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import {
-  refuserAccesConversation,
-  verdictAccesConversation,
-  type MessagesDeRefusDAcces
-} from './utils/access-control';
+import type { MessagesDeRefusDAcces } from './utils/access-control';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
   ConversationParams,
@@ -82,17 +78,13 @@ import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../servic
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
  *
- * `nonMembre` garde MOT POUR MOT la phrase que la route servait déjà — un
- * refus d'AUTORISATION, correct en 403. Ce qui change est qu'une session
- * ABSENTE ou MORTE ne le reçoit plus : elle n'a jamais été un refus de droit,
- * et cette route est montée en `optionalAuth` (`{ requireAuth: false,
- * allowAnonymous: true }`, `routes/conversations/index.ts`), une garde qui ne
- * refuse RIEN — c'est donc bien ici que ça se tranche, et le cas nominal d'un
- * retour après quelques jours arrivait jusque là.
+ * Une session ABSENTE ou MORTE reçoit 401 : cette route est montée en
+ * `optionalAuth`, une garde qui ne refuse RIEN, c'est donc ici que ça se
+ * tranche. Un non-membre reçoit le même 404 qu'un identifiant inexistant
+ * (#8099) — voir `ouvrirConversationLisible`.
  */
 const REFUS_DE_LECTURE: MessagesDeRefusDAcces = {
-  sansSession: 'Authentication required to read this conversation',
-  nonMembre: 'Unauthorized access to this conversation'
+  sansSession: 'Authentication required to read this conversation'
 };
 
 /**
@@ -175,6 +167,7 @@ export function registerMessagesListRoute(
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -224,19 +217,16 @@ export function registerMessagesListRoute(
 
       // Résoudre l'ID de conversation réel
       let t0 = performance.now();
-      const conversationId = await resolveConversationId(prisma, id);
-      timings.resolveConversationId = performance.now() - t0;
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Vérifier les permissions d'accès
-      t0 = performance.now();
-      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_LECTURE
+      });
       timings.canAccessConversation = performance.now() - t0;
-
-      if (acces.genre !== 'ok') {
-        return refuserAccesConversation(reply, acces, REFUS_DE_LECTURE);
+      if (!conversationId) {
+        return;
       }
 
       // Resolve the current user's participantId in this conversation

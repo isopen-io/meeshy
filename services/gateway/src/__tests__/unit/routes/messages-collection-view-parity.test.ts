@@ -561,11 +561,12 @@ describe('#4340 critère 2 — la TABLE des gardes × des cinq vues', () => {
       expect(corps.data).toBeUndefined();
     });
 
-    it("refuse un non-membre en le nommant, sans rien servir", async () => {
+    it("refuse un non-membre comme une conversation inexistante, sans rien servir (#8099)", async () => {
       mockVerdict.mockResolvedValue({ genre: 'non-membre' });
       const { corps } = await lireVue(url);
       expect(corps.success).toBe(false);
-      expect(corps.code).toBe('CONVERSATION_ACCESS_DENIED');
+      expect(corps.error).toBe('Conversation not found');
+      expect(corps.code).toBeUndefined();
       expect(corps.data).toBeUndefined();
     });
 

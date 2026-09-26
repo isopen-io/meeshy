@@ -25,15 +25,14 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import { UserRoleEnum } from '@meeshy/shared/types';
 
 /**
- * LES DEUX REFUS DU RATTACHEMENT NE SONT PAS LE MÊME REFUS (#4792). `nonMembre`
- * garde la phrase servie ; le 401 est neuf. La route est montée en `authOptional`
- * — une garde qui ne refuse rien — et son schéma ne déclare que `200 · 201 · 400
- * · 500` : Fastify sérialise donc ses deux refus SANS schéma, corps complet, et
- * le changement de statut ne peut rien y tronquer (le défaut de #4689). MESURÉ.
+ * LES DEUX REFUS DU RATTACHEMENT NE SONT PAS LE MÊME REFUS (#4792). Session
+ * absente ⇒ 401 ; non-membre ⇒ le même 404 qu'une conversation inexistante
+ * (#8099). La route est montée en `authOptional` — une garde qui ne refuse rien
+ * — et son schéma ne déclare que `200 · 201 · 400 · 500` : Fastify sérialise
+ * donc ses refus SANS schéma, corps complet (le défaut de #4689). MESURÉ.
  */
 const REFUS_DE_RATTACHEMENT: MessagesDeRefusDAcces = {
-  sansSession: 'Authentication required to attach a tracking link to this conversation',
-  nonMembre: 'Access denied to this conversation'
+  sansSession: 'Authentication required to attach a tracking link to this conversation'
 };
 
 /**
