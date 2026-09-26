@@ -83,4 +83,32 @@ final class MessageDayStickyOverlayTests: XCTestCase {
         // dans sa bande.
         XCTAssertEqual(MessageDayStickyPlacement.topOffset, 60)
     }
+
+    // MARK: - #7998 — la bande suit la hauteur MESURÉE de l'en-tête
+
+    func test_offset_keepsItsFloor_whenTheHeaderIsNotYetMeasured() {
+        XCTAssertEqual(MessageDayStickyPlacement.topOffset(headerBandHeight: 0), 60)
+    }
+
+    func test_offset_keepsItsFloor_forAHeaderOfDefaultSize() {
+        // 8 (padding) + 44 (rangée) : le plancher historique tient déjà.
+        XCTAssertEqual(MessageDayStickyPlacement.topOffset(headerBandHeight: 52), 60)
+    }
+
+    func test_offset_followsAHeaderGrownByDynamicType() {
+        // AX5 : l'en-tête (« AUTO Focal », retour, avatar) grandit avec le
+        // texte — la pill doit démarrer SOUS lui, marge comprise.
+        XCTAssertEqual(MessageDayStickyPlacement.topOffset(headerBandHeight: 110), 118)
+    }
+
+    func test_scrollTimePill_isShiftedByTheSameGrowth() {
+        XCTAssertEqual(MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: 52), FocalMetrics.Pill.top)
+        XCTAssertEqual(MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: 110), FocalMetrics.Pill.top + 58)
+    }
+
+    func test_flatRowClearance_followsTheSameLine() {
+        XCTAssertEqual(ThreadHeadClearance.value(usesFlatRow: true, headerBandHeight: 110), 118)
+        XCTAssertEqual(ThreadHeadClearance.value(usesFlatRow: true, headerBandHeight: 0), 60)
+        XCTAssertEqual(ThreadHeadClearance.value(usesFlatRow: false, headerBandHeight: 110), 0)
+    }
 }

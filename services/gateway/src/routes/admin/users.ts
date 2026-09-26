@@ -4,7 +4,6 @@ import {
   UserRoleEnum,
   UserAuditAction,
   PaginatedUsersResponse,
-  UserFilters,
   CreateUserDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
@@ -37,14 +36,24 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserProfileReadRoutes } from './user-profile-reads';
+import { registerUserMemberStatsRoutes } from './user-member-stats';
+import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
+import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
-import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
+import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
+import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
+
+const userConversationSortSchema = z.object({
+  sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc')
+});
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -63,27 +72,6 @@ export {
   type PermissionReport,
   type SeuilReport
 } from './user-reports';
-
-// Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
-// ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
-// sanitizeUsers masque. Sans canViewPresence, les bornes sont IGNORÉES en
-// silence (un 403 confirmerait l'existence du filtre) et le tri retombe sur
-// createdAt.
-const PRESENCE_SORT_KEYS: ReadonlySet<string> = new Set(['lastActiveAt', 'isOnline']);
-
-type PresenceGatedFilters = Pick<UserFilters, 'lastActiveAfter' | 'lastActiveBefore' | 'sortBy'>;
-
-function presenceGatedFilters(query: UserFilters, canViewPresence: boolean): PresenceGatedFilters {
-  const requestedSort = query.sortBy || 'createdAt';
-  if (!canViewPresence) {
-    return { sortBy: PRESENCE_SORT_KEYS.has(requestedSort) ? 'createdAt' : requestedSort };
-  }
-  return {
-    lastActiveAfter: query.lastActiveAfter ? new Date(query.lastActiveAfter) : undefined,
-    lastActiveBefore: query.lastActiveBefore ? new Date(query.lastActiveBefore) : undefined,
-    sortBy: requestedSort
-  };
-}
 
 // Même chemin que `routes/auth/revoke-all-sessions.ts` : le manager est lu à
 // chaque appel, pas capturé ici — il n'existe pas encore quand les routes
@@ -144,11 +132,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
 
+  // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
+  // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
+  registerUserProfileReadRoutes(fastify, { userAuditService });
+
+  // Page membre de l'administration web (#7845) : compteurs de la fiche, et
+  // préférences lues / écrites sous les gardes des écritures de compte.
+  registerUserMemberStatsRoutes(fastify);
+  registerUserMemberPreferencesRoutes(fastify, { userAuditService });
+
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
    */
   fastify.get<{
-    Querystring: UserFilters & { offset?: string; limit?: string };
+    Querystring: UserListQuery;
   }>('/admin/users', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
@@ -156,18 +153,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      const filters: UserFilters = {
-        search: request.query.search,
-        role: request.query.role,
-        isActive: request.query.isActive,
-        emailVerified: request.query.emailVerified,
-        phoneVerified: request.query.phoneVerified,
-        twoFactorEnabled: request.query.twoFactorEnabled,
-        createdAfter: request.query.createdAfter ? new Date(request.query.createdAfter) : undefined,
-        createdBefore: request.query.createdBefore ? new Date(request.query.createdBefore) : undefined,
-        ...presenceGatedFilters(request.query, permissionsService.canViewPresence(viewerRole)),
-        sortOrder: request.query.sortOrder || 'desc'
-      };
+      // #7873 — la querystring arrive en CHAÎNES : `userListFilters` traduit
+      // booléens, rôle, dates et tri, et porte la loi de présence (bornes
+      // `lastActive*` et tri par présence réservés à `canViewPresence`).
+      const filters = userListFilters(request.query, permissionsService.canViewPresence(viewerRole));
 
       const pagination = validatePagination(request.query.offset, request.query.limit);
 
@@ -661,16 +650,28 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    * GET /admin/users/:userId/conversations - List conversations a user participates in (admin view).
    * Metadata only (no message content); the target user's membership (role/joinedAt) is flattened
    * onto each conversation. Requires canViewUsers permission.
+   *
+   * #7845 — `sortBy` (lastMessageAt, par défaut, ou createdAt) et `sortOrder`
+   * (desc, par défaut, ou asc). `joinedAt` n'est pas offert : il vit sur la
+   * participation, et `conversation.findMany` ne trie pas par la colonne d'une
+   * relation filtrée. Validés par Zod dans le handler (400 hors liste).
    */
   fastify.get<{
     Params: { userId: string };
-    Querystring: { offset?: string; limit?: string; type?: string };
+    Querystring: { offset?: string; limit?: string; type?: string; sortBy?: string; sortOrder?: string };
   }>('/admin/users/:userId/conversations', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
       const { offset = '0', limit, type } = request.query;
+      const tri = userConversationSortSchema.safeParse(request.query);
+      if (!tri.success) {
+        return sendBadRequest(reply, 'VALIDATION_ERROR', {
+          message: 'sortBy must be lastMessageAt or createdAt, sortOrder asc or desc'
+        });
+      }
+      const { sortBy, sortOrder } = tri.data;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
 
       const userExists = await fastify.prisma.user.findUnique({
@@ -681,33 +682,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const where: any = {
-        participants: {
-          some: { userId, isActive: true }
-        }
+      const where = {
+        participants: { some: { userId, isActive: true } },
+        ...(type ? { type } : {})
       };
-      if (type) {
-        where.type = type;
-      }
 
       const [conversations, total] = await Promise.all([
         fastify.prisma.conversation.findMany({
           where,
           select: {
-            id: true,
-            identifier: true,
-            title: true,
-            type: true,
-            avatar: true,
-            isActive: true,
-            // Même règle que `GET /conversations` : la colonne `memberCount`
-            // n'est écrite par personne, donc l'écran admin affichait
-            // « 0 membres » sur toute conversation créée depuis la migration
-            // héritée. Le compte vient de la base.
-            _count: { select: conversationActiveMemberCountSelect },
-            communityId: true,
-            createdAt: true,
-            lastMessageAt: true,
+            // Titre, description, images, réglages, effectif (recalculé depuis
+            // `_count` : la colonne `memberCount` n'est écrite par personne) et
+            // nombre de messages — la ligne que la feuille « Configurer » de la
+            // fiche pré-remplit (#7999). Jamais un contenu de message.
+            ...CONVERSATION_METADATA_SELECT,
             participants: {
               where: { isActive: true },
               take: 6,
@@ -726,22 +714,31 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
               }
             }
           },
-          orderBy: { lastMessageAt: 'desc' },
+          orderBy: { [sortBy]: sortOrder },
           skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.conversation.count({ where })
       ]);
 
-      // Keep a small participant preview (direct → the other member, group → a
-      // first slice; the full group list is paged via the dedicated endpoint),
-      // and surface the target user's membership separately for convenience.
-      const data = conversations.map((conv) => {
-        const { _count, ...convData } = conv as typeof conv & { _count: { participants: number } };
-        const participants = (convData as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
-        const membership = participants.find((p) => p.userId === userId) ?? null;
-        return { ...convData, memberCount: _count.participants, participants, membership };
-      });
+      // `membership` est lue À PART, en UNE requête pour la page : l'aperçu est
+      // borné à six participants, et y chercher la ligne du membre rendait
+      // `null` dès qu'il était entré septième — sur les groupes, précisément
+      // là où son rang compte (#7999).
+      const memberships = conversations.length === 0
+        ? []
+        : await fastify.prisma.participant.findMany({
+            where: { userId, isActive: true, conversationId: { in: conversations.map((c) => c.id) } },
+            select: { id: true, userId: true, conversationId: true, type: true, displayName: true, avatar: true, role: true, joinedAt: true, isActive: true, nickname: true },
+            take: conversations.length
+          });
+      const membershipOf = new Map(memberships.map((m) => [m.conversationId, m]));
+
+      const data = conversations.map(({ participants, ...conv }) => ({
+        ...serveConversationMetadata(conv),
+        participants,
+        membership: membershipOf.get(conv.id) ?? participants.find((p) => p.userId === userId) ?? null
+      }));
 
       return sendPaginatedSuccess(reply, data, {
         total,
@@ -962,4 +959,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // à qui, depuis quand et dans quels groupes est une lecture de la vie privée
   // de TOUS les membres — pas la fiche d'un seul, que `canViewUsers` ouvre.
   registerConversationsSovereignRoute(fastify);
+
+  // PATCH /admin/conversations/:id et ses deux gestes sur un membre (#7999) :
+  // configurer une conversation SANS en être membre — les routes de membre
+  // exigent d'y être (« une fois dans »). Rang d'administration, motif écrit,
+  // trace `AdminAuditLog`.
+  registerConversationSettingsSovereignRoutes(fastify);
 }

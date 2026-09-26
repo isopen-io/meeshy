@@ -80,8 +80,7 @@ export const MOTIF_LONGUEUR_MINIMALE = 10;
 export const ADMIN_CONVERSATIONS_PAGE_SIZE = 20;
 export const ADMIN_MESSAGES_PAGE_SIZE = 30;
 
-export const adminConversationsQueryKey = (offset: number, recherche: string, type: string) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'conversations', offset, recherche, type] as const;
+export const adminConversationsQueryKey = (adresse: string) => [ADMIN_SOUVERAIN_PREFIXE, 'conversations', adresse] as const;
 
 export const adminConversationMessagesQueryKey = (conversationId: string, offset: number) =>
   [ADMIN_SOUVERAIN_PREFIXE, 'messages', conversationId, offset] as const;
@@ -169,17 +168,23 @@ export async function loadAdminInstanceConversations(
   params: AdminDeps & {
     readonly offset: number;
     readonly search?: string;
-    readonly type?: string;
+    readonly limit?: number;
+    /** Le tri et les filtres de la liste (#7873), déjà passés par sa liste blanche. */
+    readonly sort?: string;
+    readonly order?: 'asc' | 'desc';
+    readonly filters?: Readonly<Record<string, string>>;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminInstanceConversationPage>> {
   const query = new URLSearchParams({
     offset: String(params.offset),
-    limit: String(ADMIN_CONVERSATIONS_PAGE_SIZE),
+    limit: String(params.limit ?? ADMIN_CONVERSATIONS_PAGE_SIZE),
     // Un filtre VIDE n'est pas un filtre — la passerelle l'ignore, et
     // l'envoyer quand même ferait varier la clé de cache pour rien.
     ...(params.search === undefined || params.search === '' ? {} : { search: params.search }),
-    ...(params.type === undefined || params.type === '' ? {} : { type: params.type }),
+    ...(params.sort === undefined ? {} : { sort: params.sort }),
+    ...(params.order === undefined ? {} : { order: params.order }),
+    ...Object.fromEntries(Object.entries(params.filters ?? {}).filter(([, valeur]) => valeur !== '')),
   });
 
   const result = await params.transport.request<unknown>({

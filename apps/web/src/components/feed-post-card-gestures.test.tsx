@@ -155,12 +155,16 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
     expect(ouverts).toEqual(['p1']);
   });
 
-  /** `repostCount` RESTE une statistique — la republication ouvre un composeur
-   * que le web n'a pas encore. Ce témoin garde l'ABSENCE : sans lui, un lot à
-   * venir rendrait le chiffre cliquable sans lui donner d'effet, et l'écran
-   * porterait de nouveau un contrôle qui ment. */
-  test('CONTRE-ÉPREUVE — « Republier » n’est PAS un bouton, même avec tous les hôtes branchés', () => {
+  /** `repostCount` — CHIFFRE INERTE sans hôte (loi 4), BOUTON avec, comme
+   * « Commenter » (#6278 dernière action). APPEND-ONLY : un repost déjà posé
+   * ne se défait jamais au clic. */
+  test('« Republier » est un CHIFFRE INERTE sans hôte, un BOUTON avec — et il ne se défait jamais', () => {
     mount(post({ repostCount: 5 }), () => undefined);
+    expect(gesture('repost')).toBeNull();
+    const rangeeSansHote = container.querySelector('[data-feed-actions]');
+    expect(rangeeSansHote?.textContent).toContain('5');
+
+    const calls: string[] = [];
     act(() => {
       root.render(
         <FeedPostCard
@@ -168,15 +172,37 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
           onGesture={() => undefined}
           onShare={() => undefined}
           onComment={() => undefined}
+          onRepost={(postId) => calls.push(postId)}
         />,
       );
     });
 
-    expect(gesture('repost')).toBeNull();
-    const rangee = container.querySelector('[data-feed-actions]');
-    const libelles = [...(rangee?.querySelectorAll('button') ?? [])].map((b) => b.getAttribute('data-feed-gesture'));
-    expect(libelles).not.toContain('repost');
-    /* Le chiffre reste LU — inerte n'est pas invisible. */
-    expect(rangee?.textContent).toContain('5');
+    const repost = gesture('repost');
+    expect(repost).not.toBeNull();
+    expect(repost?.getAttribute('aria-pressed')).toBe('false');
+    expect(repost?.textContent).toContain('5');
+    act(() => repost?.click());
+    expect(calls).toEqual(['p1']);
+  });
+
+  test('un repost DÉJÀ posé s’annonce `aria-pressed=true` et reste cliquable sans effet inverse', () => {
+    const calls: string[] = [];
+    mount(post({ repostCount: 6, isRepostedByMe: true }), () => undefined);
+    act(() => {
+      root.render(
+        <FeedPostCard
+          model={resolveFeedCardModel(post({ repostCount: 6, isRepostedByMe: true }), { preferredLanguages: ['fr'], now: NOW })}
+          onGesture={() => undefined}
+          onRepost={(postId) => calls.push(postId)}
+        />,
+      );
+    });
+
+    const repost = gesture('repost');
+    expect(repost?.getAttribute('aria-pressed')).toBe('true');
+    act(() => repost?.click());
+    // Append-only côté cache (`markReposted`) — l'hôte est quand même appelé,
+    // c'est `performRepost` qui court-circuite un repost déjà connu.
+    expect(calls).toEqual(['p1']);
   });
 });

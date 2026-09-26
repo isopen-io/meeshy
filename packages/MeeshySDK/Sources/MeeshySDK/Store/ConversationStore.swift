@@ -634,7 +634,10 @@ public actor ConversationStore {
                     conversationType: conv.type,
                     peerUserId: conv.participantUserId,
                     peerUsername: conv.participantUsername,
-                    youLabel: event.youLabel
+                    youLabel: event.youLabel,
+                    eventMessageId: event.lastMessage.messageId,
+                    rowMessageId: conv.lastMessageId,
+                    rowSenderName: conv.lastMessageSenderName
                 ), auteur != conv.lastMessageSenderName {
                     conv.lastMessageSenderName = auteur
                     changed = true

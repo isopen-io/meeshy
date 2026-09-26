@@ -370,7 +370,9 @@ describe('useThreadChrome — deux attributs, hors React (T8)', () => {
     // ancêtre inerte) : la loi ne lui pose PAS l'attribut séparément.
     expect(headerActions.hasAttribute('inert')).toBe(false);
     expect(composer.hasAttribute('inert')).toBe(true);
-    expect(scrollButton.hasAttribute('inert')).toBe(true);
+    // #8002 — le bouton « revenir en bas » ne suit PAS le repli : il reste
+    // joignable pendant le défilement, c'est là qu'on le cherche.
+    expect(scrollButton.hasAttribute('inert')).toBe(false);
 
     act(() => {
       capturedListener(false);
@@ -487,6 +489,88 @@ describe('createScrollerGestureSubscriber — la levee d un geste indirect (T9, 
     // Toujours rien : le chemin TOUCH n a jamais consulte la fenetre indirecte.
     expect(heldHistory).toEqual([]);
 
+    unsubscribe();
+  });
+});
+
+/**
+ * LE CLAVIER PART D'ABORD (#8000) — `createScrollerGestureSubscriber` reçoit
+ * une sonde du clavier (`keyboard`) : un geste tactile commencé clavier
+ * ouvert ferme le clavier s'il tire vers les messages ANCIENS, et ne replie
+ * RIEN d'autre (aucun `held` n'est émis) ; le geste suivant, clavier fermé,
+ * replie comme avant.
+ */
+describe('createScrollerGestureSubscriber — le clavier part d abord (#8000)', () => {
+  const makeFakeScroller = (scrollTop: number): HTMLElement & { scrollTop: number } => {
+    class FakeScroller extends EventTarget {
+      scrollTop = scrollTop;
+    }
+    return new FakeScroller() as unknown as HTMLElement & { scrollTop: number };
+  };
+  const makeKeyboard = (open: boolean) => {
+    const keyboard = {
+      open,
+      dismissals: 0,
+      isOpen: () => keyboard.open,
+      dismiss: () => {
+        keyboard.dismissals += 1;
+        keyboard.open = false;
+      },
+    };
+    return keyboard;
+  };
+  const drag = (scroller: HTMLElement & { scrollTop: number }, deltas: readonly number[]) => {
+    scroller.dispatchEvent(new Event('touchstart'));
+    for (const delta of deltas) {
+      scroller.scrollTop += delta;
+      scroller.dispatchEvent(new Event('scroll'));
+    }
+  };
+
+  test('clavier ouvert, doigt vers les ANCIENS -> le clavier se ferme UNE fois et rien d autre ne se replie', () => {
+    const scroller = makeFakeScroller(1000);
+    const keyboard = makeKeyboard(true);
+    const heldHistory: boolean[] = [];
+    const unsubscribe = createScrollerGestureSubscriber({ current: scroller }, { keyboard })((held) => heldHistory.push(held));
+
+    drag(scroller, [-40, -40, -40]);
+    expect(keyboard.dismissals).toBe(1);
+    expect(heldHistory).toEqual([]);
+
+    scroller.dispatchEvent(new Event('touchend'));
+    expect(heldHistory).toEqual([]);
+
+    // Geste SUIVANT, clavier fermé : le repli reprend.
+    drag(scroller, [-40]);
+    expect(heldHistory).toEqual([true]);
+    scroller.dispatchEvent(new Event('touchend'));
+    expect(heldHistory).toEqual([true, false]);
+    unsubscribe();
+  });
+
+  test('clavier ouvert, doigt vers les RÉCENTS -> le clavier reste et le chrome aussi', () => {
+    const scroller = makeFakeScroller(1000);
+    const keyboard = makeKeyboard(true);
+    const heldHistory: boolean[] = [];
+    const unsubscribe = createScrollerGestureSubscriber({ current: scroller }, { keyboard })((held) => heldHistory.push(held));
+
+    drag(scroller, [40, 40]);
+    expect(keyboard.dismissals).toBe(0);
+    expect(heldHistory).toEqual([]);
+    scroller.dispatchEvent(new Event('touchend'));
+    unsubscribe();
+  });
+
+  test('clavier fermé -> le geste replie le chrome comme avant, sans rien fermer', () => {
+    const scroller = makeFakeScroller(1000);
+    const keyboard = makeKeyboard(false);
+    const heldHistory: boolean[] = [];
+    const unsubscribe = createScrollerGestureSubscriber({ current: scroller }, { keyboard })((held) => heldHistory.push(held));
+
+    drag(scroller, [-40]);
+    expect(keyboard.dismissals).toBe(0);
+    expect(heldHistory).toEqual([true]);
+    scroller.dispatchEvent(new Event('touchend'));
     unsubscribe();
   });
 });

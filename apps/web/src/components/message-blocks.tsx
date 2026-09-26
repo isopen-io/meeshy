@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 
 import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
@@ -14,6 +14,7 @@ import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS, type GlyphName } from './glyphs';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
+import { QuoteFrame } from './quote-frame';
 
 /**
  * LES BLOCS DE CONTENU D'UN MESSAGE — extraits de `bubble.tsx` (#5566, étape 0
@@ -567,6 +568,42 @@ const QUOTE_GLYPH: Readonly<Record<QuotedMediaKind, GlyphShape>> = {
 /** `Self.thumbnailSize` (`BubbleQuotedReply.swift`) — la vignette carrée de la citation. */
 const QUOTE_THUMBNAIL_PX = 36;
 
+/**
+ * LE FILET DE CITATION — celui de la citation texte (« Vous : … »), SITE
+ * UNIQUE : `Quote` et `MoodQuote` le portent dans leur fond, `RowQuote` le
+ * pose devant une carte de story qui n'en a pas (#7929). La peau « mine »
+ * (blanc) n'existe que pour le fond indigo de la bulle.
+ */
+export function QuoteRail({ isMine = false, className = '' }: { readonly isMine?: boolean; readonly className?: string }) {
+  return (
+    <span
+      data-quote-rail
+      className={`w-1 shrink-0 rounded-full ${className}`}
+      style={{ backgroundColor: isMine ? 'color-mix(in srgb, white 70%, transparent)' : 'var(--accent)' }}
+      aria-hidden
+    />
+  );
+}
+
+/**
+ * LA CITATION DE LA RANGÉE PLATE (#7995, directive porteur du 2026-09-26) —
+ * en Script et en Focal, toute citation part de l'ORIGINE DU CONTENU, la
+ * colonne du nom, comme le texte qu'elle introduit : « la citation est déjà
+ * identifiable avec la barre puis le fond teinté ». Aucun retrait. `railed`
+ * pose le filet devant une citation qui n'en dessine pas elle-même (la carte
+ * de story) ; `Quote` et `MoodQuote` portent déjà le leur. Supplante le
+ * retrait de citation du 2026-09-25 (#7929). La bulle ne monte pas ce cadre :
+ * Bulles garde sa propre mise en page.
+ */
+export function RowQuote({ railed = false, children }: { readonly railed?: boolean; readonly children: ReactNode }) {
+  return (
+    <div data-row-quote className={railed ? 'flex gap-1.5' : undefined}>
+      {railed ? <QuoteRail className="mb-1.5" /> : null}
+      {children}
+    </div>
+  );
+}
+
 export function Quote({
   quote,
   isMine,
@@ -621,17 +658,11 @@ export function Quote({
       {...(media === null ? {} : { 'data-quote-media': media.kind })}
       aria-label={label}
     >
-      <span
-        className="w-1 shrink-0 rounded-full"
-        style={{
-          backgroundColor: isMine ? 'color-mix(in srgb, white 70%, transparent)' : 'var(--accent)',
-        }}
-        aria-hidden
-      />
+      <QuoteRail isMine={isMine} />
       {/* LA VIGNETTE (#7556) — `quotedThumbnail` (`BubbleQuotedReply.swift:
           382-411`). Le flou ThumbHash tient la case AVANT la requête réseau ;
           `alt=""` + `aria-hidden` parce que le bouton porte déjà son nom. */}
-      {media !== null && media.thumbnailSrc !== null ? (
+      {media !== null && media.frame === null && media.thumbnailSrc !== null ? (
         <span
           className="relative my-1.5 ml-1.5 shrink-0 overflow-hidden rounded-media"
           style={{
@@ -661,7 +692,7 @@ export function Quote({
         <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
           {quote.sender?.displayName ?? ''}{' '}
         </span>
-        {media !== null && media.thumbnailSrc === null && !preview.isProtected ? (
+        {media !== null && media.frame === null && media.thumbnailSrc === null && !preview.isProtected ? (
           <GlyphSvg
             glyph={QUOTE_GLYPH[media.kind]}
             size={11}
@@ -687,6 +718,15 @@ export function Quote({
           >
             {media.durationLabel}
           </span>
+        ) : null}
+        {media !== null && media.frame !== null ? (
+          <QuoteFrame
+            frame={media.frame}
+            thumbnailSrc={media.thumbnailSrc}
+            placeholderSrc={media.placeholderSrc}
+            kind={media.kind}
+            timebased={media.timebased}
+          />
         ) : null}
       </span>
     </button>

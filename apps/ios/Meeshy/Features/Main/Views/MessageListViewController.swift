@@ -591,18 +591,24 @@ final class MessageListViewController: UIViewController {
         applyTopInsetToViews()
     }
 
+    /// Hauteur MESURÉE de la bande d'en-tête (grandit avec Dynamic Type) :
+    /// les pilules et la réserve de la rangée plate la suivent (#7998).
+    var headerBandHeight: CGFloat = 0 {
+        didSet { if oldValue != headerBandHeight { applyTopInsetToViews() } }
+    }
+
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
         // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
-        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow)
+        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow, headerBandHeight: headerBandHeight)
         if collectionView.contentInset.bottom != restTop {
             collectionView.contentInset.bottom = restTop
             collectionView.verticalScrollIndicatorInsets.bottom = restTop
         }
-        // INCHANGÉ — garde source ConversationTopChromeFadeTests:119
-        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
+        // Garde source ConversationTopChromeFadeTests (#7998 : hauteur mesurée).
+        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         // F-086bis (WS-2) : ancre de la pilule jour·heure, si montée.
-        scrollTimePillTopConstraint?.constant = topInset + FocalMetrics.Pill.top
+        scrollTimePillTopConstraint?.constant = topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
     }
 
     /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
@@ -612,7 +618,7 @@ final class MessageListViewController: UIViewController {
     private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
     /// Ancre verticale de la pill, recalculée par `applyTopInset` : la vue
     /// s'étendant sous la safe area haute, l'offset produit est
-    /// `topInset + MessageDayStickyPlacement.topOffset`.
+    /// `topInset + MessageDayStickyPlacement.topOffset(headerBandHeight:)`.
     private var stickyDayTopConstraint: NSLayoutConstraint?
     /// Défilement actif (drag OU décélération) — `store.isUserScrolling`,
     /// la garde des REPORTS de reconfigure (§4.7ter) : re-mesurer des
@@ -635,6 +641,8 @@ final class MessageListViewController: UIViewController {
     /// La pill de jour suit la même règle en rangée plate ; Bulles :
     /// comportement historique, la pilule suit le défilement.
     private var isChromeHiddenForScroll = false
+    /// Le clavier part D'ABORD (#8000) — `KeyboardFirstScroll.swift`.
+    private let keyboardFirst = KeyboardFirstScrollGate()
     /// Offset d'arrivée de la décélération en cours (`nil` hors décélération).
     var decelerationTargetOffsetY: CGFloat?
 
@@ -762,6 +770,8 @@ final class MessageListViewController: UIViewController {
         let host = UIHostingController(
             rootView: MessageDayStickyOverlay(state: stickyDayState)
         )
+        // #7998 : sans hauteur, la pill était CENTRÉE sur son ancre.
+        host.sizingOptions = .intrinsicContentSize
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
         addChild(host)
@@ -774,7 +784,7 @@ final class MessageListViewController: UIViewController {
         // SwiftUI propage comme safe area au contrôleur hébergé.
         let stickyTop = host.view.topAnchor.constraint(
             equalTo: view.topAnchor,
-            constant: topInset + MessageDayStickyPlacement.topOffset
+            constant: topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         )
         NSLayoutConstraint.activate([
             stickyTop,
@@ -843,7 +853,7 @@ final class MessageListViewController: UIViewController {
         host.view.translatesAutoresizingMaskIntoConstraints = false
         let pillTop = host.view.topAnchor.constraint(
             equalTo: view.topAnchor,
-            constant: topInset + FocalMetrics.Pill.top
+            constant: topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
         )
         NSLayoutConstraint.activate([
             pillTop,
@@ -1055,9 +1065,9 @@ final class MessageListViewController: UIViewController {
             // la date de l'élu retrouve au passage sa pleine largeur).
             section.contentInsets = NSDirectionalEdgeInsets(
                 top: 8,
-                leading: 12,
+                leading: Self.sectionHorizontalInset,
                 bottom: 8,
-                trailing: 12
+                trailing: Self.sectionHorizontalInset
             )
             return section
         }
@@ -1663,7 +1673,7 @@ final class MessageListViewController: UIViewController {
                         )
                     )
                 }()
-                cell.tag = isFirstInGroup ? FocalScrollPerspective.groupHeadCellTag : 0
+                cell.tag = FocalScrollPerspective.cellTag(isFirstInGroup: isFirstInGroup, showsFocusDetails: self.focalDetailedLocalId == localId)
                 let focalInput = FocalRowInput(
                     localId: localId,
                     serverId: record?.serverId,
@@ -1718,7 +1728,8 @@ final class MessageListViewController: UIViewController {
                     isFocused: self.focalDetailedLocalId == localId,
                     sentAt: message.createdAt,
                     // Pré-calculée ici, jamais dans un body (directive 2026-08-22).
-                    focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil
+                    focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
+                    availableWidth: self.rowAvailableWidth
                 )
                 var focalActions = FocalRowActions()
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
@@ -2966,6 +2977,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         let frameHeight = scrollView.frame.height
 
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
+        keyboardFirst.noteScroll(offsetY: offset, isTracking: scrollView.isTracking)
         // Chrome (boutons, composeur, bulle « retour en bas », pilule) :
         // caché tant que le doigt est posé, puis tant que la décélération est
         // LOIN de son offset d'arrivée ; il revient « quand on s'approche de
@@ -2975,7 +2987,7 @@ extension MessageListViewController: UICollectionViewDelegate {
             isTracking: scrollView.isTracking,
             isDecelerating: scrollView.isDecelerating,
             remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y }
-        ))
+        ) && keyboardFirst.chromeMayCollapse)
 
         // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
         // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
@@ -3105,6 +3117,7 @@ extension MessageListViewController: UICollectionViewDelegate {
     /// jamais par-dessus un geste.
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         scrollSettleTarget = nil
+        keyboardFirst.gestureBegan(offsetY: scrollView.contentOffset.y)
     }
 
     /// **Adopter ce que le fil MESURE** (#4041) — à la POSE uniquement.

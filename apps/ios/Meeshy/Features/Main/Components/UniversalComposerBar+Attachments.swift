@@ -93,7 +93,7 @@ extension UniversalComposerBar {
             mediaPanelGrabHandle
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+                HStack(spacing: Self.carouselTileSpacing) {
                     ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                         carouselTile(tile, index: index)
                     }
@@ -314,6 +314,12 @@ extension UniversalComposerBar {
         let action: () -> Void
     }
 
+    /// Le disque d'une tuile d'action du (+) : 58 pt réduits de 20 %
+    /// (directive porteur 2026-09-25), la gouttière dans la même proportion.
+    /// Avec son libellé, la tuile garde une cible tactile au-dessus de 44 pt.
+    static let carouselTileDiameter: CGFloat = 46
+    static let carouselTileSpacing: CGFloat = 11
+
     func carouselTile(_ tile: CarouselTile, index: Int) -> some View {
         Button {
             onAnyInteraction?()
@@ -330,11 +336,11 @@ extension UniversalComposerBar {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 58, height: 58)
-                        .shadow(color: Color(hex: tile.color).opacity(0.4), radius: 8, y: 3)
+                        .frame(width: Self.carouselTileDiameter, height: Self.carouselTileDiameter)
+                        .shadow(color: Color(hex: tile.color).opacity(0.4), radius: 6, y: 2)
 
                     Image(systemName: tile.icon)
-                        .font(.title3.weight(.semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(.white)
                 }
                 Text(tile.label)
@@ -357,9 +363,7 @@ extension UniversalComposerBar {
     ///   the carousel and brings the system keyboard back.
     var attachButton: some View {
         let accent = servedAccent
-        let iconColor = style == .dark ? Color.white.opacity(0.7) : accent
-        let bgFill = style == .dark ? Color.white.opacity(0.1) : accent.opacity(0.1)
-        let borderColor = style == .dark ? Color.white.opacity(0.2) : accent.opacity(0.2)
+        let iconColor = style == .dark ? Color.white.opacity(0.85) : accent
 
         return Button(action: {
             onAnyInteraction?()
@@ -376,14 +380,7 @@ extension UniversalComposerBar {
                 .foregroundColor(iconColor)
                 .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
                 .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(bgFill)
-                        .overlay(
-                            Circle()
-                                .stroke(borderColor, lineWidth: 1)
-                        )
-                )
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)
         }
         .accessibilityLabel(showAttachOptions

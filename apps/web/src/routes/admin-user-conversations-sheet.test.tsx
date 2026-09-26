@@ -62,6 +62,8 @@ const MEMBRE = {
   lastName: '',
   bio: '',
   avatar: '',
+  banner: '',
+  profileCompletionRate: null,
   email: 'membre@example.test',
   phoneNumber: '',
   role: 'USER',
@@ -192,6 +194,41 @@ describe('LE PRISME REMIS À LA MODALE EST CELUI DU MEMBRE', () => {
   });
 });
 
+/**
+ * **« CONFIGURER » N'EXISTE QUE POUR QUI PEUT ÉCRIRE** (#7845, #7999).
+ *
+ * La passerelle garde les écritures souveraines par `canManageConversations`
+ * au rang ADMIN — la même règle qui ouvre la section Conversations, et donc
+ * `gerer`. Sans elle, le bouton rendrait un 403 à qui le touche : son absence
+ * est le contraste qui fait le témoin.
+ */
+describe('la ligne porte « Configurer » quand la section Conversations est ouverte', () => {
+  const monterAvecGerer = (gerer: 'admConversation' | null) =>
+    mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" gerer={gerer} deps={{ source: 'gateway', transport: transportListe() }} />
+      </QueryClientProvider>,
+    );
+
+  test('le toucher ouvre la feuille des écritures souveraines de CETTE conversation', async () => {
+    const host = await monterAvecGerer('admConversation');
+    const bouton = host.querySelector('[data-admin-conversation-configure="c-atelier"]');
+    expect(bouton instanceof HTMLButtonElement).toBe(true);
+    expect(document.querySelector('[data-admin-conv-settings]')).toBe(null);
+
+    await mounter.click(bouton as HTMLElement | null);
+
+    expect(document.querySelector('[data-admin-conv-settings="c-atelier"]')).not.toBe(null);
+    expect(document.querySelector('[data-admin-conv-reason]')).not.toBe(null);
+  });
+
+  test('CONTRASTE — sans la section Conversations, aucun « Configurer »', async () => {
+    const host = await monterAvecGerer(null);
+    expect(host.querySelector('[data-admin-conversation="c-atelier"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-conversation-configure]')).toBe(null);
+  });
+});
+
 describe('la section des conversations est REPLIABLE', () => {
   test('elle se plie, et sa liste est alors démontée', async () => {
     const host = await monter();
@@ -305,5 +342,42 @@ describe('les MÉDIAS aussi : un échec n’est pas « rien publié »', () => {
     const host = await monterMedias(transportVideMedia());
     expect(host.querySelector('[data-admin-absence]')).toBe(null);
     expect(host.textContent ?? '').toContain(translateAdmin('fr', 'admin.media.empty'));
+  });
+});
+
+describe('les conversations du membre se trient et se gèrent (#7845)', () => {
+  test('changer le tri relit la liste avec le tri demandé, depuis la première page', async () => {
+    const chemins: string[] = [];
+    const espion = transportListe();
+    const premier = espion.request;
+    espion.request = (async (req: HttpRequest) => {
+      chemins.push(req.path);
+      return premier(req);
+    }) as HttpTransport['request'];
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport: espion }} />
+      </QueryClientProvider>,
+    );
+    const choix = host.querySelector<HTMLSelectElement>('[data-admin-user-conv-order]');
+    if (choix === null) throw new Error('ordre absent');
+    choix.value = 'asc';
+    choix.dispatchEvent(new Event('change', { bubbles: true }));
+    await mounter.settle();
+    expect(chemins.at(-1)).toContain('sortOrder=asc');
+    expect(chemins.at(-1)).toContain('offset=0');
+  });
+
+  test('« Gérer » mène à la fiche de la conversation, et seulement pour qui a la section', async () => {
+    const sans = await monter();
+    expect(sans.querySelector('[data-admin-conversation-manage]')).toBeNull();
+    mounter.unmountAll();
+
+    const avec = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" gerer="admConversation" deps={{ source: 'gateway', transport: transportListe() }} />
+      </QueryClientProvider>,
+    );
+    expect(avec.querySelector('[data-admin-conversation-manage="c-atelier"]')?.getAttribute('href')).toBe('/adm/conversations/c-atelier');
   });
 });

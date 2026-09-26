@@ -25,10 +25,10 @@ const mockCanAccessConversation = jest.fn<any>();
 const mockResolveConversationId = jest.fn<any>();
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
-  // Résolu dès que l'appelant porte un `registeredUser` : sans le double, tout
-  // test qui donne un rôle plateforme au lecteur tombe dans le `catch` de la
-  // route et se lit comme un échec de la règle testée, pas du harnais.
+  // Sans ce double, un lecteur à rôle plateforme (`registeredUser`) tombe dans
+  // le `catch` de la route : un échec du harnais, pas de la règle testée.
   resolveUserLanguagesOrdered: () => ['fr'],
 }));
 

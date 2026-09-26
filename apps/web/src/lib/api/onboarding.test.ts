@@ -40,6 +40,36 @@ describe('decodeOnboardingState — la frontière', () => {
     });
   });
 
+  test('les champs de #7907/#7908/#7910 se lisent, et leur absence (serveur antérieur) aussi', () => {
+    const extended = served({
+      prefilledSteps: ['email'],
+      emailVerified: true,
+      canPublishStory: true,
+      pendingFriendRequests: 2,
+      stepRewards: { global: 28, story: 20, friendship: 14 },
+    });
+    const decoded = decodeOnboardingState(extended);
+    expect({
+      prefilledSteps: decoded?.prefilledSteps,
+      emailVerified: decoded?.emailVerified,
+      canPublishStory: decoded?.canPublishStory,
+      pendingFriendRequests: decoded?.pendingFriendRequests,
+      stepRewards: decoded?.stepRewards,
+    }).toEqual({
+      prefilledSteps: ['email'],
+      emailVerified: true,
+      canPublishStory: true,
+      pendingFriendRequests: 2,
+      stepRewards: { global: 28, story: 20, friendship: 14 },
+    });
+    expect(decodeOnboardingState(served())?.stepRewards).toBeUndefined();
+  });
+
+  test('un compte de demandes négatif ou des points hors forme : illisible', () => {
+    expect(decodeOnboardingState(served({ pendingFriendRequests: -1 }))).toBeNull();
+    expect(decodeOnboardingState(served({ stepRewards: { global: 1, story: 1 } }))).toBeNull();
+  });
+
   test('une étape inconnue rend la charge ILLISIBLE, jamais une étape devinée', () => {
     expect(decodeOnboardingState(served({ seenSteps: ['languages', 'bonus'] }))).toBeNull();
   });

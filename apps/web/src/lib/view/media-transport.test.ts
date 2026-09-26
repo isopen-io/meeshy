@@ -99,6 +99,11 @@ describe('keyboardSeekTarget — le curseur au clavier, pas de 10 s comme MediaS
     expect(keyboardSeekTarget({ key: 'ArrowRight', position: 55, duration: 60 })).toBe(60);
   });
 
+  test('un pas FOURNI remplace les 10 s — la barre d’une scène de 6 s avance d’une seconde (#7879)', () => {
+    expect(keyboardSeekTarget({ key: 'ArrowRight', position: 2, duration: 6, step: 1 })).toBe(3);
+    expect(keyboardSeekTarget({ key: 'ArrowLeft', position: 2, duration: 6, step: 1 })).toBe(1);
+  });
+
   test('une autre touche, ou une durée inconnue, ne décide rien', () => {
     expect(keyboardSeekTarget({ key: 'Enter', position: 20, duration: 60 })).toBeNull();
     expect(keyboardSeekTarget({ key: 'ArrowRight', position: 20, duration: Number.NaN })).toBeNull();

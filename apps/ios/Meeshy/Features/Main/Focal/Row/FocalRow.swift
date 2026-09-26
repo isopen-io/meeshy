@@ -4,7 +4,7 @@ import MeeshyUI
 
 /// La rangée plate du Fil (Focal) — contrat §WS-4. Pastille `22`,
 /// « Pseudo · HH:mm » en tête de groupe, texte `15` pleine largeur au
-/// retrait `29`, méta discrète, AUCUNE bulle.
+/// contenu et citations sur la colonne du nom, méta discrète, AUCUNE bulle.
 ///
 /// **Densité uniforme** : `input.density` n'est PAS lu par ce fichier —
 /// « même rangée, densité uniforme, zéro perspective ». RETRAIT FOCAL iOS
@@ -30,16 +30,15 @@ struct FocalRow: View {
 
     private var content: BubbleContent { input.content }
 
-    /// Retrait CONSTANT — il ne suit plus la pastille.
+    /// Retrait CONSTANT du contenu propre ET des citations — la colonne du
+    /// nom (#7995) : l'avatar seul dans sa marge, une seule origine ensuite.
     ///
-    /// Même raison que `textSize` : le retrait fixe la largeur disponible,
-    /// donc le retour à la ligne, donc la hauteur. Le faire varier avec le
-    /// focus faisait changer la cellule de taille au basculement d'élection,
-    /// et la liste sautait. Le retrait de l'élue (41) est retenu pour TOUTES
-    /// les rangées : c'est celui qui laisse la place à la pastille de 34, que
-    /// l'en-tête réserve désormais en permanence.
+    /// Constant pour la même raison que `textSize` : le retrait fixe la
+    /// largeur disponible, donc le retour à la ligne, donc la hauteur ; le
+    /// faire varier avec le focus ferait changer la cellule de taille au
+    /// basculement d'élection, et la liste sauterait.
     private var indent: CGFloat {
-        FocalMetrics.Focus.textIndent
+        FocalMetrics.Row.contentIndent
     }
 
     /// **Le « 15 → 16 » de §4.6 est ABANDONNÉ, et c'est un choix.**
@@ -184,6 +183,8 @@ struct FocalRow: View {
             .equatable()
             .opacity(input.isFocused ? 0 : 1)
         }
+        // #7953 — une SUITE magnifiée descend sous sa pastille, en rendu seul.
+        .offset(y: focusLift)
         // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
         // que ses chips, toujours consolidés quelle que soit la hauteur
         // (estimée ou posée) de la cellule ; identité sur la ligne du HAUT
@@ -192,7 +193,7 @@ struct FocalRow: View {
         // AVEC la carte, au tick d'élection.
         .background {
             if input.isFocused {
-                focusCardBackground
+                focusCardBackground.padding(.bottom, -focusDrop)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -210,7 +211,7 @@ struct FocalRow: View {
                     focusStampChip
                 }
                 .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                .offset(y: FocalMetrics.FocusStrip.overhang)
+                .offset(y: FocalMetrics.FocusStrip.overhang + focusDrop)
             }
         }
         // F-083ter (F15) : l'effet épouse le bloc CONTENU, pas la rangée.
@@ -224,6 +225,11 @@ struct FocalRow: View {
         // colonne détachée au bord opposé, et l'inclure était la cause.
         
     }
+
+    private var focusLift: CGFloat {
+        input.isFocused ? FocalMetrics.FocusStrip.contentLift(isFirstInGroup: input.isFirstInGroup) : 0
+    }
+    private var focusDrop: CGFloat { input.isFocused ? focusLift + FocalMetrics.FocusStrip.stripDrop : 0 }
 
     /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
     /// d'un espace avec #5135 : seule la méta l'a quittée, et la ligne basse
@@ -448,20 +454,18 @@ struct FocalRow: View {
     // rangée Script gagne ~28 pt de densité et une mesure de moins.
 
 
-    /// Miroir de la règle réelle (`textBubbleContent`/`mediaWithReplyContainer`,
-    /// lus jamais modifiés) : la citation n'est rendue ICI que si le widget
-    /// média ne l'héberge pas déjà — sinon double citation.
-    private var showsQuotedReply: Bool {
-        content.reply != nil && !content.audioHostsReply && !content.visualHostsReply
-    }
+    /// La citation est rendue ICI sauf quand le lecteur audio l'héberge. Le
+    /// bloc média nu n'en loge aucune (#7928) : la règle de la bulle
+    /// (`visualHostsReply`) n'a pas cours dans la rangée plate.
+    private var showsQuotedReply: Bool { content.flatRowDrawsQuote }
 
     /// Le geste de la carte de scène, ou `nil` — même règle que la bulle : sans
     /// identifiant il n'y a rien à ouvrir, et un tap qui n'ouvre rien est une
     /// cible morte (loi 4). La carte, elle, se rend quand même : c'est la
     /// citation qui « subsiste » quand la story a expiré.
     private var storyCitationOpenTap: (() -> Void)? {
-        guard let citation = content.detachedStoryCitation,
-              !citation.messageId.isEmpty,
+        guard let citation = content.flatRowStoryCitation,
+              citation.opensQuotedTarget,
               let onStoryReplyTap = actions.onStoryReplyTap else { return nil }
         return { onStoryReplyTap(citation.messageId) }
     }
@@ -482,14 +486,13 @@ struct FocalRow: View {
             // `BubbleContent`, que cette rangée reçoit déjà. Un `else if` plutôt
             // que deux `if` — les deux rendus s'excluent par CONSTRUCTION, pas
             // par la coïncidence de deux prédicats qui pourraient diverger.
-            if let storyCitation = content.detachedStoryCitation {
-                BubbleStoryCitationCard(
+            if let storyCitation = content.flatRowStoryCitation {
+                FocalStoryCitationQuote(
                     reply: storyCitation,
                     isDark: input.isDark,
                     accentHex: input.accentHex,
                     onOpen: storyCitationOpenTap
                 )
-                .equatable()
             } else if showsQuotedReply, let reply = content.reply {
                 FocalQuotedReplyView(
                     reply: reply,
@@ -548,7 +551,8 @@ struct FocalRow: View {
                 accentHex: input.accentHex,
                 messageDeliveryStatus: content.meta.deliveryStatus ?? .sent,
                 onMediaTap: actions.onMediaTap,
-                onConsumeViewOnce: actions.onConsumeViewOnce
+                onConsumeViewOnce: actions.onConsumeViewOnce,
+                maxWidth: FocalMediaGridLayout.gridWidth(rowWidth: input.availableWidth)
             )
         }
     }
@@ -682,7 +686,7 @@ struct FocalRow: View {
     /// en interne (`MessageTextRenderer.render(fontSize: 15, …)`) — IDENTIQUE
     /// à `FocalMetrics.Text.size` (`MeeshyFont.bodySize`), aucun `.font()`
     /// externe à appliquer. Seul l'interligne additif (`1.42`, `.lineSpacing`
-    /// est en points côté SwiftUI) et le retrait `29` sont posés ICI.
+    /// est en points côté SwiftUI) et le retrait du contenu sont posés ICI.
     ///
     /// **Signal multi-langue (arbitrage user 2026-08-18)** : ni icône
     /// translate, ni bande de drapeaux dans la rangée — le menu d'appui

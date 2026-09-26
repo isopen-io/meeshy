@@ -1,247 +1,32 @@
 # Decisions - packages/shared (Types & Schema partags)
 
-## 2026-08-13 (2) : Le bloc de statut dénormalisé de `Message` sort entièrement du schéma
+> **Un fichier par décision, sous `packages/shared/decisions/` (#7711).** Ce fichier garde son préambule et la CARTE des décisions prises avant le 2026-09-25 ; il ne reçoit plus de décision : la garde `journal-one-file-per-entry-guard` (passerelle) rougit sur tout titre `## ` posé ici.
+>
+> **Écrire une décision** : créer `packages/shared/decisions/<AAAA-MM-JJ>-<slug>.md`, dont la première ligne est `## <AAAA-MM-JJ> : <titre>`. Aucune ligne à ajouter ici.
 
-**Statut** : Accepté
+**Carte des décisions, dans l'ordre du fichier d'origine**
 
-**Contexte** : Le modèle `Message` portait un bloc « COMPUTED STATUS FIELDS (denormalized for
-performance) » de quatre colonnes — `deliveredToAllAt`, `readByAllAt`, `deliveredCount`,
-`readCount` — documentées « Updated when all conversation participants complete each action ».
-Leur unique écrivain, `MessageReadStatusService.updateMessageComputedStatus`, est un **no-op
-assumé depuis le passage aux curseurs de lecture**. Les quatre colonnes valaient donc `0` / `null`
-sur tout message écrit depuis, sans qu'aucun test ni aucune garde ne le signale.
-
-Les cycles précédents ont rebranché la LECTURE : les quatre valeurs se calculent maintenant dans
-`getConversationReadStatuses` (union curseur / reçu figé, opt-out `showReadReceipts` retiré du
-numérateur comme du dénominateur) et sont servies telles quelles par
-`GET /conversations/:id/messages` et `GET /messages/:messageId`. Plus aucun `select` Prisma ne
-lisait les colonnes ; `tsc --noEmit` sur la gateway le confirme après retrait.
-
-**Décision** : les quatre colonnes sortent de `schema.prisma`. Le commentaire du modèle explique
-désormais où la valeur se calcule, pour qu'aucun futur écrivain ne les « restaure » et ne rouvre
-la divergence.
-
-**Ce qui NE change PAS** : `deliveredCount`, `readCount`, `deliveredToAllAt`, `readByAllAt`
-restent dans les types de CHARGE UTILE (`types/message-types.ts`, `types/conversation.ts`,
-`types/api-schemas.ts`, `utils/validation.ts`) — trois clients les décodent
-(`DeliveryStatusResolver` iOS et Android, `MessageRecord+ToMessage`). Application directe de la
-leçon du cycle 103 : **la colonne « lecteurs » décide du geste, et ici le lecteur lit une valeur
-CALCULÉE, pas une colonne**. Seul le stockage mort disparaît ; la charge utile est identique
-au bit près.
-
-**Alternatives rejetées** : *réécrire un écrivain* — reconstituerait une dénormalisation à tenir
-cohérente à chaque curseur déplacé, alors que le calcul à la lecture est déjà la source de vérité
-partagée par les quatre méthodes d'accusés.
-
-**Conséquences** : MongoDB conserve les champs dans les documents existants (Prisma cesse
-simplement de les connaître) — aucune migration, aucune perte. Toute tentative de les `select`
-redevient une erreur de compilation.
-
-## 2025-01: TypeScript Strict + Immutabilit
-**Statut**: Accept
-**Contexte**: Package partag entre tous les services, doit tre la rfrence de type safety
-**Decision**: TypeScript strict avec tous les flags avancs (`noUnusedLocals`, `noUncheckedIndexedAccess`, etc.), zro `any`, `readonly` partout (2849+ occurrences)
-**Alternatives rejet**: Mode loose (bugs runtime), proprits mutables (effets de bord), `any` pour flexibilit (perte de scurit)
-**Cons**: Code plus verbeux, courbe d'apprentissage
-
-## 2025-01: Branded Types pour IDs sensibles
-**Statut**: Accept
-**Contexte**: Prvenir la confusion compile-time entre types d'identifiants
-**Decision**: Types brands via intersection: `type AnonymousParticipantId = string & { readonly __brand: 'AnonymousParticipantId' }`
-**Alternatives rejet**: Strings simples (pas de protection compile-time), classes (overhead runtime), opaque types (pas support nativement par TS)
-**Cons**: Zro overhead runtime, meilleure documentation d'intention
-
-## 2025-01: `type` prfr  `interface`
-**Statut**: Accept
-**Contexte**: Cohrence des structures de donnes dans le package
-**Decision**: `type` pour les structures de donnes, `interface` rserv aux contrats de comportement (Socket.IO event maps, encryption adapters)
-**Alternatives rejet**: Interface-first (moins flexible pour unions/intersections), classes (trop lourd pour data-only)
-**Cons**: Sparation claire donnes vs comportement
-
-## 2025-01: Socket.IO Events - `entity:action-word` avec hyphens
-**Statut**: Accept
-**Contexte**: Convention de nommage unique pour tous les vnements temps rel
-**Decision**: Format `entity:action-word` (colons + hyphens, JAMAIS underscores). Constants spars `SERVER_EVENTS` et `CLIENT_EVENTS` avec `as const`
-**Alternatives rejet**: Underscores (`message_send`) (moins lisible), camelCase (`messageSend`) (pas convention WS), namespace plat (collisions)
-**Cons**: Convention doit tre enforce manuellement
-
-## 2025-01: Messages - GatewayMessage vs UIMessage
-**Statut**: Accept
-**Contexte**: Backend et frontend ont des besoins diffrents pour les messages
-**Decision**: `GatewayMessage` (align Prisma, backend), `UIMessage` (tats visuels, frontend). Conversion via `gatewayToUIMessage()`, affichage via `getDisplayContent(msg, lang)`
-**Alternatives rejet**: Type unique (mlange concerns API et UI), types multiples par contexte (maintenance impossible)
-**Cons**: Logique de conversion  maintenir, deux types  comprendre
-
-## 2025-01: Validation - Zod avec CommonSchemas
-**Statut**: Accept
-**Contexte**: Validation runtime aux frontires de confiance (API, WebSocket)
-**Decision**: Zod pour validation + infrence de types. `CommonSchemas` centralis (mongoId, conversationType, messageContent, email, etc.)
-**Alternatives rejet**: Joi (moins TypeScript-friendly), Yup (moins d'infrence), class-validator (ncessite classes), validation manuelle (error-prone)
-**Cons**: Source unique de vrit pour les rgles de validation
-
-## 2025-01: Encryption - SharedEncryptionService avec DI
-**Statut**: Accept
-**Contexte**: Mme code de chiffrement sur frontend (Web Crypto) et backend (Node crypto)
-**Decision**: SharedEncryptionService avec injection de dpendances (CryptoAdapter, KeyStorageAdapter), Signal Protocol optionnel
-**Alternatives rejet**: Impls spares par plateforme (duplication), Web Crypto only (pas Node.js), Node crypto only (pas browser)
-**Cons**: Setup DI plus complexe, mais testable avec mocks
-
-## 2025-01: Build - ESM + Subpath Exports
-**Statut**: Accept
-**Contexte**: Module moderne avec tree-shaking pour tous les consommateurs
-**Decision**: `"type": "module"`, target ES2020, moduleResolution `bundler`, subpath exports (`@meeshy/shared/types/*`, `@meeshy/shared/encryption/*`)
-**Alternatives rejet**: CommonJS (legacy, pas de tree-shaking), dual CJS+ESM (maintenance complexe)
-**Cons**: Extensions `.js` obligatoires dans les imports (convention ESM), incompatible outils CJS-only
-
-## 2025-01: Langues - 60+ langues avec capability flags
-**Statut**: Accept
-**Contexte**: Frontend et backend doivent connatre les capacits de chaque langue
-**Decision**: `SupportedLanguageInfo` avec flags (supportsTTS, supportsSTT, supportsVoiceCloning), engine specs, codes MMS, rgions
-**Alternatives rejet**: Listes de langues hardcodes (pas flexible), config backend-only (duplication frontend), fichiers spars par langue (maintenance)
-**Cons**: Synchronisation manuelle avec le service translator Python
-
-## 2025-01: Rles - Hirarchie numrique
-**Statut**: Accept
-**Contexte**: Vrification de permissions efficace et extensible
-**Decision**: Rles globaux numriques (BIGBOSS 100 > ADMIN 80 > MODERATOR 60 > AUDIT 40 > ANALYST 30 > USER 10), rles membres spars (CREATOR 40 > ADMIN 30 > MODERATOR 20 > MEMBER 10)
-**Alternatives rejet**: Comparaison string (error-prone), bitwise flags (moins lisible), hirarchie DB-only (query ncessaire)
-**Cons**: Numros arbitraires, distinction globaux vs contextuels  comprendre
-
-## 2025-01: Database - MongoDB 8 + Prisma (PAS PostgreSQL)
-**Statut**: Accept
-**Contexte**: Schma flexible pour messaging, documents imbriqus, scalabilit horizontale
-**Decision**: MongoDB 8 avec replica set (transactions), Prisma ORM, dnormalisation pour performance (memberCount, reactionSummary), soft deletes
-**Alternatives rejet**: PostgreSQL (mentionn dans anciens docs mais OBSOLTE), MySQL (pas adapt), raw driver (perte type safety)
-**Cons**: Replica set obligatoire, pas de full-text search natif (besoin Atlas Search)
-
-## 2025-01: API Response - Format unifi ApiResponse<T>
-**Statut**: Accept
-**Contexte**: Cohrence des rponses REST et WebSocket
-**Decision**: `{ success: boolean, data?: T, error?: string, code?: ErrorCode, pagination?: PaginationMeta }`
-**Alternatives rejet**: Formats diffrents par endpoint (incohrent), erreurs lances (pas de type safety)
-**Cons**: Lgrement plus verbeux (toujours unwrapper `.data`)
-
-## 2026-08: Mention - keye sur User, pas sur Participant
-**Statut**: Accept
-**Contexte**: `Mention.mentionedParticipantId` tait DCLARE comme une relation vers `Participant` alors que tous ses crivains et lecteurs (`MentionService.createMentions`, `getRecentMentionsForUser`, l'mission `mention:created`, le filtre anti-auto-notification de `createMentionNotificationsBatch`) y mettaient un `User.id`. Consquences: `getMentionsForMessage` joignait un espace d'identifiants que la colonne n'a jamais contenu et rendait `[]` pour tout message, `onDelete: Cascade` ne se dclenchait jamais, et les lignes rcrites par `migrate-to-participant-model.ts` taient invisibles depuis l'inbox.
-**Decision**: `mentionedUserId String @map("mentionedParticipantId")` + relation `mentionedUser User`, aligne sur ses deux jumeaux `CommentMention` et `PostMention`. Le `@map` conserve le nom PHYSIQUE de la colonne: le renommage est un renommage de type, pas de donnes. `scripts/migrations/repair-mention-user-ids.ts` reconvertit les lignes restes en `Participant.id`.
-**Alternatives rejet**: Converger vers `Participant` (imposerait une jointure  chaque lecture de l'inbox, qui est transverse aux conversations; et une cascade qui effacerait l'historique des mentions au retrait d'un membre — une mention nomme une personne, pas une adhsion). Renommer physiquement la colonne (migration de donnes sur toutes les lignes, sans gain).
-**Cons**: Le nom physique de la colonne ne correspond plus  son nom logique — le `@map` et ce document portent l'explication.
-
-## 2026-08: CallParticipant - la qualite de connexion est EPHEMERE, pas une colonne
-**Statut**: Accepte
-**Contexte**: `CallParticipant.connectionQuality` etait declare QUATRE fois, de quatre facons mutuellement incompatibles: `Json?` (`schema.prisma`, commente `{ latency, packetLoss, bandwidth }`), l'interface `ConnectionQuality` (`types/video-call.ts`), `z.number().nullable()` (`CallParticipantSchemas`, `utils/validation.ts`) et `{ type: 'number', 0-100 }` (`callParticipantSchema`, `types/api-schemas.ts`) — les fixtures de test y ajoutaient une cinquieme forme, une CHAINE (`'good'`). Aucun des 12 sites `callParticipant.{create,update,updateMany}` du gateway ne l'ecrivait: ZERO ecrivain. Trois emissions socket (`CallEventsHandler`, deux `call:initiated` + `call:participant-joined`) le relayaient donc a `null` a tout client, toujours, sous un double cast `as unknown as ConnectionQuality | null` qui masquait que la forme Json n'avait jamais ete validee. ZERO consommateur: iOS (`CallManager.connectionQuality: PeerConnectionState`), Android (`CallViewModel` <- `ConnectionQuality.from(sample.level())`) et web (`call-store.connectionQuality: ConnectionQualityLevel`) calculent tous leur qualite LOCALEMENT depuis leur propre pile WebRTC. La surface REST, elle, etait deja propre: `toCallParticipantResponse` (`utils/call-session-response.ts`) construit une forme explicite et n'a jamais porte le champ.
-**Decision**: RETIRER le champ — du modele Prisma, du type partage `CallParticipant`, de l'interface `ConnectionQuality` devenue orpheline, et des trois emissions socket. Le signal par participant existe deja et circule EN TEMPS REEL: `call:quality-report` porte `rtt`, `packetLoss`, `level` par participant, et sur degradation soutenue le handler emet `call:quality-alert` par participant aux pairs. Les statistiques instantanees gardent leur type dedie `ConnectionQualityStats`, a ne pas confondre avec le `ConnectionQuality` retire. Le bilan de fin d'appel reste dans `CallParticipant.analytics`. Retires dans le meme lot: `CallParticipantSchemas` (Zod) et `callParticipantSchema` (OpenAPI), sans aucune reference dans le depot, et qui decrivaient en outre `status`, `duration`, `isMuted`, `isVideoOff` — quatre champs absents du modele Prisma (qui porte `isAudioEnabled`, `isVideoEnabled`, `leftAt`). Ce n'etaient pas des contrats perimes sur un champ, mais deux descriptions entieres d'une entite qui n'a jamais existe sous cette forme.
-**Alternatives rejetees**: CABLER le champ (le remplir depuis `call:quality-report`) — couterait jusqu'a 30 ecritures/min/participant (plafond `SOCKET_RATE_LIMITS.CALL_QUALITY_REPORT`) sur le chemin CHAUD de l'appel, pour persister une donnee dont la valeur expire en quelques secondes et que trois clients sur trois calculent deja eux-memes. Laisser le champ en place «au cas ou» — c'est precisement ce qui a produit quatre declarations divergentes et un `null` diffuse a tous les clients pendant toute la vie de la feature.
-**Cons**: Aucune migration MongoDB n'accompagne le retrait (rien n'a jamais ete ecrit, il n'y a aucune donnee a perdre); des documents `CallParticipant` anterieurs pourraient theoriquement porter la cle, que Prisma ignore desormais. Une future qualite PERSISTEE devra repartir du modele, pas de ces schemas: c'est l'objet des commentaires laisses aux quatre sites.
-
-## 2026-08: Message.receivedByAllAt — retire; deliveredToAllAt/readByAllAt restent, mais CALCULES
-**Statut**: Accepte
-**Contexte**: Le modele `Message` porte cinq champs de statut denormalises (`deliveredToAllAt`,
-`receivedByAllAt`, `readByAllAt`, `deliveredCount`, `readCount`). Le passage au suivi par curseurs a
-vide leur unique ecrivain: `MessageReadStatusService.updateMessageComputedStatus` est depuis un
-no-op documente («Computed fields are no longer stored on Message to improve write performance»).
-Sur toute la collection, les trois dates valent donc `null` et les deux compteurs zero. Les
-compteurs ont ete rebranches sur la source de verite aux deux cycles precedents; les DATES ne
-l'avaient pas ete.
-**Decision**: `receivedByAllAt` SORT — modele Prisma, `MessageEntity` (`types/message-types.ts`),
-`ConversationMessage` (`types/conversation.ts`), `messageSchema` (`types/api-schemas.ts`) et les deux
-`select` du gateway. Il n'a ni ecrivain NI lecteur: aucun client des quatre plateformes ne le decode
-(verifie par grep sur `apps/web`, `apps/ios`, `apps/android`, `packages/MeeshySDK`). Ses deux
-voisines RESTENT declarees et servies, mais CALCULEES par
-`MessageReadStatusService.getConversationReadStatuses` — l'instant du dernier destinataire servi,
-`null` tant qu'il en manque un.
-**Alternatives rejetees**: Retirer les trois d'un meme geste — `deliveredToAllAt` et `readByAllAt`
-ont de VRAIS lecteurs (`DeliveryStatusResolver` iOS et Android, `MessageRecord+ToMessage`,
-`MessagePersistenceActor`), qui traitent `!= null` comme la preuve que tous ont lu; les retirer
-casserait trois decodeurs pour un defaut qui se repare. Reactiver l'ecriture des colonnes —
-c'est la decision d'archi que le passage aux curseurs a prise a l'envers; deriver a la lecture ne
-coute aucune requete de plus.
-**Cons**: Retrait d'un champ d'API publiee. Sans consequence connue: il ne pouvait valoir que `null`
-et n'avait aucun decodeur. Aucune migration MongoDB — Prisma cesse de mapper la cle, les documents
-existants la gardent inerte. `deliveredCount` / `readCount` restent declares sans ecrivain: ils ont,
-eux, des lecteurs clients et sont deja servis calcules; leur retrait est un lot distinct.
-
-## 2026-08: Événements de marquage EN MASSE — un PRÉDICAT en union discriminée, jamais un sac d'options
-**Statut**: Accepté
-**Contexte**: Les quatre chemins de marquage groupé de `NotificationService` (`markAllAsRead`, les trois clés de `markContextNotificationsAsRead`, `markNotificationsByTypesAsRead`) passent par `updateMany` / `$runCommandRaw`, qui ne renvoient AUCUN id : ils ne peuvent pas émettre un `notification:read` par ligne, et refetcher les ids annulerait le gain de l'update unique indexé. L'événement doit donc décrire ce qui a été fait, pas à quoi. La fiche d'audit `gwcontract-05` prescrivait un payload `{ conversationId?, postId?, types?, all? }` — toutes clés optionnelles.
-**Décision**: `NotificationReadBulkScope` est une union DISCRIMINÉE : `{kind:'all'} | {kind:'context', contextKey, contextValue} | {kind:'types', types}`, et le prédicat correspondant est énoncé UNE seule fois, hors des clients, dans `utils/notification-read-bulk.ts` (`notificationMatchesReadBulkScope`) — chaque client l'importe au lieu de le réécrire. Un `kind` inconnu ne matche RIEN (repli sûr d'un client plus vieux que son serveur : ne rien marquer laisse l'événement de compteurs recaler le badge, alors que marquer trop retirerait de la cloche des lignes encore non lues). Le payload ne porte délibérément AUCUN `count`.
-**Alternatives rejetées**: Le sac d'options prescrit — il rend représentables un scope vide (« rien » ou « tout » ?) et un scope contradictoire (`{all:true, conversationId}`), et surtout **il n'a pas de place pour `friendRequestId`**, la troisième clé sur laquelle la gateway marque réellement en masse et que la fiche avait omise : un client écrit d'après elle l'aurait ignorée en silence, laissant la notification de demande d'amitié non lue sur tous les autres appareils après y avoir répondu. Un payload dont toutes les clés sont optionnelles n'écrit sa cardinalité nulle part — ni le compilateur, ni un test, ni une relecture ne peuvent signaler qu'il en manque une. Porter un `count` « informatif » — c'est offrir au client le décrément exact qu'il ne doit pas faire : son cache est partiel (paginé), il matche moins de lignes que le serveur n'en a marquées, et `notification:counts` (absolu, émis juste après) est la seule autorité sur les compteurs. Émettre via `emitWithSeq` — estampiller un événement qu'aucun client n'observe ferait avancer `lastSeq` sans lecteur, donc de faux trous de séquence au prochain événement observé (lockstep `gwcontract-01`).
-**Conséquences**: Tout nouveau chemin de marquage en masse doit AJOUTER un `kind` — l'union le force à répondre « sur quoi ? » à un endroit unique, au lieu d'ajouter une clé optionnelle de plus que personne ne lira. Le miroir Swift du prédicat reste à écrire côté iOS ; l'événement étant additif, un client qui l'ignore se comporte exactement comme avant. La symétrie côté SUPPRESSIONS n'existe pas encore : `deleteAllRead` a le même défaut et demanderait un `notification:deleted-bulk`.
-
-## 2026-08: `conversation:updated` — le groupe d'aperçu est un CONTRAT nommé, pas ce que l'index signature laisse passer
-**Statut**: Accepté
-**Contexte**: `ConversationUpdatedEventData` se termine par `readonly [key: string]: unknown`, la gateway ne posant que les champs qui ont changé. Le groupe d'APERÇU — les champs qui, ENSEMBLE, décrivent le message que la ligne de liste doit rendre — y voyageait donc pour partie sans être déclaré : `lastMessageId`, `lastMessagePreview`, `senderId` et `location` passaient par l'index signature. Trois émetteurs le produisent (`MessageHandler` pour le WS `message:send`, `MeeshySocketIOManager._broadcastNewMessage` pour REST/ZMQ/agents, `emitConversationPreviewUpdate` pour édition/suppression/traduction/masquage), et leur parité ne reposait que sur la lecture du code voisin. Elle a échoué : le second omettait `location`, alors qu'il calculait déjà le lieu vingt lignes plus haut pour le hisser sur `message:new` — un message position-seule a un `lastMessagePreview` vide par construction, donc la ligne de liste ne rendait plus rien du tout. Le correctif de code a été livré par #3122 ; il ne pose aucune garde contre la récidive, et c'est cette décision-ci qui l'ajoute.
-**Décision**: `location` est déclaré dans le type, avec la règle qui le gouverne — **clé ABSENTE = « ce message n'a pas de lieu », jamais « je n'en parle pas »**. Les clients écrivent le lieu AVEC l'identité du message (`adoptLastMessage` puis `lastMessageLocation = event.location`), donc son absence efface la pastille du message précédent : c'est ce qui rend correct le remplacement d'une épingle par un texte, et faux tout émetteur qui « oublie » le champ. Corollaire opposable : **un émetteur qui porte `lastMessageId` porte le lieu du message qu'il nomme, ou aucun.** La forme reste `unknown`, même convention que `MessageRequest.location` — la validation stricte vit dans `services/gateway/src/services/location/sharedPlace.ts`.
-**Alternatives rejetées**: Laisser l'index signature faire le travail — c'est l'état qui a produit le défaut, et rien (ni compilateur, ni test, ni relecture) ne signale qu'un émetteur sur trois a oublié un membre du groupe ; le champ suivant se perdra de la même façon. Typer strictement le lieu ici (dupliquer `SharedPlace` dans `packages/shared`) — les bornes de coordonnées et les longueurs de chaîne vivraient alors à deux endroits, et c'est cette duplication-là que `sharedPlace.ts` existe pour éviter. Faire porter tout le groupe par un sous-objet `lastMessage: {...}`, qui rendrait l'oubli d'un membre impossible par construction — c'est la bonne forme, mais c'est un changement de fil pour trois émetteurs et trois clients : à instruire pour lui-même.
-**Conséquences**: Les autres membres du groupe encore non déclarés (`lastMessageId`, `lastMessagePreview`, `senderId`) devraient suivre le même chemin ; ils ne sont pas ajoutés ici faute d'un défaut mesuré à leur nom. Le contrat parle des « clients » au pluriel pour des règles que tous ne tiennent pas encore (la garde monotone est iOS-seule) — écart connu, piste ouverte.
-
-## 2026-08: Un canal serveur→client déclaré sans émetteur est un DÉFAUT — sauf s'il est réservé explicitement
-**Statut**: Accepté
-**Contexte**: Sur les 124 noms de `SERVER_EVENTS`, huit n'étaient prononcés nulle part dans le code exécutable de la passerelle. Cinq étaient de vraies dérives : `message:translated`, `system:message` et `conversation:online-stats` (écoutés par les clients, jamais émis par aucune version du serveur) ; `post:reaction-sync` et `comment:reaction-sync` (l'instantané voyage dans l'ACK de la requête, jamais en diffusion — frères de `reaction:sync`, retiré pour cette exacte raison, et dont le commentaire de retrait raconte qu'un client s'y était abonné en versant l'instantané dans le seau INCRÉMENTAL de `reaction:added`, donc un vrai bug). Les trois autres sont une réservation légitime (pipeline de traduction en appel). La réservation était jusque-là portée par un bloc de PROSE, « Call events RESERVED (no emitter yet) », qui avait pourri sans que rien ne le signale : il nommait encore six événements dont l'émetteur avait atterri depuis.
-**Décision**: Tout nom de `SERVER_EVENTS` doit être NOMMÉ dans le code exécutable de la passerelle, ou figurer dans `RESERVED_SERVER_EVENTS` — une valeur exportée par le contrat, à côté des noms qu'elle qualifie. `packages/shared/__tests__/ci/socket-event-emitter-gate.test.ts` fait respecter les deux sens : un nom orphelin non réservé rougit, ET un nom réservé dont l'émetteur a atterri rougit aussi. Le critère d'émission est « la passerelle nomme l'événement », pas « un `.emit(` le prend en argument » — le serveur émet aussi par indirection (`const errorEventName = …; socket.emit(errorEventName, …)`), et le critère retenu se trompe donc du côté PERMISSIF : il ne peut pas produire de faux positif. Les commentaires sont dépouillés avant recherche, sans quoi la prose qui explique qu'un événement N'EST PLUS émis vaudrait preuve d'émission.
-**Alternatives rejetées**: Garder la liste des réservations dans la garde — une table d'exceptions cachée au fond d'un fichier de test est un endroit où l'on dépose ce qu'on ne veut pas traiter, et que personne ne relit ; dans le contrat, réserver un canal redevient un acte visible en revue, dans le fichier qu'on ouvre de toute façon pour déclarer l'événement. Exiger la forme littérale `.emit(NOM` — rendrait rouges dix-neuf canaux d'appel parfaitement émis (ils s'écrivent `CALL_EVENTS.INITIATED`, jamais `SERVER_EVENTS.CALL_INITIATED`) et tous les émetteurs indirects. Laisser la réservation en commentaire — c'est l'état qui a produit la pourriture : une exemption que rien n'exécute survit à sa raison d'être et finit par couvrir un vrai défaut.
-**Conséquences**: Ajouter un canal serveur→client au contrat avant son émetteur exige désormais de l'inscrire dans `RESERVED_SERVER_EVENTS`, et de l'en retirer quand l'émetteur atterrit. La garde forme une paire avec `socket-event-name-gate` (cycle 76), qui pose la question inverse — un nom épelé par un client existe-t-il au contrat ? La troisième garde de la série, « tout `CLIENT_EVENTS` a-t-il un handler gateway ? », reste à écrire : elle bute sur `CALL_SIGNAL`, déclaré dans les DEUX maps, ce que le `CLAUDE.md` de ce paquet interdit déjà explicitement.
-
-## 2026-08: Le réordonnancement de COMMUNAUTÉS a son propre nom d'événement, pas un élargissement de celui des conversations
-**Statut**: Accepté
-**Contexte**: `POST /user-preferences/communities/reorder` persistait `orderInCategory` et n'émettait rien, quand son jumeau `reorderConversationPreferences` diffuse `USER_PREFERENCES_REORDERED` sur la room personnelle. La ligne `UserCommunityPreferences` étant par UTILISATEUR et non par appareil, un glisser-déposer fait sur un appareil n'atteignait jamais les autres — qui tiennent leur liste en `staleTime: Infinity` avec le socket pour source primaire. La forme naturelle du correctif était d'admettre `communityId` dans `UserPreferencesReorderedEventData` : même geste, un discriminant de plus, exactement ce que fait `USER_PREFERENCES_UPDATED` avec ses trois scopes.
-**Décision**: `USER_PREFERENCES_COMMUNITY_REORDERED` (`user:preferences-community-reordered`), avec `UserPreferencesCommunityReorderedEventData` — même forme que son jumeau, `communityId` à la place de `conversationId`, et pas de `version` (`UserCommunityPreferences` n'en a pas ; l'ordre vit hors du chemin versionné des deux côtés). La charge nomme ce qui a été ÉCRIT, jamais ce qui a été DEMANDÉ : le filtre d'appartenance borne les deux ensemble, et un lot vide n'émet rien.
-**Alternatives rejetées**: Élargir `UserPreferencesReorderedEventData` — MESURÉ sur les décodeurs avant d'écrire : iOS déclare `UserPreferencesReorderedSocketEvent.Update.conversationId` NON optionnel, donc un item de communauté fait échouer le décodage de l'ÉVÉNEMENT ENTIER et emporte les réordonnancements de conversation qui voyagent avec lui ; le web les filtre en silence (`preferencesMap.has(update.conversationId)`). L'élargissement casse le cas NOMINAL pour en servir un neuf, par le mécanisme le plus discret qui soit — un `catch` de décodage côté client (cf. `ParticipantRoleUpdatedEvent`, cycle 92 bis). Un événement multi-scope l'est parce qu'il a été CONÇU ainsi, avec des décodeurs qui discriminent ; il ne le devient pas rétroactivement. Router le geste vers le seau `onCategoryChanged` (`() => void`) — il jetterait `updates[]`, et un réordonnancement ne touche aucune `UserConversationCategory`, décision déjà prise pour le jumeau conversation.
-**Conséquences**: Le nouveau nom est INERTE pour les deux consommateurs existants par construction. iOS et Android n'ont aujourd'hui aucune surface de réordonnancement de communautés — le seul émetteur de la route est le web — donc aucun décodeur n'y est posé : l'écrire maintenant serait un consommateur sans producteur, que rien ne ferait tomber s'il dérive ; il appartient au lot qui apportera le geste. Cliquet d'inventaire des écrivains des deux tables de préférences : `services/gateway/src/__tests__/preference-writer-sweep.ts`.
-
-## 2026-09-13: `zod` est ÉPINGLÉ à `4.4.3` par un override racine — 4.5 compte des code points, plus des unités UTF-16 (#6234, suivi #6235)
-**Contexte**: L'intégration de la livraison du 2026-09-13 a monté `zod` dans `packages/shared` seul (`^4.4.3` → `^4.5.4`), laissant les trois autres workspaces en arrière. Le premier symptôme était un typecheck rouge — `ZodLiteral<"all">` non assignable à `SomeType` — parce que `notificationTypeEnum` (défini chez shared) recevait un `z.literal` issu du zod du gateway : deux univers de types. Aligner les quatre a fermé ce symptôme et OUVERT le vrai : sous 4.6.3, `z.string().max(32)` ACCEPTE `'😀'.repeat(20)` (40 unités UTF-16, 20 code points) que 4.4.3 refusait. **4.4.3 compte des unités UTF-16 (`String.length`) ; 4.5+ compte des code points Unicode**, et `.min()` / `.length()` basculent avec `.max()`.
-**Décision**: Un override racine `"zod": "4.4.3"`, et les quatre manifestes à `^4.4.3`. L'override, pas le caret, parce qu'un caret laisse n'importe quel `bun install` futur remonter à 4.6.3 et rejouer le fail-open en silence. Le contrat d'unité est désormais TENU par un témoin — `packages/shared/__tests__/types/reaction.test.ts`, qui exerce `z.string().max(EMOJI_MAX_LENGTH)` sur 32 emojis astraux (64 unités / 32 code points, la seule forme d'entrée qui distingue les deux comptages) avec sa contre-épreuve en BMP. Mesuré : refusé sous 4.4.3, accepté sous 4.6.3.
-**Alternatives rejetées**: Garder 4.6.3 et corriger le témoin qui rougit — il aurait fallu auditer les **242** bornes `.max()` du dépôt (171 gateway, 70 shared, 1 agent) dans le lot d'un `dev` rouge, et une seule d'entre elles avait une fixture astrale : les 241 autres changeaient de sens sans qu'aucun test ne bouge. Le sens de la panne est fail-OPEN (32 unités ≈ 64 octets → 32 code points ≈ 128 octets), donc l'inverse d'un repli sûr. Épingler par un caret exact dans les quatre manifestes — protège l'install d'aujourd'hui, pas celui de la semaine prochaine, et disperse en quatre endroits une intention unique.
-**Conséquences**: `bun.lock` résout 4.4.3 pour les quatre workspaces ; une copie `zod@4.6.3` subsiste dans le store pour des dépendances transitives, qu'aucune frontière de source ne traverse. Le contrat d'unité était déjà ÉCRIT dans le commentaire de `reaction.test.ts` depuis le 2026-09-02, et ses trois témoins l'assertaient en JS pur (`longest.length`) : ils ne pouvaient pas voir zod changer d'avis. **Un contrat énoncé dans un commentaire et vérifié par personne se perd à la première montée de dépendance.** Retirer l'override sans faire #6235 rouvre le fail-open sur tout le dépôt.
-
-## 2026-09-14: La légende d'un média (`PostMedia.caption`) traduit par des champs ADDITIFS, jamais dans `translations` — et `PostMedia`/`MessageAttachment` restent DEUX documents (#6280)
-
-**Statut**: Accepté
-
-**Contexte**: Directive porteur — introduire la traduction de légende de média pour post, réel, story et commentaire, et interroger au passage pourquoi le dépôt porte deux documents de pièce jointe (`PostMedia` pour posts/stories/commentaires, `MessageAttachment` pour les conversations) plutôt qu'un seul `Media`. `Post.content` a déjà sa traduction (`Post.translations`) ; ni `PostMedia.caption` ni `PostMedia.alt` n'en ont. Les trois — `Post.content`, `PostMedia.caption`, `PostMedia.alt` — sont des contenus DISTINCTS (rappel explicite du porteur) : jamais de court-circuit même à chaînes égales, chacun garde sa propre carte de traductions.
-
-**Décision**:
-1. **Deux documents, pas un.** `MessageAttachment` porte des garanties de confidentialité entre deux personnes (chiffrement, vue unique, flou, accusés par participant) que `PostMedia` (contenu public/semi-public) n'a pas et n'a pas à porter. Fusionner en un `Media` unique coûterait une migration lourde et un mélange privé/public pour AUCUN gain de traduction — la légende de chaque document a besoin de sa propre carte, qu'il y ait un ou deux modèles. La convergence se fait PAR LE TYPE de traduction, pas par la table : `packages/shared/types/media-caption-translation.ts` (Zod + TS, carte `{ [lang]: {text, translationModel, confidenceScore, createdAt, updatedAt?} }`, même forme que `Post.translations`) est écrit pour être réutilisé tel quel par `MessageAttachment.captionTranslations` (#6533) et, si la décision-produit #6534 est positive, par `PostMedia.altTranslations`.
-2. **Champs additifs sur `PostMedia`, jamais dans `translations`.** `PostMedia.translations` (Json) est DÉJÀ occupé par les pistes audio/transcriptions traduites (`{lang: {type, transcription, path, url, durationMs, …}}`) ; y ranger la légende écraserait cette carte. `PostMedia.language` documente la langue du MÉDIA pour les variantes TTS/sous-titres — une signification différente de la langue SOURCE de la légende. Deux colonnes neuves : `captionLanguage String?` et `captionTranslations Json?`.
-3. **`PostMedia.alt` reste explicitement HORS de ce lot** — décision-produit ouverte séparément (#6534) : un texte alternatif traduit peut être un vrai gain d'accessibilité (dimension 5 du CLAUDE.md racine) ou du bruit si son usage réel est un texte court déjà international, question non mesurée à ce jour (dimension 10, Utilité).
-
-**Alternatives rejetées**: Fusionner `PostMedia` et `MessageAttachment` en un modèle `Media` — étudiée et écartée (§ ci-dessus), resterait ouvrable par une ADR dédiée si un besoin réel distinct de la traduction apparaît. Réutiliser `PostMedia.translations` pour la légende — collision avec les pistes audio déjà en place. Réutiliser `PostMedia.language` pour la langue source de la légende — mélangerait deux significations (langue du média vs langue de la légende) dans une colonne déjà prise. Traduire `alt` dans le même geste que `caption` — confondrait deux contenus que le porteur a explicitement distingués, sans mesure d'usage préalable de `alt`.
-
-**Conséquences**: Spécification complète (étapes gateway/clients, namespace ZMQ `media-caption`, événement `media:caption-translation-updated`, route `POST /posts/media/:mediaId/caption/translate`) en commentaire de #6280. Issues de suite : #6533 (MessageAttachment.caption, sous garde vue unique/flou/chiffrement), #6534 (décision-produit alt). Le type partagé n'a, à ce stade, qu'un seul consommateur réel (`PostMedia.captionTranslations`) — sa généralité pour `MessageAttachment`/`alt` reste à confirmer par l'usage, pas par anticipation supplémentaire.
-
-## 2026-09-14: La légende d'une pièce jointe de conversation (`MessageAttachment.caption`) ne se traduit JAMAIS sous protection — vue unique, flou ou chiffrement (#6533)
-
-**Statut**: Accepté
-
-**Contexte**: Issue de suite de #6280 (§ ci-dessus, point 1) — `MessageAttachment` était écrit pour recevoir le même type partagé `MediaCaptionTranslations` que `PostMedia`, sous réserve d'une décision sur son traitement pour un média PROTÉGÉ. Contrairement à `PostMedia` (contenu public/semi-public, sans protection), `MessageAttachment` porte trois signaux de confidentialité qu'un pipeline de traduction traverse ou non : vue unique (`isViewOnce`), flou (`isBlurred`), chiffrement (`isEncrypted`/`encryptionMode`). Le CLAUDE.md racine (§ Prisme, cycle 124-125) nomme déjà exactement ce risque pour les notifications : un texte traduit en clair, au-dessus d'un placeholder ou d'un média masqué, est une fuite — pas une amélioration de service.
-
-**Décision**:
-1. **Fail-closed sur les trois signaux, sans exception.** Un attachement dont `isViewOnce === true` OU `isBlurred === true` OU `isEncrypted === true` (ou `encryptionMode` non nul) ne déclenche AUCUNE traduction de sa légende — ni à l'écriture, ni à la demande. La légende protégée reste dans sa langue d'origine pour tout lecteur, exactement comme le contenu du média qu'elle accompagne. `messageAttachmentCaptionMayTranslate()` (`services/gateway/src/services/attachments/MessageAttachmentCaptionTranslationService.ts`) est le SEUL point de décision — jamais réévalué au call-site.
-2. **Raisons, une par signal** :
-   - *Vue unique* — traduire persisterait un texte (`captionTranslations`, en base ET en cache de traduction côté translator) au-delà de la seule vue que le média autorise. La légende protégée n'existe, comme le média, que le temps de sa consultation.
-   - *Flou* — servir une légende traduite EN CLAIR au-dessus d'un média encore masqué est exactement la fuite documentée pour les notifications (cycle 124) : la protection porte sur le MÉDIA, jamais sur son texte d'accompagnement, si bien qu'un texte traduit contournerait le flou sans jamais le lever.
-   - *Chiffrement* — la traduction tourne côté serveur (NLLB via le translator), sur le texte en clair. Une conversation chiffrée (`isEncrypted`/`encryptionMode: 'e2ee'`) n'envoie jamais son contenu en clair au serveur ; router sa légende vers le pipeline de traduction romprait ce contrat pour le SEUL champ légende, une exception que rien ne justifie.
-3. **Champs additifs posés SANS condition sur le schéma** — `MessageAttachment.captionLanguage String?` / `.captionTranslations Json?`, même forme que `PostMedia` (#6280), réutilisant `MediaCaptionTranslations` tel quel. Les colonnes existent pour tout attachement ; c'est l'ÉCRITURE qui est gardée, jamais le schéma — un attachement non protégé aujourd'hui peut devenir protégé demain (un utilisateur peut, en théorie, éditer les drapeaux d'un attachement existant), et une garde au schéma ne survivrait pas à ce changement d'état alors que la garde d'écriture, relue à chaque déclenchement, le fait.
-4. **Portée de ce lot : la garde, pas le pipeline complet.** Contrairement à `PostMedia.caption` avant #6280, `MessageAttachment.caption` n'a aujourd'hui AUCUN chemin d'écriture depuis une route utilisateur (vérifié : ni `routes/attachments/upload.ts`, ni `metadata.ts` ne l'exposent ; le seul écrivain du dépôt est la copie de transfert, `MessageProcessor.copyForwardedAttachments` / `copyAttachments.ts`, qui recopie verbatim). Câbler la traduction à une écriture qui n'existe pas encore serait de la machinerie sans appelant. Ce lot livre donc `triggerMessageAttachmentCaptionTranslation()` — le déclencheur, testé directement avec sa garde — prêt à être appelé par la route qui donnera à `caption` son premier chemin d'écriture utilisateur ; le service de persistance ZMQ (complétion, événement socket, route à la demande) suit le même calque que `MediaCaptionTranslationService` et est un suivi explicite, pas remis à plus tard par oubli.
-
-**Alternatives rejetées**: Traduire les légendes non protégées seulement, et lever la garde après coup si le porteur le demande pour les protégées — rejetée : la doctrine sécurité du CLAUDE.md racine (dimension 1) est fail-closed par défaut, jamais l'inverse ; lever une garde de confidentialité est un choix produit qui se décide une fois, explicitement, jamais par défaut. Confier la garde au call-site (chaque appelant vérifie avant d'appeler) — rejetée : c'est la classe de défaut nommée par le CLAUDE.md gateway (« une garde de confidentialité se relit CHEZ ELLE, pas dans ses paramètres ») ; un paramètre optionnel qui désactive une garde par omission est un demi-correctif. Bâtir le pipeline ZMQ/socket/route complet dans ce lot par symétrie avec #6280 — rejetée : sans écriture utilisateur de `caption`, ce serait la même machinerie sans appelant que #6280 a précisément évitée en écrivant `applyMediaText` pour PostMedia AVANT son pipeline de traduction.
-
-**Conséquences**: `services/gateway/src/services/attachments/MessageAttachmentCaptionTranslationService.ts` porte la garde et le déclencheur, avec témoin rouge→vert prouvant qu'un attachement protégé (chacun des trois signaux, séparément) n'écrit ni `captionLanguage` ni `captionTranslations` et n'émet aucune requête ZMQ. Suivis explicites, à ouvrir en issues quand un besoin réel les motive : (a) un chemin d'écriture utilisateur pour `MessageAttachment.caption` (aucun aujourd'hui) ; (b) le service de persistance ZMQ + l'événement socket + la route à la demande, une fois (a) posé ; (c) `captionLanguage`/`captionTranslations` ajoutés à `attachmentFullSelect`/`attachmentMediaSelect` (`services/gateway/src/services/attachments/attachmentIncludes.ts`) au moment où un client a effectivement quelque chose à lire.
-
-## 2026-09-15: La décision-produit #6534 est OUI — `PostMedia.alt` se traduit ; type et gabarit `MediaCaptionTranslation*` réutilisés tels quels (#6737)
-
-**Statut**: Accepté (gateway/shared livrés ; web hors de ce lot)
-
-**Contexte**: #6534 laissait `PostMedia.alt` explicitement hors du lot #6280 (§ ci-dessus, point 3), en attente d'une mesure d'usage réel avant décision (dimension 10, Utilité). La mesure : `alt` a un producteur ET un consommateur réels sur le WEB (`legacy-web-final:apps/web/components/v2/MediaAccessibilityFields.tsx` → `<img alt=...>` dans `ImageGallery`/`PostCard`/`PostDetail`/`CanvasV3Scene`) — ce n'est pas un champ mort. iOS écrit `alt` sans jamais le rendre à VoiceOver (#6738, défaut d'accessibilité indépendant de la traduction) ; Android n'a ni producteur ni consommateur (#6739).
-
-**Décision**:
-1. **OUI, `alt` se traduit comme `caption`** — le web a une valeur immédiate et mesurée ; iOS/Android en auront une une fois leurs prérequis respectifs livrés (#6738, #6739), hors périmètre de ce lot.
-2. **Le type partagé annoncé par #6280 est réutilisé SANS modification** : `PostMedia.altLanguage String?` / `altTranslations Json?` portent `MediaCaptionTranslationEntry`/`mediaCaptionTranslationsSchema` (`packages/shared/types/media-caption-translation.ts`) — aucun nouveau fichier de type, exactement ce que son doc-comment prévoyait pour ce cas.
-3. **`MediaAltTranslationService` est une JUMELLE de `MediaCaptionTranslationService`, pas une généralisation paramétrée.** Le service capture et la CLI (`translateOnDemand`, l'écoute ZMQ, la persistance `$runCommandRaw` en pipeline) portent une charge de comportement identique à celle qui a justifié `MessageAttachmentCaptionTranslationService` comme jumelle plutôt qu'un paramètre `field: 'alt' | 'caption'` sur un service unique : deux singletons `.init()`/`.shared` distincts, deux namespaces ZMQ (`media-caption:`/`media-alt:`), deux événements socket. `applyMediaText` (`mediaText.ts`), lui, reste généralisé par colonne — c'est la couche d'écriture pure, sans état ni collaborateur externe, qui a motivé son extraction en fonction libre (#4055) ; le service de traduction a un état (`_shared`) et des collaborateurs (ZMQ, Socket.IO) qu'un paramètre de champ n'aurait fait que déplacer dans chaque branche interne.
-4. **Portée de ce lot : gateway + shared, pas le web.** `PostService.applyMediaAlt`/`writeMediaAlt`/`triggerMediaAltTranslations` (mêmes deux call-sites que `caption` : écriture+déclenchement groupés dans `createPost`, hors transaction ; écriture seule dans la transaction d'`updatePost`, déclenchement après son commit) et l'événement `media:alt-translation-updated` sont livrés et testés. La lecture/consommation web (résolution Prisme du `alt` traduit dans le carrousel) est un suivi explicite : câbler le pipeline sans le consommateur ne sert personne tant que la traduction n'est pas RENDUE (cf. CLAUDE.md racine § Prisme, cycle 122 — « qui AFFICHE ce qu'il élit ? »), mais elle ne bloque pas la livraison du déclencheur, exactement comme #6533 a livré sa garde avant son pipeline complet.
-
-**Alternatives rejetées**: Paramétrer un seul service par `field: 'alt' | 'caption'` — rejetée à ce stade par cohérence avec le patron déjà établi (`MessageAttachmentCaptionTranslationService` jumelle, pas paramètre) ; à reconsidérer si un TROISIÈME champ de ce type apparaît (la règle des trois occurrences justifierait alors l'extraction, pas la deuxième).
-
-**Conséquences**: `services/gateway/src/services/posts/MediaAltTranslationService.ts` + `mediaAltWrites.ts`, testés (mêmes cas que `MediaCaptionTranslationService.test.ts` : invalidation, détection de langue, cache, `force`, échec ZMQ, écriture MongoDB en pipeline, résolution post/commentaire, diffusion filtrée par visibilité). Suivi explicite : la lecture web du `alt` traduit dans le carrousel (résolution Prisme, repli sur l'original si aucune traduction ne matche la langue préférée).
+- [2026-08-13 (2) : Le bloc de statut dénormalisé de `Message` sort entièrement du schéma](decisions/2026-08-13-2-le-bloc-de-statut-denormalise-de-message-sort-entierement-du-schema.md)
+- [2025-01: TypeScript Strict + Immutabilit](decisions/2025-01-typescript-strict-immutabilit.md)
+- [2025-01: Branded Types pour IDs sensibles](decisions/2025-01-branded-types-pour-ids-sensibles.md)
+- [2025-01: `type` prfr  `interface`](decisions/2025-01-type-prfr-interface.md)
+- [2025-01: Socket.IO Events - `entity:action-word` avec hyphens](decisions/2025-01-socket-io-events-entity-action-word-avec-hyphens.md)
+- [2025-01: Messages - GatewayMessage vs UIMessage](decisions/2025-01-messages-gatewaymessage-vs-uimessage.md)
+- [2025-01: Validation - Zod avec CommonSchemas](decisions/2025-01-validation-zod-avec-commonschemas.md)
+- [2025-01: Encryption - SharedEncryptionService avec DI](decisions/2025-01-encryption-sharedencryptionservice-avec-di.md)
+- [2025-01: Build - ESM + Subpath Exports](decisions/2025-01-build-esm-subpath-exports.md)
+- [2025-01: Langues - 60+ langues avec capability flags](decisions/2025-01-langues-60-langues-avec-capability-flags.md)
+- [2025-01: Rles - Hirarchie numrique](decisions/2025-01-rles-hirarchie-numrique.md)
+- [2025-01: Database - MongoDB 8 + Prisma (PAS PostgreSQL)](decisions/2025-01-database-mongodb-8-prisma-pas-postgresql.md)
+- [2025-01: API Response - Format unifi ApiResponse<T>](decisions/2025-01-api-response-format-unifi-apiresponse-t.md)
+- [2026-08: Mention - keye sur User, pas sur Participant](decisions/2026-08-mention-keye-sur-user-pas-sur-participant.md)
+- [2026-08: CallParticipant - la qualite de connexion est EPHEMERE, pas une colonne](decisions/2026-08-callparticipant-la-qualite-de-connexion-est-ephemere-pas-une-colonne.md)
+- [2026-08: Message.receivedByAllAt — retire; deliveredToAllAt/readByAllAt restent, mais CALCULES](decisions/2026-08-message-receivedbyallat-retire-deliveredtoallat-readbyallat-restent.md)
+- [2026-08: Événements de marquage EN MASSE — un PRÉDICAT en union discriminée, jamais un sac d'options](decisions/2026-08-evenements-de-marquage-en-masse-un-predicat-en-union-discriminee-jamais.md)
+- [2026-08: `conversation:updated` — le groupe d'aperçu est un CONTRAT nommé, pas ce que l'index signature laisse passer](decisions/2026-08-conversation-updated-le-groupe-d-apercu-est-un-contrat-nomme-pas-ce-que.md)
+- [2026-08: Un canal serveur→client déclaré sans émetteur est un DÉFAUT — sauf s'il est réservé explicitement](decisions/2026-08-un-canal-serveur-client-declare-sans-emetteur-est-un-defaut-sauf-s-il.md)
+- [2026-08: Le réordonnancement de COMMUNAUTÉS a son propre nom d'événement, pas un élargissement de celui des conversations](decisions/2026-08-le-reordonnancement-de-communautes-a-son-propre-nom-d-evenement-pas-un.md)
+- [2026-09-13: `zod` est ÉPINGLÉ à `4.4.3` par un override racine — 4.5 compte des code points, plus des unités UTF-16 (#6234, suivi #6235)](decisions/2026-09-13-zod-est-epingle-a-4-4-3-par-un-override-racine-4-5-compte-des-code.md)
+- [2026-09-14: La légende d'un média (`PostMedia.caption`) traduit par des champs ADDITIFS, jamais dans `translations` — et `PostMedia`/`MessageAttachment` restent DEUX documents (#6280)](decisions/2026-09-14-la-legende-d-un-media-postmedia-caption-traduit-par-des-champs.md)
+- [2026-09-14: La légende d'une pièce jointe de conversation (`MessageAttachment.caption`) ne se traduit JAMAIS sous protection — vue unique, flou ou chiffrement (#6533)](decisions/2026-09-14-la-legende-d-une-piece-jointe-de-conversation-messageattachment.md)
+- [2026-09-15: La décision-produit #6534 est OUI — `PostMedia.alt` se traduit ; type et gabarit `MediaCaptionTranslation*` réutilisés tels quels (#6737)](decisions/2026-09-15-la-decision-produit-6534-est-oui-postmedia-alt-se-traduit-type-et.md)

@@ -374,6 +374,7 @@ model User {
   accountDeletionRequests  AccountDeletionRequest[]
   sessions                 UserSession[]
   pushTokens               PushToken[]
+  stickers                 UserSticker[]
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
@@ -1005,6 +1006,7 @@ model Message {
   @@index([conversationId, messageSource]) // Filtrage rapide messages système (call summaries)
   @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
   @@index([forwardedFromId]) // Forwarded messages lookup in broadcastNewMessage
+  @@index([storyReplyToId]) // Retrait d'un post cité : conversations à prévenir, en une requête (#7969)
   @@index([createdAt])
   @@index([viewOnceBurnAt]) // Balayage de purge des vues uniques (#7578)
 }
@@ -4866,4 +4868,34 @@ model MeeshLedger {
 
   @@unique([userId, requestId])
   @@index([userId, createdAt])
+}
+
+/// « Mes stickers » — un sticker de BIBLIOTHÈQUE qu'un utilisateur possède (#7938).
+/// Définition partagée : `packages/shared/types/sticker-definition.ts`.
+/// Le fichier vit sous `stickers/<userId>/` du volume d'uploads et se sert par
+/// `GET /attachments/file/*`, comme une pièce jointe.
+model UserSticker {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  /// Nom donné par l'utilisateur, facultatif (≤ 40 caractères)
+  name        String?
+  /// upload · paste · lift · received — le geste qui l'a créé
+  origin      String
+  /// image/png · image/webp · image/gif, lu dans les octets, jamais déclaré
+  mimeType    String
+  filePath    String
+  width       Int
+  height      Int
+  sizeBytes   Int
+  animated    Boolean  @default(false)
+  /// SHA-256 des octets stockés : re-créer la même image remonte le sticker existant
+  contentHash String
+  createdAt   DateTime @default(now())
+  /// Récence dans la grille ; posée à la création, remontée à chaque envoi
+  lastUsedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentHash])
+  @@index([userId, lastUsedAt])
 }

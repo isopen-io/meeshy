@@ -28,6 +28,7 @@ const SLOT_KEY_MAX_LENGTH = 32;
 const SLOT_KEY_PATTERN = /^[a-z][a-zA-Z0-9]*$/;
 const SLOT_VALUE_MAX_LENGTH = 200;
 const EMOJI_MAX_LENGTH = 16;
+const STICKER_ID_PATTERN = /^[0-9a-f]{24}$/i;
 
 const ANIMATIONS: ReadonlySet<string> = new Set(MESSAGE_STICKER_ANIMATIONS);
 
@@ -96,9 +97,23 @@ function parseEmoji(value: unknown): { ok: true; value?: string } | { ok: false 
 }
 
 /**
+ * L'identifiant d'un sticker de BIBLIOTHÈQUE (#7938) — un ObjectId, rien
+ * d'autre. Il n'est PAS confronté à la bibliothèque de l'expéditeur : un
+ * sticker transféré ou reçu garde l'identifiant de son créateur, et le rendu
+ * ne dépend jamais de lui (la pièce jointe rend).
+ */
+function parseStickerId(value: unknown): { ok: true; value?: string } | { ok: false } {
+  if (value === undefined) return { ok: true };
+  const trimmed = trimmedString(value);
+  if (trimmed === null) return typeof value === 'string' ? { ok: true } : { ok: false };
+  if (!STICKER_ID_PATTERN.test(trimmed)) return { ok: false };
+  return { ok: true, value: trimmed.toLowerCase() };
+}
+
+/**
  * Valide une entrée CLIENT (le champ `sticker` d'une requête de message).
  * Rend `null` — pas de sticker — dès qu'une borne est franchie ou qu'il n'y a
- * ni gabarit ni emoji : un sticker sans rien à rendre n'existe pas, et un
+ * ni gabarit, ni emoji, ni sticker de bibliothèque : un sticker sans rien à rendre n'existe pas, et un
  * refus silencieux vaut mieux qu'un message rejeté pour une décoration.
  */
 export function parseMessageSticker(input: unknown): MessageSticker | null {
@@ -108,14 +123,16 @@ export function parseMessageSticker(input: unknown): MessageSticker | null {
   const slots = parseSlots(input['slots']);
   const animation = parseAnimation(input['animation']);
   const emoji = parseEmoji(input['emoji']);
-  if (!templateId.ok || !slots.ok || !animation.ok || !emoji.ok) return null;
-  if (templateId.value === undefined && emoji.value === undefined) return null;
+  const stickerId = parseStickerId(input['stickerId']);
+  if (!templateId.ok || !slots.ok || !animation.ok || !emoji.ok || !stickerId.ok) return null;
+  if (templateId.value === undefined && emoji.value === undefined && stickerId.value === undefined) return null;
 
   return {
     ...(templateId.value !== undefined ? { templateId: templateId.value } : {}),
     ...(slots.value !== undefined ? { slots: slots.value } : {}),
     ...(animation.value !== undefined ? { animation: animation.value } : {}),
     ...(emoji.value !== undefined ? { emoji: emoji.value } : {}),
+    ...(stickerId.value !== undefined ? { stickerId: stickerId.value } : {}),
   };
 }
 

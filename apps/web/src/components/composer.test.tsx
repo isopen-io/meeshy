@@ -7,7 +7,6 @@ import { DEFAULT_USER_PERMISSIONS } from '@meeshy/shared/types/participant';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
-import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { COMPOSE_DETECT_DEBOUNCE_MS } from '@/lib/view/use-compose-language';
 
 /**
@@ -312,23 +311,6 @@ describe('Composer — « Composer » met le curseur dans le champ (revue #5814,
  * le résultat — `flush()` boucle sur des micro-tâches réelles plutôt que de
  * deviner un nombre fixe de `Promise.resolve()`.
  */
-/**
- * LES DEUX EMOJIS RAPIDES SONT LA TÊTE DE LA LISTE UNIQUE
- * (revue-correction #5668) — ils étaient écrits en dur dans `composer.tsx` et
- * avaient DIVERGÉ de `QUICK_REACTIONS` (`👍` au lieu de `😂` en tête), donc
- * de `quickSendDefaultEmojis` (`UniversalComposerBar+Send.swift:198`). Le
- * témoin épingle la DÉRIVATION, pas les deux caractères : changer la liste
- * change les deux boutons, et rien d'autre n'est à resynchroniser.
- */
-describe('Composer — les deux emojis d’envoi rapide', () => {
-  test('ce sont les DEUX PREMIERS de QUICK_REACTIONS, jamais une seconde liste', () => {
-    const html = renderToStaticMarkup(<Composer onSend={() => {}} />);
-    expect(html).toContain(`Envoyer ${QUICK_REACTIONS[0]}`);
-    expect(html).toContain(`Envoyer ${QUICK_REACTIONS[1]}`);
-    expect(html).not.toContain(`Envoyer ${QUICK_REACTIONS[2]}`);
-  });
-});
-
 describe('Composer — le tiroir des pièces jointes (#5668)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 

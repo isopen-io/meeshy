@@ -33,11 +33,13 @@ const postUpdate = jest.fn<any>();
 const soundUsageDeleteMany = jest.fn<any>().mockResolvedValue({ count: 0 });
 const soundUpdate = jest.fn<any>().mockResolvedValue({});
 const soundUsageFindMany = jest.fn<any>().mockResolvedValue([]);
+const messageFindMany = jest.fn<any>().mockResolvedValue([]);
 
 const mockPrisma = {
   post: { findUnique: postFindUnique, update: postUpdate },
   soundUsage: { deleteMany: soundUsageDeleteMany, findMany: soundUsageFindMany },
   sound: { update: soundUpdate },
+  message: { findMany: messageFindMany },
 } as any;
 
 type SocialEventsMock = {
@@ -54,7 +56,7 @@ function makeSocialEvents(): SocialEventsMock {
   };
 }
 
-async function buildApp(socialEvents?: SocialEventsMock): Promise<FastifyInstance> {
+async function buildApp(socialEvents?: SocialEventsMock, io?: unknown): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', mockPrisma);
   app.decorate('authenticate', async (request: any) => {
@@ -64,6 +66,7 @@ async function buildApp(socialEvents?: SocialEventsMock): Promise<FastifyInstanc
     };
   });
   if (socialEvents) app.decorate('socialEvents', socialEvents as any);
+  if (io) app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io }) } as any);
   app.register(adminPostRoutes);
   await app.ready();
   return app;
@@ -140,6 +143,33 @@ describe('DELETE /admin/posts/:postId — diffusion du retrait', () => {
 
     expect(res.statusCode).toBe(200);
     expect(postUpdate).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('DELETE /admin/posts/:postId — annonce aux conversations qui citent (#7969)', () => {
+  const CITING_CONV = '507f1f77bcf86cd799439aaa';
+
+  beforeEach(() => {
+    postFindUnique.mockReset();
+    postUpdate.mockReset().mockResolvedValue({ id: POST_ID });
+    messageFindMany.mockReset().mockResolvedValue([{ conversationId: CITING_CONV }]);
+  });
+
+  it('un retrait par la console annonce le post cité à la room de chaque conversation qui le cite', async () => {
+    postFindUnique.mockResolvedValue({ ...livePost('STORY'), expiresAt: new Date(Date.now() + 3_600_000) });
+    const emissions: Array<{ room: string; event: string; payload: { postId?: string } }> = [];
+    const io = { to: (room: string) => ({ emit: (event: string, payload: { postId?: string }) => emissions.push({ room, event, payload }) }) };
+    const app = await buildApp(makeSocialEvents(), io);
+
+    const res = await deleteInject(app);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.statusCode).toBe(200);
+    expect(messageFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { storyReplyToId: POST_ID } }));
+    expect(emissions.map((e) => [e.room, e.event, e.payload.postId])).toEqual([
+      [`conversation:${CITING_CONV}`, 'message:cited-post-withdrawn', POST_ID],
+    ]);
     await app.close();
   });
 });

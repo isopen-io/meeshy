@@ -19,23 +19,35 @@ import type { RegistrationLike } from './service-worker';
  * demande. Un import de VALEUR les recollerait, et ferait payer le contrôleur
  * à la première peinture.
  */
+/** Une version publiée sur le magasin, pour la coque Capacitor (#6937). */
+export type StoreUpdate = { readonly version: string; readonly storeUrl: string };
+
 export type AppUpdateState = {
   /** La version en attente, telle que l'annonce l'a remise. `null` : rien à proposer. */
   readonly pending: RegistrationLike | null;
+  /** La coque : une version plus récente est publiée sur le magasin. Le web n'en pose jamais. */
+  readonly store: StoreUpdate | null;
   /** « Attendre » — la bannière se referme, la version reste en attente. */
   readonly dismissed: boolean;
   /** Le clic est parti : purge, activation, rechargement. */
   readonly applying: boolean;
   announce(registration: RegistrationLike): void;
+  /** La même version déjà écartée ne rouvre pas la bannière ; une plus récente, si. */
+  announceStore(update: StoreUpdate): void;
   dismiss(): void;
   markApplying(): void;
 };
 
 export const appUpdateStore = createStore<AppUpdateState>((set) => ({
   pending: null,
+  store: null,
   dismissed: false,
   applying: false,
   announce: (registration) => set({ pending: registration, dismissed: false }),
+  announceStore: (update) =>
+    set((state) =>
+      state.store?.version === update.version ? { store: update } : { store: update, dismissed: false },
+    ),
   dismiss: () => set({ dismissed: true }),
   markApplying: () => set({ applying: true }),
 }));
@@ -77,5 +89,5 @@ if (typeof window !== 'undefined') listenForAppUpdates(window);
  * chercher la bannière, ses libellés et le contrôleur.
  */
 export function useAppUpdateAnnounced(): boolean {
-  return useStore(appUpdateStore, (state) => state.pending !== null && !state.dismissed);
+  return useStore(appUpdateStore, (state) => (state.pending !== null || state.store !== null) && !state.dismissed);
 }

@@ -91,7 +91,7 @@ final class ConversationReplyComposerFocusTests: XCTestCase {
             of: "if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId)",
             in: code
         ))
-        XCTAssertTrue(restauration.contains("composerState.pendingReplyReference = ReplyReference("))
+        XCTAssertTrue(restauration.contains("composerState.pendingReplyReference = draft.restoredReply("))
         XCTAssertFalse(
             restauration.contains("applyReplyContext(") || restauration.contains("requestReplyFocus("),
             "Rouvrir un brouillon cité n'est pas un geste de réponse : le clavier reste baissé."

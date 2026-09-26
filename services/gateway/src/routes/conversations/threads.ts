@@ -12,6 +12,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
+import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -81,6 +82,9 @@ const threadMessageSelect = {
     select: {
       id: true,
       content: true,
+      // #7927 — un parent supprimé garde `content` en base : sans ce champ, la
+      // citation le resservirait.
+      deletedAt: true,
       originalLanguage: true,
       createdAt: true,
       senderId: true,
@@ -308,9 +312,15 @@ export function registerThreadsRoutes(
 
       const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
 
+      // #7950 — la citation d'une story retirée sort expurgée : UNE requête
+      // pour le parent et toutes ses réponses.
+      const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, [
+        formatThreadMessage(parent as unknown as Record<string, unknown>),
+        ...replies.map((m) => formatThreadMessage(m as unknown as Record<string, unknown>)),
+      ]);
       return sendSuccess(reply, {
-        parent: formatThreadMessage(parent as unknown as Record<string, unknown>),
-        replies: replies.map((m) => formatThreadMessage(m as unknown as Record<string, unknown>)),
+        parent: servedParent,
+        replies: servedReplies,
         totalCount: replies.length
       });
     } catch (error) {

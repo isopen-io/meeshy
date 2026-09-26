@@ -24,8 +24,10 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Un plugin local s'enregistre AVANT `super.onCreate` : c'est la que
-        // `BridgeActivity` construit le pont et publie `PluginHeaders` (#7710).
+        // `BridgeActivity` construit le pont et publie `PluginHeaders` (#7710,
+        // #5819).
         registerPlugin(MeeshySharePlugin.class);
+        registerPlugin(MeeshyLinksPlugin.class);
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher()
             .addCallback(
@@ -38,8 +40,12 @@ public class MainActivity extends BridgeActivity {
                             webView.goBack();
                             return;
                         }
+                        // #7988 — depuis Android 12, ce retour ne detruit plus
+                        // l'activite : rouverte, elle doit retrouver ce callback,
+                        // sinon le retour fermerait l'app depuis n'importe quel ecran.
                         setEnabled(false);
                         getOnBackPressedDispatcher().onBackPressed();
+                        setEnabled(true);
                     }
                 }
             );

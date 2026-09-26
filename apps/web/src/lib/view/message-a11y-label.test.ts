@@ -4,6 +4,8 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import type { Attachment, Message } from '@/lib/api/types';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+
 import { composeMessageLabel } from './message-a11y-label';
 
 type Sender = NonNullable<Message['sender']>;
@@ -420,6 +422,22 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
     });
     expect(label).toContain('réponse à sa story');
     expect(label).not.toContain('réponse à Bruno');
+  });
+
+  test('story citée : le libellé vient du CATALOGUE — un lecteur anglophone n’entend pas du français (#7881)', async () => {
+    await loadInterfaceCatalog('en');
+    const label = composeMessageLabel({ language: 'en',
+      message: message({
+        storyReplyToId: 'p1',
+        metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '' } },
+      }),
+      isMine: false,
+      servedText: 'Hello',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    expect(label).toContain('reply to their story');
+    expect(label).not.toContain('réponse à sa story');
   });
 
   test('transféré : « transféré depuis Salon » après « épinglé »', () => {

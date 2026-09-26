@@ -5,11 +5,14 @@ import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
+import { seedMineFromPage, snapshotMine } from './reactions-mine';
 import { sealedIfOpened } from './view-once-seal';
+import { withSenderAccount } from './sender-account';
 
 /**
  * LE PORT DU FIL (#5650, F2 ; PAGINÉ #6972) —
@@ -79,19 +82,23 @@ export async function loadMessages(
     limit: String(MESSAGES_LIMIT),
     ...(params.before !== undefined ? { before: params.before } : {}),
   });
+  const mineBefore = snapshotMine();
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
     path: `/api/v1/conversations/${params.conversationId}/messages?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
+  /* « MA RÉACTION » DÈS LE CHARGEMENT (#5863, #7936) — lue sur la page
+     (`currentUserReactions`), sans requête de plus : `reactions-mine.ts`. */
+  seedMineFromPage(result.data, mineBefore);
   return {
     ok: true,
     data: {
       /* UNE VUE UNIQUE DÉJÀ OUVERTE PAR MOI ARRIVE PURGÉE (#7580) — même si
          une passerelle antérieure à #7578 sert encore son contenu : rien
          n'en atteint le cache persisté. */
-      messages: [...result.data].reverse().map(sealedIfOpened),
+      messages: [...result.data].reverse().map((message) => sealedIfOpened(withSenderAccount(message))),
       hasOlder: result.cursorPagination?.hasMore === true,
       /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
          `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
@@ -402,6 +409,13 @@ export type SendMessageBody = {
    * ce port n'en produit que la forme acceptée (`send/shared-place.ts`).
    */
   readonly location?: SharedPlace;
+  /**
+   * LE STICKER (#7938) — champ DÉDIÉ, même doctrine que `location` : la
+   * passerelle seule le valide (`parseMessageSticker`) et l'écrit dans
+   * `metadata.sticker`. Le web n'en produit qu'une forme : `{ stickerId }`,
+   * un sticker de « Mes stickers » dont l'image part en pièce jointe.
+   */
+  readonly sticker?: MessageSticker;
 };
 
 /**

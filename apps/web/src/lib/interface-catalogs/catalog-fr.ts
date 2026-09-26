@@ -10,9 +10,11 @@
  * où un site d'appel le concatène.
  */
 import frMentions from './catalog-fr-mentions';
+import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
 import frStoriesMine from './catalog-fr-stories-mine';
+import frFeedPost from './catalog-fr-feed-post';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -112,62 +114,12 @@ const fr = {
   'feed.create.post': 'Publication',
   'feed.create.reel': 'Réel',
 
-  /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
-     quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
-     (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
-     dur en français jusqu'ici, alors qu'une coque branchée en anglais servait
-     déjà `reels.open` sur la même carte. */
-  'feed.post.action.like': 'Aimer',
-  'feed.post.action.comment': 'Commenter',
-  'feed.post.action.repost': 'Repartager',
-  'feed.post.action.bookmark': 'Enregistrer',
-  'feed.post.action.share': 'Partager',
-  'feed.post.media.video': 'Vidéo',
-  'feed.post.media.audio': 'Audio',
-  'feed.post.media.previous': 'Média précédent',
-  'feed.post.media.next': 'Média suivant',
-  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
+  /* LA CARTE DU FIL ET SES GESTES (#6488, #6278 c) — les clés `feed.post.*`
+     vivent désormais dans `catalog-fr-feed-post.ts` (CLAUDE.md § budget de
+     taille) ; ces deux-ci restent ICI parce qu'elles ne portent pas ce
+     préfixe. */
   'media.unavailable': 'Média indisponible',
-  'feed.post.see_more': 'voir plus',
-  'feed.post.see_less': 'voir moins',
-  'feed.post.more_options': 'Plus d’options',
-  'feed.post.menu.open': 'Ouvrir',
-  'feed.post.menu.copy_text': 'Copier le texte',
-  'feed.post.menu.unsave': 'Retirer des enregistrements',
-  'feed.post.menu.pin': 'Épingler',
-  'feed.post.menu.delete': 'Supprimer',
-  /* MODIFIER LE TEXTE (#7534) — miroir `FeedPostCard+Header.swift:213`
-     (`feed.post.edit` = « Modifier ») et `EditPostSheet.swift` pour les cinq
-     clés de la feuille. */
-  'feed.post.edit': 'Modifier',
-  'feed.post.edit.title': 'Modifier le post',
-  'feed.post.edit.body.a11y': 'Contenu de la publication',
-  'feed.post.edit.remaining.a11y': '{count} caractères restants',
-  'feed.post.edit.publish': 'Publier',
   'report.post.title': 'Signaler cette publication',
-  'feed.post.copied': 'Texte copié',
-  'feed.post.copy_failed': 'Impossible de copier le texte',
-  'feed.post.pinned': 'Publication épinglée',
-  'feed.post.pin_failed': 'Impossible d’épingler la publication',
-  'feed.post.edited': 'Publication modifiée',
-  'feed.post.edit_failed': 'La publication n’a pas pu être modifiée',
-  'feed.post.edit_busy': 'Une modification est déjà en cours',
-  'feed.post.deleted': 'Publication supprimée',
-  'feed.post.delete_failed': 'Erreur lors de la suppression',
-  /* REPARTAGER DEPUIS LE RAIL DES RÉELS (#6484) — miroir `ReelsViewModel.repost`
-     (iOS, append-only). */
-  'feed.post.repost.success': 'Repartage',
-  'feed.post.repost.error': 'Erreur lors du repost',
-  'feed.post.repost.already': 'Déjà repartagé',
-  'feed.post.repost.offline': 'Hors ligne — le repartage n’a pas pu partir.',
-  'feed.post.repost.unconfirmed': 'Repartage non confirmé — réessayez',
-  'feed.post.repost.audience': 'Cette audience élargirait la diffusion d’origine',
-  'feed.post.reel.chip': 'Réel',
-  'feed.post.reel.of': 'Réel de {author}',
-  /* OUVRIR LA PUBLICATION (#7284) — le nom accessible DIT sa destination :
-     « Ouvrir » seul laisserait le lecteur d'écran deviner de quelle carte
-     il s'agit dans un fil qui en aligne vingt. */
-  'feed.post.open': 'Ouvrir la publication de {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Publications enregistrées',
   'bookmarks.back': 'Retour aux réglages',
@@ -992,6 +944,7 @@ const fr = {
      que le legacy n'avait pas. */
   'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
   'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',
+  'appUpdate.storeHint': 'Installez-la depuis le magasin d’applications.',
   'appUpdate.action': 'Mettre à jour',
   'appUpdate.dismiss': 'Attendre',
   'appUpdate.applying': 'Mise à jour…',
@@ -1020,6 +973,9 @@ const fr = {
   'story.action.save': 'Enregistrer',
   'story.action.comments': 'Commentaires',
   'story.action.translations': 'Traductions',
+  'story.language.bar': 'Langues disponibles',
+  'story.language.original': 'Original',
+  'story.language.more': 'Autres langues',
   'story.views.empty.title': 'Aucune vue pour le moment',
   'story.views.empty.subtitle': 'Les personnes qui regardent votre story apparaîtront ici.',
   'story.views.count.one': '{count} vue',
@@ -1129,28 +1085,7 @@ const fr = {
      (Photos / Fichier / Vocal) vivaient EN DUR dans `composer-tray.tsx` — ils
      sont remontés ici par le lot qui en ajoute quatre, plutôt que d'y répandre
      la dette (#6310). */
-  'composer.attach.group': 'Types de pièces jointes',
-  'composer.attach.handle': 'Poignée du panneau',
-  'composer.attach.photo': 'Photos',
-  'composer.attach.photo.action': 'Choisir des photos',
-  'composer.attach.camera': 'Caméra',
-  'composer.attach.camera.action': 'Prendre une photo',
-  'composer.attach.file': 'Fichier',
-  'composer.attach.file.action': 'Choisir un fichier',
-  'composer.attach.location': 'Position',
-  'composer.attach.location.action': 'Partager ma position',
-  'composer.attach.voice': 'Vocal',
-  'composer.attach.voice.action': 'Enregistrer un message vocal',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Insérer un emoji',
-  'composer.emoji.title': 'Insérer un emoji',
-  'composer.location.locating': 'Recherche de votre position…',
-  'composer.location.denied': 'Position refusée — autorisez-la dans les réglages',
-  'composer.location.unavailable': 'Position indisponible sur ce navigateur',
-  'composer.location.failed': 'Position introuvable — réessayez',
-  'composer.location.chip': 'LIEU',
-  'composer.location.unknown': 'Lieu inconnu',
-  'composer.location.remove': 'Retirer la position',
+  ...frComposerAttach,
 
   /* LA BASCULE « VUE UNIQUE » DE LA RANGÉE HAUTE (#7354, V6) — même famille
      que `composer.attach.*` ci-dessus. Libellés repris du catalogue iOS
@@ -1204,6 +1139,7 @@ const fr = {
   'message.detail.language.original': '{language} (original)',
 
   ...frStoriesMine,
+  ...frFeedPost,
 } as const;
 
 export default fr;

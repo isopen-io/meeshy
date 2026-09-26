@@ -2054,17 +2054,17 @@ public enum ReplyContext {
     /// il faudra elargir `ReplyContext`, pas ce fichier seul.
     public var toReplyReference: ReplyReference {
         switch self {
-        case .story(let storyId, _, let authorName, let preview, let publishedAt, let reactionCount, let commentCount, let thumbnailUrl):
+        case .story(let storyId, let authorId, let authorName, let preview, let publishedAt, let reactionCount, let commentCount, let thumbnailUrl):
             return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview, isStoryReply: true,
-                                  storyPublishedAt: publishedAt, storyReactionCount: reactionCount, storyCommentCount: commentCount, storyThumbnailUrl: thumbnailUrl)
-        case .status(let statusId, _, let authorName, let emoji, let content, let publishedAt):
+                                  storyPublishedAt: publishedAt, storyReactionCount: reactionCount, storyCommentCount: commentCount, storyThumbnailUrl: thumbnailUrl, storyAuthorId: authorId)
+        case .status(let statusId, let authorId, let authorName, let emoji, let content, let publishedAt):
             // Réponse à un mood : le contenu entier va dans previewText, l'emoji
             // et la date sont portés séparément pour un rendu dédié (emoji +
             // contenu + date). `isStoryReply` reste vrai pour router l'envoi via
             // `storyReplyToId` (le mood est un post côté backend).
             return ReplyReference(messageId: statusId, authorName: authorName,
                                   previewText: content ?? "", isStoryReply: true,
-                                  storyPublishedAt: publishedAt, moodEmoji: emoji)
+                                  storyPublishedAt: publishedAt, moodEmoji: emoji, storyAuthorId: authorId)
         }
     }
 }

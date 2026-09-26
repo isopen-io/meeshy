@@ -170,8 +170,8 @@ extension ConversationView {
             // (bug « ⏳ bloque le composer », 2026-07-02). Un vrai messenger
             // enchaîne les envois : chaque message a sa bulle + horloge, l'outbox
             // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
-            // synchrone (hasContent), guard isUploading (attachments), et le
-            // dedup par contenu du VM (duplicateSendDebounce).
+            // synchrone (hasContent) et guard isUploading (attachments). Aucun
+            // dedup par CONTENU : des emojis identiques partent en série (#7985).
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
@@ -219,7 +219,6 @@ extension ConversationView {
             isViewOnceEnabled: $viewModel.isViewOnceEnabled,
             hideViewOnce: composerState.editingMessageId != nil,
             pendingEffects: $viewModel.pendingEffects,
-            onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
             focusTrigger: $composerState.focusRequested
@@ -235,9 +234,6 @@ extension ConversationView {
     /// pickers, sheets légers et l'unique fullScreenCover caméra.
     private func composerPickersAndSheets(_ content: AnyView) -> AnyView {
         AnyView(content
-        .sheet(isPresented: $viewModel.showEffectsPicker) {
-            EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
-        }
         // `photoLibrary: .shared()` est requis pour la présélection : les
         // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
         // matchent les assets du picker que sur la photothèque partagée.
@@ -296,7 +292,8 @@ extension ConversationView {
     /// (`MeeshyComposerHost+Surfaces`) — sans `storyStickerLibraryProvided`,
     /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
     /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
-    /// l'onglet « Lieu » est absent (loi 4, jamais grisé).
+    /// l'onglet « Lieu » est absent (loi 4, jamais grisé) ; sans
+    /// `storyLocationPickerProvided`, la carte l'est aussi (#7922).
     private func composerStickerSheet(_ content: AnyView) -> AnyView {
         AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
@@ -316,6 +313,9 @@ extension ConversationView {
             .storyPasteProvided()
             .storyStickerLibraryProvided()
             .stickerNearbyPlacesProvided()
+            // « Ma position… » ouvre la carte : adresse, lieu, monument
+            // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
+            .storyLocationPickerProvided(accentColor: accentColor)
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         })

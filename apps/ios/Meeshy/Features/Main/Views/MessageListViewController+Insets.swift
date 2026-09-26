@@ -28,6 +28,17 @@ struct ListInsetTransition: Equatable {
 
 extension MessageListViewController {
 
+    /// Marge horizontale de la section : les rangées ne touchent pas le bord de
+    /// l'écran. Identique dans tous les modes de lecture.
+    static let sectionHorizontalInset: CGFloat = 12
+
+    /// La largeur qu'une rangée REÇOIT réellement : la liste moins ses deux
+    /// marges de section. `nil` tant que la liste n'a pas de largeur posée.
+    var rowAvailableWidth: CGFloat? {
+        guard let collectionView, collectionView.bounds.width > 0 else { return nil }
+        return collectionView.bounds.width - 2 * Self.sectionHorizontalInset
+    }
+
     /// Reserves vertical clearance at the visual bottom of the list. Because
     /// the collection view is transformed with `scaleY: -1`, what looks like
     /// the bottom on screen is `contentInset.top` in the underlying scroll

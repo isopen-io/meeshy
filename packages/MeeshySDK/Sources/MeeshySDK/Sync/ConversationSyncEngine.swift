@@ -19,12 +19,33 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
     case callNoticeUpdated(messageId: String, content: String, callSummaryJson: Data?, serverUpdatedAt: Date)
     case deleted(messageId: String, deletedAt: Date)
-    case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?, maxCount: Int?)
-    case reactionRemoved(messageId: String, emoji: String, participantId: String?)
+    /// `message:expired` (#7960) — un éphémère échu, brûlé par le SERVEUR.
+    /// Distinct de `.deleted` : l'hôte l'applique comme la conversation
+    /// OUVERTE (`ConversationSocketHandler`), sans épargner une vue unique.
+    case expired(messageId: String, expiredAt: Date)
+    /// `message:cited-post-withdrawn` (#7969) — le post que des messages de
+    /// `conversationId` citent a été retiré : chaque citation devient
+    /// « Story indisponible ».
+    case citedPostWithdrawn(postId: String, conversationId: String, deletedAt: Date)
+    /// `ownerUserId` (le `User.id` de l'auteur) est ce qui reconnaît MA
+    /// réaction posée d'un autre appareil (#7927) : sans lui, le relais d'une
+    /// conversation fermée l'écrivait sous mon `Participant.id`, jamais
+    /// « mienne » ici.
+    case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?,
+                       maxCount: Int?, ownerUserId: String?)
+    /// L'agrégat servi (`aggregateCount`, `aggregateParticipantIds`) cale le
+    /// compte quand les lignes locales n'ont pas d'auteur (rechargées REST).
+    case reactionRemoved(messageId: String, emoji: String, participantId: String?,
+                         ownerUserId: String?, aggregateCount: Int?, aggregateParticipantIds: [String]?)
     case consumed(messageId: String, viewOnceCount: Int)
     /// La vue unique est « déjà ouverte » pour CE lecteur, ou son contenu a été
     /// purgé par le serveur : vider le contenu local, garder la bulle (#7579).
     case viewOnceOpened(messageId: String)
+    /// `message:starred` (#7939) — l'étoile PERSONNELLE posée depuis un autre
+    /// appareil du lecteur. Hors de la table `messages` : l'hôte la range dans
+    /// son magasin de favoris, en composant l'instantané depuis GRDB.
+    case starred(messageId: String, conversationId: String, starredAt: Date)
+    case unstarred(messageId: String)
 }
 
 // MARK: - Protocol

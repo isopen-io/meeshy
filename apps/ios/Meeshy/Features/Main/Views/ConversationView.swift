@@ -133,13 +133,6 @@ struct PendingAudioEdit: Identifiable, Equatable {
     let url: URL
 }
 
-struct ConversationHeaderState {
-    var showStoryViewerFromHeader = false
-    var storyUserIdForHeader: String?
-    var showSearch = false
-    var searchQuery = ""
-}
-
 struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
@@ -330,12 +323,9 @@ struct ConversationView: View {
         // brouillon persisté.
         let refs = attachmentRefs
             ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
-        let draft = MessageDraft(
+        let draft = MessageDraft.composing(
             text: text,
-            replyToId: ref?.messageId,
-            replyAuthorName: ref?.authorName,
-            replyPreviewText: ref?.previewText,
-            replyIsMe: ref?.isMe ?? false,
+            reply: ref,
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
@@ -1181,24 +1171,11 @@ struct ConversationView: View {
                 }
                 if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
                     composerText.text = draft.text
-                    // Restore inline reply context from the draft so the user
-                    // sees the same compose chip they left — no hidden state
-                    // transitions on app reopen.
-                    if let replyId = draft.replyToId,
-                       let authorName = draft.replyAuthorName {
-                        // `authorAvatarUrl` reste nil, et c'est SANS
-                        // CONSEQUENCE : `MessageDraft` aplatit la citation en
-                        // quatre champs, et cette reference n'alimente que la
-                        // BANNIERE du composeur, qui ne dessine aucun avatar.
-                        // A l'envoi, seul `messageId` survit — la citation
-                        // rendue est reconstruite par `makeReplyReference`
-                        // depuis le message cite en memoire, avatar compris.
-                        composerState.pendingReplyReference = ReplyReference(
-                            messageId: replyId,
-                            authorName: authorName,
-                            previewText: draft.replyPreviewText ?? "",
-                            isMe: draft.replyIsMe
-                        )
+                    // La citation du brouillon revient telle qu'on l'a laissée —
+                    // sans écraser une réponse à une story qui vient d'ouvrir la
+                    // conversation, et jamais une story hors du DM de son auteur (#7883).
+                    if composerState.pendingReplyReference == nil {
+                        composerState.pendingReplyReference = draft.restoredReply(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
                     }
                     if let lang = draft.selectedLanguage {
                         composerState.selectedLanguage = lang
@@ -1234,12 +1211,10 @@ struct ConversationView: View {
             }
             .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
                 // Réponse à un mood affiché dans la barre directe courante : la vue
-                // est déjà à l'écran, `onAppear` ne se redéclenche pas. On applique
-                // le contexte au composer ssi il cible CETTE conversation directe.
-                guard isDirect,
-                      let ctx = router.pendingReplyContext,
-                      ctx.authorId == conversation?.participantUserId else { return }
-                applyReplyContext(ctx, openingConversation: false)
+                // est déjà à l'écran, `onAppear` ne se redéclenche pas. Un contexte
+                // refusé ici (autre conversation) reste en attente pour SON DM.
+                guard let ctx = router.pendingReplyContext,
+                      applyReplyContext(ctx, openingConversation: false) else { return }
                 router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
@@ -1397,6 +1372,7 @@ struct ConversationView: View {
                 // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
                 // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
+                headerBandHeight: previewMode ? 0 : headerState.bandHeight,
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -2008,19 +1984,19 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            if scrollState.isNearBottom == false || viewModel.isSearchingQuotedMessage {
-                // Bulle « retour en bas » : elle disparaît VERS LE BAS (bord le
-                // plus proche) en fondant pendant le défilement et en revient
-                // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
-                // du bas) suivent la même direction.
+            if Self.showsScrollToBottomButton(isNearBottom: scrollState.isNearBottom, isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage, isInJumpedState: viewModel.isInJumpedState) {
+                // Bulle « retour en bas » : elle NE suit PAS le repli du
+                // défilement (#8002, directive porteur 2026-09-26) — c'est
+                // pendant qu'on remonte qu'on la cherche. Seules ses propres
+                // entrées/sorties (proximité du bas) la font glisser.
                 ConversationTypingRosterHost(store: viewModel.stateStore) { typing in
                     VStack { Spacer(); HStack { Spacer(); scrollToBottomButton(typing: typing).padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
                 }
-                    .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
             }
 
             VStack {
@@ -2090,7 +2066,6 @@ struct ConversationView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
             searchResultsBlurOverlay
-            returnToLatestButton
         }
         // #3901 — le Résumé Vivant ne rend jamais bulle par bulle
         // (`MessageListViewController.rendersThread`), donc ne peut jamais
@@ -2241,7 +2216,8 @@ struct ConversationView: View {
             // fil pendant l'escamotage (`allowsHitTesting`). Conservé DANS la
             // closure : c'est la branche qu'il habille, pas la section.
             expandedBand: { AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top)) },
-            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) }
+            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) },
+            onBandHeightChange: { headerState.bandHeight = $0 }
         )
         // Cette animation-ci reste à l'HÔTE : sa valeur (`hidesEntireHeaderForScroll`)
         // ne gouverne aucune branche de la section — elle accompagne

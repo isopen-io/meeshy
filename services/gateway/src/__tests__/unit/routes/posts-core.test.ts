@@ -132,7 +132,7 @@ const MOCK_POST = {
 
 // ─── buildApp ─────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true, emailVerified = true } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, emailVerified = true, prisma = {} as unknown } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -160,7 +160,7 @@ async function buildApp({ authenticated = true, emailVerified = true } = {}): Pr
     broadcastStatusDeleted: jest.fn<any>().mockResolvedValue(undefined),
   });
 
-  registerCoreRoutes(app, {} as any, requiredAuth);
+  registerCoreRoutes(app, prisma as any, requiredAuth);
   await app.ready();
   return app;
 }
@@ -196,6 +196,29 @@ describe('POST /posts — email not verified', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+  });
+});
+
+// #7907 — l'exception « première story » est MONTÉE sur la route réelle (sa loi
+// est témoignée par unit/middleware/email-verification-first-story.test.ts).
+describe('POST /posts — email not verified, first story', () => {
+  it('a first STORY reaches the creation instead of the e-mail gate', async () => {
+    mockCreatePost.mockResolvedValue({ ...MOCK_POST, type: 'STORY' });
+    const findFirst = jest.fn<any>().mockResolvedValue(null);
+    const app = await buildApp({ emailVerified: false, prisma: { post: { findFirst } } });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'STORY', content: 'Hello' } });
+    expect(res.json().code).not.toBe('EMAIL_NOT_VERIFIED');
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { authorId: USER_ID, type: 'STORY' } }));
+    await app.close();
+  });
+
+  it('a second STORY is still refused', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue({ id: 'story-0' });
+    const app = await buildApp({ emailVerified: false, prisma: { post: { findFirst } } });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'STORY', content: 'Hello' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
   });
 });
 

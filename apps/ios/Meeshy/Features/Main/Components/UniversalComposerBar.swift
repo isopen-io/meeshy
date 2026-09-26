@@ -167,8 +167,9 @@ struct UniversalComposerBar: View {
     /// éphémère). ⚠️ Ne JAMAIS passer `ConversationViewModel.isSending` : il
     /// couvre tout le cycle REST+fallback (~22s en réseau dégradé) et gèlerait
     /// le composer pendant qu'un message est sur l'horloge ⏳ — les envois de
-    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), le dedup double-tap
-    /// vit dans le ViewModel (`duplicateSendDebounce`).
+    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), un double-tap ne
+    /// renvoie rien (le champ est vidé au premier), et la seule
+    /// déduplication est celle du MESSAGE, par `clientMessageId` (#7985).
     var externalIsSending: Bool = false
 
     // MARK: - Attachment ladder callbacks
@@ -267,8 +268,6 @@ struct UniversalComposerBar: View {
     /// Binding to pending effects. Parent owns the state.
     var pendingEffects: Binding<MessageEffects> = .constant(.none)
 
-    /// Called when user taps effects button — parent should show EffectsPickerView
-    var onRequestEffectsPicker: (() -> Void)? = nil
 
     /// When true, the effects button is hidden (e.g. in edit mode)
     var hideEffects: Bool = false
@@ -306,18 +305,16 @@ struct UniversalComposerBar: View {
     /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
     /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
     @State var formatSelectionStorage: Any? = nil
-    /// La feuille des dix cadres à mots, ouverte par un appui long sur la
-    /// pastille (#5326).
+    /// La feuille des dix cadres à mots, ouverte par un appui long sur le
+    /// bouton d'envoi (#5326, directive porteur 2026-09-25).
     @State var showTextStickerSheet = false
+    /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
+    /// (#7931).
+    @State var showQuickEmojiPicker = false
+    /// L'instant où la rangée des emojis rapides est revenue — la garde
+    /// d'arrivée (`QuickEmojiArrivalGuard`) s'y mesure (#7985).
+    @State var quickEmojiArrivedAt: Date?
 
-    /// **Le cran de la rotation des cadres à mots** (#6537).
-    ///
-    /// Un entier qui MONTE, jamais un index borné : le modulo se prend au
-    /// moment de lire le tour, dont la longueur change quand l'auteur épingle
-    /// ou pose un cadre. Un index borné par l'ancienne longueur aurait pointé
-    /// hors du nouveau tour.
-    @State var stickerRotationStep = 0
-    @State var stickerRotationTimer = Timer.publish(every: UniversalComposerBar.stickerRotationPeriod, on: .main, in: .common).autoconnect()
     @FocusState var isFocused: Bool
     @State var sendBounce = false
     @State var focusBounce = false
@@ -343,6 +340,8 @@ struct UniversalComposerBar: View {
 
     // Ephemeral picker
     @State var showEphemeralPicker = false
+    /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
+    @State var showEffectsPanel = false
     // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 

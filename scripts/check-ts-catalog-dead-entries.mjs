@@ -331,7 +331,40 @@ export const parseCatalogBlock = (blockLines) => {
 // générée depuis le manifeste quand la passerelle a monté la route. Son client
 // web (l'écran de détail d'un lien, développé en parallèle) écrit l'adresse en
 // littéral comme tout `apps/web` : morte ici au même titre, jusqu'à #7716.
-const BASELINE_DEAD_ENTRIES = 457;
+// 457 → 460 (#7873) : `admin.anonymousUsersByParticipantId`,
+// `admin.usersByUserIdCommunities` et `admin.usersByUserIdVoiceProfile`,
+// générées depuis `route-manifest.json`. L'espace d'administration web les
+// appelle par adresse écrite, comme toutes ses lectures admin voisines déjà au
+// compte (`admin.usersByUserIdActivity`, `admin.anonymousUsers`…) : ce lot
+// n'ouvre pas la migration du web vers le catalogue. Valeur MESURÉE sur la
+// branche du 2026-09-25.
+// 460 → 463 (#7845, 2026-09-25) : `admin.usersByUserIdStats`,
+// `admin.usersByUserIdPreferences` et `admin.usersByUserIdPreferencesByCategory`,
+// générées depuis `route-manifest.json`. La page membre de l'espace
+// d'administration web les appelle par adresse écrite, comme ses lectures
+// admin voisines déjà au compte ; aucun écran d'administration iOS ne les
+// appelle. Valeur MESURÉE sur la branche du 2026-09-25.
+// 460 → 461 (#6937) : `app.shellVersion`, générée depuis `route-manifest.json`
+// quand la passerelle a monté `GET /app/shell-version`. Son client
+// (`apps/web/src/lib/app-update/shell-update.ts`) écrit l'adresse en littéral
+// comme tout `apps/web`, et comme sa jumelle `app.minVersion`, déjà au compte :
+// morte ici au même titre, jusqu'à #7716. Valeur MESURÉE sur la branche du
+// 2026-09-25.
+// Fusion #6937 + #7845 : les deux ajouts se cumulent. Valeur MESURÉE sur l'arbre fusionné du 2026-09-25.
+// 464 → 467 (#7938) : `me.stickers`, `me.stickersByStickerId`,
+// `me.stickersByStickerIdUse` — la bibliothèque « Mes stickers », entrées
+// GÉNÉRÉES depuis `route-manifest.json`. Leur client
+// (`apps/web/src/lib/api/stickers.ts`) écrit l'adresse en littéral comme tout
+// `apps/web` : mortes ici au même titre que `me.starredMessages`, jusqu'à
+// #7716. Valeur MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
+// 467 → 470 (#7999) : `admin.conversationsByConversationId`,
+// `admin.conversationsByConversationIdParticipantsByUserId` et
+// `admin.conversationsByConversationIdParticipantsByUserIdRemove` — configurer
+// une conversation, le rang et le retrait d'un de ses membres, sans en être
+// membre. Leur client (`apps/web/src/lib/api/admin-conversation-settings.ts`)
+// écrit l'adresse en littéral comme tout `apps/web` : mortes ici au même titre
+// que leurs voisines admin, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 470;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
+import { requireEmailVerificationUnlessFirstStory } from '../../middleware/email-verification-first-story';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -50,6 +51,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
 
 /**
@@ -370,7 +372,8 @@ export function registerCoreRoutes(
   fastify.post('/posts', {
     // #6437 — publier (post ou story) sort du compte vers d'autres personnes ;
     // avant le budget d'écriture partagé pour ne pas le consommer en pure perte.
-    preValidation: [requiredAuth, requireEmailVerification],
+    // #7907 — sauf la PREMIÈRE story d'un compte au courriel non vérifié.
+    preValidation: [requiredAuth, requireEmailVerificationUnlessFirstStory(prisma)],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -699,6 +702,13 @@ export function registerCoreRoutes(
         result,
         (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
+      // #7969 — les conversations qui CITENT ce post passent leur carte en
+      // « Story indisponible » sans relire ; best-effort, jamais attendu.
+      announceCitedPostWithdrawal({
+        prisma,
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        post: result,
+      }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: cited-post announce failed', err));
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {

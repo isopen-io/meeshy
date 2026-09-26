@@ -7,8 +7,9 @@ import { segmentText, type EmphasisStyle, type InlineSegment, type TextSegment }
 import { apiConfig } from '@/lib/api/config';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { webOriginOf } from '@/lib/links/web-origin';
-import { compile, match } from '@/lib/router';
-import { Link, navigate, ROUTES } from '@/routes/route-table';
+import { peekProfileOnClick } from '@/lib/view/profile-peek';
+import { isAppPath } from '@/routes/app-paths';
+import { Link, navigate } from '@/routes/route-table';
 
 /**
  * **LE TEXTE ÉCRIT PAR QUELQU'UN, RENDU** (#7032) — le site UNIQUE de la v2
@@ -54,13 +55,6 @@ import { Link, navigate, ROUTES } from '@/routes/route-table';
  */
 const trackedLinkLabel = (token: string): string => `meeshy.me/l/${token}`;
 
-/**
- * LES CHEMINS QUE L'APP SERT (#7849) — compilés UNE fois : un lien Meeshy
- * dont le chemin n'est pas ici reste un lien sortant.
- */
-const APP_PATTERNS = Object.values(ROUTES).map((route) => compile(route.pattern));
-const isAppPath = (path: string): boolean => APP_PATTERNS.some((pattern) => match(pattern, path) !== null);
-
 const inAppPathOf = (href: string): string | null =>
   internalPathOf(href, {
     origins: [webOriginOf(apiConfig.base, window.location.origin), window.location.origin],
@@ -93,7 +87,12 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
     switch (segment.kind) {
       case 'mention':
         return (
-          <Link key={key} to="userProfile" params={{ username: segment.username }} style={linkStyle} className="hover:underline">
+          <Link
+            key={key}
+            to="userProfile"
+            params={{ username: segment.username }}
+            onClick={peekProfileOnClick(segment.username)}
+            style={linkStyle} className="hover:underline">
             {segment.text}
           </Link>
         );

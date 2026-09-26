@@ -3,8 +3,9 @@ import CoreGraphics
 /// **La réserve AU REPOS du haut du fil, en rangée plate.**
 ///
 /// Le plus ancien message s'arrête sur la ligne de la pilule de jour, sous la
-/// rangée de l'en-tête. Elle ne dépend que du MODE : un inset qui suivrait
-/// l'escamotage du chrome ferait sauter le fil à chaque défilement.
+/// rangée de l'en-tête. Elle dépend du MODE et de la hauteur MESURÉE de la
+/// bande d'en-tête (Dynamic Type, #7998) — jamais de son escamotage : un inset
+/// qui suivrait l'escamotage du chrome ferait sauter le fil à chaque défilement.
 ///
 /// ## Pourquoi ce fichier existe
 ///
@@ -15,7 +16,7 @@ import CoreGraphics
 /// « le fil remonte sous l'en-tête ».
 nonisolated enum ThreadHeadClearance {
 
-    static func value(usesFlatRow: Bool) -> CGFloat {
-        usesFlatRow ? MessageDayStickyPlacement.topOffset : 0
+    static func value(usesFlatRow: Bool, headerBandHeight: CGFloat) -> CGFloat {
+        usesFlatRow ? MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight) : 0
     }
 }

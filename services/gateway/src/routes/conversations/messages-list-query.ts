@@ -17,6 +17,12 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import {
+  CITED_POST_LIVENESS_SELECT,
+  citedPostIdsOf,
+  servePostReplyCitation,
+  withdrawnCitationsOf,
+} from '../../services/messaging/servedPostReply';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
@@ -335,6 +341,9 @@ export function buildMessageListSelect(options: {
           select: {
             id: true,
             content: true,
+            // #7927 — la suppression garde `content` en base : sans ce champ,
+            // `servedQuotedMessage` ne peut pas savoir qu'il doit le taire.
+            deletedAt: true,
             originalLanguage: true,
             createdAt: true,
             senderId: true,
@@ -582,6 +591,8 @@ export type MessageRowMappingContext = {
    * colonne, qui porte l'heure interne de destruction.
    */
   ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
+  /** #7936 — les emojis que CE lecteur a posés, par message. Absente ⇒ `[]`. */
+  readerReactions?: ReadonlyMap<string, readonly string[]>;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -664,12 +675,11 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
           reactionCount: message.reactionCount,
-          // #4177 — `currentUserReactions` (message-level) retiré : ni
-          // déclaré dans `messageSchema` ni lu par aucun client, il payait
-          // un `reaction.findMany` par page pour rien depuis toujours. Son
-          // miroir PAR PIÈCE JOINTE (`attachments[].currentUserReactions`,
-          // via `aggregateAttachmentReactions`) reste servi — lui EST
-          // déclaré et lu.
+          // #7936 — MES emojis sur ce message, chargés en UNE requête pour la
+          // page (`loadReaderReactionsByMessage`) et DÉCLARÉS au
+          // `messageSchema` : #4177 les avait retirés parce qu'ils mouraient
+          // à la sérialisation.
+          currentUserReactions: ctx.readerReactions?.get(message.id) ?? [],
 
           // Chiffrement
           isEncrypted: message.isEncrypted,
@@ -943,37 +953,31 @@ export async function enrichForwardedMessagesForList(
 
 export async function enrichPostReplyMessagesForList(
   prisma: PrismaClient,
-  mappedMessages: MappedMessageRow[]
-): Promise<void> {
-      // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
-      // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, capturé
-      // au moment de la réponse — il survit à l'expiration du post (STATUS 1h /
-      // STORY 21h) et à sa suppression. On le hisse en champ top-level
-      // `postReplyTo` (contrat client propre). La résolution live de
-      // `storyReplyToId` n'est qu'un fallback pour les messages legacy.
-      for (const m of mappedMessages) {
-        if (!m.storyReplyToId) continue;
-        const fromSnapshot = postReplyToFromMetadata(m.metadata);
-        if (fromSnapshot) m.postReplyTo = fromSnapshot;
-      }
+  mappedMessages: readonly MappedMessageRow[]
+): Promise<MappedMessageRow[]> {
+  // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
+  // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, hissé en
+  // `postReplyTo` — il survit à l'expiration du post, PAS à son retrait par
+  // l'auteur (#7950, `servePostReplyCitation`). La résolution live de
+  // `storyReplyToId` n'est qu'un repli pour les réponses legacy sans snapshot.
+  //
+  // UNE requête pour la page : la vivacité de chaque post cité (y compris ceux
+  // que citent `replyTo` et `forwardedFrom`) et, dans le même aller, de quoi
+  // reconstruire le snapshot d'une réponse legacy.
+  const ids = citedPostIdsOf(mappedMessages);
+  const citedPosts = ids.length === 0 ? [] : await prisma.post.findMany({
+    where: { id: { in: [...ids] } },
+    select: { ...POST_REPLY_SNAPSHOT_SELECT, ...CITED_POST_LIVENESS_SELECT },
+  });
+  const postMap = new Map(citedPosts.map((p) => [p.id, p]));
+  const withdrawn = withdrawnCitationsOf(citedPosts);
 
-      const legacyPostReplyIds = mappedMessages
-        .filter((m) => m.storyReplyToId && !m.postReplyTo)
-        .map((m) => m.storyReplyToId as string);
-
-      if (legacyPostReplyIds.length > 0) {
-        const uniquePostIds = [...new Set(legacyPostReplyIds)];
-        const citedPosts = await prisma.post.findMany({
-          where: { id: { in: uniquePostIds } },
-          select: POST_REPLY_SNAPSHOT_SELECT,
-        });
-        const postMap = new Map(citedPosts.map((p) => [p.id, p]));
-        for (const m of mappedMessages) {
-          if (!m.storyReplyToId || m.postReplyTo) continue;
-          const post = postMap.get(m.storyReplyToId);
-          if (!post) continue; // post supprimé sans snapshot → citation absente
-          m.postReplyTo = buildPostReplyTo(post);
-        }
-      }
+  return mappedMessages.map((m) => {
+    if (!m.storyReplyToId) return servePostReplyCitation(m, withdrawn);
+    const fromSnapshot = postReplyToFromMetadata(m.metadata);
+    const live = fromSnapshot ? undefined : postMap.get(m.storyReplyToId);
+    const postReplyTo = fromSnapshot ?? (live ? buildPostReplyTo(live) : undefined);
+    const hoisted = postReplyTo ? { ...m, postReplyTo } : m;
+    return servePostReplyCitation(hoisted, withdrawn);
+  });
 }
-

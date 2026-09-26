@@ -8,6 +8,18 @@ extension ConversationView {
 
     // MARK: - Scroll to Bottom Button
 
+    /// La bulle est le SEUL contrôle de retour au présent (#8001, directive
+    /// porteur 2026-09-26) : la capsule « Messages récents » qui la doublait
+    /// est retirée. Le bas d'une fenêtre SAUTÉE (citation, recherche) n'est
+    /// pas le bas du fil — la bulle y reste donc montée.
+    nonisolated static func showsScrollToBottomButton(
+        isNearBottom: Bool,
+        isSearchingQuotedMessage: Bool,
+        isInJumpedState: Bool
+    ) -> Bool {
+        !isNearBottom || isSearchingQuotedMessage || isInJumpedState
+    }
+
     /// Le roster est PASSÉ, jamais lu depuis un observateur capturé à l'`init`
     /// (#5961) : celui-ci pointait le store d'un ViewModel jeté par
     /// `@StateObject`, donc toujours vide. Voir `ConversationTypingRosterHost`.
@@ -54,7 +66,14 @@ extension ConversationView {
             unreadCallTint: unreadCallTint,
             onScrollToBottom: {
                 HapticFeedback.light()
-                scrollState.scrollToBottomTrigger += 1
+                if viewModel.isInJumpedState {
+                    Task {
+                        await viewModel.returnToLatest()
+                        scrollState.scrollToBottomTrigger += 1
+                    }
+                } else {
+                    scrollState.scrollToBottomTrigger += 1
+                }
                 // Demander le bas, c'est déclarer le regarder : l'accusé part
                 // avec le défilement, pas une seconde après.
                 scrollState.flushSeenTrigger += 1

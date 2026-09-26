@@ -7,6 +7,8 @@ import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
+import { ProfilePeekHost } from './profile-peek-host';
+
 /**
  * LA COQUILLE — deliberement mince.
  *
@@ -156,6 +158,10 @@ export default function Shell({ children }: { children: ReactNode }) {
         </Suspense>
       ) : null}
       {children}
+      {/* LE PROFIL D'UN AUTEUR S'OUVRE PAR-DESSUS L'ÉCRAN, sur toutes les
+          routes (`profile-peek-host.tsx`) — la feuille, elle, est chargée au
+          premier toucher. */}
+      <ProfilePeekHost />
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
           tranche, et un menu recouvert par l'écran qu'il commande serait le
           défaut le plus bête du lot. */}

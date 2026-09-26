@@ -28,6 +28,28 @@ final class RegistrationIdentityTests: XCTestCase {
         XCTAssertEqual(RegistrationIdentity.slugDAdresse("jean+meeshy@example.com"), "jean")
     }
 
+    /// #7912 — le nom dérivé PART au serveur quand rien n'est tapé, et la
+    /// passerelle refuse tout chiffre dans `displayName`. Mêmes cas que
+    /// `registration-identity-preview.test.ts`.
+    func test_digitsNeverReachTheDerivedDisplayName() {
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("rcoba2251253@example.com"), "Rcoba")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("marie.dupont1990@example.com"), "Marie Dupont")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("jean2luc@example.com"), "Jean Luc")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("42jean@example.com"), "Jean")
+        XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("20251253@example.com"), "")
+    }
+
+    func test_everyDerivedDisplayName_matchesTheServerPattern() throws {
+        let motif = try NSRegularExpression(pattern: #"^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$"#)
+        for adresse in ["rcoba2251253@example.com", "a1@example.com", "jean.dupont@example.com",
+                        "x_9_y@example.com", "jérôme.77@example.com", "o-brien3@example.com"] {
+            let nom = RegistrationIdentity.displayNameDepuisEmail(adresse)
+            guard !nom.isEmpty else { continue }
+            let plage = NSRange(nom.startIndex..., in: nom)
+            XCTAssertNotNil(motif.firstMatch(in: nom, range: plage), "\(adresse) ⇒ « \(nom) » refusé par la passerelle")
+        }
+    }
+
     func test_anUnslugifiableAddress_givesNoDisplayName() {
         XCTAssertEqual(RegistrationIdentity.displayNameDepuisEmail("@example.com"), "")
     }

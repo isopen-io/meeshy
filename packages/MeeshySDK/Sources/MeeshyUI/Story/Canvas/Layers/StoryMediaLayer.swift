@@ -896,6 +896,14 @@ public final class StoryMediaLayer: CALayer {
         let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                     toleranceBefore: tolerance, toleranceAfter: tolerance)
+        // Un clip qu'on ramène dans son item n'est plus « joué jusqu'au bout »
+        // (#7878) : sans cette remise, reculer au doigt dans la scène du
+        // lecteur laissait la couche masquée et `alignToTimelineThenPlay`
+        // refusait de la relancer.
+        if hasPlayedToEnd {
+            hasPlayedToEnd = false
+            isHidden = false
+        }
     }
 
     @MainActor

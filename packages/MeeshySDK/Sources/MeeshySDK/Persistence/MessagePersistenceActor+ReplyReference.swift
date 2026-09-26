@@ -28,7 +28,8 @@ extension MessagePersistenceActor {
         for api: APIMessage,
         currentUserId: String?,
         preferredLanguages: [String],
-        encoder: JSONEncoder
+        encoder: JSONEncoder,
+        quotedDeletedAt: Date? = nil
     ) -> Data? {
         if let story = api.postReplyTo {
             return encoder.encodeOrLog(
@@ -38,17 +39,56 @@ extension MessagePersistenceActor {
             )
         }
         return api.replyTo.flatMap { reply in
-            encoder.encodeOrLog(
-                reply.toReplyReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages),
+            let reference = reply.toReplyReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages)
+            return encoder.encodeOrLog(
+                quotedDeletedAt.map { reference.tombstoned(at: $0) } ?? reference,
                 field: "replyToJson",
                 id: api.id
             )
         }
     }
 
+    /// Le blob d'une ligne ingérée, SÉPARÉ de son repli (#7895).
+    ///
+    /// `served` : la citation que le fil décrit (instantané ou message cité).
+    /// `fallback` : la story DISPARUE — seul `storyReplyToId` a voyagé. Le repli
+    /// ne comble qu'une case VIDE : un écho allégé ne dégrade jamais une
+    /// citation riche déjà gravée, alors qu'un instantané servi remplace un
+    /// repli gravé plus tôt.
+    struct IngestedReply: Sendable {
+        let served: Data?
+        let fallback: Data?
+
+        func persisted(over existing: Data?) -> Data? {
+            served ?? existing ?? fallback
+        }
+    }
+
+    nonisolated static func ingestedReply(
+        for api: APIMessage,
+        currentUserId: String?,
+        preferredLanguages: [String],
+        encoder: JSONEncoder,
+        quotedDeletedAt: Date? = nil
+    ) -> IngestedReply {
+        let served = replyToJson(for: api, currentUserId: currentUserId,
+                                 preferredLanguages: preferredLanguages, encoder: encoder,
+                                 quotedDeletedAt: quotedDeletedAt)
+        guard served == nil, let storyId = api.storyReplyToId, !storyId.isEmpty else {
+            return IngestedReply(served: served, fallback: nil)
+        }
+        return IngestedReply(
+            served: nil,
+            fallback: encoder.encodeOrLog(ReplyReference.unavailableStory(storyId: storyId),
+                                          field: "replyToJson(story-unavailable)", id: api.id)
+        )
+    }
+
     /// `authorAvatarUrl` reste nil, DÉLIBÉRÉMENT : le snapshot `postReplyTo`
     /// ne porte pas d'avatar, et ce nom est vide — aucun profil à ouvrir.
     nonisolated private static func postReplyReference(_ story: APIPostReplyTarget) -> ReplyReference {
+        // #7950 — même décision que le jumeau réseau (`APIMessage.toMessage`).
+        if story.deletedAt != nil { return .unavailableStory(storyId: story.id) }
         let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
         if let emoji = story.moodEmoji {
             return ReplyReference(

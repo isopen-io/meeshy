@@ -2,8 +2,9 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Bloc citation NU de la rangée plate — retrait `29`
-/// (`FocalMetrics.Text.indent`), au-dessus du texte du message qui répond.
+/// Bloc citation NU de la rangée plate — à l'origine du contenu, la colonne
+/// du nom (`Row.contentIndent`, #7995), au-dessus du texte qui répond : son
+/// filet et son fond la distinguent, aucun retrait.
 ///
 /// **Rendu NATIF** (arbitrage F-083bis — remplace la réutilisation verbatim
 /// de `BubbleQuotedReply` livrée par F-082) : le filet est dessiné ICI, à
@@ -112,7 +113,7 @@ struct FocalQuotedReplyView: View, Equatable {
     /// « couleur de l'auteur cité »).
     ///
     private var authorHex: String {
-        reference.isMe ? accentHex : reference.authorColor
+        FocalQuoteRail.colorHex(for: reference, accentHex: accentHex)
     }
 
     private var railColor: Color {
@@ -124,7 +125,7 @@ struct FocalQuotedReplyView: View, Equatable {
     }
 
     private var previewColor: Color {
-        ThemeManager.shared.textMuted
+        MeeshyColors.textMuted(isDark: isDark)
     }
 
     /// NOM de l'auteur cité, avant la ponctuation du titre (« Alice : »).
@@ -235,7 +236,7 @@ struct FocalQuotedReplyView: View, Equatable {
     /// Saut à l'original — le comportement historique du bloc entier,
     /// conservé pour le texte/fond de la citation.
     private func jumpToOriginal() {
-        guard !reference.messageId.isEmpty else { return }
+        guard reference.opensQuotedTarget else { return }
         if reply.isStory {
             onStoryReplyTap?(reference.messageId)
         } else {
@@ -244,10 +245,8 @@ struct FocalQuotedReplyView: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: FocalMetrics.Quote.railWidth / 2)
-                .fill(railColor)
-                .frame(width: FocalMetrics.Quote.railWidth)
+        HStack(spacing: FocalQuoteRail.spacing) {
+            FocalQuoteRail(colorHex: authorHex)
 
             VStack(alignment: .leading, spacing: 2) {
                 // **Le texte part du deux-points de l'auteur** (#5103). Le nom
@@ -278,11 +277,22 @@ struct FocalQuotedReplyView: View, Equatable {
                 }
             }
         }
-        .padding(.leading, FocalMetrics.Text.indent)
+        .padding(.leading, FocalMetrics.Row.contentIndent)
         .contentShape(Rectangle())
         .onTapGesture {
             jumpToOriginal()
         }
+    }
+
+    /// Une image ou une vidéo citée se montre à la largeur d'une scène citée
+    /// et à SON rapport d'aspect (`QuotedReplyPresentation`, site unique) ;
+    /// le reste garde la vignette de 36.
+    private var thumbnailSize: CGSize {
+        QuotedReplyPresentation.mediaThumbnailSize(for: reference) ?? CGSize(width: 36, height: 36)
+    }
+
+    private var thumbnailRadius: CGFloat {
+        QuotedReplyPresentation.mediaThumbnailSize(for: reference) == nil ? 6 : MeeshyRadius.lg
     }
 
     /// ZONE 2 — la miniature du média cité. **Sous l'auteur depuis #5103**,
@@ -302,11 +312,12 @@ struct FocalQuotedReplyView: View, Equatable {
                 // EST une image (règle partagée, site unique).
                 thumbHash: QuotedReplyPresentation.thumbHash(for: reference)
             ) {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: thumbnailRadius)
                     .fill(railColor.opacity(0.18))
             }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .aspectRatio(contentMode: .fill)
+            .frame(width: thumbnailSize.width, height: thumbnailSize.height)
+            .clipShape(RoundedRectangle(cornerRadius: thumbnailRadius))
             .overlay {
                 // Le GENRE résolu, jamais la chaîne brute. `attachmentType`
                 // porte le MIME (« video/mp4 ») sur le chemin de rendu réel
@@ -393,7 +404,7 @@ struct FocalQuotedReplyView: View, Equatable {
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(previewColor)
                     .accessibilityHidden(true)
-                Text(String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main))
+                Text(QuotedStoryLabel.text(for: reference))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(previewColor)
             }

@@ -25,15 +25,16 @@ import { countryOf, type Country } from './countries';
 
 export type SignupFormState = {
   /**
-   * Le pseudo TAPÉ, vide tant que l'utilisateur n'a rien changé (#6479).
+   * Le pseudo et le nom affiché TAPÉS (#6479, refaits par #7897).
    *
-   * Distinct de `effectiveUsername(form)`, qui rend celui qui PARTIRA — dérivé
-   * de l'adresse à défaut de saisie. L'écran montre le second et écrit dans le
-   * premier : sans cette séparation, taper une lettre dans l'adresse écraserait
-   * un pseudo choisi à la main.
+   * `null` = jamais touché : le champ SUIT l'adresse en direct. Une chaîne =
+   * la saisie, qui gagne ; vidée, la dérivation reparaît en filigrane et
+   * repart. L'écran montre `effectiveUsername` / `effectiveDisplayName` et
+   * écrit ici : sans cette séparation, taper une lettre dans l'adresse
+   * écraserait un pseudo choisi à la main.
    */
-  readonly username: string;
-  readonly displayName: string;
+  readonly username: string | null;
+  readonly displayName: string | null;
   readonly email: string;
   /** Les chiffres SEULS, sans indicatif — l'indicatif vient de `country`. */
   readonly phoneDigits: string;
@@ -71,8 +72,8 @@ const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
  * ne rougit nulle part. La moitié « mot de passe » de #6424 a été livrée sans
  * celle-ci : l'écran annonçait « adresse seule » et exigeait toujours un nom.
  */
-export function isDisplayNameValid(value: string): boolean {
-  const trimmed = value.trim();
+export function isDisplayNameValid(value: string | null): boolean {
+  const trimmed = (value ?? '').trim();
   if (trimmed.length === 0) return true;
   if (trimmed.length > DISPLAY_NAME_MAX) return false;
   return PERSON_NAME_PATTERN.test(trimmed);
@@ -81,8 +82,8 @@ export function isDisplayNameValid(value: string): boolean {
 /** `true` quand un nom affiché a réellement été TAPÉ. Distinct de
  * `isDisplayNameValid`, qui répond « cette saisie est-elle acceptable » :
  * c'est celle-ci qui décide si la clé part dans la charge. */
-export function hasDisplayName(value: string): boolean {
-  return value.trim().length > 0;
+export function hasDisplayName(value: string | null): boolean {
+  return (value ?? '').trim().length > 0;
 }
 
 /** Rapprochement du `z.email`/`format: 'email'` serveur : « a@b » (pas de TLD)
@@ -147,32 +148,41 @@ export function phoneRefusal(phoneDigits: string): PhoneImplausibility | null {
 }
 
 /**
- * LE PSEUDO QUI PARTIRA — tapé s'il l'a été, dérivé de l'adresse sinon (#6479).
+ * LE PSEUDO QUI PARTIRA — tapé s'il l'a été, tiré de l'ADRESSE sinon (#6479,
+ * #7897 : « le pseudo rempli à partir de l'email »).
  *
  * Directive porteur : « à partir du moment où un champ username est rempli, la
- * passerelle n'a plus rien à créer ; elle crée quand aucune valeur n'est
- * disponible. Ici on a des données et la passerelle doit utiliser ces
- * données. » C'est exactement ce que fait `resoudreUsername`
- * (`registration.service.ts`) : un pseudo fourni traverse `normalizeUsername`
- * et rien n'est généré.
+ * passerelle n'a plus rien à créer ». `resoudreUsername`
+ * (`registration.service.ts`) emploie tel quel un pseudo fourni.
  *
- * Rend `''` quand la dérivation retombe sur le RECOURS (`user`) : là, on n'a
- * justement AUCUNE donnée, et envoyer `user` garantirait une collision. C'est
- * le seul cas où laisser la passerelle chercher un pseudo libre est la bonne
- * réponse — la règle du porteur lue jusqu'au bout, pas seulement sa première
- * moitié.
+ * Rend `''` quand la dérivation retombe sur le RECOURS (`user`) : envoyer
+ * `user` garantirait une collision — la passerelle cherche alors elle-même.
  */
 export function effectiveUsername(form: SignupFormState): string {
-  const tape = form.username.trim();
+  const tape = (form.username ?? '').trim();
   if (tape !== '') return tape;
-  const derive = pseudoRacine({ displayName: form.displayName, email: form.email });
+  const derive = pseudoRacine({ email: form.email });
   return derive === PSEUDO_DE_SECOURS ? '' : derive;
 }
 
-/** Le nom affiché qui partira — tapé s'il l'a été, dérivé de l'adresse sinon. */
+/** Le nom affiché qui partira — tapé s'il l'a été, tiré de l'adresse sinon. */
 export function effectiveDisplayName(form: SignupFormState): string {
-  const tape = form.displayName.trim();
+  const tape = (form.displayName ?? '').trim();
   return tape !== '' ? tape : displayNameDepuisEmail(form.email);
+}
+
+/**
+ * L'IDENTITÉ EST DÉFINIE (#7897) — nom affiché ET pseudo existent et tiennent
+ * leurs bornes. Directive porteur : « c'est quand tout est défini qu'on active
+ * le champ mot de passe ».
+ */
+export function isIdentityDefined(form: SignupFormState): boolean {
+  return (
+    isEmailValid(form.email) &&
+    effectiveDisplayName(form) !== '' &&
+    isDisplayNameValid(effectiveDisplayName(form)) &&
+    effectiveUsername(form) !== ''
+  );
 }
 
 /** Les chiffres saisis, débarrassés de tout ce qui n'en est pas. */
@@ -276,8 +286,8 @@ export function defaultCountry(locale: string): Country {
 export function emptySignupForm(locale: string): SignupFormState {
   const { systemLanguage, regionalLanguage } = defaultLanguages(locale);
   return {
-    username: '',
-    displayName: '',
+    username: null,
+    displayName: null,
     email: '',
     phoneDigits: '',
     password: '',

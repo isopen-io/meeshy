@@ -33,7 +33,11 @@ const PATH = '/api/v1/me/onboarding';
 
 /** L'ordre du parcours — le même que `ONBOARDING_STEP_IDS` (shared), lu sans
  * importer `zod`. `satisfies` + `ExhaustiveSteps` le tiennent complet. */
-export const ONBOARDING_STEPS = ['languages', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
+export const ONBOARDING_STEPS = ['languages', 'email', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
+
+/** Les étapes dont la vue clôt le parcours — `ONBOARDING_COMPLETION_STEP_IDS`
+ * (shared) : `email`, proposée au seul courriel non vérifié, n'en est pas. */
+export const ONBOARDING_COMPLETION_STEPS = ['languages', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
 type ExhaustiveSteps = [OnboardingStepId] extends [(typeof ONBOARDING_STEPS)[number]] ? true : never;
 const stepsAreExhaustive: ExhaustiveSteps = true;
@@ -49,6 +53,10 @@ const Suggestion = z.strictObject({
   languages: z.array(z.string()),
 });
 
+const Count = z.number().check(z.int(), z.minimum(0));
+
+const StepRewards = z.strictObject({ global: Count, story: Count, friendship: Count });
+
 const Served = z.strictObject({
   eligible: z.boolean(),
   completedAt: z.nullable(z.string()),
@@ -58,6 +66,10 @@ const Served = z.strictObject({
   protectedRegime: z.boolean(),
   storyDefaultVisibility: z.enum(['public', 'friends']),
   suggestions: z.array(Suggestion).check(z.maxLength(6)),
+  emailVerified: z.optional(z.boolean()),
+  canPublishStory: z.optional(z.boolean()),
+  pendingFriendRequests: z.optional(Count),
+  stepRewards: z.optional(StepRewards),
 });
 
 type SameShape<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;

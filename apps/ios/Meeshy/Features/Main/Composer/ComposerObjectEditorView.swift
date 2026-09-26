@@ -817,17 +817,17 @@ struct ComposerObjectEditorView: View {
                     .accessibilityLabel(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
 
                 slider(titre: ComposerObjectEditorCopy.start,
-                       valeur: timing.start,
-                       borne: slideDuration) { nouvelle in
-                    apply(timing.moved(to: nouvelle, slideDuration: slideDuration))
-                }
+                       valeur: Binding(get: { timing.start }, set: { nouvelle in
+                           apply(timing.moved(to: nouvelle, slideDuration: slideDuration))
+                       }),
+                       borne: slideDuration)
 
                 if let fin = timing.end {
                     slider(titre: ComposerObjectEditorCopy.end,
-                           valeur: fin,
-                           borne: slideDuration) { nouvelle in
-                        apply(timing.trimmingEnd(to: nouvelle, slideDuration: slideDuration))
-                    }
+                           valeur: Binding(get: { fin }, set: { nouvelle in
+                               apply(timing.trimmingEnd(to: nouvelle, slideDuration: slideDuration))
+                           }),
+                           borne: slideDuration)
                 }
 
                 // **Le retour vers « permanent » est un CHEMIN, pas un défaut.**
@@ -851,22 +851,21 @@ struct ComposerObjectEditorView: View {
         }
     }
 
-    private func slider(titre: String, valeur: Double, borne: Double,
-                        onChange: @escaping (Double) -> Void) -> some View {
+    private func slider(titre: String, valeur: Binding<Double>, borne: Double) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(titre)
                     .font(MeeshyFont.relative(11, weight: .regular))
                     .foregroundStyle(.white.opacity(0.55))
                 Spacer()
-                Text(ComposerObjectEditorCopy.seconds(valeur))
+                Text(ComposerObjectEditorCopy.seconds(valeur.wrappedValue))
                     .font(MeeshyFont.relative(11, weight: .medium).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.75))
             }
-            Slider(value: Binding(get: { valeur }, set: onChange), in: 0...borne)
+            Slider(value: valeur, in: 0...borne)
                 .tint(MeeshyColors.brandPrimary)
                 .accessibilityLabel(titre)
-                .accessibilityValue(ComposerObjectEditorCopy.seconds(valeur))
+                .accessibilityValue(ComposerObjectEditorCopy.seconds(valeur.wrappedValue))
         }
     }
 

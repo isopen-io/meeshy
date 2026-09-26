@@ -1,11 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+
+import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
 
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { Sheet } from '@/components/sheet';
 import {
   ADMIN_CONVERSATIONS_PAGE_SIZE,
+  ADMIN_USER_CONVERSATION_SORTS,
   adminUserConversationsQueryKey,
+  adminUserConversationsRootKey,
+  type AdminUserConversationSort,
   loadAdminUserConversations,
   type AdminConversation,
 } from '@/lib/api/admin-user-conversations';
@@ -25,7 +30,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminSkeleton } from './admin-parts';
+import { AdminFilterBar, AdminSelect } from './admin-table';
+import { Link } from './route-table';
 import { AdminConversationReading } from './admin-conversation-reading';
+import { AdminConversationSettingsSheet } from './admin-conversation-settings-sheet';
 
 /**
  * **CE QU'UN MEMBRE A CRÉÉ, ET OÙ IL PARLE** (#6819, étendu par #6862) — les
@@ -59,6 +67,18 @@ import { AdminConversationReading } from './admin-conversation-reading';
  * MÊME composant que `/adm/conversations/$id`, donc la même vue que le
  * produit, avec **le Prisme DU MEMBRE** : on lit ce que ce membre-là a lu, pas
  * la traduction que l'administrateur aurait vue.
+ *
+ * ## « CONFIGURER » OUVRE LES ÉCRITURES SOUVERAINES (#7845, #7999)
+ *
+ * Titre, description, images, droits d'écriture, archive, fermeture, et le
+ * rang ou le retrait du membre — sans que l'administrateur soit membre de la
+ * conversation (`AdminConversationSettingsSheet`). Le geste n'existe que pour
+ * qui a la section Conversations (`gerer`, résolu par la fiche depuis
+ * `GET /me/permissions`) : la passerelle garde ces écritures par
+ * `canManageConversations` au rang ADMIN, et un bouton qui rend un 403 à qui le
+ * touche est pire que son absence. Après une écriture, TOUTES les pages de la
+ * liste sont invalidées (`adminUserConversationsRootKey`) : un archivage change
+ * ce que chaque tri et chaque filtre rendent.
  */
 
 const INK = 'var(--color-ios-ink)';
@@ -211,10 +231,16 @@ function viewerDuMembre(membre: AdminUserDetail): Viewer {
 export function AdminUserConversationsSection({
   membre,
   language,
+  onAnnounce = () => undefined,
+  gerer = null,
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: InterfaceLanguage;
+  /** Le verdict d'une configuration, dit au lecteur d'écran par la fiche. */
+  readonly onAnnounce?: (texte: string) => void;
+  /** La fiche d'administration d'une conversation, dans l'espace courant — `null` pour qui n'a pas la section des conversations. */
+  readonly gerer?: 'adminConversation' | 'admConversation' | null;
   /** Le port, injectable — voir `AdminConversationReading`, même raison. */
   readonly deps?: AdminDeps;
 }) {
@@ -224,11 +250,18 @@ export function AdminUserConversationsSection({
    * doit savoir LAQUELLE elle lit, et la remonter à chaque ouverture remet le
    * motif à zéro, ce qui est voulu (un motif par lecture). */
   const [ouverte, setOuverte] = useState<AdminConversation | null>(null);
+  /** La conversation dont la feuille « Configurer » est ouverte — même raison. */
+  const [configuree, setConfiguree] = useState<AdminConversation | null>(null);
+  const client = useQueryClient();
+
+  const [tri, setTri] = useState<AdminUserConversationSort>('lastMessageAt');
+  const [ordre, setOrdre] = useState<'asc' | 'desc'>('desc');
+  const [type, setType] = useState('');
 
   const page = useQuery({
-    queryKey: adminUserConversationsQueryKey(membre.id, offset, ''),
+    queryKey: adminUserConversationsQueryKey(membre.id, offset, type, tri, ordre),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserConversations({ ...deps, userId: membre.id, offset, signal });
+      const resultat = await loadAdminUserConversations({ ...deps, userId: membre.id, offset, type, sortBy: tri, sortOrder: ordre, signal });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
@@ -240,6 +273,44 @@ export function AdminUserConversationsSection({
   return (
     <>
       <CollapsibleSection id="admin-conv" title={translateAdmin(language, 'admin.conv.title')} card={false}>
+        <AdminFilterBar>
+          <AdminSelect
+            label={translateAdmin(language, 'admin.list.sort')}
+            value={tri}
+            options={ADMIN_USER_CONVERSATION_SORTS.map((valeur) => ({
+              value: valeur,
+              label: translateAdmin(language, valeur === 'lastMessageAt' ? 'admin.col.lastMessage' : 'admin.col.createdOn'),
+            }))}
+            onChange={(valeur) => {
+              setTri(valeur === 'createdAt' ? 'createdAt' : 'lastMessageAt');
+              setOffset(0);
+            }}
+            anchor="admin-user-conv-sort"
+          />
+          <AdminSelect
+            label={translateAdmin(language, 'admin.list.order')}
+            value={ordre}
+            options={[
+              { value: 'desc', label: translateAdmin(language, 'admin.list.newest') },
+              { value: 'asc', label: translateAdmin(language, 'admin.list.oldest') },
+            ]}
+            onChange={(valeur) => {
+              setOrdre(valeur === 'asc' ? 'asc' : 'desc');
+              setOffset(0);
+            }}
+            anchor="admin-user-conv-order"
+          />
+          <AdminSelect
+            label={translateAdmin(language, 'admin.col.type')}
+            value={type}
+            options={[{ value: '', label: translateAdmin(language, 'admin.list.all') }, ...CONVERSATION_TYPES.map((valeur) => ({ value: valeur, label: valeur }))]}
+            onChange={(valeur) => {
+              setType(valeur);
+              setOffset(0);
+            }}
+            anchor="admin-user-conv-type"
+          />
+        </AdminFilterBar>
         {page.isPending ? (
           <AdminSkeleton rows={3} />
         ) : page.data === undefined ? (
@@ -257,6 +328,8 @@ export function AdminUserConversationsSection({
                   conversation={conversation}
                   language={language}
                   onOpen={() => setOuverte(conversation)}
+                  onConfigure={gerer === null ? null : () => setConfiguree(conversation)}
+                  gerer={gerer}
                 />
               ))}
             </ul>
@@ -290,6 +363,20 @@ export function AdminUserConversationsSection({
           </div>
         </Sheet>
       )}
+
+      {configuree === null ? null : (
+        <AdminConversationSettingsSheet
+          conversation={configuree}
+          userId={membre.id}
+          language={language}
+          deps={deps}
+          onAnnounce={onAnnounce}
+          onClose={() => setConfiguree(null)}
+          onChanged={() => {
+            void client.invalidateQueries({ queryKey: adminUserConversationsRootKey(membre.id) });
+          }}
+        />
+      )}
     </>
   );
 }
@@ -304,13 +391,17 @@ function ConversationRow({
   conversation,
   language,
   onOpen,
+  onConfigure,
+  gerer,
 }: {
   readonly conversation: AdminConversation;
   readonly language: InterfaceLanguage;
   readonly onOpen: () => void;
+  readonly onConfigure: (() => void) | null;
+  readonly gerer: 'adminConversation' | 'admConversation' | null;
 }) {
   return (
-    <li data-admin-conversation={conversation.id}>
+    <li data-admin-conversation={conversation.id} className="flex items-stretch gap-2">
       <button
         type="button"
         data-admin-conversation-open={conversation.id}
@@ -332,6 +423,29 @@ function ConversationRow({
           </p>
         </div>
       </button>
+      {onConfigure === null ? null : (
+        <button
+          type="button"
+          data-admin-conversation-configure={conversation.id}
+          aria-label={`${translateAdmin(language, 'admin.conv.configure')} — ${conversation.title ?? conversation.identifier ?? conversation.id}`}
+          onClick={onConfigure}
+          className="grid shrink-0 place-items-center rounded-card px-3 text-caption font-semibold"
+          style={{ ...CARTE, color: 'var(--color-ios-brand)', minHeight: 44 }}
+        >
+          {translateAdmin(language, 'admin.conv.configure')}
+        </button>
+      )}
+      {gerer === null ? null : (
+        <Link
+          to={gerer}
+          params={{ conversation: conversation.id }}
+          data-admin-conversation-manage={conversation.id}
+          className="grid shrink-0 place-items-center rounded-card px-3 text-caption font-semibold"
+          style={{ ...CARTE, color: 'var(--color-ios-brand)', minHeight: 44 }}
+        >
+          {translateAdmin(language, 'admin.conv.manage')}
+        </Link>
+      )}
     </li>
   );
 }

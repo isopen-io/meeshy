@@ -326,36 +326,46 @@ async function main() {
     }
 
     // ------------------------------------- 3. les deux sections repliables
-    console.log('\n3. LA FICHE MEMBRE PLIE ET DÉPLIE SES DEUX SECTIONS');
+    console.log('\n3. LA FICHE MEMBRE : SES ONGLETS, ET SES DEUX SECTIONS PLIENT ET DÉPLIENT');
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page } = ctx;
       await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-user="${MEMBRE_ID}"]`));
-      await attendre(() => present(page, '[data-collapsible-toggle="admin-conv"]'));
+      await attendre(() => present(page, '[data-admin-user-panel="profile"]'));
       await page.waitForTimeout(500);
-      await cliche(page, 'fiche-membre-depliee', { fullPage: true });
+      await cliche(page, 'fiche-membre-profil', { fullPage: true });
 
-      /* LA FICHE NE PEINT PAS D'HORODATAGE BRUT — constat ajouté par CETTE
-         recette : « Inscrit le 2026-01-12T08:30:00.000Z » est ce qu'un écran
-         affiche quand il rend la charge au lieu de la LIRE, et aucun témoin
-         unitaire ne le voit (le champ est juste, c'est son rendu qui ne l'est
-         pas). L'écran de l'agent formate déjà les siens. */
+      /* LA FICHE NE PEINT PAS D'HORODATAGE BRUT — « Inscrit le
+         2026-01-12T08:30:00.000Z » est ce qu'un écran affiche quand il rend la
+         charge au lieu de la LIRE, et aucun témoin unitaire ne le voit. */
       const fiche = await texteDe(page, `[data-admin-user="${MEMBRE_ID}"]`);
       check(!ISO_NU.test(fiche), `la fiche ne peint aucun horodatage ISO brut${ISO_NU.test(fiche) ? ` — « ${(fiche.match(ISO_NU) ?? [''])[0]} »` : ''}`);
-      check(
-        await present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`),
-        'la section Conversations et la section Médias sont TOUTES DEUX sur la fiche',
-      );
-      /* Le cadre d'administration défile dans un conteneur À LUI : `fullPage`
-         ne descend pas dedans. On amène donc la seconde section à l'écran pour
-         la VOIR — une capture qui ne montre pas ce qu'on affirme ne prouve
-         rien. */
-      await page.locator(`[data-admin-conversation-open="${CONVERSATION_ID}"]`).scrollIntoViewIfNeeded();
-      await page.waitForTimeout(300);
-      await cliche(page, 'fiche-membre-section-conversations');
 
-      for (const id of ['admin-media', 'admin-conv']) {
+      /* LES ONGLETS (#7873) — Conversations et Médias sont chacun dans leur
+         onglet, atteignable à la souris ET au clavier (flèches d'un tablist),
+         et l'onglet vit dans l'adresse. */
+      await page.click('[data-admin-user-tab="conversations"]');
+      check(
+        await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`)),
+        'l’onglet Conversations montre les conversations du membre',
+      );
+      check(new URL(page.url()).searchParams.get('tab') === 'conversations', 'l’onglet choisi s’écrit dans l’adresse');
+      await page.focus('[data-admin-user-tab="conversations"]');
+      await page.keyboard.press('ArrowRight');
+      check(
+        await attendre(() => present(page, '[data-collapsible-toggle="admin-media"]')),
+        'la flèche droite passe à l’onglet Médias',
+      );
+      await page.waitForTimeout(300);
+      await cliche(page, 'fiche-membre-onglet-medias');
+
+      for (const [onglet, id] of [
+        ['media', 'admin-media'],
+        ['conversations', 'admin-conv'],
+      ]) {
+        await page.click(`[data-admin-user-tab="${onglet}"]`);
+        await attendre(() => present(page, `[data-collapsible-toggle="${id}"]`));
         const etat = () =>
           page.evaluate(
             (s) => ({
@@ -398,7 +408,7 @@ async function main() {
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page, appels } = ctx;
-      await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
+      await page.goto(`${base}/adm/users/${MEMBRE_ID}?tab=conversations`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`));
       await page.waitForTimeout(400);
 
@@ -455,7 +465,7 @@ async function main() {
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page } = ctx;
-      await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
+      await page.goto(`${base}/adm/users/${MEMBRE_ID}?tab=conversations`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`));
       await page.waitForTimeout(400);
       await lireLaConversation(page, 'Signalement #9142 — vérification du fil');

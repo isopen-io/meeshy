@@ -12,36 +12,16 @@ import XCTest
 /// vérifient sans monter un clavier.
 final class ComposerActionSlotTests: XCTestCase {
 
-    // MARK: - Le cadre à mots
+    // MARK: - Du texte : le bouton d'envoi
 
     /// Le cas nominal de la directive : du texte, rien d'autre, un hôte qui
     /// sait envoyer un sticker.
-    func test_duTexteSeul_montreLeCadreAMots() {
+    /// Directive porteur 2026-09-25 : « remettre le bouton envoyer quand on a
+    /// un texte à envoyer plutôt que les stickers textuels ». Les cadres à mots
+    /// restent à un appui long du bouton d'envoi.
+    func test_duTexteSeul_montreLeBoutonDEnvoi() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
-            .textSticker)
-    }
-
-    /// **LE témoin du lot.** Un hôte qui ne câble pas l'envoi de sticker
-    /// (commentaires, post, story) garde son bouton d'envoi : une pastille qui
-    /// ne peut rien envoyer serait un contrôle inerte (loi 4).
-    func test_sansHoteCable_leBoutonDEnvoiReste() {
-        XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: false, exceedsWordLimit: false),
-            .send)
-    }
-
-    /// **LE second témoin du lot.** Un brouillon restauré à l'ouverture de la
-    /// conversation remplit le champ SANS ouvrir le clavier. Servir la pastille
-    /// là aurait retiré le seul moyen d'envoyer ce texte : la touche Retour
-    /// n'est pas à l'écran, et la pastille n'envoie pas de texte simple.
-    func test_leClavierBaisse_rendLeBoutonDEnvoi() {
-        XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: false,
-                                       offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false, offersQuickEmoji: true),
             .send)
     }
 
@@ -52,16 +32,14 @@ final class ComposerActionSlotTests: XCTestCase {
     /// d'envoyer. Le sticker ne porterait d'ailleurs pas la pièce jointe.
     func test_unePieceJointe_reprendLeBoutonDEnvoi() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: true, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: true, hasOtherContent: true, isEditMode: false, offersQuickEmoji: true),
             .send)
     }
 
     /// Sans texte non plus — une photo seule s'envoie par le bouton.
     func test_unePieceJointeSansTexte_montreLeBoutonDEnvoi() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: false, hasOtherContent: true, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: false, hasOtherContent: true, isEditMode: false, offersQuickEmoji: true),
             .send)
     }
 
@@ -69,17 +47,7 @@ final class ComposerActionSlotTests: XCTestCase {
     /// modifie un message existant, on n'en compose pas un nouveau.
     func test_uneEditionEnCours_montreLaCoche() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: true,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
-            .send)
-    }
-
-    /// Un envoi déjà en vol garde l'emplacement au bouton (que l'hôte masque),
-    /// pour ne pas offrir un second départ pendant le premier.
-    func test_unEnvoiEnVol_neProposePasLeCadre() {
-        XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: true, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: true, offersQuickEmoji: true),
             .send)
     }
 
@@ -89,8 +57,7 @@ final class ComposerActionSlotTests: XCTestCase {
     /// rapides plutôt qu'un bouton invisible.
     func test_rienASaisir_montreLesEmojisRapides() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: false, offersQuickEmoji: true),
             .quickEmoji)
     }
 
@@ -99,8 +66,7 @@ final class ComposerActionSlotTests: XCTestCase {
     /// s'effondre jamais (bug 2026-05-28).
     func test_rienASaisirSansEmoji_retombeSurLeBouton() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: false, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: false, offersQuickEmoji: false),
             .send)
     }
 
@@ -108,8 +74,7 @@ final class ComposerActionSlotTests: XCTestCase {
     /// geste en cours est une validation.
     func test_uneEditionVidee_montreLaCoche() {
         XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: true,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
+            ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: true, offersQuickEmoji: true),
             .send)
     }
     // MARK: - La borne des sept mots (#6537)
@@ -131,24 +96,11 @@ final class ComposerActionSlotTests: XCTestCase {
         XCTAssertTrue(ComposerActionSlot.exceedsTextStickerLimit("un deux trois quatre cinq six sept huit"))
     }
 
-    /// À SEPT MOTS la pastille reste — la borne est « au-delà », pas « à partir de ».
-    func test_aSeptMots_leCadreAMotsReste() {
-        XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true,
-                                       offersTextSticker: true, exceedsWordLimit: false),
-            .textSticker)
-    }
+    // MARK: - Les tuiles d'action du (+) (directive porteur 2026-09-25)
 
-    /// **LE témoin du lot.** Au-delà, le bouton ordinaire gagne — et il gagne
-    /// sur un clavier OUVERT, l'état où la pastille l'emportait jusqu'ici.
-    /// C'est la seule condition qui regarde le CONTENU et non le chrome.
-    func test_auDelaDeSeptMots_leBoutonOrdinaireGagne() {
-        XCTAssertEqual(
-            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true,
-                                       offersTextSticker: true, exceedsWordLimit: true),
-            .send)
+    @MainActor
+    func test_lesTuilesDuPlus_sontReduitesDeVingtPourcent() {
+        XCTAssertEqual(UniversalComposerBar.carouselTileDiameter, 46, "58 pt × 0,8, arrondi")
+        XCTAssertEqual(UniversalComposerBar.carouselTileSpacing, 11, "14 pt × 0,8, arrondi")
     }
-
 }

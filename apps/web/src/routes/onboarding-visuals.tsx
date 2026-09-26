@@ -219,6 +219,18 @@ export function FriendsIllustration() {
   );
 }
 
+/** 1 bis — l'enveloppe qui attend dans la boîte (#7907). */
+export function EnvelopeIllustration() {
+  return (
+    <div className="onb-illu onb-bell" aria-hidden="true">
+      <span className="onb-bell-disc">
+        <GlyphSvg glyph={DISCOVER_GLYPHS.envelopeSimple} size={44} />
+      </span>
+      <span className="onb-bell-dot" />
+    </div>
+  );
+}
+
 /** 5 — la cloche qui tinte une fois. */
 export function BellIllustration() {
   return (
@@ -246,6 +258,19 @@ export function TrophyIllustration() {
 }
 
 export type RecapTile = { readonly id: string; readonly glyph: GlyphShape; readonly text: string; readonly tone?: 'warm' };
+
+/**
+ * L'emplacement des tuiles tant que `GET /me/engagement` n'a pas répondu
+ * (#7909) : même hauteur que deux tuiles, aucun chiffre — rien qui saute.
+ */
+export function RecapPlaceholder({ label }: { readonly label: string }) {
+  return (
+    <div className="onb-recap-tiles" data-onb-recap-loading aria-busy="true" role="status" aria-label={label}>
+      <span className="onb-skeleton-line" />
+      <span className="onb-skeleton-line onb-skeleton-line-short" />
+    </div>
+  );
+}
 
 export function RecapTiles({ tiles }: { readonly tiles: readonly RecapTile[] }) {
   return (

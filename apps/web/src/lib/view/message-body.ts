@@ -127,13 +127,19 @@ export function stickerOf(message: Pick<Message, 'metadata'> & HoistedFields): M
       ? (obj.slots as Record<string, string>)
       : undefined;
 
-  if (emoji === undefined && templateId === undefined) return null;
+  /* LE STICKER DE BIBLIOTHÈQUE (#7938) — ni gabarit ni emoji : son image
+     jointe EST le rendu (`StickerArtwork`, PNG joint), l'identifiant dit
+     seulement de quelle bibliothèque il vient. */
+  const stickerId = typeof obj.stickerId === 'string' && obj.stickerId !== '' ? obj.stickerId : undefined;
+
+  if (emoji === undefined && templateId === undefined && stickerId === undefined) return null;
 
   return {
     ...(templateId === undefined ? {} : { templateId }),
     ...(slots === undefined ? {} : { slots }),
     ...(animation === undefined ? {} : { animation: animation as MessageStickerAnimation }),
     ...(emoji === undefined ? {} : { emoji }),
+    ...(stickerId === undefined ? {} : { stickerId }),
   };
 }
 
@@ -191,7 +197,26 @@ export type StoryCitation = {
   readonly previewText: string;
   readonly thumbnailUrl: string | null;
   readonly createdAt: string;
+  /**
+   * La passerelle n'a servi AUCUN instantané : le message n'en gravait pas et
+   * le post cité n'existe plus (« post supprimé sans snapshot → citation
+   * absente », `enrichPostReplyMessagesForList`). Rien à montrer, rien à
+   * ouvrir — mais la réponse garde la trace de ce à quoi elle répondait
+   * (`MessageModels.swift:914-920`, #7881). Ou bien elle en a servi un que
+   * son auteur a retiré depuis (`postReplyTo.deletedAt`, #7950).
+   */
+  readonly unavailable: boolean;
 };
+
+/**
+ * #7950 — le post cité a été SUPPRIMÉ par son auteur : la passerelle pose
+ * `postReplyTo.deletedAt` (même nom que `replyTo.deletedAt`, #7927) et vide
+ * l'instantané. Le marqueur prime sur tout ce qui resterait à côté — une
+ * vignette relayée par une charge plus ancienne ne rend pas la carte tapable.
+ */
+function isWithdrawnCitation(obj: MetadataRecord): boolean {
+  return typeof obj.deletedAt === 'string' && obj.deletedAt !== '';
+}
 
 /**
  * `postReplyTo` à la racine, `metadata.postReplyTo` en repli
@@ -205,9 +230,14 @@ export function storyCitationOf(
 ): StoryCitation | null {
   if (message.storyReplyToId === undefined) return null;
   const raw = hoistedOf(message, 'postReplyTo');
-  if (raw === undefined || raw === null || typeof raw !== 'object') return null;
+  if (raw === undefined || raw === null || typeof raw !== 'object') {
+    return { id: message.storyReplyToId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
+  }
 
   const obj = raw as MetadataRecord;
+  if (isWithdrawnCitation(obj)) {
+    return { id: typeof obj.id === 'string' ? obj.id : message.storyReplyToId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
+  }
   if (obj.moodEmoji !== null && obj.moodEmoji !== undefined) return null;
   if (typeof obj.id !== 'string') return null;
 
@@ -216,6 +246,40 @@ export function storyCitationOf(
     previewText: typeof obj.previewText === 'string' ? obj.previewText : '',
     thumbnailUrl: typeof obj.thumbnailUrl === 'string' ? obj.thumbnailUrl : null,
     createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : new Date(0).toISOString(),
+    unavailable: false,
+  };
+}
+
+/**
+ * L'HUMEUR CITÉE (#7881) — la moitié que `storyCitationOf` écarte : un
+ * `postReplyTo` à `moodEmoji` non nul (`buildPostReplyTo`,
+ * `postReplySnapshot.ts`). Elle n'a pas de scène ; elle se rend DANS la
+ * citation, comme `BubbleMoodReplyPreview` (`BubbleQuotedReply.swift`) :
+ * emoji, contenu, auteur (vide sur un snapshot legacy), date.
+ */
+export type MoodCitation = {
+  readonly id: string;
+  readonly emoji: string;
+  readonly text: string;
+  readonly authorName: string;
+  readonly createdAt: string;
+};
+
+export function moodCitationOf(
+  message: Pick<Message, 'storyReplyToId' | 'metadata'> & HoistedFields,
+): MoodCitation | null {
+  if (message.storyReplyToId === undefined) return null;
+  const raw = hoistedOf(message, 'postReplyTo');
+  if (raw === undefined || raw === null || typeof raw !== 'object') return null;
+  const obj = raw as MetadataRecord;
+  if (isWithdrawnCitation(obj)) return null;
+  if (typeof obj.moodEmoji !== 'string' || obj.moodEmoji === '') return null;
+  return {
+    id: typeof obj.id === 'string' ? obj.id : '',
+    emoji: obj.moodEmoji,
+    text: typeof obj.previewText === 'string' ? obj.previewText : '',
+    authorName: typeof obj.authorName === 'string' ? obj.authorName : '',
+    createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : '',
   };
 }
 

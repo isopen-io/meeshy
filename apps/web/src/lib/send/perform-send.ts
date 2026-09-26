@@ -13,6 +13,7 @@ import { messageTypeOfPending, type PendingAttachment } from './attachments';
 import type { ComposeProtection } from './compose-protection';
 import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-message';
 import type { SharedPlace } from './shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { entriesOf, type OutboxState } from './outbox-store';
 
 /**
@@ -68,65 +69,13 @@ export type Draft = {
    * son expéditeur (voir le doc-comment de `LocalMessage.location`).
    */
   readonly place?: SharedPlace;
+  /**
+   * LE STICKER (#7938) — le descripteur d'un sticker de bibliothèque
+   * (`{ stickerId }`), porté comme le lieu : sur le `LocalMessage`, relu par
+   * `bodyOf`. L'image elle-même voyage en pièce jointe ordinaire.
+   */
+  readonly sticker?: MessageSticker;
 };
-
-/**
- * LE DÉDOUBLONNAGE DU DOUBLE-TAP — miroir
- * `ConversationViewModel.swift:81` (`duplicateSendDebounce`, 0,6 s) : deux
- * envois du MÊME `(conversationId, content, replyToId)` sous 600 ms sont UN
- * seul envoi, jamais deux messages identiques partis en double. Une carte de
- * MODULE (comme `consumedViewOnceIds`, `api/fixtures.ts`) — la clé compose
- * la conversation pour qu'un même texte tapé dans DEUX fils distincts ne se
- * dédoublonne jamais entre eux.
- *
- * ELLE NE RETIENT RIEN AU-DELÀ DE SA FENÊTRE (revue-correction) : sa clé
- * porte le TEXTE ENTIER du message et sa valeur ne vaut que 600 ms — la
- * laisser croître garderait en mémoire, pour toute la session, chaque
- * message jamais écrit (dimension 3, « aucun cache non borné »). La purge se
- * fait à l'entrée de `performSend`, sur une carte qui reste par construction
- * minuscule : jamais un minuteur, jamais un second cycle de vie à tenir.
- */
-const DEBOUNCE_MS = 600;
-const lastAccepted = new Map<string, number>();
-
-/**
- * Le séparateur est U+0000, ÉCRIT EN ÉCHAPPEMENT et jamais en octet brut : un
- * seul NUL dans le fichier suffit à faire classer la source BINAIRE par git
- * (`git diff` rend « Bin 0 -> 9232 bytes », plus aucune revue possible) —
- * mesuré sur ce fichier même. La valeur produite est identique.
- *
- * LA SIGNATURE DES PIÈCES JOINTES (#5668) — `content` seul dédoublonnait déjà
- * deux ENVOIS DE TEXTE identiques ; un envoi de pièces PURES (`content`
- * toujours `''`) aurait sinon confondu deux photos DISTINCTES tapées à moins
- * de 600 ms d'écart. `name:size` suffit (jamais le `File` lui-même, non
- * sérialisable en clé) — deux fichiers homonymes de même poids restent une
- * collision acceptée, exactement la même tolérance que le texte (`content`
- * identique = même clé).
- */
-function attachmentsSignatureOf(attachments: readonly PendingAttachment[] | undefined): string {
-  return (attachments ?? []).map((a) => `${a.name}:${a.size}`).join('\u0000');
-}
-
-function debounceKeyOf(
-  conversationId: string,
-  content: string,
-  replyToId: string | undefined,
-  attachments: readonly PendingAttachment[] | undefined,
-): string {
-  return `${conversationId}\u0000${content}\u0000${replyToId ?? ''}\u0000${attachmentsSignatureOf(attachments)}`;
-}
-
-function pruneDebounce(nowMs: number): void {
-  for (const [key, at] of lastAccepted) {
-    if (nowMs - at >= DEBOUNCE_MS) lastAccepted.delete(key);
-  }
-}
-
-/** TÉMOIN SEUL — combien de clés la carte du débounce RETIENT (même
- * discipline que `resetSentMessagesForTests`, `api/fixtures.ts`). */
-export function debounceEntryCountForTests(): number {
-  return lastAccepted.size;
-}
 
 /**
  * `attachmentIds` REÇUS séparément du `message` (#5668) : ils viennent de la
@@ -170,6 +119,7 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
        `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
        sans qu'aucune relecture d'entrée ne le rattrape. */
     ...(message.location === undefined ? {} : { location: message.location }),
+    ...(message.sticker === undefined ? {} : { sticker: message.sticker }),
     ...protectionBodyOf(message),
   };
 }
@@ -339,6 +289,17 @@ async function attempt(params: {
   deps.outbox.getState().remove(conversationId, message.clientMessageId);
 }
 
+/**
+ * AUCUN DÉDOUBLONNAGE PAR CONTENU (#7985, directive porteur 2026-09-25) — le
+ * débounce de 600 ms sur `(conversation, texte, réponse, pièces)` bloquait
+ * 😂 😂 😂 tapés en série ; il est retiré, comme son miroir iOS
+ * (`duplicateSendDebounce`). Chaque envoi est un MESSAGE, avec son propre
+ * `clientMessageId` : c'est la SEULE déduplication qui reste — un même
+ * message rejoué (`retrySend`, écho socket) garde son identifiant et ne fait
+ * qu'une ligne, ici comme à la passerelle (`messages-send.ts`). Le double
+ * clic sur « Envoyer » est tenu par le composeur, qui vide son brouillon à
+ * l'instant de l'envoi (`composer.tsx`, `draftNow`).
+ */
 export async function performSend(params: {
   readonly conversationId: string;
   readonly draft: Draft;
@@ -349,12 +310,6 @@ export async function performSend(params: {
   const { conversationId, draft, viewerId, sender, deps } = params;
   const now = deps.now ?? Date.now;
   const nowMs = now();
-
-  const key = debounceKeyOf(conversationId, draft.content, draft.replyToId, draft.attachments);
-  const previous = lastAccepted.get(key);
-  pruneDebounce(nowMs);
-  if (previous !== undefined && nowMs - previous < DEBOUNCE_MS) return;
-  lastAccepted.set(key, nowMs);
 
   const clientMessageId = newClientMessageId();
   const messageType = messageTypeOfPending(draft.attachments ?? []);
@@ -371,6 +326,7 @@ export async function performSend(params: {
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     ...(draft.protection === undefined ? {} : { protection: draft.protection }),
     ...(draft.place === undefined ? {} : { place: draft.place }),
+    ...(draft.sticker === undefined ? {} : { sticker: draft.sticker }),
     now: new Date(nowMs),
   });
 

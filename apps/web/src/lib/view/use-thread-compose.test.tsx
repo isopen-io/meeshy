@@ -107,7 +107,7 @@ function mount(initial: {
 }
 
 describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de routes/thread.tsx)', () => {
-  test('sans citation, onSend remet null en 3e argument et les six arguments dans l’ordre de useSend', () => {
+  test('sans citation, onSend remet null en 3e argument et les sept arguments dans l’ordre de useSend', () => {
     const calls: unknown[][] = [];
     const send = (...args: unknown[]) => calls.push(args);
     const { state } = mount({ messages: [], send });
@@ -116,7 +116,19 @@ describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de rou
       state().onSend({ text: 'bonjour', attachments: [], language: 'fr', protection: {}, place: null });
     });
 
-    expect(calls).toEqual([['bonjour', [], null, 'fr', {}, null]]);
+    expect(calls).toEqual([['bonjour', [], null, 'fr', {}, null, null]]);
+  });
+
+  test('un sticker de la bibliothèque arrive en 7e argument (#7938)', () => {
+    const calls: unknown[][] = [];
+    const send = (...args: unknown[]) => calls.push(args);
+    const { state } = mount({ messages: [], send });
+
+    act(() => {
+      state().onSend({ text: '', attachments: [], language: 'fr', protection: {}, place: null, sticker: { stickerId: 's1' } });
+    });
+
+    expect(calls[0]?.[6]).toEqual({ stickerId: 's1' });
   });
 
   test('avec citation, onSend remet le MESSAGE ENTIER, puis efface la cible', () => {
@@ -134,7 +146,7 @@ describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de rou
       state().onSend({ text: 'réponse', attachments: [], language: 'fr', protection: {}, place: null });
     });
 
-    expect(calls).toEqual([['réponse', [], m1, 'fr', {}, null]]);
+    expect(calls).toEqual([['réponse', [], m1, 'fr', {}, null, null]]);
     expect(Object.is(calls[0]?.[2], m1)).toBe(true);
     expect(state().replyTo).toBeUndefined();
   });

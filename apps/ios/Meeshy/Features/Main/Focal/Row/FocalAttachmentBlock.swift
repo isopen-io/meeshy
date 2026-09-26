@@ -56,16 +56,34 @@ nonisolated enum FocalMediaGridLayout {
     /// format réel de la vidéo au lieu d'un 300 × 240 fixe qui letterboxait
     /// toute vidéo portrait dans une carte paysage (retour user 2026-08-21,
     /// image 2). Sans métadonnées de taille : 16:9.
-    static func soloVideoSlot(aspectRatio: CGFloat?) -> FocalMediaSlot {
+    static func soloVideoSlot(aspectRatio: CGFloat?, maxWidth: CGFloat = gridMaxWidth) -> FocalMediaSlot {
         let ratio = (aspectRatio ?? 0) > 0 ? aspectRatio! : 16.0 / 9.0
-        let height = min(gridMaxWidth / ratio, gridMaxWidth * soloVideoMaxHeightRatio)
-        let width = min(gridMaxWidth, height * ratio)
+        let height = min(maxWidth / ratio, maxWidth * soloVideoMaxHeightRatio)
+        let width = min(maxWidth, height * ratio)
         return FocalMediaSlot(width: width.rounded(), height: height.rounded())
     }
 
-    static func slots(for count: Int) -> [FocalMediaSlot] {
+    /// Largeur de la grille pour une rangée de `rowWidth` : jamais plus que
+    /// `gridMaxWidth`, jamais plus que la colonne de contenu — la rangée moins
+    /// ses marges et la colonne de l'heure qui la flanque.
+    ///
+    /// Recette iPhone 16 Pro du 2026-09-25 (#7881) : la rangée reçoit 378 pt,
+    /// la colonne de contenu 278. Une grille fixe de 300 débordait de 22 pt,
+    /// et SwiftUI, recentrant ce qui déborde, la faisait partir 11 pt à gauche
+    /// de l'avatar. `nil` (hôte qui ne connaît pas sa largeur) ⇒ le gabarit.
+    static func gridWidth(rowWidth: CGFloat?) -> CGFloat {
+        guard let rowWidth, rowWidth > 0 else { return gridMaxWidth }
+        let column = rowWidth
+            - 2 * FocalMetrics.Row.paddingHorizontal
+            - FocalMetrics.Row.contentIndent
+            - FocalMetrics.MetaColumn.reservedWidth
+            - FocalMetrics.MetaColumn.spacing
+        return min(gridMaxWidth, max(0, column).rounded(.down))
+    }
+
+    static func slots(for count: Int, maxWidth: CGFloat = gridMaxWidth) -> [FocalMediaSlot] {
         guard count > 0 else { return [] }
-        let halfW = (gridMaxWidth - gridSpacing) / 2
+        let halfW = (maxWidth - gridSpacing) / 2
 
         switch count {
         case 1:
@@ -75,7 +93,7 @@ nonisolated enum FocalMediaGridLayout {
             // décision de RENDU, pas de géométrie de slot — hors périmètre
             // de cette fonction pure (le contrat §WS-3 ne teste que la
             // table de slots, pas le rendu vidéo n=1).
-            return [FocalMediaSlot(width: gridMaxWidth, height: 240)]
+            return [FocalMediaSlot(width: maxWidth, height: 240)]
 
         case 2:
             return [
@@ -84,8 +102,8 @@ nonisolated enum FocalMediaGridLayout {
             ]
 
         case 3:
-            let leftW = (gridMaxWidth - gridSpacing) * 0.6
-            let rightW = (gridMaxWidth - gridSpacing) * 0.4
+            let leftW = (maxWidth - gridSpacing) * 0.6
+            let rightW = (maxWidth - gridSpacing) * 0.4
             return [
                 FocalMediaSlot(width: leftW, height: 240),
                 FocalMediaSlot(width: rightW, height: 240),
@@ -371,8 +389,8 @@ struct FocalGridCell: View {
 
 // MARK: - FocalAttachmentBlock (WS-3)
 
-/// Bloc média NU de la rangée plate — retrait `29`
-/// (`FocalMetrics.Text.indent`), grille 1/2/3/4+ via `FocalMediaGridLayout`,
+/// Bloc média NU de la rangée plate — à la colonne du nom (`Row.contentIndent`)
+/// — grille 1/2/3/4+ via `FocalMediaGridLayout`,
 /// radius `16` (`FocalMetrics.Media.radius`). Aucune bulle, aucun fond.
 ///
 /// Vue PURE : entrées primitives uniquement, aucun `@State`, `Equatable`
@@ -384,6 +402,8 @@ struct FocalAttachmentBlock: View, Equatable {
     let messageDeliveryStatus: Message.DeliveryStatus
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// Largeur de la grille (`FocalMediaGridLayout.gridWidth(rowWidth:)`).
+    var maxWidth: CGFloat = FocalMediaGridLayout.gridMaxWidth
 
     static func == (lhs: FocalAttachmentBlock, rhs: FocalAttachmentBlock) -> Bool {
         lhs.items.map(\.id) == rhs.items.map(\.id)
@@ -397,14 +417,15 @@ struct FocalAttachmentBlock: View, Equatable {
             && lhs.items.map(\.viewOnceCount) == rhs.items.map(\.viewOnceCount)
             && lhs.accentHex == rhs.accentHex
             && lhs.messageDeliveryStatus == rhs.messageDeliveryStatus
+            && lhs.maxWidth == rhs.maxWidth
     }
 
-    private var slots: [FocalMediaSlot] { FocalMediaGridLayout.slots(for: items.count) }
+    private var slots: [FocalMediaSlot] { FocalMediaGridLayout.slots(for: items.count, maxWidth: maxWidth) }
 
     var body: some View {
         let visibleItems = Array(items.prefix(slots.count))
         gridBody(visibleItems: visibleItems)
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, FocalMetrics.Row.contentIndent)
     }
 
     /// Dispatch par arité — reprend la structure HStack/VStack réelle
@@ -416,7 +437,7 @@ struct FocalAttachmentBlock: View, Equatable {
         switch visibleItems.count {
         case 1:
             if visibleItems[0].type == .video {
-                cell(visibleItems[0], FocalMediaGridLayout.soloVideoSlot(aspectRatio: visibleItems[0].videoAspectRatio))
+                cell(visibleItems[0], FocalMediaGridLayout.soloVideoSlot(aspectRatio: visibleItems[0].videoAspectRatio, maxWidth: maxWidth))
             } else {
                 cell(visibleItems[0], slots[0])
             }

@@ -231,6 +231,42 @@ export function expireLastMessage(queryClient: QueryClient, conversationId: stri
   });
 }
 
+/**
+ * `message:edited` (#7926) — la ligne qui décrit ce message prend le texte
+ * modifié et perd sa carte (elle traduisait l'ANCIEN texte ; la retraduction
+ * revient par `message:translation` / `conversation:updated`). Une ligne
+ * protégée ne reçoit jamais de texte en clair. Le rang ne bouge pas.
+ */
+export function editLastMessage(
+  queryClient: QueryClient,
+  conversationId: string,
+  edit: { readonly messageId: string; readonly content: string; readonly editedAt?: Date | string },
+): void {
+  patchConversation(queryClient, conversationId, (c) => {
+    const last = c.lastMessage;
+    if (last === undefined || last === null || last.id !== edit.messageId || isListProtected(last)) return c;
+    const editedAt = edit.editedAt === undefined ? {} : { editedAt: edit.editedAt as unknown as Date };
+    return { ...withoutCard(c), lastMessage: { ...last, content: edit.content, isEdited: true, ...editedAt } };
+  });
+}
+
+/**
+ * `message:deleted` (#7926) — la ligne qui décrit ce message ne garde ni son
+ * texte ni sa carte (le cache de liste est PERSISTÉ). L'aperçu du message
+ * précédent arrive par `conversation:updated` (`previewRecalculated`,
+ * `emitConversationPreviewUpdate`), qui l'adopte malgré son horodatage plus
+ * ancien. Le rang ne bouge pas ici.
+ */
+export function deleteLastMessage(queryClient: QueryClient, conversationId: string, messageId: string, now: Date): void {
+  patchConversation(queryClient, conversationId, (c) => {
+    const last = c.lastMessage;
+    if (last === undefined || last === null || last.id !== messageId) return c;
+    const { attachments: _attachments, attachmentSummary: _summary, ...rest } = last as ListLastMessage;
+    const tombstone = { ...rest, content: '', translations: [], deletedAt: now.toISOString() as unknown as Date } as Message;
+    return { ...withoutCard(c), lastMessage: tombstone };
+  });
+}
+
 function conversationIdsDescribing(queryClient: QueryClient, messageId: string): readonly string[] {
   const data = queryClient.getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(
     CONVERSATIONS_QUERY_KEY,

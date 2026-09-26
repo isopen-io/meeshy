@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
 
-import { bodyKindOf, emojiOnlyOf, mapsUrlOf, placeOf, stickerOf, storyCitationOf } from './message-body';
+import { bodyKindOf, emojiOnlyOf, mapsUrlOf, moodCitationOf, placeOf, stickerOf, storyCitationOf } from './message-body';
 
 const message = (partial: Partial<Message> = {}): Message =>
   ({
@@ -83,6 +83,16 @@ describe('stickerOf — lit metadata.sticker comme la passerelle', () => {
     expect(stickerOf(message({ metadata: { sticker: {} } }))).toBeNull();
   });
 
+  test('un sticker de BIBLIOTHÈQUE (#7938) ⇒ {stickerId}, rendu par son image jointe', () => {
+    const sticker = message({
+      metadata: { sticker: { stickerId: '65f0c0ffee0000000000abcd' } },
+      attachments: [{ id: 'att', fileUrl: 'stickers/u/x.png', mimeType: 'image/png' } as never],
+    });
+
+    expect(stickerOf(sticker)).toEqual({ stickerId: '65f0c0ffee0000000000abcd' });
+    expect(bodyKindOf(sticker).kind).toBe('sticker');
+  });
+
   test('metadata absent ⇒ null', () => {
     expect(stickerOf(message())).toBeNull();
   });
@@ -138,7 +148,13 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
         metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Coucher de soleil', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z' } },
       }),
     );
-    expect(citation).toEqual({ id: 'p1', previewText: 'Coucher de soleil', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z' });
+    expect(citation).toEqual({
+      id: 'p1',
+      previewText: 'Coucher de soleil',
+      thumbnailUrl: null,
+      createdAt: '2026-09-10T08:00:00.000Z',
+      unavailable: false,
+    });
   });
 
   test('une humeur (moodEmoji non nul) ⇒ null — pas de scène', () => {
@@ -150,6 +166,77 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
 
   test('sans storyReplyToId ⇒ null', () => {
     expect(storyCitationOf(message())).toBeNull();
+  });
+
+  /**
+   * LA STORY DISPARUE (#7881) — la passerelle ne sert AUCUN `postReplyTo`
+   * quand le message n'a pas d'instantané ET que le post n'existe plus
+   * (`enrichPostReplyMessagesForList` : « post supprimé sans snapshot →
+   * citation absente », `messages-list-query.ts`). iOS garde la carte
+   * (`MessageModels.swift:914-920`, « repli le plus pauvre ») ; la carte web
+   * DISPARAISSAIT, et la réponse perdait tout ce qui disait à quoi elle
+   * répondait.
+   */
+  test('storyReplyToId SANS instantané ⇒ une citation INDISPONIBLE, jamais null', () => {
+    expect(storyCitationOf(message({ storyReplyToId: 'p9' }))).toEqual({
+      id: 'p9',
+      previewText: '',
+      thumbnailUrl: null,
+      createdAt: '',
+      unavailable: true,
+    });
+  });
+
+  /**
+   * #7950 — LA STORY SUPPRIMÉE PAR SON AUTEUR. La passerelle sert encore un
+   * `postReplyTo`, mais vidé de tout ce qui décrit son contenu et marqué
+   * `deletedAt` (`servedPostReply.ts`). La carte est INDISPONIBLE — même si un
+   * client plus ancien, ou une charge relayée, y laissait une vignette.
+   */
+  test('postReplyTo.deletedAt ⇒ citation INDISPONIBLE, aucune vignette ni aperçu', () => {
+    const citation = storyCitationOf(
+      message({
+        storyReplyToId: 'p1',
+        metadata: {
+          postReplyTo: {
+            id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Coucher de soleil',
+            thumbnailUrl: 'https://cdn.meeshy.me/soleil.jpg', createdAt: '2026-09-10T08:00:00.000Z',
+            deletedAt: '2026-09-10T09:00:00.000Z',
+          },
+        },
+      }),
+    );
+    expect(citation).toEqual({ id: 'p1', previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true });
+  });
+
+  test('postReplyTo.deletedAt HISSÉ à la racine (liste REST) ⇒ indisponible', () => {
+    const hoisted = {
+      ...message({ storyReplyToId: 'p1' }),
+      postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z', deletedAt: '2026-09-10T09:00:00.000Z' },
+    };
+    expect(storyCitationOf(hoisted)?.unavailable).toBe(true);
+  });
+
+  test('une HUMEUR supprimée ⇒ indisponible aussi, jamais null', () => {
+    const citation = storyCitationOf(
+      message({
+        storyReplyToId: 'p1',
+        metadata: { postReplyTo: { id: 'p1', type: 'STATUS', moodEmoji: '😴', previewText: 'Grosse fatigue', thumbnailUrl: null, createdAt: '', deletedAt: '2026-09-10T09:00:00.000Z' } },
+      }),
+    );
+    expect(citation?.unavailable).toBe(true);
+  });
+
+  test('une story seulement EXPIRÉE (sans deletedAt) garde sa carte pleine', () => {
+    const citation = storyCitationOf(
+      message({
+        storyReplyToId: 'p1',
+        metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Scène', thumbnailUrl: 'https://cdn.meeshy.me/s.jpg', createdAt: '2026-09-01T08:00:00.000Z' } },
+      }),
+    );
+    expect(citation).toEqual({
+      id: 'p1', previewText: 'Scène', thumbnailUrl: 'https://cdn.meeshy.me/s.jpg', createdAt: '2026-09-01T08:00:00.000Z', unavailable: false,
+    });
   });
 
   test('id vide ⇒ la carte se rend quand même', () => {
@@ -213,5 +300,39 @@ describe('les champs HISSÉS à la racine priment sur metadata', () => {
   test('`sticker: null` (la passerelle sert null quand il n’y en a pas) retombe sur metadata, jamais sur un sticker vide', () => {
     expect(stickerOf(wire({ sticker: null, metadata: { sticker: { emoji: '🎉' } } }))?.emoji).toBe('🎉');
     expect(stickerOf(wire({ sticker: null }))).toBeNull();
+  });
+});
+
+/**
+ * L'HUMEUR CITÉE (#7881) — `storyCitationOf` l'écarte (pas de scène) et
+ * RIEN ne la rendait : répondre à une humeur produisait une bulle sans aucune
+ * trace de ce à quoi elle répondait. iOS la rend dans la citation
+ * (`BubbleMoodReplyPreview`, `BubbleQuotedReply.swift:614-650`) : emoji,
+ * contenu, auteur, date.
+ */
+describe('moodCitationOf — l’humeur citée se lit', () => {
+  const mood = (postReplyTo: Record<string, unknown>) =>
+    message({ storyReplyToId: 'p1', metadata: { postReplyTo: { id: 'p1', type: 'STATUS', thumbnailUrl: null, ...postReplyTo } } });
+
+  test('emoji, contenu, auteur et date du snapshot', () => {
+    expect(
+      moodCitationOf(mood({ moodEmoji: '😴', previewText: 'Grosse fatigue', authorName: 'Amina Diallo', createdAt: '2026-09-10T08:30:00.000Z' })),
+    ).toEqual({ id: 'p1', emoji: '😴', text: 'Grosse fatigue', authorName: 'Amina Diallo', createdAt: '2026-09-10T08:30:00.000Z' });
+  });
+
+  test('snapshot legacy sans auteur ⇒ authorName vide (le composant retombe sur « Humeur »)', () => {
+    expect(moodCitationOf(mood({ moodEmoji: '☕', previewText: '', createdAt: '' }))?.authorName).toBe('');
+  });
+
+  test('une humeur SUPPRIMÉE (deletedAt) n’est plus rendue comme humeur — c’est la carte indisponible qui la dit', () => {
+    expect(moodCitationOf(mood({ moodEmoji: '😴', previewText: 'Grosse fatigue', createdAt: '', deletedAt: '2026-09-10T09:00:00.000Z' }))).toBeNull();
+  });
+
+  test('une STORY (moodEmoji nul) n’est pas une humeur', () => {
+    expect(moodCitationOf(mood({ moodEmoji: null, previewText: 'Scène', createdAt: '' }))).toBeNull();
+  });
+
+  test('sans storyReplyToId ⇒ null', () => {
+    expect(moodCitationOf(message())).toBeNull();
   });
 });

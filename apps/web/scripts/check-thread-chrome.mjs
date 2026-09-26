@@ -44,6 +44,16 @@
  *    `MutationObserver` compte au plus quatre mutations pour un geste, quel
  *    que soit le nombre d'images de défilement.
  *
+ * 6. LE BOUTON « REVENIR EN BAS » NE SE REPLIE PAS (#8002). Pendant le même
+ *    geste tenu qui escamote en-tête et composeur, remonté loin du bas, le
+ *    bouton reste à `opacity: 1` et reçoit le doigt.
+ *
+ * 7. LE CLAVIER PART D'ABORD (#8000). Champ du composeur focalisé (le
+ *    clavier virtuel est levé), un geste tactile vers les messages ANCIENS
+ *    retire le focus du champ et ne replie RIEN d'autre : ni
+ *    `data-chrome-header` ni `data-chrome-composer` pendant ce geste. Le
+ *    geste SUIVANT, clavier fermé, replie comme en 1.
+ *
  * CE QU'IL NE MESURE PAS, ET POURQUOI
  *
  * · « recherche ouverte ⇒ rien ne bouge » : aucun état de recherche n'existe
@@ -128,6 +138,7 @@ const chromeState = (page) =>
     const host = header?.parentElement ?? null;
     const actions = document.querySelector('.thread-header-actions');
     const composer = document.querySelector('.thread-composer-chrome');
+    const scrollButton = document.querySelector('.thread-scroll-to-bottom');
     const read = (el) => (el === null ? null : { opacity: getComputedStyle(el).opacity, pointerEvents: getComputedStyle(el).pointerEvents });
     return {
       dataHeader: host?.dataset.chromeHeader ?? null,
@@ -135,6 +146,8 @@ const chromeState = (page) =>
       header: read(header),
       actions: read(actions),
       composer: read(composer),
+      scrollButton: read(scrollButton),
+      scrollButtonInert: scrollButton?.hasAttribute('inert') ?? null,
     };
   });
 
@@ -221,6 +234,15 @@ for (const scheme of ['light', 'dark']) {
       `${scheme} · Focal, geste tenu : le composeur est à opacity 0 et pointer-events none (${JSON.stringify(held.composer)})`,
     );
 
+    // --- 6. #8002 — le bouton « revenir en bas » ne suit PAS le repli.
+    expect(
+      held.scrollButton !== null &&
+        held.scrollButton.opacity === '1' &&
+        held.scrollButton.pointerEvents !== 'none' &&
+        held.scrollButtonInert === false,
+      `${scheme} · geste tenu loin du bas : le bouton « revenir en bas » RESTE visible et joignable (${JSON.stringify([held.scrollButton, held.scrollButtonInert])})`,
+    );
+
     await page.screenshot({ path: join(CAPTURES, `thread-focal-chrome-hidden.${scheme}.png`) });
 
     await touch(page, 'end');
@@ -240,6 +262,58 @@ for (const scheme of ['light', 'dark']) {
       `${scheme} · le chrome mute AUX TRANSITIONS seulement : ${mutations} mutations pour 8 images de défilement (attendu 1..4)`,
     );
 
+    await close(page);
+  }
+
+  // ---------------------------------------------------------------------- 7
+  {
+    const page = await openThread(scheme);
+    /* Chaque geste part du BAS du fil : un `scrollTop` déjà à 0 n'émet aucun
+       `scroll`, et le geste ne serait pas un défilement. */
+    const toBottom = async () => {
+      await page.evaluate(() => {
+        const m = document.querySelector('main');
+        m.scrollTop = m.scrollHeight;
+      });
+      await page.waitForFunction(() => document.querySelector('main').scrollTop > 600, null, { timeout: 3000 }).catch(() => {});
+    };
+    await toBottom();
+    await page.locator('[data-composer] textarea').focus();
+    const focusedBefore = await page.evaluate(() => document.activeElement?.tagName ?? null);
+    expect(focusedBefore === 'TEXTAREA', `${scheme} · le champ du composeur a le focus — le clavier est levé (${focusedBefore})`);
+
+    await touch(page, 'start');
+    for (let i = 0; i < 6; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    const keyboardClosed = await page
+      .waitForFunction(() => document.activeElement?.tagName !== 'TEXTAREA', null, { timeout: 3000 })
+      .then(() => true, () => false);
+    expect(keyboardClosed, `${scheme} · le défilement vers les anciens FERME le clavier (le champ perd le focus)`);
+    const first = await chromeState(page);
+    expect(
+      first.dataHeader === null && first.dataComposer === null && first.header.opacity === '1',
+      `${scheme} · ce premier geste ne replie RIEN d'autre (${JSON.stringify([first.dataHeader, first.dataComposer, first.header.opacity])})`,
+    );
+    await page.screenshot({ path: join(CAPTURES, `thread-keyboard-first.${scheme}.png`) });
+    await touch(page, 'end');
+    await toBottom();
+
+    await touch(page, 'start');
+    for (let i = 0; i < 4; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    await page
+      .waitForFunction(() => document.querySelector('header.thread-header')?.parentElement?.dataset.chromeHeader === 'entire', null, { timeout: 3000 })
+      .catch(() => {});
+    const second = await chromeState(page);
+    expect(
+      second.dataHeader === 'entire' && second.dataComposer === 'hidden',
+      `${scheme} · le geste SUIVANT, clavier fermé, replie le chrome (${JSON.stringify([second.dataHeader, second.dataComposer])})`,
+    );
+    await touch(page, 'end');
     await close(page);
   }
 
@@ -658,15 +732,21 @@ for (const scheme of ['light', 'dark']) {
         return { width: Math.round(r.width * 10) / 10, height: Math.round(r.height * 10) / 10 };
       }, sel);
 
-    for (const [sel, name] of TOGGLES) {
-      const box = await boxOf(sel);
-      if (expect(box !== null, `${scheme} · la bascule « ${name} » existe dans la rangée haute`)) {
+    /* LA BARRE GARDE TOUTE SA LARGEUR (#7985, après #7980) — le cadre des
+       emojis rapides vit dans la ligne de saisie, focus ou non : chaque
+       bascule tient sa cible 44×44 dans les DEUX états, et plus rien ne se
+       replie à côté d'un cadre qui ne monte plus sur la barre. */
+    for (const state of ['repos', 'focus']) {
+      if (state === 'focus') await page.locator('[aria-label="Écrire un message"]').focus();
+      for (const [sel, name] of TOGGLES) {
+        const box = await boxOf(sel);
         expect(
-          box.width >= 44 && box.height >= 44,
-          `${scheme} · « ${name} » tient la cible 44×44 (${box.width}×${box.height})`,
+          box !== null && box.width >= 44 && box.height >= 44,
+          `${scheme} · ${state}, « ${name} » tient la cible 44×44 (${box?.width}×${box?.height})`,
         );
       }
     }
+    await page.locator('[aria-label="Écrire un message"]').blur();
 
     /* L'ÉTAT ARMÉ, PAS SEULEMENT L'ÉTAT AU REPOS — c'est l'armé qui peint un
        lavis sous son encre, donc lui seul peut tomber sous AA. On ARME par
@@ -700,25 +780,171 @@ for (const scheme of ['light', 'dark']) {
       expect(ratio !== null && ratio >= 4.5, `${scheme} · « ${name} » ARMÉE tient la barre AA (${ratio}:1)`);
     }
 
-    /* LA FEUILLE D'EFFETS — ses puces sont des cibles au même titre. */
+    /* LE RAIL ÉPHÉMÈRE GARDE 8 PX AVEC LE BORD DU VERRE (#7980, miroir
+       #7966) — en haut et sur les côtés. On le rouvre (le choix l'a fermé). */
+    const railInset = async (sel) =>
+      page.evaluate((s) => {
+        const rail = document.querySelector(s);
+        const glass = document.querySelector('[data-composer]');
+        if (rail === null || glass === null) return null;
+        const r = rail.getBoundingClientRect();
+        const g = glass.getBoundingClientRect();
+        return { top: Math.round(r.top - g.top), start: Math.round(r.left - g.left), end: Math.round(g.right - r.right) };
+      }, sel);
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.waitForSelector('[data-composer-ephemeral-picker]');
+    const ephemeralInset = await railInset('[data-composer-ephemeral-picker]');
+    expect(
+      ephemeralInset !== null && ephemeralInset.top === 8 && ephemeralInset.start === 8 && ephemeralInset.end === 8,
+      `${scheme} · le rail éphémère garde 8 px avec le bord du verre (${JSON.stringify(ephemeralInset)})`,
+    );
+
+    /* LE PANNEAU D'EFFETS (#7980) — INLINE, jamais une feuille : il prend la
+       place du rail éphémère (les deux s'excluent), garde les mêmes 8 px, et
+       ses capsules sont des cibles au même titre. */
     await page.locator('[data-composer-effects]').click();
-    await page.waitForSelector('dialog[open]');
+    await page.waitForSelector('[data-composer-effects-panel]');
+    expect((await page.locator('dialog[open]').count()) === 0, `${scheme} · la baguette n'ouvre AUCUNE feuille`);
+    expect(
+      (await page.locator('[data-composer-ephemeral-picker]').count()) === 0,
+      `${scheme} · le panneau d'effets FERME le rail éphémère`,
+    );
+    const effectsInset = await railInset('[data-composer-effects-panel]');
+    expect(
+      effectsInset !== null && effectsInset.top === 8 && effectsInset.start === 8 && effectsInset.end === 8,
+      `${scheme} · le panneau d'effets garde 8 px avec le bord du verre (${JSON.stringify(effectsInset)})`,
+    );
     const chips = await page.evaluate(() =>
-      [...document.querySelectorAll('dialog[open] button')].map((b) => {
+      [...document.querySelectorAll('[data-composer-effects-panel] button[aria-pressed]')].map((b) => {
         const r = b.getBoundingClientRect();
         return { label: b.getAttribute('aria-label') ?? b.textContent, height: Math.round(r.height) };
       }),
     );
     const shortChips = chips.filter((c) => c.height < 44);
     expect(
-      chips.length > 0 && shortChips.length === 0,
-      `${scheme} · les ${chips.length} puces de la feuille d'effets tiennent 44 px (${shortChips.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
+      chips.length === 10 && shortChips.length === 0,
+      `${scheme} · les ${chips.length} capsules du panneau d'effets tiennent 44 px (${shortChips.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
     );
 
-    await page.locator('dialog[open] button', { hasText: 'Confettis' }).first().click();
-    await page.waitForTimeout(100);
-    const chipRatio = await contrastOf(page, 'dialog[open] button[aria-pressed="true"]');
-    expect(chipRatio !== null && chipRatio >= 4.5, `${scheme} · une puce d'effet ACTIVE tient la barre AA (${chipRatio}:1)`);
+    await page.locator('[data-composer-effects-panel] button', { hasText: 'Confettis' }).first().click();
+    await page.waitForSelector('[data-composer-effects-panel] button[aria-pressed="true"]');
+    const chipRatio = await contrastOf(page, '[data-composer-effects-panel] button[aria-pressed="true"]');
+    expect(chipRatio !== null && chipRatio >= 4.5, `${scheme} · une capsule d'effet ACTIVE tient la barre AA (${chipRatio}:1)`);
+    const idleRatio = await contrastOf(page, '[data-composer-effects-panel] button[aria-pressed="false"]');
+    expect(idleRatio !== null && idleRatio >= 4.5, `${scheme} · une capsule d'effet au repos tient la barre AA (${idleRatio}:1)`);
+    const clearBox = await page.evaluate(() => {
+      const b = document.querySelector('[data-composer-effects-panel] [data-effects-clear-all]');
+      if (b === null) return null;
+      const r = b.getBoundingClientRect();
+      return { height: Math.round(r.height) };
+    });
+    expect(clearBox !== null && clearBox.height >= 44, `${scheme} · « Tout effacer » paraît, cible ≥ 44 px (${JSON.stringify(clearBox)})`);
+    const clearRatio = await contrastOf(page, '[data-composer-effects-panel] [data-effects-clear-all]');
+    expect(clearRatio !== null && clearRatio >= 4.5, `${scheme} · « Tout effacer » tient la barre AA (${clearRatio}:1)`);
+    await page.screenshot({ path: join(CAPTURES, `thread-composer-effects-panel.${scheme}.png`) });
+
+    await context.close();
+  }
+
+  // ---------------------------------------------------------------------- 8
+  /**
+   * LE CADRE DES EMOJIS RAPIDES (#7985, directive porteur 2026-09-25, après
+   * #7980) — TROIS emojis EN PERMANENCE, sur une rangée, à la hauteur de la
+   * ligne de saisie, focus ou non ; la barre d'outils garde toute sa largeur
+   * (sa tonalité comprise) et aucun de ses contrôles ne glisse sous le cadre.
+   * Mesuré à 390 px et à 320 px — la largeur à laquelle l'ancienne forme
+   * « cinq sur tout le côté droit » débordait (#7984).
+   *
+   * Puis EN SÉRIE : deux taps sur le même emoji font DEUX bulles (plus de
+   * dédoublonnage par contenu), et un double clic sur « Envoyer » n'en fait
+   * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
+   * aucun envoi ne quitte le navigateur.
+   */
+  for (const width of [390, 320]) {
+    const context = await browser.newContext({
+      viewport: { width, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+      reducedMotion: 'reduce',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-composer-quick-emoji]');
+    await page.waitForSelector('[data-message]');
+
+    const measure = () =>
+      page.evaluate(() => {
+        const box = (el) => {
+          if (el === null) return null;
+          const r = el.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height };
+        };
+        const frame = document.querySelector('[data-composer-quick-emoji]');
+        const toolbar = document.querySelector('[data-composer-toolbar]');
+        const field = document.querySelector('[aria-label="Écrire un message"]')?.parentElement ?? null;
+        const toolbarControls = [...(toolbar?.children ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
+        const rightmost = Math.max(...toolbarControls.map((c) => c.getBoundingClientRect().right));
+        const buttons = [...document.querySelectorAll('[data-composer-quick-emoji] button')].map((b) => {
+          const r = b.getBoundingClientRect();
+          return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
+        });
+        return {
+          frame: box(frame),
+          toolbar: box(toolbar),
+          field: box(field),
+          toolbarRight: rightmost,
+          toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
+          tone: toolbar?.querySelector('[role="img"][aria-label^="Tonalité"]') !== null,
+          pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
+          buttons,
+        };
+      });
+
+    for (const state of ['repos', 'focus']) {
+      if (state === 'focus') await page.locator('[aria-label="Écrire un message"]').focus();
+      const m = await measure();
+      const tag = `${scheme} · ${width} px · ${state}`;
+      expect(m.buttons.length === 3 && new Set(m.buttons.map((b) => b.top)).size === 1, `${tag} · trois emojis sur UNE rangée (${JSON.stringify(m.buttons)})`);
+      if (expect(m.frame !== null && m.toolbar !== null && m.field !== null, `${tag} · cadre, barre et champ sont rendus`)) {
+        expect(
+          Math.round(m.frame.height) === 44 && m.frame.top >= m.toolbar.bottom - 1 && Math.abs(m.frame.bottom - m.field.bottom) <= 1,
+          `${tag} · le cadre tient la ligne de saisie, 44 px, sous la barre (cadre ${Math.round(m.frame.top)}→${Math.round(m.frame.bottom)}, barre ↓${Math.round(m.toolbar.bottom)}, champ ↓${Math.round(m.field.bottom)})`,
+        );
+        expect(
+          m.toolbarRight <= m.frame.left || m.frame.top >= m.toolbar.bottom - 1,
+          `${tag} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(m.toolbarRight)}, cadre ←${Math.round(m.frame.left)})`,
+        );
+      }
+      expect(m.tone, `${tag} · la barre garde sa tonalité`);
+      expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
+      const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
+      expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);
+      await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.${width}.${state}.${scheme}.png`) });
+    }
+
+    if (width === 390) {
+      const bubbles = () => page.locator('[data-message]').count();
+      const emoji = page.locator('[data-composer-quick-emoji] button').first();
+      const before = await bubbles();
+      await emoji.click();
+      await emoji.click();
+      await page.waitForFunction((n) => document.querySelectorAll('[data-message]').length >= n + 2, before, { timeout: 3000 }).catch(() => {});
+      const afterSeries = await bubbles();
+      expect(afterSeries === before + 2, `${scheme} · deux taps sur le même emoji ⇒ DEUX bulles (${before} → ${afterSeries})`);
+
+      await page.locator('[aria-label="Écrire un message"]').fill('double clic');
+      await page.locator('[aria-label="Envoyer"]').dblclick();
+      await page.waitForTimeout(600);
+      const afterDouble = await bubbles();
+      expect(afterDouble === afterSeries + 1, `${scheme} · double clic sur « Envoyer » ⇒ UNE bulle (${afterSeries} → ${afterDouble})`);
+    }
 
     await context.close();
   }

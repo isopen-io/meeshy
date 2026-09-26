@@ -105,8 +105,8 @@ nonisolated enum FocalAudioRouting {
 
 // MARK: - FocalAudioBlock (WS-3)
 
-/// Bloc audio NU de la rangée plate — retrait `29`
-/// (`FocalMetrics.Text.indent`), routage par `FocalAudioRouting.mode(for:)`.
+/// Bloc audio NU de la rangée plate — à la colonne du nom (`Row.contentIndent`)
+/// — routage par `FocalAudioRouting.mode(for:)`.
 ///
 /// **Réutilise** `AudioMediaView`/`AudioCarouselView` (contrat §WS-3) —
 /// TELS QUELS, sans les modifier (§1.3). Les deux exigent un `Message`
@@ -203,7 +203,7 @@ struct FocalAudioBlock: View, Equatable {
                 standaloneBody
             }
         }
-        .padding(.leading, FocalMetrics.Text.indent)
+        .padding(.leading, FocalMetrics.Row.contentIndent)
     }
 
     @ViewBuilder

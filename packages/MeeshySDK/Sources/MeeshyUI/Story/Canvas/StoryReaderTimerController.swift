@@ -251,6 +251,26 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         if !stalled { lastTick = nil }
     }
 
+    /// **Reprend le compte à rebours à une fraction de la slide** (#7878) — la
+    /// barre de la story se parcourt au doigt. La pause éventuelle est gardée
+    /// (le lecteur la tient pendant le glissé) ; la prochaine image repart de
+    /// la position choisie, sans intégrer le temps passé sous le doigt.
+    ///
+    /// Reculer après la fin réarme l'avance automatique ; pointer la fin la
+    /// déclenche, une seule fois.
+    public func seek(toFraction fraction: Double) {
+        let clamped = fraction.isFinite ? min(max(fraction, 0), 1) : 0
+        elapsed = duration * clamped
+        progress = clamped
+        lastTick = nil
+        if clamped < 1 { completionFired = false }
+        onProgressChange?(progress)
+        if clamped >= 1, !completionFired {
+            completionFired = true
+            onCompletion?()
+        }
+    }
+
     public func _advanceClockForTesting(by seconds: TimeInterval) {
         integrate(by: seconds)
     }

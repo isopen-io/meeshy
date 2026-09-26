@@ -359,7 +359,7 @@ emit({
  * `/forgot-password`, jamais dans le socle : ces trois glyphes ne servent
  * qu'a un visiteur SANS session, un chemin rare compare au fil.
  */
-const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise', 'info', 'pencil-simple'];
+const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise', 'info'];
 
 emit({
   ids: AUTH,
@@ -382,7 +382,7 @@ emit({
  * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
  * premier tap sur le micro ou le "+".
  */
-const COMPOSER = ['stop', 'camera', 'map-pin'];
+const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x'];
 
 /* AVERTISSEMENT (#7280) — `glyphs-feed.ts` porte un `mapPin` AJOUTÉ À LA MAIN
    (#6901), que ce script ne connaît pas : le relancer le SUPPRIME. Avant de

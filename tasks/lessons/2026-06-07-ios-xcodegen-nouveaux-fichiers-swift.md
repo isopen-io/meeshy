@@ -1,0 +1,3 @@
+## 2026-06-07 — iOS XcodeGen : nouveaux fichiers Swift
+
+19. **Un nouveau fichier `.swift` n'est PAS compilé tant que le `project.pbxproj` n'est pas régénéré.** Le projet iOS est piloté par **XcodeGen** (`apps/ios/project.yml`, `sources: [{path: Meeshy}]` globbé), mais `meeshy.sh` **ne lance pas** `xcodegen generate` — il build le `project.pbxproj` committé tel quel. Donc créer `Features/.../NewFile.swift` n'ajoute rien au build sans `xcodegen generate` (et éditer le pbxproj à la main est écrasé au prochain generate). **Règle : quand on ne peut pas régénérer/builder soi-même, mettre le nouveau code utilitaire dans un fichier DÉJÀ référencé** (ex. `ContactsShared.swift`) plutôt que créer un fichier — sinon le code ne compile pas et toutes ses références échouent.

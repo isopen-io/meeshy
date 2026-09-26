@@ -184,6 +184,7 @@ const HORS_TABLE_IOS = [
   ['--ios-radius-bubble', '18px', 'Bubble/BubbleBackground.swift — cornerRadius: 18, littéral'],
   ['--ios-radius-field', '22px', 'UniversalComposerBar+Recording.swift — RoundedRectangle(cornerRadius: 22)'],
   ['--ios-radius-quote', '12px', 'Bubble/BubbleQuotedReply.swift — style .card'],
+  ['--ios-radius-repost-embed', '14px', 'FeedPostCard.swift:893 — RoundedRectangle(14) autour de repostView (#6278 c)'],
   ['--ios-text-time', '12px', 'BubbleFooter.swift — .caption de SwiftUI, hors MeeshyFont'],
   ['--ios-text-input', '16px', 'UniversalComposerBar — .callout de SwiftUI'],
   ['--ios-text-large-title', '28px', 'ConversationListView+Overlays.swift — .system(size: 28, weight: .bold)'],
@@ -213,6 +214,7 @@ const HORS_TABLE_IOS = [
   ['--ios-tile-location', '#2ECC71', 'UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color'],
   ['--ios-tile-voice', '#E74C3C', 'UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color'],
   ['--ios-tile-emoji', '#FF9F43', 'UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color'],
+  ['--ios-tile-sticker', '#6C5CE7', 'UniversalComposerBar+Attachments.swift:295 — CarouselTile(id: "sticker").color'],
   /**
    * L'ENCRE DE LA BARRE D'ENREGISTREMENT EN SCHÉMA SOMBRE (#5668,
    * revue-correction) — `UniversalComposerBar+Recording.swift:148` pose
@@ -252,6 +254,12 @@ const HORS_TABLE_PAR_SCHEMA = [
     'color-mix(in srgb, white 15%, transparent)',
     'color-mix(in srgb, white 15%, transparent)',
     'BubbleQuotedReply.swift — style .card, hôte isMe',
+  ],
+  [
+    '--ios-repost-embed-fill',
+    'color-mix(in srgb, white 5%, transparent)',
+    'color-mix(in srgb, black 3%, transparent)',
+    'FeedPostCard.swift:892-901 — repostView, fond de la carte citée (#6278 c)',
   ],
   [
     '--ios-edge',

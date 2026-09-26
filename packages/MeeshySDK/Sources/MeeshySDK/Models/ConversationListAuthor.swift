@@ -120,7 +120,10 @@ public enum ConversationListAuthor {
         conversationType: MeeshyConversation.ConversationType,
         peerUserId: String?,
         peerUsername: String?,
-        youLabel: String
+        youLabel: String,
+        eventMessageId: String? = nil,
+        rowMessageId: String? = nil,
+        rowSenderName: String? = nil
     ) -> Resolution {
         // `currentUserId` DOIT être non nul pour que l'égalité veuille dire
         // quelque chose : comparer deux `nil` ferait dire « Toi » au premier
@@ -128,6 +131,16 @@ public enum ConversationListAuthor {
         // l'authentification n'est pas encore résolue.
         if let me = currentUserId, !me.isEmpty, eventSenderId == me || eventSenderUserId == me {
             return .display(youLabel)
+        }
+
+        // **« Vous » est TENU sur le même message** (#7952). L'auteur d'un
+        // message ne change jamais, et la ligne ne dit « Vous » que lorsqu'un
+        // événement l'a PROUVÉ. Les ré-émissions du même message — chaque
+        // traduction qui aboutit, en `previewRecalculated` — ne portent plus
+        // que mon id de PARTICIPANT et mon nom : rien qui prouve « moi », et
+        // le nom servi remplaçait « Vous » pour toujours.
+        if let eventMessageId, eventMessageId == rowMessageId, rowSenderName == youLabel {
+            return .unchanged
         }
 
         if case .replaced(let servi) = eventSenderName {
@@ -168,7 +181,10 @@ public enum ConversationListAuthor {
             conversationType: row.type,
             peerUserId: row.participantUserId,
             peerUsername: row.participantUsername,
-            youLabel: youLabel
+            youLabel: youLabel,
+            eventMessageId: event.lastMessageIdValue,
+            rowMessageId: row.lastMessageId,
+            rowSenderName: row.lastMessageSenderName
         )
     }
 }

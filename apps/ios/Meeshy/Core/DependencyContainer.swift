@@ -167,6 +167,7 @@ final class DependencyContainer {
         _ mutation: RealtimeMessageMutation,
         into persistence: MessagePersistenceActor
     ) async {
+        await StarredMessagesStore.follow(mutation, persistence: persistence)
         do {
             switch mutation {
             case let .edited(messageId, content, editedAt):
@@ -178,19 +179,31 @@ final class DependencyContainer {
                 )
             case let .deleted(messageId, deletedAt):
                 try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt, sparingOpenedViewOnce: true)
-            case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount):
+            case let .expired(messageId, expiredAt):
+                // Même écriture que la conversation OUVERTE
+                // (`ConversationSocketHandler`) : contenu vidé, citations
+                // scellées — une vue unique n'y est pas épargnée (#7960).
+                try await persistence.markDeleted(localId: messageId, deletedAt: expiredAt)
+            case let .citedPostWithdrawn(postId, conversationId, _):
+                try await persistence.markCitedPostWithdrawn(postId: postId, conversationId: conversationId)
+            case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount, ownerUserId):
                 try await persistence.appendReaction(
                     localId: messageId, reactionId: reactionId, messageId: messageId,
-                    participantId: participantId, emoji: emoji, maxCount: maxCount
+                    participantId: participantId, emoji: emoji, maxCount: maxCount,
+                    ownerUserId: ownerUserId
                 )
-            case let .reactionRemoved(messageId, emoji, participantId):
+            case let .reactionRemoved(messageId, emoji, participantId, ownerUserId, aggregateCount, aggregateParticipantIds):
                 try await persistence.removeReaction(
-                    localId: messageId, emoji: emoji, participantId: participantId
+                    localId: messageId, emoji: emoji, participantId: participantId,
+                    ownerUserId: ownerUserId, aggregateCount: aggregateCount,
+                    aggregateParticipantIds: aggregateParticipantIds
                 )
             case let .consumed(messageId, viewOnceCount):
                 try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)
             case let .viewOnceOpened(messageId):
                 try await persistence.markViewOnceOpened(localId: messageId)
+            case .starred, .unstarred:
+                break
             }
         } catch {
             containerLogger.error("Realtime message persistence failed: \(error.localizedDescription, privacy: .public)")

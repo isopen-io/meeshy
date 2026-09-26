@@ -157,6 +157,7 @@ export function resolveLastMessagePreviewPrism(
  */
 export const PREVIEW_MEDIA_SENDER_SELECT = {
   displayName: true,
+  userId: true,
   user: { select: { displayName: true } },
 } as const;
 
@@ -188,6 +189,7 @@ export const PREVIEW_MEDIA_ATTACHMENT_SELECT = {
 
 export interface PreviewMediaSender {
   readonly displayName?: string | null;
+  readonly userId?: string | null;
   readonly user?: { readonly displayName?: string | null } | null;
 }
 
@@ -237,6 +239,7 @@ export interface PreviewMediaMessage {
 
 export interface PreviewMediaFields {
   readonly lastMessageSenderName: string | null;
+  readonly lastMessageSenderUserId: string | null;
   readonly lastMessageAttachments: readonly LastMessagePreviewAttachment[];
   readonly lastMessageAttachmentCount: number;
   readonly lastMessageIsBlurred: boolean;
@@ -267,6 +270,10 @@ export function resolvePreviewMediaFields(
   const attachments = message?.attachments ?? [];
   return {
     lastMessageSenderName: resolveParticipantDisplayName(message?.sender ?? null),
+    // #7978 — l'identité UTILISATEUR de l'auteur : `senderId` est un
+    // `Participant.id`, qui ne vaut jamais l'id du lecteur. C'est sur CE champ
+    // que les clients décident « Vous ». `null` pour un auteur sans compte.
+    lastMessageSenderUserId: message?.sender?.userId ?? null,
     // Plafonnée ICI, à la sortie — pas une convention que chaque appelant
     // doit respecter à l'entrée. `emitConversationPreviewUpdate` capait déjà
     // sa requête Prisma à `take: 1` (optimisation légitime, conservée) ; les

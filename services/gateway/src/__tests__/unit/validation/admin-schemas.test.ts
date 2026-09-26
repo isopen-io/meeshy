@@ -85,6 +85,25 @@ describe('AnalyticsKpisQuerySchema', () => {
 // ─── Anonymous Users ──────────────────────────────────────────────────────────
 
 describe('AnonymousUsersQuerySchema', () => {
+  // #7873 — tri et langue : une valeur inconnue retombe sur le défaut, jamais un 400.
+  it('defaults sortBy=joinedAt, sortOrder=desc', () => {
+    expect(AnonymousUsersQuerySchema.parse({})).toMatchObject({ sortBy: 'joinedAt', sortOrder: 'desc' });
+  });
+
+  it('accepts the whitelisted sort keys and order', () => {
+    expect(AnonymousUsersQuerySchema.parse({ sortBy: 'displayName', sortOrder: 'asc' })).toMatchObject({ sortBy: 'displayName', sortOrder: 'asc' });
+    expect(AnonymousUsersQuerySchema.parse({ sortBy: 'lastActiveAt' })).toMatchObject({ sortBy: 'lastActiveAt' });
+  });
+
+  it('falls back to defaults for an unknown sort key or order', () => {
+    expect(AnonymousUsersQuerySchema.parse({ sortBy: 'sessionTokenHash', sortOrder: 'up' })).toMatchObject({ sortBy: 'joinedAt', sortOrder: 'desc' });
+  });
+
+  it('keeps a language filter and drops an unusable one', () => {
+    expect(AnonymousUsersQuerySchema.parse({ language: 'fr' })).toMatchObject({ language: 'fr' });
+    expect(AnonymousUsersQuerySchema.parse({ language: 'x' }).language).toBeUndefined();
+  });
+
   it('accepts all fields with valid values', () => {
     const result = AnonymousUsersQuerySchema.parse({ offset: '5', limit: '10', search: 'hello', status: 'active' });
     expect(result).toMatchObject({ offset: 5, limit: 10, search: 'hello', status: 'active' });

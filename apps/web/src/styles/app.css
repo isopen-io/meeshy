@@ -541,6 +541,36 @@
   }
 }
 
+/* LE RETOUR APRES ENVOI, ADOUCI (#7985) — l'emplacement d'envoi du composeur
+   (bouton d'envoi OU cadre des emojis rapides) entre par un tourbillon DOUX.
+   iOS (`tourbillonTransition`, `UniversalComposerBar+Send.swift`) passait de
+   ±250 deg / echelle 0,05 / ressort amorti 0,62 ; la directive porteur du
+   2026-09-25 le veut nettement moins accentue : ±40 deg, echelle 0,6, ressort
+   amorti 0,85 — presque sans rebond, donc une simple deceleration ici.
+   Seule l'ENTREE est animee (l'element sortant est demonte), et jamais au
+   premier rendu : ouvrir une conversation ne fait rien tourner.
+   `prefers-reduced-motion` la coupe. */
+@keyframes composerSlotIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-40deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.composer-slot-in {
+  animation: composerSlotIn 320ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-slot-in {
+    animation: none;
+  }
+}
+
 /* LA RESPIRATION DE MA PASTILLE D'HUMEUR (#6150) — trame de `MeeshyMoodBadge`
    (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/MoodBadge.swift`) : repos
    1.0, crete 1.18, puis la pastille SE POSE. Deux bornes portees depuis iOS,
@@ -580,4 +610,21 @@
   .mood-breathe {
     animation: none;
   }
+}
+
+/**
+ * L'ENCRE DU PASSAGE PRONONCÉ D'UN VOCAL (#7911) — la couleur primaire de
+ * l'application (indigo, `MeeshyColors.brandPrimary`), portée au cran qui
+ * tient le contraste AA sur le fond : indigo-600 sur clair (6,3:1 sur blanc),
+ * indigo-300 sur nuit — indigo-500 servi tel quel mesure 4,47:1 sur blanc,
+ * sous le seuil (même constat que `--ios-self-name-ink`, #5935). La bulle
+ * ENVOYÉE, peinte en indigo-500, la redéfinit en blanc (`bubble.tsx`).
+ */
+:root,
+:root.dark {
+  --color-karaoke-ink: var(--ios-indigo-300);
+}
+
+:root.light {
+  --color-karaoke-ink: var(--ios-indigo-600);
 }

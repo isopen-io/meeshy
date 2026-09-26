@@ -87,6 +87,7 @@ final class FocalRowMetricsTests: XCTestCase {
         "FocalMetaRow.swift",
         "FocalAttachmentBlock.swift",
         "FocalQuotedReplyView.swift",
+        "FocalQuoteRail.swift",
         "FocalConversationStartRow.swift"
     ]
 
@@ -118,9 +119,9 @@ final class FocalRowMetricsTests: XCTestCase {
     /// fixe la largeur disponible, donc le retour à la ligne, donc la hauteur ;
     /// le faire varier avec l'élection faisait changer la cellule de taille au
     /// basculement, et toute la liste sautait. La valeur retenue pour TOUTES
-    /// les rangées est celle de l'élue — `FocalMetrics.Focus.textIndent`
-    /// (`avatarSize + 7` = 41), la seule qui laisse la place à la pastille de
-    /// 34 que l'en-tête réserve désormais en permanence.
+    /// les rangées est, depuis #7995 (directive porteur 2026-09-26), la
+    /// colonne du nom — `FocalMetrics.Row.contentIndent` (= `Text.indent`,
+    /// 22 + 7), commune au contenu propre et aux citations.
     ///
     /// `FocalRow` a donc changé de COTE, pas de discipline : les deux sont
     /// nommées dans `FocalMetrics`, aucune n'est un littéral. Le témoin
@@ -134,13 +135,14 @@ final class FocalRowMetricsTests: XCTestCase {
         // rangées suivantes, il ne s'indente pas sous lui-même) et
         // `FocalConversationStartRow` (rangée centrée) en sont exclus.
         let indentedFiles = [
-            // Retrait CONSTANT au gabarit de l'élue depuis `0c619a98` : la
-            // pastille de 34 est réservée en permanence.
-            "FocalRow.swift": "FocalMetrics.Focus.textIndent",
-            // Rangées satellites : toujours alignées sur la pastille de 22.
+            // #7995 (directive porteur 2026-09-26) : UNE origine, la colonne
+            // du nom, pour le contenu propre ET les citations (carte de story
+            // comprise) — plus de cote de citation distincte (#7928, supplantée).
+            "FocalRow.swift": "FocalMetrics.Row.contentIndent",
+            "FocalAttachmentBlock.swift": "FocalMetrics.Row.contentIndent",
+            "FocalQuotedReplyView.swift": "FocalMetrics.Row.contentIndent",
+            "FocalQuoteRail.swift": "FocalMetrics.Row.contentIndent",
             "FocalMetaRow.swift": "FocalMetrics.Text.indent",
-            "FocalAttachmentBlock.swift": "FocalMetrics.Text.indent",
-            "FocalQuotedReplyView.swift": "FocalMetrics.Text.indent",
         ]
         for (fileName, cote) in indentedFiles {
             let stripped = AppSourceGuard.stripComments(try source(fileName))

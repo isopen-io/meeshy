@@ -313,19 +313,24 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
     (await rowOf('st-sticker').locator('img[alt^="Sticker"]').count()) === 0,
     `${label} st-sticker : AUCUNE <img> — le PNG n'est que le repli des clients qui ne dessinent pas`,
   );
-  /* LA BOÎTE (60×60, `BubbleSticker.emojiBox`) ET LA POLICE (90,
-     `EmojiOnlyResult.single.fontSize`) SONT DEUX COTES DISTINCTES
-     (revue-correction #5936, défaut majeur 6b) — le défaut précédent
-     servait `side` (112/160, celle du cas PNG) comme boîte et 60 comme
-     police : un test qui ne mesure qu'UNE valeur ne peut pas voir
-     l'interversion, donc les DEUX sont mesurées ici, séparément. */
+  /* LA POLICE (90, `EmojiOnlyResult.single.fontSize`) — et AUCUN débord
+     (#7881). La boîte 60×60 (`BubbleSticker.emojiBox`) servie en CSS laissait
+     un glyphe de ~100 px déborder de sa rangée sur le nom, l'heure et le
+     sticker voisins ; le témoin précédent exigeait EXACTEMENT ce 60 et
+     gardait donc le défaut. Ce qu'il mesure désormais est la propriété :
+     la rangée CONTIENT ce que le glyphe peint. */
   const stickerGlyphBox = await stickerGlyph.evaluate((el) => {
     const box = el.getBoundingClientRect();
-    return { width: Math.round(box.width), height: Math.round(box.height), fontSize: getComputedStyle(el).fontSize };
+    const row = el.closest('[data-message]')?.getBoundingClientRect();
+    return {
+      height: Math.round(box.height),
+      fontSize: getComputedStyle(el).fontSize,
+      contained: row !== undefined && box.top >= row.top - 0.5 && box.bottom <= row.bottom + 0.5,
+    };
   });
-  expect(stickerGlyphBox.width === 60, `${label} st-sticker : boîte du glyphe 60px de large (obtenu ${stickerGlyphBox.width})`);
-  expect(stickerGlyphBox.height === 60, `${label} st-sticker : boîte du glyphe 60px de haut (obtenu ${stickerGlyphBox.height})`);
   expect(stickerGlyphBox.fontSize === '90px', `${label} st-sticker : police du glyphe 90px (obtenu ${stickerGlyphBox.fontSize})`);
+  expect(stickerGlyphBox.height >= 90, `${label} st-sticker : la boîte du glyphe réserve sa hauteur peinte (obtenu ${stickerGlyphBox.height})`);
+  expect(stickerGlyphBox.contained, `${label} st-sticker : le glyphe tient DANS sa rangée — aucun débord sur les voisins`);
 
   // st-sticker-bare — aucun gabarit, aucune pièce jointe : repli emoji (glyphe).
   const stickerBareHtml = await rowOf('st-sticker-bare').innerHTML();
@@ -409,6 +414,16 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
       `${label} ${id} : aucun bouton (aucune route story câblée)`,
     );
   }
+  /* st-story-gone — AUCUN instantané servi (#7881) : pas de 9:16 vide, un
+     bandeau qui DIT l'état. */
+  expect(
+    (await rowOf('st-story-gone').locator('[data-story-scene]').count()) === 0,
+    `${label} st-story-gone : aucune scène vide — la carte se compacte`,
+  );
+  expect(
+    (await rowOf('st-story-gone').locator('[data-story-unavailable]').count()) > 0,
+    `${label} st-story-gone : le bandeau dit que la story est indisponible`,
+  );
   const sceneHeight = await rowOf('st-story').locator('[data-story-scene]').evaluate((el) => el.getBoundingClientRect().height);
   expect(Math.abs(sceneHeight - (132 * 16) / 9) <= 1, `${label} st-story : hauteur de scène = 132 × 16/9 ± 1 (obtenu ${sceneHeight})`);
 

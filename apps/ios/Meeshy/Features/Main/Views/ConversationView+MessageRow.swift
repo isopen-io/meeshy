@@ -43,9 +43,23 @@ extension ConversationView {
     /// statut — et lève le clavier comme un geste de réponse (#6003).
     /// `openingConversation` : la conversation vient d'être poussée pour
     /// répondre, et non déjà à l'écran.
-    func applyReplyContext(_ context: ReplyContext, openingConversation: Bool) {
+    ///
+    /// Seule porte d'entrée d'un `ReplyContext` dans le composeur : le contexte
+    /// n'y entre que dans le DM de son auteur (`StoryReplyAdmission`, #7883).
+    /// Rend `false` sans rien toucher sinon — ni citation, ni clavier, ni
+    /// brouillon.
+    @discardableResult
+    func applyReplyContext(_ context: ReplyContext, openingConversation: Bool) -> Bool {
+        guard context.isAdmissible(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId) else { return false }
         composerState.pendingReplyReference = context.toReplyReference
         requestReplyFocus(openingConversation: openingConversation)
+        return true
+    }
+
+    /// Ce que l'envoi transmet de la citation en attente, bornée à CETTE
+    /// conversation (#7883) — le site unique des chemins texte, média et sticker.
+    var outgoingReplyRoute: OutgoingReplyRoute {
+        OutgoingReplyRoute(pending: composerState.pendingReplyReference, conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
     }
 
     /// Demande le focus du composer par un FRONT bas → haut (#6003).
@@ -234,45 +248,6 @@ extension ConversationView {
             .zIndex(81)
             .allowsHitTesting(false)
             .transition(.opacity)
-        }
-    }
-
-    // MARK: - Return to Latest Button (extracted for type-checker)
-
-    @ViewBuilder
-    var returnToLatestButton: some View {
-        if viewModel.isInJumpedState && !headerState.showSearch {
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button {
-                        HapticFeedback.medium()
-                        Task { await viewModel.returnToLatest() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down.to.line")
-                                .font(MeeshyFont.relative(12, weight: .bold))
-                            Text(String(localized: "conversation.view.recent_messages", defaultValue: "Messages récents", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: accentColor).opacity(0.9))
-                                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
-                        )
-                    }
-                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages récents", bundle: .main))
-                    Spacer()
-                }
-                .padding(.bottom, composerHeight + 8)
-            }
-            .zIndex(65)
-            .transition(.scale(scale: 0.8).combined(with: .opacity))
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
         }
     }
 
