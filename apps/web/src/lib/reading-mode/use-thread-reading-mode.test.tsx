@@ -142,9 +142,9 @@ describe('useThreadReadingMode — orchestration du mode de lecture (#7429, extr
     expect(Object.is(first.readingDecision, second.readingDecision)).toBe(true);
   });
 
-  test('conversation non résolue (undefined) ⇒ `focal`, sans lecture ni écriture du magasin', () => {
+  test('conversation non résolue (undefined) ⇒ `script` (défaut, #8147), sans lecture ni écriture du magasin', () => {
     const { state, backend } = mount({ conversation: undefined });
-    expect(state().readingDecision.mode).toBe('focal');
+    expect(state().readingDecision.mode).toBe('script');
     expect(backend.calls.getItem).toBe(0);
     expect(backend.calls.setItem).toBe(0);
   });
