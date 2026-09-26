@@ -27,7 +27,7 @@ import {
 } from './call-decode';
 import { fetchActiveCallId } from './active-call';
 import { preferredInputs } from './call-devices';
-import { acquireCallMedia, acquireCamera, mediaFailureOf, stopStream, type Facing } from './call-media';
+import { acquireCallMedia, acquireCamera, acquireDisplay, mediaFailureOf, stopStream, type Facing } from './call-media';
 import {
   callStore,
   isCallLive,
@@ -90,6 +90,8 @@ export type CallEngineDeps = {
   readonly fetchActiveCallId: (conversationId: string) => Promise<string | null>;
   readonly acquireMedia: (options: { readonly video: boolean; readonly facing: Facing }) => Promise<MediaStream>;
   readonly acquireCamera: (facing: Facing) => Promise<MediaStreamTrack>;
+  /** La piste de l'écran choisi (#8063) — rejette quand l'utilisateur annule le choix. */
+  readonly acquireDisplay: () => Promise<MediaStreamTrack>;
   readonly createLink: (deps: PeerLinkDeps) => PeerLink;
   readonly createStream: (tracks: readonly MediaStreamTrack[]) => MediaStream;
   readonly now: () => number;
@@ -110,6 +112,8 @@ export type CallEngine = {
   readonly toggleMic: () => void;
   readonly toggleCamera: () => Promise<void>;
   readonly switchCamera: () => Promise<void>;
+  /** Partager l'écran, ou arrêter le partage (#8063). */
+  readonly toggleScreen: () => Promise<void>;
   /** Un périphérique choisi en cours d'appel (#8046) : la piste, déjà acquise, remplace l'actuelle. */
   readonly replaceInput: (kind: 'camera' | 'microphone', track: MediaStreamTrack) => Promise<void>;
   readonly setDisplay: (display: ActiveCall['display']) => void;
@@ -133,6 +137,7 @@ type Session = {
   qualityTimer: unknown;
   lastQualityReport: number;
   retry: StartCallRequest | null;
+  cameraBeforeShare: boolean;
 };
 
 const emptySession = (): Session => ({
@@ -144,6 +149,7 @@ const emptySession = (): Session => ({
   qualityTimer: null,
   lastQualityReport: 0,
   retry: null,
+  cameraBeforeShare: false,
 });
 
 function baseCall(request: StartCallRequest, direction: ActiveCall['direction'], phase: ActiveCall['phase']): ActiveCall {
@@ -162,6 +168,7 @@ function baseCall(request: StartCallRequest, direction: ActiveCall['direction'],
     micMuted: false,
     cameraOn: request.media === 'video',
     facing: 'user',
+    screenSharing: false,
     members: {},
     display: 'full',
     localStream: null,
@@ -179,6 +186,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   let endedTimer: unknown = null;
   let incomingTimer: unknown = null;
   let generation = 0;
+  let screenPicking = false;
 
   const read = (): ActiveCall | null => store.getState().call;
   const write = (call: ActiveCall | null): void => store.setState({ call });
@@ -237,7 +245,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     deps.tones.stop();
     if (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting') deps.tones.cue('ended');
     const elapsed = durationSec ?? (call.connectedAt === null ? null : Math.max(0, Math.round((deps.now() - call.connectedAt) / 1000)));
-    write({ ...call, phase: { kind: 'ended', reason, detail }, endedDurationSec: elapsed, localStream: null, remoteStreams: {} });
+    write({ ...call, phase: { kind: 'ended', reason, detail }, endedDurationSec: elapsed, localStream: null, remoteStreams: {}, screenSharing: false });
     session = { ...emptySession(), retry };
     const retryable = retry !== null && (reason === 'failed' || reason === 'connectionLost' || reason === 'missed' || reason === 'busy');
     endedTimer = clear(endedTimer);
@@ -287,6 +295,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         avatar: person.avatar ?? current?.avatar ?? null,
         micMuted: flags?.micMuted ?? current?.micMuted ?? false,
         cameraOn: flags?.cameraOn ?? current?.cameraOn ?? false,
+        screenSharing: current?.screenSharing ?? false,
         link: current?.link ?? 'waiting',
       });
     });
@@ -587,6 +596,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     const link = linkTo(joined.person.userId);
     update((current) => patchMember(current, joined.person.userId, { link: 'connecting' }));
+    if (read()?.screenSharing === true) announceScreen(true);
     refreshPhase();
     void link?.offer().catch(() => onLinkState(joined.person.userId, 'failed'));
   };
@@ -663,7 +673,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         if (toggled === null || call === null || call.callId !== toggled.callId) return;
         const userId = toggled.userId ?? (toggled.participantId === null ? null : (session.participantIds.get(toggled.participantId) ?? null));
         if (userId === null) return;
-        update((current) => patchMember(current, userId, toggled.mediaType === 'audio' ? { micMuted: !toggled.enabled } : { cameraOn: toggled.enabled }));
+        const patch = toggled.mediaType === 'audio' ? { micMuted: !toggled.enabled } : toggled.mediaType === 'screen' ? { screenSharing: toggled.enabled } : { cameraOn: toggled.enabled };
+        update((current) => patchMember(current, userId, patch));
         return;
       }
       case SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED: {
@@ -698,7 +709,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (call.callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId: call.callId, enabled: !muted });
   };
 
-  const setCamera = async (track: MediaStreamTrack | null): Promise<void> => {
+  const setCamera = async (track: MediaStreamTrack | null, cameraOn: boolean = track !== null): Promise<void> => {
     const stream = localStream;
     if (stream === null) return;
     for (const old of stream.getVideoTracks()) {
@@ -707,12 +718,12 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     if (track !== null) stream.addTrack(track);
     await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(track).catch(() => undefined)));
-    update((call) => ({ ...call, cameraOn: track !== null, localStream: deps.createStream(stream.getTracks()) }));
+    update((call) => ({ ...call, cameraOn, localStream: deps.createStream(stream.getTracks()) }));
   };
 
   const toggleCamera = async (): Promise<void> => {
     const call = read();
-    if (call === null || !isCallLive(call) || call.phase.kind === 'incoming') return;
+    if (call === null || !isCallLive(call) || call.phase.kind === 'incoming' || call.screenSharing) return;
     if (call.cameraOn) {
       await setCamera(null);
     } else {
@@ -733,6 +744,63 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (track === null) return;
     await setCamera(track);
     update((current) => ({ ...current, facing }));
+  };
+
+  const sharable = (call: ActiveCall | null): call is ActiveCall => call !== null && (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
+
+  const announceScreen = (enabled: boolean): void => {
+    const callId = read()?.callId ?? null;
+    if (callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId, enabled });
+  };
+
+  /**
+   * L'écran remplace la piste vidéo émise sur chaque lien — `replaceTrack`, ou
+   * une renégociation quand la ligne vidéo ne faisait que recevoir (appel
+   * vocal). La caméra, si elle tournait, est relâchée : elle revient à l'arrêt.
+   */
+  const startScreen = async (call: ActiveCall): Promise<void> => {
+    if (screenPicking) return;
+    screenPicking = true;
+    const display = await deps.acquireDisplay().catch(() => null);
+    screenPicking = false;
+    if (display === null) return;
+    const current = read();
+    if (!sharable(current) || current.callId !== call.callId || current.screenSharing) {
+      display.stop();
+      return;
+    }
+    session.cameraBeforeShare = current.cameraOn;
+    display.onended = () => void stopScreen();
+    await setCamera(display, false);
+    update((next) => ({ ...next, screenSharing: true }));
+    announceScreen(true);
+  };
+
+  /** L'arrêt — le bouton, ou « Arrêter le partage » du navigateur (fin de la piste). */
+  const stopScreen = async (): Promise<void> => {
+    const call = read();
+    if (call === null || !call.screenSharing) return;
+    for (const track of localStream?.getVideoTracks() ?? []) track.onended = null;
+    const restore = session.cameraBeforeShare;
+    session.cameraBeforeShare = false;
+    update((next) => ({ ...next, screenSharing: false }));
+    const camera = restore ? await deps.acquireCamera(call.facing).catch(() => null) : null;
+    if (read()?.callId !== call.callId) {
+      camera?.stop();
+      return;
+    }
+    await setCamera(camera);
+    announceScreen(false);
+    if (restore && camera === null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: call.callId, enabled: false });
+  };
+
+  const toggleScreen = async (): Promise<void> => {
+    const call = read();
+    if (call?.screenSharing === true) {
+      await stopScreen();
+      return;
+    }
+    if (sharable(call)) await startScreen(call);
   };
 
   const replaceMicrophone = async (track: MediaStreamTrack, muted: boolean): Promise<void> => {
@@ -826,6 +894,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     toggleMic,
     toggleCamera,
     switchCamera,
+    toggleScreen,
     replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),
     toggleCaptions: () => update((call) => ({ ...call, captionsOn: !call.captionsOn })),
@@ -865,6 +934,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs() }),
     acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
+    acquireDisplay: () => acquireDisplay(),
     createLink: createPeerLink,
     createStream: defaultCreateStream,
     now: Date.now,

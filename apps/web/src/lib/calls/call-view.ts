@@ -9,7 +9,7 @@ import { type ActiveCall, type CallEndReason, type CallMember } from './call-sto
  */
 
 /** Les libellés d'appel SANS paramètre — ceux qu'un état choisit. */
-export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named'>;
+export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named' | 'call.screen.peerSharing'>;
 
 export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   local: 'call.ended.local',
@@ -48,15 +48,18 @@ export function canRetry(call: Pick<ActiveCall, 'phase' | 'direction'>): boolean
   return reason === 'failed' || reason === 'connectionLost' || reason === 'missed' || reason === 'busy';
 }
 
-export type CallLayout = 'portrait' | 'video-duo' | 'grid';
+export type CallLayout = 'portrait' | 'video-duo' | 'grid' | 'screen';
 
 /**
- * La disposition connectée : un appel direct dont au moins une caméra tourne
- * passe en vidéo plein cadre avec la vignette locale ; un groupe à plus d'un
- * pair est une grille ; le reste est le portrait audio d'iOS.
+ * La disposition connectée : un écran partagé par un pair prend la scène
+ * (#8063), en direct comme en groupe ; un appel direct dont au moins une
+ * caméra tourne passe en vidéo plein cadre avec la vignette locale ; un
+ * groupe à plus d'un pair est une grille ; le reste est le portrait audio
+ * d'iOS.
  */
 export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup'>): CallLayout {
   const members = Object.values(call.members);
+  if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
   if (call.isGroup && members.length > 1) return 'grid';
   const remoteVideo = members.some((member) => member.cameraOn && hasVideo(call.remoteStreams[member.userId]));
   return call.cameraOn || remoteVideo ? 'video-duo' : 'portrait';
@@ -66,20 +69,36 @@ export function hasVideo(stream: MediaStream | undefined | null): boolean {
   return stream !== undefined && stream !== null && stream.getVideoTracks().some((track) => track.readyState !== 'ended');
 }
 
-export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network';
+/** Le pair dont l'écran est partagé — celui que nomme la bannière. */
+export function screenSharer(members: Readonly<Record<string, CallMember>>): CallMember | null {
+  return Object.values(members).find((member) => member.screenSharing) ?? null;
+}
+
+/**
+ * Le bouton Écran n'existe que là où `getDisplayMedia` existe : ni la
+ * WebView de la coque Android ni Safari iOS ne l'ont, et un bouton qui ne
+ * peut rien ouvrir serait une promesse fausse.
+ */
+export function canShareScreen(mediaDevices: unknown): boolean {
+  return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
+}
+
+export type StatusPill = 'mic-muted' | 'screen-sharing' | 'peer-muted' | 'poor-network';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
+  'screen-sharing': 'call.screen.sharing',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
 };
 
 /** Les pastilles de `CallView.swift` que le web sait dire. */
-export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
+export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
   const members = Object.values(call.members);
   const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
   return [
     ...(call.micMuted ? (['mic-muted'] as const) : []),
+    ...(call.screenSharing ? (['screen-sharing'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
     ...(call.quality === 'poor' ? (['poor-network'] as const) : []),
   ];

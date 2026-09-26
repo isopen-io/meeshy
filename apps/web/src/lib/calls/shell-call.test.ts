@@ -34,6 +34,7 @@ const call = (phase: CallPhase, media: CallMedia = 'audio', callId: string | nul
   micMuted: false,
   cameraOn: media === 'video',
   facing: 'user',
+  screenSharing: false,
   members: {},
   display: 'full',
   localStream: null,

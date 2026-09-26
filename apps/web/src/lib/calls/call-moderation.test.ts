@@ -13,7 +13,7 @@ import { callRoles, canRemoveFromCall, removeFromCall } from './call-moderation'
  * (`MEMBER_ROLE_HIERARCHY`), la même que la route serveur applique.
  */
 
-const member = (userId: string): CallMember => ({ userId, name: userId, avatar: null, micMuted: false, cameraOn: false, link: 'connected' });
+const member = (userId: string): CallMember => ({ userId, name: userId, avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected' });
 
 describe('mettre un participant en avant', () => {
   test('le participant choisi passe devant, les autres gardent leur ordre', () => {

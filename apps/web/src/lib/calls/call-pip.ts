@@ -56,10 +56,10 @@ export type PipSource = { readonly stream: MediaStream; readonly mirrored: boole
 
 type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'>;
 
-/** Ce qui flotte : la vidéo du premier pair qui en envoie, sinon ma caméra (en miroir, comme la vignette). */
+/** Ce qui flotte : un écran partagé d'abord (#8063), puis la vidéo du premier pair qui en envoie, sinon ma caméra (en miroir, comme la vignette). */
 export function pipSource(call: PipCall): PipSource | null {
-  const remote = Object.values(call.members)
-    .filter((member) => member.cameraOn)
+  const members = Object.values(call.members);
+  const remote = [...members.filter((member) => member.screenSharing), ...members.filter((member) => member.cameraOn && !member.screenSharing)]
     .map((member) => call.remoteStreams[member.userId])
     .find((stream) => hasVideo(stream));
   if (remote !== undefined) return { stream: remote, mirrored: false };
