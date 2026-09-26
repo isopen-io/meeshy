@@ -55,12 +55,18 @@ export type LoginVerificationRequiredData = {
 
 export type LoginResponseData = LoginSuccessData | LoginTwoFactorData | LoginVerificationRequiredData;
 
+/** La MÊME forme, rendue par la connexion d'un e-mail inconnu (#8033) et par
+ * une inscription SANS numéro (#8055) : un compte qui attend son code. */
+export type VerificationRequiredData = LoginVerificationRequiredData;
+
 function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorData {
   return (data as LoginTwoFactorData).requires2FA === true;
 }
 
-export function isVerificationRequired(data: LoginResponseData): data is LoginVerificationRequiredData {
-  return (data as LoginVerificationRequiredData).status === 'verification-required';
+export function isVerificationRequired(
+  data: LoginResponseData | RegisterResponseData,
+): data is VerificationRequiredData {
+  return (data as VerificationRequiredData).status === 'verification-required';
 }
 
 /** L'horizon d'une session dont la passerelle ne sert pas `expiresIn` — le
@@ -130,7 +136,14 @@ export type PhoneConflictData = {
   readonly pendingRegistration: Record<string, unknown>;
 };
 
-export type RegisterResponseData = RegisterSuccessData | PhoneConflictData;
+/**
+ * Trois branches de succès : la session (AVEC numéro), le conflit de numéro,
+ * et — SANS numéro (#8055, règle porteur 2026-09-26) — le compte qui attend
+ * son code, à la forme de la connexion d'un e-mail inconnu (#8033). Une
+ * passerelle qui n'a pas encore adopté #8055 rend toujours la session : les
+ * deux formes sont décodées.
+ */
+export type RegisterResponseData = RegisterSuccessData | PhoneConflictData | VerificationRequiredData;
 
 /** Le discriminant entre les deux branches de succès de `register()` — exporté
  * pour que l'écran d'inscription (`routes/signup.tsx`) n'ait pas à connaître
@@ -294,7 +307,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     });
     if (!result.ok) return result;
 
-    if (isPhoneConflict(result.data)) return result;
+    if (isPhoneConflict(result.data) || isVerificationRequired(result.data)) return result;
 
     store.getState().establish({
       user: result.data.user,

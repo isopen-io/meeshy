@@ -905,3 +905,16 @@ describe('Composer — `memo` (revue-correction #6175, défaut majeur 3)', () =>
     expect(composerType.$$typeof).toBe(Symbol.for('react.memo'));
   });
 });
+
+/**
+ * LA TOUCHE D'ACTION DU CLAVIER LOGICIEL DIT « ENVOYER » (#8031) — Entrée
+ * envoie (`onKeyDown` ci-dessus) ; sans `enterkeyhint`, le clavier Android
+ * dessine un saut de ligne sur une touche qui part. Miroir de
+ * `.submitLabel(.send)` iOS (`UniversalComposerBar+Recording.swift`).
+ */
+describe('Composer — la touche Entrée du clavier logiciel annonce l’envoi (#8031)', () => {
+  test('le champ porte enterkeyhint="send"', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} />);
+    expect(html).toMatch(/<textarea[^>]*enterkeyhint="send"/i);
+  });
+});

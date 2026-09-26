@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { registerRequestSchema } from '@meeshy/shared/types/api-schemas/auth';
 
 import {
+  hasPhoneNumber,
   PASSWORD_MIN,
   composeRegisterBody,
   defaultLanguages,
@@ -128,6 +129,19 @@ describe('le numéro FOURNI doit être plausible (#6479)', () => {
     expect(isPhoneValid('')).toBe(true);
     expect(isPhoneValid('06123456')).toBe(false);
   });
+});
+
+describe('hasPhoneNumber — la question de l’alerte d’inscription (#8040)', () => {
+  test('champ vide ⇒ aucun numéro', () => expect(hasPhoneNumber(baseForm({ phoneDigits: '' }))).toBe(false));
+  test('des espaces ou des tirets seuls ne font pas un numéro', () =>
+    expect(hasPhoneNumber(baseForm({ phoneDigits: ' - ' }))).toBe(false));
+  test('un chiffre tapé ⇒ un numéro — et c’est lui que la charge porte', () => {
+    const form = baseForm({ phoneDigits: '06 12 34 56 78' });
+    expect(hasPhoneNumber(form)).toBe(true);
+    expect(composeRegisterBody(form).phoneNumber).toBe('0612345678');
+  });
+  test('sans numéro, la charge ne porte aucune clé téléphone', () =>
+    expect('phoneNumber' in composeRegisterBody(baseForm({ phoneDigits: ' ' }))).toBe(false));
 });
 
 describe('composeRegisterBody — sans nom affiché TAPÉ (#6441, révisé #6479)', () => {

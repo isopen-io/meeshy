@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
@@ -13,11 +14,14 @@ import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { convertReferral, inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
-import { auth, isPhoneConflict } from '@/lib/api/auth';
+import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type RegisterResponseData } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
 import { countryName, type Country } from '@/lib/countries';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
+import { holdPendingVerification } from '@/lib/pending-verification';
 import {
   PASSWORD_MIN,
   canSubmit,
@@ -26,6 +30,7 @@ import {
   composeRegisterBody,
   emptySignupForm,
   hasPassword,
+  hasPhoneNumber,
   isEmailValid,
   isIdentityDefined,
   isPasswordValid,
@@ -200,9 +205,13 @@ function PasswordWhy() {
   );
 }
 
+/** `POST /auth/register` — injectable pour les témoins, `auth.register` sinon. */
+export type SignupRegister = (body: RegisterBody) => Promise<ApiResult<RegisterResponseData>>;
+
 export default function SignupScreen({
   referralDeps = defaultReferralDeps,
-}: { readonly referralDeps?: SignupReferralDeps } = {}) {
+  register = auth.register,
+}: { readonly referralDeps?: SignupReferralDeps; readonly register?: SignupRegister } = {}) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
   // `navigator.language` peut manquer hors navigateur (rendu de témoin, coque
@@ -219,6 +228,23 @@ export default function SignupScreen({
   // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : il
   // pose le MÊME (i), dont la note garde l'identifiant que sa saisie cite.
   const phoneHint = useInfoHint('signup-phone-hint');
+  /**
+   * L'ALERTE D'UNE INSCRIPTION SANS NUMÉRO (#8040) — directive porteur
+   * 2026-09-26 : le numéro sécurise le compte et permet de le récupérer. Une
+   * alerte, jamais un blocage : « Continuer quand même » crée le compte comme
+   * avant. Le drapeau MIROIR (`ref`) répond une seule fois par ouverture —
+   * le démontage du `<dialog>` émet encore `close`, qui ne doit pas rejouer
+   * « Ajouter mon numéro » après « Continuer ».
+   */
+  const [isShowingPhoneNudge, setShowingPhoneNudge] = useState(false);
+  const phoneNudgeOpen = useRef(false);
+  const phoneInput = useRef<HTMLInputElement>(null);
+  const [phoneFocusRequest, setPhoneFocusRequest] = useState(0);
+  // APRÈS le démontage du dialogue : `close()` rend le focus à ce qui l'avait
+  // avant l'ouverture (le bouton d'envoi) — le champ le reprend ensuite.
+  useEffect(() => {
+    if (phoneFocusRequest > 0) phoneInput.current?.focus();
+  }, [phoneFocusRequest]);
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
@@ -307,13 +333,35 @@ export default function SignupScreen({
     setForm((current) => ({ ...current, ...fields }));
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!canSubmit(form) || isSubmitting) return;
+    if (!hasPhoneNumber(form)) {
+      openPhoneNudge();
+      return;
+    }
+    void createAccount();
+  }
+
+  function openPhoneNudge() {
+    phoneNudgeOpen.current = true;
+    setShowingPhoneNudge(true);
+  }
+
+  /** Répond UNE fois : le premier geste referme, les suivants se taisent. */
+  function answerPhoneNudge(choice: 'add-phone' | 'continue') {
+    if (!phoneNudgeOpen.current) return;
+    phoneNudgeOpen.current = false;
+    setShowingPhoneNudge(false);
+    if (choice === 'continue') void createAccount();
+    else setPhoneFocusRequest((n) => n + 1);
+  }
+
+  async function createAccount() {
     setSubmitting(true);
     setFeedback(EMPTY_FEEDBACK);
 
-    const result = await auth.register(composeRegisterBody(form));
+    const result = await register(composeRegisterBody(form));
     setSubmitting(false);
 
     if (!result.ok) {
@@ -322,6 +370,16 @@ export default function SignupScreen({
     }
     if (isPhoneConflict(result.data)) {
       setFeedback(placeSignupFailure({ kind: 'phone-conflict' }));
+      return;
+    }
+    /* SANS NUMÉRO, AUCUNE SESSION (#8055) : le compte attend son code. Le
+       chemin est celui de la connexion d'un e-mail inconnu (#8034) — l'écran
+       du code, qui ouvrira la session. Le mot de passe est DÉJÀ enregistré
+       sur le compte : il n'est pas retenu pour repartir avec le code.
+       L'invitation (`next`) voyage jusqu'à lui, sans le court-circuiter. */
+    if (isVerificationRequired(result.data)) {
+      holdPendingVerification({ email: result.data.email, accountCreated: result.data.accountCreated });
+      navigate(href('verifyEmail', undefined, { email: result.data.email, next: safeNext ?? undefined }), true);
       return;
     }
     // Compte créé : le magasin de session est déjà `authenticated`
@@ -358,6 +416,7 @@ export default function SignupScreen({
    * dessous. */
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
+  const interfaceLanguage = currentInterfaceLanguage();
 
   return (
     /* LA COLONNE DE LA CONNEXION (#6643), HAUTEUR BORNÉE (`min-h-0`) : la seule
@@ -452,6 +511,8 @@ export default function SignupScreen({
               </button>
               <div className="flex flex-1 items-center rounded-[14px] px-4" style={{ minHeight: 48, backgroundColor: 'var(--color-ios-card)' }}>
                 <input
+                  ref={phoneInput}
+                  id="signup-phone"
                   type="tel"
                   autoComplete="tel-national"
                   value={form.phoneDigits}
@@ -718,6 +779,19 @@ export default function SignupScreen({
           </Link>
         </div>
       </form>
+
+      {isShowingPhoneNudge ? (
+        <ConfirmDialog
+          name="signup-phone-nudge"
+          title={translate(interfaceLanguage, 'signup.phoneNudge.title')}
+          body={translate(interfaceLanguage, 'signup.phoneNudge.body')}
+          cancelLabel={translate(interfaceLanguage, 'signup.phoneNudge.add')}
+          confirmLabel={translate(interfaceLanguage, 'signup.phoneNudge.continue')}
+          tone="default"
+          onConfirm={() => answerPhoneNudge('continue')}
+          onCancel={() => answerPhoneNudge('add-phone')}
+        />
+      ) : null}
 
       {isShowingCountrySheet ? (
         <CountrySheet

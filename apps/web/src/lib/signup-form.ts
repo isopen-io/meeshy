@@ -191,6 +191,16 @@ export function normalizedPhoneDigits(phoneDigits: string): string {
 }
 
 /**
+ * UN NUMÉRO A-T-IL ÉTÉ DONNÉ ? — la MÊME question que la charge se pose
+ * (`composeRegisterBody`) et que l'alerte d'une inscription sans numéro pose
+ * à l'écran (#8040) : l'alerte ne peut pas paraître pour une saisie que la
+ * charge enverrait, ni se taire pour une saisie qu'elle omettrait.
+ */
+export function hasPhoneNumber(form: SignupFormState): boolean {
+  return normalizedPhoneDigits(form.phoneDigits).length > 0;
+}
+
+/**
  * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — sept clés
  * au plus, jamais `username` / `firstName` / `lastName` (la passerelle les
  * dérive de `displayName`, #5218). Le couple téléphone est TOUT ou RIEN : un
@@ -198,7 +208,6 @@ export function normalizedPhoneDigits(phoneDigits: string): string {
  */
 export function composeRegisterBody(form: SignupFormState): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
-  const hasPhone = digits.length > 0;
   return {
     // OMISE quand le champ est vide, jamais `''` : `displayNameProperty` porte
     // `minLength: 1` — une chaîne vide serait une VALEUR, refusée par la borne,
@@ -213,7 +222,7 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
     // téléphone une ligne plus bas : une clé présente à valeur vide décrit
     // quelque chose qui n'a pas été demandé.
     ...(hasPassword(form.password) ? { password: form.password } : {}),
-    ...(hasPhone ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
+    ...(hasPhoneNumber(form) ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
     systemLanguage: form.systemLanguage,
     regionalLanguage: form.regionalLanguage,
   };

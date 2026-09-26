@@ -3,6 +3,7 @@ import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deVerifyEmail from './catalog-de-verify-email';
 import deCall from './catalog-de-call';
+import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
 import deStoriesMine from './catalog-de-stories-mine';
@@ -190,6 +191,7 @@ const de = {
   ...deIdentity,
   ...deVerifyEmail,
   ...deCall,
+  ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
   'report.body': 'Wählen Sie den Grund für Ihre Meldung. Unser Moderationsteam erhält sie.',

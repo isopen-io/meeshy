@@ -3,6 +3,7 @@ import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptCall from './catalog-pt-call';
+import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
 import ptStoriesMine from './catalog-pt-stories-mine';
@@ -194,6 +195,7 @@ const pt = {
   ...ptIdentity,
   ...ptVerifyEmail,
   ...ptCall,
+  ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',
   'report.body': 'Escolha o motivo da sua denúncia. A nossa equipa de moderação irá recebê-la.',

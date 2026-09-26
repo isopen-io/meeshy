@@ -346,7 +346,11 @@ readonly SHARED_BASELINE=0
 # 505 → 504 (#7999, configuration souveraine d'une conversation) :
 # `GET /admin/users/:userId/conversations` compose son `where` en objet typé
 # (appartenance active + type facultatif) au lieu d'un `const where: any`.
-readonly GATEWAY_BASELINE=504
+#
+# 504 → 502 (#8039, un vocal web se lit sur iOS) : les tests de couverture
+# d'`UploadProcessor` visent `normalizeAudio` — un seul cas paramétré couvre le
+# conteneur M4A pour toutes les sources, au lieu de trois `amplifyAudio` par format.
+readonly GATEWAY_BASELINE=502
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
