@@ -26,7 +26,9 @@
  *     (`object-fit: contain`), des images arrivent, sous la bannière « Nadia
  *     Benali partage son écran » ; son arrêt rend l'écran d'appel ;
  *  7. sans `getDisplayMedia` (la WebView de la coque Android, Safari iOS),
- *     aucun bouton ne promet le partage ;
+ *     aucun bouton ne promet le partage — mais la RÉCEPTION n'en dépend pas :
+ *     dans un appel VOCAL où personne n'a allumé de caméra, l'écran du pair
+ *     s'affiche en grand, entier, sous sa bannière, puis on revient au portrait ;
  *  8. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
@@ -196,8 +198,22 @@ try {
   await context.addInitScript(WITHOUT_DISPLAY);
   const page = await context.newPage();
   page.setDefaultTimeout(10_000);
-  check(await startConnectedAudioCall(page), 'sans getDisplayMedia : l’appel se connecte');
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  check(await startConnectedAudioCall(page), 'sans getDisplayMedia : l’appel VOCAL se connecte (aucune caméra, d’aucun côté)');
   check((await page.$(SHARE)) === null, 'sans getDisplayMedia (coque Android, Safari iOS) : aucun bouton ne promet le partage');
+  // La RÉCEPTION ne dépend d'aucune capacité d'émission : le pair partage, l'écran s'affiche.
+  await page.evaluate(() => window.__meeshyFixtureCallPeer?.share());
+  check(await appears(page, '[data-call-shared-screen] video'), 'sans getDisplayMedia : l’écran partagé du pair prend la scène dans un appel vocal');
+  const fitNoDisplay = await page.$eval('[data-call-shared-screen] video', (video) => getComputedStyle(video).objectFit).catch(() => null);
+  check(fitNoDisplay === 'contain', `sans getDisplayMedia : l’écran reçu s’affiche ENTIER (object-fit ${fitNoDisplay})`);
+  check(await until(page, () => (document.querySelector('[data-call-shared-screen] video')?.videoWidth ?? 0) > 0), 'sans getDisplayMedia : des images de l’écran du pair arrivent');
+  const bannerNoDisplay = await page.$eval('[data-call-screen-banner]', (el) => el.textContent ?? '').catch(() => '');
+  check(bannerNoDisplay === `${PEER_NAME} partage son écran`, `sans getDisplayMedia : la bannière nomme celui qui partage (« ${bannerNoDisplay} »)`);
+  await capture(page, 'partage-recu-sans-getDisplayMedia');
+  await page.evaluate(() => window.__meeshyFixtureCallPeer?.stopShare());
+  check(await page.waitForSelector('[data-call-shared-screen]', { state: 'detached', timeout: 5000 }).then(() => true, () => false), 'sans getDisplayMedia : la fin du partage rend le portrait de l’appel vocal');
+  check(errors.length === 0, `sans getDisplayMedia : aucune erreur de page — ${JSON.stringify(errors)}`);
   await context.close();
 } finally {
   await browser.close();

@@ -109,8 +109,8 @@ describe('CallScreen — partage d’écran (#8063)', () => {
     expect(html).toContain('aria-pressed="true"');
   });
 
-  test('le pair qui partage : son écran en grand, ENTIER, sous une bannière qui le nomme', () => {
-    const html = screen({ members: { 'u-peer': member({ screenSharing: true }) }, remoteStreams: { 'u-peer': liveVideo } });
+  test('le pair qui partage : son écran en grand, ENTIER, sous une bannière qui le nomme — même là où l’on ne sait pas ÉMETTRE, même en appel vocal sans caméra', () => {
+    const html = screen({ media: 'audio', cameraOn: false, members: { 'u-peer': member({ screenSharing: true, cameraOn: false }) }, remoteStreams: { 'u-peer': liveVideo } }, false);
     expect(html).toContain('data-call-shared-screen=""');
     expect(html).toContain('object-fit:contain');
     expect(html).toContain('Amina Diallo partage son écran');

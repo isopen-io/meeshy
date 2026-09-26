@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { createCallStore, type CallStoreApi } from './call-store';
+import { callLayout } from './call-view';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from './call-transport';
 import { createCallEngine, OUTGOING_RING_TIMEOUT_MS, type CallEngineDeps, type StartCallRequest } from './engine';
 import type { LinkState, PeerLink, PeerLinkDeps } from './peer-link';
@@ -579,6 +580,16 @@ describe('partage d’écran (#8063)', () => {
       [CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }],
       [CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }],
     ]);
+  });
+
+  test('en appel vocal, pair sans caméra : l’écran reçu s’affiche dès que screen arrive, dans un ordre comme dans l’autre', async () => {
+    const h = await connected();
+    const link = h.links[0] as FakeLink;
+    h.engine.handle(SERVER_EVENTS.CALL_MEDIA_TOGGLED, { callId: 'call-1', participantId: 'p-2', mediaType: 'screen', enabled: true });
+    expect(callLayout(h.call() as NonNullable<ReturnType<typeof h.call>>)).toBe('portrait');
+    link.deps.onRemoteStream(stream([track('audio'), track('video')]));
+    expect(h.call()?.members[PEER]?.cameraOn).toBe(false);
+    expect(callLayout(h.call() as NonNullable<ReturnType<typeof h.call>>)).toBe('screen');
   });
 });
 
