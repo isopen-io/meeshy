@@ -104,6 +104,9 @@ bulles. La v4 applique la loi telle qu'elle est écrite.
 > **Amendée le 2026-09-08 par D-20.** Ce n'est plus un écart : la cible est
 > l'app iOS drapeaux activés, où le fil s'ouvre en Focal. Le seul réglage est
 > le paramètre de construction `VITE_READING_MODES` (#5674).
+>
+> **Amendée le 2026-09-26 par D-132 (#8147)** : le défaut est désormais SCRIPT
+> (directive porteur), Focal reste un choix.
 
 ## D-8 · `summary` et `river` sont hors périmètre, et la loi retombe sur `focal` — 2026-09-07 (#5566)
 
@@ -4172,3 +4175,16 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **Le socket de fixtures accuse les appels** (`fixtures-call-ack.ts`) : un appel lancé sur le `dist` des gates reste vivant (il sonne), ce qui rend mesurable le critère de l'issue — `check-calls-during.mjs` (faux micro et fausse caméra de Chromium).
 
 **Ce qui n'est pas fait.** Les paliers de taille de la bulle (pincement iOS) ; la PiP dans la coque Android (il faudrait `enterPictureInPictureMode` natif).
+
+## D-132 — Script est le mode par défaut ; un message long se déplie sur place en Focal, sur un bloc de verre — amendement de D-7 et de D-8 (2026-09-26, #8147)
+
+**La directive (porteur, 2026-09-26).** « Il faut déplier [les messages longs] et non plus ouvrir un sheet. Lorsqu'on déplie un message long, il faut appliquer l'effet focal (ce ne doit plus être le mode par défaut, mais le mode Script). Le mode Focal doit afficher le contenu du message par-dessus un bloc de verre. […] Le message long qui doit avoir « Lire la suite » affiche toujours moins de sa moitié : 25 % du contenu uniquement, en coupant toujours au mot. »
+
+**Ce qui est tranché.**
+- **Script par défaut** : `CLAMP_FALLBACK_MODE = 'script'` dans la loi partagée (`packages/shared/utils/reading-modes.ts`) — la branche par défaut ET le repli du clamp. D-7 (« Focal par défaut ») et le repli de D-8 sont amendés. Un choix mémorisé est conservé ; « Automatique » n'ayant aucune clé stockée, aucune migration.
+- **L'extrait est UNE loi partagée** avec iOS : `longMessageExcerpt` (`packages/shared/utils/long-message.ts`, 25 vecteurs dans `fixtures/long-message/`). Seuil 512 graphèmes (inchangé), cible = ⌊25 % des graphèmes⌋, dernière frontière de mot ≤ cible, ponctuation d'ouverture traînante retirée, repli au graphème. Le texte tronqué est le texte SERVI par le Prisme. L'UI ajoute « … » et « Lire la suite ».
+- **Déplier en place, un seul à la fois** : `LongMessageText` (les deux peaux) + `unfold-store` (lu par rangée, `useIsUnfolded` — déplier ne redessine pas le fil). La hauteur s'anime par une animation Web au tempo partagé ; sèche sous Réduire le mouvement. Quitter le fil replie. Le web n'avait pas de feuille : aucune n'est créée.
+- **Déplier = effet Focal, dans tous les modes** : `UnfoldStage`, posé par `ThreadModes` autour des deux peaux (même nœud que la destruction et les effets) — bloc de verre `glass glass-card` sous le message, loupe écrêtée (`focalLoupeScale`, désormais importée de la loi partagée), voisins atténués à 0,62 par `ol:has([data-unfolded])`.
+- **Focal refondu** : la carte de l'élue n'est plus une teinte d'accent (`FOCUS_CARD_FILL_*`, retirées du web et de `check-curve`) mais le même bloc de verre, l'accent réduit à un filet ; elle passe SOUS le texte (colonne isolée, `z-index: -1`). Cotes et tempos PARTAGÉS avec iOS : `FOCAL_METRICS` (`packages/shared/utils/focal-metrics.ts`, miroir JSON pour Swift) ; `metrics.test.ts` tient les cotes dérivées de Swift égales à la loi partagée.
+- **Contraste** : le texte et « Réduire » sont à l'encre `--ios-ink` sur le verre (9,38:1 clair / 9,04:1 sombre au pire cas, entrée #8147 de `glass-contrast.mjs`) ; la teinte de marque en encre mesurait 2,62 / 2,26 et ne sert qu'au soulignement.
+- **Témoins** : `thread-modes-long-message.test.tsx` (quatre modes à rangées), `check-long-message.mjs` (navigateur, clair/sombre, mouvement réduit, Focal choisi), `check-reading-mode.mjs` (défaut Script, verre de l'élue).
