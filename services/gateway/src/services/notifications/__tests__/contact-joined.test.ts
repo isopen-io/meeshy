@@ -16,7 +16,7 @@ jest.mock('../../../utils/logger-enhanced', () => {
   return { enhancedLogger: { child: () => log }, notificationLogger: log };
 });
 
-import { announceContactJoined, CONTACT_JOINED_GROUPING_WINDOW_MS } from '../contact-joined';
+import { announceContactJoined, scheduleContactJoinedAnnouncement, CONTACT_JOINED_GROUPING_WINDOW_MS } from '../contact-joined';
 import { clearPrivacyPreferencesCache } from '../../preferences/privacy-cache';
 
 const MARIE = '507f1f77bcf86cd799439011';
@@ -252,5 +252,29 @@ describe('regroupement : pas de rafale chez un même destinataire', () => {
     expect(data.content).toBe('Dites-leur bonjour 👋');
     expect(data.metadata).toEqual({ action: 'view_profile', joinerIds: [MARIE, PAUL, ZOE], joinerCount: 3 });
     expect(data.actor.id).toBe(MARIE);
+  });
+});
+
+describe('scheduleContactJoinedAnnouncement — le point d’entrée des portes', () => {
+  it('part APRÈS la réponse, par l’exécuteur fourni', async () => {
+    const m = monde({ rows: [ligne('c1', ANNA, 'Maman')], recipients: [destinataire(ANNA)] });
+    const differees: Array<() => Promise<void>> = [];
+
+    scheduleContactJoinedAnnouncement(m.prisma as never, MARIE, {
+      notifications: { createNotification: m.createNotification },
+      afterResponse: (task) => { differees.push(task); },
+    });
+
+    expect(m.createNotification).not.toHaveBeenCalled();
+    await differees[0]!();
+    expect(m.createNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('sans service de notification (seed, tests), ne programme rien', () => {
+    const programme = jest.fn();
+
+    scheduleContactJoinedAnnouncement({} as never, MARIE, { afterResponse: programme });
+
+    expect(programme).not.toHaveBeenCalled();
   });
 });

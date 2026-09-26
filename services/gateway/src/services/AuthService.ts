@@ -839,7 +839,7 @@ export class AuthService {
   /**
    * Verify phone with SMS code
    */
-  async verifyPhone(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string }> {
+  async verifyPhone(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string; verifiedUserId?: string }> {
     try {
       const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
       const hashedCode = this.hashToken(code);
@@ -884,7 +884,9 @@ export class AuthService {
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié pour user.phoneNumber=${user.phoneNumber}`);
-      return { success: true };
+      // `verifiedUserId` n'est posé que sur une vérification NEUVE : c'est elle, et
+      // elle seule, qui peut annoncer une arrivée aux carnets (#8105).
+      return { success: true, verifiedUserId: user.id };
 
     } catch (error) {
       logger.error('[AUTH_SERVICE] ❌ Erreur vérification téléphone', error);
