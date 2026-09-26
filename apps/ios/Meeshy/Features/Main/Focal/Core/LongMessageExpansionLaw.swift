@@ -1,4 +1,4 @@
-import CoreGraphics
+import Foundation
 
 /// Le dépliage EN PLACE d'un message long (#8147) — loi pure, sans UIKit.
 ///
@@ -30,6 +30,12 @@ nonisolated enum LongMessageExpansionLaw {
     static func anchor(isExpanding: Bool) -> Anchor {
         isExpanding ? .top : .bottom
     }
+
+    /// La fenêtre pendant laquelle le bord ancré est tenu : l'animation de
+    /// hauteur, plus la marge d'une re-mesure SwiftUI tardive. Au-delà,
+    /// le fil redevient libre — une hauteur qui change plus tard (image,
+    /// traduction) obéit aux lois ordinaires du fil.
+    static let holdWindow: TimeInterval = FocalMetrics.Focus.expandDuration + 0.35
 
     /// Le décalage de défilement qui ramène le bord ancré à son ordonnée
     /// VISUELLE d'avant — dans le fil renversé (`scaleY: -1`), augmenter le

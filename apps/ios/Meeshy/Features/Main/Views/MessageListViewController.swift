@@ -298,7 +298,7 @@ final class MessageListViewController: UIViewController {
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
-    var expandedLongMessageLocalId: String? // #8147 — un seul message long déplié
+    var longMessageExpansionState = LongMessageExpansionState() // #8147 / #8157
     /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView).
     var onFocalTapLocation: ((SharedPlace) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
