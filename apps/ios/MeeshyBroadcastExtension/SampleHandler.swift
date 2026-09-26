@@ -12,7 +12,7 @@ import os
 // Sans app en écoute (aucun appel en cours), la diffusion s'arrête aussitôt
 // avec un message qui dit pourquoi.
 
-nonisolated final class SampleHandler: RPBroadcastSampleHandler {
+nonisolated final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable {
     private let uploader = ScreenShareFrameUploader()
     private var stopObserver: ScreenShareDarwinObserver?
     private var isFinishing = false
@@ -66,7 +66,7 @@ nonisolated final class ScreenShareFrameUploader: @unchecked Sendable {
     private let lock = NSLock()
     private var fd: Int32 = -1
     private var throttle = ScreenShareFrameThrottle(maxFramesPerSecond: 15)
-    private lazy var context = CIContext(options: [.useSoftwareRenderer: false])
+    private let context = CIContext(options: [.useSoftwareRenderer: false])
     private let logger = Logger(subsystem: ScreenShareIPC.extensionBundleIdentifier, category: "broadcast")
 
     func connect() -> Bool {
