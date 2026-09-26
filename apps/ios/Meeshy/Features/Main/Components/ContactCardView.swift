@@ -24,11 +24,11 @@ struct ContactCardView: View, Equatable {
     @State private var isShowingDetail = false
     @Environment(\.colorScheme) private var colorScheme
 
-    init(attachment: MessageAttachment, isMe: Bool, accentHex: String) {
+    init(attachment: MessageAttachment, isMe: Bool, accentHex: String, model: @autoclosure @escaping () -> ContactCardViewModel? = nil) {
         self.attachment = attachment
         self.isMe = isMe
         self.accentHex = accentHex
-        _model = StateObject(wrappedValue: ContactCardViewModel(attachment: attachment))
+        _model = StateObject(wrappedValue: model() ?? ContactCardViewModel(attachment: attachment))
     }
 
     nonisolated static func == (lhs: ContactCardView, rhs: ContactCardView) -> Bool {
@@ -189,6 +189,8 @@ struct ContactAccountActionRow: View {
                     Label(String(localized: "contact-card.state.request-sent", defaultValue: "Demande envoyée", bundle: .main), systemImage: "clock")
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .accessibilityElement(children: .combine)
                 case nil:
