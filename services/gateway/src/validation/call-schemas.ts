@@ -249,12 +249,12 @@ export const socketSignalSchema = z.object({
 });
 
 /**
- * Socket.IO Event: call:toggle-audio / call:toggle-video
+ * Socket.IO Event: call:toggle-audio / call:toggle-video / call:toggle-screen
  */
 export const socketMediaToggleSchema = z.object({
   callId: objectIdSchema,
   enabled: z.boolean(),
-  mediaType: z.enum(['audio', 'video']).optional(),
+  mediaType: z.enum(['audio', 'video', 'screen']).optional(),
   participantId: z.string().optional()
 });
 

@@ -140,6 +140,10 @@ const MAX_LINES = 1000;
  * `destroy()` / `prepareForShutdown()`, ou sont atteints par 33 sites de
  * témoins — leur sortie ne serait pas mécanique.
  *
+ * `socketio/CallEventsHandler.ts` : 4392 → 4341 (#8063, 2026-09-26). L'inscription
+ * des bascules de média (audio, vidéo, écran) et la traduction de leurs erreurs
+ * sont parties vers `call-media-toggle.ts`, qui porte déjà la bascule.
+ *
  * `services/CallService.ts` : entrée 3121 → 3064 (#7545, 2026-09-23). La
  * réservation d'appel (claim / reprise / libération) est partie vers
  * `services/calls/activeCallClaim.ts`, qui notifie la liste de conversations.
@@ -162,7 +166,7 @@ const MAX_LINES = 1000;
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 3761,
-  'socketio/CallEventsHandler.ts': 4392,
+  'socketio/CallEventsHandler.ts': 4341,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
