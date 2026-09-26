@@ -109,16 +109,20 @@ export function ActionButton({
   type = 'button',
   disabled = false,
   onClick,
+  data,
   children,
 }: {
   readonly tone?: ActionTone;
   readonly type?: 'button' | 'submit';
   readonly disabled?: boolean;
   readonly onClick?: () => void;
+  /** Les attributs `data-*` par lesquels un témoin ou une recette nomme ce geste. */
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
   readonly children: string;
 }) {
   return (
     <button
+      {...data}
       type={type}
       disabled={disabled}
       onClick={onClick}

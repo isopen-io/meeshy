@@ -36,35 +36,19 @@ import type {
   CreateConversationBody
 } from './types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import {
+  composeConversationUpdate,
+  broadcastConversationUpdated,
+  type ConversationMetadataBody,
+} from '../../services/conversations/conversation-metadata-update';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
-
-/**
- * Les huit réglages que `PUT /conversations/:id` peut annoncer sur
- * `conversation:updated`, DÉRIVÉS du contrat plutôt que redéclarés.
- *
- * Ce que la dérivation garde, et qu'un `Record<string, unknown>` ne gardait
- * pas : un neuvième réglage ajouté ici ne compile pas tant qu'il n'est pas
- * déclaré sur `ConversationUpdatedEventData`. C'est par cette carte ouverte que
- * les huit voyageaient sans contrat, alors que les trois clients les lisent.
- *
- * Une clé ABSENTE veut dire « ce réglage n'a pas bougé », jamais « remets-le à
- * zéro » — d'où la composition par spreads conditionnels, qui n'en pose aucune
- * quand la requête ne l'a pas changée.
- */
-type ConversationMetadataChanges = Partial<Pick<
-  ConversationUpdatedEventData,
-  'title' | 'description' | 'avatar' | 'banner' | 'defaultWriteRole'
-  | 'isAnnouncementChannel' | 'slowModeSeconds' | 'autoTranslateEnabled'
->>;
 
 /**
  * Enregistre `POST /conversations` (création d'une conversation).
@@ -516,18 +500,13 @@ export function registerUpdateConversationRoute(
     handler: async (request, reply) => {
     try {
       const { id } = request.params;
-      const { title: rawTitle, description: rawDescription, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
-        title?: string
-        description?: string
-        avatar?: string | null
-        banner?: string | null
-        defaultWriteRole?: string
-        isAnnouncementChannel?: boolean
-        slowModeSeconds?: number
-        autoTranslateEnabled?: boolean
-      };
-      const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
-      const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
+      const body = request.body as ConversationMetadataBody;
+      const { avatar, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = body;
+      // La composition (et l'assainissement de `title`/`description`) est
+      // partagée avec la route souveraine (#7845) — voir
+      // `services/conversations/conversation-metadata-update.ts`.
+      const { updateData, changedFields } = composeConversationUpdate(body);
+      const { title } = changedFields;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -631,17 +610,6 @@ export function registerUpdateConversationRoute(
         }
       } as const;
 
-      const updateData = {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(avatar !== undefined && { avatar }),
-        ...(banner !== undefined && { banner }),
-        ...(defaultWriteRole !== undefined && { defaultWriteRole }),
-        ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
-        ...(slowModeSeconds !== undefined && { slowModeSeconds }),
-        ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
-      };
-
       // Un corps qui ne nomme aucun champ connu n'est pas une erreur du client :
       // c'est une écriture vide. Prisma, lui, refuse un `data` vide et levait —
       // la route répondait 500 à un `{}`. On rend l'état courant, sans écrire et
@@ -696,60 +664,17 @@ export function registerUpdateConversationRoute(
         include: conversationInclude
       });
 
-      // Typé sur le contrat, pas `Record<string, unknown>` : une carte ouverte
-      // est une absence de déclaration qui a l'air d'en être une, et c'est par
-      // celle-ci que les huit réglages voyageaient sans contrat. La forme
-      // `Pick` est ce qui garde la liste D'ICI et celle du contrat ensemble —
-      // un neuvième réglage ajouté ici ne compile pas tant qu'il n'est pas
-      // déclaré là-bas.
-      const changedFields: ConversationMetadataChanges = {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(avatar !== undefined && { avatar }),
-        ...(banner !== undefined && { banner }),
-        ...(defaultWriteRole !== undefined && { defaultWriteRole }),
-        ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
-        ...(slowModeSeconds !== undefined && { slowModeSeconds }),
-        ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
-      }
-
-      const socketIOHandler = fastify.socketIOHandler
-      const io = socketIOHandler?.getManager()?.getIO()
-      if (io) {
-        // La room de conversation ne suffit pas, et c'est le MÊME raisonnement
-        // qui a fait naître `emitConversationPreviewUpdate` pour l'autre moitié
-        // de ce payload : un participant posé sur l'écran de LISTE a quitté
-        // `conversation:<id>` et n'est joignable que par sa room personnelle.
-        // Sans elle, un renommage — ou un changement d'avatar, de bannière, de
-        // mode lent, de canal d'annonce — n'atteignait que ceux qui avaient le
-        // fil ouvert. La ligne de liste de tous les autres gardait l'ancien
-        // titre jusqu'à un rechargement complet.
-        //
-        // Le helper chaîne les rooms (au plus UNE copie par socket, même pour
-        // un client qui est à la fois dans le fil et dans sa room) et nomme la
-        // room d'un participant sans compte par son `Participant.id`
-        // (`userId ?? id`) — la seule ligne que chaque copie de ce code avait
-        // ratée. Les participants inactifs sont écartés : quitter une
-        // conversation, c'est cesser d'en recevoir les métadonnées.
-        //
-        // Le payload ne porte AUCUNE clé `lastMessage*`, et c'est délibéré :
-        // le tri-état client distingue « clé absente » (cet événement ne parle
-        // pas du dernier message) de « clé nulle » (la carte du Prisme est
-        // périmée). Un `lastMessageTranslations: null` posé ici effacerait une
-        // traduction parfaitement valide sur toutes les lignes de liste.
-        emitToConversationParticipants({
-          io,
-          conversationId,
-          participants: updatedConversation.participants.filter(p => p.isActive),
-          event: SERVER_EVENTS.CONVERSATION_UPDATED,
-          payload: {
-            conversationId,
-            ...changedFields,
-            updatedBy: { id: userId },
-            updatedAt: new Date().toISOString(),
-          },
-        })
-      }
+      // La room de conversation ne suffit pas : un participant posé sur l'écran
+      // de LISTE n'est joignable que par sa room personnelle — sans elle, un
+      // renommage n'atteignait que ceux qui avaient le fil ouvert. Le helper
+      // partagé (#7845) écarte les inactifs et chaîne les rooms.
+      broadcastConversationUpdated({
+        io: fastify.socketIOHandler?.getManager()?.getIO(),
+        conversationId,
+        participants: updatedConversation.participants,
+        changedFields,
+        updatedBy: userId,
+      })
 
       // #7593 — la ligne de liste dit « Nom du groupe modifié » / « Photo du
       // groupe modifiée ». APRÈS `conversation:updated` : l'avis porte son
