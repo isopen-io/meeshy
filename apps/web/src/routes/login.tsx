@@ -167,7 +167,8 @@ export function LoginDoors({
        voyager avec ce code — seule preuve que celui qui l'a tapé possède
        l'adresse. */
     if (isVerificationRequired(result.data)) {
-      holdPendingVerification({ email: result.data.email, password, accountCreated: result.data.accountCreated });
+      const { email, accountCreated, pendingSessionToken } = result.data;
+      holdPendingVerification({ email, password, accountCreated, ...(pendingSessionToken !== undefined ? { pendingSessionToken } : {}) });
       navigate(href('verifyEmail', undefined, { email: result.data.email, ...nextSearch }));
     }
     // Un succès (avec ou sans 2FA) écrit le magasin — `session.status` change

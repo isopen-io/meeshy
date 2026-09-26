@@ -28,6 +28,9 @@ const deVerifyEmail = {
   'verifyEmail.resend.done': 'Code erneut gesendet!',
   'verifyEmail.link.checking': 'Link wird geprüft…',
   'verifyEmail.link.invalid': 'Dieser Link ist nicht mehr gültig. Gib den Code aus derselben E-Mail ein.',
+  'verifyEmail.proven': 'Adresse bestätigt ✓ — gib den erhaltenen Code ein, um dich hier anzumelden.',
+  'verifyEmail.handoff.opened': 'Der Link wurde in der Meeshy-App geöffnet.',
+  'verifyEmail.handoff.stay': 'Im Browser fortfahren',
   'verifyEmail.signingIn': 'Anmeldung…',
   'emailSent.codeOrLink': 'Gib den 6-stelligen Code ein, der an {email} gesendet wurde, oder öffne den Link in derselben E-Mail.',
 };

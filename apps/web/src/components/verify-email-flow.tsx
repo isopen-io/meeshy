@@ -5,6 +5,7 @@ import { auth } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { APP_HANDOFF_WAIT_MS, browserAppHandoff, type AppHandoff } from '@/lib/links/app-handoff';
 import { useOnline } from '@/lib/net/online';
 import { pendingVerificationFor } from '@/lib/pending-verification';
 import { secondClock, type IntervalClock } from '@/lib/view/interval-clock';
@@ -36,6 +37,13 @@ import { Glyph } from './glyph';
  * Arrivé depuis la connexion par mot de passe d'un e-mail inconnu, l'écran
  * DIT ce qui vient de se passer (compte créé, code et lien envoyés), et le
  * mot de passe tapé voyage avec le code (`pending-verification.ts`).
+ *
+ * LE LIEN OUVERT SUR UN TÉLÉPHONE EST D'ABORD REMIS À L'APP (#8083, « SI ET
+ * SEULEMENT SI ») — AVANT que le jeton, à usage unique, ne soit consommé ici
+ * (`app-handoff.ts`). La page reste visible ~1,5 s ⇒ l'app ne s'est pas
+ * ouverte : le navigateur valide et se connecte. La page est passée en
+ * arrière-plan ⇒ l'app a le lien : rien n'est consommé, et « Continuer dans le
+ * navigateur » reste offert à qui revient.
  */
 
 const VERIFY_TINT = 'var(--color-ios-brand)';
@@ -46,6 +54,10 @@ export type VerifyEmailFlowDeps = {
   readonly resendVerification: typeof auth.resendVerification;
   readonly clock: IntervalClock;
   readonly now: () => number;
+  /** L'état de l'adresse via le jeton d'attente (#8083) — `auth.verificationStatus` si absent. */
+  readonly verificationStatus?: typeof auth.verificationStatus;
+  /** La remise du lien à l'app (#8083) — `browserAppHandoff` si absente. */
+  readonly appHandoff?: AppHandoff;
 };
 
 const defaultDeps: VerifyEmailFlowDeps = {
@@ -55,7 +67,7 @@ const defaultDeps: VerifyEmailFlowDeps = {
   now: () => Date.now(),
 };
 
-type LinkPhase = 'idle' | 'checking' | 'refused';
+type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'refused';
 
 export function VerifyEmailFlow({
   email,
@@ -75,9 +87,14 @@ export function VerifyEmailFlow({
   const language = currentInterfaceLanguage();
 
   const [verified, setVerified] = useState(false);
-  const [linkPhase, setLinkPhase] = useState<LinkPhase>(email !== null && token !== null && token !== '' ? 'checking' : 'idle');
+  const appHandoff = deps.appHandoff ?? browserAppHandoff;
+  const [handoffUrl] = useState<string | null>(() => (email !== null && token !== null && token !== '' ? appHandoff.target() : null));
+  const [linkPhase, setLinkPhase] = useState<LinkPhase>(
+    email === null || token === null || token === '' ? 'idle' : handoffUrl !== null ? 'handoff' : 'checking',
+  );
   const [linkError, setLinkError] = useState<string | null>(null);
   const linkConsumed = useRef(false);
+  const handedOff = useRef(false);
 
   const [resendSending, setResendSending] = useState(false);
   const [resendSent, setResendSent] = useState(false);
@@ -86,6 +103,15 @@ export function VerifyEmailFlow({
   const resendLocked = resendDeadline !== null && resendRemaining > 0;
 
   const closeTarget = session.status === 'authenticated' ? 'list' : 'login';
+
+  useEffect(() => {
+    if (linkPhase !== 'handoff' || handoffUrl === null) return;
+    if (!handedOff.current) {
+      handedOff.current = true;
+      appHandoff.open(handoffUrl);
+    }
+    return appHandoff.watch(APP_HANDOFF_WAIT_MS, (appOpened) => setLinkPhase(appOpened ? 'in-app' : 'checking'));
+  }, [linkPhase, handoffUrl, appHandoff]);
 
   useEffect(() => {
     if (linkPhase !== 'checking' || email === null || token === null || linkConsumed.current) return;
@@ -164,7 +190,24 @@ export function VerifyEmailFlow({
             {translate(language, 'verifyEmail.continue')}
           </Link>
         </div>
-      ) : linkPhase === 'checking' ? (
+      ) : linkPhase === 'in-app' ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status">
+          <span aria-hidden="true" style={{ color: VERIFY_TINT }}>
+            <Glyph name="envelopeOpen" size={48} />
+          </span>
+          <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translate(language, 'verifyEmail.handoff.opened')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setLinkPhase('checking')}
+            className="grid w-full place-items-center rounded-[14px] px-8 font-semibold"
+            style={{ minHeight: 44, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)', color: 'var(--color-ios-ink)' }}
+          >
+            {translate(language, 'verifyEmail.handoff.stay')}
+          </button>
+        </div>
+      ) : linkPhase === 'checking' || linkPhase === 'handoff' ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status" aria-live="polite">
           <span aria-hidden="true" style={{ color: VERIFY_TINT }}>
             <Glyph name="envelopeOpen" size={48} />
@@ -187,6 +230,8 @@ export function VerifyEmailFlow({
             email={email}
             next={next}
             verifyEmail={deps.verifyEmail}
+            {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
+            pendingSessionToken={pending?.pendingSessionToken ?? null}
             onVerified={() => setVerified(true)}
             autoFocus
             initialError={linkError}

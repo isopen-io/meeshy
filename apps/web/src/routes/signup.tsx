@@ -388,7 +388,8 @@ export default function SignupScreen({
        compte : le code reste pour la tentative suivante. */
     forgetReferralCode();
     if (isVerificationRequired(result.data)) {
-      holdPendingVerification({ email: result.data.email, accountCreated: result.data.accountCreated });
+      const { email, accountCreated, pendingSessionToken } = result.data;
+      holdPendingVerification({ email, accountCreated, ...(pendingSessionToken !== undefined ? { pendingSessionToken } : {}) });
       navigate(href('verifyEmail', undefined, { email: result.data.email, next: safeNext ?? undefined }), true);
       return;
     }
