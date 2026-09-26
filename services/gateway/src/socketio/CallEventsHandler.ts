@@ -33,7 +33,7 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
-import { handleMediaToggle as handleMediaToggleBody } from './call-media-toggle';
+import { handleMediaToggle as handleMediaToggleBody, mapMediaToggleError, registerMediaToggleListeners } from './call-media-toggle';
 import {
   resolveNotificationLangs,
   resolveDeviceCountries,
@@ -91,6 +91,7 @@ import type {
   CallSignalEvent,
   CallEndedEvent,
   CallMediaToggleClientEvent,
+  CallMediaType,
   CallError,
   CallHeartbeatEvent,
   CallQualityReportEvent,
@@ -1480,30 +1481,7 @@ export class CallEventsHandler {
   }
 
   /**
-   * CallService throws plain `Error`s formatted as `"<CODE>: <description>"`
-   * (e.g. getCallSession's `CALL_NOT_FOUND: Call session not found`, thrown
-   * when the peer ends the call in the same instant a toggle is in flight).
-   * Relay the real code/message when it matches a known CALL_ERROR_CODES
-   * value so the client can react appropriately (e.g. silently clean up on
-   * CALL_NOT_FOUND instead of surfacing a generic toggle-failed toast);
-   * fall back to the generic code for anything unrecognized (DB errors,
-   * etc.) so raw internals are never leaked to the client.
-   */
-  private mapMediaToggleError(error: unknown, fallbackMessage: string): CallError {
-    const message = error instanceof Error ? error.message : undefined;
-    if (!message) {
-      return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
-    }
-    const match = message.match(/^([A-Z_]+):\s*(.+)$/);
-    const knownCodes = new Set<string>(Object.values(CALL_ERROR_CODES));
-    if (match && knownCodes.has(match[1])) {
-      return { code: match[1], message: match[2] } as CallError;
-    }
-    return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
-  }
-
-  /**
-   * Le corps partagé de `call:toggle-audio` / `call:toggle-video` vit dans
+   * Le corps partagé de `call:toggle-audio` / `-video` / `-screen` vit dans
    * `call-media-toggle.ts` — la plus grande unité de ce fichier qui ne
    * dépende que de QUATRE membres, donc la seule dont la liste de
    * dépendances reste lisible une fois explicitée.
@@ -1512,13 +1490,13 @@ export class CallEventsHandler {
     socket: Socket,
     getUserId: (socketId: string) => string | undefined,
     data: CallMediaToggleClientEvent,
-    mediaType: 'audio' | 'video'
+    mediaType: CallMediaType
   ): Promise<void> {
     return handleMediaToggleBody(
       {
         callService: this.callService,
         rateLimiter: this.rateLimiter,
-        mapMediaToggleError: (error, fallback) => this.mapMediaToggleError(error, fallback),
+        mapMediaToggleError,
         resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
       },
       socket, getUserId, data, mediaType
@@ -3359,23 +3337,7 @@ export class CallEventsHandler {
       }
     });
 
-    /**
-     * call:toggle-audio - Toggle audio on/off
-     * CVE-002: Added rate limiting (50 req/min)
-     * CVE-006: Added input validation
-     */
-    socket.on(CALL_EVENTS.TOGGLE_AUDIO, async (data: CallMediaToggleClientEvent) => {
-      await this.handleMediaToggle(socket, getUserId, data, 'audio');
-    });
-
-    /**
-     * call:toggle-video - Toggle video on/off
-     * CVE-002: Added rate limiting (50 req/min)
-     * CVE-006: Added input validation
-     */
-    socket.on(CALL_EVENTS.TOGGLE_VIDEO, async (data: CallMediaToggleClientEvent) => {
-      await this.handleMediaToggle(socket, getUserId, data, 'video');
-    });
+    registerMediaToggleListeners(socket, (data, mediaType) => this.handleMediaToggle(socket, getUserId, data, mediaType));
 
     /**
      * call:end - End a call (ANY active participant can end in P2P)

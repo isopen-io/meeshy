@@ -189,6 +189,8 @@ final class CallManager: ObservableObject {
     /// audioType=="audio"). Drives the mute indicator in the call UI so the local
     /// user knows why the remote peer sounds silent. Resets to `true` on call end.
     @Published private(set) var isRemoteAudioEnabled: Bool = true
+    /// #8063 — partage d'écran, local et distant (`CallManager+ScreenShare.swift`).
+    private(set) lazy var screenShare: CallScreenShareController = makeScreenShareController()
     /// `true` when the remote peer is actively screen-capturing this call
     /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
     /// banner in CallView. Resets to `false` on call end to prevent leaking state
@@ -401,7 +403,7 @@ final class CallManager: ObservableObject {
     /// WebRTC et sa chaîne de filtres (Vision + Metal) n'ont rien à faire en
     /// mémoire tant qu'aucun appel n'a commencé.
     private var builtWebRTCService: WebRTCService?
-    private var webRTCService: WebRTCService {
+    var webRTCService: WebRTCService {
         if let builtWebRTCService { return builtWebRTCService }
         let service = WebRTCService()
         service.delegate = self
@@ -2606,6 +2608,7 @@ final class CallManager: ObservableObject {
     /// case). Replaces the old track.enabled flip, which left the upgrade
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
+        guard !screenShare.isSharing else { return }
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
         let previousSurvival = survivalVideoTask
@@ -4169,6 +4172,7 @@ final class CallManager: ObservableObject {
         isRemoteVideoEnabled = true
         isRemoteAudioEnabled = true
         isRemoteScreenCapturing = false
+        screenShare.callEnded()
         videoSurvivalController.reset()
         isVideoSuspended = false
         isVideoSuspendedByCaptureInterruption = false
@@ -4541,65 +4545,6 @@ final class CallManager: ObservableObject {
 
     // MARK: - Socket.IO Signaling
 
-    /// Maps a gateway-translated segment into the local `TranscriptionSegment` model.
-    /// `text` ALWAYS carries the ORIGINAL (untranslated) text — never overwritten by
-    /// `translatedText` — so the UI can offer an original/translated toggle
-    /// (`docs/superpowers/specs/2026-07-11-call-captions-multispeaker-design.md`).
-    /// `static` and testable without standing up a full `CallManager` + mock
-    /// socket — the only non-deterministic input is `capturedAt` (wall clock
-    /// at receipt, used for ordering + the "since call start" timestamp
-    /// shown per row; `startMs`/`endMs` are the ORIGINATING device's
-    /// ASR-buffer-relative timings and unsuitable for either — see
-    /// `TranscriptionSegment.capturedAt` doc comment).
-    static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> TranscriptionSegment {
-        let seg = event.segment
-        // `capturedAtMs` (horloge murale de capture, estampillée par le device
-        // du locuteur ou à défaut par le gateway à réception) est la clé
-        // d'ordre du journal — le fallback `Date()` (heure de réception
-        // locale) ne subsiste que pour les gateways antérieurs au champ.
-        let capturedAt = seg.capturedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
-        return TranscriptionSegment(
-            id: UUID(),
-            wireId: seg.id,
-            text: seg.text,
-            speakerId: seg.speakerId,
-            speakerDisplayName: seg.speakerDisplayName,
-            startTime: Double(seg.startMs) / 1000,
-            endTime: Double(seg.endMs) / 1000,
-            isFinal: seg.isFinal,
-            confidence: seg.confidence,
-            // Tag de langue du Prisme : la langue dans laquelle le segment a
-            // été TRANSCRIT (sourceLanguage), jamais la langue cible — la
-            // traduction porte la sienne dans `translatedLanguage`.
-            language: seg.sourceLanguage,
-            translatedText: seg.translatedText,
-            translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil,
-            capturedAt: capturedAt
-        )
-    }
-
-    /// Entrée de journal arrivée en P2P direct par le data channel WebRTC —
-    /// miroir de `makeTranscriptionSegment` pour l'autre transport. Pas de
-    /// bornes ASR sur ce chemin (`startMs`/`endMs` sont de toute façon
-    /// buffer-relatifs et inutilisables pour l'ordre) : `capturedAtMs` est la
-    /// seule horloge, et `wireId` la clé de fusion avec le relais serveur
-    /// traduit qui suit.
-    static func makeTranscriptionSegment(from entry: DataChannelTranscriptEntry) -> TranscriptionSegment {
-        TranscriptionSegment(
-            id: UUID(),
-            wireId: entry.id,
-            text: entry.text,
-            speakerId: entry.speakerId,
-            speakerDisplayName: entry.speakerDisplayName.isEmpty ? nil : entry.speakerDisplayName,
-            startTime: 0,
-            endTime: 0,
-            isFinal: entry.isFinal,
-            confidence: entry.confidence,
-            language: entry.language,
-            capturedAt: Date(timeIntervalSince1970: Double(entry.capturedAtMs) / 1000)
-        )
-    }
-
     private func setupSocketListeners() {
         let socket = MessageSocketManager.shared
 
@@ -4908,6 +4853,7 @@ final class CallManager: ObservableObject {
                     // Always emit (even when !isMuted) to overwrite any stale state.
                     MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !self.isMuted)
                     Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
+                    self.screenShare.announceIfSharing()
                     // Request fresh TURN credentials after reconnect. The socket may
                     // have been down long enough for our credentials to approach
                     // expiry (the periodic refresh only fires at 80% of the TTL,
@@ -4952,8 +4898,10 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 guard event.callId == self.currentCallId else { return }
                 switch event.mediaType {
-                case "video":
-                    self.isRemoteVideoEnabled = event.enabled
+                case "video", "screen":
+                    self.isRemoteVideoEnabled = event.mediaType == "screen"
+                        ? self.screenShare.applyRemoteScreenShare(enabled: event.enabled)
+                        : self.screenShare.applyRemoteCamera(enabled: event.enabled)
                     // C7 — la caméra du pair fait basculer `isVideoUIActive`, donc
                     // l'éligibilité au PiP système. `AVPictureInPictureVideoCall-
                     // ViewController` exige `.videoChat` : sans cette ré-application
@@ -4969,8 +4917,8 @@ final class CallManager: ObservableObject {
                     // AVSampleBufferDisplayLayer (bypassing SwiftUI's declarative
                     // placeholder branch below) — it needs an explicit nudge or
                     // it keeps showing the last live frame frozen indefinitely.
-                    self.pip.setRemoteVideoMuted(!event.enabled)
-                    Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+                    self.pip.setRemoteVideoMuted(!self.isRemoteVideoEnabled)
+                    Logger.calls.info("Remote \(event.mediaType) \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
                 case "audio":
                     self.isRemoteAudioEnabled = event.enabled
                     Logger.calls.info("Remote audio \(event.enabled ? "enabled" : "muted") (callId=\(event.callId))")
@@ -5132,6 +5080,7 @@ final class CallManager: ObservableObject {
             .sink { [weak self] event in
                 handleJoin(event)
                 self?.reannounceListeningIntent()
+                self?.screenShare.announceIfSharing()
             }
 
         // CALL-FIX 2026-06-06 — the callee may have ALREADY joined (socket churn /
@@ -5228,7 +5177,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - Socket Emit Helpers
 
-    private func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
+    func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — a new offer opens a new negotiation generation.
         let generation = nextOutgoingNegotiationId()

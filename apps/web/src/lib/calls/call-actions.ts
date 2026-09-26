@@ -33,6 +33,8 @@ export const callActions = {
   switchCamera: (): void => run((engine) => engine.switchCamera()),
   minimize: (): void => run((engine) => engine.setDisplay('pill')),
   expand: (): void => run((engine) => engine.setDisplay('full')),
+  /** La pastille repliée en bulle déplaçable (#8046, `CallBubbleView.swift`). */
+  collapse: (): void => run((engine) => engine.setDisplay('bubble')),
   toggleCaptions: (): void => run((engine) => engine.toggleCaptions()),
   answerWaiting: (): void => run((engine) => engine.answerWaiting()),
   declineWaiting: (): void => run((engine) => engine.declineWaiting()),

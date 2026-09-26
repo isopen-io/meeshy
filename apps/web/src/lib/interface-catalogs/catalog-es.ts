@@ -7,6 +7,7 @@ import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
+import esCallDevices from './catalog-es-call-devices';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
@@ -202,6 +203,7 @@ const es = {
   ...esCall,
   ...esCallShell,
   ...esCallJoin,
+  ...esCallDevices,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
