@@ -1323,6 +1323,7 @@ export const notificationTypeEnum = z.enum([
   'contact_unblocked',    // Contact débloqué
   'friend_request',       // Alias pour contact_request
   'friend_accepted',      // Alias pour contact_accepted
+  'contact_joined',       // Un contact du carnet a rejoint Meeshy (#8105)
 
   // ===== INTERACTION EVENTS =====
   'user_mentioned',       // Mentionné dans un message (@username)
