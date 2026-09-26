@@ -378,4 +378,105 @@ final class SignupViewModelTests: XCTestCase {
     func test_fieldForCode_usernameTaken_targetsTheUsernameInput() {
         XCTAssertEqual(SignupViewModel.field(forCode: "USERNAME_TAKEN"), .username)
     }
+
+    // MARK: - Alerte « sans numéro » (#8040)
+
+    /// La règle pure : une inscription SANS numéro alerte, une inscription
+    /// AVEC numéro ne dit rien.
+    func test_phoneNudge_rule_withoutPhone_nudges() {
+        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
+        form.email = "awa@example.com"
+        XCTAssertTrue(SignupPhoneNudge.shouldNudge(before: form))
+    }
+
+    func test_phoneNudge_rule_withPhone_doesNotNudge() {
+        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
+        form.email = "awa@example.com"
+        form.phoneDigits = "612345678"
+        XCTAssertFalse(SignupPhoneNudge.shouldNudge(before: form))
+    }
+
+    /// Des espaces seuls ne sont pas un numéro : `hasPhone` lit les chiffres.
+    func test_phoneNudge_rule_whitespaceOnly_nudges() {
+        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
+        form.phoneDigits = "   "
+        XCTAssertTrue(SignupPhoneNudge.shouldNudge(before: form))
+    }
+
+    func test_requestSubmit_withoutPhone_presentsTheNudgeAndSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .phoneNudged)
+        XCTAssertTrue(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 0,
+                       "l'alerte PRÉCÈDE l'envoi : rien ne part avant la réponse")
+    }
+
+    func test_requestSubmit_withPhone_sendsWithoutNudge() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .created)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "612345678")
+    }
+
+    func test_requestSubmit_invalidForm_neitherNudgesNorSends() async {
+        let (sut, registrar) = makeSUT()
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_requestSubmit_withPhone_serverRefusal_isRejected() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+    }
+
+    /// « Ajouter mon numéro » : l'alerte se ferme, le champ téléphone est
+    /// désigné pour le focus, et RIEN n'est envoyé.
+    func test_addPhoneInstead_closesTheNudgeFocusesThePhoneAndSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        _ = await sut.requestSubmit()
+
+        let focus = sut.addPhoneInstead()
+
+        XCTAssertEqual(focus, .phoneNumber)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    /// « Continuer quand même » : le compte naît SANS numéro, exactement comme
+    /// avant l'alerte — ni `phoneNumber` ni `phoneCountryCode` ne partent.
+    func test_continueWithoutPhone_createsTheAccountWithoutPhone() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        _ = await sut.requestSubmit()
+
+        let created = await sut.continueWithoutPhone()
+
+        XCTAssertTrue(created)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertNil(registrar.lastRegisterRequest?.phoneNumber)
+        XCTAssertNil(registrar.lastRegisterRequest?.phoneCountryCode)
+        XCTAssertEqual(registrar.lastRegisterRequest?.email, "awa@example.com")
+    }
 }
