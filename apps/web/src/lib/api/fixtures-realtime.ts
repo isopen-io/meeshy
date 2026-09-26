@@ -3,6 +3,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 
 import type { Conversation } from './types';
+import { fixtureCallAck } from './fixtures-call-ack';
 import { CONVERSATION_ID, VIEWER_ID, conversationDefaults, kwame, viewer } from './fixtures-base';
 import { recordSurgedConversation } from './fixtures';
 import {
@@ -537,6 +538,8 @@ export const createFixturesSocketClient: SocketFactory = () => {
     emit: () => {
       /* Voir le doc-comment du fichier — aucun correspondant réel. */
     },
+    /* Les seuls accusés que le client demande sont ceux des appels (#8046). */
+    emitWithAck: (event, payload) => Promise.resolve(fixtureCallAck(event, payload)),
   };
   return client;
 };

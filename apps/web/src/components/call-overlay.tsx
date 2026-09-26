@@ -142,7 +142,7 @@ function Notice() {
 }
 
 /** L'écran plein, la pastille ou la bulle — la sonnerie et la fin reprennent toujours l'écran plein. */
-function ActiveCallView({ call }: { readonly call: ActiveCall }) {
+export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
   const reduced = call.phase.kind !== 'incoming' && call.phase.kind !== 'ended';
   if (reduced && call.display === 'pill') return <CallPill call={call} />;
   if (reduced && call.display === 'bubble') return <CallBubble call={call} />;
