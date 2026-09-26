@@ -96,7 +96,7 @@ enum NotificationCategory: String, CaseIterable {
             return [
                 .friendRequest, .contactRequest, .legacyFriendRequest,
                 .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-                .legacyStatusUpdate
+                .contactJoined, .legacyStatusUpdate
             ]
         case .groups:
             return [
@@ -138,17 +138,25 @@ public struct NotificationListView: View {
 
     public var onNotificationTap: ((APINotification) -> Void)?
     public var onDismiss: (() -> Void)?
+    /// Exécute un geste de rangée (`NotificationQuickAction`) et dit s'il a
+    /// abouti. `nil` : aucune rangée ne propose de geste.
+    public var onQuickAction: ((NotificationQuickAction) async -> Bool)?
 
     @State private var scrollRelay = ScrollOffsetRelay()
+    /// Les personnes à qui « Se connecter » est parti depuis cet écran —
+    /// posé AVANT l'aller-retour, retiré s'il échoue.
+    @State private var connectRequestedIds: Set<String> = []
 
     private let brandColor = Color(hex: "6366F1")
 
     public init(
         onNotificationTap: ((APINotification) -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil
+        onDismiss: (() -> Void)? = nil,
+        onQuickAction: ((NotificationQuickAction) async -> Bool)? = nil
     ) {
         self.onNotificationTap = onNotificationTap
         self.onDismiss = onDismiss
+        self.onQuickAction = onQuickAction
     }
 
     public var body: some View {
@@ -159,6 +167,24 @@ public struct NotificationListView: View {
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { await viewModel.loadInitial() }
+    }
+
+    // MARK: - Gestes de rangée (#8105)
+
+    /// « Écrire » ouvre ailleurs, la notification est donc lue ; « Se
+    /// connecter » s'affiche envoyé tout de suite et se défait s'il échoue.
+    private func runQuickAction(_ action: NotificationQuickAction,
+                                on notification: APINotification,
+                                perform: @escaping (NotificationQuickAction) async -> Bool) {
+        Task {
+            await viewModel.markRead(notification)
+            guard case .connect(let userId) = action else {
+                _ = await perform(action)
+                return
+            }
+            connectRequestedIds.insert(userId)
+            if !(await perform(action)) { connectRequestedIds.remove(userId) }
+        }
     }
 
     // MARK: - Header
@@ -287,7 +313,11 @@ public struct NotificationListView: View {
                                 },
                                 onDelete: {
                                     Task { await viewModel.deleteNotification(notification) }
-                                }
+                                },
+                                onQuickAction: onQuickAction.map { perform in
+                                    { action in runQuickAction(action, on: notification, perform: perform) }
+                                },
+                                isConnectRequested: notification.senderId.map(connectRequestedIds.contains) ?? false
                             )
                             .equatable()
                         }

@@ -10,7 +10,7 @@ import MeeshySDK
 /// relier l'utilisateur aux amis qui sont déjà sur Meeshy, et le prévenir quand
 /// un autre arrive (`contact_joined`). Aucun démarchage : « Inviter » reste un
 /// SMS que l'utilisateur envoie lui-même.
-enum OnboardingContactsPhase: Equatable {
+nonisolated enum OnboardingContactsPhase: Equatable {
     /// L'appareil interdit le carnet (contrôle parental, profil géré) : la
     /// proposition n'existe pas — aucun bouton sans effet.
     case unavailable
@@ -29,7 +29,7 @@ enum OnboardingContactsPhase: Equatable {
     case failed
 }
 
-enum OnboardingContacts {
+nonisolated enum OnboardingContacts {
     /// La phase de départ, lue sur l'autorisation courante. Un accès DÉJÀ
     /// accordé part aussi de `.offer` : le modèle lance la recherche à
     /// l'arrivée sur la carte, sans rien redemander.
