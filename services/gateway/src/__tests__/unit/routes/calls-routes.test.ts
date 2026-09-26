@@ -709,6 +709,44 @@ describe('callRoutes', () => {
       expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, 'membership-part-id');
     });
 
+    describe('?reason=rejected — refus avant d’avoir rejoint (#8043)', () => {
+      function ringingCallee(reason?: 'rejected') {
+        const session = makeCallSession({ initiatorId: 'caller-id', status: 'ringing', answeredAt: null, participants: [] });
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(makeMembership()) },
+          callSession: {
+            findFirst: jest.fn<any>(),
+            findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }),
+          },
+        });
+        mockGetCallSession.mockResolvedValue(session);
+        mockEndCall.mockResolvedValueOnce({ ...session, status: 'rejected' });
+        const req = makeRequest({ params: { callId: CALL_ID }, query: reason ? { reason } : {} });
+        return { routes, reply, req };
+      }
+
+      afterEach(() => mockGetCallSession.mockReset());
+
+      it('un membre qui n’a jamais rejoint refuse l’appel qui sonne', async () => {
+        const { routes, reply, req } = ringingCallee('rejected');
+        await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+        expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID, false, 'rejected', { preJoinDecline: true });
+      });
+
+      it('sans raison, le chemin de fin d’appel reste inchangé', async () => {
+        const { routes, reply, req } = ringingCallee();
+        await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+        expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
+      });
+
+      it('un appel déjà décroché ne se refuse pas : chemin de fin ordinaire', async () => {
+        const { routes, reply, req } = ringingCallee('rejected');
+        mockGetCallSession.mockResolvedValue(makeCallSession({ answeredAt: new Date(), participants: [] }));
+        await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+        expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
+      });
+    });
+
     it('returns 404 on CALL_NOT_FOUND in getCallSession', async () => {
       const { routes, reply } = setup({
         participant: { findFirst: jest.fn<any>() },

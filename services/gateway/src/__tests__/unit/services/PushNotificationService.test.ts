@@ -2589,6 +2589,44 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.notification).toEqual({ title: 'Alice vous appelle', body: 'Appel audio' });
     });
 
+    describe('web call pushes are data-only, urgent and bounded to the ring window (#8043)', () => {
+      const sendWebCall = async (payload: Partial<PushNotificationPayload>) => {
+        const service = await getFCMService();
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
+        ]);
+        await service.sendToUser({ userId: 'user-web', payload: { title: '', body: '', ...payload } as PushNotificationPayload, bypassDnd: true });
+        return mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      };
+
+      it('the ring carries its localized title, body and actions in data, with no notification block', async () => {
+        const message = await sendWebCall({
+          title: 'Alice vous appelle',
+          body: 'Appel audio',
+          data: { type: 'call', callId: 'call-1', conversationId: 'conv-1', answerLabel: 'Répondre', declineLabel: 'Refuser' },
+        });
+
+        expect(message?.notification).toBeUndefined();
+        expect(message?.data).toEqual({
+          type: 'call',
+          callId: 'call-1',
+          conversationId: 'conv-1',
+          answerLabel: 'Répondre',
+          declineLabel: 'Refuser',
+          title: 'Alice vous appelle',
+          body: 'Appel audio',
+        });
+        expect(message?.webpush).toEqual({ headers: { TTL: '60', Urgency: 'high' } });
+      });
+
+      it('the stop-ring reaches the web with the same ring-window TTL', async () => {
+        const message = await sendWebCall({ silent: true, data: { type: 'call_cancel', callId: 'call-1' } });
+
+        expect(message?.data).toEqual({ type: 'call_cancel', callId: 'call-1' });
+        expect(message?.webpush).toEqual({ headers: { TTL: '60', Urgency: 'high' } });
+      });
+    });
+
     describe('web FCM tokens carry the delivery preferences of the chokepoint (#7308)', () => {
       afterEach(() => {
         delete (mockPrisma as any).userPreferences;

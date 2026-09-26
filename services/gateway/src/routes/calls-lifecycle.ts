@@ -24,6 +24,7 @@ import {
 import { callSessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
 import { CallParams, CallRouteDeps } from './calls-shared';
+import { resolvePreJoinDeclineParticipantId } from '../socketio/call-participants.js';
 
 /**
  * Numeric conversation-role rank (creator=40 > admin=30 > moderator=20 >
@@ -201,6 +202,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
    */
   fastify.delete<{
     Params: CallParams;
+    Querystring: { reason?: 'rejected' };
   }>('/calls/:callId', {
     preValidation: [requiredAuth, createValidationMiddleware(endCallSchema)],
     ...ROUTE_RATE_LIMITS.callOperations,
@@ -216,6 +218,16 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
             pattern: OBJECT_ID_PATTERN
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          reason: {
+            type: 'string',
+            enum: ['rejected'],
+            description: 'Decline a ringing call the requester never joined (#8043 — the web notification\'s Decline action, which has no socket). Same authorization as the socket `call:end { reason: \'rejected\' }` pre-join decline: a conversation member with no CallParticipant row, before anyone answered.'
           }
         }
       },
@@ -297,7 +309,13 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
         (p) => p.participantId === endParticipantId && !p.leftAt
       );
 
-      const callSession = await callService.endCall(callId, userId, endParticipantId);
+      const preJoinDecline = !endingCallParticipant && request.query.reason === 'rejected'
+        ? await resolvePreJoinDeclineParticipantId({ prisma, callService }, userId, callId)
+        : null;
+
+      const callSession = preJoinDecline
+        ? await callService.endCall(callId, userId, preJoinDecline, false, 'rejected', { preJoinDecline: true })
+        : await callService.endCall(callId, userId, endParticipantId);
       // Parité socket call:end — invalide le cache de session `call:signal`
       // (TTL 2s) immédiatement après l'écriture de `leftAt`, comme tous les
       // handlers socket (call:end/call:leave/call:force-leave). Sans ceci,

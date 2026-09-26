@@ -62,3 +62,13 @@ export function webPushConfig(payload: WebPushSource): WebpushConfig {
     ...(payload.collapseId ? { headers: { Topic: webPushTopic(payload.collapseId) } } : {}),
   };
 }
+
+/**
+ * UN PUSH D'APPEL WEB (#8043) — data-only : le service worker compose la
+ * notification d'appel, avec ses actions, depuis `data`. RFC 8030 § 5.2-5.3 :
+ * `TTL` borne la garde du message à la fenêtre de sonnerie, `Urgency: high`
+ * le livre à un appareil en économie d'énergie.
+ */
+export function callWebPushConfig(ttlMs: number): WebpushConfig {
+  return { headers: { TTL: String(Math.round(ttlMs / 1000)), Urgency: 'high' } };
+}
