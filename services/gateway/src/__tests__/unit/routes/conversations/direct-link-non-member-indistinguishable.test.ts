@@ -48,6 +48,7 @@ import {
   registerConversationAnalysisRoute,
 } from '../../../../routes/conversations/core-detail';
 import { registerStatsRoutes } from '../../../../routes/conversations/stats';
+import { registerDirectConversationCardRoute } from '../../../../routes/conversations/card';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const SESSION_ID = '507f1f77bcf86cd7994390aa';
@@ -120,6 +121,7 @@ const monter = async (prisma: unknown): Promise<FastifyInstance> => {
   registerConversationDetailRoute(app, prisma as never, optionalAuth);
   registerConversationAnalysisRoute(app, prisma as never, requiredAuth);
   registerStatsRoutes(app, prisma as never, requiredAuth);
+  registerDirectConversationCardRoute(app, prisma as never, optionalAuth);
   await app.ready();
   return app;
 };
@@ -147,6 +149,7 @@ const ROUTES: ReadonlyArray<readonly [string, (id: string) => string]> = [
   ],
   ['GET /conversations/:id/stats', (id) => `/conversations/${id}/stats`],
   ['GET /conversations/:id/analysis', (id) => `/conversations/${id}/analysis`],
+  ['GET /conversations/:id/card', (id) => `/conversations/${id}/card`],
 ];
 
 describe('non-membre sur lien direct ≡ conversation inexistante (#8099)', () => {
