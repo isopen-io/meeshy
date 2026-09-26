@@ -620,7 +620,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Mot de passe
 
-    /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
+    /// Sans `.newPassword` — que `MeeshyPasswordField` pose pour le rôle `.new`
+    /// (#8054) —, iOS ne propose ni mot de passe fort ni — surtout —
     /// l'enregistrement au trousseau en fin d'inscription.
     ///
     /// **UN seul site depuis #5218**, contre deux auparavant : la confirmation
@@ -636,8 +637,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_signupPasswordFields_optIntoKeychainSave() throws {
         let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
         XCTAssertEqual(
-            src.components(separatedBy: ".textContentType(.newPassword)").count - 1, 1,
-            "Une seule saisie de mot de passe, et elle doit être `.newPassword`."
+            src.components(separatedBy: "role: .new").count - 1, 1,
+            "Une seule saisie de mot de passe, et elle doit être `.newPassword` (`MeeshyPasswordField` rôle `.new`, #8054)."
         )
         XCTAssertTrue(
             src.contains(".textContentType(.emailAddress)") || src.contains(".textContentType(.username)"),

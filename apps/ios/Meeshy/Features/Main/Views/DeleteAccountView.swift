@@ -210,14 +210,15 @@ struct DeleteAccountView: View {
                     .foregroundColor(theme.textSecondary)
                     .padding(.top, 6)
 
-                SecureField(
+                MeeshyPasswordField(
                     String(localized: "account.delete.password.placeholder", defaultValue: "Mot de passe actuel", bundle: .main),
-                    text: $currentPassword
+                    text: $currentPassword,
+                    role: .current,
+                    accessibilityLabel: String(localized: "account.delete.password.label", defaultValue: "Mot de passe actuel", bundle: .main),
+                    eyeColor: theme.textMuted
                 )
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textPrimary)
-                .textContentType(.password)
-                .accessibilityLabel(String(localized: "account.delete.password.label", defaultValue: "Mot de passe actuel", bundle: .main))
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
