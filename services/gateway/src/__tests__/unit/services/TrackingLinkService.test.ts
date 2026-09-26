@@ -220,6 +220,44 @@ describe('TrackingLinkService.createTrackingLink', () => {
     );
   });
 
+  // #8187 — le garde-fou des dix essais se posait AVANT la verification :
+  // `do { token = …; attempts++; if (attempts >= maxAttempts) throw } while (exists)`
+  // jetait le dixieme jeton sans jamais appeler `tokenExists` dessus. Ces deux
+  // temoins tiennent le contrat par ses deux bouts — le dixieme jeton libre est
+  // RENDU, et l'erreur n'arrive qu'apres DIX consultations, pas neuf.
+  it('rend le dixieme jeton quand les neuf premiers sont pris (#8187)', async () => {
+    const link = makeLink({ token: 'AUTOTK' });
+    const prisma = makePrisma({ findUniqueResult: null, createLinkResult: link });
+    let calls = 0;
+    prisma.trackingLink.findUnique = jest.fn<any>(async () => {
+      calls += 1;
+      return calls <= 9 ? makeLink() : null;
+    });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(
+      sut.createTrackingLink({ originalUrl: 'https://auto.example.com' })
+    ).resolves.toMatchObject({ token: 'AUTOTK' });
+
+    expect(calls).toBe(10);
+  });
+
+  it('ne jette qu\'apres DIX consultations, pas neuf (#8187)', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    let calls = 0;
+    prisma.trackingLink.findUnique = jest.fn<any>(async () => {
+      calls += 1;
+      return makeLink();
+    });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(
+      sut.createTrackingLink({ originalUrl: 'https://auto.example.com' })
+    ).rejects.toThrow('Unable to generate unique token after maximum attempts');
+
+    expect(calls).toBe(10);
+  });
+
   it('auto-generates a unique token when no customToken is provided', async () => {
     const link = makeLink({ token: 'AUTOTK' });
     const prisma = makePrisma({ findUniqueResult: null, createLinkResult: link });
