@@ -17,6 +17,18 @@ export type ConversationCardKind = 'share-link' | 'direct';
 
 export const CONVERSATION_CARD_DESCRIPTION_MAX = 200;
 
+export const CONVERSATION_CARD_INVITE_MESSAGE_MAX = 280;
+
+/**
+ * Le CRÉATEUR du lien de partage — ni son id, ni sa présence. `null` si le
+ * créateur est supprimé, et toujours `null` sur une carte `direct`.
+ */
+export type ConversationCardInviter = {
+  readonly displayName: string;
+  readonly username: string | null;
+  readonly avatarUrl: string | null;
+};
+
 export type ConversationCardStats = {
   readonly memberCount: number;
   /** Toujours `null` : la loi de visibilité de la présence ne s'ouvre pas ici. */
@@ -30,6 +42,8 @@ export type ConversationCardViewer = {
   readonly isMember: boolean;
   readonly canJoin: boolean;
   readonly requiresAccount: boolean;
+  /** Lien actif, qui n'exige pas de compte, et viewer pas encore membre. */
+  readonly canJoinAnonymously: boolean;
 };
 
 export type ConversationCardLink = {
@@ -51,4 +65,11 @@ export type ConversationCard = {
   readonly stats: ConversationCardStats;
   readonly viewer: ConversationCardViewer;
   readonly link: ConversationCardLink | null;
+  readonly inviter: ConversationCardInviter | null;
+  /**
+   * Le message propre au lien (`ConversationShareLink.description`), ≤ 280
+   * caractères ; distinct de `description` (celle de la conversation). `null`
+   * sur une carte `direct` ou un lien inactif.
+   */
+  readonly inviteMessage: string | null;
 };

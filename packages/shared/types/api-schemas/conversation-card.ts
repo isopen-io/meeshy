@@ -7,7 +7,7 @@
 export const conversationCardSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind', 'conversationId', 'title', 'description', 'avatarUrl', 'bannerUrl', 'conversationType', 'stats', 'viewer', 'link'],
+  required: ['kind', 'conversationId', 'title', 'description', 'avatarUrl', 'bannerUrl', 'conversationType', 'stats', 'viewer', 'link', 'inviter', 'inviteMessage'],
   properties: {
     kind: { type: 'string', enum: ['share-link', 'direct'] },
     conversationId: { type: 'string', nullable: true, description: 'null pour un non-membre sur lien de partage' },
@@ -30,11 +30,12 @@ export const conversationCardSchema = {
     viewer: {
       type: 'object',
       additionalProperties: false,
-      required: ['isMember', 'canJoin', 'requiresAccount'],
+      required: ['isMember', 'canJoin', 'requiresAccount', 'canJoinAnonymously'],
       properties: {
         isMember: { type: 'boolean' },
         canJoin: { type: 'boolean' },
-        requiresAccount: { type: 'boolean' }
+        requiresAccount: { type: 'boolean' },
+        canJoinAnonymously: { type: 'boolean' }
       }
     },
     link: {
@@ -47,6 +48,19 @@ export const conversationCardSchema = {
         isActive: { type: 'boolean' },
         expiresAt: { type: 'string', nullable: true }
       }
-    }
+    },
+    inviter: {
+      type: 'object',
+      nullable: true,
+      additionalProperties: false,
+      required: ['displayName', 'username', 'avatarUrl'],
+      description: 'Créateur du lien — jamais son id ni sa présence',
+      properties: {
+        displayName: { type: 'string' },
+        username: { type: 'string', nullable: true },
+        avatarUrl: { type: 'string', nullable: true }
+      }
+    },
+    inviteMessage: { type: 'string', nullable: true, description: 'ConversationShareLink.description, ≤ 280 caractères' }
   }
 } as const;
