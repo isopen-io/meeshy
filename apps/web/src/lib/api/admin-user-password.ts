@@ -1,4 +1,5 @@
-import { passwordProposalsSchema, type PasswordProposals } from '@meeshy/shared/types/admin-password-proposal';
+import type { PasswordProposals } from '@meeshy/shared/types/admin-password-proposal';
+import * as z from 'zod/mini';
 
 import { type AdminDeps } from './admin';
 import type { ApiResult } from './http';
@@ -42,6 +43,10 @@ export const ADMIN_PASSWORD_MIN_LENGTH = 6;
 
 export type { PasswordProposals };
 
+const proposal = z.string().check(z.minLength(ADMIN_PASSWORD_MIN_LENGTH));
+
+const ServedProposals = z.strictObject({ simple: proposal, easy: proposal, medium: proposal, hard: proposal });
+
 export async function fetchAdminPasswordProposals(
   params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<PasswordProposals>> {
@@ -52,7 +57,7 @@ export async function fetchAdminPasswordProposals(
   });
   if (!result.ok) return result;
 
-  const decoded = passwordProposalsSchema.safeParse(result.data);
+  const decoded = ServedProposals.safeParse(result.data);
   if (!decoded.success) return { ok: false, status: 0, error: 'Propositions illisibles' };
   return { ok: true, data: decoded.data };
 }
