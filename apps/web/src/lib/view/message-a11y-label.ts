@@ -8,6 +8,7 @@ import type { Attachment, Message } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { plainTextOf } from '@meeshy/shared/utils/text-plain';
+import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
 /**
  * LE LIBELLÉ D'ACCESSIBILITÉ D'UN MESSAGE — SITE UNIQUE, partagé par la
@@ -91,14 +92,16 @@ const lowerFirst = (text: string, language: InterfaceLanguage): string =>
  */
 export function attachmentSegments(attachments: readonly Attachment[] | undefined): readonly string[] {
   if (attachments === undefined || attachments.length === 0) return [];
-  const counts = { image: 0, video: 0, audio: 0, file: 0 };
-  for (const attachment of attachments) counts[kindOf(attachment)] += 1;
+  const counts = { image: 0, video: 0, audio: 0, file: 0, contact: 0 };
+  /* Une carte de visite est un CONTACT à l'oreille, jamais un fichier (#8122). */
+  for (const attachment of attachments) counts[isContactCardAttachment(attachment) ? 'contact' : kindOf(attachment)] += 1;
 
   const segments: string[] = [];
   if (counts.image > 0) segments.push(pluralize(counts.image, 'image', 'images'));
   if (counts.video > 0) segments.push(pluralize(counts.video, 'vidéo', 'vidéos'));
   if (counts.audio > 0) segments.push(pluralize(counts.audio, 'audio', 'audios'));
   if (counts.file > 0) segments.push(pluralize(counts.file, 'fichier', 'fichiers'));
+  if (counts.contact > 0) segments.push(pluralize(counts.contact, 'contact', 'contacts'));
   return segments;
 }
 
