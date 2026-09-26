@@ -31,6 +31,13 @@ public struct LoginResponseData: Decodable, Sendable {
     /// une panne, donc irrattrapable par l'écran.
     public let phoneOwnershipConflict: Bool?
 
+    /// #8035 — `POST /auth/login` sur une adresse inconnue sert un 200 SANS
+    /// session : `status == "verification-required"`, l'adresse, et si le
+    /// compte vient d'être créé. Lu par `pendingEmailVerification(typedIdentifier:)`.
+    public let status: String?
+    public let accountCreated: Bool?
+    public let email: String?
+
     public init(
         user: MeeshyUser?,
         token: String?,
@@ -38,7 +45,10 @@ public struct LoginResponseData: Decodable, Sendable {
         expiresIn: Int?,
         requires2FA: Bool?,
         twoFactorToken: String?,
-        phoneOwnershipConflict: Bool? = nil
+        phoneOwnershipConflict: Bool? = nil,
+        status: String? = nil,
+        accountCreated: Bool? = nil,
+        email: String? = nil
     ) {
         self.user = user
         self.token = token
@@ -47,6 +57,9 @@ public struct LoginResponseData: Decodable, Sendable {
         self.requires2FA = requires2FA
         self.twoFactorToken = twoFactorToken
         self.phoneOwnershipConflict = phoneOwnershipConflict
+        self.status = status
+        self.accountCreated = accountCreated
+        self.email = email
     }
 }
 

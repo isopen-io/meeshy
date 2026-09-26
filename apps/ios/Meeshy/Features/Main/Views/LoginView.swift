@@ -24,6 +24,15 @@ struct LoginView: View {
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
     @State private var twoFactorCode = ""
+    /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
+    /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
+    @State private var codeEntry: CodeEntryContext?
+
+    private struct CodeEntryContext: Identifiable {
+        let pending: PendingEmailVerification
+        let password: String
+        var id: String { pending.email }
+    }
 
     // Environment selector
     @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
@@ -172,6 +181,13 @@ struct LoginView: View {
         }
         .sheet(isPresented: $showForgotPassword) {
             MeeshyForgotPasswordView()
+        }
+        .sheet(item: $codeEntry) { entry in
+            EmailVerificationView(
+                email: entry.pending.email,
+                password: entry.password,
+                accountCreated: entry.pending.accountCreated
+            )
         }
         .sheet(isPresented: $showMagicLink) {
             MagicLinkView()
@@ -668,8 +684,14 @@ struct LoginView: View {
         focusedField = nil
         showError = false
         Task {
-            await authManager.login(username: username, password: password)
+            let outcome = await authManager.login(username: username, password: password)
+            presentCodeEntryIfNeeded(outcome, password: password)
         }
+    }
+
+    private func presentCodeEntryIfNeeded(_ outcome: LoginOutcome, password: String) {
+        guard case .verificationRequired(let pending) = outcome else { return }
+        codeEntry = CodeEntryContext(pending: pending, password: password)
     }
 
     private func attemptAccountLogin() {
@@ -677,7 +699,8 @@ struct LoginView: View {
         showError = false
         guard let account = selectedAccount else { return }
         Task {
-            await authManager.login(username: account.username, password: accountPassword)
+            let outcome = await authManager.login(username: account.username, password: accountPassword)
+            presentCodeEntryIfNeeded(outcome, password: accountPassword)
         }
     }
 

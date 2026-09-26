@@ -29,6 +29,9 @@ enum DeepLinkDestination: Equatable {
     case chatLink(identifier: String)
     case post(id: String)
     case magicLink(token: String)
+    /// `/auth/verify-email?token=…&email=…` — le lien de l'e-mail « code +
+    /// lien » (#8035) : il vérifie l'adresse et ouvre la session.
+    case emailVerificationLink(token: String, email: String)
     case share(text: String?, url: String?)
     case userLinks
     case postDetail(postId: String)
@@ -199,6 +202,22 @@ enum DeepLinkParser {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// `/auth/magic-link?token=…` ou `/auth/magic-link/<token>` ;
+    /// `/auth/verify-email?token=…&email=…` (#8035). Un jeton ou une adresse
+    /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
+    private static func authLink(id: String?, components: [String], url: URL) -> DeepLinkDestination? {
+        switch id {
+        case "magic-link":
+            return (identifier(components, 2) ?? queryValue("token", in: url)).map { .magicLink(token: $0) }
+        case "verify-email":
+            guard let token = queryValue("token", in: url),
+                  let email = queryValue("email", in: url) else { return nil }
+            return .emailVerificationLink(token: token, email: email)
+        default:
+            return nil
+        }
+    }
+
     /// **La seule table des formes de lien Meeshy** (#7815), pour le web et le
     /// schéma `meeshy://`. Les surfaces propres aux widgets et aux App
     /// Shortcuts (`contact`, `quickreply`, `send`, `conversations`) ne sont
@@ -211,11 +230,7 @@ enum DeepLinkParser {
         case "me": return .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
-        case "auth":
-            // `/auth/magic-link?token=…` ou `/auth/magic-link/<token>`.
-            guard id == "magic-link",
-                  let token = identifier(components, 2) ?? queryValue("token", in: url) else { return nil }
-            return .magicLink(token: token)
+        case "auth": return authLink(id: id, components: components, url: url)
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).
         case "join": return id.map { .joinLink(identifier: $0) }
@@ -301,6 +316,7 @@ enum DeepLink: Equatable {
     case trackedLink(token: String)
     case chatLink(identifier: String)
     case magicLink(token: String)
+    case emailVerificationLink(token: String, email: String)
     case conversation(id: String)
     case postDetail(postId: String)
     case storyDetail(postId: String)
@@ -338,7 +354,7 @@ enum DeepLink: Equatable {
     /// lien non résolu n'a rien à promettre.
     var opensAfterSignIn: Bool {
         switch self {
-        case .joinLink, .chatLink, .magicLink, .externalLink, .unresolvedTrackedLink:
+        case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
              .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag:
@@ -505,6 +521,7 @@ final class DeepLinkRouter: ObservableObject {
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
+        case .emailVerificationLink(let token, let email): return .emailVerificationLink(token: token, email: email)
         case .trackedLink, .share, .external: return nil
         }
     }

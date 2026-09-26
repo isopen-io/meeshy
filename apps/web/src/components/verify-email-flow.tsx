@@ -1,18 +1,21 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { auth } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { pendingVerificationFor } from '@/lib/pending-verification';
 import { secondClock, type IntervalClock } from '@/lib/view/interval-clock';
 import { type MagicLinkDeadline } from '@/lib/view/magic-link';
 import { useCountdown } from '@/lib/view/use-countdown';
 import { resolveVerifyEmailOutcome } from '@/lib/view/auth-feedback';
 import { Link } from '@/routes/route-table';
 
-import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
+import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
-import { Field } from './field';
+import { EmailCodeForm, goToLanding, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
 
 /**
@@ -20,13 +23,19 @@ import { Glyph } from './glyph';
  * `EmailVerificationView.swift` (271 l.) : icône + titre + sous-titre + champ
  * à 6 chiffres + refus + bouton + renvoi (compte à rebours) + overlay de
  * succès. Extrait en composant INJECTABLE (patron `MagicLinkFlow`) — la
- * route (`routes/verify-email.tsx`) ne fait que lire `?email=` et le passer.
+ * route (`routes/verify-email.tsx`) ne fait que lire l'adresse et la passer.
  *
- * AUCUNE écriture de session : `register()` a déjà établi la session avant
- * cet écran (#4264) ; vérifier le code ne (re)connecte personne, il ouvre la
- * SUITE — le bouton « Continuer » de l'overlay mène vers la liste si une
- * session existe, vers la connexion sinon (lien ouvert sur un navigateur qui
- * n'a jamais vu ce compte).
+ * LA VÉRIFICATION CONNECTE (#8034, contrat #8033). Le code saisi comme le
+ * lien de l'e-mail (`?token=`, consommé au montage) rendent une session, que
+ * `auth.verifyEmail` établit : l'écran mène alors là où une connexion mène
+ * (`?next=` s'il est sûr, l'accueil sinon). Une passerelle antérieure
+ * vérifie SANS connecter : l'overlay « E-mail vérifié ! » et sa porte de
+ * sortie restent pour elle — vers la liste si une session existe, vers la
+ * connexion sinon.
+ *
+ * Arrivé depuis la connexion par mot de passe d'un e-mail inconnu, l'écran
+ * DIT ce qui vient de se passer (compte créé, code et lien envoyés), et le
+ * mot de passe tapé voyage avec le code (`pending-verification.ts`).
  */
 
 const VERIFY_TINT = 'var(--color-ios-brand)';
@@ -46,19 +55,29 @@ const defaultDeps: VerifyEmailFlowDeps = {
   now: () => Date.now(),
 };
 
-function onlyDigits(value: string): string {
-  return value.replace(/\D/g, '').slice(0, 6);
-}
+type LinkPhase = 'idle' | 'checking' | 'refused';
 
-export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string | null; deps?: VerifyEmailFlowDeps }) {
+export function VerifyEmailFlow({
+  email,
+  token = null,
+  next = null,
+  deps = defaultDeps,
+}: {
+  readonly email: string | null;
+  /** Le jeton du lien reçu par e-mail (`?token=`), consommé au montage. */
+  readonly token?: string | null;
+  /** La valeur BRUTE de `?next=` — clampée là où elle sert. */
+  readonly next?: string | null;
+  readonly deps?: VerifyEmailFlowDeps;
+}) {
   const online = useOnline();
   const session = useStore(sessionStore, (s) => s.session);
+  const language = currentInterfaceLanguage();
 
-  const [code, setCode] = useState('');
-  const [codeFocused, setCodeFocused] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [codeError, setCodeError] = useState<string | null>(null);
+  const [linkPhase, setLinkPhase] = useState<LinkPhase>(email !== null && token !== null && token !== '' ? 'checking' : 'idle');
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const linkConsumed = useRef(false);
 
   const [resendSending, setResendSending] = useState(false);
   const [resendSent, setResendSent] = useState(false);
@@ -66,31 +85,26 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
   const resendRemaining = useCountdown(resendDeadline, deps.clock, deps.now);
   const resendLocked = resendDeadline !== null && resendRemaining > 0;
 
-  const isCodeComplete = code.length === 6;
   const closeTarget = session.status === 'authenticated' ? 'list' : 'login';
 
-  async function handleVerify(event: FormEvent) {
-    event.preventDefault();
-    if (email === null || !isCodeComplete || verifying || verified || !online) return;
-    setVerifying(true);
-    setCodeError(null);
-    const result = await deps.verifyEmail({ email, code });
-    setVerifying(false);
-    const outcome = resolveVerifyEmailOutcome(result);
-    if (outcome.kind === 'verified') {
-      setVerified(true);
-      return;
-    }
-    if (outcome.kind === 'invalid-code') {
-      setCodeError('Code invalide ou expiré');
-      return;
-    }
-    if (outcome.kind === 'offline') {
-      setCodeError('Pas de connexion. Vérifiez votre réseau et réessayez.');
-      return;
-    }
-    setCodeError(outcome.message);
-  }
+  useEffect(() => {
+    if (linkPhase !== 'checking' || email === null || token === null || linkConsumed.current) return;
+    linkConsumed.current = true;
+    void deps.verifyEmail({ email, token }).then((result) => {
+      const outcome = resolveVerifyEmailOutcome(result);
+      if (outcome.kind === 'signed-in') {
+        goToLanding(next);
+        return;
+      }
+      if (outcome.kind === 'verified') {
+        setVerified(true);
+        setLinkPhase('idle');
+        return;
+      }
+      setLinkError(outcome.kind === 'invalid-code' ? translate(language, 'verifyEmail.link.invalid') : verifyEmailErrorText(outcome));
+      setLinkPhase('refused');
+    });
+  }, [linkPhase, email, token, next, deps, language]);
 
   async function handleResend() {
     if (email === null || resendSending || resendLocked || !online) return;
@@ -102,32 +116,44 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
     setResendDeadline({ startedAt: deps.now(), expiresInSeconds: RESEND_COOLDOWN_SECONDS });
   }
 
-  return (
-    <AuthColumn>
-      <AuthColumnBar to={closeTarget} title="Vérification de l’e-mail" />
-
-      {email === null ? (
+  if (email === null) {
+    return (
+      <AuthColumn>
+        <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={48} style={{ color: 'var(--ios-error)' }} />
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>
-            Ce lien ne porte aucune adresse e-mail à vérifier. Ouvrez-le depuis l’e-mail que Meeshy vous a envoyé.
-          </p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(language, 'verifyEmail.noAddress')}</p>
           <Link
             to="login"
             replace
             className="grid place-items-center rounded-[14px] px-6 font-semibold"
             style={{ minHeight: 44, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)', color: 'var(--color-ios-ink)' }}
           >
-            Retour à la connexion
+            {translate(language, 'verifyEmail.backToLogin')}
           </Link>
         </div>
-      ) : verified ? (
+        <AuthBrandFooter />
+      </AuthColumn>
+    );
+  }
+
+  const pending = pendingVerificationFor(email);
+  const lead =
+    pending === null
+      ? translate(language, 'verifyEmail.subtitle', { email })
+      : translate(language, pending.accountCreated ? 'verifyEmail.subtitle.created' : 'verifyEmail.subtitle.pending', { email });
+
+  return (
+    <AuthColumn>
+      <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
+
+      {verified ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status">
           <span aria-hidden="true" style={{ color: 'var(--ios-success)' }}>
             <Glyph name="checks" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            E-mail vérifié !
+            {translate(language, 'verifyEmail.verified')}
           </h2>
           <Link
             to={closeTarget}
@@ -135,79 +161,59 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
             className="grid w-full place-items-center rounded-[14px] px-8 font-bold text-white"
             style={{ minHeight: 52, background: VERIFY_TINT }}
           >
-            Continuer
+            {translate(language, 'verifyEmail.continue')}
           </Link>
         </div>
+      ) : linkPhase === 'checking' ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status" aria-live="polite">
+          <span aria-hidden="true" style={{ color: VERIFY_TINT }}>
+            <Glyph name="envelopeOpen" size={48} />
+          </span>
+          <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translate(language, 'verifyEmail.link.checking')}
+          </p>
+        </div>
       ) : (
-        <form onSubmit={handleVerify} className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center" noValidate>
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
           <span aria-hidden="true" style={{ color: VERIFY_TINT }}>
             <Glyph name="envelopeOpen" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Vérifiez votre e-mail
+            {translate(language, 'verifyEmail.title')}
           </h2>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>
-            Entrez le code à 6 chiffres envoyé à <strong>{email}</strong>
-          </p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>{withStrongEmail(lead, email)}</p>
 
-          <div className="w-full">
-            <Field id="verify-email-code" tint={VERIFY_TINT} focused={codeFocused} error={codeError ?? undefined}>
-              {({ id, describedBy }) => (
-                <input
-                  id={id}
-                  aria-describedby={describedBy}
-                  aria-label="Code de vérification"
-                  aria-invalid={codeError !== null}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  autoFocus
-                  value={code}
-                  /* `onInput`, jamais `onChange` (motif `magic-link-flow.tsx#magic-link-email`) —
-                     un témoin qui pose `.value` puis redispatche un `input` natif n'est vu QUE par
-                     `onInput` sous ce harnais. */
-                  onInput={(e) => setCode(onlyDigits(e.currentTarget.value))}
-                  onFocus={() => setCodeFocused(true)}
-                  onBlur={() => setCodeFocused(false)}
-                  placeholder="000000"
-                  disabled={verifying || !online}
-                  className="w-full bg-transparent py-3 text-center text-input font-semibold tracking-wide outline-none"
-                  style={{ color: 'var(--color-ios-ink)' }}
-                />
-              )}
-            </Field>
-          </div>
-
-          <AuthSubmitButton
-            disabled={!isCodeComplete || !online}
-            isSubmitting={verifying}
-            label="Vérifier"
-            busyLabel="Vérification…"
-            background={VERIFY_TINT}
+          <EmailCodeForm
+            email={email}
+            next={next}
+            verifyEmail={deps.verifyEmail}
+            onVerified={() => setVerified(true)}
+            autoFocus
+            initialError={linkError}
           />
 
           <div className="grid gap-2">
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Vous n’avez pas reçu le code ?
+              {translate(language, 'verifyEmail.resend.prompt')}
             </p>
             <button
               type="button"
               onClick={handleResend}
               disabled={resendSending || resendLocked || !online}
-              aria-label="Renvoyer le code"
+              aria-label={translate(language, 'verifyEmail.resend')}
               className="text-caption font-medium"
-              style={{ color: VERIFY_TINT, opacity: resendSending || resendLocked ? 0.6 : 1 }}
+              style={{ color: VERIFY_TINT, opacity: resendSending || resendLocked ? 0.6 : 1, minHeight: 44 }}
             >
               {resendSending
-                ? 'Envoi…'
+                ? translate(language, 'verifyEmail.resend.busy')
                 : resendLocked
-                  ? `Renvoyer le code (${resendRemaining}s)`
+                  ? translate(language, 'verifyEmail.resend.locked', { seconds: String(resendRemaining) })
                   : resendSent
-                    ? 'Code renvoyé !'
-                    : 'Renvoyer le code'}
+                    ? translate(language, 'verifyEmail.resend.done')
+                    : translate(language, 'verifyEmail.resend')}
             </button>
           </div>
-        </form>
+        </div>
       )}
 
       <AuthBrandFooter />

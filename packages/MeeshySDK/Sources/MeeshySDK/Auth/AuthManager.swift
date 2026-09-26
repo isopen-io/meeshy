@@ -33,7 +33,8 @@ public protocol AuthManaging: AnyObject {
     var requires2FA: Bool { get }
     var twoFactorToken: String? { get }
     func completeLoginWith2FA(code: String) async
-    func login(username: String, password: String) async
+    @discardableResult
+    func login(username: String, password: String) async -> LoginOutcome
     func register(request: RegisterRequest) async
     func requestMagicLink(email: String) async -> Bool
     func validateMagicLink(token: String) async
@@ -308,22 +309,29 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Login
 
-    public func login(username: String, password: String) async {
+    @discardableResult
+    public func login(username: String, password: String) async -> LoginOutcome {
         isLoading = true
         errorMessage = nil
         requires2FA = false
         twoFactorToken = nil
+        defer { isLoading = false }
 
         do {
             let data = try await authService.login(username: username, password: password, rememberDevice: true)
+            if let pending = data.pendingEmailVerification(typedIdentifier: username) {
+                return .verificationRequired(pending)
+            }
             if data.requires2FA == true {
                 self.requires2FA = true
                 self.twoFactorToken = data.twoFactorToken
-            } else if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
-            } else {
+                return .twoFactorRequired
+            }
+            guard let token = data.token, let user = data.user else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
+            applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+            return .authenticated
         } catch let error as MeeshyError {
             // P1 — `APIClient` only ever throws `MeeshyError` (never the
             // legacy `APIError`); the previous `catch let error as APIError`
@@ -334,8 +342,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         } catch {
             errorMessage = error.localizedDescription
         }
-
-        isLoading = false
+        return .failed
     }
 
     public func completeLoginWith2FA(code: String) async {
@@ -419,56 +426,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
             let data = try await authService.register(request: request)
             if let token = data.token, let user = data.user {
                 applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
-            } else {
-                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
-            }
-        } catch let error as MeeshyError {
-            // P1 — `APIClient` only ever throws `MeeshyError` (never the
-            // legacy `APIError`); the previous `catch let error as APIError`
-            // here was dead code that silently fell through to the generic
-            // `catch` below. Behaviourally identical (both paths read
-            // `errorDescription`), but explicit about the real error type.
-            errorMessage = error.errorDescription
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    // MARK: - Magic Link
-
-    public func requestMagicLink(email: String) async -> Bool {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
-            isLoading = false
-            return true
-        } catch let error as MeeshyError {
-            // P1 — `APIClient` only ever throws `MeeshyError` (never the
-            // legacy `APIError`); the previous `catch let error as APIError`
-            // here was dead code that silently fell through to the generic
-            // `catch` below. Behaviourally identical (both paths read
-            // `errorDescription`), but explicit about the real error type.
-            errorMessage = error.errorDescription
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-        return false
-    }
-
-    public func validateMagicLink(token: String) async {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            let data = try await authService.validateMagicLink(token: token)
-            if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }

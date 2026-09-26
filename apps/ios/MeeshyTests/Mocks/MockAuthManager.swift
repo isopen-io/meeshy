@@ -49,6 +49,7 @@ final class MockAuthManager: AuthManaging {
 
     var magicLinkResult: Bool = true
     var passwordResetResult: Bool = true
+    var loginOutcome: LoginOutcome = .authenticated
     var loginError: String?
     var registerError: String?
     var refreshSessionResult: String = "mock-fresh-token"
@@ -70,12 +71,15 @@ final class MockAuthManager: AuthManaging {
         return refreshSessionResult
     }
 
-    func login(username: String, password: String) async {
+    @discardableResult
+    func login(username: String, password: String) async -> LoginOutcome {
         loginCallCount += 1
         loginCredentials.append((username, password))
         if let error = loginError {
             errorMessage = error
+            return .failed
         }
+        return loginOutcome
     }
 
     func register(request: RegisterRequest) async {
