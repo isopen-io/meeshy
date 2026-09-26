@@ -150,7 +150,9 @@ const MAX_LINES = 1000;
  * Puis 3064 → 3049 (#8074, 2026-09-26) : les délais de sonnerie, les grâces et
  * le plafond de participants sont partis vers `@meeshy/shared/types/call-rules`,
  * le jeu unique que la passerelle et les clients lisent. Le même lot rabaisse
- * `services/PushNotificationService.ts` de 1041 à 1035 (le TTL d'appel).
+ * `services/PushNotificationService.ts` de 1041 à 1035 (le TTL d'appel). Puis
+ * 1035 → 1032 (#8171) : le bloc `android.notification` est parti vers
+ * `android-push-config.ts`, jumeau de `web-push-config.ts`.
  *
  * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
  * du lecteur que cinq lectures recopiaient est parti vers
@@ -178,7 +180,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/PostFeedService.ts': 1199,
   'services/AuthService.ts': 1324,
   'services/messaging/MessageProcessor.ts': 1110,
-  'services/PushNotificationService.ts': 1035,
+  'services/PushNotificationService.ts': 1032,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
   'services/AudioTranslateService.ts': 1017,
 };
