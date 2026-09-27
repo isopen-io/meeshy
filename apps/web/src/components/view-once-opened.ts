@@ -29,9 +29,37 @@ const withoutViewOnce = (attachment: ProtectedAttachment): ProtectedAttachment =
   };
 };
 
+/**
+ * UN FLOU RÉVÉLÉ SUR PLACE EST LE DROIT DE VOIR SES PIÈCES (#8389).
+ *
+ * Toucher un message flouté le révèle DANS le fil ; ses pièces portent le
+ * flou de leur message (#7498) et se rendraient encore « Photo protégée »
+ * dans la fenêtre qu'on vient d'ouvrir. `ProtectedContent` pose ce contexte
+ * autour du SEUL contenu révélé : les blocs de pièces y lèvent le SEUL masque
+ * de flou ; une vue unique reste une vue unique.
+ *
+ * `onViewer` dit à la fenêtre qu'un de ses médias est ouvert en plein écran :
+ * elle se tient tant qu'il l'est (`holdReveal`), et repart pour une fenêtre
+ * neuve à sa fermeture (`rearmReveal`).
+ */
+export type VeilReveal = { readonly onViewer: (open: boolean) => void };
+export const VeilRevealContext = createContext<VeilReveal | null>(null);
+
+const withoutBlur = (attachment: ProtectedAttachment): ProtectedAttachment => {
+  const flags = attachment.effectFlags;
+  return {
+    ...attachment,
+    isBlurred: false,
+    ...(typeof flags === 'number' ? { effectFlags: flags & ~MESSAGE_EFFECT_FLAGS.BLURRED } : {}),
+  };
+};
+
 export function useAttachmentMasked(): (attachment: Attachment) => boolean {
   const opened = useContext(ViewOnceOpenedContext);
-  return opened ? (attachment) => maskedAttachment(withoutViewOnce(attachment)) : maskedAttachment;
+  const veil = useContext(VeilRevealContext);
+  if (opened) return (attachment) => maskedAttachment(withoutViewOnce(attachment));
+  if (veil !== null) return (attachment) => maskedAttachment(withoutBlur(attachment));
+  return maskedAttachment;
 }
 
 /**

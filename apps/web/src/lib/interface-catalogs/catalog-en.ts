@@ -1118,7 +1118,7 @@ const en = {
   'message.withheld': 'Content withheld',
   'message.withheld.a11y': 'Content withheld: this message exists and is not shown',
   'message.veiled': 'Hidden content',
-  'message.veiled.hint': 'Tap to reveal the content',
+  'message.veiled.hint': 'Tap to view',
   'message.veiled.error': 'Can’t reveal this right now',
   'message.ephemeral.a11y': 'Ephemeral message, disappears in {remaining}',
   'message.ephemeral.awaiting': 'Waiting to be received',

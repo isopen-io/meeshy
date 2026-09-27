@@ -8,15 +8,16 @@ import MeeshySDK
 /// flou ou à vue unique […] affiche clairement le contenu. Un contenu média
 /// caché s'ouvre directement en plein écran. »
 ///
-/// Avant ce lot, la réponse dépendait du site : le voile d'un message FLOUTÉ
-/// dévoilait la bulle cinq secondes — il fallait un SECOND toucher pour ouvrir
-/// sa photo —, et une cellule de grille protégée ne répondait qu'à un APPUI
-/// LONG, en dévoilant la vignette sur place. La règle vit désormais ici :
+/// Directive porteur du 2026-09-27 (#8389), qui revient sur le plein écran
+/// direct du flou : « lorsqu'on touche un message en flou, cela doit
+/// l'AFFICHER et NON le montrer en plein écran ». Le flou se lève SUR PLACE ;
+/// le plein écran n'arrive qu'au toucher SUIVANT, sur la pièce révélée, comme
+/// pour tout média. La vue unique n'est pas visée et garde son geste.
 ///
 /// | contenu | toucher |
 /// |---|---|
-/// | texte flouté | clair sur place ; le flou revient après la durée de visibilité (5 s par défaut, `BubbleBlurRevealLifecycle`) |
-/// | média flouté (image, vidéo, cellule) | plein écran DIRECT sur CE média, net ; la bulle reste voilée |
+/// | message flouté, texte ou médias | révélé sur place ; le flou revient après la durée de visibilité (5 s par défaut, `BubbleBlurRevealLifecycle`) ; une pièce révélée s'ouvre en plein écran au toucher suivant |
+/// | pièce floutée d'un message clair | révélée sur place dans sa case ; plein écran au toucher suivant |
 /// | vue unique scellée, texte | lu sur place ; « déjà ouvert » au retoucher, à la sortie de l'écran ou de la conversation (#7579) |
 /// | vue unique scellée, média | plein écran DIRECT ; « déjà ouvert » à la fermeture (#7499) |
 /// | vue unique déjà ouverte | rien ne se rouvre |
@@ -26,9 +27,9 @@ import MeeshySDK
 nonisolated enum ProtectedContentTap {
     /// Rien de protégé : le geste ordinaire du contenu s'applique.
     case none
-    /// Texte flouté : montré en clair sur place, le temps de la visibilité.
-    case revealText
-    /// Média caché : le plein écran s'ouvre directement sur cette pièce.
+    /// Flou (texte ou médias) : levé sur place, le temps de la visibilité.
+    case revealInPlace
+    /// Pièce à vue unique, ou pièce déjà révélée : le plein écran s'ouvre sur elle.
     case openFullscreen(MessageAttachment)
     /// Vue unique scellée : l'hôte l'ouvre (`ConversationViewModel.openViewOnce`)
     /// — en plein écran pour un média, sur place pour un texte. Le contenu
@@ -42,17 +43,16 @@ nonisolated enum ProtectedContentTap {
     /// Ce que fait un toucher sur une CELLULE de grille dont la pièce porte
     /// elle-même sa protection.
     static func resolve(cell attachment: MessageAttachment) -> ProtectedContentTap {
-        guard attachment.isBlurred || attachment.isViewOnce, opensFullscreen(attachment) else { return .none }
-        return .openFullscreen(attachment)
+        if attachment.isViewOnce, opensFullscreen(attachment) { return .openFullscreen(attachment) }
+        return attachment.isBlurred ? .revealInPlace : .none
     }
 
-    /// Ce que fait un toucher sur le VOILE d'un message flouté qui porte
-    /// `media` : le plein écran de sa première pièce visuelle, sinon le texte
-    /// en clair. La Rivière, qui ne rend aucun média (#8310), pose ici la même
-    /// question que la bulle — sans elle, son voile ne dévoilait qu'un texte
-    /// vide et l'image restait inatteignable.
-    static func veiledMessage(media: [MessageAttachment]) -> ProtectedContentTap {
-        media.first(where: opensFullscreen).map(ProtectedContentTap.openFullscreen) ?? .revealText
+    /// Ce que fait le toucher SUIVANT la révélation d'un message flouté qui
+    /// porte `media`, là où la surface ne rend aucune case : le plein écran de
+    /// sa première pièce visuelle. La Rivière ne rend aucun média (#8310) —
+    /// sans ce second geste, l'image d'un message flouté y serait inatteignable.
+    static func afterReveal(media: [MessageAttachment]) -> ProtectedContentTap {
+        media.first(where: opensFullscreen).map(ProtectedContentTap.openFullscreen) ?? .none
     }
 
     /// Seules une image (sticker compris) et une vidéo ont un plein écran.
@@ -71,9 +71,9 @@ nonisolated enum ProtectedContentTap {
         switch self {
         case .none, .alreadyOpened:
             return nil
-        case .revealText:
-            return String(localized: "protection.tap.a11y.reveal_text",
-                          defaultValue: "Touchez pour afficher le texte en clair", bundle: .main)
+        case .revealInPlace:
+            return String(localized: "protection.tap.a11y.reveal_in_place",
+                          defaultValue: "Touchez pour afficher le contenu", bundle: .main)
         case .openFullscreen, .openViewOnce(fullscreen: true):
             return Self.openFullscreenHint
         case .openViewOnce(fullscreen: false):
@@ -89,7 +89,7 @@ nonisolated enum ProtectedContentTap {
 extension ProtectedContentTap: Equatable {
     static func == (lhs: ProtectedContentTap, rhs: ProtectedContentTap) -> Bool {
         switch (lhs, rhs) {
-        case (.none, .none), (.revealText, .revealText),
+        case (.none, .none), (.revealInPlace, .revealInPlace),
              (.closeViewOnce, .closeViewOnce), (.alreadyOpened, .alreadyOpened):
             return true
         case (.openFullscreen(let a), .openFullscreen(let b)):
@@ -126,10 +126,7 @@ extension BubbleContent {
         }
         if isViewOnceRevealed { return .closeViewOnce }
         if isViewOnce { return .openViewOnce(fullscreen: false) }
-        if let media, ProtectedContentTap.opensFullscreen(media), isBlurred || media.isBlurred || media.isViewOnce {
-            return .openFullscreen(media)
-        }
-        guard isBlurred else { return .none }
-        return .veiledMessage(media: visualMedia)
+        if isBlurred { return .revealInPlace }
+        return media.map(ProtectedContentTap.resolve(cell:)) ?? .none
     }
 }

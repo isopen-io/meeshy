@@ -1118,7 +1118,7 @@ const de = {
   'message.withheld': 'Inhalt zurückgehalten',
   'message.withheld.a11y': 'Inhalt zurückgehalten: Diese Nachricht existiert und wird nicht angezeigt',
   'message.veiled': 'Ausgeblendeter Inhalt',
-  'message.veiled.hint': 'Tippen, um den Inhalt anzuzeigen',
+  'message.veiled.hint': 'Zum Anzeigen tippen',
   'message.veiled.error': 'Anzeigen derzeit nicht möglich',
   'message.ephemeral.a11y': 'Selbstlöschende Nachricht, verschwindet in {remaining}',
   'message.ephemeral.awaiting': 'Wartet auf den Empfang',

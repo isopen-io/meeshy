@@ -168,6 +168,7 @@ extension ConversationViewModel {
         let alreadyDead = fresh.filter { EphemeralReceiptLedger.shared.destruction(of: $0) != nil }
         if !alreadyDead.isEmpty {
             messages.removeAll { alreadyDead.contains($0.id) }
+            messageStore.dropGoneEphemerals()
         }
         let burning = fresh.subtracting(alreadyDead)
         guard !burning.isEmpty else { return }
@@ -175,6 +176,7 @@ extension ConversationViewModel {
         for id in burning {
             guard let index = messageIndex(for: id) else { continue }
             messages[index].isBurning = true
+            burningEphemeralIds[id] = true
         }
 
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
@@ -189,7 +191,24 @@ extension ConversationViewModel {
             withAnimation(.easeInOut(duration: 0.25)) {
                 self.messages.removeAll { burning.contains($0.id) }
             }
+            // #8382 — le fil rend `MessageStore`, pas `messages` : sans cette
+            // republication, Focal et Script gardaient la ligne à 0:00 jusqu'à
+            // la prochaine écriture en base.
+            self.messageStore.dropGoneEphemerals()
+            for id in burning { self.burningEphemeralIds.removeValue(forKey: id) }
             self.refreshEphemeralExpirySchedule()
+        }
+    }
+
+    /// Repose la combustion en cours sur des messages relus du magasin : une
+    /// écriture GRDB pendant la combustion ne la remet pas à zéro (#8382).
+    func applyingEphemeralBurns(_ incoming: [Message]) -> [Message] {
+        guard !burningEphemeralIds.isEmpty else { return incoming }
+        return incoming.map { message in
+            guard burningEphemeralIds[message.id] == true, !message.isBurning else { return message }
+            var burning = message
+            burning.isBurning = true
+            return burning
         }
     }
 
