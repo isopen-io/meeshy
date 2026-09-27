@@ -373,6 +373,11 @@ const fr = {
   'admin.identity.suggestions': 'Pseudonymes libres',
   'admin.identity.noLanguage': 'Aucune',
   'admin.security.twoFactorNotEnrolled': 'Le membre doit d’abord appairer une application d’authentification.',
+  'admin.quick.title': 'Actions rapides',
+  'admin.quick.activate': 'Activer le compte',
+  'admin.quick.activated': 'Compte activé',
+  'admin.quick.validateEmail': 'Valider l’e-mail',
+  'admin.quick.validatePhone': 'Valider le téléphone',
 } as const;
 
 export default fr;

@@ -119,8 +119,63 @@ final class ProtectedContentTapTests: XCTestCase {
         XCTAssertEqual(ProtectedContentTap.resolve(cell: cell), .openFullscreen(cell))
     }
 
+    // MARK: - Le voile d'un message flouté, hors bulle (#8310)
+
+    /// La Rivière monte le voile sans `BubbleContent` : elle pose la MÊME
+    /// question par `veiledMessage(media:)`, jamais une règle à elle.
+    func test_veiledMessage_withPhotoAfterDocument_opensTheFirstVisual() {
+        let first = photo(id: "p1")
+        XCTAssertEqual(ProtectedContentTap.veiledMessage(media: [document(), first, photo(id: "p2")]),
+                       .openFullscreen(first))
+    }
+
+    func test_veiledMessage_withoutVisual_revealsTextInPlace() {
+        XCTAssertEqual(ProtectedContentTap.veiledMessage(media: [document()]), .revealText)
+        XCTAssertEqual(ProtectedContentTap.veiledMessage(media: []), .revealText)
+    }
+
     func test_resolve_unprotectedCell_isNone() {
         XCTAssertEqual(ProtectedContentTap.resolve(cell: photo()), .none)
+    }
+
+    // MARK: - Câblage : le toucher atteint l'hôte en DIRECT (#8310)
+
+    /// Retour porteur du 2026-09-27 après #8009 : « on touche une image
+    /// floutée, ça n'affiche pas ». La case de grille protégée écrivait encore
+    /// la liaison `fullscreenAttachment`, le détour que #8009 avait mesuré mort
+    /// depuis le voile ; et la Rivière montait son voile sans `onMediaTap`.
+    func test_wiring_protectedGridCell_opensThroughTheHost_notTheDeadBinding() throws {
+        let cell = try body(of: "private func handleReveal()",
+                            in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        XCTAssertFalse(cell.contains("fullscreenAttachment ="), cell)
+        XCTAssertTrue(cell.contains("onOpenProtected(media)"), cell)
+    }
+
+    func test_wiring_riverVeil_receivesTheTapAndTheHostOpener() throws {
+        let url = Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains("tap: content.protectedTap, onMediaTap: onMediaTap"),
+                      "le voile de la Rivière doit recevoir la décision ET l'ouvreur de l'hôte")
+    }
+
+    private static var iosRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func body(of anchor: String, in relativePath: String) throws -> String {
+        let source = try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let start = try XCTUnwrap(source.range(of: anchor), "ancre absente : \(anchor)")
+        let open = try XCTUnwrap(source[start.upperBound...].firstIndex(of: "{"))
+        var depth = 0
+        var index = open
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" { depth -= 1; if depth == 0 { break } }
+            index = source.index(after: index)
+        }
+        return String(source[open...index])
     }
 
     // MARK: - Vue unique

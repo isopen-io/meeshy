@@ -76,6 +76,7 @@ const HOOK_NAMES = [
   'useEphemeralDestruction',
   'useOlderMessages',
   'useReadTracking',
+  'useAfterReadConsumption',
   'useThreadOpenScroll',
   'useUnreadBoundary',
   // #7429 — les trois hooks nés du découpage de cet écran ; ceux qu'ils ont

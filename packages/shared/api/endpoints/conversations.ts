@@ -75,6 +75,9 @@ export const byIdMarkUnread = (id: string): string => `/api/v1/conversations/${e
 /** GET · POST /api/v1/conversations/:id/messages */
 export const byIdMessages = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages`;
 
+/** POST /api/v1/conversations/:id/messages/after-read/consume */
+export const byIdMessagesAfterReadConsume = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages/after-read/consume`;
+
 /** PUT · DELETE /api/v1/conversations/:id/messages/:messageId */
 export const byIdMessagesByMessageId = (id: string, messageId: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}`;
 

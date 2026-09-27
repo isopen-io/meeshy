@@ -108,6 +108,9 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         )
         if markGroup { sut.markGroupConversation("group1", title: "Équipe") }
         sut.attach(host: host)
+        // Le coordinateur tient son hôte en `weak` : un test qui écarte `host`
+        // par `_` le libérerait avant la première assertion.
+        addTeardownBlock { _ = host }
         return (sut, host, factory, signaling, calls)
     }
 

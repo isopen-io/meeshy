@@ -83,6 +83,10 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
+    /// Ce que fait le toucher sur le voile (#8310) : la Rivière ne rend aucun
+    /// média, donc c'est ce toucher qui ouvre le plein écran de l'image
+    /// floutée. Projeté par `RiverConversationMapping`, jamais décidé ici.
+    let protectedTap: ProtectedContentTap
 
     /// Le premier lien du texte servi et ce qu'il porte (carte de
     /// conversation, façade vidéo, aperçu) — rendu par le MÊME
@@ -117,6 +121,7 @@ struct RiverBubbleContent: Equatable {
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
         isViewOnceRevealed: Bool = false,
+        protectedTap: ProtectedContentTap = .none,
         linkEmbed: BubbleContent.Text? = nil,
         contactCards: RiverContactCards = RiverContactCards(items: []),
         identity: RiverBubbleIdentity? = nil
@@ -137,6 +142,7 @@ struct RiverBubbleContent: Equatable {
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
         self.isViewOnceRevealed = isViewOnceRevealed
+        self.protectedTap = protectedTap
         self.linkEmbed = linkEmbed
         self.contactCards = contactCards
     }
@@ -352,6 +358,8 @@ struct RiverBubbleView: View, Equatable {
     /// défaut — un texte à vue unique ne doit jamais s'afficher parce qu'un
     /// site de montage a oublié de brancher son canal.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// #8310 — le plein écran de l'hôte, le MÊME que celui du Fil.
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -577,7 +585,8 @@ struct RiverBubbleView: View, Equatable {
                     isViewOnce: content.protection.isViewOnce,
                     isDark: isDark,
                     messageId: content.bubble.messageId,
-                    onConsumeViewOnce: onConsumeViewOnce
+                    onConsumeViewOnce: onConsumeViewOnce,
+                    tap: content.protectedTap, onMediaTap: onMediaTap
                 ) {
                     riverText
                 }
