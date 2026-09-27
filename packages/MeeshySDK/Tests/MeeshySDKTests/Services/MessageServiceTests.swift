@@ -388,6 +388,19 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    // MARK: - consumeAfterRead (#8303)
+
+    func testConsumeAfterReadPostsTheIdsAndReturnsWhatWasConsumed() async throws {
+        let response = APIResponse(success: true, data: ConsumeAfterReadResponse(consumed: [msgId]), error: nil)
+        mock.stub("/conversations/\(convId)/messages/after-read/consume", result: response)
+
+        let consumed = try await service.consumeAfterRead(conversationId: convId, messageIds: [msgId, "étranger"])
+
+        XCTAssertEqual(consumed, [msgId])
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages/after-read/consume")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
     // MARK: - search
 
     func testSearchReturnsMessages() async throws {

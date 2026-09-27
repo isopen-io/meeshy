@@ -2041,7 +2041,7 @@ public actor OfflineQueue {
                         // attente ne doit pas lui faire perdre sa copie de
                         // pièces jointes.
                         copyAttachmentsFromClientMessageId: item.copyAttachmentsFromClientMessageId,
-                        createdAt: item.createdAt
+                        protectionFlags: item.protectionFlags, ephemeralDuration: item.ephemeralDuration, createdAt: item.createdAt
                     )
                     let mergedPayload: Data
                     do {

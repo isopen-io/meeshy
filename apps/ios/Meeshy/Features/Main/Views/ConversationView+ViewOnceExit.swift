@@ -60,6 +60,9 @@ extension ConversationView {
     /// elle échoue, le message reste consommable, ce qui est le bon sens de
     /// l'échec : on ne détruit pas ce qu'on n'a pas pu confirmer.
     func consumeOpenedViewOnceOnExit() {
+        // #8303 — la flamme-œil suit la MÊME porte : ce qu'on y a lu disparaît
+        // quand on quitte (retour, arrière-plan, verrouillage).
+        viewModel.consumeAfterReadOnExit()
         viewModel.closeAllRevealedViewOnce()
         let lues = viewModel.viewOnceConsumableOnExit(scrollState.pendingViewOnceConsumption.takeAll())
         guard !lues.isEmpty else { return }
