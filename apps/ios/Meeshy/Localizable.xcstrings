@@ -207386,6 +207386,100 @@
           }
         }
       }
+    },
+    "call.zoom.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تكبير كاميرتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom meiner Kamera"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My camera zoom"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom de mi cámara"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom de ma caméra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom della mia fotocamera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom da minha câmera"
+          }
+        }
+      }
+    },
+    "call.zoom.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach oben oder unten wischen, um zu zoomen. Auf dem Bildschirm dein Bild auseinanderziehen; zweimal tippen für 1×"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe up or down to zoom. On screen, pinch your image; double-tap to return to 1×"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desliza hacia arriba o abajo para hacer zoom. En pantalla, pellizca tu imagen; toca dos veces para volver a 1×"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balayez vers le haut ou le bas pour zoomer. Sur l'écran, pincez votre image ; touchez deux fois pour revenir à 1×"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslize para cima ou para baixo para dar zoom. Na tela, faça o gesto de pinça na sua imagem; toque duas vezes para voltar a 1×"
+          }
+        }
+      }
     }
   },
   "version": "1.1"
