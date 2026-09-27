@@ -23,6 +23,7 @@ import esSignup from './catalog-es-signup';
 
 import esGallery from './catalog-es-gallery';
 import esMentions from './catalog-es-mentions';
+import esEphemeral from './catalog-es-ephemeral';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
@@ -1158,6 +1159,7 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esEphemeral,
   ...esGallery,
   ...esConversationCard,
   ...esStoriesMine,

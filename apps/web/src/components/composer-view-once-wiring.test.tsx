@@ -156,7 +156,7 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
     expect(sent!.protection.viewOnce).toBe(true);
   });
 
-  test('après un envoi, la bascule redescend — le message suivant part sans elle', () => {
+  test('après un envoi, la bascule RESTE armée — le message suivant part avec elle (#8306)', () => {
     const sent: { protection: { viewOnce?: boolean } }[] = [];
     const el = mount((p) => {
       sent.push(p as { protection: { viewOnce?: boolean } });
@@ -168,13 +168,13 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
-    expect(toggleOf(el)?.getAttribute('aria-pressed')).toBe('false');
+    expect(toggleOf(el)?.getAttribute('aria-pressed')).toBe('true');
     typeText(el, 'deux');
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
     expect(sent[0]?.protection.viewOnce).toBe(true);
-    expect(sent[1]?.protection.viewOnce).toBeUndefined();
+    expect(sent[1]?.protection.viewOnce).toBe(true);
   });
 
   test('retirer la dernière image ne DÉSARME plus la bascule : elle vaut pour tout ce qui part', async () => {

@@ -7,6 +7,7 @@
  */
 
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
+import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
@@ -293,7 +294,11 @@ export function protectedPreview(input: {
   const icon = contentTypeIcon(input.messageType);
 
   if (isEphemeral) {
-    const duration = formatEphemeralDuration(input.expiresAt ?? null, input.createdAt ?? null);
+    // Flamme-œil (#8302) : aucune durée — la colonne est le plafond de
+    // rétention, et « 7j » sous une flamme mentirait sur l'écran verrouillé.
+    const duration = isAfterReadEphemeral(input.effectFlags)
+      ? undefined
+      : formatEphemeralDuration(input.expiresAt ?? null, input.createdAt ?? null);
     const preview = duration
       ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
       : `${PROTECTION_ICON.ephemeral} ${icon}`;
