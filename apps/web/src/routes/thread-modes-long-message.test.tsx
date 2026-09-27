@@ -3,7 +3,7 @@ import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { longMessageExcerpt } from '@meeshy/shared/utils/long-message';
-import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
+import { FOCAL_METRICS, focalExpandEasingCss } from '@meeshy/shared/utils/focal-metrics';
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import type { Message } from '@/lib/api/types';
@@ -37,7 +37,11 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-type Played = { readonly target: Element; readonly keyframes: readonly Keyframe[] };
+type Played = {
+  readonly target: Element;
+  readonly keyframes: readonly Keyframe[];
+  readonly options: KeyframeAnimationOptions | number | undefined;
+};
 let played: Played[] = [];
 let reduceMotion = false;
 let nativeAnimate: unknown;
@@ -48,8 +52,8 @@ beforeEach(() => {
   reduceMotion = false;
   const proto = (globalThis as unknown as { Element: { prototype: Record<string, unknown> } }).Element.prototype;
   nativeAnimate = proto.animate;
-  proto.animate = function animate(this: Element, keyframes: Keyframe[]) {
-    played.push({ target: this, keyframes });
+  proto.animate = function animate(this: Element, keyframes: Keyframe[], options?: KeyframeAnimationOptions | number) {
+    played.push({ target: this, keyframes, options });
     return { cancel: () => {}, finished: Promise.resolve(), onfinish: null } as unknown as Animation;
   };
   const win = globalThis as unknown as { matchMedia: unknown };
@@ -231,6 +235,17 @@ for (const mode of ROW_MODES) {
       reduceMotion = true;
       await press(toggleOf(host, 'm-long'));
       expect(played).toHaveLength(0);
+    });
+
+    test('déplier et replier jouent la MÊME hauteur, à la durée et à la courbe partagées avec iOS (#8232)', async () => {
+      const host = await monte(mode);
+      await press(toggleOf(host, 'm-long'));
+      await press(toggleOf(host, 'm-long'));
+      const heights = played.filter((entry) => entry.keyframes.some((frame) => frame.height !== undefined));
+      expect(heights).toHaveLength(2);
+      for (const entry of heights) {
+        expect(entry.options).toEqual({ duration: FOCAL_METRICS.expandDurationMs, easing: focalExpandEasingCss() });
+      }
     });
 
     test('le verre prend la géométrie partagée avec iOS', async () => {

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, type ComponentProps } from 'react';
 
 import { longMessageExcerpt } from '@meeshy/shared/utils/long-message';
-import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
+import { FOCAL_METRICS, focalExpandEasingCss } from '@meeshy/shared/utils/focal-metrics';
 
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -24,7 +24,8 @@ import { RichText } from './rich-text';
  * l'original quand une traduction est servie.
  *
  * LA HAUTEUR S'ANIME, ET RIEN D'AUTRE. Mesurée avant et après la bascule, elle
- * est jouée par une animation Web (`height`, au tempo `expandDurationMs`) sur
+ * est jouée par une animation Web (`height`, au tempo `expandDurationMs` et sur
+ * la courbe `expandCurve` que joue aussi iOS, #8232) sur
  * le conteneur — jamais une transition CSS sur `height: auto`, qu'aucun
  * moteur n'interpole. Réduire le mouvement ⇒ la bascule est sèche.
  *
@@ -61,7 +62,7 @@ export function LongMessageText({
     const to = element.offsetHeight;
     element.animate([{ height: `${from}px`, overflow: 'hidden' }, { height: `${to}px`, overflow: 'hidden' }], {
       duration: FOCAL_METRICS.expandDurationMs,
-      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      easing: focalExpandEasingCss(),
     });
   }, [unfolded]);
 

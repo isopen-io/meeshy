@@ -36,9 +36,21 @@ export const FOCAL_METRICS = {
   flattenDurationMs: 450,
   /** Dépliage / repliage d'un message long (animation de hauteur). */
   expandDurationMs: 300,
+  /**
+   * La courbe du dépliage et du repliage (#8232) : les deux points de
+   * contrôle d'une Bézier cubique `[x1, y1, x2, y2]` — départ vif, arrivée
+   * douce. Le web la joue en `cubic-bezier(…)` (`focalExpandEasingCss`), iOS
+   * en `CAMediaTimingFunction(controlPoints:)` : une seule courbe, deux moteurs.
+   */
+  expandCurve: [0.2, 0, 0, 1],
 } as const;
 
 export type FocalMetrics = typeof FOCAL_METRICS;
+
+/** La courbe du dépliage, en fonction de temporisation CSS. */
+export function focalExpandEasingCss(): string {
+  return `cubic-bezier(${FOCAL_METRICS.expandCurve.join(', ')})`;
+}
 
 /**
  * L'échelle de loupe d'un message élu — écrêtée pour qu'un message haut ne
