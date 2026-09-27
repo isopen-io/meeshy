@@ -37,7 +37,6 @@ struct ConversationVideoPoster: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(MediaKindLabel.attachmentLabel(for: attachment))
         .accessibilityValue(attachment.durationFormatted ?? "")
-        .accessibilityHint(ProtectedContentTap.openFullscreenHint)
     }
 
     @ViewBuilder
