@@ -10,7 +10,6 @@ import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-li
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { href, navigate } from '@/routes/route-table';
 
 /**
  * **CE QUE LE `(…)` SORT** (#8391) — les actions de la vue « C adapté », en
@@ -49,11 +48,6 @@ type ActionView = {
   readonly pressed?: boolean;
   readonly disabled?: boolean;
   readonly data: Readonly<Record<`data-${string}`, string>>;
-};
-
-const openConversation = (conversationId: string) => (): void => {
-  callActions.minimize();
-  navigate(href('thread', { conversation: conversationId }));
 };
 
 function mineAction(action: MineAction, { call, language }: ActionContext): ActionView {
@@ -95,17 +89,6 @@ function mineAction(action: MineAction, { call, language }: ActionContext): Acti
 }
 
 function callAction(action: Exclude<CallAction, 'record'>, { call, language }: ActionContext): ActionView {
-  if (action === 'messages') {
-    return {
-      key: action,
-      label: translate(language, 'call.messages.open'),
-      caption: translate(language, 'call.messages'),
-      glyph: screenGlyph('chatCircleText'),
-      onPress: openConversation(call.conversationId),
-      tone: 'bare',
-      data: { 'data-call-control': 'messages' },
-    };
-  }
   const invited = call.captionsMode === 'off' && call.captionPeers.length > 0;
   return {
     key: action,

@@ -139,6 +139,20 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
   test('Réduire est un bouton de verre isolé', () => {
     expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire l’appel"[^>]*class="glass-call/);
   });
+
+  test('UN seul chemin vers la conversation : « Conversation » dans l’en-tête, juste à droite de Réduire (#8436)', () => {
+    const html = screen({ members: { 'u-peer': member() } });
+    const header = html.slice(html.indexOf('data-call-header'));
+    const order = ['aria-label="Réduire l’appel"', 'data-call-conversation'].map((marker) => header.indexOf(marker));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect(order[0]).toBeLessThan(order[1] as number);
+    expect(header).toMatch(/aria-label="Ouvrir la conversation"[^>]*class="glass-call/);
+    expect(html).not.toContain('data-call-control="messages"');
+  });
+
+  test('sans conversation connue, aucun bouton « Conversation »', () => {
+    expect(screen({ conversationId: '', members: { 'u-peer': member() } })).not.toContain('data-call-conversation');
+  });
 });
 
 describe('CallScreen — partage d’écran (#8063)', () => {
@@ -209,7 +223,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail="mine"] [data-call-screen-share]')).not.toBeNull();
     expect(view.find('[data-call-rail="call"] [data-call-captions]')).not.toBeNull();
     expect(view.find('[data-call-rail="call"] [data-call-record]')).not.toBeNull();
-    expect(view.find('[data-call-rail="call"] [data-call-control="messages"]')).not.toBeNull();
     expect(view.find('[data-call-rail="mine"]')?.className).toContain('glass-call');
     expect(view.find('[data-call-rail="mine"] button')?.className).not.toContain('glass-call');
     expect(view.find('[data-call-rail="mine"] button')?.getAttribute('title')).toBe('Activer la caméra');

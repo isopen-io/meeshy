@@ -23,8 +23,8 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
 });
 
 describe('ce que (…) sort', () => {
-  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer, Messages', () => {
-    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record', 'messages'] });
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer — la conversation vit dans l’en-tête (#8436)', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record'] });
   });
 
   test('Retourner n’existe que caméra allumée, juste après Caméra', () => {
@@ -36,18 +36,15 @@ describe('ce que (…) sort', () => {
     expect(callControlSet(context({ canShare: false, screenSharing: true })).mine).toEqual(['camera', 'screen']);
   });
 
-  test('pendant la sonnerie : ni Écran, ni Sous-titres, ni Enregistrer — Caméra et Messages restent', () => {
-    expect(callControlSet(context({ phase: { kind: 'outgoing' } }))).toEqual({ mine: ['camera'], call: ['messages'] });
+  test('pendant la sonnerie : ni Écran, ni Sous-titres, ni Enregistrer — Caméra reste', () => {
+    expect(callControlSet(context({ phase: { kind: 'outgoing' } }))).toEqual({ mine: ['camera'], call: [] });
   });
 
   test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
-    expect(callControlSet(context({ callId: null })).call).toEqual(['captions', 'messages']);
-    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'messages']);
+    expect(callControlSet(context({ callId: null })).call).toEqual(['captions']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions']);
   });
 
-  test('Messages seulement quand on connaît la conversation', () => {
-    expect(callControlSet(context({ conversationId: '' })).call).toEqual(['captions', 'record']);
-  });
 });
 
 describe('où les actions sortent', () => {

@@ -14,7 +14,8 @@ import { callLayout, type CallLayout } from './call-view';
  *   vidéo), Retourner (seulement caméra allumée), Écran (là où le navigateur
  *   sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
- *   (appel connecté et identifié), Messages (la conversation de l'appel).
+ *   (appel connecté et identifié). La conversation de l'appel n'est PAS une
+ *   action : un seul chemin y mène, « Conversation » dans l'en-tête (#8436).
  *
  * En duo, les deux familles sortent en RAILS vers les bords ; en groupe, la
  * pilule grandit et les monte en RANGÉES légendées.
@@ -22,13 +23,13 @@ import { callLayout, type CallLayout } from './call-view';
 
 export type MineAction = 'camera' | 'flip' | 'screen';
 
-export type CallAction = 'captions' | 'record' | 'messages';
+export type CallAction = 'captions' | 'record';
 
 export type CallControlSet = { readonly mine: readonly MineAction[]; readonly call: readonly CallAction[] };
 
 export type ControlsArrangement = 'rails' | 'rows';
 
-type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'screenSharing' | 'conversationId'> & {
+type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'screenSharing'> & {
   /** Le navigateur sait émettre un écran (`getDisplayMedia`). */
   readonly canShare: boolean;
 };
@@ -42,7 +43,6 @@ export function callControlSet(context: ControlsContext): CallControlSet {
   const call: readonly CallAction[] = [
     ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
-    ...(context.conversationId !== '' ? (['messages'] as const) : []),
   ];
   return { mine, call };
 }
