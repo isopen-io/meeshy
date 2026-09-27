@@ -90,6 +90,12 @@ export type ApiFailure = {
    * Les confondre ferait proposer un pseudo libre ailleurs, et repris ici.
    */
   readonly suggestedNickname?: string;
+  /**
+   * LE DÉTENTEUR MASQUÉ d'une adresse déjà prise (#8214), posé à la racine
+   * d'un `409 EMAIL_TAKEN`. BRUT ici — le transport ne connaît aucun schéma
+   * métier ; `decodeEmailOwner` (`email-owner.ts`) le valide là où il sert.
+   */
+  readonly emailOwner?: unknown;
 };
 
 export type ApiSuccess<T> = {
@@ -383,6 +389,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       ...(typeof envelope.suggestedNickname === 'string' && envelope.suggestedNickname.trim() !== ''
         ? { suggestedNickname: envelope.suggestedNickname }
         : {}),
+      ...(envelope.emailOwner !== undefined && envelope.emailOwner !== null ? { emailOwner: envelope.emailOwner } : {}),
     };
   }
 

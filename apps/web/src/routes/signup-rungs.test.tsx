@@ -181,7 +181,8 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
     expect(el.querySelector('span[lang]')).not.toBeNull();
     expect(has(el, 'a[href="/terms"]')).toBe(true);
     expect(has(el, 'a[href="/privacy"]')).toBe(true);
-    expect(el.querySelectorAll('a[href="/login"]').length).toBe(2);
+    // Les deux sorties vers la connexion emportent l'adresse tapée (#8216).
+    expect(el.querySelectorAll('a[href="/login?email=ada%40meeshy.example"]').length).toBe(2);
   });
 });
 

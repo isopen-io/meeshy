@@ -1,6 +1,7 @@
 import { usernameMaxLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 import type { UsernameRefusal } from '@meeshy/shared/utils/username-rule';
 
+import { decodeEmailOwner, type EmailOwner } from '../api/email-owner';
 import type { ApiFailure, ApiResult } from '../api/http';
 import { verificationOpensSession, type VerifyEmailData } from '../api/verify-email';
 
@@ -22,8 +23,9 @@ export type SignupField = 'username' | 'displayName' | 'email' | 'phoneNumber' |
 export type SignupFeedback = {
   readonly fieldErrors: Partial<Record<SignupField, string>>;
   readonly bannerError: string | null;
-  /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors
-   * « Se connecter » sous le champ (miroir `emailAlreadyRegistered`). */
+  /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors,
+   * sous le champ, « Recevoir un lien de connexion » à cette adresse et
+   * « Mot de passe oublié ? » (#8216, miroir `emailAlreadyRegistered`). */
   readonly showSignIn: boolean;
   /**
    * Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris (#6479).
@@ -34,6 +36,10 @@ export type SignupFeedback = {
    * un mur.
    */
   readonly usernameSuggestions: readonly string[];
+  /** Le détenteur MASQUÉ de l'adresse d'un `EMAIL_TAKEN` (#8214) — l'écran
+   * demande alors « Est-ce vous ? ». `null` partout ailleurs, et sur une
+   * passerelle qui ne le sert pas encore. */
+  readonly emailOwner: EmailOwner | null;
 };
 
 /** Le conflit de numéro (`register.ts:301-331`) — AUCUN champ HTTP ne le
@@ -167,13 +173,15 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
       bannerError: null,
       showSignIn: false,
       usernameSuggestions: [],
+      emailOwner: null,
     };
   }
 
   const showSignIn = failure.code === EMAIL_TAKEN_CODE;
+  const emailOwner = showSignIn ? decodeEmailOwner(failure.emailOwner) : null;
 
   if (failure.status === 0) {
-    return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn, usernameSuggestions: [] };
+    return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn, usernameSuggestions: [], emailOwner };
   }
 
   // Avant le calcul de `field` : un 429 ne vise aucune saisie à corriger, et
@@ -186,6 +194,7 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
       bannerError: signupRateLimitedMessage(failure.retryAfter),
       showSignIn: false,
       usernameSuggestions: [],
+      emailOwner: null,
     };
   }
 
@@ -197,12 +206,13 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
       bannerError: null,
       showSignIn,
       usernameSuggestions: failure.suggestions ?? [],
+      emailOwner,
     };
   }
 
   // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce repli, un
   // code inconnu effacerait le formulaire de toute trace de l'échec.
-  return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn, usernameSuggestions: [] };
+  return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn, usernameSuggestions: [], emailOwner };
 }
 
 /**

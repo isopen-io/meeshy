@@ -81,3 +81,28 @@ final class MockPendingReferralStore: PendingReferralStoreProviding {
         code = nil
     }
 }
+
+/// Test double pour `SignInLinkRequesting` (#8216) — la demande du lien de
+/// connexion d'une adresse déjà utilisée, sans parler à la passerelle.
+@MainActor
+final class MockSignInLinkRequester: SignInLinkRequesting {
+    nonisolated deinit {}
+
+    var requestResult: Result<EmailCodeDispatch, Error> = .success(
+        EmailCodeDispatch(expiresInSeconds: 600, pendingSessionToken: "attente-8216")
+    )
+    private(set) var requestCallCount = 0
+    private(set) var lastRequestedEmail: String?
+
+    func requestEmailCode(email: String) async throws -> EmailCodeDispatch {
+        requestCallCount += 1
+        lastRequestedEmail = email
+        return try requestResult.get()
+    }
+
+    func reset() {
+        requestResult = .success(EmailCodeDispatch(expiresInSeconds: 600, pendingSessionToken: "attente-8216"))
+        requestCallCount = 0
+        lastRequestedEmail = nil
+    }
+}

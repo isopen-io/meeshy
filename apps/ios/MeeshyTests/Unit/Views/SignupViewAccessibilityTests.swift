@@ -105,22 +105,24 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
-    /// `SignupView` en porte neuf — fermer, « Se connecter » sous l'e-mail,
+    /// `SignupView` en porte ONZE — fermer, sous une adresse déjà utilisée
+    /// « Recevoir un lien de connexion », « Mot de passe oublié ? » et « Ce
+    /// n'est pas moi » (#8216, à la place de l'ancien « Se connecter »),
     /// ouvrir le sélecteur de pays, ouvrir la feuille de langue, le pied
     /// « Déjà un compte ? », **ouvrir le bloc d'identité** et **retenir un
     /// pseudo de rechange** (#6479), puis le succès et l'échec de l'envoi. Les
     /// deux derniers sont d'INTENSITÉS distinctes : un compte créé et un refus
     /// ne se sentent pas pareil, et c'est la seule information tactile de l'écran.
     ///
-    /// La dixième — **déplier un (i)** (#6441) — vit dans `AuthInfoHint` depuis
+    /// La douzième — **déplier un (i)** (#6441) — vit dans `AuthInfoHint` depuis
     /// que la connexion par e-mail monte le même (i) (#6626). Elle se compte
     /// là-bas : un (i) qui la perdrait la perdrait sur les DEUX écrans. Il en a
     /// une parce que ses deux voisins d'usage en ont une : ouvrir le sélecteur
     /// de pays et ouvrir la feuille de langue. Un contrôle qui RÉVÈLE quelque
     /// chose se sent, sur cet écran, depuis #5555.
-    func test_signupView_keepsItsNineHaptics_andTheInfoHintCarriesTheTenth() throws {
+    func test_signupView_keepsItsElevenHaptics_andTheInfoHintCarriesTheTwelfth() throws {
         let body = try code(Self.signupView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 9)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 11)
         XCTAssertEqual(occurrences(of: "HapticFeedback.", in: try code(Self.infoHint)), 1,
                        "déplier un (i) se sent — et UNE fois, dans le composant partagé")
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
