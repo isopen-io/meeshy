@@ -198,12 +198,9 @@ async function resolveRecipients(prisma: PrismaClient, user: Returner, hidesFrom
     }),
     optedOutOfContactActivity(prisma, reachable),
   ]);
-  const byId = new Map(accounts.map((account) => [account.id, account]));
-
-  return reachable.flatMap((id) => {
-    const account = byId.get(id);
-    if (!account || !account.isActive || account.deletedAt || optedOut.has(id)) return [];
-    return [{ id, lang: recipientLanguage(account, 'fr'), nameInBook: nameInBook.get(id) ?? null }];
+  return accounts.flatMap((account) => {
+    if (!account.isActive || account.deletedAt || optedOut.has(account.id)) return [];
+    return [{ id: account.id, lang: recipientLanguage(account, 'fr'), nameInBook: nameInBook.get(account.id) ?? null }];
   });
 }
 
