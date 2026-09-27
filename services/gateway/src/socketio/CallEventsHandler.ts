@@ -35,13 +35,14 @@ import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socket
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { handleMediaToggle as handleMediaToggleBody, mapMediaToggleError, registerMediaToggleListeners } from './call-media-toggle';
 import { announceRecordingArrival, registerCallRecordingEvents } from './call-recording-events';
+import { registerCallControlEvents } from './call-controls';
 import { CallRecordingService } from '../services/calls/callRecording';
 import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
 import { buildCallInitiatedEvent, pushIncomingCall, ringCalleeSockets } from './call-ring';
 import {
   type CallParticipantResolverDeps,
   resolveParticipantId,
-  resolveParticipantIdFromCall,
+  resolveJoinParticipantId,
   resolveActiveCallParticipant,
   resolveActiveCallParticipantDetailed,
   resolveActiveCallParticipantId,
@@ -1410,10 +1411,6 @@ export class CallEventsHandler {
     return resolveParticipantId(this.participantResolverDependencies(), userId, conversationId);
   }
 
-  private resolveParticipantIdFromCall(userId: string, callId: string): Promise<string | null> {
-    return resolveParticipantIdFromCall(this.participantResolverDependencies(), userId, callId);
-  }
-
   private resolveActiveCallParticipant(
     userId: string,
     callId: string
@@ -2161,7 +2158,7 @@ export class CallEventsHandler {
         });
 
         // Resolve participantId from userId + callId
-        const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const joinParticipantId = await resolveJoinParticipantId(this.participantResolverDependencies(), userId, data.callId);
         if (!joinParticipantId) {
           ack?.({ success: false, error: { code: CALL_ERROR_CODES.NOT_A_PARTICIPANT, message: 'You are not a participant in this conversation' } });
           socket.emit(CALL_EVENTS.ERROR, {
@@ -2464,7 +2461,7 @@ export class CallEventsHandler {
         }
 
         // Resolve participantId from userId + callId
-        const leaveParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const leaveParticipantId = participant.participantId;
 
         // Leave call via service
         const callSession = await this.callService.leaveCall({
@@ -2716,7 +2713,7 @@ export class CallEventsHandler {
 
             try {
               // Resolve participantId for cleanup
-              const cleanupParticipantId = await this.resolveParticipantIdFromCall(userId, call.id);
+              const cleanupParticipantId = participant.participantId;
 
               // Leave the call
               const callSession = await this.callService.leaveCall({
@@ -3959,6 +3956,7 @@ export class CallEventsHandler {
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
     registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter }, socket, getUserId);
+    registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService }, socket, getUserId);
 
     /**
      * Handle disconnect - auto-leave any active calls

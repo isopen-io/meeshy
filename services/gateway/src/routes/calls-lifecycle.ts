@@ -7,6 +7,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import { resolveInvitedGuestParticipantId } from '../services/calls/callInvitation';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
@@ -492,7 +493,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
             where: { userId, conversationId: call.conversationId, isActive: true },
             select: { id: true },
           });
-          joinParticipantId = p?.id;
+          joinParticipantId = p?.id ?? (await resolveInvitedGuestParticipantId(prisma, { callId, userId })) ?? undefined;
         }
       }
       const callSession = await callService.joinCall({
