@@ -11,7 +11,7 @@ import { requireHierarchy } from '../../middleware/authorize';
 import { requireUserModifyAccess } from '../../middleware/admin-user-auth.middleware';
 import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
-import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError, sendError } from '../../utils/response';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 import { logError } from '../../utils/logger.js';
@@ -362,6 +362,17 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       const { moi, motif, cible } = admis;
       const userId = (request.params as { userId: string }).userId;
       const valide = securitySchema.parse(corps);
+
+      // ARMER un second facteur jamais appairé enfermerait le membre dehors
+      // (#8289) : la connexion exige alors un code TOTP que `TwoFactorService`
+      // ne peut vérifier sans secret. Refusé AVANT toute écriture du lot.
+      // `getUserById` lit la LIGNE entière (sans `select`) : le secret y est,
+      // même si `FullUser` — la forme servie — ne le déclare pas, à dessein.
+      const secret = (cible as unknown as { twoFactorSecret?: string | null }).twoFactorSecret;
+      if (valide.twoFactorEnabled === true && !cible!.twoFactorEnabledAt && !secret) {
+        sendError(reply, 409, 'The member has not paired an authenticator app', { code: 'TWO_FACTOR_NOT_ENROLLED' });
+        return;
+      }
 
       let servi = cible!;
 
