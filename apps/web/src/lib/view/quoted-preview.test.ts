@@ -400,7 +400,7 @@ describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
  * l'autre, au niveau du message comme de la pièce.
  */
 describe('quotedPreviewOf — le fichier et la pièce ouvrable d’une citation (#8233)', () => {
-  const sansVignette = attachment({ ...VIDEO, thumbnailUrl: undefined } as Partial<Attachment>);
+  const sansVignette = attachment({ ...VIDEO, thumbnailUrl: '' });
 
   test('une vidéo SANS vignette serveur livre son fichier, pour en tirer la première image', () => {
     const media = preview(quoted({ attachments: [sansVignette] })).media;

@@ -113,12 +113,21 @@ const renderFocal = (message: Message, languages: readonly string[] = ['fr']) =>
   );
 
 /** La citation SEULE, découpée du reste de la rangée — sans quoi une assertion
- *  « le libellé est là » se satisferait du corps du message qui la porte. */
+ *  « le libellé est là » se satisferait du corps du message qui la porte. La
+ *  carte ENTIÈRE (`data-quote-card`) depuis #8233 : ses zones média sont des
+ *  boutons voisins du bouton « aller au message », pas ses enfants. */
 const quoteOf = (html: string): string => {
-  const start = html.indexOf('aria-label="Aller au message de Amina Diallo');
-  expect(start).toBeGreaterThan(-1);
-  const open = html.lastIndexOf('<button', start);
-  return html.slice(open, html.indexOf('</button>', start));
+  expect(html.indexOf('aria-label="Aller au message de Amina Diallo')).toBeGreaterThan(-1);
+  const open = html.indexOf('<div data-quote-card');
+  expect(open).toBeGreaterThan(-1);
+  const tags = /<(\/?)div\b/g;
+  tags.lastIndex = open;
+  let depth = 0;
+  for (let match = tags.exec(html); match !== null; match = tags.exec(html)) {
+    depth += match[1] === '/' ? -1 : 1;
+    if (depth === 0) return html.slice(open, match.index);
+  }
+  return html.slice(open);
 };
 
 const SKINS = [

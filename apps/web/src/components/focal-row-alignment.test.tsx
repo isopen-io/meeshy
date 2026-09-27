@@ -170,7 +170,7 @@ describe('FocalRow — avatar seul dans sa marge, contenu et citations sur la co
         }
         for (const frame of host.querySelectorAll('[data-row-quote]')) {
           expect(frame.querySelectorAll(CITATION_SELECTOR).length).toBe(1);
-          expect(frame.querySelector('time, img[data-attachment-id], audio, video')).toBeNull();
+          expect(frame.querySelector('time, img[data-attachment-id], audio:not([data-quote-audio]), video:not([data-quote-still])')).toBeNull();
         }
       }
       expect(citations).toBeGreaterThanOrEqual(9);

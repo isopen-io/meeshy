@@ -16,6 +16,8 @@ const ptMediaViewer = {
   'media.viewer.react_failed': 'Não foi possível reagir',
   'media.viewer.react_limit': 'Número máximo de reações atingido',
   'media.viewer.compose_failed': 'Não foi possível abrir esta mídia no estúdio',
+  'media.viewer.open_fullscreen': 'Abrir em tela cheia',
+  'media.audio.play': 'Reproduzir áudio',
 };
 
 export default ptMediaViewer;
