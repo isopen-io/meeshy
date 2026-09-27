@@ -4718,7 +4718,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                let message = event.message
+                let message = CallRefusalMessage.localized(forCode: event.code) ?? event.message
                     ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
                 Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
                 // Call-scoping guard: RATE_LIMIT_EXCEEDED/TARGET_NOT_FOUND/etc. below
