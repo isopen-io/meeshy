@@ -31,7 +31,7 @@ describe('PrivacyPreferenceSchema', () => {
       showForwardSource: false,
       allowContactRequests: true,
       allowGroupInvites: false,
-      allowCallsFromNonContacts: false,
+      acceptCallsFromNonContacts: false,
       saveMediaToGallery: false,
       allowAnalytics: true,
       shareUsageData: false,
@@ -50,6 +50,15 @@ describe('PrivacyPreferenceSchema', () => {
   test('devrait appliquer les valeurs par défaut', () => {
     const result = PrivacyPreferenceSchema.parse({});
     expect(result).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
+  });
+
+  test('« Appels hors contacts » est ouvert à tous par défaut (#8073)', () => {
+    expect(PrivacyPreferenceSchema.parse({}).acceptCallsFromNonContacts).toBe(true);
+  });
+
+  test("l'ancienne clé allowCallsFromNonContacts est encore acceptée mais ne ferme plus rien (#8073)", () => {
+    const result = PrivacyPreferenceSchema.strict().parse({ allowCallsFromNonContacts: false });
+    expect(result.acceptCallsFromNonContacts).toBe(true);
   });
 
   test('devrait rejeter des types invalides', () => {

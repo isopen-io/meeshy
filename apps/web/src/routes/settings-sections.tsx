@@ -346,6 +346,13 @@ const PRIVACY_TOGGLES = [
     icon: { set: 'ecran', name: 'shieldCheck' },
     tint: 'var(--ios-indigo-500)',
   },
+  {
+    key: 'acceptCallsFromNonContacts',
+    label: 'settings.privacy.calls_non_contacts',
+    caption: 'settings.privacy.calls_non_contacts.info',
+    icon: { set: 'socle', name: 'phone' },
+    tint: 'var(--color-error)',
+  },
 ] as const satisfies readonly ToggleSpec[];
 
 const NOTIFICATION_TOGGLES = [
