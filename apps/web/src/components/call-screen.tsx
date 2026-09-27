@@ -9,7 +9,7 @@ import { CallStage } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { callControlSet, controlsArrangement, isVideoScene } from '@/lib/calls/call-controls';
+import { callControlSet, controlsArrangement, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
@@ -47,7 +47,6 @@ import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from
 const INK = '#ffffff';
 const INK_2 = 'rgba(255,255,255,0.72)';
 const BACKDROP = 'linear-gradient(180deg, #16131f 0%, #07060b 100%)';
-const PILL = 'rgba(255,255,255,0.14)';
 const HANGUP = '#ef4444';
 const ANSWER = '#22c55e';
 
@@ -61,7 +60,11 @@ function useSecondTick(active: boolean): number {
   return now;
 }
 
-/** Le bouton rond de l'appel entrant et de l'écran de fin — ceux-là ne changent pas. */
+/**
+ * Le bouton rond de l'appel entrant et de l'écran de fin. Neutre, il porte le
+ * verre d'appel comme tout bouton qui flotte seul (#8432) ; Refuser est rouge,
+ * Accepter vert.
+ */
 function RoundButton({
   label,
   glyph,
@@ -81,7 +84,7 @@ function RoundButton({
   readonly popup?: boolean;
   readonly control?: string;
 }) {
-  const background = tone === 'danger' ? HANGUP : tone === 'accept' ? ANSWER : PILL;
+  const glass = tone === 'plain';
   return (
     <div className="flex flex-col items-center gap-1.5">
       <button
@@ -90,8 +93,8 @@ function RoundButton({
         {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
         {...(control === undefined ? {} : { 'data-call-control': control })}
         onClick={onPress}
-        className="grid place-items-center rounded-full transition-transform active:scale-95"
-        style={{ width: size, height: size, background, color: INK }}
+        className={`${glass ? 'glass-call ' : ''}grid place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none`}
+        style={glass ? { width: size, height: size } : { width: size, height: size, background: tone === 'danger' ? HANGUP : ANSWER, color: INK }}
       >
         {glyph}
       </button>
@@ -118,6 +121,20 @@ type EffectsSupport = { readonly color: boolean; readonly blur: boolean };
 function useEffectsSupport(stream: MediaStream | null, forced: EffectsSupport | undefined): EffectsSupport {
   const sent = stream?.getVideoTracks()[0] ?? null;
   return useMemo(() => forced ?? { color: browserColorSupport(), blur: blurCapable(sent === null ? null : cameraSourceOf(sent)) }, [forced, sent]);
+}
+
+/** Une autre caméra où se retourner — relu quand la caméra s'allume et quand un appareil arrive ou part. */
+function useCanFlip(cameraOn: boolean): boolean {
+  const [canFlip, setCanFlip] = useState(true);
+  useEffect(() => {
+    const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+    if (media?.enumerateDevices === undefined) return undefined;
+    const read = () => void media.enumerateDevices().then((devices) => setCanFlip(flipOffered(devices)), () => undefined);
+    read();
+    media.addEventListener?.('devicechange', read);
+    return () => media.removeEventListener?.('devicechange', read);
+  }, [cameraOn]);
+  return canFlip;
 }
 
 const CallDeclineSheet = lazy(() =>
@@ -203,7 +220,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   });
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const support = useEffectsSupport(call.localStream, effectsSupport);
-  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support) });
+  const canFlip = useCanFlip(call.cameraOn);
+  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip });
   const effectsShown = effectsOpen && set.mine.includes('effects');
   const effects = { open: effectsShown, onToggle: () => setEffectsOpen((open) => !open) };
   const closeEffects = () => {

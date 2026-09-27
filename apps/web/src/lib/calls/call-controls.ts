@@ -11,7 +11,8 @@ import { callLayout, type CallLayout } from './call-view';
  * chaque famille est celui de la planche :
  *
  * - **mon image** — ce que JE montre : Caméra (qui fait aussi passer d'audio à
- *   vidéo), Retourner (seulement caméra allumée), Effets (caméra allumée, hors
+ *   vidéo), Retourner (caméra allumée, et une AUTRE caméra où se retourner —
+ *   sur un ordinateur à une webcam, le bouton n'aurait aucun effet, #8432), Effets (caméra allumée, hors
  *   partage d'écran, là où le navigateur sait les faire — #8442), Écran (là où
  *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
@@ -35,6 +36,8 @@ type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'scree
   readonly canShare: boolean;
   /** Le navigateur sait traiter ma vidéo, ou la caméra offre son flou (#8442). */
   readonly canEffect: boolean;
+  /** L'appareil a une autre caméra où se retourner. */
+  readonly canFlip: boolean;
 };
 
 const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'connected' || phase === 'reconnecting';
@@ -44,7 +47,7 @@ export function callControlSet(context: ControlsContext): CallControlSet {
   const inCall = joined(context.phase.kind);
   const mine: readonly MineAction[] = [
     'camera',
-    ...(context.cameraOn ? (['flip'] as const) : []),
+    ...(context.cameraOn && context.canFlip ? (['flip'] as const) : []),
     ...(context.cameraOn && context.canEffect && !context.screenSharing ? (['effects'] as const) : []),
     ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
   ];
@@ -54,6 +57,12 @@ export function callControlSet(context: ControlsContext): CallControlSet {
   ];
   return { mine, call };
 }
+
+/**
+ * Une autre caméra où se retourner ? Une liste vide (énumération pas encore
+ * rendue) ne retire rien : seule UNE caméra connue le fait.
+ */
+export const flipOffered = (devices: readonly Pick<MediaDeviceInfo, 'kind'>[]): boolean => devices.filter((device) => device.kind === 'videoinput').length !== 1;
 
 /** Rails vers les bords en duo, rangées dans la pilule en groupe. */
 export function controlsArrangement(call: Pick<ActiveCall, 'isGroup'>): ControlsArrangement {

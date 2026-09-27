@@ -323,6 +323,64 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
   });
 });
 
+describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const GLASS = '.glass-call, .glass-call-prominent';
+
+  const nestedGlass = async (overrides: Partial<ActiveCall>, openEffects: boolean) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: true, blur: true }} />));
+    act(() => (host.querySelector('[data-call-more]') as HTMLElement | null)?.click());
+    if (openEffects) {
+      act(() => (host.querySelector('[data-call-control="effects"]') as HTMLElement | null)?.click());
+      await act(async () => {
+        await import('./call-effects-panel');
+      });
+      await act(async () => {});
+    }
+    const glasses = [...host.querySelectorAll(GLASS)];
+    const nested = glasses.filter((glass) => glass.parentElement?.closest(GLASS) != null).map((glass) => glass.outerHTML.slice(0, 80));
+    const panel = host.querySelector('[data-call-effects-panel]');
+    act(() => root.unmount());
+    host.remove();
+    return { nested, glasses: glasses.length, panel };
+  };
+
+  test('en duo, actions sorties et panneau des effets ouvert : chaque groupe a UN verre', async () => {
+    const view = await nestedGlass({ cameraOn: true, members: { 'u-peer': member() } }, true);
+    expect(view.panel).not.toBeNull();
+    expect(view.glasses).toBeGreaterThan(3);
+    expect(view.nested).toEqual([]);
+  });
+
+  test('en groupe, la pilule qui a grandi porte ses rangées sans verre à elles', async () => {
+    const view = await nestedGlass({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
+    expect(view.nested).toEqual([]);
+  });
+
+  test('la sonnerie et l’écran de fin : les boutons neutres sont de verre, Refuser et Fin rouges, Accepter vert', () => {
+    const incoming = screen({ phase: { kind: 'incoming' }, media: 'video', direction: 'incoming' });
+    expect(incoming).toMatch(/aria-label="Répondre sans vidéo"[^>]*class="glass-call/);
+    expect(incoming).toMatch(/aria-label="Refuser avec un message"[^>]*class="glass-call/);
+    expect(incoming).not.toMatch(/aria-label="Refuser"[^>]*class="glass-call/);
+    expect(screen({ phase: { kind: 'ended', reason: 'missed', detail: null } })).toMatch(/aria-label="Fermer"[^>]*class="glass-call/);
+  });
+});
+
 describe('ThreadCallButton', () => {
   test('en fixtures, le bouton ouvre un menu vocal/vidéo', () => {
     const html = renderToStaticMarkup(<ThreadCallButton conversationId="c-1" title="Amina" avatar={null} group={false} />);

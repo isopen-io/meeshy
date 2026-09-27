@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callControlSet, chromeHidden, CHROME_IDLE_MS, controlsArrangement, isVideoScene } from './call-controls';
+import { callControlSet, chromeHidden, CHROME_IDLE_MS, controlsArrangement, flipOffered, isVideoScene } from './call-controls';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -19,6 +19,7 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   screenSharing: false,
   canShare: true,
   canEffect: true,
+  canFlip: true,
   ...overrides,
 });
 
@@ -29,6 +30,10 @@ describe('ce que (…) sort', () => {
 
   test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
     expect(callControlSet(context({ cameraOn: true })).mine).toEqual(['camera', 'flip', 'effects', 'screen']);
+  });
+
+  test('Retourner n’existe que là où il y a une AUTRE caméra — sinon le bouton n’aurait aucun effet (#8432)', () => {
+    expect(callControlSet(context({ cameraOn: true, canFlip: false })).mine).toEqual(['camera', 'effects', 'screen']);
   });
 
   test('Effets n’existe que caméra allumée, là où le navigateur sait les faire, et jamais sur un écran partagé (#8442)', () => {
@@ -51,6 +56,19 @@ describe('ce que (…) sort', () => {
     expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions']);
   });
 
+});
+
+describe('une autre caméra où se retourner (#8432)', () => {
+  const input = (kind: MediaDeviceKind) => ({ kind }) as MediaDeviceInfo;
+
+  test('une seule caméra : Retourner n’aurait aucun effet', () => {
+    expect(flipOffered([input('videoinput'), input('audioinput')])).toBe(false);
+  });
+
+  test('deux caméras, ou une liste encore vide : Retourner est offert', () => {
+    expect(flipOffered([input('videoinput'), input('videoinput')])).toBe(true);
+    expect(flipOffered([])).toBe(true);
+  });
 });
 
 describe('où les actions sortent', () => {
