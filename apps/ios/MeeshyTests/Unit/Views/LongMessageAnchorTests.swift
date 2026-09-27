@@ -52,6 +52,51 @@ final class LongMessageAnchorTests: XCTestCase {
         XCTAssertEqual(after, before, accuracy: 1, "« Réduire » replie vers le haut : le bas du message reste sous le doigt")
     }
 
+    /// #8232 — la hauteur s'ANIME comme sur le web : le déplié se déroule sous
+    /// un masque, au tempo et sur la courbe partagés ; au repli, ses voisins
+    /// glissent au même tempo au lieu de sauter.
+    func test_expandingThenCollapsing_playsTheHeightAtTheWebTempoAndCurve() async throws {
+        guard !UIAccessibility.isReduceMotionEnabled else { throw XCTSkip("Réduire le mouvement est actif sur ce simulateur") }
+        let (vc, cv, window) = try await makeScrolledThread()
+        defer { window.isHidden = true }
+        let collapsedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
+
+        vc.toggleLongMessageExpansion(Self.longId)
+        XCTAssertGreaterThan(try frame(of: Self.longId, in: vc, cv: cv).height, collapsedHeight + 100, "la hauteur se pose dans la passe du geste")
+        let cell = try XCTUnwrap(cv.cellForItem(at: XCTUnwrap(vc.dataSource.indexPath(for: .message(localId: Self.longId)))))
+        let reveal = try XCTUnwrap(
+            cell.layer.mask?.animation(forKey: MessageListViewController.heightRevealKey),
+            "le déplié se déroule sous un masque, il ne passe pas d'un coup à sa hauteur"
+        )
+        assertSharedTempo(reveal)
+
+        try await settle(vc, cv) { cell.layer.mask == nil }
+        let expandedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
+        vc.toggleLongMessageExpansion(Self.longId)
+        XCTAssertLessThan(try frame(of: Self.longId, in: vc, cv: cv).height, expandedHeight - 100)
+        let slides = cv.visibleCells.flatMap { neighbour in
+            (neighbour.layer.animationKeys() ?? [])
+                .filter { $0.hasPrefix(MessageListViewController.heightSlideKeyPrefix) }
+                .compactMap { neighbour.layer.animation(forKey: $0) }
+        }
+        let slide = try XCTUnwrap(slides.first, "au repli, les voisins glissent au lieu de sauter")
+        assertSharedTempo(slide)
+    }
+
+    private func assertSharedTempo(_ animation: CAAnimation, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(animation.duration, FocalMetrics.Focus.expandDuration, accuracy: 1e-9, file: file, line: line)
+        let function = animation.timingFunction ?? CAMediaTimingFunction(name: .linear)
+        let points = [1, 2].flatMap { index -> [Double] in
+            var values: [Float] = [0, 0]
+            function.getControlPoint(at: index, values: &values)
+            return values.map { Double($0) }
+        }
+        XCTAssertEqual(points.count, FocalMetrics.Focus.expandCurve.count, file: file, line: line)
+        for (measured, shared) in zip(points, FocalMetrics.Focus.expandCurve) {
+            XCTAssertEqual(measured, shared, accuracy: 1e-6, "la courbe est celle du web", file: file, line: line)
+        }
+    }
+
     // MARK: - Harnais
 
     /// Soixante messages, le trentième long : le fil est posé loin du bas

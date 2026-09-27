@@ -231,6 +231,11 @@ nonisolated public enum FocalMetrics {
         /// Durée du dépliage / repliage en place (animation de hauteur) —
         /// `expandDurationMs` de `packages/shared/utils/focal-metrics.ts`.
         public static let expandDuration: TimeInterval = 0.3
+
+        /// Courbe du dépliage / repliage (#8232) — les points de contrôle
+        /// `[x1, y1, x2, y2]` de `expandCurve` (`focal-metrics.ts`), que le
+        /// web joue en `cubic-bezier(…)` : départ vif, arrivée douce.
+        public static let expandCurve: [Double] = [0.2, 0, 0, 1]
     }
 
     // MARK: - Citation

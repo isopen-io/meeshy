@@ -69,6 +69,76 @@ nonisolated enum LongMessageExpansionLaw {
         )
     }
 
+    // MARK: - La hauteur s'anime (#8232)
+
+    /// Le tempo du dépliage ET du repliage : la durée et la courbe que joue
+    /// le web (`FOCAL_METRICS.expandDurationMs` / `expandCurve`). Réduire le
+    /// mouvement ⇒ aucun tempo : la hauteur se pose d'un coup.
+    struct HeightTiming: Equatable {
+        let duration: TimeInterval
+        /// Points de contrôle de la Bézier cubique `[x1, y1, x2, y2]`.
+        let controlPoints: [Double]
+    }
+
+    static func heightTiming(reduceMotion: Bool) -> HeightTiming? {
+        guard !reduceMotion else { return nil }
+        return HeightTiming(duration: FocalMetrics.Focus.expandDuration, controlPoints: FocalMetrics.Focus.expandCurve)
+    }
+
+    /// Un intervalle sur l'axe du fil — ordonnée à l'écran et hauteur, dans
+    /// le repère INTERNE de la liste (renversée : l'origine est le bord
+    /// visuel du BAS).
+    struct Span: Equatable {
+        let origin: CGFloat
+        let length: CGFloat
+        var end: CGFloat { origin + length }
+    }
+
+    /// Le bord d'une cellule qui GUIDE son contenu pendant l'animation.
+    enum Pin: Equatable {
+        case origin
+        case end
+    }
+
+    /// Le bord guide, dans le repère interne, d'un bord VISUEL : la liste
+    /// renversée met le haut visuel à la FIN de l'intervalle.
+    static func pin(for anchor: Anchor, listIsInverted: Bool) -> Pin {
+        (anchor == .top) == listIsInverted ? .end : .origin
+    }
+
+    /// Ce qu'une cellule JOUE pendant le tempo. Le layout se pose d'un coup —
+    /// une passe, sans animation (#8162 : l'animer par UIKit perdait 2 à 6
+    /// images) — puis l'IMAGE rejoue l'écart sur le serveur de rendu :
+    ///
+    /// - `translationFrom` : le décalage additif de départ, qui revient à 0 ;
+    /// - `revealFrom` : pour une cellule qui GRANDIT, la fenêtre visible de
+    ///   départ, dans son repère local, qui s'ouvre jusqu'à la cellule
+    ///   entière — le texte se DÉROULE depuis le bord guide, jamais une
+    ///   hauteur finale qui recouvre ses voisins.
+    struct HeightMotion: Equatable {
+        let translationFrom: CGFloat
+        let revealFrom: Span?
+    }
+
+    static func heightMotion(before: Span, after: Span, pin: Pin) -> HeightMotion? {
+        let translation = pin == .origin ? before.origin - after.origin : before.end - after.end
+        let grows = after.length > before.length + 0.5
+        guard abs(translation) > 0.5 || grows else { return nil }
+        let reveal = grows
+            ? Span(origin: pin == .origin ? 0 : after.length - before.length, length: before.length)
+            : nil
+        return HeightMotion(translationFrom: translation, revealFrom: reveal)
+    }
+
+    /// Le déplacement qu'imprime au fil le changement de hauteur du déplié
+    /// à une cellule d'un côté ou de l'autre : au-delà de sa fin, elle suit
+    /// son bord de fin ; en deçà, son bord d'origine. Sert aux cellules que
+    /// la passe fait ENTRER à l'écran (sans ordonnée d'avant) et à l'image
+    /// de celles qu'elle en fait SORTIR (sans cellule d'après).
+    static func regionShift(beyondEnd: Bool, expandedBefore: Span, expandedAfter: Span) -> CGFloat {
+        beyondEnd ? expandedAfter.end - expandedBefore.end : expandedAfter.origin - expandedBefore.origin
+    }
+
     /// L'opacité d'une cellule : le déplié reste pleinement lisible, ses
     /// voisins s'atténuent — seulement tant que le déplié est VISIBLE. Hors
     /// champ, le fil redevient uniforme (le message reste déplié). La

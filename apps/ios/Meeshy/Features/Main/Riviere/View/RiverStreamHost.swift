@@ -614,7 +614,8 @@ struct RiverStreamHost: View {
     }
 
     /// #8147 — « Lire la suite » / « Réduire » : la même loi que le fil
-    /// (`LongMessageExpansionLaw`), la hauteur animée par la pile elle-même.
+    /// (`LongMessageExpansionLaw`), la hauteur animée par la pile elle-même,
+    /// au tempo et sur la courbe du web (#8232).
     private func expansion(for messageId: String) -> LongMessageExpansion {
         LongMessageExpansion(messageId: messageId, isExpanded: expandedMessageId == messageId) {
             let next = LongMessageExpansionLaw.nextExpanded(current: expandedMessageId, toggled: messageId)
@@ -622,8 +623,8 @@ struct RiverStreamHost: View {
                 expandedMessageId = next
                 isExpandedMessageOnScreen = next != nil
             }
-            guard !reduceMotion else { return apply() }
-            withAnimation(.easeInOut(duration: FocalMetrics.Focus.expandDuration), apply)
+            guard let timing = LongMessageExpansionLaw.heightTiming(reduceMotion: reduceMotion) else { return apply() }
+            withAnimation(timing.animation, apply)
         }
     }
 
