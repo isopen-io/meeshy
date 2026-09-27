@@ -308,6 +308,8 @@ struct ThemedMessageBubble: View {
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
             }
+        case .deleted where content.protection.isExpired:
+            EmptyView()
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
         case .viewOnceSealed, .viewOnceOpened:
