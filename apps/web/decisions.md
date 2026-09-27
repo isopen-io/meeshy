@@ -4303,3 +4303,17 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - le refus n'a pas besoin du message pour être juste, et le message n'a pas besoin du refus : les coupler n'achète rien à l'utilisateur. L'« atomicité » perdue coûte au pire un refus sans texte (hors ligne ET outbox en échec — la bulle reste alors « échec », rejouable).
 
 **CallKit.** L'écran système d'appel entrant (verrouillé, arrière-plan) n'accepte aucune action personnalisée : le bouton « Message » y est réservé à l'app Téléphone. Le refus avec message vit donc dans l'écran entrant de l'app (`IncomingCallView`, app au premier plan). Détail : `apps/ios/decisions/2026-09-27-refuser-un-appel-avec-un-message-callkit-ne-porte-pas-de-reponse.md`.
+
+## D-138 — La note d'après-appel se demande par échantillon, au plus une fois par jour, et chaque participant note pour lui-même (2026-09-27, #8072)
+
+**Le constat.** `call:quality-feedback` était déclaré dans `packages/shared` sans émetteur ni gestionnaire (tableau de parité, ligne F6). La passerelle et le web l'ont reçu le 2026-09-26, iOS le 2026-09-27 ; la coque Android sert l'interface web et l'a par construction.
+
+**Ce qui est tranché — la même règle, écrite une fois par plateforme.**
+- **Quand on demande** : un appel qui a vraiment eu lieu — au moins 10 s, terminé par un raccrochage (local ou distant) ou une connexion perdue ; jamais après un appel refusé, manqué ou en échec d'établissement. Parmi eux, **un sur cinq au hasard** (`FEEDBACK_SAMPLE_RATE = 0.2`), et **toujours** celui qui a souffert (reprise, lien dégradé, connexion perdue) : c'est lui que la mesure a besoin d'entendre.
+- **Au plus une demande par jour glissant**, quel que soit le tirage : un réseau mauvais ne transforme pas chaque raccrochage en questionnaire. La borne est un confort par appareil (`localStorage` sur le web, `UserDefaults` sur iOS), jamais un état serveur.
+- **Un geste pour la note nominale** : 4 ou 5 étoiles partent d'un toucher ; en dessous, la carte demande ce qui a gêné (motifs d'un enum fermé, vidéo proposée seulement après un appel vidéo) avant d'envoyer. « Plus tard » ferme sans rien envoyer ; sans geste, la carte se retire après 20 s. Elle ne couvre rien et n'apparaît qu'une fois l'appel rendu au repos.
+- **Sites** : web `lib/calls/call-feedback.ts` (tirage, dans le moteur) + `lib/calls/call-feedback-cooldown.ts` (borne, dans le chunk de la carte `call_feedback`) ; iOS `CallFeedbackPolicy.swift` (les deux), `CallFeedbackViewModel.swift`, `CallFeedbackService.swift` ; la charge est celle de `socketCallQualityFeedbackSchema` (note entière 1…5, motifs dédoublonnés, commentaire ≤ 500 caractères, non proposé par les clients).
+
+**Stockage — chaque participant note pour lui-même.** La note s'écrit sur la ligne `CallParticipant` de celui qui note (`feedback Json?`, comme `analytics`), sous la garde de `call:analytics` (une ligne de CET appel, quel que soit `leftAt`) ; renoter écrase sa propre note. `CallSession.feedback` ne pouvait porter qu'une note pour un appel que chaque participant note, n'avait jamais reçu d'écriture, et a quitté le schéma. `GET /admin/analytics/calls` agrège : nombre de notes, moyenne, répartition 1…5, motifs.
+
+**Alternative rejetée — demander après chaque appel.** La mesure y gagnerait des notes, l'utilisateur y perdrait la légèreté de raccrocher ; les notes obtenues par lassitude sont aussi les moins fiables. L'échantillon biaisé vers les appels qui ont souffert donne l'information utile à moindre coût.
