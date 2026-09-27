@@ -55,7 +55,7 @@ export function resolveStoryMediaCaption(params: {
 }
 
 /**
- * LA CARTE `{ postMediaId → texte }` que `POST /api/v1/posts` attend
+ * LA CARTE `{ postMediaId → texte }` que `POST posts.root` attend
  * (`mediaCaption`, `routes/posts/types.ts:282`) — `undefined` quand aucune
  * légende n'est écrite, **jamais une carte vide posée quand même** : la
  * passerelle ignore toute clé absente de `mediaIds`, et une entrée vide

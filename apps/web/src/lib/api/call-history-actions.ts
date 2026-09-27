@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 
 import type { CallHistoryData } from '@/lib/calls/view';
 
@@ -66,7 +67,7 @@ export function performHideCall(params: { readonly callId: string; readonly deps
   return applyOptimistically({
     deps,
     apply: (data) => withoutRecords(data, (record) => record.callId === callId),
-    send: () => deleteFromHistory(deps, `/api/v1/calls/history/${encodeURIComponent(callId)}`),
+    send: () => deleteFromHistory(deps, callsEndpoints.historyByCallId(callId)),
     settled: (result) => result.ok || result.status === 404,
   });
 }
@@ -76,7 +77,7 @@ export function performClearCallHistory(params: { readonly deps: CallHistoryActi
   return applyOptimistically({
     deps,
     apply: () => EMPTY_HISTORY,
-    send: () => deleteFromHistory(deps, '/api/v1/calls/history'),
+    send: () => deleteFromHistory(deps, callsEndpoints.history),
     settled: (result) => result.ok,
   });
 }

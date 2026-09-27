@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import * as z from 'zod/mini';
+import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -10,7 +11,7 @@ import type { ApiResult, HttpTransport } from './http';
  * `APICallRecord` (iOS, `packages/MeeshySDK/Sources/MeeshySDK/Models/
  * CallModels.swift`).
  *
- * `GET /api/v1/calls/history?limit=&filter=all|missed&cursor=` — les appels
+ * `GET calls.history?limit=&filter=all|missed&cursor=` — les appels
  * TERMINÉS des conversations du lecteur sur trois mois glissants, du plus
  * récent au plus ancien (`services/gateway/src/routes/calls-consultation.ts`,
  * `CallService.listHistory`). La DIRECTION est dérivée par la passerelle
@@ -71,7 +72,27 @@ export type CallHistoryPage = { readonly records: readonly CallRecord[]; readonl
 export type CallsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
 export const CALLS_QUERY_PREFIX = ['calls'] as const;
-export const callHistoryQueryKey = (filter: CallHistoryFilter) => ['calls', 'history', filter] as const;
+
+export const CALL_HISTORY_TYPES = ['all', 'audio', 'video'] as const;
+export type CallHistoryType = (typeof CALL_HISTORY_TYPES)[number];
+
+/**
+ * LE JOURNAL RAFFINÉ (#8203) — type d'appel et recherche par nom, appliqués
+ * par la passerelle en une requête. Un raffinement vide EST le journal entier :
+ * même requête, même clé de cache (persistée, effaçable, lue par la fiche).
+ */
+export type CallHistoryRefine = { readonly type: CallHistoryType; readonly q: string };
+
+const refineOf = (refine: CallHistoryRefine | undefined): CallHistoryRefine | null => {
+  const q = refine?.q.trim() ?? '';
+  const type = refine?.type ?? 'all';
+  return type === 'all' && q === '' ? null : { type, q };
+};
+
+export const callHistoryQueryKey = (filter: CallHistoryFilter, refine?: CallHistoryRefine) => {
+  const refined = refineOf(refine);
+  return refined === null ? (['calls', 'history', filter] as const) : (['calls', 'history', filter, refined] as const);
+};
 
 const optionalText = z.optional(z.nullable(z.string()));
 
@@ -165,22 +186,30 @@ const nextCursorOf = (pagination: unknown): string | null => {
   return parsed.success && parsed.data.hasMore === true ? textOrNull(parsed.data.nextCursor) : null;
 };
 
-const historyPath = (filter: CallHistoryFilter, cursor: string | null): string => {
+const historyPath = (filter: CallHistoryFilter, cursor: string | null, refine: CallHistoryRefine | undefined): string => {
   const query = new URLSearchParams({ limit: String(CALL_HISTORY_PAGE_SIZE), filter });
+  const refined = refineOf(refine);
+  if (refined !== null && refined.type !== 'all') query.set('type', refined.type);
+  if (refined !== null && refined.q !== '') query.set('q', refined.q);
   if (cursor !== null) query.set('cursor', cursor);
-  return `/api/v1/calls/history?${query.toString()}`;
+  return `${callsEndpoints.history}?${query.toString()}`;
 };
 
 export async function loadCallHistory(
-  params: CallsDeps & { readonly filter: CallHistoryFilter; readonly cursor: string | null; readonly signal?: AbortSignal },
+  params: CallsDeps & {
+    readonly filter: CallHistoryFilter;
+    readonly cursor: string | null;
+    readonly refine?: CallHistoryRefine;
+    readonly signal?: AbortSignal;
+  },
 ): Promise<ApiResult<CallHistoryPage>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
     const { fixtureCallHistory } = await import('./fixtures-calls');
-    return { ok: true, data: fixtureCallHistory(params.filter) };
+    return { ok: true, data: fixtureCallHistory(params.filter, refineOf(params.refine)) };
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: historyPath(params.filter, params.cursor),
+    path: historyPath(params.filter, params.cursor, params.refine),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -193,17 +222,34 @@ export async function loadCallHistory(
 
 type PageContext = { readonly pageParam: string | null; readonly signal?: AbortSignal };
 
-export function callHistoryQueryOptions(deps: CallsDeps, filter: CallHistoryFilter) {
+/** Une recherche ne se garde pas : sa clé quitte le cache (et la persistance) une minute après qu'on l'a quittée. */
+const REFINED_GC_MS = 60_000;
+
+export function callHistoryQueryOptions(deps: CallsDeps, filter: CallHistoryFilter, refine?: CallHistoryRefine) {
   return {
-    queryKey: callHistoryQueryKey(filter),
+    queryKey: callHistoryQueryKey(filter, refine),
+    ...(refineOf(refine) === null ? {} : { gcTime: REFINED_GC_MS }),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }: PageContext) =>
-      unwrap(await loadCallHistory({ ...deps, filter, cursor: pageParam, ...(signal === undefined ? {} : { signal }) })),
+      unwrap(
+        await loadCallHistory({
+          ...deps,
+          filter,
+          cursor: pageParam,
+          ...(refine === undefined ? {} : { refine }),
+          ...(signal === undefined ? {} : { signal }),
+        }),
+      ),
     getNextPageParam: (page: CallHistoryPage) => page.nextCursor ?? undefined,
   };
 }
 
 /** Tirer pour rafraîchir : la PREMIÈRE page seule, refaite — jamais les pages déjà défilées rejouées une à une. */
-export function refreshCallHistory(queryClient: QueryClient, deps: CallsDeps, filter: CallHistoryFilter): Promise<void> {
-  return queryClient.fetchInfiniteQuery({ ...callHistoryQueryOptions(deps, filter), pages: 1, staleTime: 0 }).then(() => undefined);
+export function refreshCallHistory(
+  queryClient: QueryClient,
+  deps: CallsDeps,
+  filter: CallHistoryFilter,
+  refine?: CallHistoryRefine,
+): Promise<void> {
+  return queryClient.fetchInfiniteQuery({ ...callHistoryQueryOptions(deps, filter, refine), pages: 1, staleTime: 0 }).then(() => undefined);
 }

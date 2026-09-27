@@ -1,12 +1,14 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
 
 /**
  * **LES ANONYMES** (#7873) — les participants entrés par un lien sans compte.
  *
- * - `GET /api/v1/admin/anonymous-users` — la liste, pagination DANS `data`
+ * - `GET admin.anonymousUsers` — la liste, pagination DANS `data`
  *   (`{ anonymousUsers, pagination }`), comme la liste des comptes.
- * - `GET /api/v1/admin/anonymous-users/:participantId` — la fiche.
+ * - `GET admin.anonymousUsersByParticipantId` — la fiche.
  *
  * Gardées par `canViewUsers` côté passerelle ; la présence (`isOnline`,
  * `lastActiveAt`) y est déjà masquée pour qui n'a pas `canViewPresence`.
@@ -114,7 +116,7 @@ export async function loadAdminAnonymous(
   });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/anonymous-users?${query.toString()}`,
+    path: `${adminEndpoints.anonymousUsers}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -126,7 +128,7 @@ export async function loadAdminAnonymousOne(
 ): Promise<ApiResult<AdminAnonymousOne | null>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/anonymous-users/${encodeURIComponent(params.participantId)}`,
+    path: adminEndpoints.anonymousUsersByParticipantId(params.participantId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

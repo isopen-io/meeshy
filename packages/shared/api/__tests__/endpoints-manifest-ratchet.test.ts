@@ -43,7 +43,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../build-catalog.js';
@@ -53,6 +53,7 @@ import { API_ENDPOINTS, API_PATH_TEMPLATES } from '../endpoints.js';
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const MANIFEST_PATH = `${REPO_ROOT}services/gateway/route-manifest.json`;
 const ENDPOINTS_PATH = `${REPO_ROOT}packages/shared/api/endpoints.ts`;
+const GROUPS_DIR = `${REPO_ROOT}packages/shared/api/endpoints/`;
 const REGENERATE_COMMAND = 'cd packages/shared && npm run api-endpoints:generate';
 
 interface RawManifestFile {
@@ -151,6 +152,33 @@ describe('Cliquet — api/endpoints.ts reflète route-manifest.json', () => {
         (lignes.length > 80 ? `\n… et ${lignes.length - 80} de plus` : '') +
         `\n\nRégénérer avec : ${REGENERATE_COMMAND}`
     );
+  });
+
+  // #7716 — les modules de groupe sont ce que le web importe : une
+  // régénération oubliée y laisserait une adresse périmée sans que l'index
+  // `endpoints.ts` ne bouge.
+  it('chaque module de groupe (api/endpoints/<groupe>.ts) est identique à sa régénération, et aucun module orphelin ne survit', () => {
+    const { groups } = buildApiEndpointsCatalog(readFreshManifestRoutes());
+    const expected = new Map(groups.map((group) => [`${group.fileName}.ts`, group.source]));
+    const committed = readdirSync(GROUPS_DIR).filter((name) => name.endsWith('.ts'));
+
+    const stale = [...expected].filter(([name, source]) => {
+      try {
+        return readFileSync(`${GROUPS_DIR}${name}`, 'utf8') !== source;
+      } catch {
+        return true;
+      }
+    });
+    const orphans = committed.filter((name) => !expected.has(name));
+
+    expect({ stale: stale.map(([name]) => name), orphans }).toEqual({ stale: [], orphans: [] });
+    expect(groups.length).toBeGreaterThan(20);
+  });
+
+  it('un paramètre est ENCODÉ par le catalogue — un identifiant ne peut pas changer la route visée (#7716)', () => {
+    expect(API_ENDPOINTS.conversations.byId('a/b?c#d')).toBe('/api/v1/conversations/a%2Fb%3Fc%23d');
+    expect(API_ENDPOINTS.attachments.fileByWildcard('2026/09/x y.jpg')).toBe('/api/v1/attachments/file/2026/09/x%20y.jpg');
+    expect(API_ENDPOINTS.me.export).toBe('/api/v1/me/export');
   });
 
   it('chaque chemin du catalogue existe encore dans le manifeste — une route RETIRÉE côté serveur fait rougir ce témoin', () => {

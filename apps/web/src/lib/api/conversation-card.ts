@@ -1,6 +1,8 @@
 import * as z from 'zod/mini';
 
 import type { ConversationCard } from '@meeshy/shared/types/conversation-card';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
 
@@ -12,9 +14,9 @@ import type { ApiResult, HttpTransport } from './http';
  * **LE PORT DE LA CARTE DE CONVERSATION** (#8099) — ce qu'une bulle affiche à
  * la place d'un lien Meeshy de conversation.
  *
- * - lien de PARTAGE : `GET /api/v1/links/:identifier/card` — ce que le lien
+ * - lien de PARTAGE : `GET links.byIdentifierCard` — ce que le lien
  *   autorise déjà, à tout lecteur ;
- * - lien DIRECT : `GET /api/v1/conversations/:id/card` — au seul membre.
+ * - lien DIRECT : `GET conversations.byIdCard` — au seul membre.
  *
  * **Le 404 n'est pas une panne.** La passerelle le rend, à l'identique, pour
  * un lien inconnu et pour une conversation dont le lecteur n'est pas membre
@@ -146,8 +148,8 @@ const withSignal = (signal: AbortSignal | undefined) => (signal === undefined ? 
 
 const cardPathOf = (target: ConversationLinkTarget): string =>
   target.kind === 'share-link'
-    ? `/api/v1/links/${encodeURIComponent(target.identifier)}/card`
-    : `/api/v1/conversations/${encodeURIComponent(target.identifier)}/card`;
+    ? linksEndpoints.byIdentifierCard(target.identifier)
+    : conversationsEndpoints.byIdCard(target.identifier);
 
 export async function loadConversationCard(
   params: ConversationCardDeps & { readonly target: ConversationLinkTarget; readonly signal?: AbortSignal },
@@ -170,7 +172,7 @@ export function conversationCardQueryOptions(deps: ConversationCardDeps, target:
 }
 
 /**
- * QUITTER — la route EXISTANTE `POST /api/v1/conversations/:id/leave`
+ * QUITTER — la route EXISTANTE `POST conversations.byIdLeave`
  * (`routes/conversations/leave.ts`), jamais une jumelle : le participant passe
  * inactif, l'historique reste lisible.
  */
@@ -178,7 +180,7 @@ export async function leaveConversation(deps: ConversationCardDeps, conversation
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: null };
   return deps.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/conversations/${encodeURIComponent(conversationId)}/leave`,
+    path: conversationsEndpoints.byIdLeave(conversationId),
   });
 }
 

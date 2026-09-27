@@ -561,22 +561,24 @@ extension ConversationViewModel {
             var encryptionMode: String? = nil
 
             // E2EE logic for Direct Messages
+            //
+            // #8221 — une session E2EE indisponible (pair sans bundle Signal,
+            // cache négatif de `SessionManager`) n'est PAS un envoi raté : le
+            // message part en clair, dans tous les builds. Le build Release
+            // posait la bulle en `.failed` puis relançait l'erreur — mais le
+            // `catch` repartait par le repli socket avec ce même contenu en
+            // clair, et l'ACK la guérissait (`(.failed, .serverAck) → .sent`).
+            // La garde ne retenait aucun texte ; elle ne produisait que le
+            // retry rouge affiché quelques millisecondes à chaque envoi.
             if isDirect, let targetUserId = participantUserId, let textContent = finalContent {
                 do {
                     let payloadData = Data(textContent.utf8)
-                    let encryptedData = try await SessionManager.shared.encryptMessage(payloadData, for: targetUserId, conversationId: conversationId)
+                    let encryptedData = try await messageEncryptor.encryptMessage(payloadData, for: targetUserId, conversationId: conversationId)
                     finalContent = encryptedData.base64EncodedString()
                     isEncrypted = true
                     encryptionMode = "E2EE"
                 } catch {
-                    Logger.messages.error("Failed to encrypt message: \(error.localizedDescription)")
-                    #if DEBUG
-                    // Debug-only fallback: log and continue with plaintext so dev builds don't block on E2EE setup issues.
-                    #else
-                    // Production: never silently downgrade an E2EE session to plaintext.
-                    try? await messagePersistence.markOptimisticFailed(localId: tempId, reason: "encryption_failed")
-                    throw error
-                    #endif
+                    Logger.messages.warning("E2EE session unavailable, sending in plaintext: \(error.localizedDescription, privacy: .public)")
                 }
             }
 

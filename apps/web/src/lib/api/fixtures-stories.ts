@@ -1,3 +1,5 @@
+import * as staticEndpoints from '@meeshy/shared/api/endpoints/static';
+
 import { VIEWER_ID, portraitStandIn } from './fixtures-base';
 import { REEL_CLIP_RGB, REEL_CLIP_VOICE, STORY_CLIP_LONG } from './fixtures-reel-clips';
 import type { StatusMoodPost, StoryFeedPost, StoryTrayPost } from './stories';
@@ -322,7 +324,7 @@ export const SCENE_STORIES: readonly StoryFeedPost[] = [
    * LE SON EMPRUNTÉ À LA BIBLIOTHÈQUE (#7015) — la forme EXACTE de la
    * production, relevée en base le 2026-09-18 : l'objet audio de fond ne
    * porte AUCUN `postMediaId` (le son n'appartient pas à l'auteur) mais un
-   * `mediaURL` vers `GET /api/v1/static/:filename`, la route AUTHENTIFIÉE qui
+   * `mediaURL` vers `GET static.byFilename`, la route AUTHENTIFIÉE qui
    * sert `/app/sounds` — 20 publications de production citent cette forme, 9
    * fichiers distincts.
    *
@@ -362,7 +364,7 @@ export const SCENE_STORIES: readonly StoryFeedPost[] = [
               transform: identity,
               payload: {
                 isBackground: true,
-                mediaURL: '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a',
+                mediaURL: staticEndpoints.byFilename('d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a'),
                 volume: 0.8,
                 loop: true,
               },

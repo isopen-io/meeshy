@@ -17,6 +17,7 @@ const frCallsErase = {
   'calls.participants.more': '{names} +{count}',
   'calls.participants.a11y': 'avec {names}',
   'callJoin.detail.participants': 'Participants',
+  'calls.filter.videoOnly': 'Appels vidéo seulement',
 } as const;
 
 export default frCallsErase;

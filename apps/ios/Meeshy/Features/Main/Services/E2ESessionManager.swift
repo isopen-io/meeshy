@@ -3,6 +3,13 @@ import CryptoKit
 import MeeshySDK
 import os
 
+/// Chiffre le contenu d'un message direct pour son destinataire. Seam
+/// d'injection de `ConversationViewModel` (#8221) : le défaut est
+/// `SessionManager.shared`.
+protocol DirectMessageEncrypting: Sendable {
+    func encryptMessage(_ payload: Data, for userId: String, conversationId: String) async throws -> Data
+}
+
 public actor SessionManager {
     public static let shared = SessionManager()
 
@@ -253,6 +260,8 @@ public actor SessionManager {
         E2EEService.shared.clearAllKeys()
     }
 }
+
+extension SessionManager: DirectMessageEncrypting {}
 
 // MARK: - DecryptionSessionProviding Adapter
 

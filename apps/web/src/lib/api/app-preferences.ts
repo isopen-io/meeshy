@@ -1,11 +1,12 @@
 import * as z from 'zod/mini';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * **LE PORT DES RÉGLAGES D'USAGE** (#5563) — `GET`/`PATCH /api/v1/me/preferences`,
+ * **LE PORT DES RÉGLAGES D'USAGE** (#5563) — `GET`/`PATCH me.preferences`,
  * les routes unifiées de #4181 (`services/gateway/src/routes/me/preferences/
  * unified-routes.ts`). Miroir `UserPreferencesManager` (iOS), limité à ce que
  * l'écran montre.
@@ -22,11 +23,13 @@ import type { ApiResult, HttpTransport } from './http';
  *    `MeeshySocketIOManager` ;
  *  - `privacy.showTypingIndicator` — `PrivacyPreferencesService` ;
  *  - `privacy.hideProfileFromSearch` — toutes les recherches par identifiant
- *    (numéro, e-mail, carnet) et l'annonce « X a rejoint Meeshy » (#8104, #8105).
+ *    (numéro, e-mail, carnet) et l'annonce « X a rejoint Meeshy » (#8104, #8105) ;
+ *  - `privacy.acceptCallsFromNonContacts` — la porte de sonnerie des appels
+ *    (`services/calls/callRingPolicy.ts`, #8073).
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
  *
- * **La lecture est une PROJECTION** : `?fields=` ne demande que ces huit
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces neuf
  * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
  * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
  * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
@@ -48,6 +51,7 @@ const Privacy = z.object({
   showReadReceipts: z.boolean(),
   showTypingIndicator: z.boolean(),
   hideProfileFromSearch: z.boolean(),
+  acceptCallsFromNonContacts: z.boolean(),
 });
 
 const Complete = z.object({ application: Application, notification: Notification, privacy: Privacy });
@@ -77,6 +81,7 @@ export const APP_PREFERENCE_FIELDS = {
   showReadReceipts: 'privacy',
   showTypingIndicator: 'privacy',
   hideProfileFromSearch: 'privacy',
+  acceptCallsFromNonContacts: 'privacy',
 } as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
 
 type PreferenceKey = keyof typeof APP_PREFERENCE_FIELDS;
@@ -119,7 +124,7 @@ export async function loadAppPreferences(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/me/preferences?fields=${FIELDS_QUERY}`,
+    path: `${meEndpoints.preferences}?fields=${FIELDS_QUERY}`,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -134,7 +139,7 @@ export async function patchAppPreferences(deps: AppPreferencesDeps, patch: Prefe
   }
   const result = await deps.transport.request<unknown>({
     method: 'PATCH',
-    path: '/api/v1/me/preferences',
+    path: meEndpoints.preferences,
     body: preferencesPatchBody(patch),
   });
   if (!result.ok) return result;

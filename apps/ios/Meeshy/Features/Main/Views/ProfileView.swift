@@ -1033,7 +1033,8 @@ extension MeeshyUser {
             voicePublic: voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
-            voiceQuality: voiceQuality
+            voiceQuality: voiceQuality,
+            activation: activation
         )
     }
 }

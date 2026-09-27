@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 
 import { setAttachmentReactionEmitter, type AttachmentReactionRequest } from '@/lib/api/attachment-reaction-emit';
+import { mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesQueryKey } from '@/lib/api/messages';
 import type { Attachment, Message } from '@/lib/api/types';
@@ -142,5 +143,71 @@ describe('performAttachmentReaction', () => {
     });
     expect(outcome).toBe('limit');
     expect(sent).toEqual([]);
+  });
+});
+
+/**
+ * #8180 — OUVERTE DEPUIS L'ÉCRAN DES MÉDIAS, la visionneuse lit ses pièces
+ * dans l'INDEX (`mediaHubQueryKey`), pas dans le fil : la réaction y est posée
+ * aussi, sur chaque segment et chaque recherche de la conversation — sinon la
+ * visionneuse rouverte relirait « la mienne » d'avant le geste, et un second
+ * appui ajouterait au lieu de retirer.
+ */
+describe('performAttachmentReaction — l’index de l’écran des médias (#8180)', () => {
+  const hubMessage = (conversationId: string, attachments: readonly Attachment[]) =>
+    ({ id: MESSAGE_ID, conversationId, attachments }) as unknown as Message;
+  const seedHub = (queryClient: QueryClient, conversationId: string, term: string | null, attachments: readonly Attachment[]) =>
+    queryClient.setQueryData(mediaHubQueryKey(conversationId, 'visual', term), {
+      pages: [{ messages: [hubMessage(conversationId, attachments)], hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    });
+  const hubPiece = (queryClient: QueryClient, conversationId: string, term: string | null): Attachment | undefined =>
+    queryClient
+      .getQueryData<{ pages: { messages: Message[] }[] }>(mediaHubQueryKey(conversationId, 'visual', term))
+      ?.pages[0]?.messages[0]?.attachments?.find((attachment) => attachment.id === PIECE_ID);
+
+  test('la pièce de l’index bouge avant l’accusé, sur chaque recherche de la conversation, et seulement elle', async () => {
+    const queryClient = new QueryClient();
+    seedHub(queryClient, 'c-a', null, [piece(PIECE_ID)]);
+    seedHub(queryClient, 'c-a', 'plage', [piece(PIECE_ID)]);
+    seedHub(queryClient, 'c-b', null, [piece(PIECE_ID)]);
+    const before: (readonly string[] | undefined)[] = [];
+    setAttachmentReactionEmitter(() => {
+      before.push(hubPiece(queryClient, 'c-a', null)?.currentUserReactions);
+      return Promise.resolve('ok');
+    });
+
+    const outcome = await performAttachmentReaction({
+      queryClient,
+      conversationId: 'c-a',
+      messageId: MESSAGE_ID,
+      attachmentId: PIECE_ID,
+      emoji: '🔥',
+      mine: [],
+    });
+
+    expect(outcome).toBe('ok');
+    expect(before).toEqual([['🔥']]);
+    expect(hubPiece(queryClient, 'c-a', null)?.reactionSummary).toEqual({ '🔥': 1 });
+    expect(hubPiece(queryClient, 'c-a', 'plage')?.currentUserReactions).toEqual(['🔥']);
+    expect(hubPiece(queryClient, 'c-b', null)?.currentUserReactions).toBeUndefined();
+  });
+
+  test('un refus rend la pièce de l’index telle qu’elle était', async () => {
+    const queryClient = new QueryClient();
+    seedHub(queryClient, 'c-a', null, [piece(PIECE_ID, { reactionSummary: { '🔥': 2 }, currentUserReactions: ['🔥'] })]);
+    setAttachmentReactionEmitter(() => Promise.resolve('refused'));
+
+    await performAttachmentReaction({
+      queryClient,
+      conversationId: 'c-a',
+      messageId: MESSAGE_ID,
+      attachmentId: PIECE_ID,
+      emoji: '🔥',
+      mine: ['🔥'],
+    });
+
+    expect(hubPiece(queryClient, 'c-a', null)?.reactionSummary).toEqual({ '🔥': 2 });
+    expect(hubPiece(queryClient, 'c-a', null)?.currentUserReactions).toEqual(['🔥']);
   });
 });

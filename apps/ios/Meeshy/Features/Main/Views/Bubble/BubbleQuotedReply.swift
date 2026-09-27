@@ -128,6 +128,7 @@ struct BubbleQuotedReply: View, Equatable {
             isMe: reply.isMe,
             attachmentType: reply.attachmentType,
             attachmentThumbnailUrl: reply.attachmentThumbnailUrl,
+            attachmentFileUrl: reply.attachmentFileUrl,
             attachmentIsProtected: reply.attachmentIsProtected,
             attachmentThumbHash: reply.attachmentThumbHash,
             attachmentWidth: reply.attachmentWidth,
@@ -158,6 +159,10 @@ struct BubbleQuotedReply: View, Equatable {
         let isMe: Bool
         let attachmentType: String?
         let attachmentThumbnailUrl: String?
+        /// L'adresse du fichier cité DÉCIDE qu'une vidéo sans vignette montre
+        /// son poster (#8230) : elle arrive avec l'écho serveur, et sans elle
+        /// dans la projection la citation resterait sur son glyphe.
+        let attachmentFileUrl: String?
         /// La protection DECIDE si la vignette et le badge play sont rendus.
         /// Absente de cette projection, la citation resterait figee sur le
         /// rendu de la premiere resolution : un media revele — ou une
@@ -321,7 +326,21 @@ struct BubbleQuotedReply: View, Equatable {
     /// (`isMedia` = image/video/audio). Un document renverrait au message
     /// cite — ce que la zone 3 fait deja sous lui.
     private var glyphOpensTheMedia: Bool {
-        thumbnailUrlString == nil && (attachmentKind?.isMedia ?? false)
+        mediaFace == nil && (attachmentKind?.isMedia ?? false)
+    }
+
+    /// La FACE du média cité (#8230) — vignette, poster extrait d'une vidéo
+    /// sans vignette, ou aperçu d'un vocal —, décidée par la règle partagée
+    /// des deux peaux, qui tranche la protection d'abord. `nil` ⇒ le glyphe
+    /// de la ligne d'aperçu reste seul.
+    private var mediaFace: QuotedReplyPresentation.MediaFace? {
+        QuotedReplyPresentation.mediaFace(for: reply)
+    }
+
+    /// La teinte des textes secondaires de la citation — celle de l'aperçu,
+    /// que l'aperçu d'un vocal cité reprend.
+    private var quotePreviewColor: Color {
+        parentIsMe ? .white.opacity(0.65) : theme.textMuted
     }
 
     /// ZONE 1 — l'avatar de l'auteur cite, seule porte vers son profil. Le NOM
@@ -381,37 +400,85 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
-    /// ZONE 2, forme AVEC miniature. Sans geste arme, l'image reste une image
-    /// et le tap continue jusqu'a la zone 3.
+    /// ZONE 2 — la FACE du média cité, quelle qu'elle soit : vignette,
+    /// poster d'une vidéo sans vignette (#8230), aperçu d'un vocal (#8230).
+    /// UN seul geste pour les trois — une capacité, un site. Sans geste armé,
+    /// la face reste une image et le tap continue jusqu'à la zone 3.
     @ViewBuilder
     private var quotedThumbnail: some View {
+        if let face = mediaFace {
+            if let mediaGateTap {
+                mediaFaceSurface(face)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: mediaGateTap)
+                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+            } else {
+                mediaFaceSurface(face)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mediaFaceSurface(_ face: QuotedReplyPresentation.MediaFace) -> some View {
+        switch face {
+        case .thumbnail:
+            thumbnailSurface
+        case .videoPoster:
+            videoPosterSurface
+        case .audio:
+            QuotedAudioPreview(seed: reply.messageId, tint: quotePreviewColor, showsPlayGlyph: mediaGateTap != nil)
+        }
+    }
+
+    /// Cote et rayon d'une miniature citée — image, vidéo, ou poster.
+    private var mediaSize: CGSize {
+        QuotedReplyPresentation.mediaThumbnailSize(for: reply)
+            ?? CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize)
+    }
+
+    private var mediaRadius: CGFloat {
+        mediaSize.width > Self.thumbnailSize ? MeeshyRadius.lg : 6
+    }
+
+    /// L'aplat d'attente d'une miniature citée — vignette ou poster —, à la
+    /// couleur de l'auteur cité. Une seule résolution pour les deux faces.
+    private var mediaPlaceholder: Color {
+        Color(hex: reply.authorColor).opacity(0.3)
+    }
+
+    @ViewBuilder
+    private var thumbnailSurface: some View {
         if let thumbUrl = thumbnailUrlString {
-            let size = QuotedReplyPresentation.mediaThumbnailSize(for: reply)
-                ?? CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize)
-            let radius: CGFloat = size.width > Self.thumbnailSize ? MeeshyRadius.lg : 6
-            let thumbnail = CachedAsyncImage(
+            CachedAsyncImage(
                 url: thumbUrl,
-                targetSize: size,
+                targetSize: mediaSize,
                 // Le flou instantané plutôt qu'un carré de couleur unie le
                 // temps du réseau. `nil` pour un média protégé — un flou EST
                 // une image (règle partagée, site unique).
                 thumbHash: QuotedReplyPresentation.thumbHash(for: reply)
             ) {
-                Color(hex: reply.authorColor).opacity(0.3)
+                mediaPlaceholder
             }
             .aspectRatio(contentMode: .fill)
-            .frame(width: size.width, height: size.height)
-            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .frame(width: mediaSize.width, height: mediaSize.height)
+            .clipShape(RoundedRectangle(cornerRadius: mediaRadius))
             .overlay { playBadge }
+        }
+    }
 
-            if let mediaGateTap {
-                thumbnail
-                    .contentShape(Rectangle())
-                    .onTapGesture(perform: mediaGateTap)
-                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
-            } else {
-                thumbnail
-            }
+    /// Une vidéo citée SANS vignette serveur : son poster s'extrait de la
+    /// première frame du fichier cité, comme celui de la bulle vidéo. La pièce
+    /// reconstruite n'existe jamais pour un média protégé.
+    @ViewBuilder
+    private var videoPosterSurface: some View {
+        if let attachment = reply.quotedAttachment {
+            QuotedVideoPoster(
+                attachment: attachment,
+                size: mediaSize,
+                cornerRadius: mediaRadius,
+                placeholder: mediaPlaceholder
+            )
+            .overlay { playBadge }
         }
     }
 
@@ -486,9 +553,7 @@ struct BubbleQuotedReply: View, Equatable {
         let nameColor: Color = parentIsMe
             ? .white.opacity(0.9)
             : Color(hex: reply.isMe ? accentHex : reply.authorColor)
-        let previewColor: Color = parentIsMe
-            ? .white.opacity(0.65)
-            : theme.textMuted
+        let previewColor = quotePreviewColor
         let bgColor: Color = parentIsMe
             ? Color.white.opacity(0.15)
             : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
@@ -550,7 +615,7 @@ struct BubbleQuotedReply: View, Equatable {
                             // Le glyphe reste la SEULE affordance du média quand
                             // aucune miniature ne voyage : le retirer ici
                             // fermerait la zone 2 pour un audio ou un document.
-                            if thumbnailUrlString == nil {
+                            if mediaFace == nil {
                                 previewGlyph(previewColor: previewColor)
                             }
 
@@ -610,9 +675,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// par défaut de la cible (SE-0466, `project.yml`) et le seul décodeur des
     /// deux formes d'`attachmentType` serait hors de portée de la règle.
     nonisolated static func resolveAttachmentKind(_ type: String?) -> AttachmentKind? {
-        guard let type, !type.isEmpty else { return nil }
-        if let exact = AttachmentKind(rawValue: type) { return exact }
-        return AttachmentKind(mimeType: type)
+        AttachmentKind(quotedType: type)
     }
 }
 

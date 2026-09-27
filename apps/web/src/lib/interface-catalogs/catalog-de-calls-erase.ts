@@ -17,6 +17,7 @@ const deCallsErase = {
   'calls.participants.more': '{names} +{count}',
   'calls.participants.a11y': 'mit {names}',
   'callJoin.detail.participants': 'Teilnehmende',
+  'calls.filter.videoOnly': 'Nur Videoanrufe',
 } as const;
 
 export default deCallsErase;

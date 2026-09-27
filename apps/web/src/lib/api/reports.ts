@@ -1,3 +1,5 @@
+import * as reportsEndpoints from '@meeshy/shared/api/endpoints/reports';
+
 import type { ApiResult, HttpTransport } from './http';
 import type { DataSource } from './config';
 import { outcomeOf } from './outcome';
@@ -5,7 +7,7 @@ import { outcomeOf } from './outcome';
 /**
  * **SIGNALER — LE PORT QUI EXISTAIT SANS APPELANT** (#7187).
  *
- * `POST /api/v1/reports` vit côté passerelle depuis longtemps
+ * `POST reports.root` vit côté passerelle depuis longtemps
  * (`services/gateway/src/routes/reports/index.ts:223`), avec ses huit motifs et
  * ses trois limiteurs de débit. Mesuré avant ce lot : pas une occurrence de
  * `v1/reports`, `reportedEntityId` ni `reportType` dans `apps/web/src`.
@@ -97,7 +99,7 @@ async function sendReport(params: {
   const result: ApiResult<unknown> | null = await deps.transport
     .request<unknown>({
       method: 'POST',
-      path: '/api/v1/reports',
+      path: reportsEndpoints.root,
       body: {
         reportedType,
         reportedEntityId: entityId,

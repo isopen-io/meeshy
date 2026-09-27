@@ -13,7 +13,8 @@ import { AdminUserCreateSheet } from './admin-user-create-sheet';
 /**
  * **CRÉER UN COMPTE DEPUIS L'ADMINISTRATION** (#8217) — ce qui part, et ce qui
  * revient : la saisie émondée vers `POST /admin/users`, l'attestation de
- * l'adresse seulement quand elle est cochée, les doublons posés SOUS leur
+ * l'adresse COCHÉE par défaut (directive porteur 2026-09-27) et retirée quand
+ * on la décoche, les doublons posés SOUS leur
  * champ, et le membre créé remis à l'écran qui ouvrira sa fiche.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -60,7 +61,7 @@ function remplir(host: ParentNode) {
 }
 
 describe('créer un compte', () => {
-  test('envoie la saisie émondée, SANS attestation par défaut, et remet le membre créé', async () => {
+  test('envoie la saisie émondée, AVEC l’attestation cochée par défaut, et remet le membre créé', async () => {
     const { host, calls, crees, annonces } = await monter();
     remplir(host);
 
@@ -75,19 +76,22 @@ describe('créer un compte', () => {
       password: 'un secret robuste 2026',
       role: 'USER',
       systemLanguage: 'fr',
+      emailVerified: true,
     });
+    expect(host.querySelector<HTMLInputElement>('[data-admin-create-verified]')?.checked).toBe(true);
     expect(crees.map((m) => m.id)).toEqual(['u-new']);
     expect(annonces).toContain('Compte créé');
   });
 
-  test('cocher l’attestation la fait partir', async () => {
+  test('décocher l’attestation la retire de l’envoi', async () => {
     const { host, calls } = await monter();
     remplir(host);
 
     await mounter.click(host.querySelector<HTMLInputElement>('[data-admin-create-verified]'));
     await mounter.submit(host);
 
-    expect((calls().find((req) => req.method === 'POST')?.body as Record<string, unknown>).emailVerified).toBe(true);
+    const envoi = calls().find((req) => req.method === 'POST')?.body as Record<string, unknown>;
+    expect('emailVerified' in envoi).toBe(false);
   });
 
   test('une saisie incomplète ne part pas', async () => {

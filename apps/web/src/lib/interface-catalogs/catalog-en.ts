@@ -3,6 +3,7 @@ import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enMediaHub from './catalog-en-media-hub';
 import enMediaViewer from './catalog-en-media-viewer';
+import enActivation from './catalog-en-activation';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
@@ -208,6 +209,7 @@ const en = {
   ...enMediaHub,
   ...enMediaViewer,
   ...enVerifyEmail,
+  ...enActivation,
   ...enPassword,
   ...enCall,
   ...enRowActions,
