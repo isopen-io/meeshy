@@ -390,3 +390,57 @@ describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
     expect(shown.inventory).toEqual([]);
   });
 });
+
+/**
+ * #8233 (jumelle web de #8230) — UNE CITATION D'AUDIO OU DE VIDÉO MONTRE SON
+ * APERÇU ET S'OUVRE. Deux faits de plus sortent du site unique : le FICHIER
+ * (`fileSrc`, pour la première image d'une vidéo sans vignette et la lecture
+ * d'un vocal) et la PIÈCE qu'on ouvre (`openable`). Tous deux retenus par la
+ * MÊME protection que la vignette : une pièce protégée ne livre ni l'un ni
+ * l'autre, au niveau du message comme de la pièce.
+ */
+describe('quotedPreviewOf — le fichier et la pièce ouvrable d’une citation (#8233)', () => {
+  const sansVignette = attachment({ ...VIDEO, thumbnailUrl: undefined } as Partial<Attachment>);
+
+  test('une vidéo SANS vignette serveur livre son fichier, pour en tirer la première image', () => {
+    const media = preview(quoted({ attachments: [sansVignette] })).media;
+    expect(media?.thumbnailSrc).toBeNull();
+    expect(media?.fileSrc).toContain('sortie.mp4');
+  });
+
+  test('un vocal livre son fichier, pour se jouer depuis la citation', () => {
+    expect(preview(quoted({ attachments: [VOCAL] })).media?.fileSrc).toContain('note.m4a');
+  });
+
+  test('une image et un document ne livrent aucun fichier : la vignette suffit, un PDF ne se lit pas', () => {
+    expect(preview(quoted({ attachments: [PHOTO] })).media?.fileSrc).toBeNull();
+    expect(preview(quoted({ attachments: [DOCUMENT] })).media?.fileSrc).toBeNull();
+  });
+
+  test('image, vidéo et vocal s’ouvrent — la pièce citée elle-même', () => {
+    for (const piece of [PHOTO, VIDEO, VOCAL]) {
+      expect(preview(quoted({ attachments: [piece] })).media?.openable?.id).toBe(piece.id);
+    }
+  });
+
+  test('un document ne s’ouvre pas depuis la citation : il n’a pas d’aperçu', () => {
+    expect(preview(quoted({ attachments: [DOCUMENT] })).media?.openable).toBeNull();
+  });
+
+  test('une pièce sans fichier ne promet aucune ouverture', () => {
+    expect(preview(quoted({ attachments: [attachment({ ...VIDEO, fileUrl: '' })] })).media?.openable).toBeNull();
+  });
+
+  test('un message cité PROTÉGÉ ne livre ni fichier ni pièce ouvrable', () => {
+    const media = preview(quoted({ content: '👁️ 🎬', isViewOnce: true, attachments: [sansVignette] })).media;
+    expect(media?.fileSrc).toBeNull();
+    expect(media?.openable).toBeNull();
+  });
+
+  test('une PIÈCE protégée dans un message ordinaire ne livre ni fichier ni pièce ouvrable', () => {
+    const floute = attachment({ ...VOCAL, isBlurred: true } as Partial<Attachment>);
+    const media = preview(quoted({ content: 'Écoute', attachments: [floute] })).media;
+    expect(media?.fileSrc).toBeNull();
+    expect(media?.openable).toBeNull();
+  });
+});
