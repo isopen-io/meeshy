@@ -6,13 +6,14 @@
  * | niveau | longueur | forme | exemples |
  * |---|---|---|---|
  * | `simple` | 6 | 4 lettres + 2 chiffres, ou lettre doublée + 4 chiffres | `zert34`, `AA4545` |
- * | `easy` | 8 | 4 lettres + 4 chiffres, 4 lettres + lettre doublée + 2 chiffres, ou 4 lettres + 3 chiffres + symbole | `qsdf2334`, `KKYuio55`, `alic345@` |
+ * | `easy` | 8 | 4 lettres + 4 chiffres, 4 lettres + lettre doublée + 2 chiffres, ou 4 lettres + 3 chiffres + symbole — chiffres QUELCONQUES | `qsdf7294`, `KKYuio83`, `alic592@` |
  * | `medium` | 12 | 4 lettres capitalisées + `.` + 3 alphanumériques + 1 symbole + 3 chiffres | `Zert.k7Q!482` |
  * | `hard` | 16 | aléatoire, sans lien avec le pseudo | `Xq4!mR9…` |
  *
  * Les « 4 lettres » sont une suite de touches voisines au clavier (`zert`,
  * `qsdf`) ou, une fois sur trois, le début du pseudo ; les chiffres sont
- * voisins ou répétés ; l'ordre des morceaux est tiré au hasard.
+ * voisins ou répétés au niveau simple, quelconques au niveau facile (porteur,
+ * 2026-09-27) ; l'ordre des morceaux est tiré au hasard.
  *
  * ## Faciles à taper, sans se deviner depuis le pseudo (#8192, #8220)
  *
@@ -141,13 +142,6 @@ const nearPair = (random: RandomBelow): string => {
   return digitsOf(pick([[a, a], [a, a + 1], [a + 1, a]], random));
 };
 
-/** Trois chiffres voisins ou répétés : `345`, `554`, `464`. */
-const nearTriple = (random: RandomBelow): string => {
-  const [a, b] = [digit(random), digit(random)];
-  const c = 2 + random(6);
-  return digitsOf(pick([[c, c + 1, c + 2], [a, a, b], [a, b, a]], random));
-};
-
 /** Quatre chiffres voisins ou répétés : `4545`, `2288`, `2334`, `3456`. */
 const nearQuad = (random: RandomBelow): string => {
   const [a, b] = [digit(random), digit(random)];
@@ -186,9 +180,9 @@ const SHAPES: Readonly<Record<PasswordProposalLevel, Shape>> = {
     (_base, random) => shuffled([doubledLetter(random), nearQuad(random)], random),
   ]),
   easy: oneOf([
-    (base, random) => shuffled([easyWord(base, random), nearQuad(random)], random),
-    (base, random) => shuffled([easyWord(base, random), doubledLetter(random), nearPair(random)], random),
-    (base, random) => `${shuffled([easyWord(base, random), nearTriple(random)], random)}${symbolOf(random)}`,
+    (base, random) => shuffled([easyWord(base, random), draw(DIGITS, 4, random)], random),
+    (base, random) => shuffled([easyWord(base, random), doubledLetter(random), draw(DIGITS, 2, random)], random),
+    (base, random) => `${shuffled([easyWord(base, random), draw(DIGITS, 3, random)], random)}${symbolOf(random)}`,
   ]),
   medium: (base, random) =>
     `${capitalized(easyWord(base, random))}.${draw(ALPHANUMERIC, 3, random)}${draw(SYMBOLS, 1, random)}${draw(DIGITS, 3, random)}`,

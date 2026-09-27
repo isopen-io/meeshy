@@ -13,10 +13,12 @@ import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
 import deCallFeedback from './catalog-de-call-feedback';
 import deCallsErase from './catalog-de-calls-erase';
+import deAddressBook from './catalog-de-address-book';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
 import deCallQuality from './catalog-de-call-quality';
 import deCallCaptions from './catalog-de-call-captions';
+import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -218,10 +220,12 @@ const de = {
   ...deCallDecline,
   ...deCallFeedback,
   ...deCallsErase,
+  ...deAddressBook,
   ...deCallDevices,
   ...deCallScreen,
   ...deCallQuality,
   ...deCallCaptions,
+  ...deCallRecording,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',

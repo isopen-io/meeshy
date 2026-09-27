@@ -91,6 +91,15 @@ import type {
   CallTranslationRequestedEvent,
   CallTranslationResponseEvent,
 } from '../video-call.js';
+import type {
+  CallRecordingAck,
+  CallRecordingConsentEvent,
+  CallRecordingRequestEvent,
+  CallRecordingRequestedEvent,
+  CallRecordingStartedEvent,
+  CallRecordingStopEvent,
+  CallRecordingStoppedEvent,
+} from '../call-recording.js';
 
 import type { AgentAdminEventData } from './agent.js';
 import type { AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
@@ -260,6 +269,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
   [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveServerEvent) => void;
   [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
+  [SERVER_EVENTS.CALL_RECORDING_REQUESTED]: (data: CallRecordingRequestedEvent) => void;
+  [SERVER_EVENTS.CALL_RECORDING_STARTED]: (data: CallRecordingStartedEvent) => void;
+  [SERVER_EVENTS.CALL_RECORDING_STOPPED]: (data: CallRecordingStoppedEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED]: (data: FriendRequestCancelledEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
@@ -543,6 +555,9 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
   [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
   [CLIENT_EVENTS.CALL_ANALYTICS]: (data: CallAnalyticsEvent) => void;
+  [CLIENT_EVENTS.CALL_RECORDING_REQUEST]: (data: CallRecordingRequestEvent, ack?: (response: CallRecordingAck) => void) => void;
+  [CLIENT_EVENTS.CALL_RECORDING_CONSENT]: (data: CallRecordingConsentEvent, ack?: (response: CallRecordingAck) => void) => void;
+  [CLIENT_EVENTS.CALL_RECORDING_STOP]: (data: CallRecordingStopEvent, ack?: (response: CallRecordingAck) => void) => void;
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing

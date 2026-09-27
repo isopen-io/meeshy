@@ -186,7 +186,7 @@ Ajouté le 2026-09-26 à la demande du porteur : les fonctions absentes ou parti
 | Fonction | État iOS | Issue |
 |---|---|---|
 | Partage d'écran | ❌ | #8063 |
-| Enregistrement d'un appel avec consentement | ❌ | #8064 |
+| Enregistrement d'un appel avec consentement | 🟡 consentement, indicateur, bulle et réécoute écrits et testés (non vérifiés sur appareil) ; ne capte que la voix LOCALE — le SDK WebRTC public n'expose pas son module audio (web et coque Android : toutes les voix, `apps/web/decisions.md` D-140) | #8064 |
 | Refuser avec un message rapide | ❌ | #8065 |
 | Journal complet : pagination, recherche, suppression, participants d'un groupe | 🟡 1re page seule | #8066 |
 | « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | ✅ écrit et testé, non vérifié sur appareil | #8067, #7735 (Récents) |

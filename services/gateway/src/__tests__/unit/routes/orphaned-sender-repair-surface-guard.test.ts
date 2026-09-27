@@ -211,6 +211,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // jamais `sender`. Elle lie le message cité à la conversation de l'envoi ;
   // un expéditeur disparu n'entre dans aucune de ses branches.
   'messaging/attachmentReplySnapshot.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8064 — le rattachement d'un enregistrement d'appel retrouve la bulle par
+  // `select: { id: true }` ; la relecture qui la rediffuse passe par
+  // `findUniqueOrThrow` avec `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que
+  // les écritures du message-résumé de `CallService` (initiateur de l'appel).
+  'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
