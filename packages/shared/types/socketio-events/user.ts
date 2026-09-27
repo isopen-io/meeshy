@@ -5,6 +5,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { AccountActivation } from '../account-activation.js';
+
 /**
  * Payload de `USER_UPDATED` — émis aux user-rooms de tous les contacts
  * (utilisateurs partageant au moins une conversation avec `userId`) quand un
@@ -99,6 +101,8 @@ export interface SocketIOUser {
   readonly emailVerifiedAt?: Date;
   readonly phoneVerifiedAt?: Date;
   readonly twoFactorEnabledAt?: Date;
+  /** Délai de grâce de l'adresse (#8238) — calculé par la passerelle, jamais par un client. */
+  readonly activation?: AccountActivation;
 
   // Pending contact changes (awaiting verification)
   readonly pendingEmail?: string;

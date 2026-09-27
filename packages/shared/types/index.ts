@@ -128,6 +128,7 @@ export * from './security.js';
 
 // Export des types Magic Link (authentification sans mot de passe)
 export * from './magic-link.js';
+export * from './account-activation.js';
 
 // Export des types Signal Protocol database (pre-key bundles, conversation keys)
 export * from './signal-database.js';
