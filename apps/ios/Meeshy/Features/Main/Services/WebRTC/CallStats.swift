@@ -33,6 +33,10 @@ struct CallStats: Equatable, Sendable {
     let jitterMs: Double
     let inboundAudioBytes: Int
     let inboundVideoBytes: Int
+    /// Niveau audio reçu (0…1, `audioLevel` des `inbound-rtp` audio, le plus
+    /// fort) — nourrit « qui parle » dans un appel de groupe (#3585). Éphémère :
+    /// jamais persisté avec le diagnostic.
+    let inboundAudioLevel: Double
 
     init(
         roundTripTimeMs: Double = 0,
@@ -47,7 +51,8 @@ struct CallStats: Equatable, Sendable {
         availableOutgoingBitrateBps: Int = 0,
         jitterMs: Double = 0,
         inboundAudioBytes: Int = 0,
-        inboundVideoBytes: Int = 0
+        inboundVideoBytes: Int = 0,
+        inboundAudioLevel: Double = 0
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -62,6 +67,7 @@ struct CallStats: Equatable, Sendable {
         self.jitterMs = jitterMs
         self.inboundAudioBytes = inboundAudioBytes
         self.inboundVideoBytes = inboundVideoBytes
+        self.inboundAudioLevel = inboundAudioLevel
     }
 }
 
@@ -92,6 +98,7 @@ extension CallStats: Codable {
         jitterMs = try c.decodeIfPresent(Double.self, forKey: .jitterMs) ?? 0
         inboundAudioBytes = try c.decodeIfPresent(Int.self, forKey: .inboundAudioBytes) ?? 0
         inboundVideoBytes = try c.decodeIfPresent(Int.self, forKey: .inboundVideoBytes) ?? 0
+        inboundAudioLevel = 0
     }
 
     func encode(to encoder: Encoder) throws {
@@ -170,6 +177,7 @@ extension CallStats {
         var primaryCodecId: String?
         var audioJitterSum = 0.0
         var audioJitterCount = 0
+        var audioLevel = 0.0
 
         let codecMime: [String: String] = entries.reduce(into: [:]) { map, entry in
             guard entry.type == "codec", let mime = entry.mimeType else { return }
@@ -193,6 +201,7 @@ extension CallStats {
                     inboundAudioBytes += receivedBytes
                     // libwebrtc reports jitter in seconds; accumulate for mean across audio streams
                     if let j = entry.values["jitter"] { audioJitterSum += j; audioJitterCount += 1 }
+                    audioLevel = max(audioLevel, entry.values["audioLevel"] ?? 0)
                 }
                 bytesReceived += receivedBytes
                 if primaryCodecId == nil { primaryCodecId = entry.codecId }
@@ -223,7 +232,8 @@ extension CallStats {
             availableOutgoingBitrateBps: availableOutgoingBitrateBps,
             jitterMs: jitterMs,
             inboundAudioBytes: inboundAudioBytes,
-            inboundVideoBytes: inboundVideoBytes
+            inboundVideoBytes: inboundVideoBytes,
+            inboundAudioLevel: audioLevel
         )
     }
 }

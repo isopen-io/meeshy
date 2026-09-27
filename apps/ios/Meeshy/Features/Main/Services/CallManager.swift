@@ -167,7 +167,7 @@ final class CallManager: ObservableObject {
         }
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()
-    @Published private(set) var remoteUserId: String?
+    @Published var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
     /// Conversation (DM) qui héberge l'appel courant, quand elle est connue.
     /// Renseignée pour les appels sortants (`startCall`) et les appels entrants
@@ -4689,7 +4689,7 @@ final class CallManager: ObservableObject {
         socket.callSignalOfferReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let sdpString = event.signal.sdp else { return }
+                guard let self, let sdpString = event.signal.sdp, !self.routesToGroupMesh(event.signal, callId: event.callId) else { return }
                 let sdp = SessionDescription(type: .offer, sdp: sdpString)
                 self.handleSignalOffer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
@@ -4698,7 +4698,7 @@ final class CallManager: ObservableObject {
         socket.callAnswerReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let sdpString = event.signal.sdp else { return }
+                guard let self, let sdpString = event.signal.sdp, !self.routesToGroupMesh(event.signal, callId: event.callId) else { return }
                 let sdp = SessionDescription(type: .answer, sdp: sdpString)
                 self.handleRemoteAnswer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
@@ -4707,7 +4707,7 @@ final class CallManager: ObservableObject {
         socket.callICECandidateReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let candidateString = event.signal.candidate else { return }
+                guard let self, let candidateString = event.signal.candidate, !self.routesToGroupMesh(event.signal, callId: event.callId) else { return }
                 let candidate = IceCandidate(
                     sdpMid: event.signal.sdpMid,
                     sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
@@ -4929,7 +4929,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                guard event.callId == self.currentCallId else { return }
+                guard event.callId == self.currentCallId, !self.isGroupMeshMediaToggle(event) else { return }
                 switch event.mediaType {
                 case "video", "screen":
                     self.isRemoteVideoEnabled = event.mediaType == "screen"
@@ -5053,8 +5053,8 @@ final class CallManager: ObservableObject {
         // Idempotent join handler: creates the offer exactly once. Guarded so a
         // replayed buffered event + the live event can't both fire it.
         let handleJoin: (CallParticipantData) -> Void = { [weak self] event in
-            guard let self else { return }
-            guard self.currentCallId == callId else { return }
+            guard let self, self.currentCallId == callId else { return }
+            self.designateGroupPrimary(from: event)
             // Once we've started offering/connecting, ignore further joins.
             switch self.callState {
             case .offering, .connecting, .connected, .reconnecting: return
@@ -5215,7 +5215,7 @@ final class CallManager: ObservableObject {
         // §3.5 — a new offer opens a new negotiation generation.
         let generation = nextOutgoingNegotiationId()
         let payload: [String: Any] = [
-            "sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation
+            "sdp": sdp.sdp, "to": offerTarget(for: toUserId), "from": fromUserId, "negotiationId": generation
         ]
         // §6.3 — at-least-once delivery. The offer is the single most critical
         // signal (no offer ⇒ caller rings forever, callee stuck "Connexion…").
