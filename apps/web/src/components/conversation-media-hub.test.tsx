@@ -302,9 +302,8 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
   });
 
   test('une pièce floutée, même ouverte en clair, n’offre aucune action', async () => {
-    const blurred = photoMessage('m1');
-    const protectedMessage = { ...blurred, attachments: blurred.attachments.map((a) => ({ ...a, isBlurred: true })) };
-    await openFirst([protectedMessage]);
+    const [piece] = photoMessage('m1').attachments as readonly Record<string, unknown>[];
+    await openFirst([wireMessage('m1', { attachments: [{ ...piece, isBlurred: true }] })]);
     await settle(60);
     expect($('[data-viewer-action]')).toBeNull();
   });
