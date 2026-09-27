@@ -203,6 +203,7 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
 
 import { CallEventsHandler } from '../CallEventsHandler';
 import { logger } from '../../utils/logger';
+import { openCallRingTables } from '../../__tests__/helpers/call-ring-policy-tables';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
@@ -249,10 +250,8 @@ function makeIo() {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
-    participant: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
-      findMany: jest.fn<any>().mockResolvedValue([]),
-    },
+    ...openCallRingTables(),
+    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }), findMany: jest.fn<any>().mockResolvedValue([]) },
     callSession: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: CALL_ID, conversationId: CONV_ID }),
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -3443,7 +3442,7 @@ describe('CallEventsHandler', () => {
       });
       const ns = { createMissedCallNotification: jest.fn<any>().mockResolvedValue(undefined) };
       handler.setNotificationService(ns as any);
-      mockCallServiceGetUnrespondedParticipants.mockResolvedValue([USER_ID]);
+      mockCallServiceGetUnrespondedParticipants.mockResolvedValue(['user-a']);
 
       await expect(handler.createMissedCallNotifications(CALL_ID)).resolves.not.toThrow();
       expect(ns.createMissedCallNotification).toHaveBeenCalledWith(
