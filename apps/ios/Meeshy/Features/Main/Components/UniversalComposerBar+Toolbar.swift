@@ -37,7 +37,7 @@ extension UniversalComposerBar {
             // View-once mode toggle — À CÔTÉ du flou (#7472), et gardé par le
             // même genre de drapeau : les deux protections de masquage se
             // posent du même geste, au même endroit.
-            if !hideViewOnce {
+            if !resolvedHideViewOnce {
                 viewOnceToggleButton
             }
 

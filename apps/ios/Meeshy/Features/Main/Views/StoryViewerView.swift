@@ -342,6 +342,7 @@ struct StoryViewerView: View {
     /// selon `StoryReactionStripGesture`, lu par `unifiedDragGesture`, purgé par
     /// `resetGestureTracking()` et à la fermeture de la barre.
     @State var reactionStripOwnsDrag: Bool = false // internal for cross-file extension access
+    @State var composerOwnsDrag: Bool = false // #8431 — le glissé né sur le composeur
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
     /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
     /// ouverte, ou surface dont le cadre n'est pas mesurable ici (cf.
@@ -1537,6 +1538,7 @@ struct StoryViewerView: View {
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             reactionStripOwnsDrag: $reactionStripOwnsDrag,
+            composerOwnsDrag: $composerOwnsDrag,
             keyboard: keyboard,
             triggerStoryReaction: { emoji, frame in
                 triggerStoryReaction(emoji, from: frame)

@@ -729,7 +729,9 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
             "Aucune autre bascule ne doit s'insérer entre le flou et la vue unique : "
                 + "« à côté » est la moitié de la demande."
         )
-        XCTAssertTrue(toolbar.contains("if !hideViewOnce"),
+        // #8431 — l'opt-OUT passe par sa résolution : `hideViewOnce` OU un
+        // mode qui ne l'offre pas (un commentaire n'a personne à qui la brûler).
+        XCTAssertTrue(toolbar.contains("if !resolvedHideViewOnce"),
                       "La vue unique se cache par opt-OUT, comme le flou (`if !hideBlur`).")
     }
 

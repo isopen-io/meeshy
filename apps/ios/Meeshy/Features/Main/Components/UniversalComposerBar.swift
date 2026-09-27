@@ -402,6 +402,11 @@ struct UniversalComposerBar: View {
         if let mode { return !mode.showEphemeral }
         return hideEphemeral
     }
+    /// Masquée en édition (`hideViewOnce`) ET partout où le mode ne l'offre
+    /// pas : en commentaire, le bouton écrivait dans une constante (#8431).
+    var resolvedHideViewOnce: Bool {
+        hideViewOnce || !(mode?.showViewOnce ?? true)
+    }
     var resolvedHideEffects: Bool {
         if let mode { return !mode.showEffectsSheet }
         return hideEffects

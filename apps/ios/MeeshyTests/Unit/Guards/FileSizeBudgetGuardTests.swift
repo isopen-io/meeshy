@@ -532,7 +532,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // (pilule, en-tête, scène connectée, vignette perso, sous-titres). Il sort
     // de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
     // pesait à la sortie.
-    private static let legacyLineCeiling = 45_449
+    //
+    // #8431 — 45 449 → 45 361 (−88). La bande basse du composeur quitte
+    // `StoryViewerView+Canvas.swift` pour `StoryViewerView+CanvasComposerLayer.swift`
+    // (−91 net) AVANT d'y recevoir son repli ; le lecteur y gagne la cession au
+    // composeur (`StoryViewerView` +2, `+Content` +1).
+    private static let legacyLineCeiling = 45_361
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
