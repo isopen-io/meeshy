@@ -32,6 +32,8 @@ extension CallView {
                 .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire l'appel", bundle: .main))
                 .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main))
 
+                // #8436 — la SEULE porte vers la conversation pendant l'appel,
+                // juste à droite de la flèche (plus d'action « Messages »).
                 // Ouvrir la conversation (DM) de l'interlocuteur tout en
                 // gardant l'appel actif (minimisé en pilule). Masqué quand
                 // la conversationId est inconnue (ex: appel entrant réveillé
@@ -157,6 +159,32 @@ extension CallView {
                 callManager.displayMode = .pip
             }
             pipMorphProgress = 0
+        }
+    }
+
+    /// #8435 — le bouton PiP et le glissé : la fenêtre système démarre, et
+    /// son démarrage ferme le plein écran (`CallPiPPolicy.displayModeOnStart`,
+    /// appliqué par `CallManager`). AVKit refuse en silence quand la fenêtre
+    /// n'est pas possible : passé le délai, le geste retombe sur la pastille
+    /// plutôt que de rester sans effet.
+    func enterSystemPiP() {
+        HapticFeedback.medium()
+        callManager.startSystemPiP()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard CallPiPPolicy.shouldFallBackToPill(
+                isPiPActive: callManager.isSystemPiPActive,
+                displayMode: callManager.displayMode
+            ) else { return }
+            collapseIntoPip()
+        }
+    }
+
+    func leaveFullScreen(_ outcome: CallSwipeDownOutcome) {
+        switch outcome {
+        case .none: return
+        case .pill: collapseIntoPip()
+        case .systemPiP: enterSystemPiP()
         }
     }
 

@@ -490,11 +490,11 @@ final class CallViewAccessibilityTests: XCTestCase {
         let source = try callViewSource()
         XCTAssertTrue(
             source.contains(".frame(minWidth: 44, minHeight: 44)"),
-            "Every pill / rail / row button must keep a 44×44 target, whatever its drawn diameter."
+            "Every pill / row button must keep a 44×44 target, whatever its drawn diameter."
         )
         XCTAssertTrue(
-            source.contains("static let railGlyphDiameter: CGFloat = 44"),
-            "The rail glyphs are drawn at 44 pt at least."
+            source.contains("static let rowGlyphDiameter: CGFloat = 44"),
+            "The duo action-row glyphs are drawn at 44 pt at least (#8432)."
         )
     }
 

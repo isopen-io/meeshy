@@ -12,9 +12,10 @@ extension CallView {
 
     var connectedView: some View {
         // #8394 — UN conteneur de verre pour tout ce qui flotte au-dessus de
-        // l'appel établi : la pilule, les deux rails, le bandeau de
-        // sous-titres. Des verres voisins ne se superposent jamais (le verre
-        // ne peut pas échantillonner le verre) ; ils se fondent entre eux.
+        // l'appel établi : les boutons de verre de la pilule et des actions,
+        // le bandeau de sous-titres. Des verres voisins ne se superposent
+        // jamais (le verre ne peut pas échantillonner le verre) ; ils se
+        // fondent entre eux, et sous iOS 26 les actions naissent du (…) (#8432).
         AdaptiveGlassContainer(spacing: 12) {
             ZStack {
                 if isGroupStage {
@@ -35,7 +36,7 @@ extension CallView {
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en
         // permanence, et en UN seul endroit : le bouton « Écran » n'existe que
-        // (…) déployé, et passe d'un rail à une rangée selon la disposition.
+        // (…) déployé, dans la rangée du duo ou celle du groupe.
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
         // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
         // showControls flips to true (a reveal tap) or the (…) is used;
@@ -106,15 +107,7 @@ extension CallView {
                     // connectedView ZStack: the draggable PiP is a sibling ABOVE
                     // this layer, so moving the PiP no longer also dismisses the
                     // full-screen call (user-reported 2026-07-02).
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 50)
-                            .onEnded { value in
-                                guard !showEffectsToolbar else { return }
-                                if value.translation.height > 100 {
-                                    collapseIntoPip()
-                                }
-                            }
-                    )
+                    .simultaneousGesture(swipeDownToLeaveGesture)
                     .accessibilityLabel(showControls
                         ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
                         : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
@@ -138,9 +131,16 @@ extension CallView {
                             .padding(.horizontal, 16)
                             .frame(maxHeight: .infinity)
                     } else {
-                        Spacer()
-                        audioCallLayout
-                        Spacer()
+                        // #8435 — en audio aussi, glisser vers le bas quitte
+                        // le plein écran. Pas sur le panneau de sous-titres :
+                        // son défilement garde ses propres glissés.
+                        VStack(spacing: 12) {
+                            Spacer()
+                            audioCallLayout
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(swipeDownToLeaveGesture)
                     }
                 } else {
                     Spacer()
@@ -154,9 +154,9 @@ extension CallView {
                     }
                 }
 
-                // §7.3 — la pilule se masque avec l'en-tête et les rails en
-                // vidéo (4 s) ; toujours visible en audio, sur Mac, avec
-                // VoiceOver. Masquée, elle ne capte aucun toucher.
+                // §7.3 — la pilule et ses actions se masquent avec l'en-tête
+                // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
+                // VoiceOver. Masquées, elles ne captent aucun toucher.
                 callControlsPill
                     .padding(.horizontal, 16)
                     .padding(.bottom, Self.chromeBottomInset)
@@ -166,16 +166,39 @@ extension CallView {
         }
     }
 
-    /// Ce qui flotte AU-DESSUS de la disposition 1:1 : les deux rails du `(…)`
-    /// et la vignette perso.
+    /// #8435 — le glissé vers le bas du duo : la décision vit dans
+    /// `CallPiPPolicy.swipeDownOutcome`, la vue ne fait que l'exécuter.
+    /// Progressif et annulable : l'écran suit le doigt (`swipeDownOffset`),
+    /// et revient si le geste est relâché avant sa conclusion. Espace GLOBAL :
+    /// la vue qui porte le geste se déplace avec lui.
+    private var swipeDownToLeaveGesture: some Gesture {
+        DragGesture(minimumDistance: 50, coordinateSpace: .global)
+            .onChanged { value in
+                swipeDownOffset = CallPiPPolicy.swipeDownOffset(
+                    translation: value.translation.height,
+                    isGroup: isGroupStage,
+                    isEffectsOpen: showEffectsToolbar
+                )
+            }
+            .onEnded { value in
+                let outcome = CallPiPPolicy.swipeDownOutcome(
+                    translation: value.translation.height,
+                    predictedTranslation: value.predictedEndTranslation.height,
+                    isGroup: isGroupStage,
+                    isEffectsOpen: showEffectsToolbar,
+                    canSystemPiP: callManager.canActivateSystemPiP
+                )
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    swipeDownOffset = 0
+                }
+                leaveFullScreen(outcome)
+            }
+    }
+
+    /// Ce qui flotte AU-DESSUS de la disposition 1:1 : la vignette perso. Les
+    /// actions du `(…)` montent au-dessus de la pilule (#8432).
     @ViewBuilder
     private var duoOverlays: some View {
-        if actionsPresentation == .rails {
-            actionRails
-                .callChromeVisibility(isChromeVisible)
-                .transition(.opacity)
-        }
-
         // §7.2 — draggable, corner-snapping PiP showing the secondary
         // stream. Tap to swap it with the full-area primary (FaceTime).
         if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {

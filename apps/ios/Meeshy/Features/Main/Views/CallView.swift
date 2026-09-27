@@ -43,6 +43,8 @@ struct CallView: View {
     /// `onAppear` (expansion depuis la bannière) — voir le trio
     /// scale/opacité/coins posé sur le ZStack racine.
     @State var pipMorphProgress: CGFloat = 0
+    /// #8435 — le décalage que l'écran suit pendant le glissé vers le bas.
+    @State var swipeDownOffset: CGFloat = 0
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
     // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
     // tracks the in-flight drag; `pipCorner` is the resting corner.
@@ -79,6 +81,9 @@ struct CallView: View {
     @ObservedObject var mesh: GroupCallMeshCoordinator
     /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
     @State var controlsDisclosure = CallControlsDisclosure()
+    /// #8432 — l'espace de noms du verre : sous iOS 26, les actions naissent
+    /// du `(…)` et y retournent (`glassEffectID`).
+    @Namespace var callGlassNamespace
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
@@ -154,7 +159,10 @@ struct CallView: View {
             // PiP système — ancre invisible plein écran : `sourceView` d'où la
             // fenêtre PiP émerge. `attachSystemPiP` se gate sur canActivateSystemPiP
             // (no-op hors appel vidéo), donc inoffensive ici en permanence.
+            // #8435 — remontée à chaque fenêtre fermée : la génération force
+            // la reconfiguration sur une vue vivante.
             PiPSourceAnchor()
+                .id(callManager.pipAnchorGeneration)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
 
@@ -284,6 +292,7 @@ struct CallView: View {
         .scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)
         .opacity(1 - 0.55 * Double(pipMorphProgress))
         .clipShape(RoundedRectangle(cornerRadius: pipMorphProgress * 32, style: .continuous))
+        .offset(y: swipeDownOffset)
         .statusBarHidden(true)
         // L'écran d'appel est blanc-sur-fond-sombre fixe (cf. callBackground).
         // On épingle aussi le colorScheme en .dark pour que le verre et les

@@ -4,10 +4,13 @@ import MeeshySDK
 import MeeshyUI
 
 // #8394 — la pilule du bas, identique en audio, en vidéo et en groupe :
-// (…) · Micro · Sortie · Fin, dans UN verre. Le (…) range ou déploie les
-// actions : en duo, deux rails verticaux aux bords, à mi-hauteur (à gauche
-// « mon image », à droite « l'appel ») ; en groupe, la même pilule grandit
-// vers le haut en deux rangées légendées de quatre colonnes.
+// (…) · Micro · Sortie · Fin. #8432 — chaque bouton est un bouton de VERRE
+// interactif, et le (…) déploie les actions AU-DESSUS de la pilule : en duo,
+// une rangée de verre (deux si elle ne tient pas) ; en groupe, deux rangées
+// légendées de quatre colonnes. Sous iOS 26 les actions naissent du verre du
+// (…) (`glassEffectID`) ; avant iOS 26 et avec Réduire les animations, elles
+// apparaissent en fondu. La conversation n'est pas une action : sa seule
+// porte est l'en-tête (#8436).
 
 /// Ré-arme l'auto-masquage (§7.3) à chaque révélation ET à chaque usage du (…).
 struct AutoHideKey: Equatable {
@@ -42,6 +45,10 @@ enum CallControlsCopy {
         String(localized: "call.actions.theCall", defaultValue: "L'appel", bundle: .main)
     }
 
+    static var actions: String {
+        String(localized: "call.actions", defaultValue: "Actions de l'appel", bundle: .main)
+    }
+
     static var flipCaption: String {
         String(localized: "call.control.flipCamera.caption", defaultValue: "Retourner", bundle: .main)
     }
@@ -49,15 +56,11 @@ enum CallControlsCopy {
     static var effectsCaption: String {
         String(localized: "call.control.effects.caption", defaultValue: "Effets", bundle: .main)
     }
-
-    static var messagesCaption: String {
-        String(localized: "call.control.messages.caption", defaultValue: "Messages", bundle: .main)
-    }
 }
 
 extension CallView {
     private static let pillGlyphDiameter: CGFloat = 48
-    private static let railGlyphDiameter: CGFloat = 44
+    private static let rowGlyphDiameter: CGFloat = 44
 
     private var actionContext: CallActionContext {
         let isConnected: Bool = {
@@ -71,8 +74,7 @@ extension CallView {
                 && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })),
             isConnected: isConnected,
             mayRecord: callManager.mayRequestRecording || callManager.recording.phase.isActive,
-            canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive,
-            hasConversation: callManager.conversationId != nil
+            canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive
         )
     }
 
@@ -80,13 +82,39 @@ extension CallView {
         controlsDisclosure.presentation(isGroup: isGroupStage)
     }
 
+    /// Le déploiement du (…) : un ressort, ou un simple fondu avec Réduire
+    /// les animations — jamais une bascule sèche.
+    private var disclosureAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.85)
+    }
+
     // MARK: - Pill
 
+    /// Les actions déployées, PUIS la pilule : les actions montent au-dessus
+    /// du bloc qui contrôle l'appel, en duo comme en groupe (#8432).
     var callControlsPill: some View {
         let actions = CallActionSet.resolve(actionContext)
-        return VStack(spacing: 0) {
-            // #8396 — en groupe, les sous-titres se posent en HAUT du cadre de
-            // verre de la pilule : un seul verre, pas de verre sur verre.
+        return VStack(spacing: 10) {
+            switch actionsPresentation {
+            case .hidden:
+                EmptyView()
+            case .row:
+                duoActionRows(actions)
+                    .transition(.opacity)
+            case .rows:
+                groupActionRows(actions)
+                    .transition(.opacity)
+            }
+            controlsPill
+        }
+        .frame(maxWidth: 440)
+        .animation(disclosureAnimation, value: controlsDisclosure)
+    }
+
+    /// Les quatre boutons de verre, sur un voile non vitré. #8396 — en
+    /// groupe, les sous-titres se posent en haut de ce voile.
+    private var controlsPill: some View {
+        VStack(spacing: 0) {
             if isGroupStage && showTranscript {
                 captionsBand(hasOwnGlass: false)
                     .padding(.leading, 14)
@@ -94,17 +122,9 @@ extension CallView {
                     .padding(.top, 6)
                 pillHairline
             }
-            if actionsPresentation == .rows {
-                actionRow(title: CallControlsCopy.myImage, actions: actions.myImage)
-                pillHairline
-                actionRow(title: CallControlsCopy.theCall, actions: actions.theCall)
-                pillHairline
-            }
             baseRow
         }
-        .frame(maxWidth: 440)
-        .callChromeGlass(in: RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: controlsDisclosure)
+        .callLegibilityVeil(in: RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
 
     private var pillHairline: some View {
@@ -155,7 +175,7 @@ extension CallView {
     private func moreButton(captioned: Bool) -> some View {
         let isExpanded = controlsDisclosure.isExpanded
         return Button {
-            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85)) {
+            withAnimation(disclosureAnimation) {
                 controlsDisclosure = controlsDisclosure.toggled()
             }
             HapticFeedback.light()
@@ -166,6 +186,7 @@ extension CallView {
                 caption: captioned ? CallControlsCopy.moreCaption : nil,
                 diameter: Self.pillGlyphDiameter
             )
+            .callGlassMorph(id: "call.more", in: callGlassNamespace)
         }
         .buttonStyle(.plain)
         .pressable()
@@ -191,6 +212,17 @@ extension CallView {
     }
 
     // MARK: - Group rows
+
+    /// Groupe : « mon image » puis « l'appel », deux rangées légendées sur un
+    /// voile, au-dessus de la pilule.
+    private func groupActionRows(_ actions: CallActionSet) -> some View {
+        VStack(spacing: 0) {
+            actionRow(title: CallControlsCopy.myImage, actions: actions.myImage)
+            pillHairline
+            actionRow(title: CallControlsCopy.theCall, actions: actions.theCall)
+        }
+        .callLegibilityVeil(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
 
     /// Une rangée légendée de quatre colonnes : les places vides gardent la
     /// grille, pour que « Micro » ne change pas de colonne d'un appel à l'autre.
@@ -218,39 +250,39 @@ extension CallView {
         .accessibilityElement(children: .contain)
     }
 
-    // MARK: - Duo rails
+    // MARK: - Duo row
 
-    /// Deux rails de verre aux bords, à mi-hauteur. Sans légende visible : le
-    /// nom de chaque rail et de chaque bouton est porté par l'accessibilité.
-    var actionRails: some View {
-        let actions = CallActionSet.resolve(actionContext)
-        return HStack(alignment: .center) {
-            actionRail(title: CallControlsCopy.myImage, actions: actions.myImage)
-            Spacer(minLength: 0)
-            actionRail(title: CallControlsCopy.theCall, actions: actions.theCall)
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    func actionRail(title: String, actions: [CallAction]) -> some View {
+    /// Duo : une rangée de boutons de verre sans légende au-dessus de la
+    /// pilule, ou deux quand elle ne tiendrait pas (`CallActionSet.duoRows`).
+    /// Le nom de chaque bouton est porté par l'accessibilité.
+    private func duoActionRows(_ actions: CallActionSet) -> some View {
         VStack(spacing: 8) {
-            ForEach(actions, id: \.self) { action in
-                actionButton(action, captioned: false)
+            ForEach(Array(actions.duoRows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 12) {
+                    ForEach(row, id: \.self) { action in
+                        actionButton(action, captioned: false)
+                    }
+                }
             }
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .callChromeGlass(in: Capsule())
+        .callLegibilityVeil(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(CallControlsCopy.actions)
     }
 
     // MARK: - Actions
 
-    @ViewBuilder
+    /// Chaque action porte l'identité de verre qui la fait naître du (…).
     func actionButton(_ action: CallAction, captioned: Bool) -> some View {
-        let diameter = captioned ? Self.pillGlyphDiameter : Self.railGlyphDiameter
+        actionButtonBody(action, captioned: captioned)
+            .callGlassMorph(id: "call.action.\(action.rawValue)", in: callGlassNamespace)
+    }
+
+    @ViewBuilder
+    private func actionButtonBody(_ action: CallAction, captioned: Bool) -> some View {
+        let diameter = captioned ? Self.pillGlyphDiameter : Self.rowGlyphDiameter
         switch action {
         case .camera:
             cameraActionButton(captioned: captioned, diameter: diameter)
@@ -310,17 +342,6 @@ extension CallView {
             }
         case .pictureInPicture:
             pictureInPictureActionButton(captioned: captioned, diameter: diameter)
-        case .messages:
-            CallPillButton(
-                symbol: "bubble.left.and.bubble.right.fill",
-                kind: .normal,
-                label: String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main),
-                caption: captioned ? CallControlsCopy.messagesCaption : nil,
-                hint: String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main),
-                diameter: diameter
-            ) {
-                openConversationDuringCall()
-            }
         }
     }
 
@@ -390,12 +411,13 @@ extension CallView {
                 ? String(localized: "call.control.pip.exit", defaultValue: "Quitter le mode Picture-in-Picture", bundle: .main)
                 : String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main),
             caption: captioned ? String(localized: "call.control.pip.caption", defaultValue: "PiP", bundle: .main) : nil,
+            hint: isActive ? nil : String(localized: "call.control.pip.hint", defaultValue: "Ferme l'écran d'appel et garde la vidéo dans une fenêtre flottante", bundle: .main),
             diameter: diameter
         ) {
             if isActive {
                 callManager.stopSystemPiP()
             } else {
-                callManager.startSystemPiP()
+                enterSystemPiP()
             }
         }
     }

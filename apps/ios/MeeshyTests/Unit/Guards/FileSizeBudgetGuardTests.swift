@@ -537,7 +537,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `StoryViewerView+Canvas.swift` pour `StoryViewerView+CanvasComposerLayer.swift`
     // (−91 net) AVANT d'y recevoir son repli ; le lecteur y gagne la cession au
     // composeur (`StoryViewerView` +2, `+Content` +2).
-    private static let legacyLineCeiling = 45_362
+    //
+    // #8435/#8434 — 45 362 → 45 292 (−70). Le PiP système quitte
+    // `CallManager.swift` pour `CallManager+SystemPiP.swift`, et la
+    // resynchronisation du micro naît dans `CallManager+MuteSync.swift` sans
+    // qu'une ligne nette n'entre dans le fichier hors budget.
+    private static let legacyLineCeiling = 45_292
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
