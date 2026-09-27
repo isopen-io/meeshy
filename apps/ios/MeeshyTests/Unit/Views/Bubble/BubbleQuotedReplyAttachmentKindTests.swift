@@ -690,10 +690,20 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
         let body = try slice(
             of: code,
             from: "func openQuotedMedia(_ reference: ReplyReference)",
-            to: "switch attachment.type {"
+            to: "onMediaTap?(attachment)"
+        )
+        // #8283 — le verrou vit dans le site partagé avec la Rivière :
+        // l'hôte n'ouvre QUE ce que `QuotedMediaOpening` lui rend.
+        XCTAssertTrue(
+            body.contains("QuotedMediaOpening.attachment(for: reference"),
+            "l'hôte doit élire la pièce par la règle partagée, qui porte le verrou."
+        )
+        let rule = try anchored(
+            "Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift",
+            "static func attachment(for reference: ReplyReference", floor: 400
         )
         XCTAssertTrue(
-            body.contains("attachment.isViewOnce || attachment.isBlurred"),
+            rule.contains("attachment.isViewOnce || attachment.isBlurred") && rule.contains("!reference.quotedMediaIsProtected"),
             "un média cité à VUE UNIQUE ou FLOUTÉ ne doit pas s'ouvrir depuis la citation : le tap retombe sur " +
             "le saut à l'original, où le média garde son propre geste de révélation. Miroir de " +
             "`BubbleGridCell.handleTap` (`guard !attachmentIsProtected || isRevealed`)."

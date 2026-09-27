@@ -69,30 +69,20 @@ extension MessageListViewController {
             return
         }
         let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
-        let resolved = quoted.flatMap { reference.citedAttachment(among: $0.attachments) }
-            ?? (quoted == nil ? reference.quotedAttachment : nil)
-        guard let attachment = resolved else {
+        // L'élection et le verrou vivent dans `QuotedMediaOpening`, partagé avec
+        // la Rivière (#8283). Miroir de `BubbleGridCell.handleTap`, qui refuse
+        // d'ouvrir un attachement protégé tant qu'il n'a pas été révélé :
+        // élargir une porte sans son verrou serait une régression d'exposition.
+        // Le repli est le saut à l'original, où le média garde son propre geste
+        // de révélation et où la carte document offre téléchargement/partage.
+        guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else {
             scrollToMessage(localId: localId)
             return
         }
-        // Miroir explicite de `BubbleGridCell.handleTap`
-        // (`BubbleStandardLayout+Media.swift`), qui refuse d'ouvrir un
-        // attachement protégé tant qu'il n'a pas été révélé. Élargir une porte
-        // sans son verrou serait une régression d'exposition. Le repli est le
-        // saut à l'original, où le média garde son propre geste de révélation.
-        // La protection DÉCLARÉE par la citation compte aussi : elle couvre le
-        // message protégé (vue unique, flouté, chiffré) dont la pièce ne dit rien.
-        guard !(attachment.isViewOnce || attachment.isBlurred), !reference.quotedMediaIsProtected else {
+        guard attachment.type != .audio else {
             scrollToMessage(localId: localId)
             return
         }
-        switch attachment.type {
-        case .image, .video:
-            onMediaTap?(attachment)
-        case .audio:
-            scrollToMessage(localId: localId)
-        case .file, .location:
-            scrollToMessage(localId: localId)
-        }
+        onMediaTap?(attachment)
     }
 }

@@ -236,8 +236,14 @@ nonisolated enum RiverConversationMapping {
                 timeString: resolvedTime,
                 text: displayedText(of: message, text: text),
                 layout: geometry.layout,
+                // #8283 — la face du média cité est élue par la règle PARTAGÉE
+                // des autres modes, qui refuse d'abord tout média protégé.
                 replyPreview: message.sealedForDisplay.replyTo.map(QuotedReplyPresentation.displayed).map {
-                    RiverReplyPreview(authorDisplayName: singleLine($0.authorName), text: singleLine($0.previewText))
+                    RiverReplyPreview(
+                        authorDisplayName: singleLine($0.authorName),
+                        text: singleLine($0.previewText),
+                        media: RiverQuotedMedia.resolve($0)
+                    )
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
                 groupPosition: positions[bubble.messageId] ?? .solo,

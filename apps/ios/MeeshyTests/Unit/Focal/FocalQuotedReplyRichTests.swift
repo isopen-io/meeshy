@@ -426,8 +426,11 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             return
         }
         let body = code[start.lowerBound..<end.upperBound]
+        // #8283 — l'élection de la pièce a quitté l'hôte pour le site partagé
+        // avec la Rivière (`QuotedMediaOpening`) : l'hôte l'APPELLE, la règle
+        // se lit chez elle et s'exécute dans `QuotedMediaOpeningTests`.
         XCTAssertTrue(
-            body.contains("case .image, .video:") && body.contains("onMediaTap?(attachment)"),
+            body.contains("QuotedMediaOpening.attachment(for: reference") && body.contains("onMediaTap?(attachment)"),
             "Image et vidéo citées → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
         )
         XCTAssertTrue(
@@ -438,8 +441,13 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             body.contains("playAudio("),
             "une citation ne met pas en file les vocaux qui suivent l'original — `playAudio` n'a rien à faire ici."
         )
+        let rule = try source("Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift")
         XCTAssertTrue(
-            body.contains("reference.quotedAttachment"),
+            rule.contains("case .image, .video, .audio:"),
+            "les trois genres qui ont un plein écran sont élus par la règle partagée."
+        )
+        XCTAssertTrue(
+            rule.contains("reference.quotedAttachment"),
             "un message cité hors fenêtre s'ouvre depuis la pièce RECONSTRUITE par la citation, pas par un saut."
         )
         XCTAssertTrue(
