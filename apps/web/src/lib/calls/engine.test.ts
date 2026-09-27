@@ -807,3 +807,79 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 });
 
+describe('le micro coupé reste coupé, quel que soit le moment où on le coupe (#8434)', () => {
+  const PEER_JOINED = { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } };
+  const audioOf = (h: ReturnType<typeof harness>) => (h.call()?.localStream?.getAudioTracks() ?? []).map((t) => t.enabled);
+  const settingsOf = (h: ReturnType<typeof harness>, event: string) => (h.requested.find(([name]) => name === event)?.[1] as { settings: { audioEnabled: boolean } } | undefined)?.settings;
+
+  test('coupé AVANT que le micro soit prêt (appel sortant) : la piste naît coupée et le serveur l’apprend', async () => {
+    const h = harness();
+    const starting = h.engine.start(DIRECT);
+    h.engine.toggleMic();
+    await starting;
+    expect(h.call()?.micMuted).toBe(true);
+    expect(audioOf(h)).toEqual([false]);
+    expect(settingsOf(h, CLIENT_EVENTS.CALL_INITIATE)?.audioEnabled).toBe(false);
+  });
+
+  test('coupé pendant le décroché (appel entrant) : la piste naît coupée et call:join le dit', async () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, { callId: 'call-9', conversationId: 'c-1', mode: 'p2p', type: 'audio', initiator: { userId: PEER, username: 'amina', displayName: 'Amina', avatar: null }, participants: [] });
+    const accepting = h.engine.accept();
+    h.engine.toggleMic();
+    await accepting;
+    expect(audioOf(h)).toEqual([false]);
+    expect(settingsOf(h, CLIENT_EVENTS.CALL_JOIN)?.audioEnabled).toBe(false);
+  });
+
+  test('coupé pendant qu’on rejoint un appel en cours : même chose', async () => {
+    const h = harness();
+    const joining = h.engine.join({ ...DIRECT, callId: 'call-1' });
+    h.engine.toggleMic();
+    await joining;
+    expect(audioOf(h)).toEqual([false]);
+    expect(settingsOf(h, CLIENT_EVENTS.CALL_JOIN)?.audioEnabled).toBe(false);
+  });
+
+  const mutedInCall = async (request: StartCallRequest = DIRECT) => {
+    const h = harness();
+    await h.engine.start(request);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, PEER_JOINED);
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    h.engine.toggleMic();
+    return h;
+  };
+
+  test('partager l’écran puis l’arrêter ne rouvre pas le micro', async () => {
+    const h = await mutedInCall({ ...DIRECT, media: 'video' });
+    await h.engine.toggleScreen();
+    expect(audioOf(h)).toEqual([false]);
+    await h.engine.toggleScreen();
+    expect(audioOf(h)).toEqual([false]);
+    expect(h.call()?.micMuted).toBe(true);
+  });
+
+  test('allumer, retourner ou changer la caméra ne rouvre pas le micro', async () => {
+    const h = await mutedInCall();
+    await h.engine.toggleCamera();
+    await h.engine.switchCamera();
+    await h.engine.replaceInput('camera', track('video') as unknown as MediaStreamTrack);
+    expect(audioOf(h)).toEqual([false]);
+  });
+
+  test('la reconnexion du socket re-rejoint micro coupé', async () => {
+    const h = await mutedInCall();
+    h.binding.authenticated();
+    expect((h.requested.at(-1)?.[1] as { settings: { audioEnabled: boolean } }).settings.audioEnabled).toBe(false);
+    expect(audioOf(h)).toEqual([false]);
+  });
+
+  test('une reprise ICE (renégociation) ne touche pas au micro', async () => {
+    const h = await mutedInCall();
+    h.linkState(h.links[0] as FakeLink, 'reconnecting');
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    expect(audioOf(h)).toEqual([false]);
+    expect(h.call()?.micMuted).toBe(true);
+  });
+});
+
