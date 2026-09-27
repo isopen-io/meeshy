@@ -334,12 +334,17 @@ export const callersIn = (contents, nsNames) => {
 // appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
 // 335 → 334 (#8167, 2026-09-27) : Paramètres > Confidentialité efface le
 // carnet d'adresses par `directory.contacts` (`lib/api/address-book.ts`).
-// 334 → 332 (#8289, 2026-09-27) : la fiche éditable d'un membre appelle
+// 334 → 335 (#8284, 2026-09-27) : décision porteur — le carnet s'efface à la
+// suppression du compte, jamais à la main. La rangée web et `DELETE
+// /directory/contacts` sont partis ; `directory.contacts` (GET · PUT · PATCH)
+// n'a plus d'appelant TS, il reste servi au catalogue Swift (synchronisation et
+// lecture du Répertoire iOS). Retour exact à la valeur d'avant #8167.
+// 335 → 333 (#8289, 2026-09-27) : la fiche éditable d'un membre appelle
 // `admin.usersByUserIdVerifications`, `admin.usersByUserIdSecurity` et la
 // route neuve `admin.usersByUserIdVerificationRequests`
 // (`lib/api/admin-user-verifications.ts`) — trois entrées vivantes pour une
 // entrée ajoutée.
-const BASELINE_DEAD_ENTRIES = 332;
+const BASELINE_DEAD_ENTRIES = 333;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -366,7 +366,10 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       // ARMER un second facteur jamais appairé enfermerait le membre dehors
       // (#8289) : la connexion exige alors un code TOTP que `TwoFactorService`
       // ne peut vérifier sans secret. Refusé AVANT toute écriture du lot.
-      if (valide.twoFactorEnabled === true && !cible!.twoFactorEnabledAt && !cible!.twoFactorSecret) {
+      // `getUserById` lit la LIGNE entière (sans `select`) : le secret y est,
+      // même si `FullUser` — la forme servie — ne le déclare pas, à dessein.
+      const secret = (cible as unknown as { twoFactorSecret?: string | null }).twoFactorSecret;
+      if (valide.twoFactorEnabled === true && !cible!.twoFactorEnabledAt && !secret) {
         sendError(reply, 409, 'The member has not paired an authenticator app', { code: 'TWO_FACTOR_NOT_ENROLLED' });
         return;
       }

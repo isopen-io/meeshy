@@ -6,6 +6,7 @@ import arMediaViewer from './catalog-ar-media-viewer';
 import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
+import arAccounts from './catalog-ar-accounts';
 import arCall from './catalog-ar-call';
 import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
@@ -13,7 +14,6 @@ import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
 import arCallFeedback from './catalog-ar-call-feedback';
 import arCallsErase from './catalog-ar-calls-erase';
-import arAddressBook from './catalog-ar-address-book';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arCallQuality from './catalog-ar-call-quality';
@@ -213,6 +213,7 @@ const ar = {
   ...arVerifyEmail,
   ...arActivation,
   ...arPassword,
+  ...arAccounts,
   ...arCall,
   ...arRowActions,
   ...arCallShell,
@@ -220,7 +221,6 @@ const ar = {
   ...arCallDecline,
   ...arCallFeedback,
   ...arCallsErase,
-  ...arAddressBook,
   ...arCallDevices,
   ...arCallScreen,
   ...arCallQuality,

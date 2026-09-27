@@ -80725,100 +80725,6 @@
         }
       }
     },
-    "contacts.phonebook.erase-error": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذّر مسح دفتر الهاتف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Telefonbuch konnte nicht gelöscht werden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't clear the phonebook"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo borrar la agenda telefónica"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d'effacer le répertoire"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossibile cancellare la rubrica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível apagar a agenda telefônica"
-          }
-        }
-      }
-    },
-    "contacts.phonebook.erased": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم مسح دفتر العناوين"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adressbuch gelöscht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Address book cleared"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agenda borrada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Répertoire effacé"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rubrica cancellata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agenda apagada"
-          }
-        }
-      }
-    },
     "contacts.phonebook.filter.all": {
       "extractionState": "manual",
       "localizations": {
@@ -155937,43 +155843,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستعود إلى شاشة تسجيل الدخول. سيبقى هذا الحساب في القائمة، وسيُطلب منك كلمة المرور مرة أخرى."
+            "value": "انتقل من حساب إلى آخر دون تسجيل الخروج."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kehrst zum Anmeldebildschirm zurück. Dieses Konto bleibt in der Liste, und das Passwort wird erneut abgefragt."
+            "value": "Wechsle zwischen deinen Konten, ohne dich abzumelden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You will return to the sign-in screen. This account stays in the list, and its password will be asked again."
+            "value": "Move between your accounts without signing out."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volverás a la pantalla de inicio de sesión. Esta cuenta seguirá en la lista y se te pedirá su contraseña."
+            "value": "Pasa de una cuenta a otra sin cerrar sesión."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé."
+            "value": "Passez d’un compte à l’autre sans vous déconnecter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tornerai alla schermata di accesso. Questo account resta nell’elenco e la password verrà richiesta di nuovo."
+            "value": "Passa da un account all’altro senza disconnetterti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você voltará à tela de login. Esta conta continuará na lista e a senha será solicitada novamente."
+            "value": "Alterne entre suas contas sem sair."
           }
         }
       }
@@ -204849,241 +204755,6 @@
         }
       }
     },
-    "contacts.phonebook.erase.action": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مسح دفتر عناويني"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mein Adressbuch löschen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erase my address book"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Borrar mi agenda"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer mon carnet d'adresses"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancella la mia rubrica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apagar minha agenda"
-          }
-        }
-      }
-    },
-    "contacts.phonebook.erase.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تُستخدم جهات اتصالك فقط لإعلامك عندما ينضم صديق إلى Meeshy."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Kontakte dienen nur dazu, dich zu benachrichtigen, wenn ein Freund Meeshy beitritt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your contacts are only used to let you know when a friend joins Meeshy."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus contactos solo sirven para avisarte cuando un amigo se une a Meeshy."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tes contacts servent uniquement à te prévenir quand un ami rejoint Meeshy."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi contatti servono solo ad avvisarti quando un amico si unisce a Meeshy."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus contatos servem apenas para avisar você quando um amigo entra no Meeshy."
-          }
-        }
-      }
-    },
-    "contacts.phonebook.erase.confirm.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مسح دفتر عناوينك؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dein Adressbuch löschen?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erase your address book?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Borrar tu agenda?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer ton carnet d'adresses ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancellare la tua rubrica?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apagar sua agenda?"
-          }
-        }
-      }
-    },
-    "contacts.phonebook.erase.confirm.message": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تُحذف جهات اتصالك المتزامنة من خوادمنا، مع سجل الأصدقاء الذين أُعلن لك عن انضمامهم. لن يُرسل أي شيء مجددًا حتى تقوم بالمزامنة مرة أخرى."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine synchronisierten Kontakte werden von unseren Servern gelöscht, zusammen mit dem Verlauf der Freunde, deren Beitritt dir angekündigt wurde. Nichts wird erneut gesendet, bis du wieder synchronisierst."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your synced contacts are deleted from our servers, along with the record of friends whose arrival was announced to you. Nothing is sent again until you sync once more."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus contactos sincronizados se eliminan de nuestros servidores, junto con el registro de los amigos cuya llegada se te anunció. No se vuelve a enviar nada hasta que sincronices de nuevo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tes contacts synchronisés sont supprimés de nos serveurs, avec la trace des amis dont l'arrivée t'a été annoncée. Rien n'est renvoyé tant que tu ne synchronises pas de nouveau."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi contatti sincronizzati vengono eliminati dai nostri server, insieme alla traccia degli amici di cui ti è stato annunciato l'arrivo. Non viene inviato più nulla finché non sincronizzi di nuovo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus contatos sincronizados são excluídos dos nossos servidores, junto com o registro dos amigos cuja chegada foi anunciada a você. Nada é enviado de novo até que você sincronize outra vez."
-          }
-        }
-      }
-    },
-    "contacts.phonebook.erase.confirm.button": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مسح"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Löschen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erase"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Borrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancella"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apagar"
-          }
-        }
-      }
-    },
     "call.group.start.menu": {
       "extractionState": "manual",
       "localizations": {
@@ -205550,6 +205221,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconectando…"
+          }
+        }
+      }
+    },
+    "accounts.keep_signed_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "البقاء متصلاً على هذا الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät angemeldet bleiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stay signed in on this device"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener la sesión en este dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rester connecté sur cet appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resta connesso su questo dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manter sessão neste dispositivo"
+          }
+        }
+      }
+    },
+    "accounts.row.current": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحساب الحالي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktuelles Konto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuenta actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compte actuel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account attuale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conta atual"
+          }
+        }
+      }
+    },
+    "accounts.row.signed_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angemeldet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión iniciada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connesso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado"
+          }
+        }
+      }
+    },
+    "accounts.add": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة حساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add an account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir una cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi un account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar uma conta"
           }
         }
       }

@@ -6,6 +6,7 @@ import esMediaViewer from './catalog-es-media-viewer';
 import esActivation from './catalog-es-activation';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
+import esAccounts from './catalog-es-accounts';
 import esCall from './catalog-es-call';
 import esRowActions from './catalog-es-row-actions';
 import esCallShell from './catalog-es-call-shell';
@@ -13,7 +14,6 @@ import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
 import esCallFeedback from './catalog-es-call-feedback';
 import esCallsErase from './catalog-es-calls-erase';
-import esAddressBook from './catalog-es-address-book';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
 import esCallQuality from './catalog-es-call-quality';
@@ -213,6 +213,7 @@ const es = {
   ...esVerifyEmail,
   ...esActivation,
   ...esPassword,
+  ...esAccounts,
   ...esCall,
   ...esRowActions,
   ...esCallShell,
@@ -220,7 +221,6 @@ const es = {
   ...esCallDecline,
   ...esCallFeedback,
   ...esCallsErase,
-  ...esAddressBook,
   ...esCallDevices,
   ...esCallScreen,
   ...esCallQuality,

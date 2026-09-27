@@ -19,6 +19,7 @@ import frMediaViewer from './catalog-fr-media-viewer';
 import frActivation from './catalog-fr-activation';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
+import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
@@ -26,7 +27,6 @@ import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
 import frCallFeedback from './catalog-fr-call-feedback';
 import frCallsErase from './catalog-fr-calls-erase';
-import frAddressBook from './catalog-fr-address-book';
 import frCallDevices from './catalog-fr-call-devices';
 import frCallScreen from './catalog-fr-call-screen';
 import frCallQuality from './catalog-fr-call-quality';
@@ -203,6 +203,7 @@ const fr = {
   ...frVerifyEmail,
   ...frActivation,
   ...frPassword,
+  ...frAccounts,
   ...frCall,
   ...frRowActions,
   ...frCallShell,
@@ -210,7 +211,6 @@ const fr = {
   ...frCallDecline,
   ...frCallFeedback,
   ...frCallsErase,
-  ...frAddressBook,
   ...frCallDevices,
   ...frCallScreen,
   ...frCallQuality,

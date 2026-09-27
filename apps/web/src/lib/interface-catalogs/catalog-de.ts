@@ -6,6 +6,7 @@ import deMediaViewer from './catalog-de-media-viewer';
 import deActivation from './catalog-de-activation';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
+import deAccounts from './catalog-de-accounts';
 import deCall from './catalog-de-call';
 import deRowActions from './catalog-de-row-actions';
 import deCallShell from './catalog-de-call-shell';
@@ -13,7 +14,6 @@ import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
 import deCallFeedback from './catalog-de-call-feedback';
 import deCallsErase from './catalog-de-calls-erase';
-import deAddressBook from './catalog-de-address-book';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
 import deCallQuality from './catalog-de-call-quality';
@@ -213,6 +213,7 @@ const de = {
   ...deVerifyEmail,
   ...deActivation,
   ...dePassword,
+  ...deAccounts,
   ...deCall,
   ...deRowActions,
   ...deCallShell,
@@ -220,7 +221,6 @@ const de = {
   ...deCallDecline,
   ...deCallFeedback,
   ...deCallsErase,
-  ...deAddressBook,
   ...deCallDevices,
   ...deCallScreen,
   ...deCallQuality,

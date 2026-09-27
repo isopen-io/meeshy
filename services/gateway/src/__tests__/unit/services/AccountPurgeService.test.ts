@@ -1,9 +1,10 @@
 /**
  * Unit tests for AccountPurgeService (#3632, #5691).
  *
- * Covers the three ISOLATED tables purged when an account-deletion grace
+ * Covers the ISOLATED tables purged when an account-deletion grace
  * period expires (sessions, voice profile, share links created by the
- * account) and the identity anonymization of the `User` row (#5691).
+ * account; the address book and notifications live in
+ * `AccountPurgeAddressBook.test.ts`, #8284) and the identity anonymization of the `User` row (#5691).
  * Messages/media anonymization are explicitly out of scope for this module —
  * see its doc-comment (#5689, #5690).
  *
@@ -24,6 +25,15 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     conversationShareLink: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    notification: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    userContact: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    contactJoinNotice: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   } as any;
 }
@@ -50,10 +60,18 @@ describe('purgeAccountIsolatedData', () => {
     expect(summary.shareLinksDeleted).toBe(2);
   });
 
-  it('runs all three deletions even when every table is already empty (idempotent)', async () => {
+  it('runs every deletion even when every table is already empty (idempotent)', async () => {
     const prisma = fakePrisma();
     const summary = await purgeAccountIsolatedData(prisma, USER_ID);
-    expect(summary).toEqual({ sessionsDeleted: 0, voiceProfileDeleted: 0, shareLinksDeleted: 0 });
+    expect(summary).toEqual({
+      sessionsDeleted: 0,
+      voiceProfileDeleted: 0,
+      shareLinksDeleted: 0,
+      notificationsDeleted: 0,
+      addressBookContactsDeleted: 0,
+      contactJoinNoticesDeleted: 0,
+      arrivalAnnouncementsDeleted: 0,
+    });
   });
 });
 
