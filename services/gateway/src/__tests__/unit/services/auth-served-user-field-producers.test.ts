@@ -452,13 +452,23 @@ describe('chaque champ que `userSchema` promet a un producteur (#4641)', () => {
     await app.close();
   });
 
+  it('`activation` (#8238) est servi comme un objet, calculé depuis les colonnes du compte', async () => {
+    const { app } = await monterConnexion(compteEnBase());
+
+    const user = (await parMotDePasse(app)).json().data.user;
+
+    expect(user.activation).toEqual({ phase: 'done', deadline: null, missing: [] });
+    await app.close();
+  });
+
   it('la table des valeurs attendues couvre TOUT le contrat, moins les exemptions écrites', () => {
     // Sans ce témoin, oublier une ligne de `SERVI_ATTENDU` affaiblirait la
     // garde en silence : le champ omis ne serait plus confronté à rien.
     const couverts = new Set([
       ...Object.keys(SERVI_ATTENDU),
       ...Object.keys(SANS_PRODUCTEUR_ASSUME),
-      'permissions'
+      'permissions',
+      'activation'
     ]);
 
     expect(CHAMPS_PROMIS.filter((champ) => !couverts.has(champ))).toEqual([]);

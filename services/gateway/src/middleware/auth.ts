@@ -11,6 +11,8 @@ import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
+import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
+import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -43,6 +45,8 @@ export type RegisteredUser = {
   readonly lastActiveAt: Date;
   readonly emailVerifiedAt?: Date | null;
   readonly profileCompletionRate?: number;
+  /** Le délai de grâce de l'adresse (#8238), calculé ici pour `GET /me`. */
+  readonly activation?: AccountActivation;
 }
 
 export type UnifiedAuthContext = {
@@ -175,13 +179,25 @@ class SessionRevokedError extends Error {
   }
 }
 
+export type AuthMiddlewareOptions = {
+  /** L'horloge du délai de grâce — injectée par les témoins. */
+  readonly now?: () => Date;
+};
+
+export { ActivationBlockedError };
+
 // ===== SERVICE =====
 
 export class AuthMiddleware {
+  private readonly now: () => Date;
+
   constructor(
     private prisma: PrismaClient,
-    private statusService?: StatusService
-  ) {}
+    private statusService?: StatusService,
+    options: AuthMiddlewareOptions = {}
+  ) {
+    this.now = options.now ?? (() => new Date());
+  }
 
   async createAuthContext(
     authorizationHeader?: string,
@@ -341,15 +357,17 @@ export class AuthMiddleware {
         isOnline: boolean;
         lastActiveAt: string;
         emailVerifiedAt: string | null;
+        emailReleasedAt?: string | null;
         createdAt: string;
         updatedAt: string;
         deviceLocale: string | null;
         profileCompletionRate: number | null;
       };
 
-      type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'createdAt' | 'updatedAt'> & {
+      type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'emailReleasedAt' | 'createdAt' | 'updatedAt'> & {
         lastActiveAt: Date;
         emailVerifiedAt: Date | null;
+        emailReleasedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
         isActive: boolean;
@@ -359,6 +377,7 @@ export class AuthMiddleware {
         ...cached,
         lastActiveAt: new Date(cached.lastActiveAt),
         emailVerifiedAt: cached.emailVerifiedAt ? new Date(cached.emailVerifiedAt) : null,
+        emailReleasedAt: cached.emailReleasedAt ? new Date(cached.emailReleasedAt) : null,
         createdAt: new Date(cached.createdAt),
         updatedAt: new Date(cached.updatedAt),
       });
@@ -405,6 +424,7 @@ export class AuthMiddleware {
             lastActiveAt: true,
             isActive: true,
             emailVerifiedAt: true,
+            emailReleasedAt: true,
             createdAt: true,
             updatedAt: true,
             deviceLocale: true,
@@ -434,6 +454,7 @@ export class AuthMiddleware {
             isOnline: user.isOnline,
             lastActiveAt: user.lastActiveAt.toISOString(),
             emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            emailReleasedAt: user.emailReleasedAt?.toISOString() ?? null,
             createdAt: user.createdAt.toISOString(),
             updatedAt: user.updatedAt.toISOString(),
             deviceLocale: user.deviceLocale,
@@ -449,6 +470,14 @@ export class AuthMiddleware {
 
       if (!user || !user.isActive) {
         throw new Error('User not found or inactive');
+      }
+
+      // #8238 — lu sur la ligne, fraîche ou en cache : le délai dépend de
+      // l'heure, pas de la ligne, et se recalcule à chaque requête.
+      const activation = resolveAccountActivation(user, this.now());
+      if (activation.phase === 'blocked') {
+        authLogger.info('[AUTH] Requête refusée : délai de grâce de l\'adresse passé (#8238)', { userId: user.id });
+        throw new ActivationBlockedError();
       }
 
       if (this.statusService) {
@@ -487,11 +516,12 @@ export class AuthMiddleware {
         hasFullAccess: true,
         canSendMessages: true,
 
-        registeredUser: user as RegisteredUser,
+        registeredUser: { ...user, activation } as RegisteredUser,
         jwtPayload,
       };
 
     } catch (error) {
+      if (error instanceof ActivationBlockedError) throw error;
       if (error instanceof jwt.TokenExpiredError) {
         const tokenPrefix = jwtToken.slice(-8);
         const now = Date.now();
@@ -696,9 +726,10 @@ export function createUnifiedAuthMiddleware(
     requireAuth?: boolean;
     allowAnonymous?: boolean;
     statusService?: StatusService;
+    now?: () => Date;
   } = {}
 ) {
-  const authMiddleware = new AuthMiddleware(prisma, options.statusService);
+  const authMiddleware = new AuthMiddleware(prisma, options.statusService, { now: options.now });
 
   const unifiedAuth = async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
@@ -767,6 +798,10 @@ export function createUnifiedAuthMiddleware(
           error: 'GUEST_ACCESS_REVOKED',
           message: "L'acces de cet invite a ete retire"
         });
+      }
+
+      if (options.requireAuth && error instanceof ActivationBlockedError) {
+        return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
       }
 
       if (options.requireAuth) {

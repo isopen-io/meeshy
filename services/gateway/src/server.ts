@@ -73,6 +73,7 @@ import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanup
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 import { typedErrorResponse } from './errors/custom-errors';
+import { prismaRecipientAddressLookup, registerEmailRecipientLookup } from './services/email/recipient-policy';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -221,8 +222,8 @@ class MeeshyServer {
       },
     }) as unknown as PrismaClient;
 
-    // NOUVEAU: Initialiser le StatusService en premier (requis par AuthMiddleware)
-    this.statusService = new StatusService(this.prisma);
+    registerEmailRecipientLookup(prismaRecipientAddressLookup(this.prisma)); // #8238 — garde centrale des e-mails
+    this.statusService = new StatusService(this.prisma); // requis par AuthMiddleware
 
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
     this.jobMappingCache = new MultiLevelJobMappingCache(getCacheStore());

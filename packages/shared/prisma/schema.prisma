@@ -2341,6 +2341,11 @@ model CallSession {
   /// Whether transcription was enabled during this call
   transcriptionEnabled Boolean @default(false)
 
+  /// Appel vidéo (`true`) ou vocal — posé à la création depuis `metadata.type`,
+  /// requêtable pour le filtre du journal (#8203). Absent sur un appel antérieur
+  /// non rattrapé (migration 020) : il se lit « vocal ».
+  isVideo Boolean?
+
   /// Call metadata
   metadata Json? // { maxParticipants, recordingEnabled, etc. }
 

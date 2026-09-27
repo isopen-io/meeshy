@@ -26,7 +26,7 @@ import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../..
 import { candidatsDePseudo } from '../../utils/username-candidates';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
-import { pendingSessionTokenFor, pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
+import { pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -175,7 +175,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent, and the account is usable at once: the response carries the session (`token`, `sessionToken`) and `user.activation`, the email grace period (#8238: quiet for 7 days, invite until day 28, then blocked until the email is proven — never blocked with a phone number). An email CLAIM (`claimEmail`, #8214) is the exception: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -428,17 +428,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // son e-mail l'annoncera une fois prouvé.
       scheduleContactJoinedAnnouncement(context.prisma, user.id, { afterResponse });
 
-      // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
-      // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code
-      // et le lien sont partis avec l'e-mail de vérification ; seule leur
-      // preuve (`POST /auth/verify-email`) ouvre la session. Même réponse que
-      // la connexion d'une adresse inconnue (#8033). Un numéro — saisi, ou
-      // transféré depuis un autre compte — active le compte tout de suite.
-      const avecNumero = Boolean(user.phoneNumber) || phoneTransferValidated;
-      if (!avecNumero) {
-        const attente = await pendingSessionTokenFor(context.prisma, user.email);
-        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: user.email, ...attente });
-      }
+      // #8238 — AVEC OU SANS NUMÉRO, LE COMPTE S'UTILISE TOUT DE SUITE : le
+      // délai de grâce de l'adresse (`services/auth/account-activation.ts`)
+      // remplace le blocage immédiat de #8055. Le code et le lien sont partis
+      // avec l'e-mail de vérification, pour plus tard ; `user.activation`
+      // dit aux clients où en est le délai.
 
       // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée
       // désormais une session, comme la connexion.

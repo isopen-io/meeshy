@@ -1,16 +1,13 @@
 /**
- * Sans numéro de téléphone, un compte n'est ACTIF qu'une fois son adresse
- * prouvée ; avec un numéro, il l'est tout de suite (#8055).
+ * La porte du MOT DE PASSE sous le délai de grâce de l'adresse (#8238), qui
+ * REMPLACE le blocage immédiat de #8055.
  *
- * Règle porteur 2026-09-26 : « Le code s'entre après la création de compte la
- * première fois pour continuer sur l'application ! Sans ce code on ne rejoint
- * aucun canal, le compte reste inactif ! Si un numéro est donné en plus de
- * l'email, le compte est activé directement. »
+ * Un compte sans numéro dont l'adresse n'est pas prouvée s'utilise 7 jours
+ * sans rien (`quiet`), reste ouvert de J7 à J28 (`invite`), puis est bloqué
+ * (`blocked`) : le BON mot de passe n'ouvre alors aucune session — le refus
+ * nomme l'adresse, pour que la route renvoie le code.
  *
- * Ces témoins portent sur `AuthService.authenticate` : le BON mot de passe
- * d'un compte non vérifié et sans numéro n'ouvre AUCUNE session — le refus
- * nomme l'adresse, pour que la route renvoie le code ; le même compte avec un
- * numéro garde sa session.
+ * Horloge INJECTÉE (`AuthServiceOptions.now`) : jamais l'horloge murale.
  *
  * @jest-environment node
  */
@@ -39,6 +36,11 @@ jest.mock('../../../services/EmailService', () => ({
 
 import { AuthService } from '../../../services/AuthService';
 import { ActivationRequiresEmailProofError } from '../../../errors/custom-errors';
+import { ACTIVATION_GRACE_EPOCH } from '../../../services/auth/account-activation';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CREATED = new Date(ACTIVATION_GRACE_EPOCH.getTime() + DAY_MS);
+const jour = (n: number): Date => new Date(CREATED.getTime() + n * DAY_MS);
 
 const compte = (overrides: Record<string, unknown> = {}) => ({
   id: '507f1f77bcf86cd799439011',
@@ -67,25 +69,28 @@ const compte = (overrides: Record<string, unknown> = {}) => ({
   phoneVerifiedAt: null,
   pendingEmail: null,
   pendingPhoneNumber: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  createdAt: CREATED,
+  updatedAt: CREATED,
   failedLoginAttempts: 0,
   lockedUntil: null,
   ...overrides,
 });
 
-const service = (ligne: Record<string, unknown>) => {
+const service = (ligne: Record<string, unknown>, maintenant: Date = jour(30)) => {
   const update = jest.fn(async (_args: unknown) => ligne);
   const prisma = { user: { findFirst: jest.fn(async () => ligne), update, findUnique: jest.fn(async () => ligne) } };
-  return { svc: new AuthService(prisma as never, 'secret-de-test'), update };
+  return { svc: new AuthService(prisma as never, 'secret-de-test', { now: () => maintenant }), update };
 };
+
+const envoisDeVerification = (svc: AuthService): jest.Mock =>
+  (svc as unknown as { emailService: { sendEmailVerification: jest.Mock } }).emailService.sendEmailVerification;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockCompare.mockResolvedValue(true);
 });
 
-describe('compte NON vérifié et SANS numéro — le bon mot de passe', () => {
+describe('compte NON vérifié et SANS numéro, J28 passé (`blocked`) — le bon mot de passe', () => {
   it("n'ouvre aucune session : le refus nomme l'adresse à qui renvoyer le code", async () => {
     const { svc } = service(compte());
 
@@ -112,22 +117,64 @@ describe('compte NON vérifié et SANS numéro — le bon mot de passe', () => {
   });
 });
 
-describe('ce qui reste actif tout de suite', () => {
-  it('compte non vérifié AVEC numéro : session ouverte', async () => {
-    const { svc } = service(compte({ phoneNumber: '+33612345678' }));
+describe('compte NON vérifié et SANS numéro, pendant le délai de grâce', () => {
+  it.each([
+    ['J0 (`quiet`)', 0],
+    ['J6 (`quiet`)', 6],
+    ['J7 (`invite`)', 7],
+    ['J27 (`invite`)', 27],
+  ] as const)('%s : session ouverte', async (_nom, j) => {
+    const { svc } = service(compte(), jour(j));
 
     const res = await svc.authenticate({ username: 'lena', password: 'le-vrai' });
 
     expect(res?.sessionToken).toBe('session-token');
-    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+    expect(res?.user.activation?.phase).toBe(j < 7 ? 'quiet' : 'invite');
+    expect(res?.user.activation?.deadline).toBe(jour(28).toISOString());
   });
 
-  it('compte VÉRIFIÉ sans numéro : session ouverte', async () => {
-    const { svc } = service(compte({ emailVerifiedAt: new Date() }));
+  it("aucun e-mail n'est envoyé à la connexion : rien n'est demandé pendant le délai", async () => {
+    const { svc } = service(compte(), jour(10));
+
+    await svc.authenticate({ username: 'lena', password: 'le-vrai' });
+
+    expect(envoisDeVerification(svc)).not.toHaveBeenCalled();
+  });
+
+  it('J28 : refusé', async () => {
+    const { svc } = service(compte(), jour(28));
+    await expect(svc.authenticate({ username: 'lena', password: 'le-vrai' })).rejects.toBeInstanceOf(ActivationRequiresEmailProofError);
+  });
+});
+
+describe("l'horloge démarre au déploiement pour un compte qui existait déjà", () => {
+  it("un compte vieux d'un an, non vérifié et sans numéro, se connecte le jour du déploiement", async () => {
+    const { svc } = service(compte({ createdAt: new Date('2025-06-01T00:00:00.000Z') }), ACTIVATION_GRACE_EPOCH);
+
+    const res = await svc.authenticate({ username: 'lena', password: 'le-vrai' });
+
+    expect(res?.user.activation?.phase).toBe('quiet');
+  });
+});
+
+describe('ce qui n’est jamais bloqué', () => {
+  it('compte non vérifié AVEC numéro, même à J400 : session ouverte, invitation sans échéance', async () => {
+    const { svc } = service(compte({ phoneNumber: '+33612345678' }), jour(400));
 
     const res = await svc.authenticate({ username: 'lena', password: 'le-vrai' });
 
     expect(res?.sessionToken).toBe('session-token');
+    expect(res?.user.activation).toEqual({ phase: 'invite', deadline: null, missing: ['email'] });
+    expect(envoisDeVerification(svc)).not.toHaveBeenCalled();
+  });
+
+  it('compte VÉRIFIÉ sans numéro : session ouverte, `done`', async () => {
+    const { svc } = service(compte({ emailVerifiedAt: jour(1) }), jour(400));
+
+    const res = await svc.authenticate({ username: 'lena', password: 'le-vrai' });
+
+    expect(res?.sessionToken).toBe('session-token');
+    expect(res?.user.activation).toEqual({ phase: 'done', deadline: null, missing: ['phone'] });
   });
 });
 
@@ -145,11 +192,9 @@ describe('compte qui a CÉDÉ son adresse à une revendication prouvée (#8214)'
 
   it('aucun code n’est renvoyé à l’adresse non routable', async () => {
     const { svc } = service(cede());
-    const envoi = (svc as unknown as { emailService: { sendEmailVerification: jest.Mock } }).emailService.sendEmailVerification;
-
     await svc.authenticate({ username: 'lena', password: 'le-vrai' });
 
-    expect(envoi).not.toHaveBeenCalled();
+    expect(envoisDeVerification(svc)).not.toHaveBeenCalled();
   });
 });
 

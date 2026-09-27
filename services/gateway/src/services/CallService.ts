@@ -34,7 +34,6 @@ import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
-import type { PresenceViewer } from './PresenceVisibilityService';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -1214,6 +1213,7 @@ export class CallService {
           initiatorId,
           mode: CallMode.p2p, // Phase 1A: P2P only
           status: CallStatus.initiated,
+          isVideo: type === 'video',
           metadata: {
             type, // 'video' or 'audio'
             ...settings
@@ -2321,7 +2321,7 @@ export class CallService {
   /** Le journal des appels — `listCallHistory` (`calls/callHistoryList.ts`). */
   async listHistory(
     userId: string,
-    options: { limit: number; cursor?: string; filter: 'all' | 'missed'; viewer: PresenceViewer }
+    options: Parameters<typeof listCallHistory>[2]
   ): Promise<{ items: CallHistoryItem[]; hasMore: boolean; nextCursor?: string }> {
     return listCallHistory(this.prisma, userId, options);
   }
