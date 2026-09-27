@@ -24,9 +24,7 @@ enum EmailVerificationGateScreen {
 
     @MainActor
     private static func topMostController() -> UIViewController? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? scenes.first?.windows.first
-        var top = window?.rootViewController
+        var top = DeviceLayout.activeWindow?.rootViewController
         while let presented = top?.presentedViewController, !presented.isBeingDismissed {
             top = presented
         }
