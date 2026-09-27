@@ -339,5 +339,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // d'appel, qu'un `.overlay` posé plus tôt laisserait flotter sur la
             // carte. Garde : `OnboardingAboveGlobalChromeGuardTests`.
             .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
+            // l'onboarding (`OnboardingPresenceSignal`).
+            .activationInviteHost()
     }
 }
