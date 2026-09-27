@@ -135,6 +135,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let preferredLanguage: @MainActor () -> String?
     private let isRegisteredUser: @MainActor () -> Bool
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
+    private let dialCallBack: @MainActor (CallBackRequest) -> Void
     private let localMarkRead: @MainActor (String) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
@@ -191,6 +192,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
+        dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
+            CallBackDialer.shared.dial(request)
+        },
         localMarkRead: @escaping @MainActor (String) -> Void = { conversationId in
             // Les trois surfaces du compteur, en un seul point d'écriture.
             ConversationReadSignal.markReadLocally(conversationId)
@@ -235,6 +239,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.preferredLanguage = preferredLanguage
         self.isRegisteredUser = isRegisteredUser
         self.openNotification = openNotification
+        self.dialCallBack = dialCallBack
         self.localMarkRead = localMarkRead
         self.consume = consume
         self.removeDeliveredForConversation = removeDeliveredForConversation
@@ -360,8 +365,15 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.decline.rawValue:
             await handleFriendResponse(payload, userInfo: userInfo, accepted: false)
 
+        case MeeshyNotificationAction.callback.rawValue:
+            await consumeTapped(payload)
+            guard let request = CallBackRequest(notification: payload) else {
+                openNotification(userInfo)
+                return
+            }
+            dialCallBack(request)
+
         case MeeshyNotificationAction.view.rawValue,
-             MeeshyNotificationAction.callback.rawValue,
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
             // deep-link router decides the destination based on payload.type.

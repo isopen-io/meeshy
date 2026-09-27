@@ -21,7 +21,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'mention', 'someone',
   'reference.post', 'reference.reel', 'reference.story', 'reference.status',
   'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
-  'call.missed', 'call.incoming.title', 'call.incoming.body', 'call.action.answer', 'call.action.decline',
+  'call.missed', 'call.incoming.title', 'call.incoming.body', 'call.action.answer', 'call.action.decline', 'call.action.callBack',
   'contact.request', 'contact.accepted',
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',

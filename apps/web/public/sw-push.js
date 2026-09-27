@@ -412,13 +412,36 @@ function donneesDuTap(data) {
   return retenu;
 }
 
+const CALL_BACK_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
+const CALL_BACK_ACTION = 'call-back';
+const CALL_BACK_PARAM = 'rappeler';
+const CALL_BACK_NAME_PARAM = 'appelant';
+const CALL_BACK_GROUP_PARAM = 'groupe';
+
+function rappel(data) {
+  const conversationId = texte(data.conversationId);
+  const libelle = texte(data.callBackLabel);
+  if (CALL_BACK_TYPES.indexOf(texte(data.type)) < 0 || conversationId === '' || libelle === '') return null;
+  const typeDeConversation = texte(data.conversationType);
+  const groupe = typeDeConversation !== '' && typeDeConversation !== 'direct';
+  const titre = groupe
+    ? texte(data.conversationTitle)
+    : texte(data.senderDisplayName) || texte(data.senderUsername);
+  return {
+    action: { action: CALL_BACK_ACTION, title: libelle },
+    callBack: { conversationId: conversationId, media: texte(data.callType) === 'video' ? 'video' : 'audio', title: titre, isGroup: groupe },
+  };
+}
+
 function montrer(banniere, notification, data) {
+  const offre = rappel(data);
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
-    data: donneesDuTap(data),
+    ...(offre === null ? {} : { actions: [offre.action] }),
+    data: offre === null ? donneesDuTap(data) : { ...donneesDuTap(data), callBack: offre.callBack },
   });
 }
 
@@ -621,6 +644,36 @@ async function ouvrirAppel(data, action) {
   client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, ...(repondre ? { answerCallId: callId } : {}) });
 }
 
+async function rappeler(data) {
+  const cible = objet(data.callBack);
+  const conversationId = texte(cible.conversationId);
+  if (conversationId === '') {
+    await ouvrir(data);
+    return;
+  }
+  const callBack = {
+    conversationId: conversationId,
+    media: texte(cible.media) === 'video' ? 'video' : 'audio',
+    title: texte(cible.title),
+    isGroup: cible.isGroup === true,
+  };
+  const fil = pushTargetUrl({ conversationId: conversationId });
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    const query = new URLSearchParams();
+    query.set(CALL_BACK_PARAM, callBack.media);
+    if (callBack.title !== '') query.set(CALL_BACK_NAME_PARAM, callBack.title);
+    if (callBack.isGroup) query.set(CALL_BACK_GROUP_PARAM, '1');
+    await self.clients.openWindow(fil + '?' + query.toString());
+    return;
+  }
+  await Promise.resolve()
+    .then(() => client.focus())
+    .catch(() => undefined);
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, callBack: callBack });
+}
+
 async function ouvrir(data) {
   const url = pushTargetUrl(data);
   const ouvertes = await fenetres();
@@ -645,8 +698,13 @@ self.addEventListener('push', (evenement) => {
 self.addEventListener('notificationclick', (evenement) => {
   evenement.notification.close();
   const data = objet(evenement.notification.data);
+  const action = texte(evenement.action);
   evenement.waitUntil(
-    texte(data.type) === CALL_PUSH_TYPE ? ouvrirAppel(data, texte(evenement.action)) : ouvrir(data),
+    texte(data.type) === CALL_PUSH_TYPE
+      ? ouvrirAppel(data, action)
+      : action === CALL_BACK_ACTION
+        ? rappeler(data)
+        : ouvrir(data),
   );
 });
 

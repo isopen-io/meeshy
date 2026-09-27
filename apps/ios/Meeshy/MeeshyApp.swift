@@ -240,6 +240,11 @@ struct MeeshyApp: App {
                     }
                     let _ = deepLinkRouter.handle(url: url)
                 }
+                .onContinueUserActivity(CallBackRequest.startCallActivityType) { userActivity in
+                    guard authManager.isAuthenticated,
+                          let request = CallBackRequest(userActivity: userActivity) else { return }
+                    CallBackDialer.shared.dial(request)
+                }
                 .task {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
