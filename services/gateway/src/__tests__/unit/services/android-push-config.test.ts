@@ -34,8 +34,22 @@ describe('androidNotificationConfig — la bannière d’une conversation rempla
     expect(androidNotificationConfig({ ...banner, threadId: 'conv-42' }).tag).toBe('conv-42');
   });
 
-  it('no threadId (groupNotifications:false) means no tag: every message keeps its own banner', () => {
+  it('no threadId and no notificationId means no tag', () => {
     expect(androidNotificationConfig(banner)).not.toHaveProperty('tag');
     expect(androidNotificationConfig({ ...banner, threadId: '' })).not.toHaveProperty('tag');
+  });
+});
+
+describe('androidNotificationConfig — une notification corrigée remplace SA bannière, comme sur le web (#8201)', () => {
+  it('without threadId the notification identity is the tag, like the web fallback to notificationId', () => {
+    expect(androidNotificationConfig({ ...banner, data: { notificationId: 'notif-7' } }).tag).toBe('notif-7');
+  });
+
+  it('the conversation still wins when both are present', () => {
+    expect(androidNotificationConfig({ ...banner, threadId: 'conv-42', data: { notificationId: 'notif-7' } }).tag).toBe('conv-42');
+  });
+
+  it('an empty notificationId sets no tag', () => {
+    expect(androidNotificationConfig({ ...banner, data: { notificationId: '' } })).not.toHaveProperty('tag');
   });
 });

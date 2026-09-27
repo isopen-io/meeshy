@@ -18,7 +18,7 @@ import type { PushNotificationPayload } from './PushNotificationService';
  * `channelId` est celui que la coque crée au démarrage
  * (`SHELL_PUSH_CHANNEL_ID`, `apps/web/src/lib/push/shell-push.ts`).
  */
-export type AndroidPushSource = Pick<PushNotificationPayload, 'title' | 'body' | 'muted' | 'sound' | 'badge' | 'threadId'>;
+export type AndroidPushSource = Pick<PushNotificationPayload, 'title' | 'body' | 'muted' | 'sound' | 'badge' | 'threadId' | 'data'>;
 
 export function androidNotificationConfig(payload: AndroidPushSource): AndroidNotification {
   return {
