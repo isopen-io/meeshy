@@ -503,6 +503,7 @@ class ConversationViewModel: ObservableObject {
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
     let attachmentTranslationService: AttachmentTranslationProviding
+    let messageEncryptor: DirectMessageEncrypting
     let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     /// Captured at init so the heavy side-effects (DB observation, initial
@@ -580,12 +581,14 @@ class ConversationViewModel: ObservableObject {
         activeCallService: ActiveCallServiceProviding = ActiveCallService.shared,
         liveCallJoin: LiveCallJoinContext = .live,
         translationService: TranslationServiceProviding = TranslationService.shared,
-        attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared
+        attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
+        messageEncryptor: DirectMessageEncrypting = SessionManager.shared
     ) {
         self.activeCallService = activeCallService
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
         self.attachmentTranslationService = attachmentTranslationService
+        self.messageEncryptor = messageEncryptor
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.lastReadMessageId = lastReadMessageId
