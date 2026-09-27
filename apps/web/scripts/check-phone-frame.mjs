@@ -34,7 +34,10 @@
  *      seuil, Safari iOS ZOOME la page au focus et ne la rend jamais : le
  *      cadre entier se met alors à glisser de côté, sur l'écran touché ET sur
  *      tous ceux que l'on ouvre ensuite — le symptôme exact du signalement,
- *      que Chromium ne reproduit pas ;
+ *      que Chromium ne reproduit pas — et il mesure au moins 44 px de large :
+ *      la correction d'un champ qui élargissait sa rangée (`w-0` sur une
+ *      saisie `flex-1`, pour que sa largeur intrinsèque ne compte plus) ne
+ *      doit jamais l'écraser à zéro dans une colonne ;
  *
  * et, pour la connexion (porte par défaut ET porte du mot de passe), à
  * 375 × 667 (iPhone SE, le plus petit téléphone courant) :
@@ -154,6 +157,7 @@ const releve = () => {
     .map((el) => ({ el, taille: parseFloat(getComputedStyle(el).fontSize) }))
     .filter(({ taille }) => taille < 16)
     .map(({ el, taille }) => `${nom(el)} à ${taille} px`);
+  const etroits = champs.filter((el) => el.getBoundingClientRect().width < 44).map((el) => `${nom(el)} (${Math.round(el.getBoundingClientRect().width)} px)`);
 
   const defileEnY = [...document.querySelectorAll('body *')]
     .filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1)
@@ -172,6 +176,7 @@ const releve = () => {
     bandes,
     champs: champs.length,
     petits,
+    etroits,
     defileEnY,
     perceptible,
   };
@@ -220,6 +225,9 @@ try {
       constate(m.documentX <= TOLERANCE, `${tag} : la page défile horizontalement (${m.documentX} px de trop, ${m.chemin})`);
       for (const c of m.colonnes) {
         constate(false, `${tag} : ${c.conteneur} défile de côté (${c.debord} px de trop, ${m.chemin}) — coupable : ${c.coupables.join(' · ') || 'introuvable'}`);
+      }
+      for (const e of m.etroits) {
+        constate(false, `${tag} : champ ${e} — plus étroit qu'un doigt, il ne se saisit pas (${m.chemin})`);
       }
       for (const p of m.petits) {
         constate(false, `${tag} : champ ${p} — sous ${CHAMP_MIN_PX} px, Safari iOS zoome au focus et le cadre glisse de côté (${m.chemin})`);

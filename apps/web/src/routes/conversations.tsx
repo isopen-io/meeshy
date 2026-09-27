@@ -773,7 +773,7 @@ export default function ConversationsScreen() {
             onChange={(e) => setSearch(e.currentTarget.value)}
             placeholder="Rechercher…"
             aria-label="Rechercher une conversation"
-            className="min-w-0 flex-1 bg-transparent text-bubble outline-none placeholder:text-ios-ink-3"
+            className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none placeholder:text-ios-ink-3"
           />
           {search ? (
             <button type="button" onClick={() => setSearch('')} className="grid size-6 place-items-center">

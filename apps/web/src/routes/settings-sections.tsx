@@ -506,7 +506,7 @@ export function AppearanceSection({
           data-interface-language
           value={interfaceChoice ?? ''}
           onChange={(event) => onInterfaceLanguage(interfaceChoiceOf(event.currentTarget.value))}
-          className={`ms-auto rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          className={`ms-auto rounded-chip px-3 text-input font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
           style={{
             minHeight: 44,
             outlineColor: 'var(--color-ios-brand)',

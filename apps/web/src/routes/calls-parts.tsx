@@ -208,7 +208,7 @@ function CallsSearchField({ language, search }: { readonly language: InterfaceLa
         aria-label={translate(language, 'calls.search')}
         placeholder={translate(language, 'calls.search')}
         enterKeyHint="search"
-        className="min-w-0 flex-1 bg-transparent text-caption outline-none"
+        className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none"
         style={{ color: INK }}
       />
       {search.value === '' ? null : (
