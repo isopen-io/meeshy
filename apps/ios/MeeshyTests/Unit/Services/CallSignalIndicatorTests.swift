@@ -275,7 +275,7 @@ final class CallHangupFastPathTests: XCTestCase {
     /// 2026-08-19, plus de `isTranscribing`. La branche-rustine qui rendait le
     /// panneau fermable après un échec moteur a disparu avec sa cause.
     func test_lastError_surfacesAsToast_andKeepsTranscriptPanelOpenForReceiveOnly() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        let view = try AppSourceGuard.callViewSource()
         guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.lastError)") else {
             XCTFail("CallView must observe transcriptionService.lastError")
             return
@@ -317,7 +317,7 @@ final class CallHangupFastPathTests: XCTestCase {
             "local ait rien demandé."
         )
 
-        guard let cycleRange = view.range(of: "private func advanceCaptionsMode() {") else {
+        guard let cycleRange = view.range(of: "func advanceCaptionsMode() {") else {
             XCTFail("CallView must define advanceCaptionsMode()")
             return
         }
@@ -336,94 +336,58 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_captionsCycleButton_actionIsAdvanceCaptionsMode() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private var captionsCycleButton: some View {") else {
-            XCTFail("CallView must define captionsCycleButton")
+    func test_captionsActionButton_actionIsAdvanceCaptionsMode() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let range = view.range(of: "func captionsActionButton(") else {
+            XCTFail("CallView must define captionsActionButton — the captions action of the rails / rows (#8394)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2200, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 3200, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("Button(action: advanceCaptionsMode)"),
-            "captionsCycleButton must drive its 3-state cycle via advanceCaptionsMode() — " +
-            "replaces the old transcriptionToggleButton/translationToggleButton pair."
+            "The captions action must drive its 3-state cycle via advanceCaptionsMode()."
         )
-        // The button's own doc comment (Step 3) NAMES .toggleStateAccessibility(isToggle:
-        // true, ...) to explain why it's deliberately NOT used — strip comment lines
-        // before asserting, or that comment's own text trips a false positive here.
-        let code = body
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
+        let code = AppSourceGuard.stripComments(body)
         XCTAssertFalse(
             code.contains(".toggleStateAccessibility(isToggle: true"),
-            "captionsCycleButton is a 3-state cycle, not a binary toggle — it must not use " +
+            "The captions action is a 3-state cycle, not a binary toggle — it must not use " +
             "the .isToggle accessibility trait (that implies exactly 2 states)."
         )
+        XCTAssertTrue(
+            view.contains("case .captions:\n            captionsActionButton("),
+            "The captions action must be reachable from the « l'appel » actions."
+        )
     }
 
-    /// Le corps de `transcriptSegmentRow(_:)`, borné à son accolade fermante
-    /// (indentation 4) au lieu d'une fenêtre de 2000 caractères. Le spec
-    /// 2026-08-13 a allongé la ligne de journal (nom + heure + badge de
-    /// langue) et le corps dépasse désormais cette fenêtre : les gardes
-    /// mesuraient une portée qui n'était plus celle de la fonction.
-    private func transcriptSegmentRowBody(_ view: String) -> String? {
-        guard let decl = view.range(of: "func transcriptSegmentRow(") else { return nil }
-        let end = view.range(of: "\n    }", range: decl.upperBound ..< view.endIndex)?.upperBound
-            ?? view.endIndex
-        return String(view[decl.lowerBound ..< end])
-    }
-
-    func test_transcriptSegmentRow_usesPrimarySecondaryColorsPerSpeaker() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let body = transcriptSegmentRowBody(view) else {
-            XCTFail("CallView must define transcriptSegmentRow(_:)")
+    /// #8396 — une ligne de sous-titres porte la couleur STABLE de la
+    /// personne (la même que le liseré de sa vignette de groupe), son nom en
+    /// texte VISIBLE, et le même nom pour VoiceOver.
+    func test_captionRow_namesTheSpeakerVisibly_inTheirStableColor() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
             return
         }
+        let row = String(view[start.upperBound ..< end.lowerBound])
         XCTAssertTrue(
-            body.contains("MeeshyColors.indigo400"),
-            "transcriptSegmentRow must color the local speaker (\"Moi\") with MeeshyColors.indigo400 " +
-            "— the codebase's established \"secondary elements\" tone."
+            row.contains(".foregroundColor(Color(hex: line.speakerColorHex))"),
+            "Le nom du locuteur se colore de SA couleur, dérivée de son identifiant."
         )
         XCTAssertTrue(
-            body.contains("MeeshyColors.brandPrimary"),
-            "transcriptSegmentRow must color the remote speaker with MeeshyColors.brandPrimary " +
-            "— the signature brand color, used for the interlocutor."
+            row.contains("Text(speakerHeading)"),
+            "Le nom du locuteur est du texte VISIBLE, pas seulement une pastille."
         )
-    }
-
-    /// Le nom du locuteur reste du TEXTE VISIBLE, pas seulement une pastille
-    /// colorée (demande utilisateur 2026-07-11) ni seulement un label
-    /// VoiceOver. Le spec 2026-08-13 a fusionné nom et heure dans une seule
-    /// ligne de journal `displayName (heure)` : `Text(speakerName)` est devenu
-    /// `Text("\(speakerName) (\(timeLabel))")`. La garantie tient toujours,
-    /// l'expression a changé — le garde suit l'expression nouvelle.
-    func test_transcriptSegmentRow_showsSpeakerNameAsVisibleText() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let body = transcriptSegmentRowBody(view) else {
-            XCTFail("CallView must define transcriptSegmentRow(_:)")
-            return
-        }
         XCTAssertTrue(
-            body.contains("Text(\"\\(speakerName)"),
-            "transcriptSegmentRow must render the speaker's name inside a visible Text, " +
-            "not just a colored dot — user-requested 2026-07-11."
-        )
-        // Discriminant : `speakerName` est aussi interpolé dans
-        // `.accessibilityLabel`. Sans cette assertion, un rendu qui
-        // n'exposerait le nom qu'à VoiceOver satisferait le garde ci-dessus si
-        // l'ordre des deux occurrences venait à changer.
-        XCTAssertTrue(
-            body.contains(".accessibilityLabel(\"\\(speakerName)"),
-            "the combined row must ALSO announce the speaker to VoiceOver — visible text and " +
-            "accessibility label are two distinct requirements, neither substitutes for the other."
+            row.contains(".accessibilityLabel(\"\\(line.speakerName) : \\(line.text)\")"),
+            "…et VoiceOver l'annonce aussi : deux exigences distinctes."
         )
     }
 
     func test_advanceCaptionsMode_off_startsTranscriptionAndLandsOnTranslated() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private func advanceCaptionsMode() {") else {
+        let view = try AppSourceGuard.callViewSource()
+        guard let range = view.range(of: "func advanceCaptionsMode() {") else {
             XCTFail("CallView must define advanceCaptionsMode()")
             return
         }
@@ -471,26 +435,26 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_connectedView_floatingStack_wrapsCaptionsCycleButtonInAdaptiveGlassContainer() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "captionsCycleButton") else {
-            XCTFail("CallView must reference captionsCycleButton")
+    /// #8394 — tout ce qui flotte au-dessus de l'appel établi (pilule, rails,
+    /// bandeau) partage UN conteneur de verre : le verre ne peut pas
+    /// échantillonner le verre.
+    func test_connectedView_sharesOneGlassContainer_forPillRailsAndBand() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let range = view.range(of: "var connectedView: some View {") else {
+            XCTFail("CallView must define connectedView")
             return
         }
-        // Search backward up to 200 chars from the reference for AdaptiveGlassContainer,
-        // confirming the floating stack shares a glass container (glass can't sample glass).
-        let searchStart = view.index(range.lowerBound, offsetBy: -200, limitedBy: view.startIndex) ?? view.startIndex
-        let body = String(view[searchStart ..< range.lowerBound])
+        let end = view.index(range.lowerBound, offsetBy: 1500, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("AdaptiveGlassContainer"),
-            "The floating trailing-edge stack must wrap captionsCycleButton in " +
-            "AdaptiveGlassContainer, matching controlBar's own pattern."
+            body.contains("AdaptiveGlassContainer(spacing: 12)"),
+            "connectedView must wrap its floating chrome in one AdaptiveGlassContainer."
         )
     }
 
     func test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatingOverlay() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private var connectedView: some View {") else {
+        let view = try AppSourceGuard.callViewSource()
+        guard let range = view.range(of: "var connectedView: some View {") else {
             XCTFail("CallView must define connectedView")
             return
         }
@@ -508,17 +472,24 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_transcriptOverlay_callSite_isGatedOnVideoUIActive() throws {
-        // Regression guard for the 2026-07-11 fix: transcriptOverlay used to
-        // run unconditionally, so on an audio call with captions on, the SAME
-        // transcriptSegmentsList rendered TWICE — once via the structural
-        // transcriptPanel, once via the floating transcriptOverlay.
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "if callManager.isVideoUIActive {\n                transcriptOverlay\n            }") else {
-            XCTFail("transcriptOverlay's call site must be gated on callManager.isVideoUIActive")
+    /// #8396 — en vidéo, les sous-titres sont un bandeau de verre posé juste
+    /// au-dessus de la pilule, et seulement là : l'ancien bandeau flottant
+    /// (`transcriptOverlay`) a disparu, et l'audio garde son panneau.
+    func test_videoCaptionsBand_sitsAboveThePill_andTheFloatingOverlayIsGone() throws {
+        let view = try AppSourceGuard.callViewSource()
+        XCTAssertFalse(
+            view.contains("transcriptOverlay"),
+            "Le bandeau flottant a disparu : les sous-titres vidéo vivent au-dessus de la pilule."
+        )
+        guard let band = view.range(of: "captionsBand(hasOwnGlass: true)"),
+              let pill = view.range(of: "callControlsPill", range: band.upperBound ..< view.endIndex) else {
+            XCTFail("Le bandeau des sous-titres vidéo doit précéder la pilule dans la pile verticale")
             return
         }
-        _ = range
+        XCTAssertLessThan(
+            view.distance(from: band.upperBound, to: pill.lowerBound), 600,
+            "…et la précéder IMMÉDIATEMENT : juste au-dessus de la pilule."
+        )
     }
 
     /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
@@ -539,29 +510,22 @@ final class CallHangupFastPathTests: XCTestCase {
     /// que `capturedAt` est estampillé par le device du LOCUTEUR et transporté
     /// par le wire — c'est la seule référence commune aux deux côtés de
     /// l'appel.
-    func test_transcriptSegmentRow_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let body = transcriptSegmentRowBody(view) else {
-            XCTFail("CallView must define transcriptSegmentRow(_:)")
-            return
-        }
+    func test_captionLine_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
+        let view = try AppSourceGuard.callViewSource()
+        let line = try source("Meeshy/Features/Main/Models/CallCaptionLine.swift")
         XCTAssertTrue(
-            body.contains("let timeLabel = segment.capturedAt.formatted("),
-            "transcriptSegmentRow must derive its timestamp from segment.capturedAt — the wall " +
-            "clock stamped by the SPEAKER's device and carried over the wire, the only reference " +
-            "both sides of the call share (callStartDate is local to this device, and nil before " +
-            "media is established)."
+            line.contains("capturedAt: segment.capturedAt"),
+            "Une ligne est datée par `segment.capturedAt` — l'horloge murale estampillée par " +
+            "l'appareil du LOCUTEUR, la seule référence commune aux deux côtés de l'appel."
         )
         XCTAssertTrue(
-            body.contains("(\\(timeLabel))"),
-            "the resolved timeLabel must actually reach the rendered journal line — computing it " +
-            "and not displaying it would satisfy the assertion above while showing nothing."
+            view.contains("line.capturedAt.formatted(date: .omitted, time: .shortened)"),
+            "…et l'heure résolue atteint la ligne du journal."
         )
         XCTAssertFalse(
-            body.contains("segment.startTime") || body.contains("segment.endTime"),
-            "transcriptSegmentRow must NEVER timestamp a line from startTime/endTime: those are " +
-            "ASR-buffer-relative (see TranscriptionSegment.capturedAt's own doc comment), so they " +
-            "drift with every recognizer restart and mean nothing to the peer."
+            line.contains("segment.startTime") || line.contains("segment.endTime"),
+            "Jamais startTime/endTime : relatifs au buffer ASR, ils dérivent à chaque " +
+            "redémarrage du moteur et ne veulent rien dire pour le pair."
         )
     }
 
@@ -570,12 +534,12 @@ final class CallHangupFastPathTests: XCTestCase {
         // pipView / showEffectsToolbar's trigger — spec risk table. (The
         // reconnectingBanner this guard used to also name was removed
         // 2026-07-11 — see test_reconnecting_usesCompactStatusPill_notFullScreenBanner.)
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private var connectedView: some View {") else {
+        let view = try AppSourceGuard.callViewSource()
+        guard let range = view.range(of: "var connectedView: some View {") else {
             XCTFail("CallView must define connectedView")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 9000, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 16000, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
@@ -601,7 +565,7 @@ final class CallHangupFastPathTests: XCTestCase {
         // L'ancienne forme ne doit pas revenir sans que ce garde soit revu :
         // ré-ouvrir le panneau tout seul, alors que rien ne peut plus arriver
         // panneau fermé, ne ferait qu'afficher un panneau vide.
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        let view = try AppSourceGuard.callViewSource()
         XCTAssertFalse(
             view.contains("adaptiveOnChange(of: transcriptionService.segments.isEmpty)"),
             "The 2026-07-11 auto-reveal observer was retired by spec 2026-08-13 — reception is " +

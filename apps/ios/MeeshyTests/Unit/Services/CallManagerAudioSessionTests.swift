@@ -1145,13 +1145,8 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
 final class CallViewPiPLandscapeSourceGuardTests: XCTestCase {
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     func test_pipCenter_acceptsSafeAreaEdgeInsets_parameter() throws {
@@ -1272,13 +1267,8 @@ final class BubbleCallNoticeViewAccessibilityTests: XCTestCase {
 final class CallViewHintContrastTests: XCTestCase {
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     func test_outgoingWaitingHint_meetsContrastThreshold() throws {
@@ -1789,13 +1779,8 @@ final class CallManagerMediaServicesResetTests: XCTestCase {
 final class CallViewVoiceOverAnnouncementTests: XCTestCase {
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     func test_voiceOver_announcesCallConnected() throws {
@@ -2651,13 +2636,8 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
     }
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     /// CallManager must declare isRemoteAudioEnabled so the call UI can show a
@@ -3027,13 +3007,8 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
     }
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     /// CallManager must declare isRemoteScreenCapturing so the call UI can
@@ -4695,13 +4670,8 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
 final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     func test_shouldAutoHideControls_gatesOnVideoLayoutActive() throws {
@@ -4778,13 +4748,8 @@ final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
 final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
+        try AppSourceGuard.callViewSource()
     }
 
     func test_videoWatchdog_usesTaskSleep_notTimer() throws {

@@ -184,7 +184,15 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/AudioFullscreenView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         "Features/Main/Views/CallEffectsOverlay.swift",
-        "Features/Main/Views/CallView.swift",
+        // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
+        // surfaces (tous dans un cercle ou un cadre fixe — doctrine 82i/86i).
+        // #8394 : la pilule remplace la barre ; le glyphe de ses boutons est
+        // dimensionné par le diamètre de leur cercle (`CallDeviceControls`).
+        "Features/Main/Views/CallDeviceControls.swift",
+        "Features/Main/Views/CallView+Controls.swift",
+        "Features/Main/Views/CallView+Header.swift",
+        "Features/Main/Views/CallView+SelfView.swift",
+        "Features/Main/Views/CallView+States.swift",
         "Features/Main/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
         "Features/Main/Views/CommunityLinksView.swift",
@@ -407,7 +415,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // où il est dimensionné par son cercle (`resizable` + `frame`) et non plus
     // par une police figée. `BubbleStandardLayout+Media.swift` sort de
     // `bearingFiles` (règle 4) ; le texte figé ne bouge pas.
-    private static let totalCeiling = 210
+    // 210 → 208 (#8394) : la vue d'appel « C adapté » remplace la barre, les
+    // boutons de la vignette perso et le bouton Sous-titres flottant — onze
+    // glyphes figés deviennent neuf. `CallView.swift` sort de `bearingFiles`
+    // (règle 4), ses parties y entrent ; le texte figé ne bouge pas.
+    private static let totalCeiling = 208
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

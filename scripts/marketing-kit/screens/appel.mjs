@@ -26,7 +26,7 @@ export const appelControles = (ctx) =>
     ${controle('mic', ctx.ui('call.control.mute.caption'))}
     ${controle('video', ctx.ui('call.control.video.caption'))}
     ${controle('captions', ctx.ui('call.control.transcript.caption'), { actif: true })}
-    ${controle('speaker', ctx.ui('call.control.speaker.caption'))}
+    ${controle('speaker', ctx.ui('call.control.output.caption'))}
     ${controle('hangup', '', { rouge: true })}
   </div>`
 

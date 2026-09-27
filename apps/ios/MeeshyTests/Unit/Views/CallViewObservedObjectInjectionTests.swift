@@ -47,7 +47,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     func test_callPresentationLayer_injectsOwnCallManagerIntoCallView() throws {
         let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
-            source.contains("CallView(callManager: callManager)"),
+            source.contains("CallView(callManager: callManager, mesh: .shared)"),
             "`CallPresentationLayer` must pass its own `callManager` into CallView " +
             "instead of letting CallView default to CallManager.shared on every " +
             "reconstruction."

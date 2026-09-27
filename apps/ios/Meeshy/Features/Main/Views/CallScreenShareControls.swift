@@ -37,6 +37,12 @@ enum CallScreenShareCopy {
         return String(format: String(localized: "call.screenShare.remote.banner", defaultValue: "%@ partage son écran", bundle: .main), name)
     }
 
+    /// #8395 — l'étiquette d'un écran partagé mis à la une.
+    static func screenOf(name: String) -> String {
+        guard !name.isEmpty else { return caption }
+        return String(format: String(localized: "call.screenShare.of", defaultValue: "Écran de %@", bundle: .main), name)
+    }
+
     static var stopCaption: String {
         String(localized: "call.screenShare.stop.caption", defaultValue: "Arrêter", bundle: .main)
     }
