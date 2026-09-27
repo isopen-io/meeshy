@@ -403,9 +403,11 @@ emit({
  * vocal bascule `fillPlay` (socle) ⇄ `pause` selon `AudioPlaybackStatus`,
  * `fill/pause-fill.svg`, meme dispositif que `fill-play`). Charge avec
  * `attachment-blocks.tsx`, deja dans le chunk du fil (monte par bubble.tsx
- * et focal-row.tsx) — jamais dans le socle.
+ * et focal-row.tsx) — jamais dans le socle. `arrows-out-simple` (#8234) :
+ * le bouton plein ecran de la lecture dans le fil (`VideoTile`), miroir de
+ * `arrow.up.left.and.arrow.down.right` (`MeeshyVideoPlayer+Controls.swift`).
  */
-const MEDIA = ['pause'];
+const MEDIA = ['pause', 'arrows-out-simple'];
 
 emit({
   ids: MEDIA,

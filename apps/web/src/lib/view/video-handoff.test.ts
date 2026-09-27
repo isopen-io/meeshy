@@ -9,27 +9,27 @@ import { handOffVideoPosition, takeVideoHandoff } from './video-handoff';
  */
 describe('video-handoff — la position confiée au plein écran', () => {
   test('une position confiée se reprend UNE fois, pour sa pièce', () => {
-    handOffVideoPosition({ attachmentId: 'a-1', positionMs: 3_200 });
-    expect(takeVideoHandoff('a-1')).toBe(3_200);
-    expect(takeVideoHandoff('a-1')).toBeNull();
+    handOffVideoPosition({ attachmentId: 'h-1', positionMs: 3_200 });
+    expect(takeVideoHandoff('h-1')).toBe(3_200);
+    expect(takeVideoHandoff('h-1')).toBeNull();
   });
 
   test('une autre pièce ne reprend rien', () => {
-    handOffVideoPosition({ attachmentId: 'a-2', positionMs: 900 });
-    expect(takeVideoHandoff('a-3')).toBeNull();
-    expect(takeVideoHandoff('a-2')).toBe(900);
+    handOffVideoPosition({ attachmentId: 'h-2', positionMs: 900 });
+    expect(takeVideoHandoff('h-3')).toBeNull();
+    expect(takeVideoHandoff('h-2')).toBe(900);
   });
 
   test('la dernière position confiée gagne', () => {
-    handOffVideoPosition({ attachmentId: 'a-4', positionMs: 1_000 });
-    handOffVideoPosition({ attachmentId: 'a-4', positionMs: 5_000 });
-    expect(takeVideoHandoff('a-4')).toBe(5_000);
+    handOffVideoPosition({ attachmentId: 'h-4', positionMs: 1_000 });
+    handOffVideoPosition({ attachmentId: 'h-4', positionMs: 5_000 });
+    expect(takeVideoHandoff('h-4')).toBe(5_000);
   });
 
   test('une position négative ou non finie ne se confie pas', () => {
-    handOffVideoPosition({ attachmentId: 'a-5', positionMs: Number.NaN });
-    handOffVideoPosition({ attachmentId: 'a-6', positionMs: -1 });
-    expect(takeVideoHandoff('a-5')).toBeNull();
-    expect(takeVideoHandoff('a-6')).toBeNull();
+    handOffVideoPosition({ attachmentId: 'h-5', positionMs: Number.NaN });
+    handOffVideoPosition({ attachmentId: 'h-6', positionMs: -1 });
+    expect(takeVideoHandoff('h-5')).toBeNull();
+    expect(takeVideoHandoff('h-6')).toBeNull();
   });
 });
