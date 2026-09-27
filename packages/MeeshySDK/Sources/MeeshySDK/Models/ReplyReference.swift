@@ -146,6 +146,16 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
     /// avant lui doit se relire.
     public var quotedMessageDeletedAt: Date?
+    /// #8320 — l'échéance du message cité ÉPHÉMÈRE : passée, la zone lecture
+    /// d'un audio cité se ferme (`offersQuotedAudioPlayback(now:)`). Posée
+    /// après l'init, comme `quotedMessageDeletedAt` : optionnelle, un blob
+    /// gravé avant elle se relit sans emporter le message.
+    public var quotedExpiresAt: Date?
+    /// #8320 — les pistes TRADUITES d'un audio cité et la langue d'origine
+    /// qui les départage, pour que la citation joue, hors de la fenêtre
+    /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais
+    /// posée pour un média protégé : le fichier EST le secret.
+    public var quotedAudioTracks: QuotedAudioTracks?
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni

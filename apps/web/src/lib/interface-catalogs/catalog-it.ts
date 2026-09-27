@@ -27,6 +27,7 @@ import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
+import itQuote from './catalog-it-quote';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -1164,6 +1165,7 @@ const it = {
   ...itConversationCard,
   ...itStoriesMine,
   ...itContactCard,
+  ...itQuote,
 } satisfies InterfaceCatalog;
 
 export default it;

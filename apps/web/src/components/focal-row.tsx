@@ -524,6 +524,8 @@ export const FocalRow = memo(function FocalRow({
             isMine={false}
             languages={languages}
             onJump={() => onJumpToMessage(message.replyTo!.id)}
+            citingId={message.id}
+            now={new Date(nowMs)}
           />
         </RowQuote>
       ) : null}

@@ -327,6 +327,8 @@ export function Bubble({
           isMine={isMine}
           languages={languages}
           onJump={() => onJumpToMessage(message.replyTo!.id)}
+          citingId={message.id}
+          now={new Date(nowMs)}
         />
       ) : null}
       {/* « MODIFIÉ » — INLINE dans le corps, entre la citation et le texte

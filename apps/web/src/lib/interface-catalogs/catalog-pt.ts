@@ -27,6 +27,7 @@ import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
+import ptQuote from './catalog-pt-quote';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1168,6 +1169,7 @@ const pt = {
   ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,
+  ...ptQuote,
 } satisfies InterfaceCatalog;
 
 export default pt;
