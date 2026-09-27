@@ -76,7 +76,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | D2 | Couper le micro (+ `call:toggle-audio`, « le pair a coupé ») | ✅ | ✅ | ❌ | ❌ | 2 | |
 | D3 | Caméra on/off, passage audio → vidéo en cours d'appel | ✅ | ✅ | ❌ | ❌ | 2 | iOS `CallManager.swift:2635` · legacy `use-webrtc-p2p.ts` |
 | D4 | Caméra avant / arrière | ✅ | ✅ | ❌ | ❌ | 2 | |
-| D5 | Choix d'une caméra, d'un micro, d'une sortie audio | 🟡 caméra | ❌ | ✅ | ✅ | 4 | web : `enumerateDevices` + `setSinkId` (`call-devices-sheet.tsx`, #8046) |
+| D5 | Choix d'une caméra, d'un micro, d'une sortie audio | 🟡 caméra + sortie (`AVRoutePickerView` : AirPlay / Bluetooth / haut-parleur) + micro (`setPreferredInput`), non mesuré sur appareil (#8071) | ❌ | ✅ | ✅ | 4 | iOS `CallDeviceControls.swift` · `CallAudioRouteService.swift` · web : `enumerateDevices` + `setSinkId` (`call-devices-sheet.tsx`, #8046) |
 | D6 | Haut-parleur / écouteur / Bluetooth | ✅ | 🟡 faux (coupe la vidéo) | ✅ `setSinkId` | ✅ routes natives | 4 + 7 | coque : plugin natif de routage audio |
 | D7 | Durée, nom, compteur de participants | ✅ | ✅ | ❌ | ❌ | 2 | legacy `CallInfoOverlay.tsx` |
 | D8 | Inverser vignette locale / distante, vignette déplaçable | ✅ | ✅ | ❌ | ❌ | 2 | legacy `LocalVideoTile.tsx`, `use-draggable.ts` |
@@ -114,7 +114,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 |---|---|---|---|---|---|---|---|
 | F1 | Boucle `getStats` et niveau de qualité | ✅ 5 s | ✅ 2 s | ✅ 2 s | 🟡 même code (WebView), non mesuré sur appareil | 5 | legacy `use-call-quality.ts` · web `call-quality-loop.ts` (chaque lien, pire lien pour le niveau, #8047) |
 | F2 | Paliers d'encodage vidéo par pair | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | legacy `use-per-peer-video-tier.ts` · web `call-quality.ts` (`setParameters`, #8047) |
-| F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `CallSignalGlyph.swift` · legacy `CallQualityOverlay.tsx` · web `call-quality.tsx` (#8047) |
+| F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe + feuille « Qualité » (perte, latence, gigue, débits audio/vidéo reçus, paliers du web), non mesuré sur appareil (#8071) | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `CallSignalGlyph.swift` · `CallQualitySheet.swift` · `CallQualityStatsFeed.swift` · legacy `CallQualityOverlay.tsx` · web `call-quality.tsx` (#8047) |
 | F4 | `call:quality-report` émis, `call:quality-alert` affiché | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web : rapport horodaté ISO toutes les 5 s au plus, alerte du pair éteinte après 15 s (#8047) |
 | F5 | `call:analytics` en fin d'appel (codec, effets, sous-titres réels) | ✅ | 🟡 champs codés en dur | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web `call-analytics.ts` : codec lu dans `getStats`, sous-titres comptés quand affichés (#8047) |
 | F6 | Note post-appel | ❌ | ❌ | ❌ | ❌ | — | |
