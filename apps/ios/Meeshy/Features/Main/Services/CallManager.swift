@@ -939,10 +939,12 @@ final class CallManager: ObservableObject {
             applySpeakerRoute()
             Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(self.isSpeaker))")
         case .override:
-            // Software override (our own `overrideOutputAudioPort`); no action needed.
-            break
+            reconcileSpeakerWithCurrentOutput()
         default:
-            // Category change, wake-from-sleep, etc. — re-apply to stay consistent.
+            if currentOutputKind()?.isExternalOutput == true {
+                isSpeaker = false
+                break
+            }
             applySpeakerRoute()
         }
     }
@@ -4204,6 +4206,7 @@ final class CallManager: ObservableObject {
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)
         lastKnownStats = nil
+        CallQualityStatsFeed.shared.reset()
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)
@@ -5667,6 +5670,7 @@ extension CallManager: WebRTCServiceDelegate {
             // controller's degraded-streak timer prematurely. Gate all reporting
             // on callState == .connected.
             guard case .connected = self.callState else { return }
+            self.publishQualitySample(stats: stats, packetLossPercent: packetLossPercent)
             self.liveVideoQualityLevel = level
             self.isLinkQualityDegraded = self.degradedLinkTracker.record(level: level)
             MessageSocketManager.shared.emitCallQualityReport(
@@ -5711,17 +5715,6 @@ extension CallManager: WebRTCServiceDelegate {
             // tick; the controller's time-based hysteresis decides if a sustained
             // poor link warrants dropping to audio-only (and later recovering).
             self.videoSurvivalController.handle(level: level, userWantsVideo: self.isVideoEnabled)
-        }
-    }
-
-    /// Map the 5-tier client quality ladder onto the gateway's 4-tier
-    /// `ConnectionQualityLevel` (critical collapses into poor).
-    nonisolated static func connectionQualityLabel(for level: VideoQualityLevel) -> String {
-        switch level {
-        case .excellent: return "excellent"
-        case .good: return "good"
-        case .fair: return "fair"
-        case .poor, .critical: return "poor"
         }
     }
 

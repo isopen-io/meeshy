@@ -16,6 +16,8 @@ export const DECLINE_REPLY_KEYS = [
   'callDecline.reply.writeMe',
 ] as const;
 
+export const DECLINE_REPLY_MAX_LENGTH = 500;
+
 export type DeclineReplyKey = (typeof DECLINE_REPLY_KEYS)[number];
 
 export type DeclineReplyDeps = {
@@ -30,7 +32,7 @@ export function declineWithReply(params: {
   readonly deps: DeclineReplyDeps;
 }): boolean {
   const { call, language, deps } = params;
-  const content = params.text.trim();
+  const content = Array.from(params.text.trim()).slice(0, DECLINE_REPLY_MAX_LENGTH).join('');
   if (call === null || call.phase.kind !== 'incoming' || content.length === 0) return false;
   deps.decline();
   deps.send({ conversationId: call.conversationId, content, language });

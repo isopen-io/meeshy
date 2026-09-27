@@ -4286,3 +4286,20 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - La coque Android reçoit mais n'émet pas : sa WebView n'a pas `SpeechRecognition`, et la reconnaissance Android native reste à brancher.
 - La vérification croisée avec un vrai iOS (web fr ↔ iOS en, chacun lisant l'autre dans sa langue) appartient au lot 9. Ici, tout est prouvé contre le pair de fixtures, dont les charges se décodent par les MÊMES décodeurs que le moteur.
 - `engine.ts` compte 1 006 lignes, sous le plafond dur de 1 200 mais au-delà du seuil de 1 000 : le prochain lot qui y ajoute doit d'abord extraire.
+
+## D-137 — On refuse un appel avec un message : le refus part d'abord, le texte suit par le chemin d'envoi ORDINAIRE du client, jamais par un événement d'appel (2026-09-27, #8065)
+
+**Le constat.** Aucune plateforme n'offrait de refus avec message (tableau de parité, ligne C13). Le web l'a reçu le 2026-09-26 (bouton « Message » de l'écran entrant, `call-decline-sheet.tsx`, `lib/calls/decline-reply.ts`), iOS le 2026-09-27 (`CallDeclineSheet.swift`, `CallManager+DeclineReply.swift`, `CallDeclineMessenger.swift`). La coque Android sert l'interface web : elle l'a par construction.
+
+**Ce qui est tranché — deux gestes du client, pas une opération de la passerelle.**
+- **L'ordre est fixe** : `call:end {reason:'rejected'}` d'abord (la sonnerie s'arrête au toucher), puis le texte dans la conversation de l'appel. Chez l'appelant, le fil lit « Appel refusé » puis « Je te rappelle. ».
+- **Le texte part par le chemin du composeur**, au même `clientMessageId` de bout en bout : web `sendAction` (outbox, bulle optimiste, file hors ligne) ; iOS bulle optimiste + ligne `OfflineQueue` + `POST /conversations/:id/messages`, le chemin durable de la réponse de notification (`MessageRecord.optimisticText`, partagé avec `NotificationActionHandler`). La passerelle le traite comme tout message : garde d'appartenance (403 hors membre), validation zod de `messages-send.ts`, détection de langue, traduction NLLB vers la langue de l'appelant — le Prisme s'applique sans une ligne nouvelle.
+- **La langue déclarée est celle du texte** : la réponse rapide est dans la langue de l'INTERFACE (le catalogue l'a écrite) ; le texte libre, sur iOS, dans la première langue de contenu du lecteur, comme la réponse de notification.
+- **Le texte est borné à 500 caractères** sur les deux clients (`DECLINE_REPLY_MAX_LENGTH`, `CallDeclineReplyRule.maxLength`), et vide ⇒ rien ne part (ni refus, ni message).
+
+**Alternative rejetée — `call:end {reason:'rejected', declineMessage}` traité par la passerelle.** Elle aurait rendu l'envoi « atomique » avec le refus, mais :
+- elle perd le message dès que le socket tombe au moment du toucher — iOS REPORTE alors `call:end` à la reconnexion (`pendingEndReconciliations`), et un texte porté par cet événement vivrait dans une file de signalisation qui n'est pas faite pour durer ; le chemin client, lui, a son outbox et son dédoublonnage ;
+- elle aurait créé un SECOND producteur de messages utilisateur dans `CallEventsHandler`, à tenir d'accord avec `MessageProcessor` sur l'appartenance, les longueurs, la bulle optimiste de l'émetteur et le Prisme — la jumelle divergente que la dimension 11 interdit ;
+- le refus n'a pas besoin du message pour être juste, et le message n'a pas besoin du refus : les coupler n'achète rien à l'utilisateur. L'« atomicité » perdue coûte au pire un refus sans texte (hors ligne ET outbox en échec — la bulle reste alors « échec », rejouable).
+
+**CallKit.** L'écran système d'appel entrant (verrouillé, arrière-plan) n'accepte aucune action personnalisée : le bouton « Message » y est réservé à l'app Téléphone. Le refus avec message vit donc dans l'écran entrant de l'app (`IncomingCallView`, app au premier plan). Détail : `apps/ios/decisions/2026-09-27-refuser-un-appel-avec-un-message-callkit-ne-porte-pas-de-reponse.md`.
