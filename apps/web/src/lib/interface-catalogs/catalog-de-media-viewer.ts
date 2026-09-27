@@ -16,6 +16,8 @@ const deMediaViewer = {
   'media.viewer.react_failed': 'Reaktion nicht möglich',
   'media.viewer.react_limit': 'Maximale Anzahl an Reaktionen erreicht',
   'media.viewer.compose_failed': 'Dieses Medium konnte nicht im Studio geöffnet werden',
+  'media.viewer.open_fullscreen': 'Im Vollbild öffnen',
+  'media.audio.play': 'Audio abspielen',
 };
 
 export default deMediaViewer;
