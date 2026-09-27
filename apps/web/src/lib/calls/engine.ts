@@ -460,9 +460,16 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     );
   };
 
+  /* Le micro coupé AVANT que le média soit prêt (#8434) — pendant la demande
+     d'autorisation, le décroché ou la rejointe : la piste naît coupée, et ce
+     qu'on annonce au serveur le dit. */
+  const micMuted = (): boolean => read()?.micMuted === true;
+  const mediaSettings = (stream: MediaStream) => ({ audioEnabled: !micMuted(), videoEnabled: stream.getVideoTracks().length > 0 });
+
   const acquire = async (video: boolean, facing: Facing): Promise<MediaStream | null> => {
     try {
       const stream = await deps.acquireMedia({ video, facing });
+      for (const track of stream.getAudioTracks()) track.enabled = !micMuted();
       localStream = stream;
       return stream;
     } catch (error) {
@@ -488,7 +495,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const stream = await acquire(request_.media === 'video', 'user');
     if (stream === null || token !== generation) return;
     update((call) => ({ ...call, callId, localStream: stream, cameraOn: stream.getVideoTracks().length > 0, phase: { kind: 'connecting' } }));
-    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 } }));
+    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: mediaSettings(stream) }));
     if (token !== generation) return;
     if (afterJoinAck(ack)) startHeartbeat(callId);
   };
@@ -513,7 +520,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       await request(CLIENT_EVENTS.CALL_INITIATE, {
         conversationId: callRequest.conversationId,
         type: callRequest.media,
-        settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 },
+        settings: mediaSettings(stream),
       }),
     );
     if (token !== generation || read()?.phase.kind === 'ended') return;
@@ -521,7 +528,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       if (ack.code === 'CALL_ALREADY_ACTIVE') {
         const activeId = await deps.fetchActiveCallId(callRequest.conversationId).catch(() => null);
         if (activeId !== null && token === generation) {
-          const ackJoin = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId: activeId, settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 } }));
+          const ackJoin = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId: activeId, settings: mediaSettings(stream) }));
           if (token !== generation) return;
           update((call) => ({ ...call, callId: activeId, phase: { kind: 'connecting' } }));
           if (afterJoinAck(ackJoin)) startHeartbeat(activeId);
@@ -620,7 +627,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     if (token !== generation) return;
     update((current) => ({ ...current, localStream: stream, cameraOn: stream.getVideoTracks().length > 0 }));
-    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 } }));
+    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: mediaSettings(stream) }));
     if (token !== generation) return;
     if (afterJoinAck(ack)) startHeartbeat(callId);
   };
