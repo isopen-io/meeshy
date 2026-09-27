@@ -156,51 +156,33 @@ final class StoryCanvasFramingTests: XCTestCase {
     }
 
     func test_isCarded_truthTable() {
-        // **#4124 — le REPOS carde désormais.** La directive porteur du
-        // 2026-08-28 dit « mettre la scène 9:16 au centre avec coin arrondi et
-        // un peu d'espace à gauche haut, bas et droite » : au repos, l'atelier
-        // ne remplit plus l'écran. `bandPresent` cesse donc d'être la raison
-        // PRINCIPALE du cardage — il n'en reste qu'un cas parmi d'autres.
-        //
-        // Ce qui reste plein écran est ce que deux directives antérieures ont
-        // rendu immersif, et elles ne sont pas révoquées : le DESSIN (2026-07-11,
-        // dessinable jusqu'aux angles) et l'ÉDITION TEXTE (2026-07-28).
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false),
-                      "Au repos, la scène est une CARTE — c'est le résultat attendu de #4124.")
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false))
-        // Mode dessin IMMERSIF (user 2026-07-11) : le dessin seul ne carde
-        // PLUS — canvas plein écran, dessinable jusqu'aux angles, bulles
-        // flottantes sans sheet. (Remplace la spec 2026-06-02 « identique
-        // pour tous les outils, dessin inclus ».)
+        // **#8370 — la scène prend TOUT le viewport** (directive porteur
+        // 2026-09-27, maquette `docs/product/composer-plein-ecran/`). Elle
+        // supplante #4124 (2026-08-28), qui cardait le repos : « la scène est en
+        // plein écran et le reste des contrôleurs sont par-dessus ». Au repos,
+        // l'atelier n'est donc plus une carte ; les contrôles flottent dessus.
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false),
+                       "Au repos, la scène occupe le viewport — #8370 supplante #4124.")
+        // Un PANNEAU qui réduit la zone visible carde toujours : la scène se
+        // rétracte au-dessus de lui plutôt que de se faire recouvrir. C'est la
+        // règle d'avant #4124, et `bandPresent` en redevient la raison.
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false),
+                      "Une band déployée carde la scène au-dessus d'elle.")
+        // Mode dessin IMMERSIF (user 2026-07-11) : plein écran, dessinable
+        // jusqu'aux angles — et il l'emporte même band déployée.
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false, timelineActive: false))
-        // **Le dessin RETROUVE son effet dans la règle.** Il y figurait
-        // jusqu'ici « pour documenter la table » sans rien décider : tant que le
-        // repos ne cardait pas, `drawingActive` et le repos rendaient le même
-        // verdict, et le paramètre était indistinguable d'un défaut. Le repos
-        // cardant, c'est lui qui tient désormais l'immersion du dessin — et un
-        // témoin ne peut le prouver que sur le cas où les deux DIVERGENT.
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false))
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: false, timelineActive: false),
                        "Le dessin est immersif même band déployée : il l'emporte sur le cardage.")
-        // Édition texte (user 2026-07-28) : le canvas reste PLEIN ÉCRAN, les
-        // bulles et « Terminé » flottent par-dessus, le clavier recouvre le bas
-        // — assumé, l'attention est sur le texte.
-        //
-        // C'est une sortie anticipée et non un terme de la disjonction : quand
-        // l'éditeur s'ouvre depuis la tuile Texte, `StoryComposerView+Canvas`
-        // appelle `bandStateMachine.tapFAB` puis `tapTile` juste après
-        // `enterTextEditingMode`. La band n'est donc pas `.hidden`, et
-        // `bandPresent` seul relancerait le carding — alors même que la band est
-        // masquée et non-interactive.
+        // Édition texte (user 2026-07-28) : sortie anticipée, jamais un terme de
+        // la disjonction — la band n'est pas `.hidden` quand l'éditeur s'ouvre
+        // depuis la tuile Texte.
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true, timelineActive: false))
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: false))
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: true),
                        "l'édition texte l'emporte sur toutes les autres raisons")
-        // Timeline (2026-07-14) : la timeline force le cadrage exactement
-        // comme l'édition de texte — le panneau timeline est présenté via
-        // l'override de ComposerControlsLayer pendant que
-        // `bandStateMachine.state` reste `.hidden`, donc `bandPresent` seul
-        // ne peut pas le voir.
+        // Timeline (2026-07-14) : présentée par l'override de
+        // ComposerControlsLayer pendant que la band reste `.hidden` — elle
+        // carde par son propre terme.
         XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: true))
     }
 

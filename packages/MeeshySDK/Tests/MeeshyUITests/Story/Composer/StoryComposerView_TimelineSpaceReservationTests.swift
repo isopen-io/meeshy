@@ -26,24 +26,31 @@ final class StoryComposerView_TimelineSpaceReservationTests: XCTestCase {
 
     // MARK: - resolveCanvasIsCarded
 
-    /// **RETOURNÉ au #4124** (directive porteur 2026-08-28 : « mettre la scène
-    /// 9:16 au centre avec coin arrondi et un peu d'espace à gauche, haut, bas
-    /// et droite »). Le repos CARDE désormais — il ne reste plein écran que là
-    /// où l'immersion est le sujet, et ces deux cas ont leurs témoins juste en
-    /// dessous.
-    ///
-    /// Ce que le nom de ce test disait — « band cachée, aucun override ⇒ pas
-    /// cardé » — était vrai d'une règle qui posait le plein écran par défaut.
-    /// La règle dit maintenant l'inverse, donc le témoin change de verdict et de
-    /// nom : le garder à `false` aurait figé une directive révoquée.
-    func test_resolveCanvasIsCarded_auRepos_carde() {
+    /// **RETOURNÉ une seconde fois au #8370** (directive porteur 2026-09-27 :
+    /// « la scène est en plein écran et le reste des contrôleurs sont par-dessus
+    /// la scène »). Elle supplante #4124 (2026-08-28), qui cardait le repos :
+    /// band cachée, aucune feuille, la scène prend le viewport et les contrôles
+    /// flottent dessus. Le témoin change de verdict et de nom — le garder à
+    /// `true` aurait figé une directive supplantée.
+    func test_resolveCanvasIsCarded_auRepos_pleinEcran() {
         let result = StoryComposerView.resolveCanvasIsCarded(
             isTextEditing: false,
             effectiveBandIsHidden: true,
             drawingActive: false,
             presentedSystemSheetFraction: nil
         )
-        XCTAssertTrue(result, "Au repos, la scène est une carte centrée et marginée.")
+        XCTAssertFalse(result, "Au repos, la scène occupe le viewport (#8370).")
+    }
+
+    /// Ce qui carde encore : une feuille système présentée, qui réduit la zone
+    /// visible — la scène se rétracte au-dessus d'elle plutôt que de s'y cacher.
+    func test_resolveCanvasIsCarded_uneFeuilleSysteme_carde() {
+        XCTAssertTrue(StoryComposerView.resolveCanvasIsCarded(
+            isTextEditing: false,
+            effectiveBandIsHidden: true,
+            drawingActive: false,
+            presentedSystemSheetFraction: 0.5
+        ))
     }
 
     /// Les deux immersions que #4124 ne révoque PAS, et qui tiennent le plein

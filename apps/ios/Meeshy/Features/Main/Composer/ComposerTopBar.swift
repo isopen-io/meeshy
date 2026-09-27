@@ -39,6 +39,12 @@ struct ComposerTopBar: View {
 
     let onClose: () -> Void
 
+    /// **La teinte du verre de la croix** (#8370). Sur la scène plein écran, la
+    /// barre flotte sur la scène elle-même : nu, le verre d'iOS 26 vire au clair
+    /// sur une photo claire et la croix blanche disparaît (mesuré au simulateur
+    /// le 2026-09-27). Teinté du plateau, il reste sombre partout.
+    let plateauTint: Color
+
     // **L'historique a quitté cette barre le 2026-08-30.** Il y lisait mal :
     // pendant qu'un outil est ouvert, « Annuler » se comprend comme « fermer
     // l'outil » et non « défaire le dernier geste » — le mot dit les deux en
@@ -59,7 +65,7 @@ struct ComposerTopBar: View {
                     .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
-                    .adaptiveGlass(in: Circle())
+                    .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
             }
             .accessibilityLabel(Text(ComposerDocumentCopy.close))
             slideRail

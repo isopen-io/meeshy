@@ -378,6 +378,7 @@ struct ComposerDocumentSurface: View {
             slideRailSlot: slideRailSlot,
             overflowMenu: overflowMenu,
             onClose: onClose,
+            plateauTint: plateauTint
         )
     }
 

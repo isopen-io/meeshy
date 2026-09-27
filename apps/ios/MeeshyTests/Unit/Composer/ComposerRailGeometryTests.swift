@@ -218,6 +218,34 @@ final class ComposerRailGeometryTests: XCTestCase {
                       "Le volet de l'atelier doit se retirer de la largeur d'un rail de chaque côté.")
     }
 
+    // MARK: - La scène prend le viewport (#8370)
+
+    /// **La carte se cadre sur l'écran ENTIER**, et le chrome flotte dessus.
+    /// Elle vivait dans une `VStack` entre la barre haute et les rangées du bas,
+    /// qui lui prenaient chacune sa hauteur : elle ne pouvait jamais occuper le
+    /// viewport (retour porteur 2026-09-27). Deux calques frères désormais.
+    func test_laScene_estUnCalquePleinEcran_sousLeChrome() throws {
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+        XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer}"),
+                      "Le letterbox, la scène et le chrome sont trois calques empilés, dans cet ordre.")
+        XCTAssertTrue(surface.contains(".blur(radius:34,opaque:true)"),
+                      "Les bandes que la carte laisse sont le FLOU de la scène, pas un plateau.")
+        guard let debut = surface.range(of: "privatevarsceneLayer:someView{"),
+              let fin = surface.range(of: "privatevarchromeLayer:someView{") else {
+            return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
+        }
+        let scene = surface[debut.upperBound..<fin.lowerBound]
+        XCTAssertTrue(scene.contains(".ignoresSafeArea()"),
+                      "La scène doit ignorer les zones sûres : elle prend le viewport entier.")
+        XCTAssertFalse(scene.contains("ComposerTopBar("),
+                       "Aucun chrome ne se loge dans le calque de la scène.")
+        XCTAssertFalse(surface.contains("pushesToThumb:true"),
+                       "Aucun rail de la scène ne s'étire sur sa hauteur.")
+        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false)"),
+                      "Le rail droit flotte : pas de ressort qui l'étire sur toute la scène.")
+    }
+
     // MARK: - Ce qu'une rangée requiert, et ce qui déborde (#4582)
 
     /// **Le débordement de la rangée d'outils est ARITHMÉTIQUE.**

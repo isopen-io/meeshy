@@ -60,6 +60,12 @@ struct ComposerTrailingRail: View {
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
+    /// **Le ressort qui pousse vers le pouce** — le même contrat que
+    /// `ComposerLeadingRail.pushesToThumb`. Sur la scène plein écran (#8370), le
+    /// rail FLOTTE au bas de la scène libre : un ressort l'y étirait sur toute la
+    /// hauteur, colonne de verre vide au-dessus du `[+]`.
+    var pushesToThumb: Bool = true
+
     @State private var lastTapped: String?
 
     /// **Le rail EXISTE dès qu'il a le `[+]`**, même sans objet sélectionné.
@@ -73,7 +79,7 @@ struct ComposerTrailingRail: View {
     var body: some View {
         if !isEmpty {
             VStack(spacing: 10) {
-                Spacer(minLength: 0)
+                if pushesToThumb { Spacer(minLength: 0) }
                 // **`[+]` TOUT EN HAUT**, jamais mêlée aux contrôleurs de
                 // l'objet : elle n'agit pas sur le même niveau du modèle. Les
                 // contrôleurs modifient UN objet ; celle-ci ajoute une PAGE à

@@ -15,11 +15,15 @@ final class ComposerAtelierHeaderTests: XCTestCase {
 
     // MARK: - Le cadrage
 
-    /// La directive, dite par la règle du SDK : **au repos, la scène est une
-    /// carte**. Les deux exceptions sont les deux immersions que des directives
-    /// antérieures ont posées, et elles tiennent.
-    func test_leCadrage_carde_saufQuandLImmersionEstLeSujet() {
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false))
+    /// La directive, dite par la règle du SDK : **au repos, la scène occupe le
+    /// viewport** (#8370, maquette plein écran du 2026-09-27, qui supplante la
+    /// carte de #4124). Seul un panneau déployé la carde au-dessus de lui ; les
+    /// deux immersions (dessin, texte) l'emportent toujours.
+    func test_leCadrage_pleinEcranAuRepos_carteSousUnPanneau() {
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false),
+                       "Au repos, la scène prend tout le viewport.")
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false),
+                      "Une band déployée carde la scène au-dessus d'elle.")
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false),
                        "Le dessin reste immersif (2026-07-11).")
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: true),
