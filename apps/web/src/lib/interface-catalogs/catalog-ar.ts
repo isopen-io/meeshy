@@ -13,6 +13,7 @@ import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
 import arCallFeedback from './catalog-ar-call-feedback';
 import arCallsErase from './catalog-ar-calls-erase';
+import arAddressBook from './catalog-ar-address-book';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arCallQuality from './catalog-ar-call-quality';
@@ -218,6 +219,7 @@ const ar = {
   ...arCallDecline,
   ...arCallFeedback,
   ...arCallsErase,
+  ...arAddressBook,
   ...arCallDevices,
   ...arCallScreen,
   ...arCallQuality,

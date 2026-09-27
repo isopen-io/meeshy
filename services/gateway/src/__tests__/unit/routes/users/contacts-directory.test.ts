@@ -86,6 +86,9 @@ function makePrisma(options: { users?: any[]; entries?: any[]; total?: number } 
       count: jest.fn<any>().mockResolvedValue(total),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }),
     },
+    contactJoinNotice: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
   } as any;
 }
 

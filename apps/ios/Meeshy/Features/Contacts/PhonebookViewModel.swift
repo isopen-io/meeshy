@@ -42,6 +42,7 @@ final class PhonebookViewModel: ObservableObject {
     private let currentUserId: String
     private let cacheKey = "phonebook:all"
     private let searchDebounce: Duration
+    private let autoSyncHold: DirectoryAutoSyncHolding
     private var revalidationTask: Task<Void, Never>?
     private var platformSearchTask: Task<Void, Never>?
     private var hasAttemptedInitialSync = false
@@ -52,7 +53,8 @@ final class PhonebookViewModel: ObservableObject {
         userService: UserServiceProviding = UserService.shared,
         conversationCreator: ConversationCreating = ConversationCreator(),
         currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
-        searchDebounce: Duration = .milliseconds(300)
+        searchDebounce: Duration = .milliseconds(300),
+        autoSyncHold: DirectoryAutoSyncHolding = DirectoryAutoSyncHold.standard
     ) {
         self.directoryService = directoryService
         self.contactSync = contactSync
@@ -60,6 +62,7 @@ final class PhonebookViewModel: ObservableObject {
         self.conversationCreator = conversationCreator
         self.currentUserId = currentUserId
         self.searchDebounce = searchDebounce
+        self.autoSyncHold = autoSyncHold
     }
 
     deinit {
@@ -152,6 +155,7 @@ final class PhonebookViewModel: ObservableObject {
     private func synchronizeIfDirectoryIsEmpty() async {
         guard contacts.isEmpty, !isSyncing, !hasAttemptedInitialSync else { return }
         hasAttemptedInitialSync = true
+        guard !autoSyncHold.isHeld(for: currentUserId) else { return }
         guard contactSync.authorizationStatus() == .authorized else { return }
         await synchronize(silent: true)
     }
@@ -186,6 +190,7 @@ final class PhonebookViewModel: ObservableObject {
 
         do {
             let result = try await contactSync.syncDirectory(mode: .replace)
+            if !silent { autoSyncHold.release(for: currentUserId) }
             await refreshFromNetwork()
             guard !silent else { return }
             HapticFeedback.success()
@@ -264,17 +269,27 @@ final class PhonebookViewModel: ObservableObject {
         return await startConversation(withUserId: user.id)
     }
 
-    /// Efface le répertoire conservé côté serveur (droit au retrait).
+    /// Efface le répertoire conservé côté serveur (droit au retrait, #8167).
+    ///
+    /// Optimiste : la liste se vide au geste, et revient telle quelle si le
+    /// serveur refuse. Un effacement réussi RETIENT le remplissage automatique
+    /// (`DirectoryAutoSyncHold`) : rouvrir l'onglet ne renvoie pas en silence
+    /// le carnet qu'on vient de faire effacer.
     func eraseDirectory() async {
+        let snapshot = contacts
+        contacts = []
+        loadState = .loaded
         do {
             _ = try await directoryService.clear()
-            contacts = []
-            loadState = .loaded
+            autoSyncHold.hold(for: currentUserId)
             try? await CacheCoordinator.shared.phonebook.save([], for: cacheKey)
+            HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(
                 String(localized: "contacts.phonebook.erased", defaultValue: "Répertoire effacé", bundle: .main)
             )
         } catch {
+            contacts = snapshot
+            HapticFeedback.error()
             FeedbackToastManager.shared.showError(
                 String(localized: "contacts.phonebook.erase-error", defaultValue: "Impossible d'effacer le répertoire", bundle: .main)
             )
@@ -296,6 +311,30 @@ final class PhonebookViewModel: ObservableObject {
         let greeting = name.isEmpty ? "Salut" : "Salut \(name)"
         return "\(greeting) ! Rejoins-moi sur Meeshy : https://meeshy.me/download"
     }
+}
+
+// MARK: - Pas de resynchronisation silencieuse après un effacement (#8167)
+
+/// Le remplissage automatique d'un répertoire vide (`synchronizeIfDirectoryIsEmpty`)
+/// renverrait au serveur, sans un geste, le carnet que l'utilisateur vient de
+/// faire effacer. Un effacement réussi pose donc une RETENUE, par compte et
+/// persistée : seule une synchronisation demandée explicitement la lève.
+nonisolated protocol DirectoryAutoSyncHolding: Sendable {
+    func isHeld(for userId: String) -> Bool
+    func hold(for userId: String)
+    func release(for userId: String)
+}
+
+nonisolated struct DirectoryAutoSyncHold: DirectoryAutoSyncHolding, @unchecked Sendable {
+    static let standard = DirectoryAutoSyncHold(defaults: .standard)
+
+    let defaults: UserDefaults
+
+    private func key(_ userId: String) -> String { "phonebook.autoSyncHeldAfterErasure.\(userId)" }
+
+    func isHeld(for userId: String) -> Bool { defaults.bool(forKey: key(userId)) }
+    func hold(for userId: String) { defaults.set(true, forKey: key(userId)) }
+    func release(for userId: String) { defaults.removeObject(forKey: key(userId)) }
 }
 
 // MARK: - Pagination complète du répertoire (2026-08-21)

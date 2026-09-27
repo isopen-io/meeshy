@@ -90,6 +90,9 @@ function makePrisma(options: {
       count: jest.fn<any>().mockResolvedValue(count),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }),
     },
+    contactJoinNotice: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
   } as any;
 }
 
@@ -697,6 +700,7 @@ describe('ContactDirectoryService.clear', () => {
     const removed = await service.clear(OWNER_ID);
 
     expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: OWNER_ID } });
+    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: OWNER_ID } });
     expect(removed).toBe(3);
   });
 });

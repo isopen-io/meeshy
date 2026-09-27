@@ -203673,6 +203673,241 @@
           }
         }
       }
+    },
+    "contacts.phonebook.erase.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح دفتر عناويني"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mein Adressbuch löschen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erase my address book"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar mi agenda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer mon carnet d'adresses"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancella la mia rubrica"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagar minha agenda"
+          }
+        }
+      }
+    },
+    "contacts.phonebook.erase.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُستخدم جهات اتصالك فقط لإعلامك عندما ينضم صديق إلى Meeshy."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Kontakte dienen nur dazu, dich zu benachrichtigen, wenn ein Freund Meeshy beitritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contacts are only used to let you know when a friend joins Meeshy."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus contactos solo sirven para avisarte cuando un amigo se une a Meeshy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes contacts servent uniquement à te prévenir quand un ami rejoint Meeshy."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi contatti servono solo ad avvisarti quando un amico si unisce a Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus contatos servem apenas para avisar você quando um amigo entra no Meeshy."
+          }
+        }
+      }
+    },
+    "contacts.phonebook.erase.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح دفتر عناوينك؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Adressbuch löschen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erase your address book?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Borrar tu agenda?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer ton carnet d'adresses ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancellare la tua rubrica?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagar sua agenda?"
+          }
+        }
+      }
+    },
+    "contacts.phonebook.erase.confirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُحذف جهات اتصالك المتزامنة من خوادمنا، مع سجل الأصدقاء الذين أُعلن لك عن انضمامهم. لن يُرسل أي شيء مجددًا حتى تقوم بالمزامنة مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine synchronisierten Kontakte werden von unseren Servern gelöscht, zusammen mit dem Verlauf der Freunde, deren Beitritt dir angekündigt wurde. Nichts wird erneut gesendet, bis du wieder synchronisierst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your synced contacts are deleted from our servers, along with the record of friends whose arrival was announced to you. Nothing is sent again until you sync once more."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus contactos sincronizados se eliminan de nuestros servidores, junto con el registro de los amigos cuya llegada se te anunció. No se vuelve a enviar nada hasta que sincronices de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes contacts synchronisés sont supprimés de nos serveurs, avec la trace des amis dont l'arrivée t'a été annoncée. Rien n'est renvoyé tant que tu ne synchronises pas de nouveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi contatti sincronizzati vengono eliminati dai nostri server, insieme alla traccia degli amici di cui ti è stato annunciato l'arrivo. Non viene inviato più nulla finché non sincronizzi di nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus contatos sincronizados são excluídos dos nossos servidores, junto com o registro dos amigos cuja chegada foi anunciada a você. Nada é enviado de novo até que você sincronize outra vez."
+          }
+        }
+      }
+    },
+    "contacts.phonebook.erase.confirm.button": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erase"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagar"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

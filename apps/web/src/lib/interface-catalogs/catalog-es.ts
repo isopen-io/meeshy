@@ -13,6 +13,7 @@ import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
 import esCallFeedback from './catalog-es-call-feedback';
 import esCallsErase from './catalog-es-calls-erase';
+import esAddressBook from './catalog-es-address-book';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
 import esCallQuality from './catalog-es-call-quality';
@@ -218,6 +219,7 @@ const es = {
   ...esCallDecline,
   ...esCallFeedback,
   ...esCallsErase,
+  ...esAddressBook,
   ...esCallDevices,
   ...esCallScreen,
   ...esCallQuality,

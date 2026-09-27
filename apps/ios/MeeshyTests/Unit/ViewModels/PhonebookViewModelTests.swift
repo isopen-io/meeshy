@@ -36,7 +36,8 @@ final class PhonebookViewModelTests: XCTestCase {
         contacts: [DirectoryContact] = [],
         listError: Error? = nil,
         platformResults: [UserSearchResult] = [],
-        contactsAuthorization: CNAuthorizationStatus = .denied
+        contactsAuthorization: CNAuthorizationStatus = .denied,
+        autoSyncHold: DirectoryAutoSyncHolding = DirectoryAutoSyncHold(defaults: UserDefaults(suiteName: "phonebook-tests-\(UUID().uuidString)")!)
     ) -> (sut: PhonebookViewModel, directory: MockContactDirectoryService, sync: MockContactSyncService, creator: MockConversationCreator, users: MockUserService) {
         let directory = MockContactDirectoryService()
         directory.listResult = listError.map { .failure($0) } ?? .success(contacts)
@@ -53,7 +54,8 @@ final class PhonebookViewModelTests: XCTestCase {
             userService: users,
             conversationCreator: creator,
             currentUserId: "me",
-            searchDebounce: .zero
+            searchDebounce: .zero,
+            autoSyncHold: autoSyncHold
         )
         return (sut, directory, sync, creator, users)
     }
@@ -386,6 +388,79 @@ final class PhonebookViewModelTests: XCTestCase {
         await sut.eraseDirectory()
 
         XCTAssertEqual(sut.contacts.count, 1)
+    }
+
+    // MARK: - Effacer mon carnet (#8167)
+
+    private func makeHold() -> DirectoryAutoSyncHold {
+        DirectoryAutoSyncHold(defaults: UserDefaults(suiteName: "phonebook-hold-\(UUID().uuidString)")!)
+    }
+
+    func test_eraseDirectory_emptiesTheListBeforeTheServerAnswers() async {
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
+        await sut.load(forceNetwork: true)
+        var countWhileErasing: Int?
+        directory.beforeClear = { countWhileErasing = sut.contacts.count }
+
+        await sut.eraseDirectory()
+
+        XCTAssertEqual(countWhileErasing, 0)
+    }
+
+    func test_eraseDirectory_failure_restoresEveryContact() async {
+        let contacts = [makeContact(id: "a"), makeContact(id: "b", onMeeshy: false)]
+        let (sut, directory, _, _, _) = makeSUT(contacts: contacts)
+        await sut.load(forceNetwork: true)
+        directory.clearResult = .failure(URLError(.notConnectedToInternet))
+
+        await sut.eraseDirectory()
+
+        XCTAssertEqual(sut.contacts.map(\.id), ["a", "b"])
+    }
+
+    func test_eraseDirectory_thenReopen_neverRefillsTheDirectorySilently() async {
+        let hold = makeHold()
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()], contactsAuthorization: .authorized, autoSyncHold: hold)
+        await sut.load(forceNetwork: true)
+        await sut.eraseDirectory()
+        XCTAssertEqual(directory.clearCallCount, 1)
+
+        let (reopened, _, sync, _, _) = makeSUT(contacts: [], contactsAuthorization: .authorized, autoSyncHold: hold)
+        await reopened.load(forceNetwork: true)
+
+        XCTAssertEqual(sync.syncDirectoryCallCount, 0)
+    }
+
+    func test_eraseDirectory_failure_leavesTheAutomaticFillAlone() async {
+        let hold = makeHold()
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()], contactsAuthorization: .authorized, autoSyncHold: hold)
+        await sut.load(forceNetwork: true)
+        directory.clearResult = .failure(URLError(.badServerResponse))
+
+        await sut.eraseDirectory()
+
+        XCTAssertFalse(hold.isHeld(for: "me"))
+    }
+
+    func test_synchronize_explicitlyAfterAnErasure_liftsTheHold() async {
+        let hold = makeHold()
+        let (sut, _, sync, _, _) = makeSUT(contacts: [makeContact()], contactsAuthorization: .authorized, autoSyncHold: hold)
+        await sut.load(forceNetwork: true)
+        await sut.eraseDirectory()
+
+        await sut.synchronize()
+
+        XCTAssertEqual(sync.syncDirectoryCallCount, 1)
+        XCTAssertFalse(hold.isHeld(for: "me"))
+    }
+
+    func test_autoSyncHold_isPerAccount() {
+        let hold = makeHold()
+
+        hold.hold(for: "me")
+
+        XCTAssertTrue(hold.isHeld(for: "me"))
+        XCTAssertFalse(hold.isHeld(for: "someone-else"))
     }
 
     // MARK: - Invitation
