@@ -8,6 +8,7 @@ import XCTest
 /// `thumbnailUrl`, la première image s'extrait par un `GET` partiel : pendant
 /// ce temps, la cellule montrait un dégradé générique alors que le thumbHash —
 /// décodé en moins d'une milliseconde — donnait déjà la silhouette de l'image.
+@MainActor
 final class MeeshyVideoThumbnailPendingLayerTests: XCTestCase {
 
     func test_pendingLayer_withAThumbHash_showsTheThumbHash() {
