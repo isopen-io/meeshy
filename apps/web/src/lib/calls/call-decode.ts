@@ -38,11 +38,26 @@ function personOf(value: unknown): DecodedPerson | null {
   return { userId, name, avatar: str(value.avatar) };
 }
 
+/**
+ * L'état caméra et micro d'une ligne `CallParticipant` (#8295) — seuls les
+ * champs DITS sont rendus : un champ absent laisse le moteur garder ce qu'il
+ * savait, jamais un défaut « caméra éteinte » qui masquerait l'image reçue.
+ */
+export type MemberFlags = { readonly micMuted?: boolean; readonly cameraOn?: boolean };
+
+function mediaFlags(row: Json): MemberFlags {
+  const audio = bool(row.isAudioEnabled);
+  const video = bool(row.isVideoEnabled);
+  return { ...(audio === null ? {} : { micMuted: !audio }), ...(video === null ? {} : { cameraOn: video }) };
+}
+
 export type DecodedInitiated = {
   readonly callId: string;
   readonly conversationId: string;
   readonly media: CallMedia;
   readonly initiator: DecodedPerson;
+  /** L'appelant d'un appel vidéo a sa caméra allumée, sauf si sa ligne dit le contraire. */
+  readonly initiatorFlags: MemberFlags;
   readonly participants: readonly DecodedPerson[];
   readonly isGroup: boolean;
   readonly conversationTitle: string | null;
@@ -55,12 +70,16 @@ export function decodeInitiated(payload: unknown): DecodedInitiated | null {
   const conversationId = str(payload.conversationId);
   const initiator = personOf(payload.initiator);
   if (callId === null || conversationId === null || initiator === null) return null;
-  const participants = Array.isArray(payload.participants) ? payload.participants.map(personOf).filter((person): person is DecodedPerson => person !== null) : [];
+  const rows = Array.isArray(payload.participants) ? payload.participants.filter(isRecord) : [];
+  const participants = rows.map(personOf).filter((person): person is DecodedPerson => person !== null);
+  const media: CallMedia = payload.type === 'video' ? 'video' : 'audio';
+  const initiatorRow = rows.find((row) => str(row.userId) === initiator.userId);
   return {
     callId,
     conversationId,
-    media: payload.type === 'video' ? 'video' : 'audio',
+    media,
     initiator,
+    initiatorFlags: { cameraOn: media === 'video', ...(initiatorRow === undefined ? {} : mediaFlags(initiatorRow)) },
     participants,
     isGroup: payload.conversationType === 'group',
     conversationTitle: str(payload.conversationTitle),
@@ -165,16 +184,18 @@ export function decodeAck(value: unknown): { readonly ok: true; readonly data: J
 }
 
 /** Les membres déjà présents d'une session rendue par `call:join` (session Prisma brute). */
-export function decodeSessionMembers(session: unknown): readonly (DecodedPerson & { readonly participantId: string | null })[] {
+export type DecodedSessionMember = DecodedPerson & { readonly participantId: string | null; readonly flags: MemberFlags };
+
+export function decodeSessionMembers(session: unknown): readonly DecodedSessionMember[] {
   if (!isRecord(session) || !Array.isArray(session.participants)) return [];
-  return session.participants.flatMap((row): (DecodedPerson & { readonly participantId: string | null })[] => {
+  return session.participants.flatMap((row): DecodedSessionMember[] => {
     if (!isRecord(row) || row.leftAt !== null && row.leftAt !== undefined) return [];
     const nested = isRecord(row.participant) ? row.participant : {};
     const user = isRecord(nested.user) ? nested.user : {};
     const userId = str(nested.userId) ?? str(row.userId) ?? str(row.participantId);
     if (userId === null) return [];
     const name = str(nested.displayName) ?? str(user.displayName) ?? str(user.username) ?? '';
-    return [{ userId, name, avatar: str(user.avatar) ?? str(nested.avatar), participantId: str(row.id) }];
+    return [{ userId, name, avatar: str(user.avatar) ?? str(nested.avatar), participantId: str(row.id), flags: mediaFlags(row) }];
   });
 }
 

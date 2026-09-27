@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CallSession } from '@/lib/api/call-sessions';
 
-import { resumableCall } from './call-resume';
+import { forgetEndedCall, resumableCall } from './call-resume';
 import type { ActiveCall } from './call-store';
 
 /**
@@ -69,5 +69,27 @@ describe('la bannière « Reprendre l’appel »', () => {
     expect(resumableCall({ active: session(), local: null, viewerId: 'u-me', identityOf })).toMatchObject({ title: 'Famille', avatar: 'f.jpg', isGroup: true });
     const trio = session({ participants: [...session().participants, { userId: 'u-bo', name: 'Bo', avatar: null }] });
     expect(resumableCall({ active: trio, local: null, viewerId: 'u-me', identityOf: noIdentity })?.isGroup).toBe(true);
+  });
+
+  test('un appel qu’on vient de raccrocher et que la passerelle croit encore vivant : pas de bannière (#8366)', () => {
+    expect(resumableCall({ active: session(), local: null, viewerId: 'u-me', identityOf: noIdentity, endedCallIds: ['call-1'] })).toBeNull();
+    expect(resumableCall({ active: session(), local: localCall('ended'), viewerId: 'u-me', identityOf: noIdentity, endedCallIds: ['call-1'] })).toBeNull();
+  });
+
+  test('un AUTRE appel vivant que celui qu’on vient de raccrocher : la bannière le propose (#8366)', () => {
+    expect(resumableCall({ active: session({ callId: 'call-2' }), local: null, viewerId: 'u-me', identityOf: noIdentity, endedCallIds: ['call-1'] })?.callId).toBe('call-2');
+  });
+});
+
+describe('oublier l’appel raccroché dans la lecture en cache (#8366)', () => {
+  test('la lecture en cache porte l’appel raccroché : elle est vidée', () => {
+    expect(forgetEndedCall(session(), 'call-1')).toBeNull();
+  });
+
+  test('la lecture en cache porte un autre appel, ou rien : elle est gardée', () => {
+    const other = session({ callId: 'call-2' });
+    expect(forgetEndedCall(other, 'call-1')).toBe(other);
+    expect(forgetEndedCall(null, 'call-1')).toBeNull();
+    expect(forgetEndedCall(undefined, 'call-1')).toBeUndefined();
   });
 });

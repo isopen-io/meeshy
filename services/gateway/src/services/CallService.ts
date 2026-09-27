@@ -34,6 +34,7 @@ import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
+import { commitCallEnd } from './calls/endCallRetry';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -1732,116 +1733,113 @@ export class CallService {
     // concurrently) could resolve it between the `call` read above and this
     // write; scoping to `call.version` makes the losing writer's terminal
     // write a no-op instead of clobbering the winner's duration/endReason.
+    // #8293 — same as endCall(): a P2034 is not proof of a concurrent
+    // terminal writer; `commitCallEnd` re-reads and retries while the call
+    // is still open.
     const leaveVersionConflict = Symbol('leaveVersionConflict');
-    const leaveOutcome = await this.prisma.$transaction(async (tx) => {
-      // Update participant left time
-      await tx.callParticipant.update({
-        where: { id: callParticipant.id },
-        data: { leftAt }
-      });
+    const leaveOutcome = await commitCallEnd({
+      write: () => this.prisma.$transaction(async (tx) => {
+        // Update participant left time
+        await tx.callParticipant.update({
+          where: { id: callParticipant.id },
+          data: { leftAt }
+        });
 
-      // Vague 183 — fresh, in-transaction read: does any OTHER participant
-      // still show `!leftAt` right now, not several awaits ago? This is what
-      // closes (narrows — see the doc comment above `isLastParticipant`'s
-      // declaration) the TOCTOU race: the outer `call.participants` snapshot
-      // can no longer be the sole basis for "does this leave end the call".
-      const remainingActive = await tx.callParticipant.count({
-        where: {
-          callSessionId: callId,
-          id: { not: callParticipant.id },
-          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
-        }
-      });
-      isLastParticipant = isDirectCall || remainingActive === 0;
-
-      // If last participant, end the call (status depends on pre/post-answer).
-      if (isLastParticipant) {
-        // Stamp leftAt on any OTHER still-active participant too (mirrors
-        // endCall()'s updateMany and the idempotent-leave branch above). A
-        // direct call always ends here regardless of whether the other party
-        // has formally left — without this, the other party's CallParticipant
-        // row keeps leftAt: null forever even though the CallSession is now
-        // terminal, so every per-event authorization check that gates on
-        // `!leftAt` (resolveActiveCallParticipantId — call:signal, heartbeat,
-        // quality-report, reconnecting/reconnected, request-ice-servers,
-        // backgrounded/foregrounded, screen-capture-detected) keeps accepting
-        // that party's events against a dead call indefinitely.
-        await tx.callParticipant.updateMany({
+        // Vague 183 — fresh, in-transaction read: does any OTHER participant
+        // still show `!leftAt` right now, not several awaits ago? This is what
+        // closes (narrows — see the doc comment above `isLastParticipant`'s
+        // declaration) the TOCTOU race: the outer `call.participants` snapshot
+        // can no longer be the sole basis for "does this leave end the call".
+        const remainingActive = await tx.callParticipant.count({
           where: {
             callSessionId: callId,
             id: { not: callParticipant.id },
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
-          },
-          data: { leftAt }
-        });
-
-        // Audit Vague 27 — anchor duration on answeredAt (talk time),
-        // mirroring endCall()'s `call.answeredAt ? … : 0`. This was still
-        // anchoring on startedAt unconditionally (ring+talk time), producing
-        // a duration inconsistent with the same real-world call ending via
-        // a different path (e.g. the explicit "End Call" button).
-        const duration = wasPreAnswered
-          ? 0
-          : Math.max(0, Math.floor((leftAt.getTime() - call.answeredAt!.getTime()) / 1000));
-
-        const lock = await tx.callSession.updateMany({
-          where: { id: callId, version: call.version },
-          data: {
-            status: targetEndedStatus,
-            endReason: targetEndReason,
-            endedAt: leftAt,
-            duration,
-            // Mirror endCall(): record WHO ended the call. The callee's
-            // decline and the caller's cancel both land here — the summary
-            // uses initiator equality to render "Appel annulé" per-viewer.
-            metadata: {
-              ...(call.metadata as Record<string, unknown>),
-              endedBy: userId
-            },
-            version: { increment: 1 }
           }
         });
+        isLastParticipant = isDirectCall || remainingActive === 0;
 
-        if (lock.count === 0) {
-          throw leaveVersionConflict;
+        // If last participant, end the call (status depends on pre/post-answer).
+        if (isLastParticipant) {
+          // Stamp leftAt on any OTHER still-active participant too (mirrors
+          // endCall()'s updateMany and the idempotent-leave branch above). A
+          // direct call always ends here regardless of whether the other party
+          // has formally left — without this, the other party's CallParticipant
+          // row keeps leftAt: null forever even though the CallSession is now
+          // terminal, so every per-event authorization check that gates on
+          // `!leftAt` (resolveActiveCallParticipantId — call:signal, heartbeat,
+          // quality-report, reconnecting/reconnected, request-ice-servers,
+          // backgrounded/foregrounded, screen-capture-detected) keeps accepting
+          // that party's events against a dead call indefinitely.
+          await tx.callParticipant.updateMany({
+            where: {
+              callSessionId: callId,
+              id: { not: callParticipant.id },
+              OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+            },
+            data: { leftAt }
+          });
+
+          // Audit Vague 27 — anchor duration on answeredAt (talk time),
+          // mirroring endCall()'s `call.answeredAt ? … : 0`. This was still
+          // anchoring on startedAt unconditionally (ring+talk time), producing
+          // a duration inconsistent with the same real-world call ending via
+          // a different path (e.g. the explicit "End Call" button).
+          const duration = wasPreAnswered
+            ? 0
+            : Math.max(0, Math.floor((leftAt.getTime() - call.answeredAt!.getTime()) / 1000));
+
+          const lock = await tx.callSession.updateMany({
+            where: { id: callId, version: call.version },
+            data: {
+              status: targetEndedStatus,
+              endReason: targetEndReason,
+              endedAt: leftAt,
+              duration,
+              // Mirror endCall(): record WHO ended the call. The callee's
+              // decline and the caller's cancel both land here — the summary
+              // uses initiator equality to render "Appel annulé" per-viewer.
+              metadata: {
+                ...(call.metadata as Record<string, unknown>),
+                endedBy: userId
+              },
+              version: { increment: 1 }
+            }
+          });
+
+          if (lock.count === 0) {
+            throw leaveVersionConflict;
+          }
+
+          logger.info('✅ Call closed - last participant left', {
+            callId,
+            duration,
+            status: targetEndedStatus,
+            endReason: targetEndReason,
+            wasPreAnswered
+          });
         }
-
-        logger.info('✅ Call closed - last participant left', {
-          callId,
-          duration,
-          status: targetEndedStatus,
-          endReason: targetEndReason,
-          wasPreAnswered
-        });
-      }
-    }).then(
-      () => 'left' as const,
-      (error) => {
-        if (error === leaveVersionConflict || this.isTransientWriteConflict(error)) {
-          return 'conflict' as const;
+      }).then(
+        () => 'written' as const,
+        (error) => {
+          if (error === leaveVersionConflict) return 'version-conflict' as const;
+          throw error;
         }
-        throw error;
-      }
-    );
+      ),
+      readCurrent: () => this.getCallSession(callId),
+      isTerminal: (current) => TERMINAL_STATUSES.includes(current.status),
+      isTransientConflict: (error) => this.isTransientWriteConflict(error)
+    });
 
-    if (leaveOutcome === 'conflict') {
-      // Vague 182 (#4202/Vague 181 follow-up) — this branch used to silently
-      // RETURN the fresh session, the identical anti-pattern #3581 fixed on
-      // endCall()'s own conflict branch (see its doc comment). The loser of
-      // this race is exactly "already ended by someone else": a resolved
-      // promise here is indistinguishable from "I just ended it" to every
-      // caller (CallEventsHandler's call:leave/call:force-leave,
-      // AuthHandler's anonymous-disconnect loop, routes/calls.ts's
-      // leave/kick route), which fall through to re-broadcast call:ended,
-      // re-post the call-summary, and (for a `missed` outcome) re-fire the
-      // missed-call notification for a call this leaveCall() did not
-      // actually end. Throw the same CallAlreadyEndedError endCall() throws
-      // so every caller absorbs it as the idempotent no-op it is.
-      const current = await this.getCallSession(callId);
+    if (leaveOutcome.kind === 'lost') {
+      // Vague 182 (#4202) — the loser of this race is "already ended by
+      // someone else": resolving would make every caller re-broadcast
+      // call:ended, re-post the summary and re-fire the missed-call
+      // notification. Throw the same CallAlreadyEndedError as endCall().
       logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write', {
-        callId, userId, currentStatus: current.status
+        callId, userId, currentStatus: leaveOutcome.current.status
       });
-      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
+      throw new CallAlreadyEndedError(leaveOutcome.current.endReason ?? CallEndReason.completed);
     }
 
     if (isLastParticipant) {
@@ -2237,61 +2235,53 @@ export class CallService {
     // `version: call.version` (same optimistic-lock field `joinCallAttempt`
     // uses) makes the losing writer's update a no-op and roll back its
     // participant `leftAt` stamps too, instead of corrupting the record.
+    // #8293 — a P2034 is NOT proof of a concurrent terminal writer (the
+    // hang-up's own `call:analytics` writes a CallParticipant row in the same
+    // millisecond): `commitCallEnd` re-reads, retries while the call is still
+    // open, and reports `lost` only once it is terminal.
     const versionConflict = Symbol('versionConflict');
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      await tx.callParticipant.updateMany({
-        where: {
-          callSessionId: callId,
-          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
-        },
-        data: { leftAt: endedAt }
-      });
+    const outcome = await commitCallEnd({
+      write: () => this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.updateMany({
+          where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+          data: { leftAt: endedAt }
+        });
 
-      const lock = await tx.callSession.updateMany({
-        where: { id: callId, version: call.version },
-        data: {
-          status: targetStatus,
-          endedAt,
-          duration,
-          endReason,
-          metadata: {
-            ...(call.metadata as Record<string, unknown>),
-            endedBy
-          },
-          version: { increment: 1 }
+        const lock = await tx.callSession.updateMany({
+          where: { id: callId, version: call.version },
+          data: {
+            status: targetStatus,
+            endedAt,
+            duration,
+            endReason,
+            metadata: { ...(call.metadata as Record<string, unknown>), endedBy },
+            version: { increment: 1 }
+          }
+        });
+
+        if (lock.count === 0) throw versionConflict;
+      }).then(
+        () => 'written' as const,
+        (error) => {
+          if (error === versionConflict) return 'version-conflict' as const;
+          throw error;
         }
-      });
+      ),
+      readCurrent: () => this.getCallSession(callId),
+      isTerminal: (current) => TERMINAL_STATUSES.includes(current.status),
+      isTransientConflict: (error) => this.isTransientWriteConflict(error)
+    });
 
-      if (lock.count === 0) {
-        throw versionConflict;
-      }
-    }).then(
-      () => 'ended' as const,
-      (error) => {
-        if (error === versionConflict || this.isTransientWriteConflict(error)) {
-          return 'conflict' as const;
-        }
-        throw error;
-      }
-    );
-
-    if (outcome === 'conflict') {
-      // Issue #3581 follow-up — this branch used to silently RETURN the
-      // fresh session, same as the stale-read guard above did before #3581.
-      // The loser of this race is exactly the "already ended by someone
-      // else" case that fix exists for: a resolved promise here is
-      // indistinguishable from "I just ended it" to both callers
-      // (CallEventsHandler, routes/calls.ts), which fall through to
-      // re-broadcast call:ended, re-post the call-summary, and (for a
-      // `missed` outcome) re-fire the missed-call notification for a call
-      // this request did not actually end. Throw the same
-      // CallAlreadyEndedError the stale-read guard throws so both callers
-      // absorb it as the idempotent no-op it is.
-      const current = await this.getCallSession(callId);
+    if (outcome.kind === 'lost') {
+      // Issue #3581 follow-up — the loser of this race is the "already ended
+      // by someone else" case: resolving would make both callers
+      // (CallEventsHandler, routes/calls.ts) re-broadcast call:ended, re-post
+      // the call-summary and re-fire the missed-call notification. Throw the
+      // same CallAlreadyEndedError as the stale-read guard above.
       logger.warn('⚠️ Call end lost race to a concurrent terminal write', {
-        callId, endedBy, currentStatus: current.status
+        callId, endedBy, currentStatus: outcome.current.status
       });
-      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
+      throw new CallAlreadyEndedError(outcome.current.endReason ?? CallEndReason.completed);
     }
 
     this.clearHeartbeats(callId);
