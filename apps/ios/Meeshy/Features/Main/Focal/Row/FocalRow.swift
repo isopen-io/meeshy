@@ -185,7 +185,8 @@ struct FocalRow: View {
     @ViewBuilder
     private var standardBody: some View {
         HStack(alignment: .bottom, spacing: FocalMetrics.MetaColumn.spacing) {
-            contentColumn
+            // #8303 — la flamme-œil, dans la gouttière de l'avatar jusqu'à la première lettre.
+            contentColumn.afterReadWatermark(content.protection.isAfterRead, gutter: indent, tint: ComposerProtection.ephemeral.tint)
 
             // En focus, `focusStampChip` dit la même chose sur la bande de la
             // carte : la colonne s'efface alors, comme la ligne basse, sans

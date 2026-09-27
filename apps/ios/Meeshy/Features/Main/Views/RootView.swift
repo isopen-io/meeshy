@@ -416,10 +416,7 @@ struct RootView: View {
         // commentaires et des réactions. Armé par `FeedView` et désarmé à
         // sa disparition, il ratait tout ce qui arrivait ailleurs dans
         // l'app. `arm()` est idempotent — jamais désarmé.
-        DependencyContainer.shared.feedSocketHandler.arm()
-
-        // Start SyncEngine socket relay
-        await ConversationSyncEngine.shared.startSocketRelay()
+        await RealtimeRelays.arm()
 
         // Deferred cleanup
         Task.detached(priority: .background) {

@@ -122,8 +122,8 @@ final class ConversationMediaGalleryMenuTests: XCTestCase {
                 + "qui stage le fichier puis présente la share sheet système"
         )
         XCTAssertTrue(
-            try body(of: "func requestSaveCurrent() {").contains("saveCoordinator.requestSave("),
-            "enregistrer garde la sheet de destinations du composant unifié"
+            try body(of: "func requestSaveCurrent() {").contains("saveCoordinator.save("),
+            "enregistrer passe par le composant unifié — l'image et la vidéo vont droit à l'album Meeshy (#8307)"
         )
     }
 
