@@ -335,9 +335,9 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `route-manifest.json`. Le web l'appelle déjà ; le lot iOS de la même
 // milestone la consomme en parallèle et doit ramener cette valeur à 281.
 // Valeur MESURÉE le 2026-09-27.
-// 282 → 281 : le lot iOS annoncé ci-dessus consomme désormais
-// `byIdMessagesAfterReadConsume` — `dev` mesurait 281 et rougissait sur
-// « amélioration non enregistrée ». Valeur MESURÉE le 2026-09-27.
+// 282 → 281 (#8303) : le lot iOS consomme `byIdMessagesAfterReadConsume`
+// (`MessageService.consumeAfterRead`, rejoué par l'outbox). Valeur MESURÉE le
+// 2026-09-27.
 const BASELINE_DEAD_ENTRIES = 281;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;

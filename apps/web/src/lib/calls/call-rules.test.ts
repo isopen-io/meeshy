@@ -50,6 +50,18 @@ describe('décodage', () => {
     expect(members.map((m) => m.userId)).toEqual(['u1']);
   });
 
+  test('les membres d’une session portent leur état caméra et micro, absent s’il n’est pas dit (#8295)', () => {
+    const members = decodeSessionMembers({ participants: [{ id: 'p1', userId: 'u1', leftAt: null, isAudioEnabled: true, isVideoEnabled: true }, { id: 'p2', userId: 'u2', leftAt: null }] });
+    expect(members.map((m) => m.flags)).toEqual([{ micMuted: false, cameraOn: true }, {}]);
+  });
+
+  test('l’initiateur d’un appel vidéo arrive caméra allumée, sauf si sa ligne dit le contraire (#8295)', () => {
+    const base = { callId: 'c', conversationId: 'v', initiator: { userId: 'u', username: 'amina' } };
+    expect(decodeInitiated({ ...base, type: 'video' })?.initiatorFlags).toEqual({ cameraOn: true });
+    expect(decodeInitiated({ ...base, type: 'audio' })?.initiatorFlags).toEqual({ cameraOn: false });
+    expect(decodeInitiated({ ...base, type: 'video', participants: [{ userId: 'u', isAudioEnabled: false, isVideoEnabled: false }] })?.initiatorFlags).toEqual({ micMuted: true, cameraOn: false });
+  });
+
   test('les motifs de fin de la passerelle, miroir d’iOS', () => {
     expect(mapServerEndReason('no_answer')).toBe('missed');
     expect(mapServerEndReason('declined')).toBe('rejected');

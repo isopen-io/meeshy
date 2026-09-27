@@ -35,13 +35,30 @@ const HISTORY_STATUSES: CallStatus[] = [
  * conversations sur la fenêtre glissante, moins ceux qu'il a effacés (#8066).
  * La lecture et le « tout effacer » partagent cette portée : vider efface
  * exactement ce que le journal montrait.
+ *
+ * L'effacement se retire PAR IDENTIFIANT, jamais par `NOT: { hiddenForUserIds:
+ * { has } }` (#8294) : sur MongoDB, Prisma double tout filtre de liste NIÉ d'une
+ * exigence de présence du champ, et une session créée avant `@default([])` n'en
+ * porte pas la clé — le journal rendait 0 appel. Aucun filtre typé ne dit
+ * « champ absent » sur une liste scalaire (`isSet` n'y existe pas) ; `has`
+ * POSITIF, lui, lit une clé absente comme « ne contient pas ».
  */
-const journalScope = (userId: string, windowStart: Date): Prisma.CallSessionWhereInput => ({
-  startedAt: { gte: windowStart },
-  status: { in: HISTORY_STATUSES },
-  conversation: { participants: { some: { userId, isActive: true } } },
-  NOT: { hiddenForUserIds: { has: userId } }
-});
+const journalScope = async (
+  prisma: PrismaClient,
+  userId: string,
+  windowStart: Date
+): Promise<Prisma.CallSessionWhereInput> => {
+  const base: Prisma.CallSessionWhereInput = {
+    startedAt: { gte: windowStart },
+    status: { in: HISTORY_STATUSES },
+    conversation: { participants: { some: { userId, isActive: true } } }
+  };
+  const hidden = await prisma.callSession.findMany({
+    where: { ...base, hiddenForUserIds: { has: userId } },
+    select: { id: true }
+  });
+  return hidden.length === 0 ? base : { ...base, id: { notIn: hidden.map((h) => h.id) } };
+};
 
 /**
  * Paginated call journal for a user: the terminal (ended/missed/rejected/
@@ -78,17 +95,20 @@ export async function listCallHistory(
   const { limit, cursor, filter, viewer } = options;
   const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
 
-  const where: Prisma.CallSessionWhereInput = journalScope(userId, windowStart);
+  const query = normalizedJournalQuery(options.q);
+  const conversationIds = query === null ? null : await journalConversationsMatching(prisma, userId, query);
+  if (conversationIds !== null && conversationIds.length === 0) return { items: [], hasMore: false, nextCursor: undefined };
+
+  const where: Prisma.CallSessionWhereInput = await journalScope(prisma, userId, windowStart);
+  if (conversationIds !== null) where.conversationId = { in: conversationIds };
   // Type d'appel (#8203) : `isVideo` est posé à la création ; un appel plus
   // ancien que ce champ (non encore rattrapé par la migration 020) n'en porte
-  // pas et se lit « audio », comme `callIsVideo` le lit sur `metadata`.
+  // pas et se lit « audio », comme `callIsVideo` le lit sur `metadata`. Sur
+  // MongoDB, `NOT: { isVideo: true }` exclut aussi la clé ABSENTE (#8294) :
+  // l'absence se dit `isSet: false`.
   if (options.type === 'video') where.isVideo = true;
-  if (options.type === 'audio') where.AND = [{ NOT: { isVideo: true } }];
-  const query = normalizedJournalQuery(options.q);
-  if (query !== null) {
-    const conversationIds = await journalConversationsMatching(prisma, userId, query);
-    if (conversationIds.length === 0) return { items: [], hasMore: false, nextCursor: undefined };
-    where.conversationId = { in: conversationIds };
+  if (options.type === 'audio') {
+    where.AND = [{ OR: [{ isVideo: { isSet: false } }, { isVideo: null }, { isVideo: false }] }];
   }
   if (filter === 'missed') {
     // A missed call, for THIS user, is either (a) the call-wide `missed`
@@ -243,7 +263,7 @@ export async function hideCallFromHistory(
 export async function clearCallHistory(prisma: PrismaClient, userId: string): Promise<number> {
   const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
   const result = await prisma.callSession.updateMany({
-    where: journalScope(userId, windowStart),
+    where: await journalScope(prisma, userId, windowStart),
     data: { hiddenForUserIds: { push: userId } }
   });
   return result.count;
