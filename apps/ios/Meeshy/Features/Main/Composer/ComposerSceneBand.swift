@@ -42,6 +42,15 @@ import MeeshyUI
 /// qu'on ajoutera.
 nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
     case palette
+    /// **Le CADRE** (#8414) : Ajuster / Remplir et le fond des bandes d'un média
+    /// de fond. Ouvert par la même porte « Fond » que la palette, dès que la
+    /// scène a un média de fond — une couleur n'y aurait plus rien à peindre.
+    case frame
+
+    /// La bande que la porte « Fond » ouvre : une seule porte, deux objets.
+    static func forBackgroundDoor(hasBackgroundMedia: Bool) -> ComposerSceneBand {
+        hasBackgroundMedia ? .frame : .palette
+    }
 
     /// **La bande réellement OUVERTE — `nil` ⇒ le bas ne porte que le socle.**
     ///
@@ -243,10 +252,22 @@ struct ComposerSceneBandView: View {
     var openingEffect: StoryTransitionEffect?
     var onPickOpening: ((StoryTransitionEffect?) -> Void)?
 
+    var fitMode: String = StoryBackgroundFraming.fill
+    var backdrop: StoryBackdrop = .blur
+    var plateauTint: Color = .clear
+    var onPickFitMode: ((String) -> Void)?
+    var onPickBackdrop: ((StoryBackdrop) -> Void)?
+
     var body: some View {
         switch band {
         case .palette:
             palette
+        case .frame:
+            ComposerFrameBand(fitMode: fitMode,
+                              backdrop: backdrop,
+                              plateauTint: plateauTint,
+                              onPickFitMode: { onPickFitMode?($0) },
+                              onPickBackdrop: { onPickBackdrop?($0) })
         }
     }
 

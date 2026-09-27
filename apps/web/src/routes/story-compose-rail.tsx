@@ -17,12 +17,16 @@ export function StudioLeadingRail({
   locked,
   onPlace,
   onSelect,
+  sound = true,
 }: {
   readonly lang: InterfaceLanguage;
   readonly page: StudioPage;
   readonly locked: boolean;
   readonly onPlace: (door: StudioDoor, file: File) => void;
   readonly onSelect: (id: string) => void;
+  /** La porte du SON — absente d'une retouche d'image (#8416) : une image ne
+   * porte pas de son. */
+  readonly sound?: boolean;
 }) {
   const selectedId = page.selected;
   return (
@@ -47,14 +51,16 @@ export function StudioLeadingRail({
         onSelect={(file) => onPlace('overlay', file)}
         disabled={locked}
       />
-      <StudioDoorButton
-        door="sound"
-        label={translate(lang, 'story.studio.sound.add')}
-        glyph="microphone"
-        accept="audio/*"
-        onSelect={(file) => onPlace('sound', file)}
-        disabled={locked}
-      />
+      {sound ? (
+        <StudioDoorButton
+          door="sound"
+          label={translate(lang, 'story.studio.sound.add')}
+          glyph="microphone"
+          accept="audio/*"
+          onSelect={(file) => onPlace('sound', file)}
+          disabled={locked}
+        />
+      ) : null}
       <div role="group" aria-label={translate(lang, 'story.studio.objects.label')} className="flex w-full flex-col items-center gap-1 pt-1">
         {page.texts.map((layer, index) => (
           <StudioChip

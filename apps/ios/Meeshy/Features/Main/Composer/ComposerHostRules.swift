@@ -589,7 +589,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// tenait : `opened(_:served:)` refuse toujours une bande hors de ce jeu.
     /// La ligne de partage entre ce que la première vue sert et ce qui part à
     /// l'éditeur vit dans `ComposerFirstView`.
-    static let bands: Set<ComposerSceneBand> = [.palette]
+    static let bands: Set<ComposerSceneBand> = [.palette, .frame]
 }
 
 

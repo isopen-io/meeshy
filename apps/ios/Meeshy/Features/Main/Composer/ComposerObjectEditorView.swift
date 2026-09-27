@@ -619,9 +619,17 @@ struct ComposerObjectEditorView: View {
             actions: [],
             plateauTint: plateauTint,
             onUndo: viewModel.canUndoGlobal ? { viewModel.undoGlobal() } : nil,
-            onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil
+            onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil,
+            // **Plus de colonne vide** (directive porteur 2026-09-27 : « pas de
+            // barre d'action qui se prolonge sans action »). Le ressort étirait
+            // le verre sur toute la hauteur au-dessus d'un seul bouton ; les
+            // TUILES de la scène, posées au bas, n'occupent que ce qu'elles
+            // portent.
+            pushesToThumb: false,
+            labeledTiles: true
         )
-        .frame(width: 52)
+        .frame(width: ComposerRailGeometry.tileWidth + 8)
+        .frame(maxHeight: .infinity, alignment: .bottom)
     }
 
     // MARK: - Toutes les options, empilées

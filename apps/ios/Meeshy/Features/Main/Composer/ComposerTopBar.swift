@@ -45,6 +45,10 @@ struct ComposerTopBar: View {
     /// le 2026-09-27). Teinté du plateau, il reste sombre partout.
     let plateauTint: Color
 
+    /// Une pastille posée avant le `⋯` — la bascule « Animé » de la scène
+    /// (#8415). `nil` ⇒ rien.
+    var trailingAccessory: AnyView? = nil
+
     static let topPadding: CGFloat = 12
 
     /// **Ce que la barre occupe sous la zone sûre** — lu par la scène plein
@@ -76,6 +80,7 @@ struct ComposerTopBar: View {
             .accessibilityLabel(Text(ComposerDocumentCopy.close))
             slideRail
             Spacer(minLength: 0)
+            if let trailingAccessory { trailingAccessory.fixedSize() }
             if let overflowMenu { overflowMenu.fixedSize() }
         }
         .padding(.horizontal, 16)

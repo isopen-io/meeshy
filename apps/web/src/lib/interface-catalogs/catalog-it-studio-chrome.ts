@@ -27,6 +27,19 @@ const itStudioChrome = {
   'story.studio.backdrop.white': 'Bianco',
   'story.studio.backdrop.indigo': 'Indaco',
   'story.studio.backdrop.sand': 'Sabbia',
+  'story.studio.animated': 'Animato',
+  'story.studio.timeline': 'Timeline della scena',
+  'story.studio.timeline.play': 'Riproduci',
+  'story.studio.timeline.pause': 'Pausa',
+  'story.studio.timeline.start': 'Inizio di {name}',
+  'story.studio.timeline.end': 'Fine di {name}',
+  'story.studio.timeline.empty': 'Scrivi un testo o posa un livello: ogni oggetto ha la sua traccia.',
+  'story.studio.timeline.overlay': 'Livello',
+  'story.studio.retouch.title': 'Modifica l’immagine',
+  'story.studio.retouch.done': 'Fine',
+  'story.studio.retouch.cancel': 'Annulla la modifica',
+  'composer.attachment.edit': 'Modifica {name}',
+  'story.studio.retouch.failed': 'Impossibile generare l’immagine.',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

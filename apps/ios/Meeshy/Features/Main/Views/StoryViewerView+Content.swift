@@ -188,6 +188,7 @@ extension StoryViewerView {
                 // insubordonnable par priorité — la barre ne peut gagner que
                 // s'il CÈDE, et il ne le sait qu'en lisant cet état.
                 guard !reactionStripOwnsDrag else { return }
+                guard !composerOwnsDrag else { return }
                 // CESSION AU GLISSÉ DE LA BARRE (#7878) et du rail : pendant un
                 // parcours au doigt, ni cube ni fermeture.
                 guard !isScrubbingRail else { return }
@@ -434,6 +435,7 @@ extension StoryViewerView {
         // Même raison que les deux lignes précédentes : la revendication de la
         // barre de réactions ne vaut que pour LE geste qui vient de finir.
         reactionStripOwnsDrag = false
+        composerOwnsDrag = false
         gestureResetToken &+= 1
     }
 
