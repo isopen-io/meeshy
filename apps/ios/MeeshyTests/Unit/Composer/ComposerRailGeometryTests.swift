@@ -204,8 +204,8 @@ final class ComposerRailGeometryTests: XCTestCase {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
         XCTAssertTrue(surface.contains("EmbeddedSceneCanvas"), "Ce n'est pas la surface de scène.")
-        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.lane)"),
-                      "Le volet de la scène doit se retirer de la largeur d'un rail de chaque côté.")
+        XCTAssertTrue(surface.contains("descriptionPanel.padding(.leading,ComposerRailGeometry.lane).padding(.trailing,ComposerRailGeometry.tileLane)"),
+                      "Le volet de la scène doit se retirer du rail de portes à gauche et du rail de tuiles à droite.")
         XCTAssertFalse(surface.contains("sceneInset(railsShown:true)+10"),
                        "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
     }
@@ -216,6 +216,40 @@ final class ComposerRailGeometryTests: XCTestCase {
         let hote = compact(AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource()))
         XCTAssertTrue(hote.contains("volet.padding(.horizontal,ComposerRailGeometry.lane)"),
                       "Le volet de l'atelier doit se retirer de la largeur d'un rail de chaque côté.")
+    }
+
+    // MARK: - La scène prend le viewport (#8370)
+
+    /// **La carte se cadre sur l'écran ENTIER**, et le chrome flotte dessus.
+    /// Elle vivait dans une `VStack` entre la barre haute et les rangées du bas,
+    /// qui lui prenaient chacune sa hauteur : elle ne pouvait jamais occuper le
+    /// viewport (retour porteur 2026-09-27). Deux calques frères désormais.
+    func test_laScene_estUnCalquePleinEcran_sousLeChrome() throws {
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+        XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer}"),
+                      "Le letterbox, la scène et le chrome sont trois calques empilés, dans cet ordre.")
+        XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
+                      "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
+        XCTAssertTrue(surface.contains("StorySlideRenderer.computeThumbHash(slide:slide,"),
+                      "Le sol se peint du composite de la slide — ce que la publication emporte.")
+        guard let debut = surface.range(of: "privatevarsceneLayer:someView{"),
+              let fin = surface.range(of: "privatevarchromeLayer:someView{") else {
+            return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
+        }
+        let scene = surface[debut.upperBound..<fin.lowerBound]
+        XCTAssertTrue(scene.contains(".padding(.top,ComposerTopBar.height+4)"),
+                      "La scène se pose sous la barre haute, jamais sous la croix (directive 2026-09-27).")
+        XCTAssertTrue(scene.contains(".ignoresSafeArea(.keyboard)"),
+                      "Le clavier ne pousse pas la scène.")
+        XCTAssertTrue(surface.contains(".statusBarHidden(true)"),
+                      "La barre de statut s'efface : la croix monte dans la rangée de la Dynamic Island.")
+        XCTAssertFalse(scene.contains("ComposerTopBar("),
+                       "Aucun chrome ne se loge dans le calque de la scène.")
+        XCTAssertFalse(surface.contains("pushesToThumb:true"),
+                       "Aucun rail de la scène ne s'étire sur sa hauteur.")
+        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false,labeledTiles:true)"),
+                      "Le rail droit flotte sans ressort, en tuiles libellées comme la création de post.")
     }
 
     // MARK: - Ce qu'une rangée requiert, et ce qui déborde (#4582)

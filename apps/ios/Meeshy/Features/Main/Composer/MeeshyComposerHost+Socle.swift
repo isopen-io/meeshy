@@ -44,12 +44,42 @@ extension MeeshyComposerHost {
         HStack(spacing: 10) {
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
-            if paintedSocleZones.contains(.preview) { previewButton }
+            if socleServesPostText { postTextButton }
             publishButton
         }
         .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        // **Plus bas, sous la scène** (directive porteur 2026-09-27) : il
+        // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+    }
+
+    /// **Le texte du post, là où était l'œil** (#8370, directive porteur
+    /// 2026-09-27 : « preview à supprimer, remplacer le bouton par le bouton de
+    /// texte de post »). Ce n'est pas un nouveau chemin : c'est la PORTE
+    /// `.content`, qui quitte la rangée basse (`ComposerSceneFloatingRail.lowRow`)
+    /// et garde son unique aiguillage, `handleRailDoor`. Peinte seulement sous
+    /// la scène d'un post — la surface document écrit son corps en place.
+    var socleServesPostText: Bool {
+        mountedComposerView == .scene
+            && ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                        format: selectedFormat,
+                                        allowsCapture: profile.allowsCapture)
+                .contains(ComposerSceneFloatingRail.socleDoor)
+    }
+
+    var postTextButton: some View {
+        Button {
+            handleRailDoor(ComposerSceneFloatingRail.socleDoor)
+        } label: {
+            Image(systemName: ComposerSceneFloatingRail.socleDoor.symbolName)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
+        }
+        .accessibilityLabel(Text(ComposerRailCopy.label(ComposerSceneFloatingRail.socleDoor)))
     }
 
 
@@ -104,7 +134,9 @@ extension MeeshyComposerHost {
     // écran sert-il l'historique ? » — seule la PLACE a changé, jamais la
     // question. Elle est posée par `MeeshyComposerHost+Surfaces`.
 
-    /// **L'œil — voir le post COMME IL SERA LU, avant de le publier.**
+    /// **L'aperçu — voir le post COMME IL SERA LU, avant de le publier.** Servi
+    /// par l'entrée `⋯ › Aperçu` depuis #8370 ; l'œil du socle a laissé sa place
+    /// au texte du post.
     ///
     /// Il ne rend rien lui-même : il remet les slides composées au rappel
     /// `onPreview`, que la PORTE branche sur `StoryViewerView` — le lecteur
@@ -149,24 +181,6 @@ extension MeeshyComposerHost {
         }
     }
 
-    var previewButton: some View {
-        Button {
-            performSoclePreview()
-        } label: {
-            // **Sur verre** (#8370) : le socle flotte sur la scène, et un
-            // pictogramme nu s'y perdrait sur une photo claire.
-            Image(systemName: "eye")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
-        }
-        .accessibilityLabel(Text(String(
-            localized: "composer.a11y.preview",
-            defaultValue: "Aperçu", bundle: .main
-        )))
-    }
 
     /// **L'audience du socle CHOISIT — elle ne témoigne plus.**
     ///

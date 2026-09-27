@@ -96,7 +96,8 @@ extension MeeshyComposerHost {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: ComposerControlMetrics.visualDiameter,
                        height: ComposerControlMetrics.visualDiameter)
-                .adaptiveGlass(in: Circle())
+                // Teinté du plateau, comme la croix qu'il encadre (#8370).
+                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
         }
         .accessibilityLabel(Text(ComposerOverflowCopy.menu))
     }
@@ -106,6 +107,8 @@ extension MeeshyComposerHost {
     /// lisent sans monter une vue.
     func perform(_ entry: ComposerOverflowEntry) {
         switch entry {
+        case .preview:
+            performSoclePreview()
         case .pickBackground:
             // Bascule : le même geste ouvre et referme la bande. « Ouvrir »
             // sans « refermer » rendrait les ≈ 170 pt à sens unique.

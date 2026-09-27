@@ -166,10 +166,18 @@ nonisolated enum ComposerSceneFloatingRail {
     /// Les deux rangées forment une PARTITION du jeu servi — c'est la
     /// négation du même prédicat, donc aucune porte ne peut se perdre ni
     /// apparaître deux fois. Deux filtres écrits séparément l'auraient permis.
+    ///
+    /// **Le corps du post n'y est plus (#8370)** : sa porte vit au SOCLE, à la
+    /// place de l'œil (directive porteur 2026-09-27). Elle reste dans le jeu
+    /// SERVI — c'est la rangée basse qui ne la peint plus, pour qu'elle ne
+    /// soit pas deux fois à l'écran.
     static func lowRow(from served: [ComposerRailDoor],
                        format: ComposerFormat) -> [ComposerRailDoor] {
-        served.filter { !$0.level(for: format).appearsOnCanvas }
+        served.filter { !$0.level(for: format).appearsOnCanvas && $0 != socleDoor }
     }
+
+    /// La porte que le SOCLE porte à la place de la rangée basse.
+    static let socleDoor: ComposerRailDoor = .content
 }
 
 

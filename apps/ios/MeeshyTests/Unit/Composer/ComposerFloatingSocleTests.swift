@@ -143,4 +143,19 @@ final class ComposerFloatingSocleTests: XCTestCase {
         XCTAssertFalse(code.contains(".adaptiveGlass(in:Capsule())"),
                        "Un verre nu dans le socle choisit seul sa luminance, et le libellé blanc s'y perd.")
     }
+
+    /// **La barre haute flotte AUSSI sur la scène** : sa croix et son `⋯`
+    /// portent le même verre teinté, sinon ils virent au clair sur une photo
+    /// claire et leurs glyphes blancs disparaissent (simulateur, 2026-09-27).
+    func test_leVerreDeLaBarreHaute_estTeinteDuPlateau() throws {
+        let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTopBar.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(barre.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+                      "La croix doit porter un verre teinté du plateau.")
+        let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertFalse(hote.contains(".adaptiveGlass(in:Circle())"),
+                       "Aucun verre nu dans le chrome du meuble : le `⋯` est teinté comme la croix.")
+    }
 }

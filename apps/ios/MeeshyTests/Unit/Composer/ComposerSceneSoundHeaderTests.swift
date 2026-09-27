@@ -134,64 +134,46 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
         XCTAssertNil(ComposerSceneSoundTrace.served(background: fond(), toolIsOpen: true))
         XCTAssertNotNil(ComposerSceneSoundTrace.served(background: fond(), toolIsOpen: false))
     }
-    /// **La trace se pose JUSTE au-dessus de la carte** (#5017).
+    /// **La trace se lit AVEC la scène, en tête du chrome** (#5017, puis #8370).
     ///
     /// > Directive porteur 2026-09-03 : « bord gauche aligné sur la scène il
     /// > faut mettre **juste au dessus de la scene** ! »
     ///
-    /// Mesuré avant correctif au simulateur : ligne à `y ≈ 300`, carte à
-    /// `y ≈ 513` — deux cent treize points de vide entre l'étiquette et ce
-    /// qu'elle étiquette. Posée en FRÈRE dans la pile, la trace se collait sous
-    /// la barre haute ; le vide n'était pas une marge à régler mais la moitié
-    /// haute du CENTRAGE de la carte dans la hauteur qu'on lui donne.
-    ///
-    /// Le témoin épingle donc le MÉCANISME, pas une distance : le montage passe
-    /// par l'ancre, et l'ancre lit `ComposerRailGeometry`. Un correctif qui
-    /// rapprocherait la trace par un `padding(.top, 200)` resterait rouge — et
-    /// c'est le but, puisqu'un littéral se démentirait au premier autre ratio.
-    func test_soundHeader_isAnchoredAboveTheCard_notMountedAsASibling() throws {
+    /// Tant que la carte se centrait dans une frame plus haute qu'elle, la trace
+    /// devait s'ancrer au-dessus du DESSIN (`ancreAuDessusDuDessin`) pour ne pas
+    /// flotter à deux cents points de ce qu'elle étiquette. La scène prend
+    /// désormais le viewport (#8370) : la trace est l'étage qui suit la barre
+    /// haute, posé SUR la scène — il n'y a plus de vide à franchir. Ce que le
+    /// témoin garde : elle vit dans le chrome, juste sous la barre, jamais dans
+    /// le calque de la scène, où elle deviendrait un objet du canvas.
+    func test_soundHeader_isTheFirstFloorUnderTheTopBar() throws {
         let surface = try source("ComposerSceneSurface.swift")
-        let ancre = "ancreAuDessusDuDessin("
-        XCTAssertTrue(surface.contains(ancre + "\n" ) || surface.contains(ancre),
-                      "l'ancre haute doit exister")
-        guard let posee = surface.range(of: ancre + "\n"),
-              let montee = surface.range(of: "ComposerSceneSoundHeader(") else {
-            return XCTFail("l'en-tête doit être monté DANS l'ancre haute")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let chrome = surface.range(of: "privatevarchromeLayer:someView{"),
+              let barre = surface.range(of: "ComposerTopBar(", range: chrome.upperBound..<surface.endIndex),
+              let trace = surface.range(of: "ComposerSceneSoundHeader(", range: chrome.upperBound..<surface.endIndex),
+              let libre = surface.range(of: "freeZone", range: chrome.upperBound..<surface.endIndex) else {
+            return XCTFail("le chrome, sa barre ou la trace ont changé de nom — la garde doit être re-pointée")
         }
-        XCTAssertTrue(posee.upperBound <= montee.lowerBound,
-                      "l'en-tête est monté DANS `ancreAuDessusDuDessin`, jamais en frère de la pile")
+        XCTAssertTrue(barre.upperBound <= trace.lowerBound && trace.upperBound <= libre.lowerBound,
+                      "la trace se pose entre la barre haute et la scène libre")
+        guard let scene = surface.range(of: "privatevarsceneLayer:someView{") else {
+            return XCTFail("le calque de la scène a changé de nom")
+        }
+        XCTAssertFalse(surface[scene.upperBound..<chrome.lowerBound].contains("ComposerSceneSoundHeader("),
+                       "un son de fond ne produit aucun pixel au rendu : sa trace ne vit pas dans la scène")
     }
 
-    /// **L'écart vient de la RÈGLE, jamais d'un littéral** (#5017).
-    ///
-    /// La carte est ajustée à son ratio puis CENTRÉE : le vide du haut vaut
-    /// celui du bas et change avec le ratio comme avec la taille de l'écran.
-    /// `sceneBottomInset` le calcule déjà pour le rail bas — l'ancre haute est
-    /// sa jumelle et lit la MÊME fonction. Deux calculs parallèles dériveraient
-    /// au premier ratio ajouté, l'un des deux rougissant sans que l'autre bouge.
-    func test_upperAnchor_readsTheGeometryRule_neverALiteralInset() throws {
+    /// **Le bord gauche vient de la CARTE mesurée, jamais d'un littéral** (#5011).
+    /// La carte se centre dans le viewport et n'en touche le bord que si la
+    /// largeur la contraint (iPhone portrait) ; sur iPad elle s'en écarte.
+    func test_soundHeader_alignsOnTheMeasuredCard_neverALiteralInset() throws {
         let surface = try source("ComposerSceneSurface.swift")
-        // Le corps se borne par la DÉCLARATION suivante, jamais par un `// MARK:` :
-        // `AppSourceGuard.stripComments` dépouille la source avant de la rendre,
-        // donc un témoin ancré sur un commentaire cherche un repère que le texte
-        // qu'il lit ne contient plus. Écrit ici après l'avoir fait tomber.
-        guard let debut = surface.range(of: "private func ancreAuDessusDuDessin") else {
-            return XCTFail("l'ancre haute doit exister")
-        }
-        let apres = debut.upperBound ..< surface.endIndex
-        let suivante = ["\n    private ", "\n    var ", "\n    func "]
-            .compactMap { surface.range(of: $0, range: apres)?.lowerBound }
-            .min() ?? surface.endIndex
-        let fin = suivante ..< suivante
-        let corps = String(surface[debut.upperBound ..< fin.lowerBound])
-        XCTAssertTrue(corps.contains("ComposerRailGeometry.sceneBottomInset("),
-                      "l'ancre haute lit la règle, comme sa jumelle basse")
-        XCTAssertTrue(corps.contains("dimensions[.bottom]"),
-                      "le contenu se soulève de SA hauteur — aucune hauteur n'est écrite ni mesurée")
-        for littéral in ["padding(.top, 2", "padding(.top, 1", "offset(y: -2", "offset(y: -1"] {
-            XCTAssertFalse(corps.contains(littéral),
-                           "aucune distance en dur dans l'ancre : `\(littéral)` se démentirait au premier autre ratio")
-        }
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(surface.contains("ComposerSceneSoundHeader(backgroundSound:backgroundSound,toolIsOpen:toolIsOpen,leadingInset:sceneCardLeading,"),
+                      "la trace lit le bord de la carte que le canvas a mesuré")
+        XCTAssertTrue(surface.contains("ComposerRailGeometry.sceneLeadingInset("),
+                      "le bord se calcule par la règle, jamais d'un nombre")
     }
 
 }

@@ -121,12 +121,25 @@ final class ComposerSoclePublishHandoffTests: XCTestCase {
             ComposerChromeOwnership.socleZones(for: .scene, atelierOffersPreview: false).isEmpty == false,
             "l'audience et la flèche restent peintes"
         )
-        XCTAssertFalse(
-            ComposerChromeOwnership.socleZones(for: .scene, atelierOffersPreview: false).contains(.preview),
-            "… mais pas l'œil"
+        // **L'œil a quitté le socle au #8370** (directive porteur 2026-09-27) :
+        // armé ou non, il ne s'y peint plus. L'aperçu est servi par le `⋯`
+        // dès qu'il y a une scène à montrer.
+        for arme in [false, true] {
+            XCTAssertFalse(
+                ComposerChromeOwnership.socleZones(for: .scene, atelierOffersPreview: arme).contains(.preview),
+                "l'œil ne se peint plus au socle (armé : \(arme))"
+            )
+        }
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(hasBackground: false, hasMedia: false, hasText: false,
+                                           hasLocation: false, hasScene: true).first,
+            .preview,
+            "l'aperçu ouvre le `⋯` dès qu'une scène existe"
         )
-        XCTAssertTrue(
-            ComposerChromeOwnership.socleZones(for: .scene, atelierOffersPreview: true).contains(.preview)
+        XCTAssertFalse(
+            ComposerOverflowPolicy.entries(hasBackground: false, hasMedia: true, hasText: true,
+                                           hasLocation: false, hasScene: false).contains(.preview),
+            "sans scène, rien à prévisualiser"
         )
 
         var vus = 0
