@@ -294,7 +294,7 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = notification.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
             }
@@ -367,7 +367,7 @@ extension iPadRootView {
                 )
             }
 
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined:
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive:
             if let senderId = event.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -462,7 +462,7 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = payload.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,

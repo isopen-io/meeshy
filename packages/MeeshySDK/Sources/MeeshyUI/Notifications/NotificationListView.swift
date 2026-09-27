@@ -96,7 +96,7 @@ enum NotificationCategory: String, CaseIterable {
             return [
                 .friendRequest, .contactRequest, .legacyFriendRequest,
                 .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-                .contactJoined, .legacyStatusUpdate
+                .contactJoined, .contactRecentlyActive, .legacyStatusUpdate
             ]
         case .groups:
             return [

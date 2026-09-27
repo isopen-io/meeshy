@@ -91,6 +91,10 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     /// arrivées rapprochées se regroupent en une seule notification
     /// (`metadata.joinerIds`). Suit la préférence « contacts ».
     case contactJoined = "contact_joined"
+    /// Un ami, ou un contact du carnet, redevient actif sur Meeshy (#8285) —
+    /// au plus une fois toutes les 3 h par acteur, décidé par la passerelle.
+    /// L'acteur est celui qui revient ; le toucher ouvre son profil.
+    case contactRecentlyActive = "contact_recently_active"
 
     // Interaction events
     case userMentioned = "user_mentioned"
@@ -205,6 +209,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .friendRequest, .contactRequest, .legacyFriendRequest: return "person.badge.plus"
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted: return "person.2.fill"
         case .contactJoined: return "person.crop.circle.badge.plus"
+        case .contactRecentlyActive: return "person.crop.circle.badge.clock"
         case .communityInvite, .legacyGroupInvite: return "person.3.fill"
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
@@ -252,7 +257,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate,
-             .contactJoined:
+             .contactJoined, .contactRecentlyActive:
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
@@ -615,6 +620,15 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "\(actorName) a accepte votre invitation"
         case .contactJoined:
             return "\(actorName) a rejoint Meeshy"
+        case .contactRecentlyActive:
+            return String(
+                format: String(
+                    localized: "notification.contactRecentlyActive.fallbackTitle",
+                    defaultValue: "%@ était sur Meeshy récemment",
+                    bundle: .main
+                ),
+                actorName
+            )
         case .newConversationDirect:
             // Direct DM: the conversation has no real title — surface the
             // sender name so the user immediately knows who started it.
