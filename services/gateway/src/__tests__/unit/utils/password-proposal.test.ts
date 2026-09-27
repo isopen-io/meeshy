@@ -61,20 +61,18 @@ describe('proposePasswords — quatre niveaux, tous acceptés par la politique',
     }
   });
 
-  it('va du plus court au plus long, et le niveau difficile ignore le pseudo', () => {
+  it('va du plus court au plus long à partir de « facile », et le niveau difficile ignore le pseudo', () => {
     const proposals = proposePasswords({ source: { username: 'alice' } });
 
-    expect(proposals.simple.length).toBeLessThan(proposals.easy.length);
     expect(proposals.easy.length).toBeLessThan(proposals.medium.length);
     expect(proposals.medium.length).toBeLessThan(proposals.hard.length);
     expect(proposals.hard).toHaveLength(HARD_PASSWORD_LENGTH);
     expect(proposals.hard.toLowerCase()).not.toContain('alice');
   });
 
-  it('dérive les trois premiers niveaux du pseudo', () => {
+  it('dérive les niveaux facile et moyen du pseudo', () => {
     const proposals = proposePasswords({ source: { username: 'alice' } });
 
-    expect(proposals.simple).toMatch(/^alice[2-9]{3}$/);
     expect(proposals.easy).toMatch(/^Alice-[2-9]{4}[!?#*]$/);
     expect(proposals.medium).toMatch(/^Alice\.[A-Za-z2-9]{4}[!?#*][2-9]{4}$/);
   });
@@ -97,9 +95,57 @@ describe('proposePasswords — quatre niveaux, tous acceptés par la politique',
   });
 });
 
+describe('le niveau simple (#8192) — facile à taper, pas facile à deviner', () => {
+  const SAMPLES = 20_000;
+  const simples = (username: string) =>
+    Array.from({ length: SAMPLES }, () => proposePassword('simple', { source: { username } }));
+
+  it('se complète toujours de chiffres voisins ou répétés, comme 4545, 1223 ou 3456', () => {
+    for (const password of simples('alice').slice(0, 500)) {
+      const digits = password.match(/[2-9]{4}/)?.[0];
+      expect({ password, digits }).toEqual({ password, digits: expect.any(String) });
+      const [a, b, c, d] = [...digits!].map(Number);
+      const repeatedPair = a === c && b === d;
+      const doubledPairs = a === b && c === d;
+      const stair = b === a! + 1 && c === b && d === c! + 1;
+      const run = b === a! + 1 && c === b! + 1 && d === c! + 1;
+      expect({ password, shaped: repeatedPair || doubledPairs || stair || run }).toEqual({ password, shaped: true });
+    }
+  });
+
+  it('prend le pseudo PARFOIS, et le plus souvent des lettres voisines au clavier', () => {
+    const drawn = simples('alice').slice(0, 2_000);
+    const withPseudo = drawn.filter((password) => password.toLowerCase().includes('alice')).length;
+
+    expect(withPseudo).toBeGreaterThan(drawn.length * 0.1);
+    expect(withPseudo).toBeLessThan(drawn.length * 0.6);
+    expect(drawn.some((password) => /zert|qsdf|wxcv|azer|erty|sdfg|xcvb/i.test(password))).toBe(true);
+  });
+
+  it('ne se devine plus en quelques centaines d’essais : 20 000 tirages pour un même pseudo restent presque tous distincts', () => {
+    const distinct = new Set(simples('alice')).size;
+
+    expect(distinct).toBeGreaterThan(SAMPLES * 0.8);
+  });
+
+  it('reste au niveau simple : la politique de robustesse l’accepte presque toujours au premier tirage', () => {
+    const verdicts: boolean[] = [];
+    const judged = (password: string) => {
+      const accepted = validatePasswordStrength(password).isValid;
+      verdicts.push(accepted);
+      return accepted;
+    };
+
+    const drawn = Array.from({ length: 2_000 }, () => proposePassword('simple', { source: { username: 'alice' }, accept: judged }));
+
+    expect(drawn.filter((password) => password.includes('-') || password.length >= HARD_PASSWORD_LENGTH)).toEqual([]);
+    expect(verdicts.filter((accepted) => !accepted).length).toBeLessThan(verdicts.length * 0.05);
+  });
+});
+
 describe('proposePassword — un niveau intenable monte d’un cran au lieu d’échouer', () => {
-  it('sert un mot de passe SANS la base quand la politique refuse tout ce qui la contient', () => {
-    const refusesTheBase = (password: string) => !password.toLowerCase().includes('alice');
+  it('sert le niveau aléatoire quand la politique refuse toutes les formes lisibles', () => {
+    const refusesTheBase = (password: string) => password.length >= HARD_PASSWORD_LENGTH;
     let draws = 0;
     const counting = (max: number) => {
       draws += 1;
