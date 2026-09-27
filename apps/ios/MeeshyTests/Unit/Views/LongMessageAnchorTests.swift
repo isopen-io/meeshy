@@ -20,12 +20,13 @@ final class LongMessageAnchorTests: XCTestCase {
     private nonisolated static let longId = "m30"
 
     func test_expanding_farFromTheBottom_withTheTopUnderTheChrome_keepsTheExcerptInPlace() async throws {
-        let (vc, cv) = try await makeScrolledThread()
+        let (vc, cv, window) = try await makeScrolledThread()
+        defer { window.isHidden = true }
         let before = try visualTop(of: Self.longId, in: vc, cv: cv)
         let collapsedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
 
         vc.toggleLongMessageExpansion(Self.longId)
-        try await settle(vc, cv)
+        try await settle(vc, cv) { try self.frame(of: Self.longId, in: vc, cv: cv).height > collapsedHeight + 100 }
 
         let after = try visualTop(of: Self.longId, in: vc, cv: cv)
         XCTAssertGreaterThan(try frame(of: Self.longId, in: vc, cv: cv).height, collapsedHeight + 100, "précondition : le message s'est déplié")
@@ -34,15 +35,20 @@ final class LongMessageAnchorTests: XCTestCase {
     }
 
     func test_collapsing_farFromTheBottom_keepsTheShowLessEdgeInPlace() async throws {
-        let (vc, cv) = try await makeScrolledThread()
+        let (vc, cv, window) = try await makeScrolledThread()
+        defer { window.isHidden = true }
+        let collapsedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
         vc.toggleLongMessageExpansion(Self.longId)
-        try await settle(vc, cv)
+        try await settle(vc, cv) { try self.frame(of: Self.longId, in: vc, cv: cv).height > collapsedHeight + 100 }
+        let expandedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
+        XCTAssertGreaterThan(expandedHeight, collapsedHeight + 100, "précondition : le message s'est déplié avant d'être replié")
         let before = try visualBottom(of: Self.longId, in: vc, cv: cv)
 
         vc.toggleLongMessageExpansion(Self.longId)
-        try await settle(vc, cv)
+        try await settle(vc, cv) { try self.frame(of: Self.longId, in: vc, cv: cv).height < expandedHeight - 100 }
 
         let after = try visualBottom(of: Self.longId, in: vc, cv: cv)
+        XCTAssertLessThan(try frame(of: Self.longId, in: vc, cv: cv).height, expandedHeight - 100, "précondition : le message s'est replié")
         XCTAssertEqual(after, before, accuracy: 1, "« Réduire » replie vers le haut : le bas du message reste sous le doigt")
     }
 
@@ -51,11 +57,24 @@ final class LongMessageAnchorTests: XCTestCase {
     /// Soixante messages, le trentième long : le fil est posé loin du bas
     /// (verrou armé), le haut du long message au-dessus de l'écran et son
     /// « Lire la suite » visible — la configuration de la capture 21.
-    private func makeScrolledThread() async throws -> (MessageListViewController, UICollectionView) {
+    ///
+    /// La fenêtre est rattachée à la `UIWindowScene` de l'app hôte (#8329),
+    /// comme `RenderedScreen` et `MessageListCellSizingTests` : une
+    /// `UIWindow(frame:)` nue n'est affichée par aucune scène, et le contenu
+    /// `UIHostingConfiguration` d'une cellule re-configurée n'y repropose pas
+    /// sa taille — la hauteur dépliée ne se pose jamais, alors qu'elle se pose
+    /// dans l'app (#8162 a retiré la passe de layout forcée qui la posait
+    /// quand même ici). L'appelant masque la fenêtre en fin de test.
+    private func makeScrolledThread() async throws -> (MessageListViewController, UICollectionView, UIWindow) {
         let vc = makeSUT(store: try await makeSeededStore())
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "la suite tourne dans l'app hôte : une scène existe"
+        )
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
         window.rootViewController = vc
-        window.makeKeyAndVisible()
+        window.isHidden = false
         vc.view.layoutIfNeeded()
         let cv = try XCTUnwrap(vc.focalCollectionViewForTesting)
         let indexPath = try XCTUnwrap(vc.dataSource.indexPath(for: .message(localId: Self.longId)))
@@ -70,15 +89,29 @@ final class LongMessageAnchorTests: XCTestCase {
         vc.isCurrentlyNearBottom = false
         let top = try visualTop(of: Self.longId, in: vc, cv: cv)
         XCTAssertLessThan(top, 0, "précondition : le haut du message est hors champ")
-        return (vc, cv)
+        return (vc, cv, window)
     }
 
-    /// Laisse passer l'animation de hauteur et la re-mesure SwiftUI, puis
-    /// rejoue un tour de défilement : c'est là que le verrou de scène
-    /// restaurait l'ancre d'avant.
-    private func settle(_ vc: MessageListViewController, _ cv: UICollectionView) async throws {
-        try await Task.sleep(for: .milliseconds(50))
-        cv.layoutIfNeeded()
+    /// Laisse la re-mesure SwiftUI poser la nouvelle hauteur, puis rejoue un
+    /// tour de défilement : c'est là que le verrou de scène restaurait l'ancre
+    /// d'avant.
+    ///
+    /// On attend la CONDITION (la hauteur a changé), bornée, plutôt qu'une
+    /// durée fixe : 50 ms étaient un pari sur la vitesse du simulateur de CI.
+    /// La borne reste sous la fenêtre de tenue du bord
+    /// (`LongMessageExpansionLaw.holdWindow`) tant que la hauteur se pose dans
+    /// l'image suivante — une hauteur posée plus tard sortirait de la tenue, et
+    /// l'assertion d'ancrage le dirait.
+    private func settle(
+        _ vc: MessageListViewController,
+        _ cv: UICollectionView,
+        until resized: () throws -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(2)
+        repeat {
+            try await Task.sleep(for: .milliseconds(16))
+            cv.layoutIfNeeded()
+        } while (try? resized()) != true && Date() < deadline
         vc.scrollViewDidScroll(cv)
         cv.layoutIfNeeded()
     }
