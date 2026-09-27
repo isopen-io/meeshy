@@ -106,6 +106,26 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertFalse(CallAction.allCases.map(\.rawValue).contains("messages"))
     }
 
+    // MARK: - Duo : la rangée au-dessus de la pilule
+
+    func test_duoRows_fewActions_joinsBothGroupsInOneRow() {
+        let actions = CallActionSet.resolve(context(canPictureInPicture: true))
+        XCTAssertEqual(actions.duoRows, [[.camera, .screenShare, .captions, .pictureInPicture]])
+    }
+
+    func test_duoRows_tooManyForOneRow_splitsMyImageThenTheCall() {
+        let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, canPictureInPicture: true))
+        XCTAssertEqual(actions.duoRows, [
+            [.camera, .flipCamera, .effects, .screenShare],
+            [.captions, .recording, .pictureInPicture]
+        ])
+    }
+
+    func test_duoRows_anyContext_neverExceedsTheDuoRowWidth() {
+        let all = CallActionSet.resolve(context(isVideoEnabled: true, hasSelectableCameras: true, mayRecord: true, canPictureInPicture: true))
+        XCTAssertTrue(all.duoRows.allSatisfy { $0.count <= CallActionSet.maxPerDuoRow })
+    }
+
     // MARK: - Une rangée ne porte jamais plus de quatre actions
 
     func test_resolve_anyContext_neverExceedsFourPerRow() {

@@ -180,7 +180,12 @@ struct CallPresentationLayer: ViewModifier {
             //   émerger puis retourner l'animation.
             .overlay(alignment: .top) {
                 if let callManager, callManager.callState.isActive, callManager.displayMode != .fullScreen {
+                    // #8435 — entrer en PiP ferme le plein écran : cette ancre
+                    // devient la source de la fenêtre. Remontée à chaque
+                    // fermeture (`pipAnchorGeneration`), elle reconfigure le
+                    // PiP suivant sur une vue vivante.
                     PiPSourceAnchor()
+                        .id(callManager.pipAnchorGeneration)
                         .frame(height: 64)
                         .padding(.top, MeeshySpacing.sm)
                         .allowsHitTesting(false)

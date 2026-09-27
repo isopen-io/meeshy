@@ -85,15 +85,30 @@ enum CallPiPPolicy {
     /// en vidéo comme en audio : vers le PiP système quand l'appel y est
     /// éligible, sinon vers la pastille. En groupe la scène garde ses propres
     /// gestes ; barre d'effets ouverte, ses curseurs gardent les leurs.
-    static let swipeDownThreshold: CGFloat = 100
+    ///
+    /// Le geste est PROGRESSIF et ANNULABLE (directive 2026-08-30) : l'écran
+    /// suit le doigt sur sa course, et relâcher avant 75 % de la course le
+    /// ramène — sauf un lancer franc, dont la fin prévue dépasse la course.
+    static let swipeDownCourse: CGFloat = 300
+    static let swipeDownCommitFraction: CGFloat = 0.75
+
+    /// Le décalage que l'écran d'appel suit pendant le geste.
+    static func swipeDownOffset(translation: CGFloat, isGroup: Bool, isEffectsOpen: Bool) -> CGFloat {
+        guard !isGroup, !isEffectsOpen else { return 0 }
+        return min(max(translation, 0), swipeDownCourse)
+    }
 
     static func swipeDownOutcome(
         translation: CGFloat,
+        predictedTranslation: CGFloat,
         isGroup: Bool,
         isEffectsOpen: Bool,
         canSystemPiP: Bool
     ) -> CallSwipeDownOutcome {
-        guard !isGroup, !isEffectsOpen, translation > swipeDownThreshold else { return .none }
+        guard !isGroup, !isEffectsOpen, translation > 0 else { return .none }
+        let isCommitted = translation >= swipeDownCourse * swipeDownCommitFraction
+            || predictedTranslation >= swipeDownCourse
+        guard isCommitted else { return .none }
         return canSystemPiP ? .systemPiP : .pill
     }
 

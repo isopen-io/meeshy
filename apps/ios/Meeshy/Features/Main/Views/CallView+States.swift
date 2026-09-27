@@ -156,7 +156,8 @@ extension CallView {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Capsule().fill(MeeshyColors.success))
+                    .frame(minHeight: 44)
+                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.success)
                 }
                 .padding(.top, 8)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))

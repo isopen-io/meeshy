@@ -40,6 +40,17 @@ struct CallActionSet: Equatable, Sendable {
     let myImage: [CallAction]
     let theCall: [CallAction]
 
+    /// Duo (#8432) : les actions tiennent sur UNE rangée au-dessus de la
+    /// pilule tant qu'elle ne dépasse pas cinq boutons de 44 pt (l'écran le
+    /// plus étroit, marges comprises) ; au-delà, « mon image » puis « l'appel ».
+    static let maxPerDuoRow = 5
+
+    var duoRows: [[CallAction]] {
+        let all = myImage + theCall
+        guard all.count > Self.maxPerDuoRow else { return [all] }
+        return [myImage, theCall].filter { !$0.isEmpty }
+    }
+
     static func resolve(_ context: CallActionContext) -> CallActionSet {
         CallActionSet(myImage: myImageActions(context), theCall: theCallActions(context))
     }

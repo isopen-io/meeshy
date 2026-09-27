@@ -149,36 +149,45 @@ final class CallPiPPolicyTests: XCTestCase {
 
     // MARK: - #8435 · le glissé vers le bas
 
-    func test_swipeDownOutcome_duoLongSwipeWithPiP_returnsSystemPiP() {
+    func test_swipeDownOutcome_duoPastThreeQuartersWithPiP_returnsSystemPiP() {
         XCTAssertEqual(
-            CallPiPPolicy.swipeDownOutcome(translation: 140, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
+            CallPiPPolicy.swipeDownOutcome(translation: 240, predictedTranslation: 240, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
             .systemPiP
         )
     }
 
     /// Audio seul, ou appareil sans PiP : la pastille.
-    func test_swipeDownOutcome_duoLongSwipeWithoutPiP_returnsPill() {
+    func test_swipeDownOutcome_duoPastThreeQuartersWithoutPiP_returnsPill() {
         XCTAssertEqual(
-            CallPiPPolicy.swipeDownOutcome(translation: 140, isGroup: false, isEffectsOpen: false, canSystemPiP: false),
+            CallPiPPolicy.swipeDownOutcome(translation: 240, predictedTranslation: 240, isGroup: false, isEffectsOpen: false, canSystemPiP: false),
             .pill
         )
     }
 
-    func test_swipeDownOutcome_shortSwipe_returnsNone() {
+    /// Annulable : relâché avant 75 % de la course, sans élan, rien ne part.
+    func test_swipeDownOutcome_releasedBeforeThreeQuarters_returnsNone() {
         XCTAssertEqual(
-            CallPiPPolicy.swipeDownOutcome(translation: 100, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
+            CallPiPPolicy.swipeDownOutcome(translation: 200, predictedTranslation: 210, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
             .none
         )
         XCTAssertEqual(
-            CallPiPPolicy.swipeDownOutcome(translation: -300, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
+            CallPiPPolicy.swipeDownOutcome(translation: -300, predictedTranslation: -400, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
             .none
+        )
+    }
+
+    /// Un lancer franc vers le bas dit l'intention avant la course entière.
+    func test_swipeDownOutcome_flungPastTheCourse_commits() {
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: 90, predictedTranslation: 420, isGroup: false, isEffectsOpen: false, canSystemPiP: false),
+            .pill
         )
     }
 
     /// La barre d'effets a ses propres glissés (curseurs, carrousel).
     func test_swipeDownOutcome_effectsOpen_returnsNone() {
         XCTAssertEqual(
-            CallPiPPolicy.swipeDownOutcome(translation: 200, isGroup: false, isEffectsOpen: true, canSystemPiP: true),
+            CallPiPPolicy.swipeDownOutcome(translation: 280, predictedTranslation: 500, isGroup: false, isEffectsOpen: true, canSystemPiP: true),
             .none
         )
     }
@@ -186,9 +195,19 @@ final class CallPiPPolicyTests: XCTestCase {
     /// En groupe, la scène a ses propres gestes (vignette à la une, plein écran).
     func test_swipeDownOutcome_group_returnsNone() {
         XCTAssertEqual(
-            CallPiPPolicy.swipeDownOutcome(translation: 200, isGroup: true, isEffectsOpen: false, canSystemPiP: true),
+            CallPiPPolicy.swipeDownOutcome(translation: 280, predictedTranslation: 500, isGroup: true, isEffectsOpen: false, canSystemPiP: true),
             .none
         )
+    }
+
+    /// L'écran suit le doigt vers le bas, jamais vers le haut, jamais au-delà
+    /// de la course — et reste immobile là où le geste ne vaut rien.
+    func test_swipeDownOffset_followsFingerWithinTheCourse() {
+        XCTAssertEqual(CallPiPPolicy.swipeDownOffset(translation: 120, isGroup: false, isEffectsOpen: false), 120)
+        XCTAssertEqual(CallPiPPolicy.swipeDownOffset(translation: -80, isGroup: false, isEffectsOpen: false), 0)
+        XCTAssertEqual(CallPiPPolicy.swipeDownOffset(translation: 900, isGroup: false, isEffectsOpen: false), CallPiPPolicy.swipeDownCourse)
+        XCTAssertEqual(CallPiPPolicy.swipeDownOffset(translation: 120, isGroup: true, isEffectsOpen: false), 0)
+        XCTAssertEqual(CallPiPPolicy.swipeDownOffset(translation: 120, isGroup: false, isEffectsOpen: true), 0)
     }
 
     /// `PiPCallController.start()` sort en silence quand AVKit ne peut pas
