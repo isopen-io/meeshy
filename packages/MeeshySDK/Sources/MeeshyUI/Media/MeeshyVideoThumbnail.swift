@@ -105,7 +105,7 @@ public struct MeeshyVideoThumbnail: View {
     }
 
     /// Ce qui tient la place d'une première image encore en extraction.
-    enum PendingLayer: Equatable {
+    nonisolated enum PendingLayer: Equatable, Sendable {
         case thumbHash
         case gradient
     }
