@@ -2,9 +2,11 @@ import { lazy, Suspense, useMemo } from 'react';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { Message } from '@/lib/api/types';
+import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-delivery-host';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import type { MediaCarrier } from '@/lib/view/media';
 import { mediaHubViewerOf, type MediaHubItem } from '@/lib/view/media-hub';
+import { mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/media-viewer-actions';
 import { isMineOf } from '@/lib/view/message';
 
 import { revealedAttachment } from './view-once-opened';
@@ -24,6 +26,12 @@ const MediaViewer = lazy(() => import('./media-viewer'));
  *
  * La pièce touchée s'ouvre en clair si elle était floutée (#8008) — elle
  * seule : ses voisines gardent leur substitut dans la visionneuse.
+ *
+ * LES ACTIONS (#8180) — Enregistrer, Réagir, Créer avec ce média, décidées
+ * page par page par `mediaPageOffers` sur la pièce ORIGINALE (jamais sa copie
+ * révélée). Pas « Répondre » : l'écran ne tient pas le composeur du fil
+ * (iOS `MediaHubGalleryCover` non plus) — loi 4, un contrôle existe s'il a un
+ * effet. Réagir se relit dans l'index (`patchMediaHubMessages`).
  */
 export function carrierOfMessage(message: Message): MediaCarrier {
   const displayName = message.sender?.displayName;
@@ -65,6 +73,10 @@ export function MediaHubViewerHost({
     () => items.flatMap((item) => (item.kind === 'visual' ? [item.message] : [])),
     [items],
   );
+  const capabilities = useMemo<MediaViewerCapabilities>(
+    () => ({ save: hasFileDeliveryDoor(browserFileDeliveryHost()), react: true, reply: false, compose: true }),
+    [],
+  );
   const shown = viewer.items.map((attachment, index) => (index === viewer.startIndex ? revealedAttachment(attachment) : attachment));
 
   return (
@@ -85,6 +97,17 @@ export function MediaHubViewerHost({
         }}
         onNearEnd={() => {
           if (canExtend) onExtend();
+        }}
+        actionsAt={(index) => {
+          const attachment = viewer.items[index];
+          const message = messages[index];
+          if (attachment === undefined || message === undefined) return null;
+          return {
+            attachment,
+            messageId: message.id,
+            conversationId: message.conversationId,
+            offers: mediaPageOffers({ attachment, message, capabilities }),
+          };
         }}
         {...(deps === undefined ? {} : { deps })}
         {...(container === undefined ? {} : { container })}

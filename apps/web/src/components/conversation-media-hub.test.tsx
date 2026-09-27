@@ -3,7 +3,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { setAttachmentReactionEmitter, type AttachmentReactionRequest } from '@/lib/api/attachment-reaction-emit';
 import { mediaHubPath, mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
+import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
+import { takeStudioSeed } from '@/lib/stories/studio-seed';
+import { href } from '@/routes/route-table';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { MessagesPage } from '@/lib/api/messages-pages';
@@ -241,6 +246,101 @@ describe('la grille et la visionneuse conversation-entière (#6303)', () => {
     expect(viewer?.getAttribute('data-viewer-index')).toBe('1');
     expect(viewer?.getAttribute('aria-label')).toBe('Média 2 sur 3');
     expect(viewer?.querySelector('[data-viewer-footer]')?.textContent).toContain('Nour Haddad');
+  });
+});
+
+/**
+ * #8180 — OUVERTE DEPUIS L'ÉCRAN DES MÉDIAS, la visionneuse offre ce qu'elle
+ * sait FAIRE sans le fil : Enregistrer, Réagir, Créer avec ce média. Pas
+ * « Répondre » : l'écran ne tient pas le composeur (iOS `MediaHubGalleryCover`
+ * non plus). La réaction se relit dans l'index d'où la visionneuse est ouverte.
+ */
+describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () => {
+  const openFirst = async (messages: readonly unknown[]) => {
+    const client = appQueryClient;
+    mountHub({ replies: { [pathOf('visual')]: page(messages) }, client });
+    await until(() => $$('[data-media-hub-tile]').length === messages.length);
+    click($$('[data-media-hub-tile]')[0] ?? null);
+    await until(() => $('[data-media-viewer]') !== null);
+    return client;
+  };
+  const hubPieceOf = (client: QueryClient, messageId: string) =>
+    client
+      .getQueryData<{ pages: MessagesPage[] }>(mediaHubQueryKey('c1', 'visual', null))
+      ?.pages.flatMap((p) => p.messages)
+      .find((m: Message) => m.id === messageId)?.attachments?.[0];
+
+  afterEach(() => {
+    appQueryClient.clear();
+    setAttachmentReactionEmitter(null);
+  });
+
+  test('Enregistrer, Réagir et Créer avec ce média sont offerts ; Répondre ne l’est pas', async () => {
+    await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="compose"]') !== null && $('[data-viewer-action="save"]') !== null);
+    expect($('[data-viewer-action="save"]')).not.toBeNull();
+    expect($('[data-viewer-action="react"]')).not.toBeNull();
+    expect($('[data-viewer-action="compose"]')).not.toBeNull();
+    expect($('[data-viewer-action="reply"]')).toBeNull();
+  });
+
+  test('Réagir vise la PIÈCE regardée et se relit aussitôt dans l’index de l’écran', async () => {
+    const sent: AttachmentReactionRequest[] = [];
+    setAttachmentReactionEmitter((request) => {
+      sent.push(request);
+      return Promise.resolve('ok');
+    });
+    const client = await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="react"]') !== null);
+    click($('[data-viewer-action="react"]'));
+    const emoji = $('[data-viewer-reactions] button');
+    await act(async () => {
+      emoji?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ action: 'add', attachmentId: 'a-m2', messageId: 'm2' });
+    expect(hubPieceOf(client, 'm2')?.currentUserReactions).toEqual([sent[0]!.emoji]);
+    expect(hubPieceOf(client, 'm1')?.currentUserReactions).toBeUndefined();
+  });
+
+  test('Créer avec ce média dépose la pièce dans le studio et y mène', async () => {
+    const realFetch = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      asked.push(String(input));
+      return new Response(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }), { status: 200, headers: { 'content-type': 'image/jpeg' } });
+    }) as typeof fetch;
+    act(() => {
+      sessionStore.getState().establish({
+        user: { id: 'u-moi', username: 'moi', displayName: 'Moi' },
+        token: 'jeton-de-test',
+        sessionToken: 'session-de-test',
+        expiresIn: 3600,
+      });
+    });
+    try {
+      await openFirst([photoMessage('m2'), photoMessage('m1')]);
+      await until(() => $('[data-viewer-action="compose"]') !== null);
+      click($('[data-viewer-action="compose"]'));
+      await until(() => $('[data-media-viewer]') === null);
+      expect(asked.some((url) => url.endsWith('/uploads/m2.jpg'))).toBe(true);
+      expect(takeStudioSeed()?.name).toBe('m2.jpg');
+      expect(window.location.pathname).toBe(href('storyCompose'));
+    } finally {
+      globalThis.fetch = realFetch;
+      act(() => {
+        sessionStore.getState().clearSession();
+      });
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
+  test('une pièce floutée, même ouverte en clair, n’offre aucune action', async () => {
+    const [piece] = photoMessage('m1').attachments as readonly Record<string, unknown>[];
+    await openFirst([wireMessage('m1', { attachments: [{ ...piece, isBlurred: true }] })]);
+    await settle(60);
+    expect($('[data-viewer-action]')).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@ import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversati
 import { itemsOfKind, type MediaHubKind } from '@/lib/view/media-hub';
 
 import { unwrap } from './client';
+import { mediaHubConversationKey } from './media-hub-cache';
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 import { decodeMessage } from './decode';
@@ -44,9 +45,9 @@ export function mediaHubSearchTerm(raw: string): string | null {
   return term.length >= MIN_SEARCH_LENGTH ? term : null;
 }
 
-/** Hors de `['conversations', …]` : ce préfixe porte des conversations et des fils, parcourus comme tels. */
+/** Une clé par segment et par recherche, sous le préfixe de la conversation (`media-hub-cache.ts`). */
 export const mediaHubQueryKey = (conversationId: string, kind: MediaHubKind, term: string | null) =>
-  ['conversation-media-hub', conversationId, kind, term ?? ''] as const;
+  [...mediaHubConversationKey(conversationId), kind, term ?? ''] as const;
 
 export function mediaHubPath(params: {
   readonly conversationId: string;
