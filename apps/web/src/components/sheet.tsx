@@ -41,6 +41,7 @@ export function Sheet({
   search,
   onSearchChange,
   bodyAs = 'ul',
+  presentation = 'fullscreen',
   onClose,
   children,
 }: {
@@ -64,6 +65,17 @@ export function Sheet({
    * de désigner son propre conteneur de défilement.
    */
   bodyAs?: 'ul' | 'div';
+  /**
+   * PLEIN ÉCRAN ou MODALE CENTRÉE (#8289).
+   *
+   * `'fullscreen'` (défaut) — les choix longs, qu'on parcourt et qu'on filtre.
+   * `'centered'` — un FORMULAIRE court (photo, mot de passe, bannissement) :
+   * largeur bornée à 36 rem avec une gouttière d'1 rem de chaque côté, hauteur
+   * bornée à 90 % de l'écran, centré par les marges automatiques du
+   * `<dialog>` modal — le même geste sur un téléphone, une tablette et un
+   * bureau, et l'écran d'où l'on vient reste visible derrière le voile.
+   */
+  presentation?: 'fullscreen' | 'centered';
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -99,25 +111,38 @@ export function Sheet({
     };
   }, []);
 
+  const centree = presentation === 'centered';
+
   return (
     <dialog
       ref={ref}
       onClose={onClose}
       aria-labelledby={titleId}
-      style={{
-        margin: 0,
-        padding: 0,
-        border: 0,
-        width: '100%',
-        maxWidth: '100%',
-        height: '100%',
-        maxHeight: '100%',
-        backgroundColor: 'var(--color-ios-surface)',
-        color: 'var(--color-ios-ink)',
-      }}
+      data-sheet-presentation={presentation}
+      className={centree ? 'm-auto w-[min(36rem,calc(100%-2rem))] max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-black/40' : undefined}
+      style={
+        centree
+          ? {
+              border: 0,
+              backgroundColor: 'var(--color-ios-surface)',
+              color: 'var(--color-ios-ink)',
+              boxShadow: '0 24px 64px color-mix(in srgb, black 28%, transparent)',
+            }
+          : {
+              margin: 0,
+              padding: 0,
+              border: 0,
+              width: '100%',
+              maxWidth: '100%',
+              height: '100%',
+              maxHeight: '100%',
+              backgroundColor: 'var(--color-ios-surface)',
+              color: 'var(--color-ios-ink)',
+            }
+      }
     >
-      <div className="flex h-full flex-col">
-        <div className="flex shrink-0 items-center gap-3 px-4 pt-safe pb-2">
+      <div className={centree ? 'flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col' : 'flex h-full flex-col'}>
+        <div className={`flex shrink-0 items-center gap-3 px-4 pb-2 ${centree ? 'pt-2' : 'pt-safe'}`}>
           <button
             type="button"
             onClick={() => ref.current?.close()}
@@ -156,10 +181,13 @@ export function Sheet({
           </div>
         )}
 
+        {/* Centrée, la feuille est BORNÉE : son corps défile lui-même, quel
+            qu'il soit — sans `min-h-0`, un enfant de flex refuse de rétrécir
+            sous son contenu et le bas du formulaire serait rogné. */}
         {bodyAs === 'ul' ? (
-          <ul className="flex-1 overflow-y-auto pb-safe">{children}</ul>
+          <ul className={`min-h-0 flex-1 overflow-y-auto ${centree ? 'pb-2' : 'pb-safe'}`}>{children}</ul>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col pb-safe">{children}</div>
+          <div className={`flex min-h-0 flex-1 flex-col ${centree ? 'overflow-y-auto pb-2' : 'pb-safe'}`}>{children}</div>
         )}
       </div>
     </dialog>

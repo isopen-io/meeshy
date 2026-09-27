@@ -401,6 +401,13 @@ export enum UserAuditAction {
   VERIFY_EMAIL = 'VERIFY_EMAIL',
   VERIFY_PHONE = 'VERIFY_PHONE',
   VERIFY_AGE = 'VERIFY_AGE',
+  /**
+   * Relance, par un administrateur, de la vérification d'un contact (#8289) —
+   * un code + lien par e-mail, un SMS par téléphone. Distincte de
+   * `VERIFY_EMAIL`/`VERIFY_PHONE`, qui POSENT la preuve : celle-ci n'en écrit
+   * aucune, elle émet ce que le membre aurait pu redemander lui-même.
+   */
+  REQUEST_VERIFICATION = 'REQUEST_VERIFICATION',
 
   /**
    * Poser ou retirer, au nom d'un tiers, la preuve d'un consentement (#4154).

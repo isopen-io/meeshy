@@ -12,7 +12,7 @@ import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-b
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
 
-import { Texte } from './admin-user-edit-sheet';
+import { Texte } from './admin-member-parts';
 
 /**
  * **CRÉER UN COMPTE** (#8217) — la feuille, ouverte depuis la liste des
@@ -126,7 +126,7 @@ export function AdminUserCreateSheet({
   const selectStyle = { minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK };
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.create.title')} bodyAs="div" onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.create.title')} bodyAs="div" presentation="centered" onClose={onClose}>
       <form
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-6"
         data-admin-create=""

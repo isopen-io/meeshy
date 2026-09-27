@@ -172,3 +172,63 @@ describe('retirer l’image', () => {
     expect(avec.annonces).toContain('Image retirée');
   });
 });
+
+describe('l’aperçu immédiat et le refus de RANG (#8289)', () => {
+  async function monterAvecApercu(reponse: 'ok' | 'rang') {
+    const t = routedTransport((req: HttpRequest) => {
+      if (req.method === 'GET' && pathOf(req) === '/api/v1/admin/users/u-alice/profile-image-candidates') {
+        return { ok: true, data: CANDIDATES, pagination: { total: CANDIDATES.length, offset: 0, limit: 30, hasMore: false } };
+      }
+      if (req.method === 'PUT') {
+        return reponse === 'rang' ? { ok: false, status: 403, error: 'Hiérarchie insuffisante' } : { ok: true, data: { ...membre(), avatar: '/p/1.jpg' } };
+      }
+      return undefined;
+    });
+    const apercus: (string | null)[] = [];
+    const echecs: string[] = [];
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserImageSheet
+          membre={membre()}
+          kind="avatar"
+          language="fr"
+          deps={{ source: 'gateway', transport: t.transport }}
+          isOnline={() => true}
+          onAnnounce={() => {}}
+          onSaved={() => {}}
+          onPreview={(_kind, url) => apercus.push(url)}
+          onFailed={(_kind, message) => echecs.push(message)}
+          onClose={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    return { host, apercus, echecs };
+  }
+
+  test('choisir une image la montre AVANT la réponse de la passerelle', async () => {
+    const { host, apercus } = await monterAvecApercu('ok');
+
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-image-candidate="m-1"]'));
+
+    expect(apercus).toEqual(['/p/1.jpg']);
+  });
+
+  test('un 403 dit le RANG, jamais « échec » — et l’aperçu est retiré', async () => {
+    const { host, echecs } = await monterAvecApercu('rang');
+
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-image-candidate="m-1"]'));
+
+    const motif = 'Refusé : votre rôle ne permet pas de modifier ce membre';
+    expect(host.querySelector('[data-admin-image-refused]')?.textContent).toBe(motif);
+    expect(echecs).toEqual([motif]);
+  });
+
+  test('la feuille est CENTRÉE, jamais plein écran', async () => {
+    const { host } = await monterAvecApercu('ok');
+    expect(host.querySelector('dialog')?.dataset.sheetPresentation).toBe('centered');
+  });
+});
+

@@ -183,7 +183,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/AffiliateView.swift",
         "Features/Main/Views/AudioFullscreenView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
-        "Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
         "Features/Main/Views/CallEffectsOverlay.swift",
         "Features/Main/Views/CallView.swift",
         "Features/Main/Views/ChangePasswordView.swift",
@@ -403,7 +402,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // d'invitation de MeeshyUI ; ses deux glyphes figés (20 et 13 pt, sur des
     // `Image`, donc le texte figé ne bouge pas) partent avec elle.
     // `ShareLinkIdentitySheet.swift` sort de `bearingFiles` (règle 4).
-    private static let totalCeiling = 211
+    // 211 → 210 (#8231) : le glyphe play de la vidéo du fil quitte
+    // `BubbleStandardLayout+Media.swift` pour `ConversationVideoPoster.swift`,
+    // où il est dimensionné par son cercle (`resizable` + `frame`) et non plus
+    // par une police figée. `BubbleStandardLayout+Media.swift` sort de
+    // `bearingFiles` (règle 4) ; le texte figé ne bouge pas.
+    private static let totalCeiling = 210
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
