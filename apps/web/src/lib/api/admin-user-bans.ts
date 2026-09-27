@@ -1,8 +1,9 @@
 import { type AdminDeps, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
- * **BANNIR, LEVER, LISTER** (#6819) — `POST /api/v1/admin/users/:userId/ban`,
+ * **BANNIR, LEVER, LISTER** (#6819) — `POST admin.usersByUserIdBan`,
  * `POST …/bans/:banId/lift`, `GET …/bans`. Écriture ADMIN+
  * (`requireUserModifyAccess` + `requireHierarchy`), lecture `canViewUsers`.
  *
@@ -77,7 +78,7 @@ export async function loadAdminUserBans(
 ): Promise<ApiResult<readonly AdminBan[]>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/bans`,
+    path: adminEndpoints.usersByUserIdBans(params.userId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -119,7 +120,7 @@ export async function banAdminUser(
 
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/ban`,
+    path: adminEndpoints.usersByUserIdBan(params.userId),
     body: corps,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
@@ -143,7 +144,7 @@ export async function liftAdminUserBan(
 
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/bans/${encodeURIComponent(params.banId)}/lift`,
+    path: adminEndpoints.usersByUserIdBansByBanIdLift(params.userId, params.banId),
     body: corps,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });

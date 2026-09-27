@@ -1,16 +1,17 @@
 import { type AdminDeps, asCount, asRecord } from './admin';
 import type { ApiResult } from './http';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **LES CHIFFRES ET LES PRÉFÉRENCES D'UN MEMBRE** (#7845).
  *
- * - `GET /api/v1/admin/users/:userId/stats` — des compteurs à plat.
+ * - `GET admin.usersByUserIdStats` — des compteurs à plat.
  *   `reportsFiled` vaut `null` pour qui n'a pas `canModerateContent` : ce
  *   n'est pas zéro, c'est un chiffre que la passerelle ne sert pas.
- * - `GET /api/v1/admin/users/:userId/preferences` — les sept catégories,
+ * - `GET admin.usersByUserIdPreferences` — les sept catégories,
  *   défauts appliqués, comme `/me/preferences` les sert au membre lui-même.
  *   Chaque lecture est journalisée côté passerelle.
- * - `PATCH /api/v1/admin/users/:userId/preferences/:category` — une écriture
+ * - `PATCH admin.usersByUserIdPreferencesByCategory` — une écriture
  *   partielle, validée par le MÊME schéma que celle du membre, réservée à
  *   ADMIN+ au-dessus du rang de la cible, journalisée clé par clé.
  */
@@ -73,7 +74,7 @@ export async function loadAdminUserStats(
 ): Promise<ApiResult<AdminUserStats>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/stats`,
+    path: adminEndpoints.usersByUserIdStats(params.userId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   return result.ok ? { ok: true, data: decodeAdminUserStats(result.data) } : result;
@@ -84,7 +85,7 @@ export async function loadAdminUserPreferences(
 ): Promise<ApiResult<AdminUserPreferences>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/preferences`,
+    path: adminEndpoints.usersByUserIdPreferences(params.userId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   return result.ok ? { ok: true, data: decodeAdminUserPreferences(result.data) } : result;
@@ -99,7 +100,7 @@ export async function patchAdminUserPreferences(
 ): Promise<ApiResult<AdminPreferenceDocument>> {
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/preferences/${params.category}`,
+    path: adminEndpoints.usersByUserIdPreferencesByCategory(params.userId, params.category),
     body: params.changes,
   });
   if (!result.ok) return result;

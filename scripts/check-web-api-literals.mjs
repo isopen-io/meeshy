@@ -39,7 +39,8 @@ const TEST_FILE_RE = /\.test\.[^/]*$/;
 const SOURCE_RE = /\.tsx?$/;
 
 // 348 — mesuré le 2026-09-27 sur `origin/dev` (ba870370e3), avant la migration.
-const BASELINE = 348;
+// 348 → 303 (#7716, lot admin).
+const BASELINE = 303;
 
 export const isCountedFile = (name) => SOURCE_RE.test(name) && !TEST_FILE_RE.test(name);
 

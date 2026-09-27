@@ -1,8 +1,9 @@
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
- * **LE DÉTAIL D'UN MEMBRE** (#6819) — `GET /api/v1/admin/users/:userId`,
+ * **LE DÉTAIL D'UN MEMBRE** (#6819) — `GET admin.usersByUserId`,
  * gardé par `canViewUserDetails` (BIGBOSS, ADMIN, MODERATOR, AUDIT).
  *
  * La charge est servie **NUE** : `sendSuccess(reply, sanitizedUser)`
@@ -186,7 +187,7 @@ export async function loadAdminUserDetail(
 ): Promise<ApiResult<AdminUserDetail>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}`,
+    path: adminEndpoints.usersByUserId(params.userId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

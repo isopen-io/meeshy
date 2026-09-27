@@ -389,7 +389,9 @@ export const callersIn = (contents, nsNames) => {
 // (`apps/web/src/lib/api/admin-user-images.ts`) écrit les adresses en
 // littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27
 // (CI de dev rouge sur 7943044432, relevé fusionné sans le cliquet).
-const BASELINE_DEAD_ENTRIES = 478;
+// 478 → 443 (#7716, lot admin) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+const BASELINE_DEAD_ENTRIES = 443;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

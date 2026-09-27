@@ -2,6 +2,8 @@ import type { AdminPermissions } from '@/lib/admin/sections';
 
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 /**
  * **LE PORT DE L'ADMINISTRATION** (#6432) — `services/gateway/src/routes/admin/*`.
@@ -168,7 +170,7 @@ export async function loadAdminIdentity(
 ): Promise<ApiResult<AdminIdentity>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/me/permissions',
+    path: meEndpoints.permissions,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -228,7 +230,7 @@ export async function loadAdminDashboard(
 ): Promise<ApiResult<AdminDashboard>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/admin/dashboard',
+    path: adminEndpoints.dashboard,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -305,7 +307,7 @@ export async function loadAdminUsers(
   });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users?${query.toString()}`,
+    path: `${adminEndpoints.users}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

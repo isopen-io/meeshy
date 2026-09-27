@@ -1,9 +1,10 @@
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import type { ApiResult } from './http';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **LES CONVERSATIONS D'UN MEMBRE** (#6819) —
- * `GET /api/v1/admin/users/:userId/conversations`, sous `canViewUsers`.
+ * `GET admin.usersByUserIdConversations`, sous `canViewUsers`.
  *
  * **Métadonnées seules : aucun contenu de message.** La route sert le CADRE
  * d'une conversation — titre, type, effectif, dates — jamais ce qui s'y dit.
@@ -199,7 +200,7 @@ export async function loadAdminUserConversations(
 
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/conversations?${query.toString()}`,
+    path: `${adminEndpoints.usersByUserIdConversations(params.userId)}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

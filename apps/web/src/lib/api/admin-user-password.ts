@@ -3,10 +3,11 @@ import * as z from 'zod/mini';
 
 import { type AdminDeps } from './admin';
 import type { ApiResult } from './http';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **RÉINITIALISER LE MOT DE PASSE D'UN MEMBRE** (#6819, #8051) —
- * `POST /api/v1/admin/users/:userId/reset-password`, sous `canResetPasswords`
+ * `POST admin.usersByUserIdResetPassword`, sous `canResetPasswords`
  * (ADMIN+) et `requireHierarchy`. Le geste **révoque les sessions ouvertes**
  * de la cible (`resetPassword`, #5569) : la personne est déconnectée partout.
  *
@@ -52,7 +53,7 @@ export async function fetchAdminPasswordProposals(
 ): Promise<ApiResult<PasswordProposals>> {
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/password-proposals`,
+    path: adminEndpoints.usersByUserIdPasswordProposals(params.userId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -80,7 +81,7 @@ export async function resetAdminUserPassword(
 
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/reset-password`,
+    path: adminEndpoints.usersByUserIdResetPassword(params.userId),
     body: corps,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
