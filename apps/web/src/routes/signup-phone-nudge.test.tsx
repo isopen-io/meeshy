@@ -64,7 +64,24 @@ function mount(): { readonly el: HTMLDivElement; readonly sent: RegisterBody[] }
   return { el: container, sent };
 }
 
+/**
+ * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288) — un numéro donné puis
+ * effacé la fait paraître SANS choisir « l'e-mail seulement » : l'alerte
+ * « sans numéro » (#8040) reste alors due, comme avant le réagencement.
+ */
+function revealEmail(el: HTMLElement) {
+  if (el.querySelector('#signup-email') !== null) return;
+  for (const value of ['612345678', '']) {
+    const phone = el.querySelector('#signup-phone') as HTMLInputElement;
+    act(() => {
+      phone.value = value;
+      phone.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+}
+
 function type(el: HTMLDivElement, selector: string, value: string) {
+  if (selector === '#signup-email') revealEmail(el);
   const input = el.querySelector(selector) as HTMLInputElement;
   act(() => {
     input.value = value;

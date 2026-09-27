@@ -34,6 +34,7 @@ export function DerivedIdentity({
   suggestions,
   usernamePlaceholder,
   displayNamePlaceholder,
+  framed = true,
 }: {
   /** Ce que la saisie du pseudo AFFICHE — la frappe, ou l'adresse tant qu'on n'a pas touché. */
   username: string;
@@ -52,9 +53,15 @@ export function DerivedIdentity({
   displayNameError?: string | undefined;
   /** Les pseudos libres servis avec un refus `USERNAME_TAKEN`. */
   suggestions: readonly string[];
+  /** Faux : l'hôte porte déjà la surface (la carte de verre de l'inscription, #8288). */
+  framed?: boolean;
 }) {
   return (
-    <div className="grid gap-3 rounded-[14px] px-4 py-3" style={{ backgroundColor: 'var(--color-ios-card)' }} data-derived-identity>
+    <div
+      className={framed ? 'grid gap-3 rounded-[14px] px-4 py-3' : 'grid gap-3'}
+      style={framed ? { backgroundColor: 'var(--color-ios-card)' } : undefined}
+      data-derived-identity
+    >
       <p className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
         Votre identité
       </p>

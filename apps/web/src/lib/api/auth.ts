@@ -144,6 +144,9 @@ type RegisterSuccessData = {
   readonly token: string;
   readonly sessionToken: string;
   readonly expiresIn: number;
+  /** #8288 — le jeton d'attente (#8083) : la carte de l'inscription apprend
+   * que le lien a été ouvert ailleurs. Absent d'une passerelle antérieure. */
+  readonly pendingSessionToken?: string;
 };
 
 /** La branche « conflit de numéro » (`register.ts:301-331`) — AUCUN compte

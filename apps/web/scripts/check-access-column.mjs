@@ -112,14 +112,16 @@ const ETATS = [
     fin: '#login-2fa-code',
   },
   { nom: 'accueil', chemin: '/welcome', pret: 'a[href="/signup"]' },
-  { nom: 'inscription', chemin: '/signup', pret: '#signup-email' },
+  { nom: 'inscription', chemin: '/signup', pret: '#signup-phone' },
   {
     nom: 'inscription — dépliée',
     chemin: '/signup',
-    pret: '#signup-email',
-    /* Une adresse valide déplie l'identité, le mot de passe, la langue et le
-       bouton (D-72, deux barreaux) : c'est l'état le plus long de la page. */
+    pret: '#signup-phone',
+    /* Le numéro fait paraître l'adresse, l'adresse la carte d'identité, le
+       mot de passe, la langue et le parrainage (D-141, phases vivantes) :
+       c'est l'état le plus long de la page. */
     geste: async (page) => {
+      await remplit(page, [['#signup-phone', '0612345678']]);
       await remplit(page, [['#signup-email', EMAIL]]);
     },
     fin: '#signup-password',

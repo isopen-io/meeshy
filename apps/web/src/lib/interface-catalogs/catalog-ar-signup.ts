@@ -16,6 +16,16 @@ const arSignup = {
   'signup.emailTaken.itsMe': 'هذا أنا — استعادة حسابي',
   'signup.emailTaken.notMe': 'ليس أنا',
   'signup.emailTaken.notMeNote': 'سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه.',
+  'signup.phone.skip': 'المتابعة بالبريد الإلكتروني فقط',
+  'signup.card.title': 'حسابك',
+  'signup.card.validateNow': 'تأكيد حسابي الآن',
+  'signup.card.validateNow.busy': 'جارٍ إنشاء الحساب…',
+  'signup.card.code.lead': 'أدخل الرمز المكوّن من 6 أرقام المرسل إلى {email}، أو افتح الرابط الذي وصلك.',
+  'signup.card.verified': 'تم تأكيد الحساب!',
+  'signup.card.verified.lead': 'كل شيء جاهز: يقرأك الآخرون بلغتهم.',
+  'signup.submit': 'إنشاء حساب',
+  'signup.submit.busy': 'جارٍ التسجيل…',
+  'signup.talk': 'تحدّث مع الآخرين',
 };
 
 export default arSignup;
