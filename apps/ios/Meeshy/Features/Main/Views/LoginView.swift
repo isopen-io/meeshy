@@ -3,6 +3,18 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// #8287 — le choix du serveur n'existe qu'au simulateur. La décision se prend
+/// à la COMPILATION : un binaire d'appareil ne contient pas la branche.
+enum LoginServerPicker {
+    static var isAvailable: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var theme = ThemeManager.shared
@@ -170,8 +182,9 @@ struct LoginView: View {
                 .opacity(showFields ? 1 : 0)
 
                 // Sélecteur d'environnement (Production/Staging/Localhost/Custom +
-                // « Connecté à … ») réservé à l'environnement de simulation.
-                if Self.isSimulator {
+                // « Connecté à … ») : au SIMULATEUR seulement, décidé à la
+                // compilation (#8287) — jamais dans un binaire d'appareil.
+                if LoginServerPicker.isAvailable {
                     environmentSelector
                         .padding(.bottom, MeeshySpacing.md)
                         .opacity(showFields ? 1 : 0)
