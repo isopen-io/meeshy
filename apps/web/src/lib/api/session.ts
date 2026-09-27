@@ -58,6 +58,12 @@ export type SessionUser = Pick<User, 'id' | 'username' | 'displayName' | 'avatar
      * seul), un écart déjà présent ailleurs dans le dépôt que ce fichier
      * n'a pas vocation à corriger — il se contente de ne pas y échouer. */
     readonly customDestinationLanguage?: string | null;
+    /** L'adresse du compte n'est PAS prouvée (#8365) — posé depuis ce que la
+     * connexion sert (`emailVerifiedAt: null`, ou `activation.missing` qui
+     * contient `email`, #8238), jamais deviné : absent = inconnu. Lu par le
+     * transport pour ouvrir la validation de l'e-mail AVANT d'envoyer une
+     * publication (`lib/activation/email-gated-transport.ts`). */
+    readonly emailUnproven?: true;
   };
 
 /** La branche « second facteur attendu » ne porte AUCUN jeton d'accès —
@@ -161,6 +167,9 @@ export type SessionStoreState = {
    * projetée comme à l'`establish`. Sans effet hors d'une session
    * authentifiée : il n'y a pas de soi à modifier. */
   updateUser(fields: SessionProfileFields): void;
+  /** L'adresse vient d'être prouvée (#8365) : le drapeau `emailUnproven`
+   * quitte la session tenue ET persistée. Sans effet hors d'un compte. */
+  noteEmailProven(): void;
   restoreSession(): void;
   clearSession(): void;
 };
@@ -195,6 +204,19 @@ type PersistedGuest = {
 
 type PersistedSession = PersistedAccount | PersistedGuest;
 
+/** Ce que la connexion SERT de la preuve d'adresse (#8365) — lu sur la charge
+ * brute, que le type ne déclare pas : `emailVerifiedAt` explicitement `null`,
+ * ou `activation.missing` qui nomme `email`. Une session restaurée porte déjà
+ * le drapeau projeté. */
+function servesUnprovenEmail(user: SessionUser): boolean {
+  if (user.emailUnproven === true) return true;
+  if (Reflect.get(user, 'emailVerifiedAt') === null) return true;
+  const activation: unknown = Reflect.get(user, 'activation');
+  if (typeof activation !== 'object' || activation === null) return false;
+  const missing: unknown = Reflect.get(activation, 'missing');
+  return Array.isArray(missing) && missing.includes('email');
+}
+
 /** La PROJECTION — un objet NEUF, jamais celui reçu du réseau : les champs
  * absents ne deviennent pas des clés `undefined`, et rien d'autre ne suit. */
 function pickSessionUser(user: SessionUser): SessionUser {
@@ -208,6 +230,7 @@ function pickSessionUser(user: SessionUser): SessionUser {
     ...(user.customDestinationLanguage !== undefined
       ? { customDestinationLanguage: user.customDestinationLanguage }
       : {}),
+    ...(servesUnprovenEmail(user) ? { emailUnproven: true as const } : {}),
   };
 }
 
@@ -339,6 +362,7 @@ function withProfileFields(user: SessionUser, fields: SessionProfileFields): Ses
     ...(systemLanguage === undefined ? {} : { systemLanguage }),
     ...(regionalLanguage === undefined ? {} : { regionalLanguage }),
     ...(customDestinationLanguage === undefined ? {} : { customDestinationLanguage }),
+    ...(user.emailUnproven === true ? { emailUnproven: true as const } : {}),
   };
 }
 
@@ -367,6 +391,13 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       const current = get().session;
       if (current.status !== 'authenticated') return;
       const user = pickSessionUser(withProfileFields(current.user, fields));
+      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      set({ session: { ...current, user } });
+    },
+    noteEmailProven: () => {
+      const current = get().session;
+      if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
+      const { emailUnproven: _proven, ...user } = current.user;
       persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
       set({ session: { ...current, user } });
     },

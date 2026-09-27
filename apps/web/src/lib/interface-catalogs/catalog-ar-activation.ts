@@ -30,6 +30,10 @@ const arActivation = {
   'activation.complete': 'تم تأكيد حسابك. شكرًا!',
   'activation.later': 'لاحقًا',
   'activation.close': 'إغلاق',
+  'activation.gate.title': 'أكّد عنوان بريدك الإلكتروني',
+  'activation.gate.publish': 'للنشر، أكّد عنوانك. منشورك محفوظ وسيُنشر فور تأكيد الرمز.',
+  'activation.gate.invite': 'للدعوة عبر البريد الإلكتروني، أكّد عنوانك. ستُرسل دعوتك فور تأكيد الرمز.',
+  'activation.gate.link': 'لإنشاء رابط، أكّد عنوانك. سيُنشأ رابطك فور تأكيد الرمز.',
 } as const;
 
 export default arActivation;

@@ -30,6 +30,10 @@ const frActivation = {
   'activation.complete': 'Votre compte est validé. Merci !',
   'activation.later': 'Plus tard',
   'activation.close': 'Fermer',
+  'activation.gate.title': 'Validez votre adresse e-mail',
+  'activation.gate.publish': 'Pour publier, validez votre adresse. Votre publication est conservée et partira dès le code validé.',
+  'activation.gate.invite': 'Pour inviter par e-mail, validez votre adresse. Votre invitation partira dès le code validé.',
+  'activation.gate.link': 'Pour créer un lien, validez votre adresse. Votre lien sera créé dès le code validé.',
 } as const;
 
 export default frActivation;

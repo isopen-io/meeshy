@@ -6,6 +6,7 @@ import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
 import { MY_PROFILE_QUERY_KEY } from '@/lib/api/profile';
 import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
 import { inviteDue, rememberInviteShown, wasInviteShownToday } from '@/lib/activation/invite';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
@@ -69,7 +70,10 @@ export function ActivationInviteHost({
       now={now()}
       language={language}
       deps={dialogDeps}
-      onActivationChange={() => void appQueryClient.invalidateQueries({ queryKey: MY_PROFILE_QUERY_KEY })}
+      onActivationChange={(next) => {
+        if (!next.missing.includes('email')) sessionStore.getState().noteEmailProven();
+        void appQueryClient.invalidateQueries({ queryKey: MY_PROFILE_QUERY_KEY });
+      }}
       onClose={() => setShown(null)}
     />
   );
