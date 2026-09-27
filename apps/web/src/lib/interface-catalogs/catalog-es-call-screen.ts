@@ -9,6 +9,18 @@ const esCallScreen = {
   'call.screen.stop': 'Dejar de compartir pantalla',
   'call.screen.sharing': 'Estás compartiendo tu pantalla',
   'call.screen.peerSharing': '{name} está compartiendo su pantalla',
+  'call.more': 'Más acciones',
+  'call.section.mine': 'Mi imagen',
+  'call.section.call': 'La llamada',
+  'call.flip': 'Girar',
+  'call.screen.short': 'Pantalla',
+  'call.record.short': 'Grabar',
+  'call.messages': 'Mensajes',
+  'call.messages.open': 'Abrir los mensajes',
+  'call.flip.label': 'Girar la cámara',
+  'call.fullscreen.enter': 'Pantalla completa',
+  'call.fullscreen.exit': 'Salir de pantalla completa',
+  'call.screen.of': 'Pantalla de {name}',
 } as const;
 
 export default esCallScreen;

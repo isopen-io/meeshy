@@ -842,6 +842,26 @@ emit({
 });
 
 /**
+ * LA VUE D'APPEL « C ADAPTE » (#8391, #8392) — la pilule de verre et la une :
+ *
+ * | role | phosphor |
+ * |---|---|
+ * | `(…)`, les actions de l'appel | `dots-three` |
+ * | Sortie (audio et appareils) | `speaker-high` |
+ * | Grille (quitter la une) | `squares-four` |
+ * | Plein ecran / le quitter | `corners-out` / `corners-in` |
+ *
+ * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
+ */
+emit({
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in'],
+  output: join(HERE, '../src/components/glyphs-call-view.ts'),
+  constant: 'CALL_VIEW_GLYPHS',
+  type: 'CallViewGlyphName',
+  role: "LA VUE D'APPEL « C ADAPTE » (#8391, #8392) : le (…) de la pilule, la sortie, la grille et le plein ecran, charge avec l'ecran d'appel, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
  * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
  * `CreateShareLinkView.swift` :

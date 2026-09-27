@@ -15,7 +15,8 @@
  * gabarits (390 × 844, 320 × 568) :
  *
  *  1. un appel VOCAL se connecte au pair ;
- *  2. le bouton « Partager l’écran » est offert, cible de 44 ;
+ *  2. le bouton « Partager l’écran » est offert, cible de 44, derrière le (…)
+ *     de la pilule qui déplie les actions (#8391) ;
  *  3. le toucher annonce le partage, et le pair DÉCODE des images de l'écran
  *     (la renégociation d'un appel vocal a eu lieu) ; la pastille « Vous
  *     partagez votre écran » s'affiche, le bouton est enfoncé ;
@@ -103,6 +104,20 @@ const peerReceives = async (page) => {
   return false;
 };
 
+/**
+ * Les actions vivent derrière le (…) de la pilule (#8391), et en vidéo les
+ * commandes s'effacent après 4 s sans geste : un toucher sur la scène les
+ * rappelle, puis le (…) déplie les actions s'il ne l'a pas déjà fait.
+ */
+const openActions = async (page) => {
+  const { width, height } = page.viewportSize();
+  await page.mouse.move(width / 2, height / 3);
+  await page.mouse.move(width / 2 + 8, height / 3 + 8);
+  await appears(page, '[data-call-chrome="shown"]');
+  const more = page.locator('[data-call-more]');
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+};
+
 const startConnectedAudioCall = async (page) => {
   await page.goto(`${BASE}/`, { waitUntil: 'load' });
   await page.waitForSelector('[data-row] a');
@@ -135,6 +150,7 @@ try {
         check(await startConnectedAudioCall(page), `${label} : l'appel vocal se connecte au pair`);
 
         // ------------------------------------------------ 2. le bouton
+        await openActions(page);
         const share = page.locator(SHARE);
         check((await share.count()) === 1 && (await share.getAttribute('aria-label')) === 'Partager l’écran', `${label} : « Partager l’écran » est offert`);
         const box = await share.boundingBox();
@@ -161,13 +177,17 @@ try {
         check((await page.locator('button[aria-label="Activer la caméra"]').count()) === 1 && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : l'appel reste vocal et connecté`);
 
         // ------------------------------------------------ 5. la caméra revient
+        await openActions(page);
         await page.click('button[aria-label="Activer la caméra"]');
         await appears(page, 'button[aria-label="Couper la caméra"]');
+        await openActions(page);
         await share.click();
         await appears(page, '[data-call-pill="screen-sharing"]');
         check(await page.locator('button[aria-label="Couper la caméra"], button[aria-label="Activer la caméra"]').first().isDisabled(), `${label} : la caméra ne se rallume pas par-dessus un partage`);
+        await openActions(page);
         await share.click();
         check(await appears(page, 'button[aria-label="Couper la caméra"][aria-pressed="true"]:not([disabled])'), `${label} : arrêter le partage rend la caméra qui tournait`);
+        await openActions(page);
         await page.click('button[aria-label="Couper la caméra"]');
         await appears(page, 'button[aria-label="Activer la caméra"]');
 
@@ -184,6 +204,7 @@ try {
         const back = await page.waitForSelector('[data-call-shared-screen]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
         check(back && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : la fin du partage du pair rend l'écran d'appel`);
 
+        await openActions(page);
         await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
       } catch (error) {
         failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
@@ -201,6 +222,7 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   check(await startConnectedAudioCall(page), 'sans getDisplayMedia : l’appel VOCAL se connecte (aucune caméra, d’aucun côté)');
+  await openActions(page);
   check((await page.$(SHARE)) === null, 'sans getDisplayMedia (coque Android, Safari iOS) : aucun bouton ne promet le partage');
   // La RÉCEPTION ne dépend d'aucune capacité d'émission : le pair partage, l'écran s'affiche.
   await page.evaluate(() => window.__meeshyFixtureCallPeer?.share());
