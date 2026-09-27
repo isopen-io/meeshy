@@ -110,6 +110,7 @@
   --ios-tile-photo: #9B59B6; /* UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color */
   --ios-tile-camera: #F8B500; /* UniversalComposerBar+Attachments.swift:256 — CarouselTile(id: "camera").color */
   --ios-tile-file: #45B7D1; /* UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color */
+  --ios-tile-contact: #5B8DEF; /* UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "contact").color */
   --ios-tile-location: #2ECC71; /* UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color */
   --ios-tile-voice: #E74C3C; /* UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color */
   --ios-tile-emoji: #FF9F43; /* UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color */
