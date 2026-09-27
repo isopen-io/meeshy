@@ -20,7 +20,7 @@ import type { ApiResult, HttpRequest, HttpTransport } from './http';
  * les notifications poussées et leur son (`PushNotificationService`), et les
  * quatre bascules de visibilité, et la discrétion de la recherche par identifiant (#8105) (`PresenceVisibilityService`,
  * `MeeshySocketIOManager`, `MessageReadStatusService`). Le cache de requêtes
- * est persisté : rien d'autre que ces huit valeurs n'y entre.
+ * est persisté : rien d'autre que ces neuf valeurs n'y entre.
  */
 
 const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
@@ -32,6 +32,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     showReadReceipts: true,
     showTypingIndicator: false,
     hideProfileFromSearch: true,
+    allowCallsFromNonContacts: false,
     allowAnalytics: true,
     ...overrides.privacy,
   },
@@ -46,6 +47,7 @@ const expected: AppPreferences = {
   showReadReceipts: true,
   showTypingIndicator: false,
   hideProfileFromSearch: true,
+  allowCallsFromNonContacts: false,
 };
 
 const transportAnswering = (answer: ApiResult<unknown>) => {
@@ -60,7 +62,7 @@ const transportAnswering = (answer: ApiResult<unknown>) => {
 };
 
 describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () => {
-  test('rend exactement les huit réglages de l’écran', () => {
+  test('rend exactement les neuf réglages de l’écran', () => {
     expect(decodeAppPreferences(wire())).toEqual(expected);
   });
 
@@ -106,13 +108,17 @@ describe('preferencesPatchBody — un réglage retrouve SA catégorie', () => {
     expect(preferencesPatchBody({ hideProfileFromSearch: true })).toEqual({ privacy: { hideProfileFromSearch: true } });
   });
 
+  test('« appels hors contacts » part sous `privacy`, là où la porte de sonnerie la lit (#8073)', () => {
+    expect(preferencesPatchBody({ allowCallsFromNonContacts: true })).toEqual({ privacy: { allowCallsFromNonContacts: true } });
+  });
+
   test('une catégorie que le geste ne touche pas ne part pas', () => {
     expect(Object.keys(preferencesPatchBody({ soundEnabled: true }))).toEqual(['notification']);
   });
 });
 
 describe('loadAppPreferences — une seule lecture, bornée à ce que l’écran montre', () => {
-  test('demande les huit champs, et rien d’autre', async () => {
+  test('demande les neuf champs, et rien d’autre', async () => {
     const { calls, transport } = transportAnswering({ ok: true, data: wire() });
     const result = await loadAppPreferences({ source: 'gateway', transport });
     expect(calls).toHaveLength(1);
@@ -148,7 +154,7 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
     expect(calls[0]?.body).toEqual({ privacy: { showTypingIndicator: true } });
     expect(result).toEqual({
       ok: true,
-      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false, hideProfileFromSearch: true },
+      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false, hideProfileFromSearch: true, allowCallsFromNonContacts: false },
     });
   });
 
