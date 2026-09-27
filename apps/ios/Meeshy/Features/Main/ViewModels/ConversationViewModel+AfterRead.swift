@@ -59,6 +59,10 @@ protocol AfterReadConsumptionProviding {
 /// puis la consommation serveur par l'outbox, qui la rejoue hors ligne.
 @MainActor
 final class AfterReadConsumption: AfterReadConsumptionProviding {
+    // SE-0466 : la deinit synthétisée serait isolée au MainActor (cible app) et
+    // libérerait deux fois au démontage hors tâche. Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     static let shared = AfterReadConsumption()
 
     func consume(conversationId: String, messageIds: [String]) {

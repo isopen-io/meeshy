@@ -41,6 +41,10 @@ protocol ConversationProtectionPreferenceProviding: AnyObject, Sendable {
 /// Une entrée par conversation armée, dans `UserDefaults` ; une conversation
 /// désarmée n'occupe rien.
 final class ConversationProtectionPreferenceStore: ConversationProtectionPreferenceProviding, @unchecked Sendable {
+    // SE-0466 : la deinit synthétisée serait isolée au MainActor (cible app) et
+    // libérerait deux fois au démontage hors tâche. Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     static let shared = ConversationProtectionPreferenceStore()
 
     private static let key = "meeshy.conversation.armedProtections.v1"
