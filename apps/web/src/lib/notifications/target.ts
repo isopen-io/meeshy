@@ -115,10 +115,11 @@ const EPHEMERAL_ONLY_TYPES: ReadonlySet<string> = new Set([
 const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_request']);
 
 /**
- * Les types qui annoncent une PERSONNE (#8105) : « X a rejoint Meeshy » ouvre
- * le profil de l'arrivant, où l'on trouve « Se connecter » et « Écrire ».
+ * Les types qui annoncent une PERSONNE : « X a rejoint Meeshy » (#8105) et
+ * « X était sur Meeshy récemment » (#8285) ouvrent le profil de X, où l'on
+ * trouve « Se connecter » et « Écrire ».
  */
-const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined']);
+const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active']);
 
 const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
   'achievement_unlocked',

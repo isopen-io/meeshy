@@ -29,6 +29,8 @@ export interface NotificationPreference {
   readonly reactionEnabled: boolean;
   readonly contactRequestEnabled: boolean;
   readonly memberJoinedEnabled: boolean;
+  /** « Quand un contact revient sur Meeshy » (#8285) — absent = reçu. */
+  readonly contactActivityEnabled?: boolean;
 
   // === DO NOT DISTURB ===
   readonly dndEnabled: boolean;
@@ -143,6 +145,8 @@ export function isNotificationTypeEnabled(
     case 'contact_accepted':
     case 'contact_joined':
       return prefs.contactRequestEnabled;
+    case 'contact_recently_active':
+      return prefs.contactActivityEnabled !== false;
     case 'member_joined':
     case 'member_left':
       return prefs.memberJoinedEnabled;

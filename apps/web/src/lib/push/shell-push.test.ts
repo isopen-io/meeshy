@@ -223,6 +223,13 @@ describe('ce que la coque lit de la charge', () => {
     });
   });
 
+  test('« X était sur Meeshy récemment » mène la coque au profil du contact revenu (#8285)', () => {
+    expect(pushTapTarget(shellPushTargetInput({ type: 'contact_recently_active', senderUsername: 'marie' }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'marie' },
+    });
+  });
+
   test('une remise sans message ni conversation n’est pas une remise', () => {
     expect(deliveredMessageOf({ type: 'new_message', conversationId: 'c1', messageId: '' })).toBeNull();
     expect(deliveredMessageOf(null)).toBeNull();

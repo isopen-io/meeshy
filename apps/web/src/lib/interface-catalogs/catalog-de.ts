@@ -28,6 +28,7 @@ import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
+import deContactDiscovery from './catalog-de-contact-discovery';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -461,9 +462,6 @@ const de = {
   'settings.privacy.read_receipts.info':
     'Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden.',
   'settings.privacy.typing_indicator': 'Schreibanzeige',
-  'settings.privacy.hide_from_search': 'Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben',
-  'settings.privacy.hide_from_search.info':
-    'Deine Kontakte finden dich nicht über deine Nummer oder E-Mail und werden nicht benachrichtigt, wenn du beitrittst.',
   'settings.section.appearance': 'Erscheinungsbild',
   'settings.theme': 'Design',
   'settings.theme.auto': 'Auto',
@@ -1166,6 +1164,7 @@ const de = {
   ...deStoriesMine,
   ...deContactCard,
   ...deQuote,
+  ...deContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default de;

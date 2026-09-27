@@ -110,6 +110,9 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.contactRequestEnabled)
 
+            notifToggle(icon: "person.crop.circle.badge.clock", title: String(localized: "settings.notifications.contact_activity", defaultValue: "Quand un contact revient sur Meeshy", bundle: .main), color: MeeshyColors.successHex,
+                        keyPath: \.contactActivityEnabled)
+
             notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.groupInviteEnabled)
 

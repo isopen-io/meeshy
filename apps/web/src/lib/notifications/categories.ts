@@ -86,6 +86,7 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'contact_accepted',
     'FRIEND_ACCEPTED',
     'contact_joined',
+    'contact_recently_active',
     'STATUS_UPDATE',
   ],
   groups: [

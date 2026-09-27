@@ -213,6 +213,11 @@ export interface PrivacyPreferencesDefaults {
   // Découvrabilité (#8104) — lue par `services/profile-discoverability.ts`.
   // Postérieure à janvier 2026 : aucune ligne kebab-case héritée.
   hideProfileFromSearch: boolean;
+
+  // « Prévenir mes contacts quand je reviens sur Meeshy » (#8285) — lue par
+  // `services/notifications/contact-recently-active.ts`. Postérieure à janvier
+  // 2026 : aucune ligne kebab-case héritée.
+  notifyContactsOnReturn: boolean;
 }
 
 export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
@@ -241,6 +246,10 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
 
   // Trouvable par défaut : se cacher est un OPT-IN.
   hideProfileFromSearch: false,
+
+  // Le défaut DÉCLARÉ par le schéma partagé : OPT-OUT, activé tant que
+  // l'utilisateur ne l'a pas coupé — un document sans la clé vaut « activé ».
+  notifyContactsOnReturn: PRIVACY_PREFERENCE_DEFAULTS.notifyContactsOnReturn,
 };
 
 /**

@@ -26,6 +26,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'contact.request', 'contact.accepted',
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
+  'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
@@ -529,6 +530,10 @@ export function buildNotificationDisplay(
     // ── Un contact du carnet vient d'arriver (#8105) : « Marie est sur Meeshy ! » ──
     case 'contact_joined':
       return framed(notificationString(L, 'contact.joinedAction'), null);
+
+    // ── Un contact est revenu (#8285) : « Marie était sur Meeshy récemment » ──
+    case 'contact_recently_active':
+      return framed(notificationString(L, 'contact.recentlyActiveAction'), null);
 
     // ── Partage / repost ──
     case 'post_repost':
