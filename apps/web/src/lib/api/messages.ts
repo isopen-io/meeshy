@@ -6,6 +6,7 @@ import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
@@ -16,7 +17,7 @@ import { withSenderAccount } from './sender-account';
 
 /**
  * LE PORT DU FIL (#5650, F2 ; PAGINÉ #6972) —
- * `GET /api/v1/conversations/:id/messages?limit=50[&before=<id>]`
+ * `GET conversations.byIdMessages?limit=50[&before=<id>]`
  * (`services/gateway/src/routes/conversations/messages-list.ts:91-201`,
  * `optionalAuth`).
  *
@@ -85,7 +86,7 @@ export async function loadMessages(
   const mineBefore = snapshotMine();
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
-    path: `/api/v1/conversations/${params.conversationId}/messages?${query.toString()}`,
+    path: `${conversationsEndpoints.byIdMessages(params.conversationId)}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -348,7 +349,7 @@ export function latestCachedThreadMessage(queryClient: QueryClient, conversation
 
 /**
  * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —
- * `POST /api/v1/conversations/:id/messages`
+ * `POST conversations.byIdMessages`
  * (`services/gateway/src/routes/conversations/messages-send.ts:117-120`,
  * `SendMessageBodySchema:41-105`). SUCCÈS = **200**, pas 201
  * (`response.ts:38`, `messages-send.ts:391` — § 0 de la spécification #5813,
@@ -360,7 +361,7 @@ export function latestCachedThreadMessage(queryClient: QueryClient, conversation
  * n'est posé QUE hors du défaut serveur `'text'` (`messages-send.ts:59`,
  * `:142`) — la même discipline « aucune clé à sa valeur par défaut » que le
  * reste de ce port. `attachmentIds` : les ids rendus par
- * `POST /api/v1/attachments/upload` (`api/attachments.ts`), bornés à
+ * `POST attachments.upload` (`api/attachments.ts`), bornés à
  * `MAX_ATTACHMENTS_PER_MESSAGE` (`@meeshy/shared/types/attachment.ts:454`) —
  * la borne n'est PAS revérifiée ici, c'est `send/attachments.ts` /
  * `use-recorder.ts` qui composent la sélection, jamais un lot déjà hors
@@ -497,7 +498,7 @@ export async function sendMessage(
   }
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/conversations/${params.conversationId}/messages`,
+    path: conversationsEndpoints.byIdMessages(params.conversationId),
     body: params.body,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
