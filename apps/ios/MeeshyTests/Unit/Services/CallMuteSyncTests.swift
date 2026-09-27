@@ -79,6 +79,23 @@ final class CallMuteSyncTests: XCTestCase {
         XCTAssertEqual(media.trackEnabled, false)
     }
 
+    // MARK: - Aucun chemin ne contourne la resynchronisation
+
+    /// Un repli de plus écrit avec `webRTCService.startLocalMedia(` en direct
+    /// rouvrirait le micro sans que rien ne rougisse : la garde balaie toute
+    /// l'unité `CallManager` (le fichier et ses extensions `CallManager+*`).
+    func test_callManagerUnit_createsLocalTrackOnlyThroughMuteSync() throws {
+        let unit = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        )
+        XCTAssertFalse(unit.contains("webRTCService.startLocalMedia("),
+                       "La piste locale naît seulement par startLocalMediaKeepingMute (#8434)")
+        XCTAssertGreaterThanOrEqual(
+            AppSourceGuard.occurrences(ofIdentifier: "startLocalMediaKeepingMute", in: unit), 4,
+            "Le démarrage et ses deux replis passent par la resynchronisation du micro"
+        )
+    }
+
     // MARK: - Les pairs
 
     func test_mustAnnounceMuteToPeers_mutedOnCurrentCall_returnsTrue() {

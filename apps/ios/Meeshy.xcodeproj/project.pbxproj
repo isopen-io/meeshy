@@ -426,6 +426,8 @@
 		2FABFC877FB825ED82D2F370 /* HashtagResultsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBFD06BD1037D35F90549E2 /* HashtagResultsViewModelTests.swift */; };
 		2FCFEE36AF2E008D7FAB52F2 /* MeeshyAppOutboxHygieneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92FB6DC677255DAA27ADA08A /* MeeshyAppOutboxHygieneTests.swift */; };
 		2FF33CDD8C9B0DCBDE485FCA /* CallManager+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C826319F11FAA36F7622AF /* CallManager+Recording.swift */; };
+		3AF3299CF2401C1A6B941AD2 /* CallManager+MuteSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFAD0B8B5101C465F1CC5DD /* CallManager+MuteSync.swift */; };
+		0098F48315D85DD7C77ED183 /* CallManager+SystemPiP.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AE60D135E4838C154D031BC /* CallManager+SystemPiP.swift */; };
 		3002BDE26A8FF05AA3344C78 /* StoryCitationAcrossSkinsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C7EAC238BE772055D09709 /* StoryCitationAcrossSkinsTests.swift */; };
 		30059FAF74A834DEBF42E8B5 /* OutboxLogoutHookCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98083C56ABBC8914B5156238 /* OutboxLogoutHookCoverageTests.swift */; };
 		304D9AB9523CC9D787745583 /* ComposerSceneSoundHeaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2D74474010728187C4235C9 /* ComposerSceneSoundHeaderTests.swift */; };
@@ -2564,6 +2566,8 @@
 		13A020468B6C8367F8121928 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13B6AFBDCA69220393EF2C4D /* SyncPillPauseGestureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillPauseGestureTests.swift; sourceTree = "<group>"; };
 		13C826319F11FAA36F7622AF /* CallManager+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Recording.swift"; sourceTree = "<group>"; };
+		8CFAD0B8B5101C465F1CC5DD /* CallManager+MuteSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+MuteSync.swift"; sourceTree = "<group>"; };
+		7AE60D135E4838C154D031BC /* CallManager+SystemPiP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+SystemPiP.swift"; sourceTree = "<group>"; };
 		13E0093588E570A338A6204F /* ContactSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactSyncService.swift; sourceTree = "<group>"; };
 		13E932FAEE1375FF08BBA43C /* P2PWebRTCClientConcurrencySourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClientConcurrencySourceTests.swift; sourceTree = "<group>"; };
 		13EB2F440260960BA0911D12 /* StoryViewerCommentRealtimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerCommentRealtimeTests.swift; sourceTree = "<group>"; };
@@ -7155,6 +7159,8 @@
 				27E52142DB2F56BEDB5D78D7 /* CallManager+GroupMesh.swift */,
 				5AA7C4E49B24D61003417D7B /* CallManager+IncomingOffer.swift */,
 				13C826319F11FAA36F7622AF /* CallManager+Recording.swift */,
+				8CFAD0B8B5101C465F1CC5DD /* CallManager+MuteSync.swift */,
+				7AE60D135E4838C154D031BC /* CallManager+SystemPiP.swift */,
 				365D252ED587CA8D290E1241 /* CallManager+ScreenShare.swift */,
 				1C915E7FB3811FAC3A097DFD /* CallManager+TranscriptionSegments.swift */,
 				518528C1D9E5F0CD66524B07 /* CallManagerHost.swift */,
@@ -8285,6 +8291,8 @@
 				ED49344D4A5F9C40E9BC2CB2 /* CallManager+GroupMesh.swift in Sources */,
 				C8419DC1DB7E5DB1AAE64C51 /* CallManager+IncomingOffer.swift in Sources */,
 				2FF33CDD8C9B0DCBDE485FCA /* CallManager+Recording.swift in Sources */,
+				3AF3299CF2401C1A6B941AD2 /* CallManager+MuteSync.swift in Sources */,
+				0098F48315D85DD7C77ED183 /* CallManager+SystemPiP.swift in Sources */,
 				B75F508CB2BC4289529EF426 /* CallManager+ScreenShare.swift in Sources */,
 				7328D28858ED928424617DBD /* CallManager+TranscriptionSegments.swift in Sources */,
 				3CB036FE97B1AD9BC4481E1A /* CallManager.swift in Sources */,
