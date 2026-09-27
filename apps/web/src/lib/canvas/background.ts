@@ -1,3 +1,4 @@
+import { sceneBackdropOf, type SceneBackdrop } from './backdrop';
 import type { CanvasScene } from './document';
 
 /**
@@ -61,10 +62,20 @@ export function backgroundCss(value: unknown, fallback: string): string {
   return hexColorCss(value) ?? fallback;
 }
 
-export function backgroundFraming(scene: CanvasScene): BackgroundFraming {
-  const declared = scene.objects
+/** Le premier champ `transform.<key>` DÉCLARÉ par un porteur de fond — la
+ * même élection pour le cadrage et pour le fond du Cadre (#8414). */
+function backgroundTransformField(scene: CanvasScene, key: 'videoFitMode' | 'backdrop'): string | undefined {
+  return scene.objects
     .filter((object) => object.kind === 'media' && (object.plane === 'bg' || object.payload.isBackground === true))
-    .map((object) => (isRecord(object.payload.transform) ? object.payload.transform.videoFitMode : undefined))
-    .find((mode): mode is string => typeof mode === 'string');
-  return declared === 'fit' ? 'fit' : 'fill';
+    .map((object) => (isRecord(object.payload.transform) ? object.payload.transform[key] : undefined))
+    .find((value): value is string => typeof value === 'string');
+}
+
+export function backgroundFraming(scene: CanvasScene): BackgroundFraming {
+  return backgroundTransformField(scene, 'videoFitMode') === 'fit' ? 'fit' : 'fill';
+}
+
+/** Ce qui se peint AUTOUR d'un fond ajusté (`backdrop.ts`) — absent ⇒ flou. */
+export function backgroundBackdrop(scene: CanvasScene): SceneBackdrop {
+  return sceneBackdropOf(backgroundTransformField(scene, 'backdrop'));
 }

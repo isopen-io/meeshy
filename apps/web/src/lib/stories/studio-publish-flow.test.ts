@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 
-import { runStudioPublish, type StudioPublishedEvent } from './studio-publish-flow';
+import { runStudioPublish, studioPublicationContent, type StudioPublishedEvent } from './studio-publish-flow';
 import type { StudioPublication, StudioPublishPlan } from './studio-publish';
 
 /**
@@ -113,5 +113,22 @@ describe('runStudioPublish — séquentiel, dans l’ordre, arrêt à la premiè
 
     expect(calls).toEqual(['page-1']);
     expect(outcome).toEqual({ kind: 'aborted', published: 1, total: 3 });
+  });
+});
+
+/** LE TEXTE DU POST (#8413) — `Post.content` ne part que sous un POST : une
+ * story ou un réel n'ont pas de corps, leur texte vit dans la scène. */
+describe('studioPublicationContent — le corps ne part que pour un POST', () => {
+  test('POST ⇒ le texte, débarrassé de ses blancs de bord', () => {
+    expect(studioPublicationContent({ kind: 'POST', postText: '  Bonjour  ' })).toBe('Bonjour');
+  });
+
+  test('STORY ou REEL ⇒ rien', () => {
+    expect(studioPublicationContent({ kind: 'STORY', postText: 'Bonjour' })).toBeUndefined();
+    expect(studioPublicationContent({ kind: 'REEL', postText: 'Bonjour' })).toBeUndefined();
+  });
+
+  test('un texte vide ou blanc ⇒ rien', () => {
+    expect(studioPublicationContent({ kind: 'POST', postText: '   ' })).toBeUndefined();
   });
 });

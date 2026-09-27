@@ -137,6 +137,7 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
             source: background,
             mediaType: page.background.mediaType,
             ...(page.background.aspectRatio !== undefined ? { aspectRatio: page.background.aspectRatio } : {}),
+            ...(page.background.frame !== undefined ? { frame: page.background.frame } : {}),
           },
         }
       : {}),
