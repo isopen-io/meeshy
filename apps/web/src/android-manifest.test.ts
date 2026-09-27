@@ -62,3 +62,24 @@ describe('le manifeste de la coque Android (#8007)', () => {
     expect(permissions).toContain('android.permission.ACCESS_FINE_LOCATION');
   });
 });
+
+/**
+ * LA BANNIÈRE FCM DE LA COQUE, APP FERMÉE (#7307). Le SDK Firebase la rend
+ * seul, sans le JS : sa petite icône et son canal viennent du manifeste. Sans
+ * eux, la barre d'état montre un carré blanc (l'icône de lancement, opaque).
+ */
+describe('la bannière d’un push de la coque (#7307)', () => {
+  const xml = readFileSync(MANIFEST, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+  const metaData = (name: string): string | null =>
+    new RegExp(`<meta-data\\s+android:name="${name.replace(/\./g, '\\.')}"\\s+android:(?:resource|value)="([^"]+)"`).exec(xml)?.[1] ?? null;
+
+  test('porte une petite icône monochrome, pas l’icône de lancement', () => {
+    expect(metaData('com.google.firebase.messaging.default_notification_icon')).toBe('@drawable/ic_stat_meeshy');
+    const icon = readFileSync(join(dirname(MANIFEST), 'res', 'drawable', 'ic_stat_meeshy.xml'), 'utf8');
+    expect(icon).toContain('<vector');
+  });
+
+  test('tombe dans le canal que la passerelle nomme', () => {
+    expect(metaData('com.google.firebase.messaging.default_notification_channel_id')).toBe('meeshy_notifications');
+  });
+});

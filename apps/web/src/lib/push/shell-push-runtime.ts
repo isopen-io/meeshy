@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 
 import { httpTransport } from '@/lib/api/client';
@@ -6,6 +6,7 @@ import { sessionStore } from '@/lib/api/session';
 import type { PushTapTarget } from '@/lib/notifications/target';
 import { href, navigate } from '@/routes/route-table';
 
+import { devicePushControl, type DevicePushControl, type NotificationSettingsBridge } from './device-permission';
 import { startShellPush } from './shell-push';
 
 /**
@@ -50,5 +51,17 @@ export async function startShellPushInShell(): Promise<void> {
     navigate: (url) => navigate(url),
     urlOf: shellPushUrl,
     appVersion: __APP_VERSION__,
+  });
+}
+
+/**
+ * LA PERMISSION DE L'APPAREIL POUR LES RÉGLAGES (#7307) — `null` sans pont
+ * natif, où aucune rangée ne se dessine.
+ */
+export function shellDevicePushControl(): DevicePushControl | null {
+  if (!Capacitor.isPluginAvailable('PushNotifications')) return null;
+  return devicePushControl({
+    plugin: PushNotifications,
+    settings: registerPlugin<NotificationSettingsBridge>('MeeshyNotificationSettings'),
   });
 }

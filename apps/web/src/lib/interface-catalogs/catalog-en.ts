@@ -5,6 +5,7 @@ import enMediaHub from './catalog-en-media-hub';
 import enMediaViewer from './catalog-en-media-viewer';
 import enActivation from './catalog-en-activation';
 import enVerifyEmail from './catalog-en-verify-email';
+import enDevicePush from './catalog-en-device-push';
 import enPassword from './catalog-en-password';
 import enAccounts from './catalog-en-accounts';
 import enCall from './catalog-en-call';
@@ -217,6 +218,7 @@ const en = {
   ...enVerifyEmail,
   ...enActivation,
   ...enPassword,
+  ...enDevicePush,
   ...enAccounts,
   ...enCall,
   ...enRowActions,

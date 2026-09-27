@@ -23,6 +23,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -421,9 +422,44 @@ export function PrivacySection({ language, view, disabled, onToggle, onRetry }: 
   );
 }
 
-export function NotificationsSection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
+/**
+ * LA PERMISSION DE L'APPAREIL (#7307) — la coque seule la porte. Refusée,
+ * la bascule `pushEnabled` ne gouverne plus rien sur CET appareil : la rangée
+ * le dit, et donne le seul chemin de retour qu'Android laisse.
+ */
+function DevicePushRowView({ language, device }: { readonly language: InterfaceLanguage; readonly device: DevicePushRow }) {
+  const denied = device.permission === 'denied';
+  const label = translate(language, denied ? 'settings.notif.device.blocked' : 'settings.notif.device.prompt');
+  return (
+    <div data-device-push={device.permission} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon tint={denied ? 'var(--color-error)' : 'var(--color-ios-brand)'}>
+        <IconOf icon={{ set: 'ecran', name: 'bellRinging' }} size={15} />
+      </RowIcon>
+      <RowText label={label} />
+      <button
+        type="button"
+        data-device-push-action
+        onClick={denied ? device.openSettings : device.enable}
+        className={`grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+        style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {translate(language, denied ? 'settings.notif.device.open_settings' : 'settings.notif.device.enable')}
+      </button>
+    </div>
+  );
+}
+
+export function NotificationsSection({
+  language,
+  view,
+  disabled,
+  onToggle,
+  onRetry,
+  device = null,
+}: PreferenceSectionProps & { readonly device?: DevicePushRow | null }) {
   return (
     <GroupedSection id="settings-notifications" title={upper(language, 'settings.section.notifications')} icon={SECTION_ICON({ set: 'socle', name: 'bell' })}>
+      {device !== null && device.permission !== 'granted' ? <DevicePushRowView language={language} device={device} /> : null}
       <Toggles language={language} view={view} specs={NOTIFICATION_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
     </GroupedSection>
   );
