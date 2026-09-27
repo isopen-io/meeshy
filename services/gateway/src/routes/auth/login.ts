@@ -192,9 +192,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         if (error instanceof PasswordNotSetError && await replyFromEmailAccount(request, reply, username, requestContext)) {
           return reply;
         }
-        // #8055 — le BON mot de passe d'un compte pas encore actif (adresse à
-        // prouver, aucun numéro) : aucune session, le code part à l'adresse
-        // DU COMPTE, quel que soit l'identifiant tapé.
+        // #8238 (remplace #8055) — le BON mot de passe d'un compte dont le
+        // délai de grâce est passé (28 jours, adresse à prouver, aucun
+        // numéro) : aucune session, le code part à l'adresse DU COMPTE, quel
+        // que soit l'identifiant tapé.
         if (error instanceof ActivationRequiresEmailProofError) {
           if (await replyFromEmailAccount(request, reply, error.email, requestContext, 'proven-password')) {
             return reply;
