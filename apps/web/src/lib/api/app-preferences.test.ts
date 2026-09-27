@@ -19,13 +19,21 @@ import type { ApiResult, HttpRequest, HttpTransport } from './http';
  * passerelle OBÉIT : le thème (relu par iOS, `ThemeManager.observeRemoteThemeSync`),
  * les notifications poussées et leur son (`PushNotificationService`), et les
  * quatre bascules de visibilité, et la discrétion de la recherche par identifiant (#8105) (`PresenceVisibilityService`,
- * `MeeshySocketIOManager`, `MessageReadStatusService`). Le cache de requêtes
- * est persisté : rien d'autre que ces neuf valeurs n'y entre.
+ * `MeeshySocketIOManager`, `MessageReadStatusService`), et l'annonce « X était
+ * sur Meeshy récemment » dans ses deux sens (#8285). Le cache de requêtes
+ * est persisté : rien d'autre que ces onze valeurs n'y entre.
  */
 
 const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
   application: { theme: 'dark', interfaceLanguage: 'en', fontSize: 'medium', ...overrides.application },
-  notification: { pushEnabled: false, soundEnabled: true, emailEnabled: true, dndEnabled: false, ...overrides.notification },
+  notification: {
+    pushEnabled: false,
+    soundEnabled: true,
+    contactActivityEnabled: false,
+    emailEnabled: true,
+    dndEnabled: false,
+    ...overrides.notification,
+  },
   privacy: {
     showOnlineStatus: false,
     showLastSeen: true,
@@ -33,6 +41,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     showTypingIndicator: false,
     hideProfileFromSearch: true,
     acceptCallsFromNonContacts: false,
+    notifyContactsOnReturn: false,
     allowAnalytics: true,
     ...overrides.privacy,
   },
@@ -42,12 +51,14 @@ const expected: AppPreferences = {
   theme: 'dark',
   pushEnabled: false,
   soundEnabled: true,
+  contactActivityEnabled: false,
   showOnlineStatus: false,
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: false,
   hideProfileFromSearch: true,
   acceptCallsFromNonContacts: false,
+  notifyContactsOnReturn: false,
 };
 
 const transportAnswering = (answer: ApiResult<unknown>) => {
@@ -62,7 +73,7 @@ const transportAnswering = (answer: ApiResult<unknown>) => {
 };
 
 describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () => {
-  test('rend exactement les neuf réglages de l’écran', () => {
+  test('rend exactement les onze réglages de l’écran', () => {
     expect(decodeAppPreferences(wire())).toEqual(expected);
   });
 
@@ -84,9 +95,12 @@ describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () 
 
 describe('decodeServedPreferences — ce qu’une écriture rend, catégorie par catégorie', () => {
   test('ne rend que les réglages des catégories servies', () => {
-    expect(decodeServedPreferences({ notification: { pushEnabled: true, soundEnabled: false, emailEnabled: true } })).toEqual({
+    expect(
+      decodeServedPreferences({ notification: { pushEnabled: true, soundEnabled: false, contactActivityEnabled: false, emailEnabled: true } }),
+    ).toEqual({
       pushEnabled: true,
       soundEnabled: false,
+      contactActivityEnabled: false,
     });
   });
 
@@ -112,13 +126,21 @@ describe('preferencesPatchBody — un réglage retrouve SA catégorie', () => {
     expect(preferencesPatchBody({ acceptCallsFromNonContacts: true })).toEqual({ privacy: { acceptCallsFromNonContacts: true } });
   });
 
+  test('« prévenir mes contacts quand je reviens » part sous `privacy`, là où l’annonce la lit (#8285)', () => {
+    expect(preferencesPatchBody({ notifyContactsOnReturn: false })).toEqual({ privacy: { notifyContactsOnReturn: false } });
+  });
+
+  test('« quand un contact revient » part sous `notification`, là où la réception la lit (#8285)', () => {
+    expect(preferencesPatchBody({ contactActivityEnabled: false })).toEqual({ notification: { contactActivityEnabled: false } });
+  });
+
   test('une catégorie que le geste ne touche pas ne part pas', () => {
     expect(Object.keys(preferencesPatchBody({ soundEnabled: true }))).toEqual(['notification']);
   });
 });
 
 describe('loadAppPreferences — une seule lecture, bornée à ce que l’écran montre', () => {
-  test('demande les neuf champs, et rien d’autre', async () => {
+  test('demande les onze champs, et rien d’autre', async () => {
     const { calls, transport } = transportAnswering({ ok: true, data: wire() });
     const result = await loadAppPreferences({ source: 'gateway', transport });
     expect(calls).toHaveLength(1);
@@ -154,7 +176,15 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
     expect(calls[0]?.body).toEqual({ privacy: { showTypingIndicator: true } });
     expect(result).toEqual({
       ok: true,
-      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false, hideProfileFromSearch: true, acceptCallsFromNonContacts: false },
+      data: {
+        showOnlineStatus: false,
+        showLastSeen: true,
+        showReadReceipts: true,
+        showTypingIndicator: false,
+        hideProfileFromSearch: true,
+        acceptCallsFromNonContacts: false,
+        notifyContactsOnReturn: false,
+      },
     });
   });
 
