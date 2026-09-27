@@ -232,6 +232,41 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertTrue(sut.model.isPresented)
     }
 
+    // MARK: - #8089 — la célébration de l'arrivée passe d'abord
+
+    func test_start_whileTheArrivalIsCelebrated_defersThePresentation() async {
+        let sut = makeSUT()
+        sut.model.celebrationChanged(isShowing: true)
+
+        await sut.model.start(user: makeUser())
+
+        XCTAssertFalse(sut.model.isPresented)
+    }
+
+    func test_celebrationEnded_presentsTheFirstCard() async {
+        let sut = makeSUT()
+        sut.model.celebrationChanged(isShowing: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.celebrationChanged(isShowing: false)
+
+        XCTAssertTrue(sut.model.isPresented)
+        XCTAssertEqual(sut.model.card, .step(.languages), "la célébration ne remplace pas la première étape")
+    }
+
+    func test_celebrationEnded_whileRoutingElsewhere_stillWaitsForTheRoute() async {
+        let sut = makeSUT()
+        sut.model.celebrationChanged(isShowing: true)
+        sut.model.routingChanged(isElsewhere: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.celebrationChanged(isShowing: false)
+        XCTAssertFalse(sut.model.isPresented)
+
+        sut.model.routingChanged(isElsewhere: false)
+        XCTAssertTrue(sut.model.isPresented)
+    }
+
     // MARK: - Carte 1 — langues
 
     func test_start_prefillsPrimaryLanguageFromTheProfile() async {

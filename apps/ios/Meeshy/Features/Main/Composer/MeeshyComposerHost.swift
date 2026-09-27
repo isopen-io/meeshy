@@ -212,6 +212,10 @@ struct MeeshyComposerHost: View {
     /// (`init`), et jamais réappliquée ensuite : relire la mémoire à chaque
     /// apparition d'un contrôle écraserait, au premier changement de format,
     /// l'audience que l'auteur vient de choisir sur l'autre surface.
+    /// Le choix que le chevron a ARMÉ, `nil` tant qu'il n'a rien touché ⇒ la
+    /// capsule publie le format de la porte. Le chevron choisit ; seul Publier
+    /// envoie (maquette plein écran, 2026-09-27). Lu par `armedChoice`.
+    @State var armedPublishChoice: ComposerPublishChoice?
     @State var composerVisibility: PostVisibility
     @State var composerVisibilityUserIds: [String] = []
 

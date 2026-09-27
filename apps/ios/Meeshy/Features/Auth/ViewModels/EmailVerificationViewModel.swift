@@ -44,6 +44,7 @@ final class EmailVerificationViewModel: ObservableObject {
     private let watchInterval: Duration
     /// Borne d'une veille : la durée d'un code de connexion.
     private let watchLimit: Duration
+    private let celebration: ArrivalCelebrating
 
     init(
         email: String,
@@ -54,8 +55,10 @@ final class EmailVerificationViewModel: ObservableObject {
         confirmer: EmailVerificationConfirming = AuthManager.shared,
         watcher: EmailVerificationWatching = AuthService.shared,
         watchInterval: Duration = .seconds(3),
-        watchLimit: Duration = .seconds(15 * 60)
+        watchLimit: Duration = .seconds(15 * 60),
+        celebration: ArrivalCelebrating? = nil
     ) {
+        self.celebration = celebration ?? ArrivalCelebrationController.shared
         self.email = email
         self.password = password
         self.accountCreated = accountCreated
@@ -114,6 +117,7 @@ final class EmailVerificationViewModel: ObservableObject {
         provenSession = nil
         confirmer.openSession(proven)
         sessionOpened = true
+        celebration.begin(userId: proven.user.id)
     }
 
     func resendCode() async {

@@ -31,6 +31,15 @@ enum SignInLink: Equatable {
         }
     }
 
+    /// La session que ce lien ouvre est-elle une ARRIVÉE à célébrer (#8089) ?
+    /// Seul le lien qui VÉRIFIE l'adresse l'est, et seulement s'il ouvre la
+    /// session : le lien de connexion est un retour, et le lien du compte déjà
+    /// connecté une rotation de session.
+    func celebratesArrival(isAuthenticated: Bool) -> Bool {
+        guard case .emailVerification = self else { return false }
+        return !isAuthenticated
+    }
+
     /// Faut-il déconnecter le compte courant AVANT de valider ?
     ///
     /// Une session posée par-dessus celle d'un AUTRE compte ferait fuir ses
@@ -78,7 +87,8 @@ enum SignInLinkOpener {
         _ link: SignInLink,
         auth: SignInLinkAuthorizing = AuthManager.shared,
         toasts: FeedbackToastSurfacing = FeedbackToastManager.shared,
-        sessionGate: SessionOpeningGate = .shared
+        sessionGate: SessionOpeningGate = .shared,
+        celebration: ArrivalCelebrating = ArrivalCelebrationController.shared
     ) async {
         if link.requiresSignOut(isAuthenticated: auth.isAuthenticated, currentEmail: auth.currentUser?.email) {
             await auth.logout()
@@ -88,7 +98,11 @@ enum SignInLinkOpener {
                 toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
                 return
             }
-            sessionGate.open { auth.openSession(proven) }
+            let celebrates = link.celebratesArrival(isAuthenticated: auth.isAuthenticated)
+            sessionGate.open {
+                auth.openSession(proven)
+                if celebrates { celebration.begin(userId: proven.user.id) }
+            }
             toasts.showSuccess(signedInMessage)
         } catch {
             toasts.showError(EmailProofErrorText.linkMessage(for: error))

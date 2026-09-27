@@ -4344,3 +4344,12 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **Rien de l'enregistrement ne pèse sur un appel qui n'enregistre pas.** Trois morceaux à la demande, tous déclarés dans `budgets.json` : `call_recording_layer` (la question, l'indicateur, le mot de fin — monté par `call-layer.tsx` seulement quand une demande, un enregistrement ou un mot existe), `call_recording_runtime` (chargé par `call-recording-live.ts` chez l'enregistreur SEUL, à `call:recording-started`) et `interface_catalogs_call_recording`. Seules les deux clés du bouton « Enregistrer l'appel » vivent dans les catalogues d'interface, qui touchaient leur plafond arbitré (141 Ko : 141,83 avec les dix-sept clés, 140,33 avec les deux) ; les autres vivent dans un catalogue d'enregistrement chargé avec la couche, sept langues, un seul téléchargé par lecteur (`lib/i18n-call-recording-catalog.ts`). `engine.ts` ne grandit pas.
 
 **Ce que les autres clients font.** La coque Android EST ce code. iOS applique le même protocole (`CallRecordingController`, `CallRecordingService`) mais ne capte que la voix LOCALE : le SDK WebRTC public n'expose pas son module audio, donc les voix distantes ne peuvent pas rejoindre le fichier sans un module audio personnalisé — limite écrite dans `CallRecordingService.swift`, suivi à ouvrir. Les deux réécoutent l'enregistrement depuis la bulle de l'appel.
+
+## D-141 — La flèche de Publier CHOISIT, seul Publier envoie ; le composer suit la maquette plein écran (2026-09-27, #8281)
+
+**Contexte.** La capsule scindée `PublishSplitButton` (`[Publier … | ^]`) publiait dès qu'on choisissait une entrée du menu : un geste destiné à RÉGLER l'envoi l'exécutait. Le porteur a validé le 2026-09-27 une maquette plein écran (`docs/product/composer-plein-ecran/`) qui fixe la règle inverse, identique sur web mobile, coque Android, navigateur, iOS et iPad.
+
+**Décision.** Le chevron arme un `PublishChoice` (format + disposition) que l'hôte retient (`story-compose.tsx`, `onChoose={setChoice}`) ; la partie principale se renomme d'après lui et seule elle publie. Le miroir iOS est `ComposerPublishMenuRule.armed`.
+
+**Conséquences.** Aucune publication ne part par surprise. La scène plein écran à contrôles flottants, le panneau Cadre et la frise « Animé » de la même maquette sont des lots suivants, chacun sous son issue.
+
