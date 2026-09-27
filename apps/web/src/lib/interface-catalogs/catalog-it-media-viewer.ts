@@ -16,6 +16,8 @@ const itMediaViewer = {
   'media.viewer.react_failed': 'Impossibile reagire',
   'media.viewer.react_limit': 'Numero massimo di reazioni raggiunto',
   'media.viewer.compose_failed': 'Impossibile aprire questo contenuto nello studio',
+  'media.viewer.open_fullscreen': 'Apri a schermo intero',
+  'media.audio.play': 'Riproduci audio',
 };
 
 export default itMediaViewer;

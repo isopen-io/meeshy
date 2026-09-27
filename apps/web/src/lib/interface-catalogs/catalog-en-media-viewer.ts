@@ -16,6 +16,8 @@ const enMediaViewer = {
   'media.viewer.react_failed': 'Couldn’t react',
   'media.viewer.react_limit': 'Maximum number of reactions reached',
   'media.viewer.compose_failed': 'Couldn’t open this media in the studio',
+  'media.viewer.open_fullscreen': 'Open full screen',
+  'media.audio.play': 'Play audio',
 };
 
 export default enMediaViewer;

@@ -215,7 +215,7 @@ describe('les deux zones sont EXCLUSIVES (#8320)', () => {
       jumps += 1;
     });
     const calls = stubAudio(el.querySelector('audio')!);
-    const jump = el.querySelector<HTMLButtonElement>('button[aria-label^="Aller au message de"]')!;
+    const jump = el.querySelector<HTMLButtonElement>('button[data-quote-media]')!;
 
     await act(async () => {
       jump.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -224,8 +224,34 @@ describe('les deux zones sont EXCLUSIVES (#8320)', () => {
     expect(calls.plays).toBe(0);
   });
 
-  test('la cible de lecture fait 44 × 44 px', () => {
+  test('la cible de lecture fait au moins 44 px de haut', () => {
     const el = mountQuote(() => {});
-    expect(el.querySelector('[data-quote-play]')!.className).toContain('size-11');
+    expect(el.querySelector<HTMLElement>('[data-quote-play]')!.style.minHeight).toBe('44px');
+  });
+
+  test('deux réponses qui citent le même vocal sont deux lecteurs : l’une met l’autre en pause', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <>
+          <Quote quote={quotedVoice()} isMine={false} languages={['de', 'fr']} onJump={() => {}} citingId="m-reply-1" now={NOW} />
+          <Quote quote={quotedVoice()} isMine={false} languages={['de', 'fr']} onJump={() => {}} citingId="m-reply-2" now={NOW} />
+        </>,
+      );
+    });
+    const [first, second] = [...container.querySelectorAll('audio')].map((a) => stubAudio(a));
+    const [playFirst, playSecond] = [...container.querySelectorAll<HTMLButtonElement>('[data-quote-play]')];
+    await act(async () => {
+      playFirst!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      playSecond!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(first!.pauses).toBe(1);
+    expect(second!.plays).toBe(1);
   });
 });
