@@ -21,9 +21,11 @@ const prismaWith = (callSession: Record<string, unknown>) => ({ callSession } as
 
 describe('listCallHistory', () => {
   it('ne rend jamais un appel que le lecteur a effacé de son journal', async () => {
-    const findMany = jest.fn<any>().mockResolvedValue([]);
+    const findMany = jest.fn<any>().mockResolvedValueOnce([{ id: CALL_ID }]).mockResolvedValue([]);
     await listCallHistory(prismaWith({ findMany }), USER_ID, { limit: 30, filter: 'all', viewer: { userId: USER_ID, role: 'USER' } as any });
-    expect(findMany.mock.calls[0][0].where.NOT).toEqual({ hiddenForUserIds: { has: USER_ID } });
+    expect(findMany.mock.calls[0][0].where.hiddenForUserIds).toEqual({ has: USER_ID });
+    expect(findMany.mock.calls[1][0].where.id).toEqual({ notIn: [CALL_ID] });
+    expect(findMany.mock.calls[1][0].where.NOT).toBeUndefined();
   });
 });
 
@@ -62,11 +64,12 @@ describe('hideCallFromHistory', () => {
 describe('clearCallHistory', () => {
   it('efface pour soi tout le journal visible (fenêtre, statuts terminaux, conversations dont on est membre)', async () => {
     const updateMany = jest.fn<any>().mockResolvedValue({ count: 4 });
-    const cleared = await clearCallHistory(prismaWith({ updateMany }), USER_ID);
+    const findMany = jest.fn<any>().mockResolvedValue([{ id: CALL_ID }]);
+    const cleared = await clearCallHistory(prismaWith({ findMany, updateMany }), USER_ID);
     expect(cleared).toBe(4);
     const { where, data } = updateMany.mock.calls[0][0];
     expect(data).toEqual({ hiddenForUserIds: { push: USER_ID } });
-    expect(where.NOT).toEqual({ hiddenForUserIds: { has: USER_ID } });
+    expect(where.id).toEqual({ notIn: [CALL_ID] });
     expect(where.conversation).toEqual({ participants: { some: { userId: USER_ID, isActive: true } } });
     expect(where.startedAt.gte).toBeInstanceOf(Date);
     expect(where.status.in).toEqual(['ended', 'missed', 'rejected', 'failed']);
