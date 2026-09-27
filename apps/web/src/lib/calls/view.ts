@@ -1,6 +1,14 @@
 import type { InfiniteData } from '@tanstack/react-query';
 
-import { CALL_HISTORY_FILTERS, type CallHistoryFilter, type CallHistoryPage, type CallRecord } from '@/lib/api/calls';
+import {
+  CALL_HISTORY_FILTERS,
+  CALL_HISTORY_TYPES,
+  type CallHistoryFilter,
+  type CallHistoryPage,
+  type CallHistoryRefine,
+  type CallHistoryType,
+  type CallRecord,
+} from '@/lib/api/calls';
 
 /**
  * **LES RÈGLES PURES DU JOURNAL D'APPELS** (#6362) — miroir des accesseurs de
@@ -81,4 +89,34 @@ export function searchCallRecords(records: readonly CallRecord[], query: string,
       (field) => nonEmpty(field) && foldForSearch(field).includes(needle),
     ),
   );
+}
+
+export const CALL_TYPE_PARAM = 'type';
+
+export function callTypeFromSearch(raw: string | null): CallHistoryType {
+  return CALL_HISTORY_TYPES.find((type) => type === raw) ?? 'all';
+}
+
+const matchesType = (record: CallRecord, type: CallHistoryType): boolean =>
+  type === 'all' || (type === 'video') === record.isVideo;
+
+/** Le raffinement (#8203) appliqué à des lignes déjà là — la même règle que la passerelle. */
+export function refineCallRecords(records: readonly CallRecord[], refine: CallHistoryRefine, unknown: string): CallRecord[] {
+  return searchCallRecords(records, refine.q, unknown).filter((record) => matchesType(record, refine.type));
+}
+
+/**
+ * **LE JOURNAL RAFFINÉ SE PEINT DEPUIS LE CACHE** (#8203) — pendant que la
+ * passerelle cherche, les lignes déjà chargées qui correspondent s'affichent
+ * au lieu d'un squelette. Sans curseur : la page suivante est celle que la
+ * passerelle rendra, jamais une page du journal entier.
+ */
+export function refinedCallHistory(
+  cached: CallHistoryData | undefined,
+  refine: CallHistoryRefine,
+  unknown: string,
+): CallHistoryData | undefined {
+  if (cached === undefined || (refine.type === 'all' && refine.q.trim() === '')) return undefined;
+  const records = refineCallRecords(cached.pages.flatMap((page) => page.records), refine, unknown);
+  return { pages: [{ records, nextCursor: null }], pageParams: [null] };
 }

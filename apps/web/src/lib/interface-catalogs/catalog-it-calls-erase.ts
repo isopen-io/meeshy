@@ -17,6 +17,7 @@ const itCallsErase = {
   'calls.participants.more': '{names} +{count}',
   'calls.participants.a11y': 'con {names}',
   'callJoin.detail.participants': 'Partecipanti',
+  'calls.filter.videoOnly': 'Solo videochiamate',
 } as const;
 
 export default itCallsErase;

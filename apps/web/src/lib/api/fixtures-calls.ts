@@ -1,6 +1,8 @@
 import type { CallSession } from './call-sessions';
 import type { CallTranscript } from '@/lib/calls/call-transcript';
-import type { CallHistoryFilter, CallHistoryPage, CallRecord } from './calls';
+import { refineCallRecords } from '@/lib/calls/view';
+
+import type { CallHistoryFilter, CallHistoryPage, CallHistoryRefine, CallRecord } from './calls';
 
 /**
  * **LE JOURNAL D'APPELS DU LECTEUR DE RECETTE** (#6362) — servi par le MÊME
@@ -104,9 +106,10 @@ const records = (): readonly CallRecord[] => [
   },
 ];
 
-export function fixtureCallHistory(filter: CallHistoryFilter): CallHistoryPage {
-  const all = records();
-  return { records: filter === 'missed' ? all.filter((record) => record.direction === 'missed') : all, nextCursor: null };
+export function fixtureCallHistory(filter: CallHistoryFilter, refine: CallHistoryRefine | null = null): CallHistoryPage {
+  const byFilter = records().filter((record) => filter === 'all' || record.direction === 'missed');
+  const refined = refine === null ? byFilter : refineCallRecords(byFilter, refine, 'Inconnu');
+  return { records: refined, nextCursor: null };
 }
 
 /**
