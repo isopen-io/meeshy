@@ -33,20 +33,24 @@ export function AdminMemberContactSection({
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
-  const [draft, setDraft] = useState<ContactDraft>(() => contactDraftOf(membre));
+  /* Seuls les champs TOUCHÉS vivent dans l'état : le reste se relit du membre
+     servi, si bien qu'un geste d'une AUTRE section (activer, valider) ne laisse
+     jamais ici une valeur périmée qui ferait croire à une modification. */
+  const [touches, setTouches] = useState<Partial<ContactDraft>>({});
+  const draft: ContactDraft = { ...contactDraftOf(membre), ...touches };
   const focus = useFieldFocus();
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const edit = contactEditOf(membre, draft);
   const dirty = sectionIsDirty(edit);
 
   const poser = (partie: Partial<ContactDraft>) => {
-    setDraft((precedent) => ({ ...precedent, ...partie }));
+    setTouches((precedent) => ({ ...precedent, ...partie }));
     ecriture.reset();
   };
 
   async function enregistrer() {
     const aJour = await ecriture.run(() => updateAdminUser({ ...deps, userId: membre.id, edit }));
-    if (aJour !== null) setDraft(contactDraftOf(aJour));
+    if (aJour !== null) setTouches({});
   }
 
   return (
@@ -97,6 +101,12 @@ export function AdminMemberContactSection({
       />
     </MemberSection>
   );
+}
+
+/** Le membre tel qu'il sera une fois la preuve posée (ou retirée) — l'aperçu optimiste du badge. */
+export function withContactProof(m: AdminUserDetail, channel: AdminContactChannel, verified: boolean): AdminUserDetail {
+  const quand = verified ? new Date().toISOString() : null;
+  return channel === 'email' ? { ...m, emailVerifiedAt: quand } : { ...m, phoneVerifiedAt: quand };
 }
 
 function ContactRow({
@@ -154,7 +164,13 @@ function ContactRow({
           <SectionButton
             data={{ 'data-admin-contact-verify': channel }}
             disabled={occupe}
-            onClick={() => void preuve.run(() => setAdminUserVerification({ ...deps, userId: membre.id, channel, verified: !verifie }))}
+            onClick={() =>
+              void preuve.run(
+                () => setAdminUserVerification({ ...deps, userId: membre.id, channel, verified: !verifie }),
+                'admin.edit.saved',
+                (avant) => withContactProof(avant, channel, !verifie),
+              )
+            }
           >
             {translateAdmin(language, verifie ? 'admin.contact.markUnverified' : 'admin.contact.markVerified')}
           </SectionButton>

@@ -3,7 +3,8 @@ import type { Ref } from 'react';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { ComposerLanguagePill } from './composer-language-pill';
 import { Glyph, GlyphSvg } from './glyph';
-import { EPHEMERAL_DURATIONS, characterCounterOf } from '@/lib/send/compose-protection';
+import { FlameEyeGlyph } from './flame-eye-glyph';
+import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
 import { SENTIMENT_EMOJI, type SentimentLevel } from '@/lib/send/sentiment';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -123,11 +124,11 @@ export function ComposerTopRow({
   readonly maxLength?: number;
 }) {
   const counter = characterCounterOf({ text, ...(maxLength === undefined ? {} : { maxLength }) });
-  /** LIBELLÉS DE LA BASCULE « VUE UNIQUE » (#7354) — SEUL occupant de cette
-   * rangée à passer par le catalogue (Prisme Linguistique, CLAUDE.md
-   * racine) : les autres bascules restent en français en dur, dette
-   * antérieure (#6310) que ce lot n'étend pas mais ne répand pas non plus. */
+  /** LES LIBELLÉS DE L'ÉPHÉMÈRE (#8304) ET DE LA VUE UNIQUE (#7354) passent
+   * par le catalogue ; le flou et les effets restent en français en dur,
+   * dette antérieure (#6310) que ce lot ne répand pas. */
   const language = currentInterfaceLanguage();
+  const armedEphemeral = ephemeralSeconds === undefined ? undefined : ephemeralDurationLabelOf(ephemeralSeconds);
 
   return (
     <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
@@ -147,15 +148,23 @@ export function ComposerTopRow({
           style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={
             ephemeralSeconds === undefined
-              ? 'Activer le mode éphémère'
-              : `Mode éphémère actif : ${EPHEMERAL_DURATIONS.find((d) => d.seconds === ephemeralSeconds)?.displayLabel ?? ''}`
+              ? translate(language, 'composer.ephemeral.activate')
+              : translate(language, 'composer.ephemeral.active', {
+                  duration: armedEphemeral === undefined ? '' : translate(language, armedEphemeral.displayKey),
+                })
           }
         >
-          <Glyph name={ephemeralSeconds !== undefined ? 'flameFill' : 'timer'} size={16} />
-          {ephemeralSeconds !== undefined ? (
-            <span className="text-title font-bold">
-              {EPHEMERAL_DURATIONS.find((d) => d.seconds === ephemeralSeconds)?.label}
+          {/* LA FLAMME-ŒIL (#8304) n'a pas de libellé court : son
+              pictogramme DIT le choix, comme sur iOS. */}
+          {isAfterReadChoice(ephemeralSeconds) ? (
+            <span data-glyph="flameEye" className="inline-flex">
+              <FlameEyeGlyph size={16} />
             </span>
+          ) : (
+            <Glyph name={ephemeralSeconds !== undefined ? 'flameFill' : 'timer'} size={16} />
+          )}
+          {armedEphemeral !== undefined && armedEphemeral.label !== '' ? (
+            <span className="text-title font-bold">{armedEphemeral.label}</span>
           ) : null}
         </button>
 
@@ -248,11 +257,12 @@ export function ComposerEphemeralRail({
   /** Choix d'une capsule du sélecteur — `undefined` = « Désactivé ». */
   readonly onSelectEphemeral: (seconds: number | undefined) => void;
 }) {
+  const language = currentInterfaceLanguage();
   return (
     <div
       data-composer-ephemeral-picker
       role="group"
-      aria-label="Durée avant disparition du message"
+      aria-label={translate(language, 'composer.ephemeral.rail')}
       className="mx-2 mt-2 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-1"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-ios-surface))' }}
     >
@@ -271,7 +281,7 @@ export function ComposerEphemeralRail({
             : { color: 'var(--color-ios-ink-2)' }
         }
       >
-        Désactivé
+        {translate(language, 'composer.ephemeral.off')}
       </button>
       {EPHEMERAL_DURATIONS.map((d) => {
         const active = ephemeralSeconds === d.seconds;
@@ -281,7 +291,8 @@ export function ComposerEphemeralRail({
             type="button"
             onClick={() => onSelectEphemeral(d.seconds)}
             aria-pressed={active}
-            aria-label={d.displayLabel}
+            aria-label={translate(language, d.displayKey)}
+            {...(d.afterRead ? { 'data-ephemeral-after-read': '' } : {})}
             className="flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3.5 text-title font-semibold"
             style={
               active
@@ -292,8 +303,8 @@ export function ComposerEphemeralRail({
                   }
             }
           >
-            <Glyph name="flameFill" size={12} />
-            {d.label}
+            {d.afterRead ? <FlameEyeGlyph size={16} /> : <Glyph name="flameFill" size={12} />}
+            {d.label === '' ? null : d.label}
           </button>
         );
       })}
