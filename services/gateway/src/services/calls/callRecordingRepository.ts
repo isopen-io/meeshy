@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import { callRecordingKindOf } from '@meeshy/shared/types/call-recording';
 import type { CallService } from '../CallService';
 import type { CallRecordingRepository, CallRecordingRow, CallRoster } from './callRecording';
 
@@ -21,6 +22,7 @@ const ROW_SELECT = {
   requiredUserIds: true,
   consentedUserIds: true,
   requestedAt: true,
+  kind: true,
   startedAt: true,
   stoppedAt: true,
   stopReason: true,
@@ -29,6 +31,7 @@ const ROW_SELECT = {
 
 const toRow = (record: Prisma.CallRecordingGetPayload<{ select: typeof ROW_SELECT }>): CallRecordingRow => ({
   ...record,
+  kind: callRecordingKindOf(record.kind),
   startedAt: record.startedAt ?? null,
   stoppedAt: record.stoppedAt ?? null,
   stopReason: record.stopReason ?? null,
@@ -45,6 +48,7 @@ export function prismaCallRecordingRepository(prisma: RecordingPrisma): CallReco
           requiredUserIds: [...input.requiredUserIds],
           consentedUserIds: [],
           requestedAt: input.requestedAt,
+          kind: input.kind,
           startedAt: null,
           stoppedAt: null,
           attachmentId: null,
