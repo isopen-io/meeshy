@@ -193,6 +193,18 @@ model User {
   pendingPhoneVerificationCode   String? // Code SMS pour le nouveau téléphone
   pendingPhoneVerificationExpiry DateTime? // Expiration du code
 
+  /// Adresse REVENDIQUÉE par ce compte (#8214) — « ce n'est pas moi » devant
+  /// une adresse déjà détenue. Le compte naît INACTIF (`isActive: false`),
+  /// sous une adresse non routable qui lui est propre, et ne reçoit celle-ci
+  /// qu'à la preuve (code ou lien), dans la transaction qui la retire à son
+  /// détenteur. Stockée normalisée ; `null` hors revendication en cours.
+  claimedEmail                String?
+  /// Date à laquelle ce compte a CÉDÉ son adresse à une revendication prouvée
+  /// (#8214). Il garde pseudo, numéro, mot de passe et contenu ; son adresse
+  /// devient `released-<id>@released.meeshy.invalid`. Non nul ⇒ l'activation
+  /// #8055 ne lui réclame plus la preuve d'une adresse qui n'est plus la sienne.
+  emailReleasedAt             DateTime?
+
   /// Phone Transfer Tracking (audit trail)
   phoneTransferredFromUserId String?   @db.ObjectId // ID de l'ancien compte d'où le numéro a été transféré
   phoneTransferredAt         DateTime? // Date du transfert de numéro
