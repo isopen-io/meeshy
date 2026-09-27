@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { CallButton } from '@/components/call-glass-button';
 import { CallGrid, Portrait, type CallRemoval } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
+import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
@@ -15,7 +16,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * **LA SCÈNE DE L'APPEL** (#6382, #8063, #8392) — ce que l'écran d'appel montre
  * sous ses commandes : la grille d'un groupe (et sa une), l'écran partagé d'un
  * pair en duo (ENTIER, `contain`), ou la vidéo plein cadre avec la vignette
- * locale en coin, qui s'inverse d'un toucher comme sur iOS.
+ * locale en coin, qui s'inverse d'un toucher comme sur iOS. Là où ma caméra
+ * propose un zoom (#8441), pincer ou faire rouler la molette sur MON image le
+ * règle, et la capsule `−  1×  +` se pose sous la vignette.
  */
 
 const INK_2 = 'rgba(255,255,255,0.72)';
@@ -32,6 +35,7 @@ type StageProps = {
 };
 
 const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
+const underCorner = { top: 'calc(env(safe-area-inset-top) + 15.5rem)' } as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -71,10 +75,14 @@ function VideoDuo({ call, language }: Pick<StageProps, 'call' | 'language'>) {
   const corner = swapped ? remoteStream : call.localStream;
   const mainOn = swapped ? call.cameraOn : remoteVideoOn;
   const cornerOn = swapped ? remoteVideoOn : call.cameraOn;
+  const zoom = useCameraZoom(call.cameraOn && !call.screenSharing ? call.localStream : null);
+  const gestures = useZoomGestures(zoom);
   return (
     <div className="absolute inset-0">
       {mainOn ? (
-        <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
+        <div className="absolute inset-0" {...(swapped ? gestures : {})}>
+          <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
+        </div>
       ) : (
         <div className="absolute inset-0 grid place-items-center">
           <div className="flex flex-col items-center gap-3">
@@ -91,12 +99,14 @@ function VideoDuo({ call, language }: Pick<StageProps, 'call' | 'language'>) {
           aria-label={translate(language, 'call.video.swap')}
           onClick={() => setSwapped((value) => !value)}
           className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg"
-          style={cornerTop}
+          {...(swapped ? {} : gestures)}
+          style={swapped ? cornerTop : { ...cornerTop, ...gestures.style }}
           data-call-corner=""
         >
           <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" />
         </button>
       ) : null}
+      {zoom === null ? null : <CallZoomControl zoom={zoom} language={language} className="absolute right-4 z-10" style={underCorner} />}
     </div>
   );
 }
