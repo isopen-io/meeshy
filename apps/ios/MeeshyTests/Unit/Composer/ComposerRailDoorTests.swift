@@ -624,7 +624,9 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
     /// type est servie, donc aucune ne peut être déclarée sans hôte. C'est la
     /// même loi 4, prise par l'autre bout.
     func test_lesBandesServies_ontTouteUnContenu() {
-        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette])
+        // Le CADRE (#8414) est servi : la porte « Fond » l'ouvre dès qu'un
+        // média occupe le fond.
+        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette, .frame])
         XCTAssertEqual(
             Set(ComposerSceneBand.allCases), ComposerSceneCapabilities.bands,
             "une bande DÉCLARÉE et non servie est indiscernable d'une bande oubliée : "
@@ -1414,8 +1416,9 @@ final class ComposerDrawingDoorTests: XCTestCase {
         // Le cas `drawing` n'existe plus dans `ComposerSceneBand` : les réglages
         // du pinceau sont un contrôleur FLOTTANT. Le témoin porte donc sur ce
         // qui reste — une seule bande servie —, la disparition du cas étant
-        // tenue par le compilateur lui-même.
-        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette])
+        // tenue par le compilateur lui-même. Le Cadre (#8414) s'y est ajouté :
+        // il règle la SCÈNE, jamais le pinceau.
+        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette, .frame])
     }
 }
 

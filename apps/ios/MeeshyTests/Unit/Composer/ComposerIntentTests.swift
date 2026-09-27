@@ -43,7 +43,8 @@ final class ComposerIntentTests: XCTestCase {
         .draft(id: "brouillon-42"),
         .share,
         .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
-        .socialMedia(postId: "post-9", mediaId: "media-2")
+        .socialMedia(postId: "post-9", mediaId: "media-2"),
+        .conversationDraftImage
     ]
 
     private func nom(de origin: ComposerOrigin) -> String {
@@ -57,6 +58,7 @@ final class ComposerIntentTests: XCTestCase {
         case .share: return "share"
         case .conversationMedia: return "conversationMedia"
         case .socialMedia: return "socialMedia"
+        case .conversationDraftImage: return "conversationDraftImage"
         }
     }
 
@@ -314,10 +316,11 @@ final class ComposerIntentTests: XCTestCase {
             "Deux entrées du corpus désignent la même porte : une porte resterait sans profil éprouvé."
         )
         XCTAssertEqual(
-            noms.count, 9,
-            "Neuf portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
-            + "slide d'une story). Une porte ajoutée à `ComposerOrigin` doit entrer ici avec son "
-            + "profil, jamais s'ajouter en silence."
+            noms.count, 10,
+            "Dix portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
+            + "slide d'une story ; #8416 `.conversationDraftImage`, la retouche d'une image du fil). "
+            + "Une porte ajoutée à `ComposerOrigin` doit entrer ici avec son profil, jamais s'ajouter "
+            + "en silence."
         )
     }
 
@@ -361,7 +364,8 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .repost, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia:
+        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia,
+             .conversationDraftImage:
             return false
         }
     }
@@ -468,7 +472,8 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .draft, .share, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia:
+        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia,
+             .conversationDraftImage:
             return false
         }
     }
@@ -637,8 +642,9 @@ final class ComposerIntentTests: XCTestCase {
 
         XCTAssertEqual(
             serviesParLeMeuble,
+            // #8416 : la retouche d'une image du fil monte le meuble, elle aussi.
             ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia",
-             "socialMedia", "repost"],
+             "socialMedia", "repost", "conversationDraftImage"],
             "Périmètre après #6085 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
             + "média de conversation, LE MÉDIA SOCIAL (post / story) — et le REPOST. `edit` n'y figure pas parce "
             + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "
