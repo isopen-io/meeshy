@@ -1,7 +1,7 @@
 import type { ApiFailure } from '@/lib/api/http';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
-import type { StudioMediaKind, StudioPlane } from './story-document';
+import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
 import { clampPose, type StudioPose } from './studio-pose';
 import { newTextLayer, type StudioTextLayer } from './studio-text';
 
@@ -54,6 +54,9 @@ export type StudioVisualAsset = {
   readonly caption: string;
   /** La pose du CALQUE. Le FOND n'en a pas d'utile (il remplit la scène). */
   readonly pose: StudioPose;
+  /** LE CADRE du FOND (#8414) — Ajuster/Remplir et ce qui se peint autour.
+   * Absent ⇒ ajusté, flou (`lib/canvas/backdrop.ts`). */
+  readonly frame?: StoryFrame;
 };
 
 export type StudioSoundAsset = {
@@ -192,6 +195,11 @@ export function pageWithVisualCaption(page: StudioPage, door: 'visual' | 'overla
   const slot = visualSlot(door);
   const asset = page[slot];
   return asset === null ? page : { ...page, [slot]: { ...asset, caption: caption.slice(0, MEDIA_CAPTION_MAX) } };
+}
+
+/** LE CADRE du fond de CETTE page (#8414) — sans fond, rien ne change. */
+export function pageWithBackgroundFrame(page: StudioPage, frame: StoryFrame): StudioPage {
+  return page.background === null ? page : { ...page, background: { ...page.background, frame } };
 }
 
 export function pageWithVisualPose(page: StudioPage, door: 'visual' | 'overlay', pose: StudioPose): StudioPage {

@@ -24,6 +24,7 @@ import ptSignup from './catalog-pt-signup';
 
 import ptGallery from './catalog-pt-gallery';
 import ptMentions from './catalog-pt-mentions';
+import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
@@ -1164,6 +1165,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptStudioChrome,
   ...ptEphemeral,
   ...ptGallery,
   ...ptConversationCard,

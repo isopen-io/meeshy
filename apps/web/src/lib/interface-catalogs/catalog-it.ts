@@ -24,6 +24,7 @@ import itSignup from './catalog-it-signup';
 
 import itGallery from './catalog-it-gallery';
 import itMentions from './catalog-it-mentions';
+import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
@@ -1160,6 +1161,7 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itStudioChrome,
   ...itEphemeral,
   ...itGallery,
   ...itConversationCard,

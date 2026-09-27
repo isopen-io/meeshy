@@ -45,7 +45,12 @@ export type StudioPageSnapshot = {
   readonly id: string;
   readonly texts: readonly StudioTextLayerSnapshot[];
   readonly background?: StudioDraftAssetRef &
-    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
+    StudioDraftCaption & {
+      readonly mediaType: StudioMediaKind;
+      readonly aspectRatio?: number;
+      /** LE CADRE (#8414) — LÂCHE, normalisé à la relecture (`studio.ts`). */
+      readonly frame?: unknown;
+    };
   /** LE CALQUE d'avant-plan et SA pose (#6943). */
   readonly overlay?: StudioDraftAssetRef &
     StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly pose?: unknown };
@@ -69,6 +74,10 @@ export type StudioDraftSnapshot = {
    * `undefined` tant que l'auteur n'a rien choisi pour CE brouillon.
    */
   readonly visibility?: PostVisibility;
+  /** LE TEXTE DU POST (#8413) — `Post.content`, absent tant que vide.
+   * Champ AJOUTÉ, optionnel : un client plus ancien l'ignore sans rien
+   * perdre d'autre, d'où l'absence de bump de `schema`. */
+  readonly postText?: string;
 };
 
 /** LA FORME PRÉCÉDENTE (#6900-#7683, sans `schema`) — UNE page implicite,
@@ -146,7 +155,7 @@ function isPagesSnapshot(value: unknown): value is StudioDraftSnapshot {
   if (value.currentPage !== undefined && typeof value.currentPage !== 'string') return false;
   if (value.language !== undefined && typeof value.language !== 'string') return false;
   if (value.visibility !== undefined && !(STUDIO_AUDIENCES as readonly unknown[]).includes(value.visibility)) return false;
-  return true;
+  return value.postText === undefined || typeof value.postText === 'string';
 }
 
 function isLegacySnapshot(value: unknown): value is LegacyStudioDraftSnapshot {

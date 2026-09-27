@@ -24,6 +24,7 @@ import arSignup from './catalog-ar-signup';
 
 import arGallery from './catalog-ar-gallery';
 import arMentions from './catalog-ar-mentions';
+import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
@@ -1157,6 +1158,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arStudioChrome,
   ...arEphemeral,
   ...arGallery,
   ...arConversationCard,

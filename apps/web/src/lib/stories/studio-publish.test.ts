@@ -214,3 +214,12 @@ describe('settle / uploadStateOf — un média PRÊT n’est jamais remonté, un
     expect(uploadStateOf({ ok: false, status: 0, error: 'annulé', code: 'ABORTED' })).toBeNull();
   });
 });
+
+describe('le Cadre du fond voyage dans ce qui part (#8414)', () => {
+  test('Remplir + blanc, posés dans le studio, partent dans le `transform` du fond', () => {
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', { ...visual(), frame: { fitMode: 'fill', backdrop: 'white' } });
+    const publication = onlyPublication(documentPlan([page], new Map<string, SettledPage>([['page-1', [ready('pm-1'), NONE, NONE]]])));
+    const background = publication?.storyEffects.scenes?.[0]?.objects.find((o) => o.id === 'background');
+    expect(background?.payload.transform).toEqual({ videoFitMode: 'fill', backdrop: 'white' });
+  });
+});

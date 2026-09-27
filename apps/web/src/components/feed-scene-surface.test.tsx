@@ -163,7 +163,9 @@ describe('FeedSceneSurface — ce que la tuile ANNONCE et ce que la scène PEINT
     const fitted = await mountWith(
       <FeedSceneSurface document={{ v: 3, scenes: [{ id: 's1', objects: [carrierOfFraming, { ...image, id: 'img', plane: 'bg' }, fixedObject] }] }} sceneIndex={0} carrier={carrier} preferredLanguages={['fr']} active={false} frame="tile" />,
     );
-    expect(fitted.querySelector('img')?.className).toContain('object-contain');
+    // Le fond ajusté peint AUSSI sa bande (`data-scene-letterbox`, #8414) : la
+    // mesure vise le MÉDIA, pas la bande floutée posée dessous.
+    expect(fitted.querySelector('img:not([data-scene-letterbox])')?.className).toContain('object-contain');
   });
 
   test('un `mediaURL` de scène se résout comme toute pièce jointe (`attachmentSrc`) — jamais contre l’origine du document', async () => {

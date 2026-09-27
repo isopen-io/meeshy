@@ -1,5 +1,6 @@
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
+import { DEFAULT_SCENE_BACKDROP, DEFAULT_SCENE_FIT_MODE, type SceneBackdrop, type SceneFitMode } from '@/lib/canvas/backdrop';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
@@ -70,7 +71,12 @@ export type StoryVisual = {
    * fond paysage n'est plus cadré sur sa bande côté lecteur
    * (`declaredAspect`, `scene-framing.ts:57-61`). */
   readonly aspectRatio?: number;
+  /** LE CADRE d'un FOND (#8414, `lib/canvas/backdrop.ts`) — Ajuster ou
+   * Remplir, et ce qui se peint autour. Absent ⇒ ajusté, flou. */
+  readonly frame?: StoryFrame;
 };
+
+export type StoryFrame = { readonly fitMode: SceneFitMode; readonly backdrop: SceneBackdrop };
 
 export type StoryComposition = {
   /** Les objets TEXTE, dans leur ordre de pose — leur `z` en découle, comme
@@ -105,6 +111,12 @@ export function studioMediaKindOf(mimeType: string): StudioMediaKind {
 export const STORY_PLAIN_BACKGROUND = '0F0C29';
 const CENTER = { t: 'free', x: 0.5, y: 0.5 } as const;
 const IDENTITY = { scale: 1, rotation: 0, opacity: 1 } as const;
+
+function frameTransform(frame: StoryFrame | undefined): Record<string, string> {
+  const fitMode = frame?.fitMode ?? DEFAULT_SCENE_FIT_MODE;
+  const backdrop = frame?.backdrop ?? DEFAULT_SCENE_BACKDROP;
+  return { videoFitMode: fitMode, ...(backdrop !== DEFAULT_SCENE_BACKDROP ? { backdrop } : {}) };
+}
 
 function addressPayload(address: StoryMediaAddress): Record<string, string> {
   return {
@@ -163,8 +175,10 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               mediaType: background.mediaType,
               isBackground: true,
               // Chaque média garde SON format (maquette plein écran, #8370) :
-              // le fond part AJUSTÉ, comme le composer iOS le pose déjà.
-              transform: { videoFitMode: 'fit' },
+              // le fond part AJUSTÉ, comme le composer iOS le pose déjà ; le
+              // panneau Cadre (#8414) choisit Remplir et le fond d'autour. Le
+              // FLOU est l'absence de `backdrop` — le contrat commun à iOS.
+              transform: frameTransform(background.frame),
               ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
               ...(mutesVideo ? { muted: true, volume: 0 } : {}),
             },
@@ -250,7 +264,7 @@ export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
  * paramètre. C'est la loi 6 relue « le PLAYER est l'aperçu » : une seconde
  * description aurait divergé, et ce que l'auteur voit ne serait plus ce qui
  * part (le texte d'aperçu y avait déjà perdu `textStyle` et `fontFamily`). */
-type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
+type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly frame?: StoryFrame };
 type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
 
@@ -272,6 +286,7 @@ function storyCompositionOf<A>(
     address: addressOf(slot.source),
     mediaType: slot.mediaType,
     ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
+    ...(slot.frame !== undefined ? { frame: slot.frame } : {}),
   });
   return {
     texts: params.texts,

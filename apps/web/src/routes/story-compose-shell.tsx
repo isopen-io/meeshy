@@ -4,6 +4,7 @@ import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind, StudioOrigin } from '@/lib/stories/publication-kind';
+import { ROUND_GLASS } from '@/routes/story-compose-chrome';
 import { Link } from '@/routes/route-table';
 
 const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
@@ -13,35 +14,47 @@ const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post'
  * titre reste pour le lecteur d'écran, et la scène ne change pas de hauteur
  * quand le rail apparaît.
  *
- * PLEIN ÉCRAN (maquette 2026-09-27, #8370) : la scène prend tout l'écran et la
- * barre FLOTTE dessus, en verre — elle n'occupe plus de bande à elle. */
+ * PLEIN ÉCRAN (maquette 2026-09-27, #8370, retour porteur #8413) : l'écran est
+ * une COLONNE — la barre haute, la zone de la scène, le socle. Ni ✕ ni ⋯ ni le
+ * socle ne se posent sur le dessin : la scène se cadre dans ce qui reste
+ * entre eux (`ComposerSceneSurface`, `.padding(.top, ComposerTopBar.height)`).
+ * Le SOL (`floor`) est peint sous les trois, sur l'écran entier ; les
+ * contrôles flottent dessus en verre, aucune bande opaque ne le coupe. */
 export function StudioShell({
   kind,
   origin,
   rail,
+  menu,
+  floor,
   children,
 }: {
   readonly kind: PublicationKind;
   readonly origin: StudioOrigin | null;
   readonly rail?: ReactNode;
+  /** Le menu `⋯` (`StudioMoreMenu`), au bout de la barre. */
+  readonly menu?: ReactNode;
+  /** Le SOL de la scène (`StudioFloorLayer`). */
+  readonly floor?: ReactNode;
   readonly children: ReactNode;
 }) {
   const lang = currentInterfaceLanguage();
   return (
-    <main data-story-studio className="relative h-dvh overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
-      <header data-story-studio-top className="glass absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 pt-safe pb-2">
+    <main data-story-studio className="relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
+      {floor}
+      <header data-story-studio-top className="relative z-20 flex shrink-0 items-center gap-3 px-4 pt-safe pb-2">
         <Link
           to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
           aria-label={translate(lang, 'story.studio.cancel')}
-          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+          className={ROUND_GLASS}
           style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
         >
           <Glyph name="x" size={18} />
         </Link>
-        {rail}
-        <h1 className={rail === undefined ? 'flex-1 text-body font-semibold' : 'offscreen'} style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(lang, TITLE_KEY[kind])}
-        </h1>
+        {/* Aucun titre peint (maquette : ✕ et ⋯ seuls, « le type se choisit à
+            l'ENVOI ») — il reste pour le lecteur d'écran. */}
+        {rail ?? <span aria-hidden="true" className="flex-1" />}
+        <h1 className="offscreen">{translate(lang, TITLE_KEY[kind])}</h1>
+        {menu}
       </header>
       {children}
     </main>

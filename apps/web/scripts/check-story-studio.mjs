@@ -11,10 +11,12 @@
  *     `requestAnimationFrame` après la pose, jamais `img.complete` seul).
  *  3. La carte (`[data-scene-stage]`) est TOUJOURS 9:16 (±0,01) et CENTRÉE
  *     (±1 px) dans son plateau, aux DEUX gabarits (320 et 390 px de large) et
- *     dans les DEUX schémas. PLEIN ÉCRAN (maquette 2026-09-27, #8370) : ce
- *     plateau est l'ÉCRAN ENTIER (±1 px), et la barre haute, le socle et les
- *     deux rails FLOTTENT dessus (`position: absolute`) — aucun couloir ne
- *     prend plus de place à la scène.
+ *     dans les DEUX schémas. PLEIN ÉCRAN, PARITÉ iOS (#8413, retour porteur
+ *     du 2026-09-27 sur #8370) : ce plateau s'étend ENTRE la barre haute et le
+ *     socle — la carte ne passe ni sous ✕/⋯ ni sous la capsule Publier (±1 px),
+ *     il prend toute la largeur de l'écran, et seuls les deux rails FLOTTENT
+ *     dessus (`position: absolute`). Le sol (`[data-story-studio-floor]`) est
+ *     peint dès qu'un fond image est posé.
  *  4. Cinq cibles ≥ 44 px : les deux portes, Publier, Retirer (fond), le
  *     bouton son.
  *  5. LA SAISIE EST ALIGNÉE SUR CE QU'ELLE FAIT PEINDRE (défaut 1,
@@ -242,21 +244,31 @@ async function runScheme(colorScheme) {
       );
       measures[`${viewport.width}.carte`] = [round(carte.x), round(carte.y), round(carte.width), round(carte.height)];
       const ecran = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      const haut = await readBox(page, '[data-story-studio-top]');
+      const socle = await readBox(page, '[data-story-studio-bottom]');
       check(
-        Math.abs(plateau.x) <= 1 && Math.abs(plateau.y) <= 1 &&
-          Math.abs(plateau.width - ecran.width) <= 1 && Math.abs(plateau.height - ecran.height) <= 1,
-        `${tag} : la scène doit occuper l'écran entier (${JSON.stringify({ plateau, ecran })})`,
+        Math.abs(plateau.x) <= 1 && Math.abs(plateau.width - ecran.width) <= 1,
+        `${tag} : la zone de la scène prend toute la largeur (${JSON.stringify({ plateau, ecran })})`,
+      );
+      check(
+        haut !== null && socle !== null && Math.abs(plateau.y - (haut.y + haut.height)) <= 1 && Math.abs(plateau.y + plateau.height - socle.y) <= 1,
+        `${tag} : la zone de la scène s'étend ENTRE la barre haute et le socle (${JSON.stringify({ haut, plateau, socle })})`,
+      );
+      check(
+        haut !== null && socle !== null && carte.y >= haut.y + haut.height - 1 && carte.y + carte.height <= socle.y + 1,
+        `${tag} : ni la barre haute ni le socle ne se posent sur la carte (${JSON.stringify({ haut, carte, socle })})`,
       );
     }
     const flottants = await page.evaluate(() =>
-      ['[data-story-studio-top]', '[data-story-studio-bottom]', '[data-story-studio-rail="leading"]', '[data-story-studio-rail="trailing"]'].map((sel) => {
+      ['[data-story-studio-rail="leading"]', '[data-story-studio-rail="trailing"]'].map((sel) => {
         const el = document.querySelector(sel);
         return { sel, position: el === null ? null : getComputedStyle(el).position };
       }),
     );
+    check(flottants.every((f) => f.position === 'absolute'), `${tag} : les deux rails flottent sur la scène — ${JSON.stringify(flottants)}`);
     check(
-      flottants.every((f) => f.position === 'absolute'),
-      `${tag} : la barre haute, le socle et les rails flottent sur la scène — ${JSON.stringify(flottants)}`,
+      await page.evaluate(() => document.querySelector('[data-story-studio-floor] img') !== null),
+      `${tag} : un fond image posé doit peindre le sol de la scène`,
     );
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */

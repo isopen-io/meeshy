@@ -2,16 +2,15 @@ import { useEffect, useRef } from 'react';
 
 import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
 import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
-import type { SceneCarrier } from '@/lib/canvas/carrier';
-import { backgroundFraming } from '@/lib/canvas/background';
+import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
+import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { sceneRatio } from '@/lib/canvas/fit';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
-import { letterboxHashes, letterboxIsServed } from '@/lib/stories/letterbox';
+import { letterboxFill, letterboxHashes } from '@/lib/stories/letterbox';
 
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -40,9 +39,9 @@ import { SceneObjectText } from './scene-object-text';
  * Unnecessary Re-render).
  *
  * **LE SOL D'UN FOND AJUSTÉ** (`framing === 'fit'`, revue-correction #6901) se
- * peint ICI, dans le moteur — `BackgroundLayer` reçoit le placeholder ThumbHash
- * déjà résolu par `SceneCanvas` (`letterboxHashes` + `letterboxIsServed`,
- * `lib/stories/letterbox.ts`), la MÊME cascade que le lecteur de story, qui ne
+ * peint ICI, dans le moteur — `BackgroundLayer` reçoit le remplissage déjà
+ * résolu par `SceneCanvas` (`letterboxFill` : le fond choisi au Cadre, #8414,
+ * et la cascade `letterboxHashes`), la MÊME loi que le lecteur de story, qui ne
  * la pose plus lui-même (double-peint évité). `servesLetterboxFill` (par
  * défaut `true`, miroir `MeeshyScenePlayer.servesLetterboxFill`) est la SEULE
  * dérogation — le lecteur de story la coupe en verdict `imageOnly` (#6636).
@@ -140,15 +139,21 @@ function SceneCanvas({
   // une seconde.
   const background = backgroundMedia(scene);
   const framing = backgroundFraming(scene);
-  // LE SOL D'UN FOND AJUSTÉ (revue-correction #6901) — la cascade des
-  // ThumbHash (`letterboxHashes`, déjà écrite pour l'hôte de story) devient le
-  // SITE UNIQUE, dans le MOTEUR : `servesLetterboxFill` (miroir
-  // `MeeshyScenePlayer.servesLetterboxFill`, `false` en verdict `imageOnly`
-  // côté story) est la SEULE dérogation, jamais une seconde loi de cadrage.
-  // Aucun repli quand aucun hash n'existe (`Source.none` côté iOS non plus :
-  // ce cas reste un écart de PARITÉ assumé, pas une régression de ce lot).
-  const letterboxCandidate = servesLetterboxFill && background !== undefined ? thumbHashPlaceholder(letterboxHashes(scene)[0]) : undefined;
-  const letterboxFillSrc = letterboxIsServed({ fitMode: framing, hasSource: letterboxCandidate !== undefined }) ? letterboxCandidate : undefined;
+  // LE SOL D'UN FOND AJUSTÉ (revue-correction #6901) — le SITE UNIQUE, dans
+  // le MOTEUR : `letterboxFill` y peint le fond choisi au panneau Cadre
+  // (#8414 : le média flouté par défaut, ou une teinte), et
+  // `servesLetterboxFill` (miroir `MeeshyScenePlayer.servesLetterboxFill`,
+  // `false` en verdict `imageOnly` côté story) reste la SEULE dérogation.
+  const letterbox =
+    servesLetterboxFill && background !== undefined
+      ? letterboxFill({
+          fitMode: framing,
+          backdrop: backgroundBackdrop(scene),
+          mediaSrc: objectMediaSrc(background, carrier),
+          mediaIsImage: !(typeof background.payload.mediaType === 'string' && background.payload.mediaType.startsWith('video')),
+          hashes: letterboxHashes(scene),
+        })
+      : undefined;
   // Le fond VISUEL (`backgroundMedia`) et le fond SONORE (`electBackgroundTrack`,
   // `lib/canvas/background-sound.ts`) sont DEUX fonds, et l'un comme l'autre
   // est servi HORS des couches d'objet : le premier par `BackgroundLayer`
@@ -168,7 +173,7 @@ function SceneCanvas({
           playing={playing}
           muted={muted}
           framing={framing}
-          letterboxFillSrc={letterboxFillSrc}
+          letterbox={letterbox}
           callbacks={callbacks}
           seekClock={seekClock}
         />

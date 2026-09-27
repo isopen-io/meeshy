@@ -30,26 +30,6 @@ const check = (ok, what) => {
   if (!ok) failures.push(what);
 };
 
-/**
- * La couleur MOYENNE d'un ThumbHash (spécification d'Evan Wallace, fonction
- * `thumbHashToAverageRGBA`), recopiée ici — comme dans `check-story-scene.mjs`
- * — pour que l'attendu ne soit pas lu dans `lib/media/thumbhash.ts`, le code
- * mesuré. `THUMB_HASH_AMBER` (`fixtures-feed.ts`) est désormais posé sur
- * `POST_SCENE_DECORATED.bg1.payload.thumbHash` (revue-correction #6901).
- */
-function averageRgbOfThumbHash(base64) {
-  const bytes = Buffer.from(base64, 'base64');
-  const header = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
-  const l = (header & 63) / 63;
-  const p = ((header >> 6) & 63) / 31.5 - 1;
-  const q = ((header >> 12) & 63) / 31.5 - 1;
-  const b = l - (2 / 3) * p;
-  const r = (3 * l - b + q) / 2;
-  const g = r - q;
-  const to255 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255);
-  return [to255(r), to255(g), to255(b)];
-}
-const LETTERBOX_AMBER_RGB = averageRgbOfThumbHash('LHkC');
 const distance = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
 
 /** La couleur MOYENNE d'un petit clip, décodée par un `<canvas>` de la page —
@@ -540,14 +520,17 @@ async function runScheme(colorScheme) {
     }
 
     /* LE SOL D'UN FOND AJUSTÉ EST PEINT DANS LE MOTEUR, PAS DANS L'APLAT DE
-     * CARTE (revue-correction #6901, défaut 1). Le fond `fit` de cette scène
-     * (16:9) est plus LARGE que le canvas 9:16 : il laisse une bande
-     * horizontale en haut ET en bas. L'échantillon est pris au centre du bord
-     * HAUT — loin des deux coins arrondis (`data-feed-scene-box`,
-     * `borderRadius: 16`) et de tout occupant (texte à x∈[0,2;0,8] y=0,2 ;
-     * dessin dès (100,100) en design, ≈ 36 px rendus ; sticker/lieu en bas) —
-     * et exige la couleur MOYENNE du ThumbHash du fond (ambré), jamais celle
-     * de l'aplat de carte, qui CHANGE de schéma alors que le sol ne doit pas. */
+     * CARTE (revue-correction #6901, défaut 1), et depuis le panneau Cadre
+     * (#8414) il est le MÉDIA LUI-MÊME, flouté — le fond « flou » par défaut
+     * du contrat commun à iOS, plus la couleur MOYENNE du ThumbHash. Le fond
+     * `fit` de cette scène (16:9) est plus LARGE que le canvas 9:16 : il
+     * laisse une bande horizontale en haut ET en bas. L'échantillon est pris
+     * au centre du bord HAUT — loin des deux coins arrondis
+     * (`data-feed-scene-box`, `borderRadius: 16`) et de tout occupant (texte
+     * à x∈[0,2;0,8] y=0,2 ; dessin dès (100,100) en design, ≈ 36 px rendus ;
+     * sticker/lieu en bas). Il doit être LOIN de l'aplat de carte du schéma
+     * (qu'il remplace) — l'épreuve inter-schémas plus bas prouve qu'il n'en
+     * dépend pas. */
     if (colorSchemeCtx.reducedMotion !== 'reduce') {
       const sceneRect = await page3.evaluate(() => {
         const scene = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-player]');
@@ -556,14 +539,29 @@ async function runScheme(colorScheme) {
         return { x: r.left, y: r.top, width: r.width, height: r.height };
       });
       check(sceneRect !== null, `[${colorScheme}] post-scene-decorated : [data-scene-player] introuvable pour l'échantillon de bande`);
+      check(
+        await page3.evaluate(
+          () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-letterbox]')?.getAttribute('data-scene-backdrop') === 'blur',
+        ),
+        `[${colorScheme}] post-scene-decorated : le fond \`fit\` sans \`backdrop\` doit peindre ses bandes du média flouté (\`data-scene-backdrop="blur"\`)`,
+      );
       if (sceneRect !== null) {
         const clip = { x: Math.round(sceneRect.x + sceneRect.width / 2 - 4), y: Math.round(sceneRect.y + 4), width: 8, height: 6 };
         const rgb = await averageRgbOfClip(page3, clip);
         bandeParScheme[colorScheme] = rgb;
-        const ecart = distance(rgb, LETTERBOX_AMBER_RGB);
+        const carte = await page3.evaluate(() => {
+          const probe = document.createElement('div');
+          probe.style.cssText = 'position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;background:var(--color-ios-card)';
+          probe.setAttribute('data-gate-probe', '');
+          document.body.appendChild(probe);
+          return { x: 0, y: 0, width: 8, height: 8 };
+        });
+        const aplat = await averageRgbOfClip(page3, carte);
+        await page3.evaluate(() => document.querySelector('[data-gate-probe]')?.remove());
+        const ecart = distance(rgb, aplat);
         check(
-          ecart <= 40,
-          `[${colorScheme}] post-scene-decorated : bande du fond \`fit\` = rgb(${rgb.join(',')}) — attendu proche de l'ambré du ThumbHash rgb(${LETTERBOX_AMBER_RGB.join(',')}) (écart ${ecart}, ≤ 40), pas l'aplat de carte`,
+          ecart > 40,
+          `[${colorScheme}] post-scene-decorated : bande du fond \`fit\` = rgb(${rgb.join(',')}) — trop proche de l'aplat de carte rgb(${aplat.join(',')}) (écart ${ecart}, attendu > 40) : le sol ne serait pas peint`,
         );
       }
     }
@@ -602,13 +600,10 @@ check(
 );
 if (bandeParScheme.light !== undefined && bandeParScheme.dark !== undefined) {
   // Le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85, MÊME constante qu'iOS,
-  // `StoryLetterboxFill.fillOpacity`) : il laisse filtrer 15 % de ce qu'il y
-  // a DESSOUS, donc un écart RÉSIDUEL entre schémas est ATTENDU — mesuré ici
-  // à 34 (clair rgb(225,173,169), sombre rgb(191,139,135), calcul vérifié :
-  // 0,85 × ambré + 0,15 × `--color-ios-card` de chaque schéma). Le seuil
-  // borne ce résidu, PAS l'écart des deux aplats de carte eux-mêmes
-  // (`#f8f7ff` clair vs `#13111c` sombre : distance 229) — c'est CETTE
-  // distance-là que le sol doit éviter, pas atteindre zéro.
+  // `StoryLetterboxFill.fillOpacity`) sur un fond NOIR depuis #8414 — plus
+  // sur l'aplat de carte : ce qui transparaît ne dépend plus du schéma. Le
+  // seuil borne un résidu d'anticrénelage, PAS l'écart des deux aplats de
+  // carte eux-mêmes (`#f8f7ff` clair vs `#13111c` sombre : distance 229).
   const ecartEntreSchemas = distance(bandeParScheme.light, bandeParScheme.dark);
   check(
     ecartEntreSchemas <= 40,
