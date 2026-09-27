@@ -475,6 +475,12 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/u/awa']);
   });
 
+  test('« X était sur Meeshy récemment » ouvre le profil du contact revenu (#8285)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'contact_recently_active', senderUsername: 'marie' }).event);
+    expect(worker.opened).toEqual(['/u/marie']);
+  });
+
   test('sans destination, le tap ouvre la liste des notifications — il atterrit toujours', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'un_type_sans_ecran' }).event);

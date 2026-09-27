@@ -87,6 +87,17 @@ describe('« X a rejoint Meeshy » (#8105)', () => {
   });
 });
 
+describe('« X était sur Meeshy récemment » (#8285)', () => {
+  test('`contact_recently_active` se range sous « Contacts »', () => {
+    expect(categoryQuery('contacts').types?.split(',')).toContain('contact_recently_active');
+    expect(categoryAccepts('contacts', { type: 'contact_recently_active', state: { isRead: false } })).toBe(true);
+  });
+
+  test('`contact_recently_active` prend la teinte de la famille contacts', () => {
+    expect(notificationAccent('contact_recently_active')).toBe(notificationAccent('friend_request'));
+  });
+});
+
 describe('une ligne reçue appartient-elle à une catégorie ?', () => {
   const ligne = (type: string, isRead: boolean) => ({ type, state: { isRead } });
 

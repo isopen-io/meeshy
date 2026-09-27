@@ -28,6 +28,7 @@ import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
+import enContactDiscovery from './catalog-en-contact-discovery';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -461,9 +462,6 @@ const en = {
   'settings.privacy.read_receipts.info':
     "This works both ways: if you don't send read receipts, you won't see whether your own messages were read.",
   'settings.privacy.typing_indicator': 'Typing indicator',
-  'settings.privacy.hide_from_search': 'Don\'t suggest me to people who have my number or email',
-  'settings.privacy.hide_from_search.info':
-    'Your contacts won\'t find you by your number or email, and won\'t be told when you join.',
   'settings.section.appearance': 'Appearance',
   'settings.theme': 'Theme',
   'settings.theme.auto': 'Auto',
@@ -1166,6 +1164,7 @@ const en = {
   ...enStoriesMine,
   ...enContactCard,
   ...enQuote,
+  ...enContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default en;

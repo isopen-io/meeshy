@@ -128,6 +128,7 @@ const ADRESSES = [
   [{ postId: 'p1', postType: 'REEL' }, '/post/p1'],
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
+  [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
   [{ type: 'login_new_device' }, '/settings'],
   [{ type: 'badge_earned' }, '/me/progression'],
   [{ type: 'un_type_sans_ecran' }, '/notifications'],

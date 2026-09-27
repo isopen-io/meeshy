@@ -53,6 +53,8 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   showTypingIndicator: true,
   hideProfileFromSearch: false,
   acceptCallsFromNonContacts: true,
+  notifyContactsOnReturn: true,
+  contactActivityEnabled: true,
   ...overrides,
 });
 
@@ -129,7 +131,7 @@ describe('le compte — seule la suppression reste offerte', () => {
   });
 });
 
-describe('la confidentialité — cinq bascules que la passerelle obéit', () => {
+describe('la confidentialité — les bascules que la passerelle obéit', () => {
   const NAMES = ['Statut en ligne', 'Dernière connexion', 'Accusés de lecture', 'Indicateur de frappe'];
 
   test('chaque bascule annonce son état réel', () => {
@@ -207,6 +209,34 @@ describe('la confidentialité — cinq bascules que la passerelle obéit', () =>
     expect(toggle?.getAttribute('aria-checked')).toBe('false');
     expect(toggle?.getAttribute('data-setting')).toBe('acceptCallsFromNonContacts');
     expect(host.textContent).toContain('seuls vos amis peuvent vous faire sonner');
+  });
+
+  /* #8285 — la passerelle ne prévient les contacts du retour de X que si ce
+     réglage est ouvert (défaut : ouvert), et jamais si sa présence est masquée. */
+  const RETURN = 'Prévenir mes contacts quand je reviens sur Meeshy';
+
+  test('« prévenir mes contacts quand je reviens » se bascule, écrit SA clé et dit ce qu’elle montre', () => {
+    const host = dom(
+      <PrivacySection language="fr" view={ready({ notifyContactsOnReturn: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+    );
+    const toggle = switchNamed(host, RETURN);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('notifyContactsOnReturn');
+    expect(host.textContent).toContain('au plus une fois toutes les 3 heures');
+    expect(host.textContent).toContain('Jamais si votre statut en ligne est masqué.');
+  });
+
+  test('« prévenir mes contacts » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const toggle = host.querySelector('[data-setting="notifyContactsOnReturn"]');
+      const label = toggle?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(RETURN);
+      expect(label).not.toBe('');
+      expect(host.textContent).not.toContain('settings.privacy.notify_contacts_on_return');
+    }
   });
 
   test('hors ligne, aucune bascule n’est actionnable', () => {
@@ -340,6 +370,30 @@ describe('les notifications', () => {
     const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
     expect(switchNamed(host, 'Notifications')?.getAttribute('aria-checked')).toBe('true');
     expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  /* #8285 — la passerelle ne pousse « X était sur Meeshy récemment » qu'à
+     qui garde cette préférence ouverte (défaut : ouverte). */
+  const CONTACT_BACK = 'Quand un contact revient sur Meeshy';
+
+  test('« quand un contact revient » se bascule et écrit SA clé', () => {
+    const host = dom(
+      <NotificationsSection language="fr" view={ready({ contactActivityEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+    );
+    const toggle = switchNamed(host, CONTACT_BACK);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('contactActivityEnabled');
+  });
+
+  test('« quand un contact revient » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="contactActivityEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(CONTACT_BACK);
+      expect(label).not.toBe('');
+    }
   });
 
   /* Le legacy est décommissionné (#6702) : les options fines de notification

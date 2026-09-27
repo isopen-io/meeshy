@@ -28,6 +28,7 @@ import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
+import arContactDiscovery from './catalog-ar-contact-discovery';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -459,9 +460,6 @@ const ar = {
   'settings.privacy.read_receipts': 'إيصالات القراءة',
   'settings.privacy.read_receipts.info': 'الأمر متبادل: إن لم تُرسل إشعارات القراءة، فلن ترى أيضًا ما إذا قُرئت رسائلك.',
   'settings.privacy.typing_indicator': 'مؤشر الكتابة',
-  'settings.privacy.hide_from_search': 'لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني',
-  'settings.privacy.hide_from_search.info':
-    'لن يجدك جهات اتصالك عبر رقمك أو بريدك الإلكتروني، ولن يتم إعلامهم بانضمامك.',
   'settings.section.appearance': 'المظهر',
   'settings.theme': 'السمة',
   'settings.theme.auto': 'تلقائي',
@@ -1163,6 +1161,7 @@ const ar = {
   ...arStoriesMine,
   ...arContactCard,
   ...arQuote,
+  ...arContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default ar;
