@@ -18,6 +18,7 @@ import {
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
@@ -572,8 +573,8 @@ function DocumentRow({ href, label, glyph }: { readonly href: string; readonly l
 export function AboutSection({ language, version }: { readonly language: InterfaceLanguage; readonly version: string }) {
   return (
     <GroupedSection id="settings-about" title={upper(language, 'settings.section.about')} icon={SECTION_ICON({ set: 'ecran', name: 'info' })}>
-      <DocumentRow href="/terms" label={translate(language, 'settings.terms')} glyph="fileText" />
-      <DocumentRow href="/privacy" label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
+      <DocumentRow href={appInstitutionalHref('terms')} label={translate(language, 'settings.terms')} glyph="fileText" />
+      <DocumentRow href={appInstitutionalHref('privacy')} label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
       <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
         <RowIcon tint="var(--color-warning)">
           <GlyphSvg glyph={SETTINGS_GLYPHS.sparkle} size={15} />
