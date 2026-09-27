@@ -4,7 +4,7 @@ import { backgroundCss, type BackgroundFraming } from '@/lib/canvas/background';
 import { backgroundMediaTimeline } from '@/lib/canvas/media-seek';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
-import { LETTERBOX_FILL_OPACITY } from '@/lib/stories/letterbox';
+import { LETTERBOX_FILL_OPACITY, type LetterboxFill } from '@/lib/stories/letterbox';
 
 import type { SceneClockHandle } from './scene-clock';
 import { useSceneMediaSync } from './scene-media-seek';
@@ -41,7 +41,7 @@ export function BackgroundLayer({
   playing,
   muted,
   framing,
-  letterboxFillSrc,
+  letterbox,
   callbacks,
   seekClock,
 }: {
@@ -50,13 +50,13 @@ export function BackgroundLayer({
   readonly playing: boolean;
   readonly muted: boolean;
   readonly framing: BackgroundFraming;
-  /** LE SOL d'un fond AJUSTÉ (`framing === 'fit'`) — un placeholder ThumbHash
-   * déjà résolu par l'appelant (`SceneCanvas`, SITE UNIQUE de la loi
-   * `letterboxIsServed`), ou `undefined` quand aucune bande ne se peint.
-   * Peint SOUS le média, en `object-cover` : la bande doit être PLEINE, un
+  /** LE SOL d'un fond AJUSTÉ (`framing === 'fit'`) — le fond choisi au Cadre
+   * (#8414), déjà résolu par l'appelant (`SceneCanvas`, SITE UNIQUE de la loi
+   * `letterboxFill`), ou `undefined` quand aucune bande ne se peint. Peint
+   * SOUS le média, en `object-cover` : la bande doit être PLEINE, un
    * `object-contain` y laisserait ses propres bandes (un letterbox dans un
    * letterbox — miroir `StoryBackgroundLayer+LetterboxFill.swift:54-56`). */
-  readonly letterboxFillSrc: string | undefined;
+  readonly letterbox: LetterboxFill | undefined;
   readonly callbacks: { readonly current: SceneCallbacks };
   /** L'horloge du parcours au doigt (#7879) — la vidéo de fond (qui boucle)
    * s'y recale à chaque `seek`. */
@@ -129,17 +129,30 @@ export function BackgroundLayer({
   // 2026-08-31) : les bandes qu'un fond AJUSTÉ laisse sur les trois plateformes
   // (revue-correction #6901, `MeeshyScenePlayer.servesLetterboxFill`).
   const letterboxFill =
-    letterboxFillSrc !== undefined ? (
-      // eslint-disable-next-line jsx-a11y/alt-text
-      <img
+    letterbox === undefined ? null : letterbox.kind === 'tint' ? (
+      <span
         data-scene-letterbox
-        src={letterboxFillSrc}
-        alt=""
+        data-scene-backdrop={letterbox.backdrop}
         aria-hidden="true"
-        className="absolute inset-0 size-full object-cover"
-        style={{ opacity: LETTERBOX_FILL_OPACITY }}
+        className="absolute inset-0 block"
+        style={{ backgroundColor: letterbox.color }}
       />
-    ) : null;
+    ) : (
+      // Le FLOU déborde de sa boîte : la bande se rogne à la scène, jamais
+      // au-delà (`scale` compense le liseré transparent du flou au bord).
+      <span aria-hidden="true" className="absolute inset-0 block overflow-hidden">
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <img
+          data-scene-letterbox
+          data-scene-backdrop="blur"
+          src={letterbox.src}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 size-full object-cover"
+          style={{ opacity: LETTERBOX_FILL_OPACITY, filter: 'blur(24px)', transform: 'scale(1.15)' }}
+        />
+      </span>
+    );
 
   if (isVideo) {
     return (
