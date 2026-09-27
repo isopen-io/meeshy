@@ -287,14 +287,14 @@ class ConversationViewModel: ObservableObject {
     @Published var accessRevoked: Bool = false
 
     /// L'éphémère armé pour les prochains messages : la flamme-œil ou une durée (#8303).
-    @Published var ephemeralChoice: EphemeralChoice?
+    @Published var ephemeralChoice: EphemeralChoice? { didSet { persistArmedProtection() } }
 
     /// When true, next message will be sent with blur (recipient must tap to reveal)
-    @Published var isBlurEnabled: Bool = false
+    @Published var isBlurEnabled: Bool = false { didSet { persistArmedProtection() } }
 
     /// When true, next message will be sent as view-once (revealed once, then
     /// burned). Surfaced by the notification preview composer.
-    @Published var isViewOnceEnabled: Bool = false
+    @Published var isViewOnceEnabled: Bool = false { didSet { persistArmedProtection() } }
 
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
@@ -502,6 +502,8 @@ class ConversationViewModel: ObservableObject {
     /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
     var afterReadVisit = AfterReadVisit()
     let afterReadConsumer: AfterReadConsumptionProviding
+    /// #8305 — ce que la conversation garde armé, entre deux envois et deux visites.
+    let protectionPreferences: ConversationProtectionPreferenceProviding
     private let activeCallService: ActiveCallServiceProviding
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
@@ -586,9 +588,11 @@ class ConversationViewModel: ObservableObject {
         translationService: TranslationServiceProviding = TranslationService.shared,
         attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
         messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
-        afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared
+        afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
+        protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared
     ) {
         self.afterReadConsumer = afterReadConsumer
+        self.protectionPreferences = protectionPreferences
         self.activeCallService = activeCallService
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
@@ -664,6 +668,7 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        restoreArmedProtection()
     }
 
     // MARK: - MessageStore Observation (Task 1.3)
