@@ -30,6 +30,10 @@ const itActivation = {
   'activation.complete': 'Il tuo account è convalidato. Grazie!',
   'activation.later': 'Più tardi',
   'activation.close': 'Chiudi',
+  'activation.gate.title': 'Convalida il tuo indirizzo e-mail',
+  'activation.gate.publish': 'Per pubblicare, convalida il tuo indirizzo. Il tuo contenuto è conservato e partirà appena il codice sarà convalidato.',
+  'activation.gate.invite': 'Per invitare via e-mail, convalida il tuo indirizzo. Il tuo invito partirà appena il codice sarà convalidato.',
+  'activation.gate.link': 'Per creare un link, convalida il tuo indirizzo. Il tuo link sarà creato appena il codice sarà convalidato.',
 } as const;
 
 export default itActivation;

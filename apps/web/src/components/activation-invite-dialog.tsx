@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import type { EmailGateReason } from '@/lib/activation/email-gate';
 import type { Activation, ActivationChannel } from '@/lib/api/activation';
 import type { auth } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
@@ -28,6 +29,11 @@ import { Field } from './field';
  * retour matériel d'Android passent par le MÊME `onClose`. Une preuve rendue
  * ici remonte à l'hôte (`onActivationChange`) : l'adresse prouvée fait passer
  * le compte à `done`, sans attendre une relecture.
+ *
+ * **La même modal sert la GARDE DE L'E-MAIL** (#8365) : avec une `reason`,
+ * une publication, une invitation ou un lien attend l'adresse prouvée. Elle
+ * dit alors POURQUOI (« Pour publier, validez votre adresse »), envoie le code
+ * dès l'ouverture, et ne demande que l'adresse — le numéro n'y est pas requis.
  */
 
 const TINT = 'var(--color-ios-brand)';
@@ -67,6 +73,7 @@ export function ActivationInviteDialog({
   deps,
   onActivationChange,
   onClose,
+  reason,
 }: {
   readonly activation: Activation;
   /** L'adresse EN CLAIR, en mémoire vive — `null` : rien à envoyer. */
@@ -76,6 +83,8 @@ export function ActivationInviteDialog({
   readonly deps: ActivationInviteDeps;
   readonly onActivationChange: (next: Activation) => void;
   readonly onClose: () => void;
+  /** L'action que l'adresse non prouvée retient (#8365) — absente : l'invitation de #8239. */
+  readonly reason?: EmailGateReason;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -100,6 +109,10 @@ export function ActivationInviteDialog({
     return () => {
       if (dialog.open) dialog.close();
     };
+  }, []);
+
+  useEffect(() => {
+    if (reason !== undefined) void sendEmailCode();
   }, []);
 
   function prove(channel: ActivationChannel) {
@@ -148,7 +161,7 @@ export function ActivationInviteDialog({
   }
 
   const asksEmail = missing.includes('email') && email !== null;
-  const asksPhone = missing.includes('phone');
+  const asksPhone = reason === undefined && missing.includes('phone');
   const complete = missing.length === 0;
 
   return (
@@ -163,10 +176,10 @@ export function ActivationInviteDialog({
     >
       <div className="grid gap-4 p-5">
         <h2 id={titleId} className="text-thread font-extrabold">
-          {translate(language, 'activation.invite.title')}
+          {translate(language, reason === undefined ? 'activation.invite.title' : 'activation.gate.title')}
         </h2>
         <p id={leadId} className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {leadText(language, activation, now)}
+          {reason === undefined ? leadText(language, activation, now) : translate(language, `activation.gate.${reason}`)}
         </p>
 
         {proven.includes('email') ? (
