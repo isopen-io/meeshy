@@ -138,6 +138,27 @@ describe('placeOf — coordonnées valides, textes bornés', () => {
       'https://maps.apple.com/?ll=48.85840,2.29450&q=Tour%20Eiffel',
     );
   });
+
+  test('mapsUrlOf rend une URI geo: sous la coque Android — launchIntent la remet à l’app de cartes (#8262)', () => {
+    expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null }, { platform: 'android' })).toBe(
+      'geo:48.85840,2.29450?q=48.85840,2.29450(Tour%20Eiffel)',
+    );
+  });
+
+  test('mapsUrlOf sous Android : sans nom, la seule position ; les parenthèses du nom sont encodées', () => {
+    expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: null, address: null }, { platform: 'android' })).toBe(
+      'geo:48.85840,2.29450?q=48.85840,2.29450',
+    );
+    expect(mapsUrlOf({ latitude: 1, longitude: 2, name: 'Café (terrasse)', address: null }, { platform: 'android' })).toBe(
+      'geo:1.00000,2.00000?q=1.00000,2.00000(Caf%C3%A9%20%28terrasse%29)',
+    );
+  });
+
+  test('mapsUrlOf garde Plans sous la coque iOS', () => {
+    expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: null, address: null }, { platform: 'ios' })).toBe(
+      'https://maps.apple.com/?ll=48.85840,2.29450',
+    );
+  });
 });
 
 describe('storyCitationOf — la carte subsiste, le geste non', () => {

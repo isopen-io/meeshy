@@ -117,6 +117,31 @@ describe('LocationCard — le libellé d’action tient AA (défaut majeur 5)', 
   });
 });
 
+describe('LocationCard — la coque Android ouvre l’app de cartes du téléphone (#8262)', () => {
+  beforeAll(async () => {
+    await loadInterfaceCatalog('fr');
+  });
+
+  const render = (): string =>
+    renderToStaticMarkup(
+      <LocationCard place={{ latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null }} accent="#46bdca" language="fr" />,
+    );
+
+  test('une coque qui se déclare android lie le lieu par geo:', () => {
+    const host = globalThis as { Capacitor?: { getPlatform: () => string } };
+    host.Capacitor = { getPlatform: () => 'android' };
+    try {
+      expect(render()).toContain('href="geo:48.85840,2.29450?q=48.85840,2.29450(Tour%20Eiffel)"');
+    } finally {
+      delete host.Capacitor;
+    }
+  });
+
+  test('hors coque, le lien reste Plans', () => {
+    expect(render()).toContain('href="https://maps.apple.com/?ll=48.85840,2.29450&amp;q=Tour%20Eiffel"');
+  });
+});
+
 describe('StoryCitationCard — fond pâle, bandeau dans la carte, texte centré, UN libellé (défaut majeur 7 et 8)', () => {
   const citation: StoryCitation = {
     id: 'p-story-1',
