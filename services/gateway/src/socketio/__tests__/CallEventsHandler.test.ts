@@ -3720,8 +3720,8 @@ describe('CallEventsHandler', () => {
 
   // ── call:leave with null leaveParticipantId ───────────────────────────────
 
-  describe('call:leave null leaveParticipantId fallback', () => {
-    it('uses userId as fallback when resolveParticipantIdFromCall returns null', async () => {
+  describe('call:leave — la sortie vise la participation de la ligne d’appel (#8433)', () => {
+    it('quitte par la participation de la ligne active, même quand la conversation ne le connaît plus', async () => {
       const participant = makeParticipant();
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [participant] }));
       const leftSession = makeCallSession({ status: 'ended', duration: 60, endReason: null as any });
@@ -3737,8 +3737,7 @@ describe('CallEventsHandler', () => {
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('call:leave', { callId: CALL_ID });
-      // Verifies: leaveParticipantId || userId (userId used as fallback), endReason || 'completed'
-      expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ participantId: USER_ID }));
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ participantId: participant.participantId, userId: USER_ID }));
     });
   });
 

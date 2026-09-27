@@ -1371,7 +1371,7 @@ export class CallService {
       where: {
         conversationId: call.conversationId,
         id: participantId,
-        isActive: true
+        ...(call.invitedUserIds?.includes(userId) ? { userId } : { isActive: true })
       }
     });
 

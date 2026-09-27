@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { mayLinkRecording } from '@meeshy/shared/utils/call-recording-consent';
+import { callRecordingKindOf, type CallRecordingKind } from '@meeshy/shared/types/call-recording';
 import { CALL_SUMMARY_MESSAGE_INCLUDE } from '../CallService';
 import { OPEN_RECORDING } from './callRecordingRepository';
 import { toConsentState } from './callRecording';
@@ -10,7 +11,7 @@ import { toConsentState } from './callRecording';
  *
  * Seul l'enregistreur d'un enregistrement réellement DÉMARRÉ (consenti par
  * tous) peut y lier un fichier, une seule fois, et seulement un fichier audio
- * qu'il a lui-même téléversé et qui n'appartient encore à aucun message. Un
+ * (ou vidéo, pour un enregistrement vidéo — #8437) qu'il a lui-même téléversé et qui n'appartient encore à aucun message. Un
  * fichier d'un autre utilisateur répond « introuvable » — la route ne dit pas
  * qu'il existe.
  */
@@ -35,6 +36,7 @@ export type LinkCallRecordingFailure = {
     | 'ATTACHMENT_NOT_FOUND'
     | 'ATTACHMENT_ALREADY_ATTACHED'
     | 'ATTACHMENT_NOT_AUDIO'
+    | 'ATTACHMENT_NOT_RECORDING_MEDIA'
     | 'CALL_BUBBLE_MISSING';
 };
 
@@ -43,6 +45,7 @@ export type LinkCallRecordingSuccess = {
   readonly message: CallSummaryMessage;
   readonly conversationId: string;
   readonly consentedUserIds: readonly string[];
+  readonly recordingKind: CallRecordingKind;
 };
 
 export type LinkCallRecordingResult = LinkCallRecordingSuccess | LinkCallRecordingFailure;
@@ -59,6 +62,21 @@ const FREE_ATTACHMENT: Prisma.MessageAttachmentWhereInput = {
   OR: [{ messageId: null }, { messageId: { isSet: false } }],
 };
 
+/**
+ * Le fichier doit être ce que TOUS ont accepté (#8437) : un accord pour de
+ * l'audio seul ne reçoit jamais de vidéo. Un enregistrement vidéo accepte aussi
+ * un fichier audio — l'appareil qui ne sait pas composer l'image se rabat sur
+ * le son, ce qui reste en deçà de l'accord.
+ */
+const recordingMediaRefusal = (
+  kind: CallRecordingKind,
+  mimeType: string,
+): LinkCallRecordingFailure | null => {
+  if (mimeType.startsWith('audio/')) return null;
+  if (kind === 'audio') return fail(415, 'ATTACHMENT_NOT_AUDIO');
+  return mimeType.startsWith('video/') ? null : fail(415, 'ATTACHMENT_NOT_RECORDING_MEDIA');
+};
+
 const UNLINKED_RECORDING: Prisma.CallRecordingWhereInput = {
   OR: [{ attachmentId: null }, { attachmentId: { isSet: false } }],
 };
@@ -73,6 +91,7 @@ export async function linkCallRecording(
   const state = {
     ...toConsentState({
       ...recording,
+      kind: callRecordingKindOf(recording.kind),
       startedAt: recording.startedAt ?? null,
       stoppedAt: recording.stoppedAt ?? null,
       stopReason: recording.stopReason ?? null,
@@ -92,7 +111,9 @@ export async function linkCallRecording(
   });
   if (!attachment || attachment.uploadedBy !== input.userId) return fail(404, 'ATTACHMENT_NOT_FOUND');
   if (attachment.messageId) return fail(409, 'ATTACHMENT_ALREADY_ATTACHED');
-  if (!attachment.mimeType.startsWith('audio/')) return fail(415, 'ATTACHMENT_NOT_AUDIO');
+  const recordingKind = callRecordingKindOf(recording.kind);
+  const mediaRefusal = recordingMediaRefusal(recordingKind, attachment.mimeType);
+  if (mediaRefusal) return mediaRefusal;
 
   const call = await prisma.callSession.findUnique({ where: { id: input.callId }, select: { conversationId: true } });
   if (!call) return fail(404, 'RECORDING_NOT_FOUND');
@@ -135,5 +156,6 @@ export async function linkCallRecording(
     message,
     conversationId: call.conversationId,
     consentedUserIds: recording.consentedUserIds.filter((id) => id !== input.userId),
+    recordingKind,
   };
 }

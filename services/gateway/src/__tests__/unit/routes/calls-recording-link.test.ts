@@ -109,7 +109,7 @@ describe('POST /calls/:callId/recordings/:recordingId/attachment — le fichier 
     const h = harness(prisma);
     const reply = await h.call(ALICE);
 
-    expect(reply.body).toMatchObject({ success: true, data: { recordingId: REC, messageId: MSG, attachmentId: ATT } });
+    expect(reply.body).toMatchObject({ success: true, data: { recordingId: REC, messageId: MSG, attachmentId: ATT, kind: 'audio' } });
     expect(prisma.messageAttachment.state.rows[0]).toMatchObject({ messageId: MSG });
     expect(prisma.callRecording.state.rows[0]).toMatchObject({ attachmentId: ATT, stopReason: 'call-ended' });
     expect(h.broadcastEdited).toHaveBeenCalledWith(expect.objectContaining({ id: MSG }), CONV);
@@ -170,5 +170,30 @@ describe('POST /calls/:callId/recordings/:recordingId/attachment — le fichier 
     const reply = await harness(prisma).call(ALICE);
     expect(reply.body).toMatchObject({ code: 'CALL_BUBBLE_MISSING' });
     expect(prisma.callRecording.state.rows[0]).toMatchObject({ attachmentId: null });
+  });
+});
+
+describe('le type d’enregistrement gouverne le fichier accepté (#8437)', () => {
+  it('un enregistrement vidéo reçoit son fichier vidéo, et la réponse le dit', async () => {
+    const prisma = world({ recording: { kind: 'video' }, attachment: { mimeType: 'video/mp4' } });
+    const reply = await harness(prisma).call(ALICE);
+
+    expect(reply.body).toMatchObject({ success: true, data: { recordingId: REC, kind: 'video' } });
+    expect(prisma.messageAttachment.state.rows[0]).toMatchObject({ messageId: MSG });
+  });
+
+  it('un accord donné pour de l’audio seul ne reçoit jamais de vidéo', async () => {
+    const legacy = await harness(world({ attachment: { mimeType: 'video/mp4' } })).call(ALICE);
+    expect(legacy.statusCode).toBe(415);
+    expect(legacy.body).toMatchObject({ code: 'ATTACHMENT_NOT_AUDIO' });
+
+    const audio = await harness(world({ recording: { kind: 'audio' }, attachment: { mimeType: 'video/webm' } })).call(ALICE);
+    expect(audio.statusCode).toBe(415);
+  });
+
+  it('un enregistrement vidéo refuse ce qui n’est ni vidéo ni audio', async () => {
+    const reply = await harness(world({ recording: { kind: 'video' }, attachment: { mimeType: 'image/png' } })).call(ALICE);
+    expect(reply.statusCode).toBe(415);
+    expect(reply.body).toMatchObject({ code: 'ATTACHMENT_NOT_RECORDING_MEDIA' });
   });
 });

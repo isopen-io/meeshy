@@ -204,10 +204,8 @@ describe('CallEventsHandler — call:force-leave handler', () => {
   // Line 1130: cleanupParticipantId || userId
   // -------------------------------------------------------------------------
 
-  describe('cleanupParticipantId || userId fallback (line 1130)', () => {
-    it('falls back to userId when resolveParticipantIdFromCall returns null', async () => {
-      // callSession.findUnique returns null → resolveParticipantIdFromCall → null
-      // → cleanupParticipantId is null → participantId: null || userId = userId
+  describe('la sortie forcée vise la participation de la ligne d’appel (#8433)', () => {
+    it('quitte par la participation de la ligne active, sans relire la conversation', async () => {
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([
           makeActiveCallWithParticipant(USER_ID),
@@ -224,9 +222,8 @@ describe('CallEventsHandler — call:force-leave handler', () => {
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['call:force-leave'](FORCE_LEAVE_DATA);
 
-      // leaveCall must have been called with participantId === USER_ID (the fallback)
       expect(mockLeaveCall5).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: USER_ID })
+        expect.objectContaining({ participantId: MEMBERSHIP_ID, userId: USER_ID })
       );
     });
   });

@@ -58,9 +58,21 @@ describe('prismaCallRecordingRepository — chaque transition est une écriture 
   it('crée une demande avec des dates explicitement nulles', async () => {
     const prisma = fakePrisma([]);
     const created = await prismaCallRecordingRepository(prisma as never).create({
-      callSessionId: 'call', requesterId: 'alice', requiredUserIds: ['bob'], requestedAt: new Date(0),
+      callSessionId: 'call', requesterId: 'alice', requiredUserIds: ['bob'], requestedAt: new Date(0), kind: 'audio',
     });
     expect(created).toMatchObject({ startedAt: null, stoppedAt: null, attachmentId: null, consentedUserIds: [] });
+  });
+
+  it('stocke le type demandé, et lit « audio » une ligne antérieure au champ (#8437)', async () => {
+    const prisma = fakePrisma([legacyRow()]);
+    const repository = prismaCallRecordingRepository(prisma as never);
+    expect((await repository.findById('r0'))?.kind).toBe('audio');
+
+    const created = await repository.create({
+      callSessionId: 'call', requesterId: 'alice', requiredUserIds: ['bob'], requestedAt: new Date(0), kind: 'video',
+    });
+    expect(created.kind).toBe('video');
+    expect(prisma.state.rows[1]?.kind).toBe('video');
   });
 
   it('traite un champ ABSENT comme nul : une ligne sans dates est ouverte et en attente', async () => {

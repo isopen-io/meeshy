@@ -2354,6 +2354,19 @@ model CallSession {
   /// `DELETE /calls/history[/:callId]` (`services/calls/callHistoryList.ts`).
   hiddenForUserIds String[] @default([]) @db.ObjectId
 
+  /// Les personnes invitées PENDANT l'appel (#8433) par un participant
+  /// connecté — des amis acceptés, pas forcément membres de la conversation.
+  /// Une invitation autorise à rejoindre CET appel seulement : elle vit et meurt
+  /// avec la session, d'où une liste sur la session plutôt qu'un modèle. Écrit
+  /// par `services/calls/callInvitation.ts`.
+  invitedUserIds String[] @default([]) @db.ObjectId
+
+  /// Les réactions envoyées pendant l'appel, comptées par emoji (#8439) :
+  /// `{ "👍": 3, "🎉": 1 }`, emojis de `CALL_REACTION_EMOJIS` seulement.
+  /// Incrémenté atomiquement (`$inc`) par `services/calls/callReactions.ts` ;
+  /// absent tant que personne n'a réagi.
+  reactionCounts Json?
+
   /// Optimistic locking version. Incremented on every status transition.
   /// Pattern: where: { id, version: known }, data: { ..., version: { increment: 1 } }.
   /// See docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.7.
@@ -2446,6 +2459,10 @@ model CallRecording {
   stoppedByUserId  String?   @db.ObjectId
   attachmentId     String?   @db.ObjectId
   linkedAt         DateTime?
+  /// `audio` | `video` (#8437) — ce que TOUS ont accepté d'enregistrer. Absent
+  /// sur un enregistrement antérieur au champ : il se lit « audio »
+  /// (`callRecordingKindOf`).
+  kind             String?
 
   @@index([callSessionId])
 }

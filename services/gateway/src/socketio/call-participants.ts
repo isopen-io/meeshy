@@ -21,6 +21,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallService } from '../services/CallService';
 import { logger } from '../utils/logger';
+import { resolveInvitedGuestParticipantId } from '../services/calls/callInvitation';
 
 /** Ce que ces résolveurs empruntent à l'instance — résolu à l'APPEL, jamais capturé. */
 export type CallParticipantResolverDeps = {
@@ -43,6 +44,16 @@ export async function resolveParticipantIdFromCall(deps: CallParticipantResolver
   });
   if (!call) return null;
   return resolveParticipantId(deps, userId, call.conversationId);
+}
+
+/**
+ * La participation par laquelle `call:join` fait entrer quelqu'un : la sienne
+ * s'il est membre de la conversation, sinon celle que son INVITATION dans cet
+ * appel lui ouvre (#8433) — jamais une autre porte.
+ */
+export async function resolveJoinParticipantId(deps: CallParticipantResolverDeps, userId: string, callId: string): Promise<string | null> {
+  return (await resolveParticipantIdFromCall(deps, userId, callId))
+    ?? resolveInvitedGuestParticipantId(deps.prisma, { callId, userId });
 }
 
 /**
