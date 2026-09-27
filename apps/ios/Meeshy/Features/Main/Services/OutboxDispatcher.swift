@@ -62,6 +62,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .markStoryViewed:
             try await dispatchMarkStoryViewed(record)
 
+        case .consumeAfterRead:
+            try await dispatchConsumeAfterRead(record)
+
         case .reportAttachmentStatus:
             try await dispatchReportAttachmentStatus(record)
 
@@ -330,6 +333,20 @@ struct OutboxDispatcher: OutboxDispatching {
             logger.info("reportAttachmentStatus dispatched att=\(payload.attachmentId, privacy: .public) action=\(payload.action, privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("reportAttachmentStatus 404 att=\(payload.attachmentId, privacy: .public) — attachement disparu, accepté comme succès")
+        }
+    }
+
+    /// #8303 — la consommation des flammes-œil lues, rejouée jusqu'à ce que la
+    /// passerelle l'accepte. Idempotente : un rejeu ne consomme rien de plus,
+    /// et une conversation disparue (404) n'a plus rien à consommer.
+    private func dispatchConsumeAfterRead(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ConsumeAfterReadPayload.self)
+        do {
+            let consumed = try await MessageService.shared.consumeAfterRead(
+                conversationId: payload.conversationId, messageIds: payload.messageIds)
+            logger.info("consumeAfterRead dispatched conv=\(payload.conversationId, privacy: .public) consumed=\(consumed.count, privacy: .public)/\(payload.messageIds.count, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("consumeAfterRead 404 conv=\(payload.conversationId, privacy: .public) — conversation disparue, accepté")
         }
     }
 
