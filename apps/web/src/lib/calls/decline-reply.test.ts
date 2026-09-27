@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { DECLINE_REPLY_KEYS, declineWithReply, type DeclineReplyDeps } from './decline-reply';
+import { DECLINE_REPLY_KEYS, DECLINE_REPLY_MAX_LENGTH, declineWithReply, type DeclineReplyDeps } from './decline-reply';
 
 type Sent = { readonly conversationId: string; readonly content: string; readonly language: string };
 
@@ -34,6 +34,14 @@ describe('declineWithReply — refuser un appel avec un message (#8065)', () => 
     expect(events).toEqual([]);
     expect(declineWithReply({ call: incoming, text: '  En réunion  ', language: 'fr', deps })).toBe(true);
     expect(sent[0]?.content).toBe('En réunion');
+  });
+
+  test('borne le texte libre à la même longueur que l’écran iOS', () => {
+    const { sent, deps } = recorder();
+    const text = 'a'.repeat(DECLINE_REPLY_MAX_LENGTH + 40);
+    expect(declineWithReply({ call: incoming, text, language: 'fr', deps })).toBe(true);
+    expect(sent[0]?.content.length).toBe(DECLINE_REPLY_MAX_LENGTH);
+    expect(DECLINE_REPLY_MAX_LENGTH).toBe(500);
   });
 
   test('ne fait rien hors de la sonnerie : un appel déjà décroché ne se refuse plus', () => {
