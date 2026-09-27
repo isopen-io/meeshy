@@ -14,6 +14,9 @@ const ptCallsErase = {
   'calls.search': 'Pesquisar um nome',
   'calls.search.clear': 'Limpar a pesquisa',
   'calls.search.empty': 'Nenhuma chamada corresponde a «{query}»',
+  'calls.participants.more': '{names} +{count}',
+  'calls.participants.a11y': 'com {names}',
+  'callJoin.detail.participants': 'Participantes',
 } as const;
 
 export default ptCallsErase;

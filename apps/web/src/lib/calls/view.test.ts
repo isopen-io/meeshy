@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CallHistoryPage, CallRecord } from '@/lib/api/calls';
 
-import { callDisplayNameOf, callDurationLabel, callFilterFromSearch, searchCallRecords, seededCallHistory } from './view';
+import { callDisplayNameOf, callDurationLabel, callFilterFromSearch, callParticipantNames, searchCallRecords, seededCallHistory } from './view';
 
 /**
  * LES RÈGLES PURES DU JOURNAL D'APPELS (#6362) — miroir des accesseurs de
@@ -21,6 +21,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   durationSec: 185,
   bytes: null,
   peer: { userId: 'u-amina', username: 'amina', displayName: 'Amina Diallo', avatar: null },
+  participants: [],
   ...overrides,
 });
 
@@ -99,5 +100,29 @@ describe('chercher dans le journal (#8066)', () => {
   test('le NOM AFFICHÉ se cherche, repli compris', () => {
     expect(found('inconnu')).toEqual(['x4']);
     expect(found('zzz')).toEqual([]);
+  });
+});
+
+describe('les participants d’un appel de groupe (#8066)', () => {
+  const people = ['Ada', 'Bruno', 'Chloé', 'Dia'].map((displayName, index) => ({
+    participantId: `p${index}`,
+    username: displayName.toLowerCase(),
+    displayName,
+    avatar: null,
+  }));
+  const group = record({ callId: 'g1', peer: null, conversationType: 'group', conversationTitle: 'Équipe', participants: people });
+
+  test('la ligne en nomme quelques-uns et compte les autres', () => {
+    expect(callParticipantNames(group, 2)).toEqual({ names: ['Ada', 'Bruno'], more: 2 });
+    expect(callParticipantNames(group, 5)).toEqual({ names: ['Ada', 'Bruno', 'Chloé', 'Dia'], more: 0 });
+  });
+
+  test('un appel direct ne nomme personne de plus que son pair', () => {
+    expect(callParticipantNames(record(), 2)).toEqual({ names: [], more: 0 });
+  });
+
+  test('chercher un participant trouve l’appel de groupe où il était', () => {
+    expect(searchCallRecords([record(), group], 'chloe', 'Inconnu').map((r) => r.callId)).toEqual(['g1']);
+    expect(searchCallRecords([record(), group], 'BRUNO', 'Inconnu').map((r) => r.callId)).toEqual(['g1']);
   });
 });

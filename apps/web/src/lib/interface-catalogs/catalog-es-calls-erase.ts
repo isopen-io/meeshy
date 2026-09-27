@@ -14,6 +14,9 @@ const esCallsErase = {
   'calls.search': 'Buscar un nombre',
   'calls.search.clear': 'Borrar la búsqueda',
   'calls.search.empty': 'Ninguna llamada coincide con «{query}»',
+  'calls.participants.more': '{names} +{count}',
+  'calls.participants.a11y': 'con {names}',
+  'callJoin.detail.participants': 'Participantes',
 } as const;
 
 export default esCallsErase;

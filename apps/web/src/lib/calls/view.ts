@@ -32,6 +32,16 @@ export function callAvatarOf(record: Pick<CallRecord, 'peer' | 'conversationAvat
   return record.peer?.avatar ?? record.conversationAvatar;
 }
 
+/**
+ * **QUI ÉTAIT DANS L'APPEL DE GROUPE** (#8066) — les `limit` premiers noms
+ * pour la ligne, et combien d'autres ; rien pour un appel direct, que son
+ * pair nomme déjà.
+ */
+export function callParticipantNames(record: Pick<CallRecord, 'participants'>, limit: number): { readonly names: readonly string[]; readonly more: number } {
+  const names = record.participants.map((participant) => participant.displayName);
+  return { names: names.slice(0, limit), more: Math.max(0, names.length - limit) };
+}
+
 export const CALL_FILTER_PARAM = 'filtre';
 
 export function callFilterFromSearch(raw: string | null): CallHistoryFilter {
@@ -58,7 +68,8 @@ const foldForSearch = (text: string): string => text.normalize('NFD').replace(/\
 
 /**
  * **LA RECHERCHE DU JOURNAL** (#8066) — le `.searchable` de `CallsTab.swift` :
- * sur le nom AFFICHÉ (repli compris) et l'identifiant du pair, sans accents ni
+ * sur le nom AFFICHÉ (repli compris), l'identifiant du pair et les participants
+ * d'un appel de groupe, sans accents ni
  * casse. Elle filtre ce qui est CHARGÉ ; l'écran charge la suite pendant qu'on
  * cherche, pour qu'un appel ancien finisse par apparaître.
  */
@@ -66,6 +77,8 @@ export function searchCallRecords(records: readonly CallRecord[], query: string,
   const needle = foldForSearch(query);
   if (needle === '') return records;
   return records.filter((record) =>
-    [callDisplayNameOf(record, unknown), record.peer?.username].some((field) => nonEmpty(field) && foldForSearch(field).includes(needle)),
+    [callDisplayNameOf(record, unknown), record.peer?.username, ...record.participants.flatMap((participant) => [participant.displayName, participant.username])].some(
+      (field) => nonEmpty(field) && foldForSearch(field).includes(needle),
+    ),
   );
 }

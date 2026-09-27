@@ -64,6 +64,7 @@ describe('un appel décodé est une PROJECTION', () => {
       durationSec: 185,
       bytes: 238000,
       peer: { userId: '64f0c0ffee0000000000abcd', username: 'ada', displayName: 'Ada Lovelace', avatar: 'https://cdn.test/ada.jpg' },
+      participants: [],
     });
   });
 
@@ -75,6 +76,29 @@ describe('un appel décodé est une PROJECTION', () => {
     const record = decodeCallRecord(wireRecord({ peer: null, conversationType: 'group', conversationTitle: 'Équipe' }));
     expect(record?.peer).toBeNull();
     expect(record?.conversationTitle).toBe('Équipe');
+  });
+
+  test('un appel de groupe nomme ses participants (#8066) — sans présence ni contact, une entrée illisible écartée', () => {
+    const record = decodeCallRecord(
+      wireRecord({
+        peer: null,
+        conversationType: 'group',
+        participants: [
+          { participantId: 'p-ada', userId: 'u-ada', username: 'ada', displayName: 'Ada', avatar: 'a.jpg', isOnline: true, phoneNumber: '+33600000000' },
+          { participantId: 'p-guest', userId: null, username: null, displayName: 'Invité', avatar: null },
+          { participantId: 'p-bad', displayName: 42 },
+        ],
+      }),
+    );
+    expect(record?.participants).toEqual([
+      { participantId: 'p-ada', username: 'ada', displayName: 'Ada', avatar: 'a.jpg' },
+      { participantId: 'p-guest', username: null, displayName: 'Invité', avatar: null },
+    ]);
+  });
+
+  test('une charge sans participants (passerelle antérieure) se lit liste vide', () => {
+    expect(decodeCallRecord(wireRecord({ participants: undefined }))?.participants).toEqual([]);
+    expect(decodeCallRecord(wireRecord({ participants: 'x' }))?.participants).toEqual([]);
   });
 
   test('une date illisible écarte la ligne ; une durée négative se lit zéro', () => {

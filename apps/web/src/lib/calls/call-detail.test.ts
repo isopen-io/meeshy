@@ -23,6 +23,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   durationSec: 754,
   bytes: 48_620_000,
   peer: { userId: 'u-kwame', username: 'kwame', displayName: 'Kwame Mensah', avatar: 'k.jpg' },
+  participants: [],
   ...overrides,
 });
 
@@ -55,6 +56,7 @@ describe('une fiche depuis le journal en cache', () => {
       durationSec: 754,
       bytes: 48_620_000,
       isGroup: false,
+      participants: [],
       live: false,
     });
   });
@@ -66,6 +68,14 @@ describe('une fiche depuis le journal en cache', () => {
 
   test('un appel de groupe se nomme par sa conversation', () => {
     expect(callDetailFromRecord(record({ peer: null, conversationType: 'group', conversationTitle: 'Équipe' }), 'Inconnu')).toMatchObject({ name: 'Équipe', isGroup: true });
+  });
+
+  test('un appel de groupe nomme ses participants dans la fiche (#8066)', () => {
+    const people = [
+      { participantId: 'p-ada', username: 'ada', displayName: 'Ada', avatar: null },
+      { participantId: 'p-bruno', username: null, displayName: 'Bruno', avatar: null },
+    ];
+    expect(callDetailFromRecord(record({ peer: null, conversationType: 'group', conversationTitle: 'Équipe', participants: people }), 'Inconnu').participants).toEqual(['Ada', 'Bruno']);
   });
 
   test('le journal en cache se lit sur ses deux filtres', () => {
@@ -94,6 +104,18 @@ describe('une fiche depuis la passerelle (lien profond sans cache)', () => {
   test('l’identité connue de la conversation passe avant la liste des participants', () => {
     const identity = { title: 'Famille', avatar: 'f.jpg', isGroup: true };
     expect(callDetailFromSession(session(), { viewerId: 'u-me', unknown: 'Inconnu', identity })).toMatchObject({ name: 'Famille', avatar: 'f.jpg', isGroup: true });
+  });
+
+  test('un appel de groupe servi nomme les autres participants ; un appel à deux, personne de plus', () => {
+    const group = session({
+      participants: [
+        { userId: 'u-ada', name: 'Ada', avatar: null },
+        { userId: 'u-bruno', name: 'Bruno', avatar: null },
+        { userId: 'u-me', name: 'Moi', avatar: null },
+      ],
+    });
+    expect(callDetailFromSession(group, { viewerId: 'u-me', unknown: 'Inconnu' }).participants).toEqual(['Ada', 'Bruno']);
+    expect(callDetailFromSession(session(), { viewerId: 'u-me', unknown: 'Inconnu' }).participants).toEqual([]);
   });
 
   test('personne d’autre que moi : le repli', () => {

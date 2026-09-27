@@ -41,6 +41,14 @@ export type CallPeer = {
   readonly avatar: string | null;
 };
 
+/** Qui a rejoint un appel de GROUPE (#8066) — un nom et un visage, jamais une présence ni un contact. */
+export type CallParticipantName = {
+  readonly participantId: string;
+  readonly username: string | null;
+  readonly displayName: string;
+  readonly avatar: string | null;
+};
+
 export type CallRecord = {
   readonly callId: string;
   readonly conversationId: string;
@@ -54,6 +62,8 @@ export type CallRecord = {
   /** Octets envoyés + reçus par le lecteur, `null` quand aucun client ne les a rapportés. */
   readonly bytes: number | null;
   readonly peer: CallPeer | null;
+  /** Les participants d'un appel de groupe, lecteur exclu ; vide pour un appel direct. */
+  readonly participants: readonly CallParticipantName[];
 };
 
 export type CallHistoryPage = { readonly records: readonly CallRecord[]; readonly nextCursor: string | null };
@@ -72,6 +82,13 @@ const WirePeer = z.object({
   avatar: optionalText,
 });
 
+const WireParticipant = z.object({
+  participantId: z.string().check(z.minLength(1)),
+  username: optionalText,
+  displayName: z.string().check(z.minLength(1)),
+  avatar: optionalText,
+});
+
 const WireRecord = z.object({
   callId: z.string().check(z.minLength(1)),
   conversationId: z.string().check(z.minLength(1)),
@@ -85,6 +102,7 @@ const WireRecord = z.object({
   bytesSent: z.optional(z.nullable(z.number())),
   bytesReceived: z.optional(z.nullable(z.number())),
   peer: z.optional(z.unknown()),
+  participants: z.optional(z.unknown()),
 });
 
 const textOrNull = (value: string | null | undefined): string | null =>
@@ -110,6 +128,16 @@ function decodePeer(raw: unknown): CallPeer | null {
   return { userId, username, displayName: textOrNull(displayName), avatar: textOrNull(avatar) };
 }
 
+function decodeParticipants(raw: unknown): readonly CallParticipantName[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    const parsed = WireParticipant.safeParse(entry);
+    if (!parsed.success) return [];
+    const { participantId, username, displayName, avatar } = parsed.data;
+    return [{ participantId, username: textOrNull(username), displayName, avatar: textOrNull(avatar) }];
+  });
+}
+
 export function decodeCallRecord(raw: unknown): CallRecord | null {
   const parsed = WireRecord.safeParse(raw);
   if (!parsed.success) return null;
@@ -126,6 +154,7 @@ export function decodeCallRecord(raw: unknown): CallRecord | null {
     durationSec: secondsOf(wire.durationSec),
     bytes: bytesOf(wire.bytesSent, wire.bytesReceived),
     peer: decodePeer(wire.peer),
+    participants: decodeParticipants(wire.participants),
   };
 }
 
