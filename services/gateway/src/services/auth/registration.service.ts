@@ -164,6 +164,8 @@ export type RegistrationDeps = {
         passwordUrl: string;
         hasPassword: boolean;
       };
+      /** #8227 — une revendication : l'e-mail dit que le code retire l'adresse à un compte existant. */
+      claim?: boolean;
     }): Promise<{ success: boolean; error?: string; provider?: string; messageId?: string }>;
   };
   readonly frontendUrl: string;
@@ -563,6 +565,7 @@ export async function registerAccount(
         passwordUrl: passwordSettingsUrl(deps.frontendUrl),
         hasPassword: hashedPassword !== null,
       },
+      ...(revendication ? { claim: true } : {}),
     });
 
     if (!resultat.success) {

@@ -80,6 +80,7 @@
 - [`EXACT_READ_TRACKING_SINCE` est armée par les compositions de staging et de production, pas seulement documentée (2026-09-22, #7356)](decisions/exact-read-tracking-since-est-armee-par-les-compositions-de-staging-et-de.md)
 - [Meeshy Global tient une vague d'arrivées : mode lent des nouveaux comptes et arrivées regroupées (2026-09-24, #7740)](decisions/meeshy-global-tient-une-vague-d-arrivees-mode-lent-des-nouveaux-comptes-et.md)
 - [Une adresse inconnue devient un compte, et la vérification ouvre la session (2026-09-26, #8033, #8036)](decisions/une-adresse-inconnue-devient-un-compte-et-la-verification-ouvre-la-session-2026-09-26-8033.md)
-- [Sans numéro, un compte n'est actif qu'une fois l'adresse prouvée (2026-09-26 soir, #8055)](decisions/sans-numero-un-compte-n-est-actif-qu-une-fois-l-adresse-prouvee-2026-09-26-8055.md)
+- [~~Sans numéro, un compte n'est actif qu'une fois l'adresse prouvée~~ — REMPLACÉE par #8238 (2026-09-26 soir, #8055)](decisions/sans-numero-un-compte-n-est-actif-qu-une-fois-l-adresse-prouvee-2026-09-26-8055.md)
 - [« Appels hors contacts » est ouvert à tous par défaut, et les anciens `false` ne ferment rien (2026-09-27, #8073)](decisions/les-appels-hors-contacts-s-ouvrent-a-tous-par-defaut-et-les-anciens-false-ne-2026-09-27-8073.md)
 - [Une adresse prise montre son détenteur masqué ; « ce n'est pas moi » + code la transfère (2026-09-27, #8214)](decisions/une-adresse-prise-montre-son-detenteur-et-ce-n-est-pas-moi-plus-code-la-transfere-2026-09-27-8214.md)
+- [Un compte à l'adresse non prouvée a 28 jours de grâce, et ne reçoit que les e-mails qui la prouvent (2026-09-27, #8238, absorbe #8236)](decisions/un-compte-a-l-adresse-non-prouvee-a-28-jours-de-grace-et-ne-recoit-que-ce-qui-la-prouve-2026-09-27-8238.md)

@@ -32,6 +32,9 @@ import { composePasswordResetEmail, type PasswordResetEmailData } from './email/
 import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from './email/login-code-email';
 import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
 import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
+import { emailBaseStyles } from './email/base-styles';
+import { claimWarningFor } from './email/claim-warning';
+import { emailMayLeave, registeredEmailRecipientLookup, type RecipientAddressLookup } from './email/recipient-policy';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -90,6 +93,8 @@ export interface EmailVerificationData {
    * rempli, qui présenterait un pseudo vide comme si c'était le sien.
    */
   identity?: IdentiteDuCompte;
+  /** Une REVENDICATION d'adresse (#8227) : l'e-mail dit que le code la retire à un compte existant. */
+  claim?: boolean;
 }
 
 export interface PasswordChangedEmailData {
@@ -237,8 +242,11 @@ export class EmailService {
   private frontendUrl: string;
   /** `MEESHY_ENV=staging`, lu UNE fois (#8036) — voir `./email/staging-marker`. */
   private readonly staging: boolean;
+  /** Qui lit l'état d'une adresse (#8238) — absent ⇒ celui enregistré au démarrage. */
+  private readonly recipientLookup?: RecipientAddressLookup;
 
-  constructor() {
+  constructor(options: { readonly recipientLookup?: RecipientAddressLookup } = {}) {
+    this.recipientLookup = options.recipientLookup;
     this.staging = isStagingEnvironment(process.env.MEESHY_ENV);
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
@@ -337,6 +345,12 @@ export class EmailService {
   }
 
   private async sendEmail(input: EmailData): Promise<EmailResult> {
+    // #8238 — la garde CENTRALE : une adresse non vérifiée ne reçoit que ce qui la prouve.
+    const lookup = this.recipientLookup ?? registeredEmailRecipientLookup();
+    if (!(await emailMayLeave({ to: input.to, kind: input.trackingType, lookup }))) {
+      logger.info(`[EmailService] ⛔ adresse non vérifiée — e-mail « ${input.trackingType ?? 'sans famille'} » non envoyé`);
+      return { success: false, error: 'RECIPIENT_ADDRESS_UNVERIFIED' };
+    }
     const data = markForEnvironment({ ...input }, this.staging);
     if (data.trackingType) {
       const pixel = this.getTrackingPixelHtml(data.trackingType, data.trackingLang);
@@ -389,40 +403,7 @@ export class EmailService {
   // ==========================================================================
 
   private getBaseStyles(): string {
-    // Light mode styles
-    const lightStyles = `
-      body{font-family:Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0;background-color:#ffffff}
-      .container{max-width:600px;margin:0 auto;padding:20px}
-      .header{background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:30px;text-align:center;border-radius:8px 8px 0 0}
-      .header h1{margin:0;font-size:24px}
-      .content{background:#f9fafb;padding:30px;border-radius:0 0 8px 8px;color:#333}
-      .content p{color:#333}
-      .content strong{color:#111}
-      .button{display:inline-block;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white!important;padding:14px 32px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:bold}
-      .footer{margin-top:30px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:center}
-      .info{background:#EEF2FF;border-left:4px solid #6366F1;padding:12px;margin:20px 0;border-radius:4px;color:#3730a3}
-      .warning{background:#fef2f2;border-left:4px solid #ef4444;padding:12px;margin:20px 0;border-radius:4px;color:#991b1b}
-      .success{background:#f0fdf4;border-left:4px solid #22c55e;padding:12px;margin:20px 0;border-radius:4px;color:#166534}
-      .link-text{color:#6366F1}
-    `;
-
-    // Dark mode styles (for clients that support @media prefers-color-scheme)
-    const darkStyles = `
-      @media (prefers-color-scheme:dark){
-        body{background-color:#111827!important;color:#e5e7eb!important}
-        .container{background-color:#111827!important}
-        .content{background:#1f2937!important;color:#e5e7eb!important}
-        .content p{color:#d1d5db!important}
-        .content strong{color:#f3f4f6!important}
-        .footer{border-top-color:#374151!important;color:#9ca3af!important}
-        .info{background:#312e81!important;color:#c7d2fe!important}
-        .warning{background:#7f1d1d!important;color:#fecaca!important}
-        .success{background:#14532d!important;color:#bbf7d0!important}
-        .link-text{color:#a5b4fc!important}
-      }
-    `;
-
-    return (lightStyles + darkStyles).replace(/\s+/g, ' ').trim();
+    return emailBaseStyles();
   }
 
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
@@ -444,9 +425,11 @@ export class EmailService {
     // mentions d'expiration : le geste demandé reste le premier lu.
     const identityHtml = data.identity ? accountIdentityBlockHtml(data.identity, data.language) : '';
     const identityText = data.identity ? `\n\n${accountIdentityBlockText(data.identity, data.language)}` : '';
+    const claimWarning = data.claim ? claimWarningFor(this.normalizeLanguage(data.language)) : '';
+    const claimHtml = claimWarning ? `<div class="warning"><strong>⚠️</strong> ${claimWarning}</div>` : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}${identityHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p>${claimHtml}<div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}${identityHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}${claimWarning ? `\n\n${claimWarning}` : ''}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
   }

@@ -26,7 +26,7 @@ import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../..
 import { candidatsDePseudo } from '../../utils/username-candidates';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
-import { pendingSessionTokenFor, pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
+import { pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -169,13 +169,13 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   // POST /register - Main registration endpoint
   fastify.post('/register', {
     schema: {
-      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation. When the address already belongs to another account, the 409 EMAIL_TAKEN carries its masked identity (`emailOwner`); resubmitting with `claimEmail: true` creates the account inactive, without the address, until the code or the link is presented to POST /auth/verify-email (#8214).',
+      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation. When the address already belongs to another account, the 409 EMAIL_TAKEN carries its masked identity (`emailOwner`); resubmitting with `claimEmail: true` creates the account inactive, without the address, until the code or the link is presented to POST /auth/verify-email (#8214). A claim cannot carry a transferred phone number: `claimEmail` with `phoneTransferToken` is refused with 400 CLAIM_WITH_PHONE_TRANSFER (#8227).',
       tags: ['auth'],
       summary: 'User registration',
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent, and the account is usable at once: the response carries the session (`token`, `sessionToken`) and `user.activation`, the email grace period (#8238: quiet for 7 days, invite until day 28, then blocked until the email is proven — never blocked with a phone number). An email CLAIM (`claimEmail`, #8214) is the exception: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -323,6 +323,18 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       const requestContext = await getRequestContext(request, { geoTimeoutMs: GEO_AVANT_REPONSE_MS });
 
+      // #8227 — une REVENDICATION d'adresse n'emporte pas de numéro TRANSFÉRÉ.
+      // Le compte revendiquant naît inactif et peut ne jamais être prouvé :
+      // transférer maintenant retirerait le numéro à un compte vivant pour un
+      // compte qui n'existera peut-être jamais, et différer le transfert à la
+      // preuve exigerait de garder un jeton de transfert (vie courte) au-delà
+      // de sa fenêtre. Refus explicite, avant de toucher au jeton : l'un, puis
+      // l'autre, une fois le compte actif.
+      if (inscription.claimEmail && inscription.phoneTransferToken) {
+        rembourserLaTentative(limiteurs, request);
+        return sendBadRequest(reply, "Une revendication d'adresse ne peut pas emporter un numéro transféré : revendiquez l'adresse, puis transférez le numéro depuis le compte activé.", { code: 'CLAIM_WITH_PHONE_TRANSFER' });
+      }
+
       // Check if phoneTransferToken is provided
       let phoneTransferValidated = false;
       let inscriptionFinale = inscription;
@@ -428,17 +440,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // son e-mail l'annoncera une fois prouvé.
       scheduleContactJoinedAnnouncement(context.prisma, user.id, { afterResponse });
 
-      // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
-      // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code
-      // et le lien sont partis avec l'e-mail de vérification ; seule leur
-      // preuve (`POST /auth/verify-email`) ouvre la session. Même réponse que
-      // la connexion d'une adresse inconnue (#8033). Un numéro — saisi, ou
-      // transféré depuis un autre compte — active le compte tout de suite.
-      const avecNumero = Boolean(user.phoneNumber) || phoneTransferValidated;
-      if (!avecNumero) {
-        const attente = await pendingSessionTokenFor(context.prisma, user.email);
-        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: user.email, ...attente });
-      }
+      // #8238 — AVEC OU SANS NUMÉRO, LE COMPTE S'UTILISE TOUT DE SUITE : le
+      // délai de grâce de l'adresse (`services/auth/account-activation.ts`)
+      // remplace le blocage immédiat de #8055. Le code et le lien sont partis
+      // avec l'e-mail de vérification, pour plus tard ; `user.activation`
+      // dit aux clients où en est le délai.
 
       // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée
       // désormais une session, comme la connexion.
