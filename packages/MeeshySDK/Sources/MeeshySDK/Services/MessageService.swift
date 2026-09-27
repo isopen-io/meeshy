@@ -33,7 +33,19 @@ public extension MessageServiceProviding {
     }
 }
 
-public final class MessageService: MessageServiceProviding, @unchecked Sendable {
+/// #8303 — la consommation des messages flamme-œil lus (contrat #8302).
+/// Protocole à part : les faux de `MessageServiceProviding` n'ont pas à
+/// connaître un geste que seule la sortie de conversation déclenche.
+public protocol AfterReadConsuming: Sendable {
+    /// Rend les identifiants que la passerelle a effectivement consommés.
+    func consumeAfterRead(conversationId: String, messageIds: [String]) async throws -> [String]
+}
+
+public struct ConsumeAfterReadResponse: Decodable, Sendable {
+    public let consumed: [String]
+}
+
+public final class MessageService: MessageServiceProviding, AfterReadConsuming, @unchecked Sendable {
     public static let shared = MessageService()
     private let api: APIClientProviding
 
@@ -205,6 +217,14 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
             ConversationsEndpoint.byIdMessagesByMessageIdConsume(id: conversationId, messageId: messageId), body: Empty()
         )
         return response.data
+    }
+
+    public func consumeAfterRead(conversationId: String, messageIds: [String]) async throws -> [String] {
+        struct Body: Encodable { let messageIds: [String] }
+        let response: APIResponse<ConsumeAfterReadResponse> = try await api.post(
+            ConversationsEndpoint.byIdMessagesAfterReadConsume(id: conversationId), body: Body(messageIds: messageIds)
+        )
+        return response.data.consumed
     }
 
     public func search(conversationId: String, query: String, limit: Int = 20) async throws -> MessagesAPIResponse {

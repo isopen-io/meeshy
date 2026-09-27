@@ -231,8 +231,9 @@ struct UniversalComposerBar: View {
 
     // MARK: - Ephemeral mode
 
-    /// Binding to the ephemeral duration (nil = off). Parent owns the state.
-    var ephemeralDuration: Binding<EphemeralDuration?> = .constant(nil)
+    /// L'éphémère armé : la flamme-œil ou une durée (nil = désactivé, #8303).
+    /// Le parent possède l'état.
+    var ephemeralChoice: Binding<EphemeralChoice?> = .constant(nil)
 
     /// When true, the ephemeral toggle is hidden (e.g. in edit mode)
     var hideEphemeral: Bool = false
