@@ -56,7 +56,7 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
-import { useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
+import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
@@ -732,6 +732,7 @@ export default function ThreadScreen() {
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
         <ConversationDetailsContext.Provider value={openDetails}>
+          <AfterReadSeenContext.Provider value={afterRead.noteSeen}>
           <ThreadModes
             mode={reading.readingDecision.mode}
             viewer={viewer}
@@ -776,6 +777,7 @@ export default function ThreadScreen() {
             unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
             unreadCount={unreadBoundary?.unreadCount ?? 0}
           />
+          </AfterReadSeenContext.Provider>
         </ConversationDetailsContext.Provider>
       </main>
       <OlderLoadIndicator state={older.state} onRetry={older.retry} />

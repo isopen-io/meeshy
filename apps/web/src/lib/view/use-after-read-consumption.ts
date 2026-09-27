@@ -1,11 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef } from 'react';
+import { createContext, useCallback, useEffect, useRef } from 'react';
 
 import { apiDeps } from '@/lib/api/deps';
 import { consumeAfterRead, createAfterReadQueue, removeAfterReadLocally, type AfterReadQueue } from '@/lib/api/after-read';
 import type { Message } from '@/lib/api/types';
 
-import { afterReadSeenUpTo } from './after-read';
+import { afterReadSeenUpTo, isAfterReadMessage } from './after-read';
 
 /**
  * UNE FILE PAR LECTEUR — la clé porte l'identité, comme le brouillon
@@ -65,7 +65,11 @@ export function useAfterReadConsumption(params: {
   readonly queryClient: QueryClient;
   /** Injectable pour les témoins ; la file du lecteur par défaut. */
   readonly queue?: AfterReadQueue;
-}): { readonly noteSeenUpTo: (boundaryId: string) => void } {
+}): {
+  readonly noteSeenUpTo: (boundaryId: string) => void;
+  /** Une rangée flamme-œil RÉELLEMENT vue à l'écran (#8343, `AfterReadSeenProbe`). */
+  readonly noteSeen: (messageId: string) => void;
+} {
   const { conversationId, messages, viewerId, queryClient } = params;
   const queue = params.queue ?? (viewerId === undefined || viewerId === '' ? undefined : afterReadQueueFor(viewerId));
 
@@ -91,6 +95,16 @@ export function useAfterReadConsumption(params: {
   queueRef.current = queue;
   const queryClientRef = useRef(queryClient);
   queryClientRef.current = queryClient;
+
+  const noteSeen = useCallback(
+    (messageId: string) => {
+      if (viewerId === undefined || viewerId === '') return;
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (message === undefined || !isAfterReadMessage(message) || message.senderId === viewerId || message.deletedAt != null) return;
+      seenRef.current.add(messageId);
+    },
+    [viewerId],
+  );
 
   const leave = useCallback((leftConversationId: string | undefined) => {
     const ids = [...seenRef.current];
@@ -134,5 +148,12 @@ export function useAfterReadConsumption(params: {
     if (held.length > 0) removeAfterReadLocally(queryClient, { conversationId, messageIds: held });
   }, [conversationId, messages, queue, queryClient]);
 
-  return { noteSeenUpTo };
+  return { noteSeenUpTo, noteSeen };
 }
+
+/**
+ * LE CANAL DE LA SONDE (#8343) — l'écran du fil le fournit, chaque rangée
+ * flamme-œil y déclare qu'elle a été vue. `null` hors d'un fil : la sonde ne
+ * fait rien.
+ */
+export const AfterReadSeenContext = createContext<((messageId: string) => void) | null>(null);

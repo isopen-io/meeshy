@@ -3,6 +3,7 @@ import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import { AfterReadSeenProbe } from '@/components/after-read-seen-probe';
 import { AfterReadWatermark, afterReadReachOf } from '@/components/after-read-watermark';
 import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
@@ -692,6 +693,7 @@ export function ThreadModes({
                 {/* LE FILIGRANE DE LA FLAMME-ŒIL (#8304) — sur le nœud des
                     DEUX peaux, comme la destruction : tous les modes le
                     reçoivent, et il remplace la pastille de décompte. */}
+                {rowAfterRead && !rowIsMine ? <AfterReadSeenProbe messageId={p.message.id} /> : null}
                 {rowAfterRead ? (
                   <AfterReadWatermark
                     reach={afterReadReachOf({

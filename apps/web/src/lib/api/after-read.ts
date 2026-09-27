@@ -17,11 +17,7 @@ import { tombstoneQuotesOf } from './quote-tombstone';
  * l'échéance à maintenant et expire aussitôt (`message:expired` vers ses
  * autres appareils) ; elle ignore ce qui n'est pas une flamme-œil reçue.
  *
- * L'ADRESSE : le catalogue généré (`route-manifest.json`) n'a pas encore
- * d'entrée propre pour cette route. `byIdMessagesByMessageIdConsume(id,
- * 'after-read')` compose EXACTEMENT la même adresse (segment statique
- * `after-read` à la place de `:messageId`) sans écrire de chemin en dur ;
- * l'entrée dédiée la remplacera dès que le manifeste la porte.
+ * L'ADRESSE vient du catalogue généré (`byIdMessagesAfterReadConsume`, #8342).
  */
 export function consumeAfterRead(
   transport: Transport,
@@ -29,7 +25,7 @@ export function consumeAfterRead(
 ): Promise<unknown> {
   return transport({
     method: 'POST',
-    path: conversationsEndpoints.byIdMessagesByMessageIdConsume(input.conversationId, 'after-read'),
+    path: conversationsEndpoints.byIdMessagesAfterReadConsume(input.conversationId),
     body: { messageIds: [...input.messageIds] },
   });
 }
