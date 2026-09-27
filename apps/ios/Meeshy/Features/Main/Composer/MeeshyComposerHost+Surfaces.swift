@@ -546,6 +546,9 @@ extension MeeshyComposerHost {
             bandBackdrop: sceneBackdrop,
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
+            animatedToggle: sceneAnimatedToggle,
+            timelinePanel: sceneTimelinePanel,
+            timelineBridge: viewModel.canvasTimelineBridge,
             // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE
             // le trait, et les contrôleurs qui règlent le pinceau. Les deux
             // flottent sur la scène, et ce sont ceux de l'ATELIER — pinceau

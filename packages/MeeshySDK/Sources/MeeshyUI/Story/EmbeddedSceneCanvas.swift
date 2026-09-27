@@ -193,8 +193,10 @@ public struct EmbeddedSceneCanvas: View {
         onInlineTextEditEnded: ((String) -> Void)? = nil,
         selectedItemId: String? = nil,
         selectionBadge: String? = nil,
-        referenceViewport: CGSize = CGSize(width: 402, height: 874)
+        referenceViewport: CGSize = CGSize(width: 402, height: 874),
+        timelineBridge: StoryCanvasTimelineBridge? = nil
     ) {
+        self.timelineBridge = timelineBridge
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
@@ -235,6 +237,11 @@ public struct EmbeddedSceneCanvas: View {
     /// propre canvas (mesuré 392×696 sur iPhone 16 Pro).
     public var referenceViewport: CGSize
 
+    /// **Le pont de la frise** (#8415, mode Animé) : la lecture et le
+    /// déplacement de la tête pilotent ce canvas-ci, comme dans l'atelier.
+    /// `nil` pour tout hôte qui n'anime pas sa scène.
+    public var timelineBridge: StoryCanvasTimelineBridge?
+
     public var body: some View {
         GeometryReader { proxy in
             // Bounds intrinsèques FIXES au ratio, centrés (« fit ») dans la
@@ -265,7 +272,8 @@ public struct EmbeddedSceneCanvas: View {
                 // de référence PUIS réduite, donc un rayon UIKit de
                 // `cornerRadius / scale` atterrit bien à `cornerRadius` à l'écran
                 // (même compensation que `canvasComposerLayer`).
-                canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0
+                canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
+                timelineBridge: timelineBridge
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
             // les capture** — sinon le doigt qui trace déplacerait aussi

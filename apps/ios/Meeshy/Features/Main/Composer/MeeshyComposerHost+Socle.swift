@@ -386,6 +386,9 @@ extension MeeshyComposerHost {
     /// slides. Un RÉEL part par le document (#4869) : le canal de la scène publie
     /// un post PAR SLIDE, et un réel de deux photos y faisait deux posts.
     func performSoclePublish(_ choice: ComposerPublishChoice) {
+        // La frise ouverte rend ses pistes à la slide AVANT l'envoi (#8415) :
+        // sinon un timing réglé à l'instant partirait sans elle.
+        if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
         switch ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice) {
         case .atelier:
             publishTrigger.requestPublish(

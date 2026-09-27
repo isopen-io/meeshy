@@ -244,8 +244,8 @@ final class ComposerSceneBandTests: XCTestCase {
         let code = try source("ComposerSceneSurface.swift")
         // Le chrome de la scène vit dans `chromeLayer` depuis #8370 : le `body`
         // n'empile plus que les calques, et c'est là que la bande s'insère.
-        guard let corps = declarationBody(startingAt: "private var chromeLayer: some View", in: code) else {
-            return XCTFail("Le calque de chrome de la surface de scène est introuvable")
+        guard let corps = declarationBody(startingAt: "private var lowerFloors: some View", in: code) else {
+            return XCTFail("Les étages du bas de la surface de scène sont introuvables")
         }
         let compacte = compact(corps)
         XCTAssertTrue(compacte.contains("ComposerSceneBandView("),
