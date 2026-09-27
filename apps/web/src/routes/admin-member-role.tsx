@@ -34,7 +34,11 @@ export function AdminMemberRoleSection({
   readonly onOpenBan: () => void;
   readonly deps?: AdminDeps;
 }) {
-  const [draft, setDraft] = useState<RoleDraft>(() => roleDraftOf(membre));
+  /* Seuls les champs TOUCHÉS vivent dans l'état : le reste se relit du membre
+     servi, si bien qu'un geste d'une AUTRE section (activer, valider) ne laisse
+     jamais ici une valeur périmée qui ferait croire à une modification. */
+  const [touches, setTouches] = useState<Partial<RoleDraft>>({});
+  const draft: RoleDraft = { ...roleDraftOf(membre), ...touches };
   const [motif, setMotif] = useState('');
   const [confirme, setConfirme] = useState(false);
   const focus = useFieldFocus();
@@ -45,7 +49,7 @@ export function AdminMemberRoleSection({
   const doitConfirmer = sensibles.length > 0 && !confirme;
 
   const poser = (partie: Partial<RoleDraft>) => {
-    setDraft((precedent) => ({ ...precedent, ...partie }));
+    setTouches((precedent) => ({ ...precedent, ...partie }));
     setConfirme(false);
     ecriture.reset();
   };
@@ -60,7 +64,7 @@ export function AdminMemberRoleSection({
     );
     setConfirme(false);
     if (aJour === null) return;
-    setDraft(roleDraftOf(aJour));
+    setTouches({});
     setMotif('');
   }
 

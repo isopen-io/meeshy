@@ -346,6 +346,11 @@ const it = {
   'admin.identity.suggestions': 'Pseudonimi liberi',
   'admin.identity.noLanguage': 'Nessuna',
   'admin.security.twoFactorNotEnrolled': 'Il membro deve prima associare un’app di autenticazione.',
+  'admin.quick.title': 'Azioni rapide',
+  'admin.quick.activate': 'Attiva l’account',
+  'admin.quick.activated': 'Account attivato',
+  'admin.quick.validateEmail': 'Convalida l’e-mail',
+  'admin.quick.validatePhone': 'Convalida il telefono',
 } satisfies AdminInterfaceCatalog;
 
 export default it;
