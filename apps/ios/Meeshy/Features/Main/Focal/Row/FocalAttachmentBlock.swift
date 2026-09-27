@@ -180,8 +180,8 @@ nonisolated enum FocalMediaProtection {
 /// conditionnelles inlinées — la cause du crash `swift_getTypeByMangledNameInContextImpl`
 /// documentée sur ce fichier) SANS réutiliser son TYPE. Le rendu réutilise
 /// les primitives réellement accessibles : `ProgressiveCachedImage`,
-/// `VideoAvailabilityResolver` + `MeeshyVideoPlayer`, `DownloadBadgeView`
-/// (`internal`, non `fileprivate` — vérifié).
+/// `ConversationVideoPoster` (une vidéo ne se lit plus dans le fil, #8231),
+/// `DownloadBadgeView` (`internal`, non `fileprivate` — vérifié).
 ///
 /// **Flou / voir-une-fois (arbitrage F-083bis, planche des 25 cas)** :
 /// `AttachmentBlurOverlayView` et `viewCountBadge` (`BubbleGridCell`) sont
@@ -299,20 +299,9 @@ struct FocalGridCell: View {
             .clipped()
 
         case .video:
-            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-                MeeshyVideoPlayer(
-                    attachment: attachment,
-                    style: .inline,
-                    controls: .inlineDefault,
-                    accentColor: accentHex,
-                    frame: .bubble,
-                    availability: availability,
-                    performance: .inline,
-                    playButtonDiameter: 44,
-                    onDownload: onDownload,
-                    onExpand: { onTap?(attachment) }
-                )
-            }
+            // #8231 — un poster fixe, jamais un lecteur : le toucher de la
+            // cellule (`body`) ouvre le plein écran, qui lance la lecture.
+            ConversationVideoPoster(attachment: attachment, accentHex: accentHex)
 
         default:
             EmptyView()

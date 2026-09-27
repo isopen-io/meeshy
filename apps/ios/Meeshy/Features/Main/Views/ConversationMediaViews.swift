@@ -56,6 +56,10 @@ struct DownloadBadgeView: View {
     /// plate, carrousel) : deux boutons, deux anneaux, deux téléchargeurs dont
     /// aucun ne voyait l'autre. Il ne sert plus que l'image, dont la vue n'a pas
     /// d'autre affordance.
+    ///
+    /// Depuis #8231 la vidéo ne se lit plus dans le fil : son lecteur est
+    /// celui du PLEIN ÉCRAN (la page vidéo de la galerie résout la même
+    /// disponibilité), et la tuile ne montre qu'un poster.
     var yieldsToThePlayer: Bool {
         attachment.type == .video
     }

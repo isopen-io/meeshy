@@ -518,7 +518,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // quitté pour `ConversationInfoSheet+Pinned.swift` : il sort de
     // `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
     // pesait à la sortie.
-    private static let legacyLineCeiling = 47_652
+    //
+    // #8231 — 47 652 → 47 615 (−37). Plus aucune vidéo ne se lit dans une
+    // bulle : `BubbleStandardLayout.swift` perd le miroir de
+    // `SharedAVPlayerManager.activeURL` qui masquait son pied pendant la
+    // lecture inline.
+    private static let legacyLineCeiling = 47_615
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
