@@ -1131,6 +1131,13 @@ export const CALL_ERROR_CODES = {
    * appel déjà en cours va à son terme. Cf. `CallService.initiateCall`.
    */
   CONVERSATION_CLOSED: 'CONVERSATION_CLOSED',
+  /**
+   * L'interlocuteur a coupé « Appels hors contacts » (`allowCallsFromNonContacts`)
+   * et l'appelant n'est pas un ami accepté (#8073). Refusé à l'OUVERTURE d'un
+   * appel direct : aucune session, aucune sonnerie, aucun appel manqué. En
+   * groupe, le membre concerné n'est simplement pas sonné.
+   */
+  CALLEE_REFUSES_NON_CONTACTS: 'CALLEE_REFUSES_NON_CONTACTS',
 
   // Call state errors
   CALL_NOT_FOUND: 'CALL_NOT_FOUND',
