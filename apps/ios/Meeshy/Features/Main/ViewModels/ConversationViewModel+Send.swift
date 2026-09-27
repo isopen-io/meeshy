@@ -69,23 +69,17 @@ extension ConversationViewModel {
         )
     }
 
-    /// Saisit la protection armée et DÉSARME la rangée dans le même tour.
+    /// Saisit la protection armée, une fois par tap, AVANT que quoi que ce soit
+    /// parte : la valeur rendue voyage ensuite jusqu'à chaque message de cet
+    /// envoi (#7498 — un envoi multi-pièces ne peut pas perdre sa protection
+    /// en route).
     ///
-    /// Appelée une fois par tap, avant que quoi que ce soit parte : la valeur
-    /// rendue voyage ensuite jusqu'à chaque message de cet envoi. Le
-    /// désarmement était jusqu'ici fait à l'ACQUITTEMENT de chaque message
-    /// (`finalizeSuccessfulSend`), ce qui donnait à un envoi multi-pièces une
-    /// fenêtre où la protection avait déjà disparu pour les groupes suivants.
-    ///
-    /// Désarmer au TAP est aussi ce que l'utilisateur attend : il vient
-    /// d'envoyer, la rangée s'éteint — elle ne reste pas allumée le temps d'un
-    /// upload, à lui faire croire que le prochain envoi sera protégé aussi.
-    func consumeArmedProtection() -> MessageProtectionIntent {
-        let intent = armedProtection
-        if ephemeralChoice != nil { ephemeralChoice = nil }
-        if isBlurEnabled { isBlurEnabled = false }
-        if isViewOnceEnabled { isViewOnceEnabled = false }
-        return intent
+    /// **Elle ne DÉSARME plus rien** (#8305, directive porteur 2026-09-27) : une
+    /// protection armée reste armée pour les messages suivants de la
+    /// conversation jusqu'à ce qu'on la change. Seuls les effets décoratifs
+    /// restent à usage unique (`finalizeSuccessfulSend`).
+    func captureArmedProtection() -> MessageProtectionIntent {
+        armedProtection
     }
 
     /// Les bits que la ligne OPTIMISTE doit porter : l'axe apparition/persistant
@@ -184,12 +178,10 @@ extension ConversationViewModel {
             )
         }
 
-        // Le désarmement des TROIS protections a quitté cet endroit (#7498) :
-        // il se fait au TAP, par `consumeArmedProtection()`. Ici, on est à
-        // l'ACQUITTEMENT d'UN message — et un tap en produit souvent plusieurs
-        // (un par groupe de pièces jointes, plus le texte). Désarmer ici
-        // laissait partir sans protection tout ce qui suivait le premier
-        // acquittement, la rangée allumée au moment du tap.
+        // Les TROIS protections ne se désarment NI ici NI au tap (#8305) :
+        // elles restent armées jusqu'à ce qu'on les change. Seuls les effets
+        // décoratifs sont à usage unique — et c'est à l'ACQUITTEMENT qu'ils
+        // tombent, jamais avant (#7498 : un tap produit plusieurs messages).
         if pendingEffects.hasAnyEffect { pendingEffects = .none }
         mentionController.clearDraft()
 
