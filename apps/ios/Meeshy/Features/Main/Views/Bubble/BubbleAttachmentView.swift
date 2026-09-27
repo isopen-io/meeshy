@@ -46,7 +46,7 @@ struct BubbleAttachmentView: View {
             // la bulle, et le toucher remis à l'hôte qui ouvre le plein écran.
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: accentHex,
-                                    playBadgeDiameter: 48)
+                                    playButtonDiameter: 64)
                 .aspectRatio(attachment.videoAspectRatio ?? (16.0 / 9.0), contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .contentShape(Rectangle())

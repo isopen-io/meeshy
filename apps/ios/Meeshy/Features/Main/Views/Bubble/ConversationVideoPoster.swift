@@ -21,8 +21,10 @@ import MeeshyUI
 struct ConversationVideoPoster: View {
     let attachment: MessageAttachment
     let accentHex: String
-    /// Diamètre extérieur du badge play : 48 pour une vidéo seule, 36 en grille.
-    var playBadgeDiameter: CGFloat = 36
+    /// Diamètre extérieur du badge play : 64 pour une vidéo seule, 44 en grille
+    /// — les cotes du bouton de l'ancien lecteur inline, que la loi de la
+    /// Lentille (web, `curve-media-grid.mjs`) relit sur la grille.
+    var playButtonDiameter: CGFloat = 44
     /// `true` dans une page de carrousel plus haute que la vidéo : l'image garde
     /// son rapport naturel, centrée, au lieu de remplir la page en la rognant.
     var keepsNaturalRatio: Bool = false
@@ -60,20 +62,20 @@ struct ConversationVideoPoster: View {
     }
 
     private var playBadge: some View {
-        let inner = playBadgeDiameter - 6
+        let inner = playButtonDiameter - 6
         return ZStack {
             Circle()
                 .fill(.ultraThinMaterial)
-                .frame(width: playBadgeDiameter, height: playBadgeDiameter)
+                .frame(width: playButtonDiameter, height: playButtonDiameter)
             Circle()
                 .fill(Color(hex: accentHex).opacity(0.85))
                 .frame(width: inner, height: inner)
             Image(systemName: "play.fill")
                 // Doctrine 86i : glyphe play dans un cercle de dimension fixe →
                 // taille figée, proportionnée au cercle (ne doit pas déborder).
-                .font(.system(size: playBadgeDiameter * 0.375, weight: .bold))
+                .font(.system(size: playButtonDiameter * 0.375, weight: .bold))
                 .foregroundColor(.white)
-                .offset(x: playBadgeDiameter / 24)
+                .offset(x: playButtonDiameter / 24)
         }
         .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
     }

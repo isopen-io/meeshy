@@ -447,7 +447,7 @@ fileprivate struct BubbleGridCell: View {
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
-                                    playBadgeDiameter: solo ? 48 : 36)
+                                    playButtonDiameter: solo ? 64 : 44)
         default:
             EmptyView()
         }
@@ -866,7 +866,7 @@ struct BubbleCarouselView: View {
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
         ConversationVideoPoster(attachment: attachment,
                                 accentHex: contactColor,
-                                playBadgeDiameter: 48,
+                                playButtonDiameter: 64,
                                 keepsNaturalRatio: true)
             .overlay(alignment: .bottom) {
                 MediaConsumptionProgressBar(
