@@ -589,10 +589,17 @@ async function runScheme(colorScheme) {
       `${tag} : rechargé, le brouillon rend ses trois pages ET la page courante`,
     );
 
-    /* (f) Post › « Une grande, les autres à côté » publie. */
+    /* (f) Post › « Une grande, les autres à côté » s'ARME au chevron sans
+       publier ; seul Publier envoie (maquette plein écran, #8281). */
     await pagesPage.click('[data-publish-kind-toggle]');
     await pagesPage.click('[data-publish-kind-choice="POST"]');
     await pagesPage.click('[data-publish-layout-choice="hero"]');
+    check(
+      new URL(pagesPage.url()).pathname !== '/feed' &&
+        (await pagesPage.getAttribute('[data-story-publish]', 'data-publish-kind')) === 'POST',
+      `${tag} : choisir une disposition au chevron publie au lieu d'armer la capsule`,
+    );
+    await pagesPage.click('[data-story-publish]');
     await pagesPage.waitForURL((url) => url.pathname.startsWith('/feed'), { timeout: 8000 });
 
     check(pagesErrors.length === 0, `${tag} : erreurs de page (plusieurs pages) — ${pagesErrors.join(' | ')}`);
