@@ -61,7 +61,6 @@ import { matchContacts } from './contacts-match';
 import {
   syncContactsDirectory,
   getContactsDirectory,
-  clearContactsDirectory
 } from './contacts-directory';
 
 // Presence routes (runtime online status)
@@ -127,7 +126,6 @@ export async function userRoutes(fastify: FastifyInstance) {
   // Répertoire persisté (sync / list / erase)
   await syncContactsDirectory(fastify);
   await getContactsDirectory(fastify);
-  await clearContactsDirectory(fastify);
 
   // Presence routes
   await getUsersPresence(fastify);

@@ -219,7 +219,6 @@ nonisolated private final class PreviewContactDirectory: ContactDirectoryService
                                     pagination: CursorPagination(nextCursor: nil, hasMore: false, limit: limit), error: nil)
     }
 
-    func clear() async throws -> DirectoryClearResult { DirectoryClearResult(removedCount: 0) }
 }
 
 private final class PreviewNotificationPermission: OnboardingNotificationPermitting {
