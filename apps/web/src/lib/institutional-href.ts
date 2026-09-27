@@ -16,8 +16,10 @@
  */
 export type InstitutionalPage = 'terms' | 'privacy';
 
-export function institutionalHref(page: InstitutionalPage, _options: { readonly shell: boolean }): string {
-  return `/${page}`;
+const CANONICAL_ORIGIN = 'https://meeshy.me';
+
+export function institutionalHref(page: InstitutionalPage, options: { readonly shell: boolean }): string {
+  return options.shell ? `${CANONICAL_ORIGIN}/${page}` : `/${page}`;
 }
 
 export function appInstitutionalHref(page: InstitutionalPage): string {

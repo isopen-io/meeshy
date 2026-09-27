@@ -51,6 +51,7 @@ import {
 } from '@/lib/view/referral-code';
 import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
+import { appInstitutionalHref } from '@/lib/institutional-href';
 import { Link, href, navigate } from '@/routes/route-table';
 import { PasswordInput } from '@/components/password-input';
 
@@ -748,12 +749,13 @@ export default function SignupScreen({
             </p>
             {/* Les DEUX pages institutionnelles existent déjà (`/terms`, `/privacy`,
                 #5606) — des ancres PLEIN DOCUMENT, jamais des routes de l'app :
-                elles n'ont ni session ni API à porter (§ leur propre doc-comment). */}
+                elles n'ont ni session ni API à porter (§ leur propre doc-comment).
+                La coque les lie par leur adresse publique (#8213). */}
             <div className="flex gap-4">
-              <a href="/terms" className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
+              <a href={appInstitutionalHref('terms')} className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
                 Conditions d’utilisation
               </a>
-              <a href="/privacy" className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
+              <a href={appInstitutionalHref('privacy')} className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
                 Politique de confidentialité
               </a>
             </div>
