@@ -25,10 +25,14 @@ describe('call:media-toggled du partage d’écran', () => {
 });
 
 describe('la disposition quand un pair partage', () => {
-  test('le flux partagé prend la scène, en direct comme en groupe', () => {
+  test('en direct, le flux partagé prend la scène', () => {
     const sharing = member({ screenSharing: true });
     expect(callLayout({ members: { a: sharing }, cameraOn: false, remoteStreams: { 'u-a': liveVideo }, isGroup: false })).toBe('screen');
-    expect(callLayout({ members: { a: sharing, b: member({ userId: 'u-b' }) }, cameraOn: true, remoteStreams: { 'u-a': liveVideo }, isGroup: true })).toBe('screen');
+  });
+
+  test('en groupe, la grille reste : c’est sa mise à la une qui monte l’écran (#8392, `call-spotlight.ts`)', () => {
+    const sharing = member({ screenSharing: true });
+    expect(callLayout({ members: { a: sharing, b: member({ userId: 'u-b' }) }, cameraOn: true, remoteStreams: { 'u-a': liveVideo }, isGroup: true })).toBe('grid');
   });
 
   test('sans piste vidéo reçue, l’annonce seule ne vide pas la scène', () => {

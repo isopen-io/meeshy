@@ -128,8 +128,10 @@ export function loadGlassDensities() {
   const css = readFileSync(GLASS_CSS_PATH, 'utf8');
   const regular = /\.glass\s*\{\s*--glass-density:\s*(\d+(?:\.\d+)?)%/.exec(css);
   const prominent = /\.glass-prominent\s*\{\s*--glass-density:\s*(\d+(?:\.\d+)?)%/.exec(css);
-  if (!regular || !prominent) throw new Error('densité de verre introuvable dans glass.css');
-  return { glass: Number(regular[1]), 'glass-prominent': Number(prominent[1]) };
+  const call = /\.glass-call\s*\{\s*--glass-density:\s*(\d+(?:\.\d+)?)%/.exec(css);
+  const callProminent = /\.glass-call-prominent\s*\{\s*--glass-density:\s*(\d+(?:\.\d+)?)%/.exec(css);
+  if (!regular || !prominent || !call || !callProminent) throw new Error('densité de verre introuvable dans glass.css');
+  return { glass: Number(regular[1]), 'glass-prominent': Number(prominent[1]), 'glass-call': Number(call[1]), 'glass-call-prominent': Number(callProminent[1]) };
 }
 
 const relativeLuminance = (c) => {
@@ -154,13 +156,18 @@ export function wcagContrastRatio(a, b) {
 }
 
 /** Le fond de verre au PIRE CAS (D-51) : le ton, à sa densité, composé sur l'extrême du schéma. */
-export function glassWorstCaseBackground({ tone, densityPercent, scheme }) {
-  return over({ ...tone, a: tone.a * (densityPercent / 100) }, WORST_CASE_CANVAS[scheme]);
+export function glassWorstCaseBackground({ tone, densityPercent, scheme, canvas = WORST_CASE_CANVAS[scheme] }) {
+  return over({ ...tone, a: tone.a * (densityPercent / 100) }, canvas);
 }
 
-/** Le contraste d'une encre posée sur ce fond de verre, au pire cas. */
-export function glassWorstCaseContrast({ tone, ink, densityPercent, scheme }) {
-  const background = glassWorstCaseBackground({ tone, densityPercent, scheme });
+/**
+ * Le contraste d'une encre posée sur ce fond de verre, au pire cas. `canvas`
+ * remplace l'extrême du schéma quand la surface a le SIEN : le verre d'appel
+ * (#8391) flotte sur une vidéo, et son pire cas est le blanc dans les deux
+ * schémas.
+ */
+export function glassWorstCaseContrast({ tone, ink, densityPercent, scheme, canvas }) {
+  const background = glassWorstCaseBackground({ tone, densityPercent, scheme, canvas });
   const text = over(ink, background);
   return wcagContrastRatio(text, background);
 }
@@ -306,6 +313,32 @@ export const GLASS_CONTRAST_INVENTORY = [
     ink: '--ios-ink-3',
     density: 'glass',
     kind: 'non-text',
+  },
+  {
+    /* #8391 — LE VERRE D'APPEL (`glass-call`, `styles/glass.css`) : pilule,
+       rails, puce « Nom · durée », étiquettes de nom. L'écran d'appel est
+       toujours sombre, son encre est le blanc, et son pire cas est un fond
+       BLANC passant dessous (une vidéo claire, un écran partagé) dans les
+       deux schémas — d'où `canvas`. Le texte le plus exigeant est la durée
+       et les légendes des rangées de groupe. */
+    site: 'src/components/call-*.tsx — l’encre blanche sur le verre d’appel régulier (#8391)',
+    tone: '--ios-indigo-950',
+    ink: 'white',
+    density: 'glass-call',
+    canvas: 'white',
+    kind: 'text',
+  },
+  {
+    /* #8391 · #8393 — la teinte plus sombre : le bandeau des sous-titres et
+       les commandes posées sur un écran partagé à la une. Les noms de couleur
+       des locuteurs y sont mesurés par `call-speaker-color.test.ts`, contre
+       CE fond. */
+    site: 'src/components/call-captions-panel.tsx + call-controls-*.tsx — l’encre blanche sur le verre d’appel sombre (#8391, #8393)',
+    tone: '--ios-indigo-950',
+    ink: 'white',
+    density: 'glass-call-prominent',
+    canvas: 'white',
+    kind: 'text',
   },
 ];
 
@@ -470,9 +503,10 @@ export function glassContrastAudit(inventory = GLASS_CONTRAST_INVENTORY) {
     ['light', 'dark'].map((scheme) => {
       const vars = schemes[scheme];
       const tone = resolveColor(`var(${entry.tone})`, vars);
-      const ink = resolveColor(`var(${entry.ink})`, vars);
+      const ink = resolveColor(entry.ink.startsWith('--') ? `var(${entry.ink})` : entry.ink, vars);
+      const canvas = entry.canvas === undefined ? undefined : resolveColor(entry.canvas, vars);
       const densityPercent = densities[entry.density];
-      const ratio = glassWorstCaseContrast({ tone, ink, densityPercent, scheme });
+      const ratio = glassWorstCaseContrast({ tone, ink, densityPercent, scheme, canvas });
       const minRatio = MIN_RATIO[entry.kind];
       return { ...entry, scheme, densityPercent, ratio, minRatio, passes: ratio >= minRatio };
     }),

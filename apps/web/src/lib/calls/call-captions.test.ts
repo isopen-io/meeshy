@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   CAPTIONS_JOURNAL_KEPT,
+  captionLanguageLabel,
   captionText,
   captureAction,
   decodeChannelMessage,
@@ -23,10 +24,38 @@ const caption = (overrides: Partial<CallCaption> = {}): CallCaption => ({
   speakerName: 'Nadia',
   original: 'Hello',
   translated: null,
+  pair: null,
   isFinal: true,
   at: 1_000,
   mine: false,
   ...overrides,
+});
+
+describe('l’étiquette de langue d’une ligne traduite (#8393)', () => {
+  const translated = caption({ translated: 'Bonjour', pair: { from: 'en', to: 'fr' } });
+
+  test('« EN → FR » quand la ligne lue est une traduction', () => {
+    expect(captionLanguageLabel(translated, 'translated')).toBe('EN → FR');
+  });
+
+  test('rien en mode original, rien sur l’original servi, rien sur ma propre parole', () => {
+    expect(captionLanguageLabel(translated, 'original')).toBeNull();
+    expect(captionLanguageLabel(caption(), 'translated')).toBeNull();
+    expect(captionLanguageLabel({ ...translated, mine: true }, 'translated')).toBeNull();
+  });
+
+  test('une traduction arrivée sans ses langues ne ment pas : pas d’étiquette', () => {
+    expect(captionLanguageLabel(caption({ translated: 'Bonjour' }), 'translated')).toBeNull();
+  });
+
+  test('la fusion garde les langues arrivées avec la traduction', () => {
+    const merged = mergeCaption(mergeCaption([], translated), caption({ isFinal: true }));
+    expect(merged[0]?.pair).toEqual({ from: 'en', to: 'fr' });
+  });
+
+  test('un tag régional se lit par sa langue : pt-BR → PT', () => {
+    expect(captionLanguageLabel(caption({ translated: 'Olá', pair: { from: 'en-US', to: 'pt-BR' } }), 'translated')).toBe('EN → PT');
+  });
 });
 
 const utterance = (overrides: Partial<Utterance> = {}): Utterance => ({
@@ -114,9 +143,9 @@ describe('les formes du fil (#8048)', () => {
       callId: 'call-1',
       segment: { id: 'w-9', text: 'Hello', translatedText: 'Bonjour', speakerId: 'u-peer', speakerDisplayName: 'Nadia', startMs: 0, endMs: 900, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr', confidence: 0.9, capturedAtMs: 42 },
     });
-    expect(decoded).toEqual({ callId: 'call-1', speakerName: 'Nadia', caption: { id: 'w-9', speakerId: 'u-peer', speakerName: 'Nadia', original: 'Hello', translated: 'Bonjour', isFinal: true, at: 42 } });
+    expect(decoded).toEqual({ callId: 'call-1', speakerName: 'Nadia', caption: { id: 'w-9', speakerId: 'u-peer', speakerName: 'Nadia', original: 'Hello', translated: 'Bonjour', pair: { from: 'en', to: 'fr' }, isFinal: true, at: 42 } });
     const same = decodeTranslatedSegment({ callId: 'call-1', segment: { text: 'Salut', speakerId: 'u-peer', startMs: 7, endMs: 9, isFinal: false, sourceLanguage: 'fr', targetLanguage: 'fr' } });
-    expect(same?.caption).toMatchObject({ id: 'u-peer:7', translated: null, isFinal: false });
+    expect(same?.caption).toMatchObject({ id: 'u-peer:7', translated: null, pair: null, isFinal: false });
     expect(decodeTranslatedSegment({ callId: 'call-1', segment: { speakerId: 'u-peer' } })).toBeNull();
   });
 

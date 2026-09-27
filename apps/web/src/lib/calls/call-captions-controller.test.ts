@@ -117,7 +117,7 @@ describe('recevoir les sous-titres (G1, G2, G4)', () => {
   test('un segment traduit entre au journal ; le mode traduit le lit traduit, le mode original tel qu’il a été dit', () => {
     const h = harness();
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated());
-    expect(h.call()?.captions).toEqual([{ id: 'w-peer-1', speakerId: PEER, speakerName: 'Nadia Benali', original: 'Hello everyone', translated: 'Bonjour à tous', isFinal: true, at: 5_000, mine: false }]);
+    expect(h.call()?.captions).toEqual([{ id: 'w-peer-1', speakerId: PEER, speakerName: 'Nadia Benali', original: 'Hello everyone', translated: 'Bonjour à tous', pair: { from: 'en', to: 'fr' }, isFinal: true, at: 5_000, mine: false }]);
   });
 
   test('un segment sans heure de capture (un client ancien) se range à l’heure où il arrive, jamais en tête du journal', () => {
@@ -244,7 +244,7 @@ describe('le web transcrit son micro (G3, G5)', () => {
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toEqual([
       { callId: 'call-1', segment: { id: 'w-1', text: 'Bonjour à tous', speakerId: ME, startMs: 1_200, endMs: 2_000, isFinal: true, confidence: 0.87, language: 'fr', capturedAtMs: 11_200 } },
     ]);
-    expect(h.call()?.captions).toEqual([{ id: 'w-1', speakerId: ME, speakerName: 'Moi Même', original: 'Bonjour à tous', translated: null, isFinal: true, at: 11_200, mine: true }]);
+    expect(h.call()?.captions).toEqual([{ id: 'w-1', speakerId: ME, speakerName: 'Moi Même', original: 'Bonjour à tous', translated: null, pair: null, isFinal: true, at: 11_200, mine: true }]);
     h.say('Deuxième phrase', true);
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT).map((payload) => (payload as { segment: { id: string } }).segment.id)).toEqual(['w-1', 'w-2']);
   });

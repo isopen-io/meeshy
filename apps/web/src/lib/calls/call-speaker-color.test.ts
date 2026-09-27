@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { glassWorstCaseContrast, loadGlassDensities, loadIosSchemes, resolveColor } from '../../../scripts/lib/glass-contrast.mjs';
+
 import { SELF_SPEAKER_COLOR, SPEAKER_PALETTE, speakerColor } from './call-speaker-color';
 
 /**
@@ -31,4 +33,20 @@ describe('speakerColor', () => {
   test('un identifiant vide rend une couleur, jamais une erreur', () => {
     expect(SPEAKER_PALETTE.includes(speakerColor(''))).toBe(true);
   });
+});
+
+describe('lisible sur le verre des sous-titres, au pire cas', () => {
+  const schemes = loadIosSchemes();
+  const density = loadGlassDensities()['glass-call-prominent'];
+  const white = resolveColor('white', {});
+
+  for (const color of [...SPEAKER_PALETTE, SELF_SPEAKER_COLOR]) {
+    test(`${color} tient AA texte (4,5:1) sur glass-call-prominent posé sur du blanc`, () => {
+      for (const scheme of ['light', 'dark'] as const) {
+        const tone = resolveColor('var(--ios-indigo-950)', schemes[scheme]);
+        const ink = resolveColor(color, {});
+        expect(glassWorstCaseContrast({ tone, ink, densityPercent: density, scheme, canvas: white })).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+  }
 });

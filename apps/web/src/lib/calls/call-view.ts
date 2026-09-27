@@ -61,16 +61,16 @@ export function canRetry(call: Pick<ActiveCall, 'phase' | 'direction'>): boolean
 export type CallLayout = 'portrait' | 'video-duo' | 'grid' | 'screen';
 
 /**
- * La disposition connectée : un écran partagé par un pair prend la scène
- * (#8063), en direct comme en groupe ; un appel direct dont au moins une
- * caméra tourne passe en vidéo plein cadre avec la vignette locale ; un
- * groupe à plus d'un pair est une grille ; le reste est le portrait audio
- * d'iOS.
+ * La disposition connectée : un groupe à plus d'un pair est une grille — un
+ * écran partagé y monte à la une de la grille (#8392, `call-spotlight.ts`) ;
+ * ailleurs, un écran partagé par un pair prend la scène (#8063) ; un appel
+ * direct dont au moins une caméra tourne passe en vidéo plein cadre avec la
+ * vignette locale ; le reste est le portrait audio d'iOS.
  */
 export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup'>): CallLayout {
   const members = Object.values(call.members);
-  if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
   if (call.isGroup && members.length > 1) return 'grid';
+  if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
   const remoteVideo = members.some((member) => member.cameraOn && hasVideo(call.remoteStreams[member.userId]));
   return call.cameraOn || remoteVideo ? 'video-duo' : 'portrait';
 }

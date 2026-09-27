@@ -32,6 +32,10 @@ describe('sans partage', () => {
   test('un participant choisi qui s’en va rend la grille', () => {
     expect(view([awa, kofi], chooseMember('bintou'))).toBeNull();
   });
+
+  test('… et, si quelqu’un partage, la main à la règle : son écran remonte', () => {
+    expect(view([awa, sharing], chooseMember('bintou'))?.featured).toEqual(sharing);
+  });
 });
 
 describe('la montée automatique d’un partage', () => {
