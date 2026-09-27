@@ -81,7 +81,7 @@ describe('flamme-œil — surfaces servies (#8302)', () => {
 
   it("la bannière la protège en éphémère, sans durée inventée", () => {
     expect(
-      protectedPreview({ messageType: 'text', effectFlags: AFTER_READ, expiresAt: RETENTION, createdAt: SENT_AT }),
+      protectedPreview({ messageType: 'text', effectFlags: AFTER_READ, expiresAt: RETENTION }),
     ).toEqual({ preview: expect.not.stringMatching(/\dj$/), locKey: 'notification.ephemeral_message' });
   });
 
