@@ -122,7 +122,7 @@ describe('performAdminImageUpload — téléverser PUIS poser', () => {
     expect(appels).toEqual([]);
   });
 
-  test('un refus de la pose remonte avec son code', async () => {
+  test('un refus de la pose remonte avec son statut — un 403 est un RANG, pas une panne (#8289)', async () => {
     const { transport } = transportScenarise((requete) =>
       requete.path === '/api/v1/attachments/upload'
         ? { ok: true, data: { attachments: [{ fileUrl: '/f.jpg' }] } }
@@ -136,7 +136,7 @@ describe('performAdminImageUpload — téléverser PUIS poser', () => {
       deps: { ...deps(transport), isOnline: () => true, recompress },
     });
 
-    expect(issue).toEqual({ status: 'refused', error: 'Hiérarchie insuffisante' });
+    expect(issue).toEqual({ status: 'refused', error: 'Hiérarchie insuffisante', httpStatus: 403 });
   });
 });
 

@@ -724,7 +724,19 @@ describe('POST /admin/users/:userId/enable-2fa', () => {
     await app.ready();
   });
   afterAll(() => app.close());
-  beforeEach(resetMocks);
+  // Armer n'est possible que sur une application DÉJÀ appairée (#8289) :
+  // sans secret, la connexion suivante demanderait un code invérifiable.
+  beforeEach(() => {
+    resetMocks();
+    mockUMS.getUserById.mockResolvedValue({ ...mockUser, twoFactorSecret: 'JBSWY3DPEHPK3PXP' });
+  });
+
+  it('returns 409 TWO_FACTOR_NOT_ENROLLED when the member never paired an app', async () => {
+    mockUMS.getUserById.mockResolvedValue({ ...mockUser, twoFactorSecret: null, twoFactorEnabledAt: null });
+    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/enable-2fa' });
+    expect(res.statusCode).toBe(409);
+    expect(mockUMS.enable2FA).not.toHaveBeenCalled();
+  });
 
   it('returns 200 on happy path', async () => {
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/enable-2fa' });
