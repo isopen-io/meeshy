@@ -74,7 +74,7 @@ import { takeStudioSeed } from '@/lib/stories/studio-seed';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan, uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
-import { browserCompositeDeps, type StudioCompositeDeps } from '@/lib/stories/studio-composite';
+import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
@@ -91,7 +91,6 @@ import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audien
 import { publicationRefusalText, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import { StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
-import { StudioFramePanel } from '@/routes/story-compose-frame';
 import { StudioRefusal } from '@/routes/story-compose-parts';
 import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
 import { StudioObjectHandles } from '@/routes/story-compose-stage';
@@ -152,6 +151,10 @@ const StudioPageRail = lazy(() => import('@/routes/story-compose-pages').then((m
  * que si l'auteur ouvre ⋯ › Aperçu ou touche le bouton document du socle. */
 const StudioPreviewSheet = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPreviewSheet })));
 const StudioPostTextSheet = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPostTextSheet })));
+
+/** LE PANNEAU CADRE (#8414), CHARGÉ À LA DEMANDE — il ne pèse que si
+ * l'auteur touche la tuile Cadre. */
+const StudioFramePanel = lazy(() => import('@/routes/story-compose-frame').then((m) => ({ default: m.StudioFramePanel })));
 
 /** Le Cadre d'un fond qu'on n'a pas encore réglé — le contrat (#8414). */
 const DEFAULT_FRAME: StoryFrame = { fitMode: 'fit', backdrop: 'blur' };
@@ -805,7 +808,7 @@ function StoryStudio({
 
   /** LE SOL (#8413) — le hash du COMPOSITE (#8425), sinon celui du fond ;
    * recalculé quand la MATIÈRE change, jamais à la frappe. */
-  const sceneHash = useStudioCompositeHash(page, deps.composite ?? browserCompositeDeps);
+  const sceneHash = useStudioCompositeHash(page, deps.composite ?? null);
   const floor = useMemo(
     () => studioFloor({ page, ...(sceneHash !== undefined ? { sceneHash } : {}) }),
     [page.background, page.overlay, sceneHash], // eslint-disable-line react-hooks/exhaustive-deps
@@ -939,7 +942,9 @@ function StoryStudio({
 
         {page.background !== null && frameOpen ? (
           <div className="absolute bottom-2 z-20" style={{ insetInlineEnd: 76 }} inert={publishing}>
-            <StudioFramePanel lang={lang} frame={frame} onChange={(next) => edit((current) => withBackgroundFrame(current, next))} onClose={() => setFrameOpen(false)} />
+            <Suspense fallback={null}>
+              <StudioFramePanel lang={lang} frame={frame} onChange={(next) => edit((current) => withBackgroundFrame(current, next))} onClose={() => setFrameOpen(false)} />
+            </Suspense>
           </div>
         ) : null}
         <StudioTrailingRail

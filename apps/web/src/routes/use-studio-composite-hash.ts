@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { renderStudioComposite, studioCompositePlan, type StudioCompositeDeps } from '@/lib/stories/studio-composite';
+import { studioCompositePlan, type StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import type { StudioPage } from '@/lib/stories/studio-page';
 
 /** Anti-rebond : le sol suit la COMPOSITION, jamais le doigt (miroir iOS,
@@ -13,8 +13,13 @@ const DEBOUNCE_MS = 200;
  * jamais à la frappe ni à la progression d'une montée. `undefined` tant qu'il
  * n'est pas calculé, ou quand il ne peut pas l'être : le sol retombe alors sur
  * le hash du fond (`studioFloor`).
+ *
+ * Le RENDU et l'ENCODEUR (`studio-composite.ts`) se chargent à la demande, au
+ * premier plan dessinable : une scène sans média ne les télécharge jamais, et
+ * le chunk du studio ne les porte pas. `deps` injecté (témoins) ou `null` : le
+ * canvas du navigateur.
  */
-export function useStudioCompositeHash(page: StudioPage, deps: StudioCompositeDeps): string | undefined {
+export function useStudioCompositeHash(page: StudioPage, deps: StudioCompositeDeps | null): string | undefined {
   const plan = useMemo(() => studioCompositePlan(page), [page]);
   const key = plan === null ? null : JSON.stringify(plan);
   const [hash, setHash] = useState<{ readonly key: string; readonly value: string } | null>(null);
@@ -22,9 +27,12 @@ export function useStudioCompositeHash(page: StudioPage, deps: StudioCompositeDe
     if (plan === null || key === null) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      void renderStudioComposite(plan, deps).then((value) => {
-        if (!cancelled && value !== null) setHash({ key, value });
-      });
+      void import('@/lib/stories/studio-composite')
+        .then(({ renderStudioComposite, browserCompositeDeps }) => renderStudioComposite(plan, deps ?? browserCompositeDeps))
+        .catch(() => null)
+        .then((value) => {
+          if (!cancelled && value !== null) setHash({ key, value });
+        });
     }, DEBOUNCE_MS);
     return () => {
       cancelled = true;

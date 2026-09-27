@@ -182,10 +182,11 @@ describe('le panneau Cadre (#8414)', () => {
     expect(el.querySelector('[data-story-option="frame"]')).not.toBeNull();
   });
 
-  test('le panneau est du MÊME verre que la barre, les rails et le socle — pas un aplat opaque', () => {
+  test('le panneau est du MÊME verre que la barre, les rails et le socle — pas un aplat opaque', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     const tokens = (el.querySelector('[data-story-frame-panel]')?.className ?? '').split(/\s+/);
     const rail = (el.querySelector('[data-story-studio-rail="leading"]')?.className ?? '').split(/\s+/);
     expect(tokens).toContain('glass');
@@ -193,10 +194,11 @@ describe('le panneau Cadre (#8414)', () => {
     expect(tokens).not.toContain('glass-prominent');
   });
 
-  test('Remplir couvre le cadre ; les fonds ne s’offrent qu’à un média ajusté', () => {
+  test('Remplir couvre le cadre ; les fonds ne s’offrent qu’à un média ajusté', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     expect(el.querySelectorAll('[data-story-frame-panel] [data-story-frame-option]')).toHaveLength(7);
     click(el.querySelector('[data-story-frame-option="fill"]'));
     expect(el.querySelector('[data-scene-stage] img:not([data-scene-letterbox])')?.className).toContain('object-cover');
@@ -209,6 +211,7 @@ describe('le panneau Cadre (#8414)', () => {
     selectFile(el, 'visual', image());
     await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     click(el.querySelector('[data-story-frame-option="sand"]'));
     expect(el.querySelector('[data-scene-stage] [data-scene-letterbox]')?.getAttribute('data-scene-backdrop')).toBe('sand');
     click(publishButton(el));
