@@ -166,6 +166,11 @@ const MAX_LINES = 1000;
  * suggestions d'autocomplete sont parties vers `services/mentions/`, avec la
  * portée qu'elles partagent désormais avec la validation à l'envoi.
  *
+ * `services/EmailService.ts` : SORTI (1032 → 984, #8238, 2026-09-27). La
+ * feuille de style commune est partie vers `services/email/base-styles.ts`
+ * avant que la garde des destinataires (`services/email/recipient-policy.ts`)
+ * n'entre dans `sendEmail`.
+ *
  * `services/AuthService.ts` : SORTI (1324 → 945, #8238, 2026-09-27). La
  * vérification du numéro par SMS est partie vers `services/auth/phone-verification.ts`
  * avant que la loi du délai de grâce (`services/auth/account-activation.ts`)
@@ -180,7 +185,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/CallService.ts': 3049,
   'services/PostService.ts': 2628,
   'socketio/handlers/MessageHandler.ts': 2269,
-  'services/EmailService.ts': 1032,
   'server.ts': 1406,
   'services/PostFeedService.ts': 1199,
   'services/messaging/MessageProcessor.ts': 1110,
