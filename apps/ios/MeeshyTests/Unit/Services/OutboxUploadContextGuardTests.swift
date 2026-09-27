@@ -33,7 +33,7 @@ import XCTest
 /// `MessageAttachment`. La session suivante la « corrigerait » en posant
 /// `uploadContext: "post"` sur un envoi de message, qui créerait alors un
 /// `PostMedia` orphelin que plus aucun message ne réclamerait. La garde énumère
-/// donc, et exige que la liste SANS contexte soit **exactement** les trois sites
+/// donc, et exige que la liste SANS contexte soit **exactement** les sites
 /// de message, nommés par fichier + déclaration englobante — jamais par numéro
 /// de ligne, qui bouge à chaque édition du voisinage.
 final class OutboxUploadContextGuardTests: XCTestCase {
@@ -241,6 +241,14 @@ final class OutboxUploadContextGuardTests: XCTestCase {
         XCTAssertEqual(
             sansContexte,
             [
+                // **L'enregistrement d'un appel (#8064, #8327, 2026-09-27)** : le
+                // fichier capté devient la pièce jointe de la BULLE de l'appel, qui
+                // est un message. `callRecordingLink` (gateway) ne rattache qu'un
+                // `messageAttachment` libre, audio, déposé par l'enregistreur —
+                // un contexte `post` le rendrait introuvable (404
+                // `ATTACHMENT_NOT_FOUND`). Le web dépose le sien par le même
+                // chemin sans contexte (`uploadAttachments`, `call-recording-runtime.ts`).
+                "CallRecordingController.swift:upload",
                 "ConversationView+AttachmentHandlers.swift:sendMessageWithAttachments",
                 // **Le sticker de conversation (#4823, 2026-09-02)** : le PNG rendu
                 // d'un sticker est une pièce jointe de MESSAGE ordinaire — c'est
@@ -258,8 +266,8 @@ final class OutboxUploadContextGuardTests: XCTestCase {
             ],
             "Un téléversement sans contexte crée un `MessageAttachment` ; si ce site alimente le `mediaIds` "
                 + "d'un post, le post naîtra VIDE (`PostService.createPost` ne réclame que des `PostMedia`, "
-                + "et un manque n'y produit qu'un `logger.warn`). Les trois seuls sites qui en ont le DROIT "
-                + "sont les pièces jointes de MESSAGE, qui veulent précisément un `MessageAttachment`. "
+                + "et un manque n'y produit qu'un `logger.warn`). Les seuls sites qui en ont le DROIT "
+                + "sont les pièces jointes de MESSAGE (bulle d'appel comprise), qui veulent précisément un `MessageAttachment`. "
                 + "NE PAS lever cette garde en ajoutant `uploadContext:` à un envoi de message : cela "
                 + "créerait un `PostMedia` orphelin que plus aucun message ne réclamerait. "
                 + "Trouvés — \(sansContexte)."
