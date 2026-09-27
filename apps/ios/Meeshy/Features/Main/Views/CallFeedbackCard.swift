@@ -43,7 +43,7 @@ struct CallFeedbackCard: View {
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
-            Button(action: viewModel.dismiss) {
+            Button { viewModel.dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -101,7 +101,7 @@ struct CallFeedbackCard: View {
             }
             HStack {
                 Spacer()
-                Button(action: viewModel.send) {
+                Button { viewModel.send() } label: {
                     Text(String(localized: "call.feedback.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)

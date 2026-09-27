@@ -73,7 +73,8 @@ final class CallFeedbackViewModelTests: XCTestCase {
         let (sut, service) = makeSUT()
         endCall(sut)
         sut.rate(5)
-        XCTAssertEqual(service.submitted, [CallQualityFeedback(callId: "call-1", rating: 5, issues: [])])
+        XCTAssertEqual(service.submitCallCount, 1)
+        XCTAssertEqual(service.submitted.first, CallQualityFeedback(callId: "call-1", rating: 5, issues: []))
         XCTAssertNil(sut.prompt)
     }
 
@@ -94,7 +95,8 @@ final class CallFeedbackViewModelTests: XCTestCase {
         sut.toggle(.videoQuality)
         sut.toggle(.echo)
         sut.send()
-        XCTAssertEqual(service.submitted, [CallQualityFeedback(callId: "call-1", rating: 2, issues: [.videoQuality])])
+        XCTAssertEqual(service.submitCallCount, 1)
+        XCTAssertEqual(service.submitted.first, CallQualityFeedback(callId: "call-1", rating: 2, issues: [.videoQuality]))
         XCTAssertNil(sut.prompt)
     }
 
