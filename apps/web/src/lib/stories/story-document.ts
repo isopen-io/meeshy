@@ -5,7 +5,7 @@ import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document'
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
 import type { StudioPose } from './studio-pose';
-import { textLayerPayload, type StudioTextLayer } from './studio-text';
+import { textLayerPayload, type StudioTextLayer, type StudioTiming } from './studio-text';
 
 /**
  * LE DOCUMENT D'UNE STORY COMPOSÉE (#6900, élargi au PLATEAU par #6943) — le
@@ -87,7 +87,9 @@ export type StoryComposition = {
   /** LE CALQUE D'AVANT-PLAN — un second visuel, posé SUR le fond, avec sa
    * propre pose. C'est lui qui répond à « ajouter des images en fond **ou
    * front** » (directive porteur 2026-09-17). */
-  readonly overlay?: StoryVisual & { readonly pose: StudioPose };
+  readonly overlay?: StoryVisual & { readonly pose: StudioPose; readonly timing?: StudioTiming };
+  /** LA DURÉE d'une scène animée (#8415) — `SceneV3.timelineDuration`. */
+  readonly duration?: number;
   /** LE SON — `background` : la bande-son de la scène, élue par
    * `electBackgroundTrack` (`payload.isBackground === true`) ; `foreground` :
    * un son POSÉ, que cette élection ignore. Deux rôles, un seul fichier. */
@@ -111,6 +113,10 @@ export function studioMediaKindOf(mimeType: string): StudioMediaKind {
 export const STORY_PLAIN_BACKGROUND = '0F0C29';
 const CENTER = { t: 'free', x: 0.5, y: 0.5 } as const;
 const IDENTITY = { scale: 1, rotation: 0, opacity: 1 } as const;
+
+/** `timelineDuration` d'une scène ANIMÉE — absente d'une scène statique. */
+const durationOf = (input: { readonly duration?: number }): { readonly timelineDuration?: number } =>
+  input.duration !== undefined && input.duration > 0 ? { timelineDuration: input.duration } : {};
 
 function frameTransform(frame: StoryFrame | undefined): Record<string, string> {
   const fitMode = frame?.fitMode ?? DEFAULT_SCENE_FIT_MODE;
@@ -149,6 +155,7 @@ function storyTextObject(layer: StudioTextLayer, z: number): ObjectV3 {
     id: layer.id,
     kind: 'text',
     ...posed(layer.pose),
+    ...(layer.timing !== undefined ? { timing: { start: layer.timing.start, end: layer.timing.end } } : {}),
     plane: 'fg',
     z,
     locale: layer.language,
@@ -218,6 +225,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
             id: 'overlay',
             kind: 'media',
             ...posed(overlay.pose),
+            ...(overlay.timing !== undefined ? { timing: { start: overlay.timing.start, end: overlay.timing.end } } : {}),
             // `fg` SANS `isBackground` : `isBackground()`
             // (`lib/feed/scene-framing.ts:51-52`) rend alors faux, donc ce
             // visuel ne vole ni le cadrage ni la bande du fond.
@@ -251,7 +259,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
  * jamais sans texte NI média, `core.ts:327-365`). */
 export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
   const objects = composeObjects(input);
-  return objects.length === 0 ? null : { v: 3, scenes: [{ id: 'scene-0', objects }] };
+  return objects.length === 0 ? null : { v: 3, scenes: [{ id: 'scene-0', objects, ...durationOf(input) }] };
 }
 
 /**
@@ -265,7 +273,7 @@ export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
  * description aurait divergé, et ce que l'auteur voit ne serait plus ce qui
  * part (le texte d'aperçu y avait déjà perdu `textStyle` et `fontFamily`). */
 type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly frame?: StoryFrame };
-type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose };
+type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose; readonly timing?: StudioTiming };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
 
 /** Un emplacement du studio CONVERTI en `StoryComposition` — l'ADRESSE
@@ -279,6 +287,7 @@ function storyCompositionOf<A>(
     readonly background?: VisualSlot<A>;
     readonly overlay?: OverlaySlot<A>;
     readonly sound?: SoundSlot<A>;
+    readonly duration?: number;
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): StoryComposition {
@@ -291,7 +300,10 @@ function storyCompositionOf<A>(
   return {
     texts: params.texts,
     ...(params.background !== undefined ? { background: visual(params.background) } : {}),
-    ...(params.overlay !== undefined ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose } } : {}),
+    ...(params.overlay !== undefined
+      ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose, ...(params.overlay.timing !== undefined ? { timing: params.overlay.timing } : {}) } }
+      : {}),
+    ...(params.duration !== undefined ? { duration: params.duration } : {}),
     ...(params.sound !== undefined ? { sound: { address: addressOf(params.sound.source), plane: params.sound.plane } } : {}),
   };
 }
@@ -302,6 +314,7 @@ function compose<A>(
     readonly background?: VisualSlot<A>;
     readonly overlay?: OverlaySlot<A>;
     readonly sound?: SoundSlot<A>;
+    readonly duration?: number;
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): CanvasV3 | null {
@@ -313,6 +326,7 @@ export function buildStoryCanvasEffects(params: {
   readonly background?: VisualSlot<StudioReadyAsset>;
   readonly overlay?: OverlaySlot<StudioReadyAsset>;
   readonly sound?: SoundSlot<StudioReadyAsset>;
+  readonly duration?: number;
 }): CanvasV3 | null {
   return compose(params, (ready) => ({
     postMediaId: ready.postMediaId,
@@ -331,6 +345,7 @@ export function buildPreviewCanvasDocument(params: {
   readonly background?: VisualSlot<string>;
   readonly overlay?: OverlaySlot<string>;
   readonly sound?: SoundSlot<string>;
+  readonly duration?: number;
 }): CanvasDocument | null {
   const composed = compose(params, (previewUrl) => ({ mediaURL: previewUrl }));
   return composed === null ? null : parseCanvasDocument(composed);
@@ -395,7 +410,7 @@ export function studioMediaIds(
 export type StoryPageComposition = StoryComposition & { readonly id: string };
 
 export function composeStoryCanvasPages(pages: readonly StoryPageComposition[], layout: MosaicLayoutMode | null): CanvasV3 | null {
-  const scenes = pages.map((page) => ({ id: page.id, objects: composeObjects(page) })).filter((scene) => scene.objects.length > 0);
+  const scenes = pages.map((page) => ({ id: page.id, objects: composeObjects(page), ...durationOf(page) })).filter((scene) => scene.objects.length > 0);
   if (scenes.length === 0) return null;
   return { v: 3, scenes, ...(scenes.length >= 2 && layout !== null ? { layout } : {}) };
 }
@@ -409,6 +424,7 @@ export function buildStoryCanvasEffectsPages(
     readonly background?: VisualSlot<StudioReadyAsset>;
     readonly overlay?: OverlaySlot<StudioReadyAsset>;
     readonly sound?: SoundSlot<StudioReadyAsset>;
+    readonly duration?: number;
   }[],
   layout: MosaicLayoutMode | null,
 ): CanvasV3 | null {
