@@ -14,6 +14,7 @@ import { AdminIdentifierTakenError, rethrowIdentifierTaken } from './admin-ident
 import { logger, logWarn } from '../../utils/logger';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { searchTokensFor } from '../../utils/search-tokens';
+import { candidatsDePseudo } from '../../utils/username-candidates';
 import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
@@ -290,6 +291,7 @@ export class UserManagementService {
     const email = data.email === undefined ? undefined : normalizeEmail(data.email);
     const emailChanges = email !== undefined && await this.emailDiffersFromCurrent(userId, email);
     if (email !== undefined) await this.assertEmailAvailable(email, userId);
+    if (data.username !== undefined) await this.assertUsernameAvailable(data.username, userId);
 
     const searchTokens = touchesName
       ? searchTokensFor(await this.resolveNameFields(userId, data))
@@ -339,13 +341,34 @@ export class UserManagementService {
   /**
    * La même question pour le pseudonyme (#8217) — celle que pose
    * l'inscription publique (`registration-identity.ts`), insensible à la casse.
+   * Au renommage (#8289), le membre lui-même est exclu : changer la CASSE de
+   * son propre pseudo n'est pas le prendre à quelqu'un. Le refus porte les
+   * candidats libres, testés en UNE requête comme `GET /directory/availability`.
    */
-  private async assertUsernameAvailable(username: string): Promise<void> {
+  private async assertUsernameAvailable(username: string, exceptUserId?: string): Promise<void> {
     const taken = await this.prisma.user.findFirst({
-      where: { username: { equals: username, mode: 'insensitive' } },
+      where: {
+        username: { equals: username, mode: 'insensitive' },
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+      },
       select: { id: true },
     });
-    if (taken) throw new AdminIdentifierTakenError('username');
+    if (taken) throw new AdminIdentifierTakenError('username', await this.freeUsernameCandidates(username));
+  }
+
+  /** Best-effort : une suggestion qui échoue ne change pas un 409 en 500. */
+  private async freeUsernameCandidates(username: string): Promise<string[]> {
+    const candidats = candidatsDePseudo(username);
+    try {
+      const pris = await this.prisma.user.findMany({
+        where: { username: { in: candidats, mode: 'insensitive' } },
+        select: { username: true },
+      });
+      const occupes = new Set((pris ?? []).map((u: { username: string }) => u.username.toLowerCase()));
+      return candidats.filter((c) => !occupes.has(c.toLowerCase())).slice(0, 3);
+    } catch {
+      return [];
+    }
   }
 
   private async emailDiffersFromCurrent(userId: string, email: string): Promise<boolean> {
