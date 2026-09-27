@@ -53,6 +53,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshySharePlugin.class);
         registerPlugin(MeeshyLinksPlugin.class);
         registerPlugin(MeeshyCallPlugin.class);
+        registerPlugin(MeeshyContactsPlugin.class);
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher()
             .addCallback(

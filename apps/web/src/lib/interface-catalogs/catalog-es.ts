@@ -13,10 +13,12 @@ import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
 import esCallFeedback from './catalog-es-call-feedback';
 import esCallsErase from './catalog-es-calls-erase';
+import esAddressBook from './catalog-es-address-book';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
 import esCallQuality from './catalog-es-call-quality';
 import esCallCaptions from './catalog-es-call-captions';
+import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
@@ -218,10 +220,12 @@ const es = {
   ...esCallDecline,
   ...esCallFeedback,
   ...esCallsErase,
+  ...esAddressBook,
   ...esCallDevices,
   ...esCallScreen,
   ...esCallQuality,
   ...esCallCaptions,
+  ...esCallRecording,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',

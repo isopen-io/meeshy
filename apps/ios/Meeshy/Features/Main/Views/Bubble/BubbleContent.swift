@@ -217,6 +217,25 @@ nonisolated struct BubbleContent: Equatable {
         /// Full call timestamp, formatted (date + time) in the long-press detail
         /// sheet. Kept as a `Date` so the sheet controls its own formatting.
         let timestamp: Date
+        /// #8064 — l'enregistrement consenti de l'appel, rattaché à SA bulle :
+        /// on le réécoute là où l'appel est raconté.
+        var recording: CallRecording? = nil
+    }
+
+    /// La piste audio d'un appel enregistré. Égalité par identité et par
+    /// fichier servi : la bulle ne se redessine que si la piste change.
+    struct CallRecording: Equatable {
+        let attachment: MeeshyMessageAttachment
+
+        static func == (lhs: CallRecording, rhs: CallRecording) -> Bool {
+            lhs.attachment.id == rhs.attachment.id
+                && lhs.attachment.fileUrl == rhs.attachment.fileUrl
+                && lhs.attachment.duration == rhs.attachment.duration
+        }
+
+        static func from(_ attachments: [MeeshyMessageAttachment]) -> CallRecording? {
+            attachments.first { $0.type == .audio }.map(CallRecording.init(attachment:))
+        }
     }
 
     /// Faits résolus d'un avis d'ARRIVÉE — tout ce dont la feuille

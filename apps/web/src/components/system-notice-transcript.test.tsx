@@ -14,7 +14,7 @@ import { SystemNotice } from './system-notice';
 
 const row: SystemRow = { kind: 'call', callType: 'video', text: 'Appel vidéo · 04:32' };
 
-const target = (overrides: Partial<CallNoticeTarget> = {}): CallNoticeTarget => ({ conversationId: 'c-states', callId: 'call-1', media: 'video', live: false, transcript: true, ...overrides });
+const target = (overrides: Partial<CallNoticeTarget> = {}): CallNoticeTarget => ({ conversationId: 'c-states', callId: 'call-1', media: 'video', live: false, transcript: true, recording: null, ...overrides });
 
 const render = (callTarget: CallNoticeTarget) => renderToStaticMarkup(<SystemNotice row={row} timeString="09:06" surface="bubble" callTarget={callTarget} />);
 

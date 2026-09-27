@@ -332,7 +332,9 @@ export const callersIn = (contents, nsNames) => {
 // MESURÉE sur l'arbre fusionné avec `dev` du 2026-09-27.
 // 337 → 335 (#8239, 2026-09-27) : la modal « Validez votre compte » du web
 // appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
-const BASELINE_DEAD_ENTRIES = 335;
+// 335 → 334 (#8167, 2026-09-27) : Paramètres > Confidentialité efface le
+// carnet d'adresses par `directory.contacts` (`lib/api/address-book.ts`).
+const BASELINE_DEAD_ENTRIES = 334;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

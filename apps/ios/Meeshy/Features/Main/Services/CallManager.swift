@@ -191,6 +191,8 @@ final class CallManager: ObservableObject {
     @Published private(set) var isRemoteAudioEnabled: Bool = true
     /// #8063 — partage d'écran, local et distant (`CallManager+ScreenShare.swift`).
     private(set) lazy var screenShare: CallScreenShareController = makeScreenShareController()
+    /// #8064 — l'enregistrement consenti de l'appel (`CallManager+Recording.swift`).
+    private(set) lazy var recording: CallRecordingController = makeRecordingController()
     /// `true` when the remote peer is actively screen-capturing this call
     /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
     /// banner in CallView. Resets to `false` on call end to prevent leaking state
@@ -4175,6 +4177,7 @@ final class CallManager: ObservableObject {
         isRemoteAudioEnabled = true
         isRemoteScreenCapturing = false
         screenShare.callEnded()
+        recording.callEnded()
         videoSurvivalController.reset()
         isVideoSuspended = false
         isVideoSuspendedByCaptureInterruption = false

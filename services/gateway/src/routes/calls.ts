@@ -20,6 +20,7 @@ import { createUnifiedAuthMiddleware } from '../middleware/auth.js';
 import { CallService } from '../services/CallService.js';
 import { registerCallsLifecycleRoutes } from './calls-lifecycle';
 import { registerCallsConsultationRoutes } from './calls-consultation';
+import { registerCallsRecordingRoutes } from './calls-recording';
 
 export default async function callRoutes(fastify: FastifyInstance) {
   // Get decorated prisma instance
@@ -48,4 +49,5 @@ export default async function callRoutes(fastify: FastifyInstance) {
   // routes reste celui du fichier original.
   registerCallsLifecycleRoutes(fastify, deps);
   registerCallsConsultationRoutes(fastify, deps);
+  registerCallsRecordingRoutes(fastify, deps);
 }

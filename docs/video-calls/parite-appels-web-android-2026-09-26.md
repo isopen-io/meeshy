@@ -117,7 +117,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe + feuille « Qualité » (perte, latence, gigue, débits audio/vidéo reçus, paliers du web), non mesuré sur appareil (#8071) | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `CallSignalGlyph.swift` · `CallQualitySheet.swift` · `CallQualityStatsFeed.swift` · legacy `CallQualityOverlay.tsx` · web `call-quality.tsx` (#8047) |
 | F4 | `call:quality-report` émis, `call:quality-alert` affiché | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web : rapport horodaté ISO toutes les 5 s au plus, alerte du pair éteinte après 15 s (#8047) |
 | F5 | `call:analytics` en fin d'appel (codec, effets, sous-titres réels) | ✅ | 🟡 champs codés en dur | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web `call-analytics.ts` : codec lu dans `getStats`, sous-titres comptés quand affichés (#8047) |
-| F6 | Note post-appel | ❌ | ❌ | ❌ | ❌ | — | |
+| F6 | Note post-appel (1 à 5 + motifs, échantillonnée) | 🟡 carte + émission, non vérifiée au simulateur | ❌ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | règle commune D-139 (≥ 10 s, 1 sur 5, toujours après une souffrance, au plus 1 par jour) · passerelle `call-client-reports.ts` → `CallParticipant.feedback`, agrégat `callAnalyticsAggregate.ts` (`GET /admin/analytics/calls › feedback`) · web `call-feedback.ts` + `call-feedback-cooldown.ts` + `call-feedback-card.tsx` · iOS `CallFeedbackPolicy.swift` + `CallFeedbackViewModel.swift` + `CallFeedbackCard.swift`, SDK `MessageSocketManager+CallFeedback.swift` (#8072) |
 
 ### G. Sous-titres, transcription, traduction
 
@@ -186,7 +186,7 @@ Ajouté le 2026-09-26 à la demande du porteur : les fonctions absentes ou parti
 | Fonction | État iOS | Issue |
 |---|---|---|
 | Partage d'écran | ❌ | #8063 |
-| Enregistrement d'un appel avec consentement | ❌ | #8064 |
+| Enregistrement d'un appel avec consentement | 🟡 consentement, indicateur, bulle et réécoute écrits et testés (non vérifiés sur appareil) ; ne capte que la voix LOCALE — le SDK WebRTC public n'expose pas son module audio (web et coque Android : toutes les voix, `apps/web/decisions.md` D-140) | #8064 |
 | Refuser avec un message rapide | ❌ | #8065 |
 | Journal complet : pagination, recherche, suppression, participants d'un groupe | 🟡 1re page seule | #8066 |
 | « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | ✅ écrit et testé, non vérifié sur appareil | #8067, #7735 (Récents) |

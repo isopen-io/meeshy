@@ -229,6 +229,10 @@ export const SERVER_EVENTS = {
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
+  /** #8064 — consentement à l'enregistrement : demande diffusée, démarrage après l'accord de TOUS, arrêt. */
+  CALL_RECORDING_REQUESTED: 'call:recording-requested',
+  CALL_RECORDING_STARTED: 'call:recording-started',
+  CALL_RECORDING_STOPPED: 'call:recording-stopped',
   /**
    * L'accusé de remise et de lecture — le SEUL nom sous lequel il voyage.
    *
@@ -659,6 +663,10 @@ export const CLIENT_EVENTS = {
    * passerelle depuis toujours — déclaré ici seulement au cycle 107.
    */
   CALL_ANALYTICS: 'call:analytics',
+  /** #8064 — demander, accepter ou refuser, arrêter l'enregistrement d'un appel. */
+  CALL_RECORDING_REQUEST: 'call:recording-request',
+  CALL_RECORDING_CONSENT: 'call:recording-consent',
+  CALL_RECORDING_STOP: 'call:recording-stop',
 
   // --- Location sharing ---
   LOCATION_LIVE_START: 'location:live-start',

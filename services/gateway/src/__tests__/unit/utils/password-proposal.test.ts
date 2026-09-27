@@ -116,7 +116,7 @@ describe('simple et facile (#8192, #8220) — faciles à taper, pas faciles à d
     return repeatedPair || doubledPairs || mirrored || doubledThenAny || steps.every((step) => step === 0 || step === 1 || step === -1);
   };
 
-  it.each(['simple', 'easy'] as const)('%s se complète de chiffres voisins ou répétés, comme 4545, 2334 ou 55', (level) => {
+  it.each(['simple'] as const)('%s se complète de chiffres voisins ou répétés, comme 4545, 2334 ou 55', (level) => {
     for (const password of drawn(level, 1_000)) {
       const digits = password.match(/[2-9]{2,4}/)?.[0] ?? '';
       expect({ password, near: isNear(digits), counted: digits.length >= 2 }).toEqual({ password, near: true, counted: true });
@@ -134,7 +134,18 @@ describe('simple et facile (#8192, #8220) — faciles à taper, pas faciles à d
 
   it('ne se devinent plus depuis le pseudo : l’espace dépasse de loin les 512 secrets de l’ancienne forme', () => {
     expect(new Set(drawn('simple', 10_000)).size).toBeGreaterThan(4_000);
-    expect(new Set(drawn('easy', 10_000)).size).toBeGreaterThan(7_000);
+    expect(new Set(drawn('easy', 10_000)).size).toBeGreaterThan(9_500);
+  });
+
+  it('facile tire n’importe quels chiffres, pas seulement des voisins (porteur 2026-09-27)', () => {
+    const digitsOf = (password: string) => password.match(/[2-9]{2,4}/)?.[0] ?? '';
+    const isNearOrRepeated = (digits: string) =>
+      [...digits].every((value, index, all) => index === 0 || Math.abs(Number(value) - Number(all[index - 1])) <= 1 || value === all[index - 2]);
+
+    const passwords = drawn('easy', 1_000);
+
+    expect(passwords.every((password) => digitsOf(password).length >= 2)).toBe(true);
+    expect(passwords.filter((password) => !isNearOrRepeated(digitsOf(password))).length).toBeGreaterThan(500);
   });
 
   it.each(['simple', 'easy'] as const)('%s reste à son niveau : la politique de robustesse l’accepte presque toujours', (level) => {

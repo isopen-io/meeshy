@@ -13,10 +13,12 @@ import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
 import ptCallFeedback from './catalog-pt-call-feedback';
 import ptCallsErase from './catalog-pt-calls-erase';
+import ptAddressBook from './catalog-pt-address-book';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptCallScreen from './catalog-pt-call-screen';
 import ptCallQuality from './catalog-pt-call-quality';
 import ptCallCaptions from './catalog-pt-call-captions';
+import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
@@ -222,10 +224,12 @@ const pt = {
   ...ptCallDecline,
   ...ptCallFeedback,
   ...ptCallsErase,
+  ...ptAddressBook,
   ...ptCallDevices,
   ...ptCallScreen,
   ...ptCallQuality,
   ...ptCallCaptions,
+  ...ptCallRecording,
   ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',

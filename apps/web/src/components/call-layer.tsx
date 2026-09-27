@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
+import { callRecordingStore } from '@/lib/calls/call-recording-live';
+import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 import { callStore } from '@/lib/calls/call-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -35,11 +37,20 @@ const CallFeedbackLayer = lazy(() =>
   Promise.all([import('./call-feedback-layer'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
 );
 
+/* L'enregistrement d'un appel (#8064) : la question de consentement,
+   l'indicateur « en cours » et le mot de fin, dans leur chunk, chargé quand
+   une demande existe — il survit à l'écran pour dire que le fichier est
+   déposé. */
+const CallRecordingLayer = lazy(() =>
+  Promise.all([import('./call-recording-layer'), loadCallRecordingCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
   const hasCall = useStore(callStore, (state) => state.call !== null);
   const bubble = useStore(callStore, (state) => state.call?.display === 'bubble');
   const rating = useStore(callStore, (state) => state.feedback !== null && state.call === null);
+  const recording = useStore(callRecordingStore, (state) => state.view.kind !== 'idle' || state.notice !== null);
   return (
     <>
       <Suspense fallback={null}>
@@ -48,6 +59,11 @@ export function CallLayer() {
       {active ? (
         <Suspense fallback={null}>
           <CallOverlay />
+        </Suspense>
+      ) : null}
+      {recording ? (
+        <Suspense fallback={null}>
+          <CallRecordingLayer />
         </Suspense>
       ) : null}
       {rating ? (

@@ -175,6 +175,26 @@ describe('message:edited — le fil suit le texte modifié', () => {
     expect(rowOf(client)?.content).toBe('Rendez-vous à 11h');
   });
 
+  test('les pièces jointes servies avec la rediffusion rejoignent la rangée — l’enregistrement d’un appel (#8064)', () => {
+    const client = seeded([original({ attachments: [] })]);
+    const recording = { id: 'att-rec', messageId: 'm-1', mimeType: 'audio/webm', fileUrl: '/u/rec.webm', transcription: null };
+
+    editWith(client, edited({ attachments: [recording] }));
+
+    expect(rowOf(client)?.attachments).toEqual([
+      { id: 'att-rec', messageId: 'm-1', mimeType: 'audio/webm', fileUrl: '/u/rec.webm' },
+    ] as unknown as Message['attachments']);
+  });
+
+  test('une rediffusion SANS pièces jointes ne retire pas celles en place', () => {
+    const kept = [{ id: 'att-1', mimeType: 'image/png' }] as unknown as NonNullable<Message['attachments']>;
+    const client = seeded([original({ attachments: kept })]);
+
+    editWith(client, edited());
+
+    expect(rowOf(client)?.attachments).toEqual(kept);
+  });
+
   test('le voisin garde sa référence', () => {
     const neighbour = localMessage({ id: 'm-2' });
     const client = seeded([original(), neighbour]);

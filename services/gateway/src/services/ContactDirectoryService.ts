@@ -570,10 +570,17 @@ export class ContactDirectoryService {
       });
   }
 
-  /** Efface l'intégralité du répertoire de l'utilisateur (droit au retrait). */
+  /**
+   * Efface l'intégralité du répertoire de l'utilisateur (droit au retrait, #8167).
+   *
+   * Les `ContactJoinNotice` dont il est le DESTINATAIRE partent avec lui : chacune
+   * dit qu'une personne de son carnet a été annoncée, donc qui y figurait. Celles
+   * où il est l'ARRIVANT appartiennent aux carnets des autres et restent.
+   */
   async clear(ownerId: string): Promise<number> {
     const deletion = await this.prisma.userContact.deleteMany({ where: { ownerId } });
-    logger.info('Répertoire effacé', { ownerId, removed: deletion.count });
+    const notices = await this.prisma.contactJoinNotice.deleteMany({ where: { recipientId: ownerId } });
+    logger.info('Répertoire effacé', { ownerId, removed: deletion.count, notices: notices.count });
     return deletion.count;
   }
 
