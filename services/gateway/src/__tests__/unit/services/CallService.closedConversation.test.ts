@@ -53,6 +53,7 @@ const createMockPrisma = () => ({
     updateMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 1 })
   },
   participant: {
+    findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
     findFirst: (jest.fn() as jest.Mock<any>).mockResolvedValue({
       id: 'participant-123',
       conversationId: 'conv-123',

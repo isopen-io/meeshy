@@ -268,6 +268,12 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
+      // #8238 — le délai de grâce de l'adresse est passé : une session
+      // existante ne se renouvelle plus ; la connexion mènera au code.
+      if (user.activation?.phase === 'blocked') {
+        return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
       // Le jeton renouvelé garde le nom de SA session (#4264, critère 1 :
       // « `refresh` lui-même »). Pour un jeton hérité, la session de confiance
       // présentée sert de porte de sortie de la fenêtre de transition : le

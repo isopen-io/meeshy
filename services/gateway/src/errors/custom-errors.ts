@@ -182,8 +182,9 @@ export class EmailNotVerifiedError extends BaseAppError {
 }
 
 /**
- * Le BON mot de passe d'un compte qui n'est pas encore actif (#8055) : adresse
- * jamais prouvée et aucun numéro de téléphone. Aucune session ne s'ouvre ; le
+ * Le BON mot de passe d'un compte dont le délai de grâce de l'adresse est
+ * passé (#8238, qui remplace le blocage immédiat de #8055) : 28 jours sans
+ * preuve d'adresse et aucun numéro de téléphone. Aucune session ne s'ouvre ; le
  * refus porte l'adresse du compte, pour que la route y renvoie le code — quel
  * que soit l'identifiant tapé (pseudo ou adresse).
  */

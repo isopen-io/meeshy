@@ -208,3 +208,13 @@ describe('effacer et chercher (#8066)', () => {
     expect(renderToStaticMarkup(<CallsSearchEmpty language="fr" query="zed" />)).toContain('Aucun appel ne correspond à « zed »');
   });
 });
+
+describe('le filtre vidéo (#8203)', () => {
+  test('un bouton nommé dont l’état se lit', () => {
+    const off = renderToStaticMarkup(<CallFilterRail language="fr" selected="all" onSelect={noop} video={{ pressed: false, onToggle: noop }} />);
+    expect(off).toMatch(/data-call-type-video[^>]*aria-pressed="false"/);
+    expect(off).toContain('aria-label="Appels vidéo seulement"');
+    const on = renderToStaticMarkup(<CallFilterRail language="fr" selected="all" onSelect={noop} video={{ pressed: true, onToggle: noop }} />);
+    expect(on).toMatch(/data-call-type-video[^>]*aria-pressed="true"/);
+  });
+});

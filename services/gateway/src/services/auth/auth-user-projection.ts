@@ -90,5 +90,8 @@ export const AUTH_USER_SELECT = {
   updatedAt: true,
   failedLoginAttempts: true,
   lockedUntil: true,
+  // #8214 / #8238 — un compte qui a cédé son adresse n'a plus rien à prouver :
+  // la loi du délai de grâce le lit (`./account-activation`).
+  emailReleasedAt: true,
   ...AUTO_TRANSLATE_PREFERENCE_SELECT
 } as const;

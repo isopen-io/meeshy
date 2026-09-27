@@ -67,8 +67,12 @@ export interface AuthSessionRevokedEventData {
    * celui-ci un REFUS à la connexion — aucun client ne switche sur `reason`
    * aujourd'hui (web/iOS déclenchent la même déconnexion pour les quatre),
    * l'ajout est donc sans risque de décodage strict.
+   *
+   * `activation_required` (#8238) — le délai de grâce de l'adresse est passé
+   * (28 jours sans preuve, aucun numéro) : le socket est refusé à la
+   * connexion, et la prochaine connexion mène au code d'activation.
    */
-  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke' | 'session_expired';
+  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke' | 'session_expired' | 'activation_required';
 }
 
 /**

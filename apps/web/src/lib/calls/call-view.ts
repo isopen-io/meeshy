@@ -1,3 +1,5 @@
+import type { CallErrorCode } from '@meeshy/shared/types/video-call';
+
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 
 import { type ActiveCall, type CallEndReason, type CallMember } from './call-store';
@@ -23,6 +25,14 @@ export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   removed: 'call.ended.removed',
 };
 
+/**
+ * Les refus de PRINCIPE de la passerelle (#8073) : un code typé qui a son
+ * propre motif, et qu'un nouvel essai rencontrerait à l'identique.
+ */
+const REFUSAL_KEYS: ReadonlyMap<string, PlainCallKey> = new Map<CallErrorCode, PlainCallKey>([['CALLEE_REFUSES_NON_CONTACTS', 'call.ended.refusedNonContacts']]);
+
+const refusalKeyOf = (detail: string | null): PlainCallKey | null => (detail === null ? null : (REFUSAL_KEYS.get(detail) ?? null));
+
 /** Le libellé sous le nom — `nil` une fois connecté : c'est la durée qui parle. */
 export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId' | 'direction'>): PlainCallKey | null {
   switch (call.phase.kind) {
@@ -35,7 +45,7 @@ export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId
     case 'reconnecting':
       return 'call.reconnecting';
     case 'ended':
-      return END_REASON_KEY[call.phase.reason];
+      return refusalKeyOf(call.phase.detail) ?? END_REASON_KEY[call.phase.reason];
     case 'connected':
       return null;
   }
@@ -43,7 +53,7 @@ export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId
 
 /** « Réessayer » d'iOS : après un échec passager ou une absence de réponse, jamais après un raccroché. */
 export function canRetry(call: Pick<ActiveCall, 'phase' | 'direction'>): boolean {
-  if (call.phase.kind !== 'ended' || call.direction !== 'outgoing') return false;
+  if (call.phase.kind !== 'ended' || call.direction !== 'outgoing' || refusalKeyOf(call.phase.detail) !== null) return false;
   const reason = call.phase.reason;
   return reason === 'failed' || reason === 'connectionLost' || reason === 'missed' || reason === 'busy';
 }
