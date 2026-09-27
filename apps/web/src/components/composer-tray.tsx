@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ComposerAttachmentPanel, type ComposerAttachmentPanelProps } from './composer-attachment-panel';
+
+/** « Éditer » une image en attente (#8416) — le studio en retouche, à la demande. */
+const ComposerRetouch = lazy(() => import('./composer-retouch'));
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { translate } from '@/lib/i18n-catalog';
@@ -47,6 +51,9 @@ export type ComposerTrayProps =
       readonly variant: 'above';
       readonly pending: readonly PendingAttachment[];
       readonly onRemove: (localId: string) => void;
+      /** « Éditer » une image en attente (#8416) : la retouche REMPLACE la
+       * pièce (`replacePendingAttachment`, chez l'hôte qui possède l'état). */
+      readonly onReplace?: (localId: string, file: File) => void;
       readonly notice: ComposerNotice | null;
       /** LE LIEU ATTACHÉ (#7280) — `null` quand aucun. Il se rend AU-DESSUS
        * de la rangée, avec tout ce qui DÉCRIT le message à partir (citation,
@@ -249,7 +256,17 @@ function RecordingBar({
   );
 }
 
-function PreviewTile({ attachment, onRemove }: { readonly attachment: PendingAttachment; readonly onRemove: () => void }) {
+function PreviewTile({
+  attachment,
+  onRemove,
+  onEdit,
+}: {
+  readonly attachment: PendingAttachment;
+  readonly onRemove: () => void;
+  /** « Éditer » (#8416) — une IMAGE seulement : toucher sa vignette ouvre le
+   * studio en retouche. */
+  readonly onEdit?: () => void;
+}) {
   /**
    * UN URL D'OBJET PAR PIÈCE, PARTAGÉ AVEC LA BULLE OPTIMISTE (défaut 7,
    * revue #5668) — `previewUrlFor` (`lib/send/attachment-preview-url.ts`)
@@ -295,6 +312,26 @@ function PreviewTile({ attachment, onRemove }: { readonly attachment: PendingAtt
           <Glyph name="x" size={10} />
         </span>
       </button>
+      {/* « ÉDITER » (#8416) — un badge au coin OPPOSÉ à « Supprimer », cible de
+          44 px elle aussi. Posé APRÈS lui : là où les deux cibles se
+          recouvrent (le centre de la vignette), c'est le geste qui ne détruit
+          rien qui l'emporte — mesuré au navigateur, la cible de « Supprimer »
+          couvrait tout le centre d'une vignette de 56 px. */}
+      {onEdit !== undefined ? (
+        <button
+          type="button"
+          data-composer-edit
+          onClick={onEdit}
+          aria-label={translate(currentInterfaceLanguage(), 'composer.attachment.edit', { name: attachment.name })}
+          className="absolute -bottom-2.5 -left-2.5 grid size-11 place-items-center"
+        >
+          <span className="grid size-[22px] place-items-center rounded-full text-white" style={{ backgroundColor: 'var(--accent)' }} aria-hidden>
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 20h4L19 9l-4-4L4 16z" />
+            </svg>
+          </span>
+        </button>
+      ) : null}
       <span className="mt-1 block truncate text-check" style={{ width: 60 }}>
         {attachment.name}
       </span>
@@ -305,27 +342,55 @@ function PreviewTile({ attachment, onRemove }: { readonly attachment: PendingAtt
 function PreviewStrip({
   pending,
   onRemove,
+  onReplace,
 }: {
   readonly pending: readonly PendingAttachment[];
   readonly onRemove: (localId: string) => void;
+  readonly onReplace?: (localId: string, file: File) => void;
 }) {
+  /** L'image en RETOUCHE (#8416) — la couche vit en PORTAIL sur `body` : le
+   * plateau peut être posé dans un conteneur qui romprait `position: fixed`. */
+  const [retouching, setRetouching] = useState<string | null>(null);
+  const target = pending.find((attachment) => attachment.localId === retouching) ?? null;
   return (
-    <div
-      role="group"
-      aria-label="Pièces jointes en attente"
-      className="scrollbar-none flex gap-3 overflow-x-auto px-3 py-2.5"
-      style={{
-        height: 100,
-        borderRadius: 16,
-        margin: '0 12px 4px',
-        backgroundColor: 'color-mix(in srgb, var(--accent) 6%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
-      }}
-    >
-      {pending.map((attachment) => (
-        <PreviewTile key={attachment.localId} attachment={attachment} onRemove={() => onRemove(attachment.localId)} />
-      ))}
-    </div>
+    <>
+      <div
+        role="group"
+        aria-label="Pièces jointes en attente"
+        className="scrollbar-none flex gap-3 overflow-x-auto px-3 py-2.5"
+        style={{
+          height: 100,
+          borderRadius: 16,
+          margin: '0 12px 4px',
+          backgroundColor: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+        }}
+      >
+        {pending.map((attachment) => (
+          <PreviewTile
+            key={attachment.localId}
+            attachment={attachment}
+            onRemove={() => onRemove(attachment.localId)}
+            {...(onReplace !== undefined && attachment.kind === 'image' ? { onEdit: () => setRetouching(attachment.localId) } : {})}
+          />
+        ))}
+      </div>
+      {target !== null && onReplace !== undefined
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerRetouch
+                attachment={target}
+                onCancel={() => setRetouching(null)}
+                onDone={(file) => {
+                  onReplace(target.localId, file);
+                  setRetouching(null);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
@@ -439,7 +504,9 @@ export default function ComposerTray(props: ComposerTrayProps) {
 
   return (
     <>
-      {props.pending.length > 0 ? <PreviewStrip pending={props.pending} onRemove={props.onRemove} /> : null}
+      {props.pending.length > 0 ? (
+        <PreviewStrip pending={props.pending} onRemove={props.onRemove} {...(props.onReplace !== undefined ? { onReplace: props.onReplace } : {})} />
+      ) : null}
       {props.place !== null ? <PlaceChip place={props.place} onRemove={props.onRemovePlace} /> : null}
       {props.notice !== null ? <NoticeBanner notice={props.notice} /> : null}
     </>

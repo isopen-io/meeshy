@@ -254,3 +254,51 @@ describe('le message du socle suit le format', () => {
     expect(el.querySelector('[data-story-studio-bottom]')?.textContent).not.toContain('vingt heures');
   });
 });
+
+describe('le mode Animé (#8415)', () => {
+  test('la pastille ouvre la frise : une piste par objet, rails et volets retirés ; la refermer rend tout', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    const toggle = el.querySelector('[data-story-animated]')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    click(toggle);
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    expect(el.querySelector('[data-story-animated]')?.getAttribute('aria-pressed')).toBe('true');
+    expect([...el.querySelectorAll('[data-story-track]')].map((track) => track.getAttribute('data-story-track'))).toEqual(['text-1']);
+    expect(el.querySelector('[data-story-studio-rail="leading"]')).toBeNull();
+    expect(el.querySelector('[data-story-studio-rail="trailing"]')).toBeNull();
+    expect(el.querySelector('[data-story-object-move]')).toBeNull();
+    expect(el.querySelector('[data-story-publish]')).not.toBeNull();
+    click(el.querySelector('[data-story-animated]'));
+    expect(el.querySelector('[data-story-timeline]')).toBeNull();
+    expect(el.querySelector('[data-story-studio-rail="trailing"]')).not.toBeNull();
+  });
+
+  test('la fenêtre réglée à la frise PART dans le document, avec la durée de la scène', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-track-handle="start"]') !== null);
+    const start = el.querySelector<HTMLButtonElement>('[data-story-track-handle="start"]')!;
+    for (let i = 0; i < 2; i++) act(() => start.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })));
+    expect(el.querySelector('[data-story-track="text-1"]')?.getAttribute('data-story-track-start')).toBe('1');
+    click(publishButton(el));
+    await flush(() => bench.posts.length === 1);
+    const scene = (bench.posts[0]?.storyEffects as { scenes: { timelineDuration?: number; objects: { kind: string; timing?: unknown }[] }[] }).scenes[0]!;
+    expect(scene.timelineDuration).toBe(5);
+    expect(scene.objects.find((object) => object.kind === 'text')?.timing).toEqual({ start: 1, end: 5 });
+  });
+
+  test('la frise se ferme d’un geste, et Annuler défait l’animation', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    click(el.querySelector('[data-story-animated]'));
+    click(el.querySelector('[data-story-option="undo"]'));
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    expect(el.querySelector('[data-story-timeline-duration]')?.textContent).toContain('5');
+  });
+});

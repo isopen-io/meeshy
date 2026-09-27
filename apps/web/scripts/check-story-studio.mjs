@@ -475,6 +475,34 @@ async function runScheme(colorScheme) {
       `${tag} : rouvert après publication, le studio doit avoir purgé le brouillon et relu la mémoire (COMMUNITY/chosen, texte vide) — ${JSON.stringify(afterPublish)}`,
     );
 
+    /* ── LE MODE ANIMÉ (#8415) : la pastille ouvre la frise, les rails se
+       retirent, la tête de lecture AVANCE sur l'horloge du moteur, et la
+       refermer rend les rails. ─────────────────────────────────────────── */
+    await page.fill('#story-studio-text', 'Animé');
+    await page.click('[data-story-animated]');
+    await page.waitForSelector('[data-story-timeline] [data-story-track]', { timeout: 8000 });
+    const avant = await page.evaluate(() => document.querySelector('[data-story-timeline-head]')?.style.left ?? null);
+    // Une CONDITION, jamais un délai fixe : la tête doit quitter sa position.
+    await page
+      .waitForFunction((depart) => {
+        const left = document.querySelector('[data-story-timeline-head]')?.style.left ?? null;
+        return left !== null && left !== depart && left !== '0%';
+      }, avant, { timeout: 4000 })
+      .catch(() => undefined);
+    const anime = await page.evaluate(() => ({
+      tete: document.querySelector('[data-story-timeline-head]')?.style.left ?? null,
+      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+      pistes: document.querySelectorAll('[data-story-track]').length,
+      publier: document.querySelector('[data-story-publish]') !== null,
+    }));
+    check(anime.rails === 0 && anime.pistes >= 1 && anime.publier, `${tag} : frise ouverte, rails retirés, une piste par objet, Publier gardé — ${JSON.stringify(anime)}`);
+    check(avant !== anime.tete && anime.tete !== '0%', `${tag} : la tête de lecture doit avancer pendant la lecture (${avant} → ${anime.tete})`);
+    await page.click('[data-story-animated]');
+    check(
+      await page.evaluate(() => document.querySelector('[data-story-timeline]') === null && document.querySelectorAll('[data-story-studio-rail]').length === 2),
+      `${tag} : refermer Animé rend les deux rails`,
+    );
+
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
     await context.close();
 

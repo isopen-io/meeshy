@@ -1,6 +1,6 @@
 import { rgbaToThumbHash, thumbHashToBase64 } from '@/lib/media/thumbhash-image';
 
-import { STUDIO_COMPOSITE_SIZE, type StudioCompositeDeps, type StudioCompositeOp } from './studio-composite-plan';
+import { STUDIO_COMPOSITE_SIZE, loadPlanSources, paintCompositePlan, type StudioCompositeDeps, type StudioCompositeOp } from './studio-composite-plan';
 
 /** L'EXÉCUTION du plan (`studio-composite-plan.ts`) — chargée à la demande
  * par `use-studio-composite-hash.ts`, hors du chunk du studio. */
@@ -12,28 +12,9 @@ export async function renderStudioComposite(plan: readonly StudioCompositeOp[], 
   const { width: w, height: h } = STUDIO_COMPOSITE_SIZE;
   const context = deps.createCanvas(w, h);
   if (context === null) return null;
-  const sources = new Map<string, CanvasImageSource>();
-  for (const op of plan) {
-    if (op.kind !== 'image' || sources.has(op.src)) continue;
-    const image = await deps.loadImage(op.src);
-    if (image === null) return null;
-    sources.set(op.src, image);
-  }
-  plan.forEach((op) => {
-    if (op.kind === 'fill') {
-      context.fillStyle = op.color;
-      context.fillRect(0, 0, w, h);
-      return;
-    }
-    const image = sources.get(op.src);
-    if (image === undefined) return;
-    context.save();
-    context.translate(op.x * w, op.y * h);
-    context.rotate((op.rotation * Math.PI) / 180);
-    context.filter = op.blur ? 'blur(4px)' : 'none';
-    context.drawImage(image, (-op.width * w) / 2, (-op.height * h) / 2, op.width * w, op.height * h);
-    context.restore();
-  });
+  const sources = await loadPlanSources(plan, deps.loadImage);
+  if (sources === null) return null;
+  paintCompositePlan(context, plan, sources, { width: w, height: h });
   try {
     const pixels = context.getImageData(0, 0, w, h).data;
     return thumbHashToBase64(rgbaToThumbHash(w, h, new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength)));

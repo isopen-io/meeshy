@@ -27,6 +27,19 @@ const deStudioChrome = {
   'story.studio.backdrop.white': 'Weiß',
   'story.studio.backdrop.indigo': 'Indigo',
   'story.studio.backdrop.sand': 'Sand',
+  'story.studio.animated': 'Animiert',
+  'story.studio.timeline': 'Zeitleiste der Szene',
+  'story.studio.timeline.play': 'Abspielen',
+  'story.studio.timeline.pause': 'Pause',
+  'story.studio.timeline.start': 'Beginn von {name}',
+  'story.studio.timeline.end': 'Ende von {name}',
+  'story.studio.timeline.empty': 'Schreib einen Text oder setze eine Ebene: Jedes Objekt bekommt seine Spur.',
+  'story.studio.timeline.overlay': 'Ebene',
+  'story.studio.retouch.title': 'Bild bearbeiten',
+  'story.studio.retouch.done': 'Fertig',
+  'story.studio.retouch.cancel': 'Bearbeitung verwerfen',
+  'composer.attachment.edit': '{name} bearbeiten',
+  'story.studio.retouch.failed': 'Das Bild konnte nicht erstellt werden.',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

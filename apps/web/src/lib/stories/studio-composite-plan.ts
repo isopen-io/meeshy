@@ -91,7 +91,7 @@ export function studioCompositePlan(page: StudioPage): readonly StudioCompositeO
   return ops;
 }
 
-type Context2D = Pick<
+export type Context2D = Pick<
   CanvasRenderingContext2D,
   'fillStyle' | 'fillRect' | 'drawImage' | 'save' | 'restore' | 'translate' | 'rotate' | 'filter' | 'getImageData'
 >;
@@ -101,3 +101,45 @@ export type StudioCompositeDeps = {
   readonly loadImage: (src: string) => Promise<CanvasImageSource | null>;
 };
 
+
+/** Les images du plan, décodées une fois chacune — `null` dès qu'une manque. */
+export async function loadPlanSources(
+  plan: readonly StudioCompositeOp[],
+  loadImage: (src: string) => Promise<CanvasImageSource | null>,
+): Promise<ReadonlyMap<string, CanvasImageSource> | null> {
+  const sources = new Map<string, CanvasImageSource>();
+  for (const op of plan) {
+    if (op.kind !== 'image' || sources.has(op.src)) continue;
+    const image = await loadImage(op.src);
+    if (image === null) return null;
+    sources.set(op.src, image);
+  }
+  return sources;
+}
+
+/** PEINDRE le plan sur un contexte de `size` — la même peinture pour le hash
+ * du sol (56×100) et pour la retouche (1080×1920) ; le flou suit la taille. */
+export function paintCompositePlan(
+  context: Context2D,
+  plan: readonly StudioCompositeOp[],
+  sources: ReadonlyMap<string, CanvasImageSource>,
+  size: { readonly width: number; readonly height: number },
+): void {
+  const { width: w, height: h } = size;
+  const blur = `blur(${Math.max(1, Math.round(w * 0.07))}px)`;
+  plan.forEach((op) => {
+    if (op.kind === 'fill') {
+      context.fillStyle = op.color;
+      context.fillRect(0, 0, w, h);
+      return;
+    }
+    const image = sources.get(op.src);
+    if (image === undefined) return;
+    context.save();
+    context.translate(op.x * w, op.y * h);
+    context.rotate((op.rotation * Math.PI) / 180);
+    context.filter = op.blur ? blur : 'none';
+    context.drawImage(image, (-op.width * w) / 2, (-op.height * h) / 2, op.width * w, op.height * h);
+    context.restore();
+  });
+}
