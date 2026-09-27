@@ -48648,49 +48648,49 @@
         }
       }
     },
-    "protection.tap.a11y.reveal_text": {
+    "protection.tap.a11y.reveal_in_place": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر لإظهار النص"
+            "value": "انقر لإظهار المحتوى"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippen, um den Text anzuzeigen"
+            "value": "Tippen, um den Inhalt anzuzeigen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap to show the text"
+            "value": "Tap to show the content"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca para mostrar el texto"
+            "value": "Toca para mostrar el contenido"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour afficher le texte en clair"
+            "value": "Touchez pour afficher le contenu"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca per mostrare il testo"
+            "value": "Tocca per mostrare il contenuto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque para mostrar o texto"
+            "value": "Toque para mostrar o conteúdo"
           }
         }
       }

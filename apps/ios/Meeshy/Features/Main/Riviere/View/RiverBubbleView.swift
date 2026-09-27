@@ -83,10 +83,12 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
-    /// Ce que fait le toucher sur le voile (#8310) : la Rivière ne rend aucun
-    /// média, donc c'est ce toucher qui ouvre le plein écran de l'image
-    /// floutée. Projeté par `RiverConversationMapping`, jamais décidé ici.
+    /// Ce que fait le toucher sur le voile : le lever SUR PLACE (#8389).
+    /// Projeté par `RiverConversationMapping`, jamais décidé ici.
     let protectedTap: ProtectedContentTap
+    /// Le toucher SUIVANT, sur le contenu révélé : la Rivière ne rend aucun
+    /// média (#8310), c'est lui qui ouvre le plein écran de l'image floutée.
+    let tapAfterReveal: ProtectedContentTap
 
     /// Le premier lien du texte servi et ce qu'il porte (carte de
     /// conversation, façade vidéo, aperçu) — rendu par le MÊME
@@ -122,6 +124,7 @@ struct RiverBubbleContent: Equatable {
         viewOnceChip: ViewOnceChip.State? = nil,
         isViewOnceRevealed: Bool = false,
         protectedTap: ProtectedContentTap = .none,
+        tapAfterReveal: ProtectedContentTap = .none,
         linkEmbed: BubbleContent.Text? = nil,
         contactCards: RiverContactCards = RiverContactCards(items: []),
         identity: RiverBubbleIdentity? = nil
@@ -143,6 +146,7 @@ struct RiverBubbleContent: Equatable {
         self.viewOnceChip = viewOnceChip
         self.isViewOnceRevealed = isViewOnceRevealed
         self.protectedTap = protectedTap
+        self.tapAfterReveal = tapAfterReveal
         self.linkEmbed = linkEmbed
         self.contactCards = contactCards
     }
@@ -613,7 +617,8 @@ struct RiverBubbleView: View, Equatable {
                     isDark: isDark,
                     messageId: content.bubble.messageId,
                     onConsumeViewOnce: onConsumeViewOnce,
-                    tap: content.protectedTap, onMediaTap: onMediaTap
+                    tap: content.protectedTap,
+                    tapAfterReveal: content.tapAfterReveal, onMediaTap: onMediaTap
                 ) {
                     riverText
                 }

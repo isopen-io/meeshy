@@ -523,7 +523,11 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // bulle : `BubbleStandardLayout.swift` perd le miroir de
     // `SharedAVPlayerManager.activeURL` qui masquait son pied pendant la
     // lecture inline.
-    private static let legacyLineCeiling = 47_615
+    //
+    // #8389 — 47 615 → 47 614 (−1). Le voile d'une bulle floutée se lève sur
+    // place : `BubbleStandardLayout.swift` perd la couche qui ouvrait chaque
+    // case en plein écran sous le voile.
+    private static let legacyLineCeiling = 47_614
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

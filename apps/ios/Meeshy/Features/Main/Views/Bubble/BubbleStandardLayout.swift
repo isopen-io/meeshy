@@ -504,7 +504,6 @@ struct BubbleStandardLayout: View {
                         )
                     }
                 }
-                .modifier(ProtectedGridCellTapLayer(cells: shouldBlur ? content.veiledGridCells : [], open: openProtectedMedia))
                 // Les effets du message se posent sur LA BULLE, jamais sur la
                 // rangée. Ils ont vécu montés sur `BubbleStandardLayout(...)`
                 // depuis `ThemedMessageBubble` — c'est-à-dire sur le `HStack`
@@ -1436,10 +1435,10 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Blur reveal action (delegated to controller)
 
-    /// #8009 — un média caché s'ouvre en plein écran, sans dévoilement dans la bulle.
+    /// #8389 — le voile se lève SUR PLACE, médias compris : chaque case
+    /// révélée ouvre ensuite son plein écran par son propre toucher.
     private func revealBlurredContent() {
         HapticFeedback.medium()
-        if case .openFullscreen(let media) = content.protectedTap() { return openProtectedMedia(media) }
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
                 messageId: content.messageId,
