@@ -411,6 +411,7 @@ export default function ThreadScreen() {
     virtualizer,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
     mode: reading.readingDecision.mode,
+    older: { state: threadData.olderState, fetchOlder: threadData.fetchOlder },
   });
 
   /**

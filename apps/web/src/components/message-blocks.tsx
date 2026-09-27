@@ -10,10 +10,12 @@ import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
+import { quotedAudioOf } from '@/lib/view/quoted-audio';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS, type GlyphName } from './glyphs';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
+import { QuoteAudioPlay } from './quote-audio-play';
 import { QuoteFrame } from './quote-frame';
 
 /**
@@ -610,9 +612,19 @@ export function Quote({
   isMine,
   languages,
   onJump,
+  citingId,
+  now,
 }: {
   quote: NonNullable<Message['replyTo']>;
   isMine: boolean;
+  /**
+   * LE MESSAGE QUI PORTE LA CITATION (#8320) — l'identité de la zone lecture
+   * auprès du coordinateur de média : deux réponses qui citent le même vocal
+   * sont deux lecteurs distincts. Absent ⇒ aucune zone lecture.
+   */
+  citingId?: string;
+  /** L'HORLOGE de l'hôte (#8320) — un éphémère cité EXPIRÉ n'offre plus la lecture. */
+  now?: Date;
   /**
    * LE PRISME DU LECTEUR (#7556) — celui que la rangée hôte a déjà reçu. Sans
    * lui, `Quote` rendait `quote.content` BRUT : le même message cité
@@ -648,18 +660,27 @@ export function Quote({
      vocabulaire que `composeMessageLabel` (le bouton porte un `aria-label`,
      donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
      annoncée nulle part). */
-  const label = [`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`, ...preview.inventory].join(', ');
-
-  return (
+  const uiLanguage = currentInterfaceLanguage();
+  const label = [
+    translate(uiLanguage, 'quote.jumpTo', { name: quote.sender?.displayName ?? 'l’expéditeur' }),
+    ...preview.inventory,
+  ].join(', ');
+  /* LA ZONE LECTURE (#8320) — un audio cité qu'on a le DROIT de jouer se joue
+     sur place, par le bouton voisin ; le reste de la citation garde son saut.
+     Deux boutons FRÈRES, jamais imbriqués : un bouton dans un bouton n'est
+     pas du HTML valide, et le lecteur d'écran doit annoncer deux actions. */
+  const playable = citingId === undefined ? null : quotedAudioOf({ quoted: quote, readerLanguages: languages, now: now ?? new Date() });
+  const split = playable !== null && citingId !== undefined;
+  const jump = (
     <button
       type="button"
       onClick={onJump}
-      className="mb-1.5 flex w-full rounded-quote text-left"
-      style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
+      className={split ? 'flex min-w-0 flex-1 text-left' : 'mb-1.5 flex w-full rounded-quote text-left'}
+      {...(split ? {} : { style: { backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' } })}
       {...(media === null ? {} : { 'data-quote-media': media.kind })}
       aria-label={label}
     >
-      <QuoteRail isMine={isMine} />
+      {split ? null : <QuoteRail isMine={isMine} />}
       {/* LA VIGNETTE (#7556) — `quotedThumbnail` (`BubbleQuotedReply.swift:
           382-411`). Le flou ThumbHash tient la case AVANT la requête réseau ;
           `alt=""` + `aria-hidden` parce que le bouton porte déjà son nom. */}
@@ -693,7 +714,7 @@ export function Quote({
         <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
           {quote.sender?.displayName ?? ''}{' '}
         </span>
-        {media !== null && media.frame === null && media.thumbnailSrc === null && !preview.isProtected ? (
+        {media !== null && media.frame === null && media.thumbnailSrc === null && !preview.isProtected && !split ? (
           <GlyphSvg
             glyph={QUOTE_GLYPH[media.kind]}
             size={11}
@@ -731,6 +752,18 @@ export function Quote({
         ) : null}
       </span>
     </button>
+  );
+  if (!split || playable === null || citingId === undefined) return jump;
+  return (
+    <div
+      data-quote-audio
+      className="mb-1.5 flex w-full items-stretch rounded-quote"
+      style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
+    >
+      <QuoteRail isMine={isMine} />
+      <QuoteAudioPlay audio={playable} citingId={citingId} isMine={isMine} interfaceLanguage={uiLanguage} />
+      {jump}
+    </div>
   );
 }
 

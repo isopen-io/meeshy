@@ -37,12 +37,17 @@ const attachment = (partial: Partial<Attachment>): Attachment =>
     uploadedBy: 'u-amina',
     createdAt: '2026-09-23T09:00:00.000Z',
     duration: 42_000,
+    ...partial,
+  }) as Attachment;
+
+const voice = (partial: Partial<Attachment> = {}): Attachment =>
+  attachment({
     transcription: { type: 'audio', transcribedText: 'Hello team', language: 'en', confidence: 0.9, source: 'whisper' },
     translations: {
       fr: { type: 'audio', transcription: 'Bonjour équipe', url: 'https://cdn.meeshy.me/voice-fr.m4a', durationMs: 40_000, createdAt: new Date() },
     },
     ...partial,
-  }) as Attachment;
+  });
 
 const quoted = (partial: Partial<Message> = {}): Message =>
   ({
@@ -63,7 +68,7 @@ const quoted = (partial: Partial<Message> = {}): Message =>
     isEncrypted: false,
     translations: [],
     createdAt: new Date('2026-09-23T09:00:00.000Z'),
-    attachments: [attachment({})],
+    attachments: [voice()],
     ...partial,
   }) as Message;
 
@@ -90,14 +95,14 @@ describe('quotedAudioOf — la zone lecture joue la BONNE pièce dans la BONNE l
   });
 
   test('la pièce NOMMÉE par la réponse l’emporte sur la première', () => {
-    const second = attachment({ id: 'a-second', fileUrl: 'https://cdn.meeshy.me/second.m4a', translations: undefined });
-    const message = { ...quoted({ attachments: [attachment({}), second] }), attachmentReplyTo: { attachmentId: 'a-second', kind: 'audio' } } as Message;
+    const second = attachment({ id: 'a-second', fileUrl: 'https://cdn.meeshy.me/second.m4a' });
+    const message = { ...quoted({ attachments: [voice(), second] }), attachmentReplyTo: { attachmentId: 'a-second', kind: 'audio' } } as Message;
     expect(audioOf(message)?.attachmentId).toBe('a-second');
     expect(audioOf(message)?.url).toBe('https://cdn.meeshy.me/second.m4a');
   });
 
   test('un message cité NON audio n’offre pas la lecture', () => {
-    const photo = attachment({ mimeType: 'image/jpeg', fileUrl: 'https://cdn.meeshy.me/p.jpg', transcription: undefined, translations: undefined });
+    const photo = attachment({ mimeType: 'image/jpeg', fileUrl: 'https://cdn.meeshy.me/p.jpg' });
     expect(audioOf(quoted({ attachments: [photo] }))).toBeNull();
     expect(audioOf(quoted({ attachments: [] }))).toBeNull();
   });
@@ -116,8 +121,8 @@ describe('quotedAudioOf — un message cité PROTÉGÉ n’offre pas la lecture 
   });
 
   test('vue unique ou floutée — au niveau de la PIÈCE seule', () => {
-    expect(audioOf(quoted({ attachments: [attachment({ isViewOnce: true })] }))).toBeNull();
-    expect(audioOf(quoted({ attachments: [attachment({ isBlurred: true })] }))).toBeNull();
+    expect(audioOf(quoted({ attachments: [voice({ isViewOnce: true })] }))).toBeNull();
+    expect(audioOf(quoted({ attachments: [voice({ isBlurred: true })] }))).toBeNull();
   });
 
   test('éphémère EXPIRÉ ⇒ rien ; éphémère encore vivant ⇒ lisible, comme dans le fil', () => {
@@ -126,6 +131,6 @@ describe('quotedAudioOf — un message cité PROTÉGÉ n’offre pas la lecture 
   });
 
   test('pièce sans fichier servi (masquée par la passerelle) ⇒ rien', () => {
-    expect(audioOf(quoted({ attachments: [attachment({ fileUrl: '' })] }))).toBeNull();
+    expect(audioOf(quoted({ attachments: [voice({ fileUrl: '' })] }))).toBeNull();
   });
 });
