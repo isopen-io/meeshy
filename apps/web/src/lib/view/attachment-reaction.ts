@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { isReactionAllowed } from '@meeshy/shared/utils/reaction-limit';
 
 import { emitAttachmentReaction } from '@/lib/api/attachment-reaction-emit';
-import { patchMediaHubMessages } from '@/lib/api/conversation-media-hub';
+import { patchMediaHubMessages } from '@/lib/api/media-hub-cache';
 import { patchThreadMessages } from '@/lib/api/messages';
 import type { Attachment, Message } from '@/lib/api/types';
 
