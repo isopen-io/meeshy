@@ -160,7 +160,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         protection: MessageProtectionIntent = .none
     ) {
         self.id = UUID().uuidString
-        self.protectionFlags = protection.isEmpty ? nil : protection.lifecycleFlags.rawValue
+        self.protectionFlags = protection.persistedFlags
         self.ephemeralDuration = protection.ephemeralDurationSeconds
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.conversationId = conversationId
@@ -305,5 +305,13 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(protectionFlags, forKey: .protectionFlags)
         try c.encodeIfPresent(ephemeralDuration, forKey: .ephemeralDuration)
         try c.encode(createdAt, forKey: .createdAt)
+    }
+}
+
+extension MessageProtectionIntent {
+    /// Les bits que la file persiste — `nil` pour un envoi non protégé, la
+    /// forme des lignes écrites avant la protection (#8303, #8350).
+    var persistedFlags: UInt32? {
+        isEmpty ? nil : lifecycleFlags.rawValue
     }
 }

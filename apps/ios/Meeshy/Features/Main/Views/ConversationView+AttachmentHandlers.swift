@@ -439,7 +439,8 @@ extension ConversationView {
                             content: nil,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
+                            replyToId: send.group.carriesReply ? replyId : nil,
+                            protection: protection
                         )
                         anySuccess = true
                         Logger.messages.info("Audio group queued offline for \(send.tempId)")
@@ -475,7 +476,8 @@ extension ConversationView {
                             content: nil,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
+                            replyToId: send.group.carriesReply ? replyId : nil,
+                            protection: protection
                         )
                         anySuccess = true
                         Logger.messages.info("Visual group queued offline for \(send.tempId)")
@@ -667,7 +669,8 @@ extension ConversationView {
                                 content: nil,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
+                                replyToId: send.group.carriesReply ? replyId : nil,
+                                protection: protection
                             )) != nil
                         }
                     } else {
@@ -684,7 +687,8 @@ extension ConversationView {
                                 content: nil,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
+                                replyToId: send.group.carriesReply ? replyId : nil,
+                                protection: protection
                             )) != nil
                         }
                     }

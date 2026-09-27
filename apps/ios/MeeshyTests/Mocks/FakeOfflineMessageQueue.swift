@@ -112,7 +112,8 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         copyAttachmentsFromClientMessageId: String?,
         sticker: MessageSticker?,
         deletesSourceFiles: Bool,
-        createdAt: Date?
+        createdAt: Date?,
+        protection: MessageProtectionIntent
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         if let delay { try? await Task.sleep(for: delay) }
         if shouldFailNow() { throw errorToThrow }
