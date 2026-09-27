@@ -9,6 +9,9 @@ const enSignup = {
   'signup.phoneNudge.body': 'Your number helps secure your account and recover it if you lose access to your email.',
   'signup.phoneNudge.add': 'Add my number',
   'signup.phoneNudge.continue': 'Continue anyway',
+  'signup.emailTaken.message': 'An account already exists with this address.',
+  'signup.emailTaken.sendLink': 'Get a sign-in link',
+  'signup.emailTaken.forgotPassword': 'Forgot password?',
 };
 
 export default enSignup;

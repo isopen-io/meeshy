@@ -9,6 +9,9 @@ const arSignup = {
   'signup.phoneNudge.body': 'يساعد رقمك على تأمين حسابك واستعادته إذا فقدت الوصول إلى بريدك الإلكتروني.',
   'signup.phoneNudge.add': 'إضافة رقمي',
   'signup.phoneNudge.continue': 'المتابعة على أي حال',
+  'signup.emailTaken.message': 'يوجد حساب بهذا العنوان بالفعل.',
+  'signup.emailTaken.sendLink': 'تلقي رابط تسجيل الدخول',
+  'signup.emailTaken.forgotPassword': 'نسيت كلمة المرور؟',
 };
 
 export default arSignup;

@@ -9,6 +9,9 @@ const esSignup = {
   'signup.phoneNudge.body': 'Tu número sirve para proteger tu cuenta y recuperarla si pierdes el acceso a tu correo electrónico.',
   'signup.phoneNudge.add': 'Añadir mi número',
   'signup.phoneNudge.continue': 'Continuar de todos modos',
+  'signup.emailTaken.message': 'Ya existe una cuenta con esta dirección.',
+  'signup.emailTaken.sendLink': 'Recibir un enlace de inicio de sesión',
+  'signup.emailTaken.forgotPassword': '¿Olvidaste tu contraseña?',
 };
 
 export default esSignup;

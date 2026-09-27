@@ -9,6 +9,9 @@ const deSignup = {
   'signup.phoneNudge.body': 'Deine Nummer schützt dein Konto und hilft dir, es wiederherzustellen, falls du keinen Zugriff mehr auf deine E-Mail hast.',
   'signup.phoneNudge.add': 'Meine Nummer hinzufügen',
   'signup.phoneNudge.continue': 'Trotzdem fortfahren',
+  'signup.emailTaken.message': 'Mit dieser Adresse existiert bereits ein Konto.',
+  'signup.emailTaken.sendLink': 'Anmeldelink erhalten',
+  'signup.emailTaken.forgotPassword': 'Passwort vergessen?',
 };
 
 export default deSignup;

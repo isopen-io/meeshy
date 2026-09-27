@@ -22,8 +22,9 @@ export type SignupField = 'username' | 'displayName' | 'email' | 'phoneNumber' |
 export type SignupFeedback = {
   readonly fieldErrors: Partial<Record<SignupField, string>>;
   readonly bannerError: string | null;
-  /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors
-   * « Se connecter » sous le champ (miroir `emailAlreadyRegistered`). */
+  /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors,
+   * sous le champ, « Recevoir un lien de connexion » à cette adresse et
+   * « Mot de passe oublié ? » (#8216, miroir `emailAlreadyRegistered`). */
   readonly showSignIn: boolean;
   /**
    * Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris (#6479).

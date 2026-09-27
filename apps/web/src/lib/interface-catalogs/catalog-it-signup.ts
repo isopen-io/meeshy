@@ -9,6 +9,9 @@ const itSignup = {
   'signup.phoneNudge.body': 'Il tuo numero serve a proteggere il tuo account e a recuperarlo se perdi l’accesso alla tua email.',
   'signup.phoneNudge.add': 'Aggiungi il mio numero',
   'signup.phoneNudge.continue': 'Continua comunque',
+  'signup.emailTaken.message': 'Esiste già un account con questo indirizzo.',
+  'signup.emailTaken.sendLink': 'Ricevi un link di accesso',
+  'signup.emailTaken.forgotPassword': 'Password dimenticata?',
 };
 
 export default itSignup;

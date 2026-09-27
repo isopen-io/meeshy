@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { auth } from '@/lib/api/auth';
 import { isEmailValid } from '@/lib/signup-form';
@@ -102,12 +102,28 @@ export type MagicLinkPanelProps = {
    * `MagicLinkValidation` relit en `returnUrl` à l'arrivée.
    */
   readonly next?: string | null;
+  /** L'adresse PRÉREMPLIE (#8216) — celle qu'on vient de taper ailleurs
+   * (l'inscription, `?email=`) : la retaper est un geste de trop, et une
+   * occasion de se tromper d'adresse. */
+  readonly initialEmail?: string;
+  /** Envoie la demande DÈS LE MONTAGE, à `initialEmail` (#8216) : l'hôte a
+   * déjà reçu le geste qui la demande (« Recevoir un lien de connexion » d'une
+   * adresse déjà utilisée). Une seule fois par montage. */
+  readonly sendOnMount?: boolean;
 };
 
-export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, autoFocus = false, next = null }: MagicLinkPanelProps) {
+export function MagicLinkPanel({
+  deps = defaultMagicLinkDeps,
+  footer,
+  onCancel,
+  autoFocus = false,
+  next = null,
+  initialEmail = '',
+  sendOnMount = false,
+}: MagicLinkPanelProps) {
   const online = useOnline();
   const [step, setStep] = useState<'input' | 'waiting'>('input');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<MagicLinkRequestOutcome | null>(null);
   const [deadline, setDeadline] = useState<MagicLinkDeadline | null>(null);
@@ -135,6 +151,13 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
     }
     setOutcome(resolved);
   }
+
+  const sentOnMount = useRef(false);
+  useEffect(() => {
+    if (!sendOnMount || sentOnMount.current) return;
+    sentOnMount.current = true;
+    void send();
+  }, [sendOnMount]);
 
   function cancel() {
     setStep('input');

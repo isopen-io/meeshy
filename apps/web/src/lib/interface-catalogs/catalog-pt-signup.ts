@@ -9,6 +9,9 @@ const ptSignup = {
   'signup.phoneNudge.body': 'Seu número serve para proteger sua conta e recuperá-la se você perder o acesso ao seu e-mail.',
   'signup.phoneNudge.add': 'Adicionar meu número',
   'signup.phoneNudge.continue': 'Continuar mesmo assim',
+  'signup.emailTaken.message': 'Já existe uma conta com este endereço.',
+  'signup.emailTaken.sendLink': 'Receber um link de acesso',
+  'signup.emailTaken.forgotPassword': 'Esqueceu a senha?',
 };
 
 export default ptSignup;
