@@ -76,6 +76,16 @@ export interface BuiltApiEndpointsCatalog {
   /** Le fichier `.ts` complet, tel qu'écrit par le générateur dans `api/endpoints.ts`. */
   readonly source: string;
   /**
+   * Un module par NAMESPACE (#7716), écrit dans `api/endpoints/<fichier>.ts` :
+   * une constante exportée par adresse. C'est la forme qu'un CLIENT importe
+   * (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`) :
+   * le bundler retire chaque entrée non appelée ET range le module dans le
+   * paquet de ses seuls appelants — un écran d'administration ne fait plus
+   * payer ses adresses à la première peinture. `API_ENDPOINTS` (dans `source`)
+   * les réunit, pour qui veut tout.
+   */
+  readonly groups: readonly CatalogGroup[];
+  /**
    * Les entrées DÉRIVÉES — une par adresse unique, triées par chemin brut.
    *
    * Exposées pour que les projections d'AUTRES langages (#4281 Android,
@@ -210,6 +220,13 @@ function deriveKeyAndParams(restSegments: readonly string[]): KeySplit {
   return { key: `${lowerFirst(firstPiece)}${restPieces.join('')}`, paramNames };
 }
 
+export interface CatalogGroup {
+  readonly namespace: string;
+  /** Le nom de fichier, SANS extension, sous `api/endpoints/` — le namespace en kebab-case. */
+  readonly fileName: string;
+  readonly source: string;
+}
+
 export interface CatalogEntry {
   readonly namespace: string;
   readonly key: string;
@@ -218,12 +235,21 @@ export interface CatalogEntry {
   readonly methods: readonly HttpMethod[];
 }
 
-/** Le corps du template littéral d'une fonction paramétrée, dérivé du chemin BRUT du manifeste. */
+/**
+ * Le corps du template littéral d'une fonction paramétrée, dérivé du chemin
+ * BRUT du manifeste.
+ *
+ * Chaque paramètre est ENCODÉ ici, une fois pour tous les appelants (#7716) :
+ * un identifiant qui porterait `/`, `?` ou `#` changerait sinon la route
+ * visée. L'appelant passe la valeur BRUTE — l'encoder aussi l'encoderait deux
+ * fois. Le joker `*` (chemin de fichier, identifiant TUS) garde ses `/` : il
+ * désigne un SUFFIXE de chemin, et seuls ses segments sont encodés.
+ */
 function buildTemplateBody(rawPath: string): string {
   return splitPathSegments(rawPath)
     .map((segment) => {
-      if (segment === '*') return '${wildcard}';
-      if (segment.startsWith(':')) return `\${${segment.slice(1)}}`;
+      if (segment === '*') return "${wildcard.split('/').map(encodeURIComponent).join('/')}";
+      if (segment.startsWith(':')) return `\${encodeURIComponent(${segment.slice(1)})}`;
       return segment;
     })
     .join('/');
@@ -234,7 +260,51 @@ function renderEntryValue(entry: CatalogEntry): string {
     return `'${entry.rawPath}'`;
   }
   const params = entry.paramNames.map((name) => `${name}: string`).join(', ');
-  return `(${params}) => \`/${buildTemplateBody(entry.rawPath)}\``;
+  return `(${params}): string => \`/${buildTemplateBody(entry.rawPath)}\``;
+}
+
+/** Les mots qu'un `export const` ne peut pas porter, mais qu'un nom d'export (`export { x as delete }`) accepte. */
+const RESERVED_WORDS: ReadonlySet<string> = new Set([
+  'arguments', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default',
+  'delete', 'do', 'else', 'enum', 'eval', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if',
+  'implements', 'import', 'in', 'instanceof', 'interface', 'let', 'new', 'null', 'package', 'private',
+  'protected', 'public', 'return', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof',
+  'var', 'void', 'while', 'with', 'yield',
+]);
+
+/** `apiLegacyAttachments` → `api-legacy-attachments` : le nom de fichier d'un groupe. */
+export function groupFileName(namespace: string): string {
+  return namespace.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+function renderGroupEntry(entry: CatalogEntry): string {
+  const doc = `/** ${entry.methods.join(' · ')} ${entry.rawPath} */`;
+  if (!RESERVED_WORDS.has(entry.key)) {
+    return `${doc}\nexport const ${entry.key} = ${renderEntryValue(entry)};`;
+  }
+  const local = `${entry.key}_`;
+  return `${doc}\nconst ${local} = ${renderEntryValue(entry)};\nexport { ${local} as ${entry.key} };`;
+}
+
+function renderGroupSource(namespace: string, entries: readonly CatalogEntry[]): string {
+  const header = [
+    '/**',
+    ` * Les adresses du groupe \`${namespace}\` du catalogue d'API Meeshy — GÉNÉRÉ, ne pas éditer à la main.`,
+    ' *',
+    ' * Source : services/gateway/route-manifest.json. Régénérer après tout changement de route :',
+    ' *',
+    ' *   cd packages/shared && npm run api-endpoints:generate',
+    ' *',
+    " * S'importe en espace de noms, ce qui laisse le bundler retirer chaque entrée non appelée :",
+    ' *',
+    ` *   import * as ${namespace}Endpoints from '@meeshy/shared/api/endpoints/${groupFileName(namespace)}';`,
+    ' *',
+    ' * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.',
+    ' */',
+    '',
+    '',
+  ].join('\n');
+  return `${header}${entries.map(renderGroupEntry).join('\n\n')}\n`;
 }
 
 const FILE_HEADER = [
@@ -255,6 +325,11 @@ const FILE_HEADER = [
   ' * par verbe) : GET et POST sur la même URL partagent une seule entrée, le',
   " * verbe se choisissant au site d'appel — voir build-catalog.ts pour la règle",
   ' * complète de dérivation namespace/clé, et #4280 pour le contexte du lot.',
+  ' *',
+  ' * Les entrées vivent dans api/endpoints/<groupe>.ts, un module par namespace',
+  " * (#7716) : un client importe le module de son groupe en espace de noms, et",
+  ' * le bundler ne garde que les adresses appelées, dans le paquet de leurs',
+  ' * seuls appelants. Les paramètres y sont encodés (encodeURIComponent).',
   ' *',
   " * Aucun securityLevel n'apparaît ici : le manifeste le porte 'inconnu' par",
   ' * refus délibéré de deviner (#4276) — un catalogue qui en dériverait une',
@@ -278,13 +353,10 @@ function renderSource(
   }
 
   const namespaces = [...byNamespace.keys()].sort();
-  const namespaceBlocks = namespaces.map((namespace) => {
-    const namespaceEntries = [...(byNamespace.get(namespace) ?? [])].sort((a, b) =>
-      a.key.localeCompare(b.key)
-    );
-    const lines = namespaceEntries.map((entry) => `    ${entry.key}: ${renderEntryValue(entry)},`);
-    return `  ${namespace}: {\n${lines.join('\n')}\n  },`;
-  });
+  const importLines = namespaces.map(
+    (namespace) => `import * as ${namespace}Group from './endpoints/${groupFileName(namespace)}.js';`
+  );
+  const namespaceLines = namespaces.map((namespace) => `  ${namespace}: ${namespace}Group,`);
 
   const templateLines = pathTemplates.map((path) => `  '${path}',`).join('\n');
   const methodLines = pathTemplates
@@ -297,10 +369,13 @@ function renderSource(
   return (
     FILE_HEADER +
     [
+      ...importLines,
+      '',
       "export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';",
       '',
+      '/** Tous les groupes réunis. Un CLIENT importe le module de son groupe (`./endpoints/<groupe>.js`), jamais cet objet entier. */',
       'export const API_ENDPOINTS = {',
-      namespaceBlocks.join('\n'),
+      namespaceLines.join('\n'),
       '} as const;',
       '',
       '/** Les 419 (au 2026-08-29) chemins uniques du manifeste — dédupliqués par verbe. */',
@@ -382,5 +457,15 @@ export function buildApiEndpointsCatalog(routes: readonly ManifestRouteInput[]):
     seenSlots.set(slot, entry.rawPath);
   }
 
-  return { source: renderSource(entries, pathTemplates, pathMethods), entries, pathTemplates, pathMethods };
+  const namespaces = [...new Set(entries.map((entry) => entry.namespace))].sort();
+  const groups: CatalogGroup[] = namespaces.map((namespace) => ({
+    namespace,
+    fileName: groupFileName(namespace),
+    source: renderGroupSource(
+      namespace,
+      entries.filter((entry) => entry.namespace === namespace).sort((a, b) => a.key.localeCompare(b.key))
+    ),
+  }));
+
+  return { source: renderSource(entries, pathTemplates, pathMethods), groups, entries, pathTemplates, pathMethods };
 }

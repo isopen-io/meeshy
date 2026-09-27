@@ -20,12 +20,23 @@
 import { describe, expect, it } from 'vitest';
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../build-catalog.js';
 
+/** Tout le texte généré — l'index `endpoints.ts` et chaque module de groupe. */
+function generated(routes: readonly ManifestRouteInput[]): string {
+  const built = buildApiEndpointsCatalog(routes);
+  return [built.source, ...built.groups.map((group) => group.source)].join('\n');
+}
+
+/** Le module d'UN groupe, tel qu'écrit dans `api/endpoints/<fichier>.ts`. */
+function group(routes: readonly ManifestRouteInput[], namespace: string): string {
+  return buildApiEndpointsCatalog(routes).groups.find((candidate) => candidate.namespace === namespace)?.source ?? '';
+}
+
 describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
   it('un chemin fixe (sans paramètre) devient une constante littérale', () => {
     const routes: ManifestRouteInput[] = [{ method: 'POST', path: '/api/v1/auth/login' }];
-    const { source } = buildApiEndpointsCatalog(routes);
+    const source = group(routes, 'auth');
 
-    expect(source).toContain("login: '/api/v1/auth/login',");
+    expect(source).toContain("export const login = '/api/v1/auth/login';");
     expect(source).not.toContain('=>');
   });
 
@@ -34,59 +45,55 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
       { method: 'GET', path: '/api/v1/conversations' },
       { method: 'POST', path: '/api/v1/conversations' },
     ];
-    const { source, pathTemplates } = buildApiEndpointsCatalog(routes);
+    const { pathTemplates } = buildApiEndpointsCatalog(routes);
 
-    expect(source).toContain("root: '/api/v1/conversations',");
+    expect(group(routes, 'conversations')).toContain("export const root = '/api/v1/conversations';");
     // GET + POST sur le MÊME chemin ne doivent produire qu'UNE seule entrée de
     // catalogue — c'est le verbe qui varie au site d'appel, jamais le chemin.
     expect(pathTemplates).toEqual(['/api/v1/conversations']);
   });
 
-  it('un segment `:param` devient un paramètre de fonction interpolé au bon endroit', () => {
+  it('un segment `:param` devient un paramètre de fonction interpolé ET ENCODÉ au bon endroit (#7716)', () => {
     const routes: ManifestRouteInput[] = [{ method: 'GET', path: '/api/v1/conversations/:id' }];
-    const { source } = buildApiEndpointsCatalog(routes);
 
-    expect(source).toContain('byId: (id: string) => `/api/v1/conversations/${id}`,');
+    expect(group(routes, 'conversations')).toContain(
+      'export const byId = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}`;'
+    );
   });
 
   it('plusieurs `:param` sont interpolés dans leur ORDRE d’apparition dans l’URL', () => {
     const routes: ManifestRouteInput[] = [
       { method: 'DELETE', path: '/api/v1/communities/:groupId/members/:memberId' },
     ];
-    const { source } = buildApiEndpointsCatalog(routes);
-
-    expect(source).toContain(
-      'byGroupIdMembersByMemberId: (groupId: string, memberId: string) => ' +
-        '`/api/v1/communities/${groupId}/members/${memberId}`,'
+    expect(group(routes, 'communities')).toContain(
+      'export const byGroupIdMembersByMemberId = (groupId: string, memberId: string): string => ' +
+        '`/api/v1/communities/${encodeURIComponent(groupId)}/members/${encodeURIComponent(memberId)}`;'
     );
   });
 
-  it('un segment `*` (chemin TUS) devient un paramètre `wildcard`', () => {
+  it('un segment `*` (chemin TUS) devient un paramètre `wildcard` dont seuls les SEGMENTS sont encodés', () => {
     const routes: ManifestRouteInput[] = [{ method: 'POST', path: '/api/v1/uploads/*' }];
-    const { source } = buildApiEndpointsCatalog(routes);
 
-    expect(source).toContain('byWildcard: (wildcard: string) => `/api/v1/uploads/${wildcard}`,');
+    expect(group(routes, 'uploads')).toContain(
+      "export const byWildcard = (wildcard: string): string => `/api/v1/uploads/${wildcard.split('/').map(encodeURIComponent).join('/')}`;"
+    );
   });
 
   it('un segment à tiret est PascalCase-ifié sans le tiret', () => {
     const routes: ManifestRouteInput[] = [
       { method: 'GET', path: '/api/v1/conversations/check-identifier/:identifier' },
     ];
-    const { source } = buildApiEndpointsCatalog(routes);
-
-    expect(source).toContain(
-      'checkIdentifierByIdentifier: (identifier: string) => ' +
-        '`/api/v1/conversations/check-identifier/${identifier}`,'
+    expect(group(routes, 'conversations')).toContain(
+      'export const checkIdentifierByIdentifier = (identifier: string): string => ' +
+        '`/api/v1/conversations/check-identifier/${encodeURIComponent(identifier)}`;'
     );
   });
 
   it('un segment débutant par un chiffre (2fa) reste un identifiant valide', () => {
     const routes: ManifestRouteInput[] = [{ method: 'POST', path: '/api/v1/auth/2fa/verify' }];
-    const { source } = buildApiEndpointsCatalog(routes);
-
     // `2faVerify` n'est pas un identifiant JS valide (débute par un chiffre) —
     // la règle préfixe donc le PREMIER token numérique d'un `N`.
-    expect(source).toContain("n2FaVerify: '/api/v1/auth/2fa/verify',");
+    expect(group(routes, 'auth')).toContain("export const n2FaVerify = '/api/v1/auth/2fa/verify';");
   });
 
   it('/api/xxx SANS version (userDeletionsRoutes) prend un namespace apiLegacy* — jamais le même que /api/v1/xxx', () => {
@@ -94,24 +101,25 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
       { method: 'DELETE', path: '/api/conversations/:conversationId/delete-for-me' },
       { method: 'GET', path: '/api/v1/conversations/:id' },
     ];
-    const { source } = buildApiEndpointsCatalog(routes);
+    const { source, groups } = buildApiEndpointsCatalog(routes);
 
-    expect(source).toContain('apiLegacyConversations: {');
-    expect(source).toContain(
-      'byConversationIdDeleteForMe: (conversationId: string) => ' +
-        '`/api/conversations/${conversationId}/delete-for-me`,'
+    expect(source).toContain('apiLegacyConversations: apiLegacyConversationsGroup,');
+    expect(group(routes, 'apiLegacyConversations')).toContain(
+      'export const byConversationIdDeleteForMe = (conversationId: string): string => ' +
+        '`/api/conversations/${encodeURIComponent(conversationId)}/delete-for-me`;'
     );
     // Les deux familles ne doivent JAMAIS fusionner sous le même namespace —
     // sans quoi une lecture par erreur de l'une renverrait l'autre.
-    expect(source).toContain('conversations: {');
+    expect(source).toContain('conversations: conversationsGroup,');
+    expect(groups.map((candidate) => candidate.fileName)).toEqual(['api-legacy-conversations', 'conversations']);
   });
 
   it('un chemin SANS aucun préfixe /api (health, voice/analysis…) prend son premier segment pour namespace', () => {
     const routes: ManifestRouteInput[] = [{ method: 'GET', path: '/health' }];
-    const { source } = buildApiEndpointsCatalog(routes);
-
-    expect(source).toContain('health: {');
-    expect(source).toContain("root: '/health',");
+    expect(buildApiEndpointsCatalog(routes).source).toContain(
+      "import * as healthGroup from './endpoints/health.js';"
+    );
+    expect(group(routes, 'health')).toContain("export const root = '/health';");
   });
 
   it('le chemin PORTE son préfixe complet — /api/v1 est écrit dans la valeur, jamais recalculé', () => {
@@ -125,10 +133,8 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
       { method: 'GET', path: '/api/v1/auth/me' },
       { method: 'GET', path: '/voice/analysis' },
     ];
-    const { source } = buildApiEndpointsCatalog(routes);
-
-    expect(source).toContain("me: '/api/v1/auth/me',");
-    expect(source).toContain("analysis: '/voice/analysis',");
+    expect(group(routes, 'auth')).toContain("export const me = '/api/v1/auth/me';");
+    expect(group(routes, 'voice')).toContain("export const analysis = '/voice/analysis';");
   });
 
   it('un type ApiPath et une table de méthodes par chemin sont dérivés', () => {
@@ -150,7 +156,7 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
     // qu'il devienne une clé ou une valeur de code : `securityLevel: …` ou un
     // libellé `'S0'`..`'S6'` porté par une route.
     const routes: ManifestRouteInput[] = [{ method: 'GET', path: '/api/v1/auth/me' }];
-    const { source } = buildApiEndpointsCatalog(routes);
+    const source = generated(routes);
 
     expect(source).not.toMatch(/securityLevel\s*:/);
     expect(source).not.toMatch(/'S[0-6]'/);
@@ -163,7 +169,24 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
     ];
     const b: ManifestRouteInput[] = [...a].reverse();
 
-    expect(buildApiEndpointsCatalog(a).source).toBe(buildApiEndpointsCatalog(b).source);
+    expect(generated(a)).toBe(generated(b));
+  });
+
+  it('une clé qui est un mot réservé (`me/export`) est exportée sous son nom par un alias local', () => {
+    const routes: ManifestRouteInput[] = [{ method: 'GET', path: '/api/v1/me/export' }];
+
+    expect(group(routes, 'me')).toContain(
+      "const export_ = '/api/v1/me/export';\nexport { export_ as export };"
+    );
+  });
+
+  it('chaque entrée porte ses verbes et son chemin brut en commentaire', () => {
+    const routes: ManifestRouteInput[] = [
+      { method: 'GET', path: '/api/v1/links/:id' },
+      { method: 'DELETE', path: '/api/v1/links/:id' },
+    ];
+
+    expect(group(routes, 'links')).toContain('/** GET · DELETE /api/v1/links/:id */');
   });
 
   it('une collision de namespace/clé entre deux chemins DIFFÉRENTS fait lever une erreur explicite plutôt que d’écraser en silence', () => {
