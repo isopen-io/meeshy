@@ -317,7 +317,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // à un administrateur, GÉNÉRÉE depuis `route-manifest.json` ; seul le web
 // d'administration l'appelle, comme ses voisines `AdminEndpoint`. Valeur
 // MESURÉE le 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 278;
+// 278 → 280 (#8217) : `AdminEndpoint.usersByUserIdProfileImageCandidates` et
+// `AdminEndpoint.usersByUserIdProfileImagesByKind` — `GET
+// /api/v1/admin/users/:userId/profile-image-candidates` et `PUT
+// /api/v1/admin/users/:userId/profile-images/:kind`, la photo et la bannière
+// d'un membre posées par l'administration, GÉNÉRÉES depuis
+// `route-manifest.json` ; seul le web d'administration les appelle, comme
+// leurs voisines `AdminEndpoint`. Valeur MESURÉE le 2026-09-27.
+const BASELINE_DEAD_ENTRIES = 280;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

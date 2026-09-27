@@ -42477,96 +42477,378 @@
         }
       }
     },
-    "auth.signup.email.signIn": {
+    "auth.signup.email.taken": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تسجيل الدخول"
+            "value": "يوجد حساب بهذا العنوان بالفعل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anmelden"
+            "value": "Mit dieser Adresse existiert bereits ein Konto."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign in"
+            "value": "An account already exists with this address."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Iniciar sesión"
+            "value": "Ya existe una cuenta con esta dirección."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se connecter"
+            "value": "Un compte existe déjà avec cette adresse."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accedi"
+            "value": "Esiste già un account con questo indirizzo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entrar"
+            "value": "Já existe uma conta com este endereço."
           }
         }
       }
     },
-    "auth.signup.email.signIn.hint": {
+    "auth.signup.email.sendSignInLink": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يفتح شاشة تسجيل الدخول"
+            "value": "تلقي رابط تسجيل الدخول"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffnet den Anmeldebildschirm"
+            "value": "Anmeldelink erhalten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens the sign-in screen"
+            "value": "Get a sign-in link"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre la pantalla de inicio de sesión"
+            "value": "Recibir un enlace de inicio de sesión"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre l'écran de connexion"
+            "value": "Recevoir un lien de connexion"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apre la schermata di accesso"
+            "value": "Ricevi un link di accesso"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre a tela de login"
+            "value": "Receber um link de acesso"
+          }
+        }
+      }
+    },
+    "auth.signup.email.sendSignInLink.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرسل رمزًا ورابط تسجيل دخول إلى هذا العنوان"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendet einen Code und einen Anmeldelink an diese Adresse"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends a code and a sign-in link to this address"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía un código y un enlace de inicio de sesión a esta dirección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoie un code et un lien de connexion à cette adresse"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia un codice e un link di accesso a questo indirizzo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envia um código e um link de acesso para este endereço"
+          }
+        }
+      }
+    },
+    "auth.signup.email.forgotPassword": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسيت كلمة المرور؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwort vergessen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forgot password?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Olvidaste tu contraseña?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mot de passe oublié ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password dimenticata?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esqueceu a senha?"
+          }
+        }
+      }
+    },
+    "auth.signup.email.isItYou": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هل هذا أنت؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sind Sie das?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Is this you?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eres tú?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Est-ce vous ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sei tu?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É você?"
+          }
+        }
+      }
+    },
+    "auth.signup.email.itsMe": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا أنا — استعادة حسابي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das bin ich — Konto wiederherstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It’s me — recover my account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soy yo — recuperar mi cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est moi — récupérer mon compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono io — recupera il mio account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sou eu — recuperar minha conta"
+          }
+        }
+      }
+    },
+    "auth.signup.email.notMe": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ليس أنا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das bin ich nicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It’s not me"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No soy yo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce n’est pas moi"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non sono io"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não sou eu"
+          }
+        }
+      }
+    },
+    "auth.signup.email.notMe.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der an diese Adresse gesendete Code wird verlangt, um sie zu erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code sent to this address will be required to claim it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se pedirá el código enviado a esta dirección para obtenerla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le code envoyé à cette adresse sera demandé pour l’obtenir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per ottenerlo verrà richiesto il codice inviato a questo indirizzo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O código enviado para este endereço será pedido para obtê-lo."
           }
         }
       }

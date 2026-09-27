@@ -130,3 +130,26 @@ describe('ce qui reste actif tout de suite', () => {
     expect(res?.sessionToken).toBe('session-token');
   });
 });
+
+describe('compte qui a CÉDÉ son adresse à une revendication prouvée (#8214)', () => {
+  const cede = (extra: Record<string, unknown> = {}) =>
+    compte({ email: 'released-507f1f77bcf86cd799439011@released.meeshy.invalid', emailReleasedAt: new Date(), ...extra });
+
+  it('sans numéro, son mot de passe reste sa porte : la session s’ouvre par le pseudo', async () => {
+    const { svc } = service(cede());
+
+    const res = await svc.authenticate({ username: 'lena', password: 'le-vrai' });
+
+    expect(res?.sessionToken).toBe('session-token');
+  });
+
+  it('aucun code n’est renvoyé à l’adresse non routable', async () => {
+    const { svc } = service(cede());
+    const envoi = (svc as unknown as { emailService: { sendEmailVerification: jest.Mock } }).emailService.sendEmailVerification;
+
+    await svc.authenticate({ username: 'lena', password: 'le-vrai' });
+
+    expect(envoi).not.toHaveBeenCalled();
+  });
+});
+

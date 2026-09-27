@@ -70,9 +70,20 @@ export type ForgotPasswordDeps = { readonly request: typeof auth.forgotPassword 
 
 const defaultDeps: ForgotPasswordDeps = { request: auth.forgotPassword };
 
-export default function ForgotPasswordScreen({ deps = defaultDeps }: { readonly deps?: ForgotPasswordDeps } = {}) {
+/** `?email=` — l'adresse déjà tapée à l'inscription ou à la connexion
+ * (#8216), lue sur l'ADRESSE comme `nextFromLocation` d'inscription : l'écran
+ * est monté tel quel par ses témoins, hors du routeur. */
+function emailFromLocation(): string {
+  if (typeof window !== 'object') return '';
+  return new URLSearchParams(window.location.search).get('email') ?? '';
+}
+
+export default function ForgotPasswordScreen({
+  deps = defaultDeps,
+  initialEmail = emailFromLocation(),
+}: { readonly deps?: ForgotPasswordDeps; readonly initialEmail?: string } = {}) {
   const online = useOnline();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [focused, setFocused] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<ForgotPasswordOutcome | null>(null);

@@ -92,6 +92,27 @@ describe('adresse déjà portée par un autre compte — 409 typé (#8215)', () 
     await app.close();
   });
 
+  it('POST /admin/users answers 409 USERNAME_TAKEN for a taken username (#8217)', async () => {
+    service.createUser.mockRejectedValue(new AdminIdentifierTakenError('username'));
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/users',
+      payload: {
+        username: 'Cible',
+        firstName: 'Nou',
+        lastName: 'Veau',
+        email: 'libre@meeshy.me',
+        password: 'Tr0ub4dor&3-horse-battery',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'USERNAME_TAKEN' });
+    await app.close();
+  });
+
   it('PATCH /admin/users/:userId answers 409 EMAIL_TAKEN and leaves no audit line', async () => {
     service.updateUser.mockRejectedValue(new AdminIdentifierTakenError('email'));
     const app = await buildApp();

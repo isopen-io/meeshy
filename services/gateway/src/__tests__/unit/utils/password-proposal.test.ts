@@ -2,6 +2,7 @@ import { PASSWORD_PROPOSAL_LEVELS } from '@meeshy/shared/types/admin-password-pr
 import {
   DRAWS_PER_LEVEL,
   HARD_PASSWORD_LENGTH,
+  PASSWORD_LEVEL_LENGTHS,
   passwordBaseOf,
   proposePassword,
   proposePasswords,
@@ -61,20 +62,26 @@ describe('proposePasswords — quatre niveaux, tous acceptés par la politique',
     }
   });
 
-  it('va du plus court au plus long à partir de « facile », et le niveau difficile ignore le pseudo', () => {
-    const proposals = proposePasswords({ source: { username: 'alice' } });
+  it('tient la longueur de chaque niveau : 6, 8, 12 et 16 caractères (#8220)', () => {
+    expect(PASSWORD_LEVEL_LENGTHS).toEqual({ simple: 6, easy: 8, medium: 12, hard: 16 });
 
-    expect(proposals.easy.length).toBeLessThan(proposals.medium.length);
-    expect(proposals.medium.length).toBeLessThan(proposals.hard.length);
-    expect(proposals.hard).toHaveLength(HARD_PASSWORD_LENGTH);
-    expect(proposals.hard.toLowerCase()).not.toContain('alice');
+    for (let round = 0; round < 50; round += 1) {
+      const proposals = proposePasswords({ source: { username: 'alice' } });
+      for (const level of PASSWORD_PROPOSAL_LEVELS) {
+        expect({ level, password: proposals[level], length: proposals[level].length }).toEqual({
+          level,
+          password: proposals[level],
+          length: PASSWORD_LEVEL_LENGTHS[level],
+        });
+      }
+    }
   });
 
-  it('dérive les niveaux facile et moyen du pseudo', () => {
+  it('le niveau difficile ignore le pseudo', () => {
     const proposals = proposePasswords({ source: { username: 'alice' } });
 
-    expect(proposals.easy).toMatch(/^Alice-[2-9]{4}[!?#*]$/);
-    expect(proposals.medium).toMatch(/^Alice\.[A-Za-z2-9]{4}[!?#*][2-9]{4}$/);
+    expect(proposals.hard).toHaveLength(HARD_PASSWORD_LENGTH);
+    expect(proposals.hard.toLowerCase()).not.toContain('alice');
   });
 
   it('ne sert jamais un caractère qui se confond à la lecture', () => {
@@ -95,40 +102,42 @@ describe('proposePasswords — quatre niveaux, tous acceptés par la politique',
   });
 });
 
-describe('le niveau simple (#8192) — facile à taper, pas facile à deviner', () => {
-  const SAMPLES = 20_000;
-  const simples = (username: string) =>
-    Array.from({ length: SAMPLES }, () => proposePassword('simple', { source: { username } }));
+describe('simple et facile (#8192, #8220) — faciles à taper, pas faciles à deviner', () => {
+  const drawn = (level: 'simple' | 'easy', count: number) =>
+    Array.from({ length: count }, () => proposePassword(level, { source: { username: 'alice' } }));
 
-  it('se complète toujours de chiffres voisins ou répétés, comme 4545, 1223 ou 3456', () => {
-    for (const password of simples('alice').slice(0, 500)) {
-      const digits = password.match(/[2-9]{4}/)?.[0];
-      expect({ password, digits }).toEqual({ password, digits: expect.any(String) });
-      const [a, b, c, d] = [...digits!].map(Number);
-      const repeatedPair = a === c && b === d;
-      const doubledPairs = a === b && c === d;
-      const stair = b === a! + 1 && c === b && d === c! + 1;
-      const run = b === a! + 1 && c === b! + 1 && d === c! + 1;
-      expect({ password, shaped: repeatedPair || doubledPairs || stair || run }).toEqual({ password, shaped: true });
+  const isNear = (digits: string): boolean => {
+    const values = [...digits].map(Number);
+    const steps = values.slice(1).map((value, index) => value - values[index]!);
+    const repeatedPair = values.length === 4 && values[0] === values[2] && values[1] === values[3];
+    const doubledPairs = values.length === 4 && values[0] === values[1] && values[2] === values[3];
+    const mirrored = values.length === 3 && values[0] === values[2];
+    const doubledThenAny = values.length === 3 && values[0] === values[1];
+    return repeatedPair || doubledPairs || mirrored || doubledThenAny || steps.every((step) => step === 0 || step === 1 || step === -1);
+  };
+
+  it.each(['simple', 'easy'] as const)('%s se complète de chiffres voisins ou répétés, comme 4545, 2334 ou 55', (level) => {
+    for (const password of drawn(level, 1_000)) {
+      const digits = password.match(/[2-9]{2,4}/)?.[0] ?? '';
+      expect({ password, near: isNear(digits), counted: digits.length >= 2 }).toEqual({ password, near: true, counted: true });
     }
   });
 
-  it('prend le pseudo PARFOIS, et le plus souvent des lettres voisines au clavier', () => {
-    const drawn = simples('alice').slice(0, 2_000);
-    const withPseudo = drawn.filter((password) => password.toLowerCase().includes('alice')).length;
+  it.each(['simple', 'easy'] as const)('%s prend le pseudo PARFOIS, et le plus souvent des touches voisines au clavier', (level) => {
+    const passwords = drawn(level, 1_000);
+    const withPseudo = passwords.filter((password) => password.toLowerCase().includes('alic')).length;
 
-    expect(withPseudo).toBeGreaterThan(drawn.length * 0.1);
-    expect(withPseudo).toBeLessThan(drawn.length * 0.6);
-    expect(drawn.some((password) => /zert|qsdf|wxcv|azer|erty|sdfg|xcvb/i.test(password))).toBe(true);
+    expect(withPseudo).toBeGreaterThan(passwords.length * 0.05);
+    expect(withPseudo).toBeLessThan(passwords.length * 0.5);
+    expect(passwords.some((password) => /zert|qsdf|wxcv|azer|erty|sdfg|xcvb/i.test(password))).toBe(true);
   });
 
-  it('ne se devine plus en quelques centaines d’essais : 20 000 tirages pour un même pseudo restent presque tous distincts', () => {
-    const distinct = new Set(simples('alice')).size;
-
-    expect(distinct).toBeGreaterThan(SAMPLES * 0.8);
+  it('ne se devinent plus depuis le pseudo : l’espace dépasse de loin les 512 secrets de l’ancienne forme', () => {
+    expect(new Set(drawn('simple', 10_000)).size).toBeGreaterThan(4_000);
+    expect(new Set(drawn('easy', 10_000)).size).toBeGreaterThan(7_000);
   });
 
-  it('reste au niveau simple : la politique de robustesse l’accepte presque toujours au premier tirage', () => {
+  it.each(['simple', 'easy'] as const)('%s reste à son niveau : la politique de robustesse l’accepte presque toujours', (level) => {
     const verdicts: boolean[] = [];
     const judged = (password: string) => {
       const accepted = validatePasswordStrength(password).isValid;
@@ -136,9 +145,9 @@ describe('le niveau simple (#8192) — facile à taper, pas facile à deviner', 
       return accepted;
     };
 
-    const drawn = Array.from({ length: 2_000 }, () => proposePassword('simple', { source: { username: 'alice' }, accept: judged }));
+    const passwords = Array.from({ length: 1_000 }, () => proposePassword(level, { source: { username: 'alice' }, accept: judged }));
 
-    expect(drawn.filter((password) => password.includes('-') || password.length >= HARD_PASSWORD_LENGTH)).toEqual([]);
+    expect(passwords.filter((password) => password.length !== PASSWORD_LEVEL_LENGTHS[level])).toEqual([]);
     expect(verdicts.filter((accepted) => !accepted).length).toBeLessThan(verdicts.length * 0.05);
   });
 });

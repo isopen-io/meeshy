@@ -30,7 +30,10 @@
  *   le saisissant : ouvrir l'un laisse l'autre valable jusqu'à l'expiration de
  *   la paire, à usage unique, ses essais bornés par le débit de la route ;
  * - **les appareils en attente l'apprennent** (#8083) : toute preuve marque
- *   « prouvée » les attentes vivantes du compte — un ÉTAT, jamais une session.
+ *   « prouvée » les attentes vivantes du compte — un ÉTAT, jamais une session ;
+ * - **une clé que le détenteur ne reconnaît pas** est présentée aux
+ *   revendications de l'adresse (#8214, `./email-claim`) : celle qui y répond
+ *   reçoit l'adresse, dans la transaction qui la retire au détenteur.
  *
  * @module services/auth/email-proof.service
  */
@@ -42,7 +45,8 @@ import { normalizeEmail } from '../../utils/normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveSecondFactor, type SecondFactorState } from '../MagicLinkService';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
-import { markEmailVerificationWatchesProven, type EmailVerificationWatchStore } from './email-verification-watch';
+import { markEmailVerificationWatchesProven } from './email-verification-watch';
+import { proveEmailClaim, type EmailClaimStore } from './email-claim';
 
 const logger = enhancedLogger.child({ module: 'EmailProof' });
 
@@ -84,8 +88,31 @@ type ProofRow = {
   emailVerificationExpiry: Date | null;
 };
 
+/**
+ * Une clé que le détenteur de l'adresse ne reconnaît pas peut répondre à une
+ * REVENDICATION (#8214) : même preuve, même réponse, et c'est le compte
+ * revendiquant qui s'ouvre.
+ */
+async function preuveDeRevendication(
+  prisma: EmailClaimStore,
+  proof: EmailProof,
+  parCode: boolean,
+): Promise<EmailProofResult> {
+  const issue = await proveEmailClaim(prisma, proof);
+  if (issue.kind === 'expired') return parCode ? REFUS.codeExpire : REFUS.lienExpire;
+  if (issue.kind !== 'proven') return parCode ? REFUS.codeInvalide : REFUS.lienInvalide;
+  return {
+    success: true,
+    userId: issue.userId,
+    verifiedAt: issue.verifiedAt,
+    alreadyVerified: false,
+    passwordSet: issue.passwordSet,
+    secondFactor: 'absent',
+  };
+}
+
 export async function verifyEmailProof(
-  prisma: Pick<PrismaClient, 'user'> & EmailVerificationWatchStore,
+  prisma: Pick<PrismaClient, 'user'> & EmailClaimStore,
   proof: EmailProof,
 ): Promise<EmailProofResult> {
   const parCode = typeof proof.code === 'string' && proof.code.length > 0;
@@ -106,12 +133,12 @@ export async function verifyEmailProof(
       },
     })) as ProofRow | null;
 
-    if (!ligne) return invalide;
-
-    const correspond = parCode
-      ? emailCodeMatches(ligne.emailVerificationCode, saisie)
-      : emailTokenMatches(ligne.emailVerificationToken, saisie);
-    if (!correspond) return invalide;
+    const correspond =
+      ligne !== null &&
+      (parCode
+        ? emailCodeMatches(ligne.emailVerificationCode, saisie)
+        : emailTokenMatches(ligne.emailVerificationToken, saisie));
+    if (!ligne || !correspond) return preuveDeRevendication(prisma, proof, parCode);
 
     if (!ligne.emailVerificationExpiry || ligne.emailVerificationExpiry.getTime() <= Date.now()) {
       return parCode ? REFUS.codeExpire : REFUS.lienExpire;

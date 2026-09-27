@@ -191,7 +191,7 @@ struct LoginView: View {
             .iPadFormWidth()
         }
         .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
-            MeeshyForgotPasswordView()
+            MeeshyForgotPasswordView(prefilledEmail: prefillableEmail)
         }
         .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
             EmailVerificationView(
@@ -203,7 +203,7 @@ struct LoginView: View {
             )
         }
         .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
-            MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) })
+            MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) }, prefilledEmail: prefillableEmail)
                 .environmentObject(authManager)
         }
         .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
@@ -213,7 +213,10 @@ struct LoginView: View {
             // `AdaptiveRootView` à l'instant où `isAuthenticated` passe.
             SignupView(
                 onComplete: { showRegister = false },
-                onSwitchToLogin: { showRegister = false },
+                onSwitchToLogin: { email in
+                    adoptSignupEmail(email)
+                    showRegister = false
+                },
                 onVerified: { opener in
                     sessionGate.openWhenDismissed(opener)
                     showRegister = false
@@ -234,6 +237,9 @@ struct LoginView: View {
         }
         .onAppear {
             if !hasAccessPresentation { sessionGate.presentationEnded() }
+            // L'accueil referme l'inscription AVANT que cet écran n'existe
+            // (#8216) : l'adresse qu'on y avait tapée l'attend ici.
+            adoptSignupEmail(LoginEmailHandoff.shared.take())
         }
         // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
         // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
@@ -269,6 +275,22 @@ struct LoginView: View {
             }
         }
         .onTapGesture { focusedField = nil }
+    }
+
+    // MARK: - Adresse venue de l'inscription (#8216)
+
+    /// L'identifiant tapé, quand c'est une ADRESSE : la connexion par e-mail
+    /// et le mot de passe oublié la reçoivent au lieu d'un champ vide.
+    private var prefillableEmail: String {
+        SignupForm.isEmailValid(username) ? username.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+    }
+
+    /// L'inscription bascule vers la connexion avec l'adresse qu'on venait de
+    /// taper : elle devient l'identifiant, sur le formulaire qui la montre.
+    private func adoptSignupEmail(_ email: String?) {
+        guard let email, !email.isEmpty else { return }
+        username = email
+        showNormalLogin = true
     }
 
     // MARK: - Account Picker Section

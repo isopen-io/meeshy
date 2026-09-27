@@ -221,6 +221,7 @@ export class UserManagementService {
     // `utils/password-hash`, et il n'y a plus de site où le retaper.
     const email = normalizeEmail(data.email);
     await this.assertEmailAvailable(email);
+    await this.assertUsernameAvailable(data.username);
 
     const hashedPassword = await hashPassword(data.password);
 
@@ -246,7 +247,10 @@ export class UserManagementService {
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        // L'administrateur ATTESTE l'adresse (#8217) : sans numéro, un compte
+        // n'est actif qu'une fois son adresse prouvée (#8055).
+        ...(data.emailVerified === true ? { emailVerifiedAt: new Date() } : {})
         // TODO: Initialize UserPreferences.application when implemented
       }
     }).catch(rethrowIdentifierTaken);
@@ -330,6 +334,18 @@ export class UserManagementService {
       select: { id: true },
     });
     if (taken) throw new AdminIdentifierTakenError('email');
+  }
+
+  /**
+   * La même question pour le pseudonyme (#8217) — celle que pose
+   * l'inscription publique (`registration-identity.ts`), insensible à la casse.
+   */
+  private async assertUsernameAvailable(username: string): Promise<void> {
+    const taken = await this.prisma.user.findFirst({
+      where: { username: { equals: username, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (taken) throw new AdminIdentifierTakenError('username');
   }
 
   private async emailDiffersFromCurrent(userId: string, email: string): Promise<boolean> {

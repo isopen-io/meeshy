@@ -5,11 +5,13 @@ import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
+import { EmailTakenActions } from '@/components/email-taken-actions';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { LanguageSheet } from '@/components/language-sheet';
+import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -126,6 +128,7 @@ const EMPTY_FEEDBACK: SignupFeedback = {
   bannerError: null,
   showSignIn: false,
   usernameSuggestions: [],
+  emailOwner: null,
 };
 
 /**
@@ -214,7 +217,13 @@ export type SignupRegister = (body: RegisterBody) => Promise<ApiResult<RegisterR
 export default function SignupScreen({
   referralDeps = defaultReferralDeps,
   register = auth.register,
-}: { readonly referralDeps?: SignupReferralDeps; readonly register?: SignupRegister } = {}) {
+  magicLinkDeps,
+}: {
+  readonly referralDeps?: SignupReferralDeps;
+  readonly register?: SignupRegister;
+  /** La demande du lien de connexion d'une adresse déjà utilisée (#8216). */
+  readonly magicLinkDeps?: MagicLinkPanelDeps;
+} = {}) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
   // `navigator.language` peut manquer hors navigateur (rendu de témoin, coque
@@ -225,6 +234,14 @@ export default function SignupScreen({
   const [form, setForm] = useState<SignupFormState>(() => emptySignupForm(locale));
   const [focused, setFocused] = useState<FocusedField>(null);
   const [feedback, setFeedback] = useState<SignupFeedback>(EMPTY_FEEDBACK);
+  /** L'adresse que la passerelle a refusée comme DÉJÀ UTILISÉE (#8216) — le
+   * refus et ses deux gestes ne valent que pour ELLE : corrigée, l'adresse
+   * n'est plus celle d'un compte connu, et y envoyer un lien de connexion
+   * mentirait. */
+  const [takenEmail, setTakenEmail] = useState<string | null>(null);
+  /** Non nul : le lien de connexion part vers cette adresse, et l'écran
+   * d'attente de `MagicLinkPanel` remplace le formulaire (#8216). */
+  const [signInLinkEmail, setSignInLinkEmail] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
@@ -360,15 +377,21 @@ export default function SignupScreen({
     else setPhoneFocusRequest((n) => n + 1);
   }
 
-  async function createAccount() {
+  /** `claimEmail` — « Ce n'est pas moi » (#8214 × #8216) : la MÊME
+   * inscription, qui revendique l'adresse ; la réponse mène à l'écran du
+   * code, dont la preuve seule donne l'adresse au nouveau compte. */
+  async function createAccount({ claimEmail = false }: { readonly claimEmail?: boolean } = {}) {
     setSubmitting(true);
     setFeedback(EMPTY_FEEDBACK);
 
-    const result = await register(composeRegisterBody(form, { referralCode }));
+    const body = composeRegisterBody(form, { referralCode });
+    const result = await register(claimEmail ? { ...body, claimEmail: true } : body);
     setSubmitting(false);
 
     if (!result.ok) {
-      setFeedback(placeSignupFailure(result));
+      const placed = placeSignupFailure(result);
+      setFeedback(placed);
+      setTakenEmail(placed.showSignIn ? form.email : null);
       return;
     }
     if (isPhoneConflict(result.data)) {
@@ -403,7 +426,17 @@ export default function SignupScreen({
     navigate(landingAfterRegistration({ next, email: form.email }), true);
   }
 
-  const emailError = feedback.fieldErrors.email;
+  const interfaceLanguage = currentInterfaceLanguage();
+  const isEmailTaken = feedback.showSignIn && takenEmail === form.email;
+  const emailError = isEmailTaken
+    ? translate(interfaceLanguage, 'signup.emailTaken.message')
+    : feedback.showSignIn
+      ? undefined
+      : feedback.fieldErrors.email;
+  /** L'adresse que la connexion reçoit (#8216) — seulement une adresse
+   * COMPLÈTE : un début de saisie préremplirait un champ qu'il faudrait vider. */
+  const typedEmail = isEmailValid(form.email) ? form.email.trim() : undefined;
+  const loginSearch = { next: safeNext ?? undefined, email: typedEmail };
   // #8082 — la borne du pseudo se dit PENDANT la frappe ; un refus serveur
   // posé sur ce champ garde la priorité.
   const usernameRefusal = usernameFieldRefusal(form);
@@ -416,7 +449,21 @@ export default function SignupScreen({
    * dessous. */
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
-  const interfaceLanguage = currentInterfaceLanguage();
+
+  if (signInLinkEmail !== null) {
+    return (
+      <AuthColumn className="min-h-0">
+        <AuthColumnBar to="login" search={loginSearch} />
+        <MagicLinkPanel
+          {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
+          next={next}
+          initialEmail={signInLinkEmail}
+          sendOnMount
+          onCancel={() => setSignInLinkEmail(null)}
+        />
+      </AuthColumn>
+    );
+  }
 
   return (
     /* LA COLONNE DE LA CONNEXION (#6643), HAUTEUR BORNÉE (`min-h-0`) : la seule
@@ -425,7 +472,7 @@ export default function SignupScreen({
        (`SignupView.swift:74`, `safeAreaInset(edge: .top)`). Fermer mène
        toujours à la connexion — iOS referme la feuille et rend `LoginView`. */
     <AuthColumn className="min-h-0">
-      <AuthColumnBar to="login" />
+      <AuthColumnBar to="login" search={loginSearch} />
 
       <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto px-6" noValidate>
         <div className="grid gap-2 pt-2 pb-6">
@@ -470,16 +517,16 @@ export default function SignupScreen({
                 />
               )}
             </Field>
-            {feedback.showSignIn ? (
-              <Link
-                to="login"
-                search={{ next: safeNext ?? undefined }}
-                replace
-                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
-                style={{ minHeight: 44 }}
-              >
-                Se connecter
-              </Link>
+            {isEmailTaken && typedEmail !== undefined ? (
+              <EmailTakenActions
+                email={typedEmail}
+                owner={feedback.emailOwner}
+                language={interfaceLanguage}
+                linkClassName={INDIGO_LINK}
+                isClaiming={isSubmitting}
+                onSendLink={() => setSignInLinkEmail(typedEmail)}
+                onClaim={() => void createAccount({ claimEmail: true })}
+              />
             ) : null}
           </div>
 
@@ -767,7 +814,7 @@ export default function SignupScreen({
               faire paraître le lien qui l'emmène ailleurs. */}
           <Link
             to="login"
-            search={{ next: safeNext ?? undefined }}
+            search={loginSearch}
             replace
             className="inline-flex items-center justify-self-center text-title font-semibold"
             style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}

@@ -11,6 +11,7 @@ import { auth, isVerificationRequired } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
 import { holdPendingVerification } from '@/lib/pending-verification';
+import { isEmailValid } from '@/lib/signup-form';
 import { useSearch } from '@/lib/router';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
@@ -71,6 +72,14 @@ const LEGACY_PASSWORD_METHOD = 'motdepasse';
  */
 const NEXT_PARAM = 'next';
 
+/**
+ * `email` — L'ADRESSE DÉJÀ TAPÉE (#8216). L'inscription y bascule avec
+ * l'adresse qu'on venait de saisir : la retaper est un geste de trop, et une
+ * occasion de se tromper d'adresse puis de créer un second compte. Elle
+ * préremplit la saisie, jamais n'envoie rien.
+ */
+const EMAIL_PARAM = 'email';
+
 type LoginMethod = 'lien' | 'password';
 
 export function loginMethodFromSearch(raw: string | null): LoginMethod {
@@ -103,6 +112,7 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
     <LoginDoors
       method={loginMethodFromSearch(search.get(METHOD_PARAM))}
       next={search.get(NEXT_PARAM)}
+      email={search.get(EMAIL_PARAM)}
       {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
     />
   );
@@ -111,12 +121,15 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
 export function LoginDoors({
   method,
   next = null,
+  email = null,
   magicLinkDeps,
   passwordLogin = auth.login,
 }: {
   readonly method: LoginMethod;
   /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
   readonly next?: string | null;
+  /** L'adresse à PRÉREMPLIR (#8216) — la valeur brute de `?email=`. */
+  readonly email?: string | null;
   readonly magicLinkDeps?: MagicLinkPanelDeps;
   /** La connexion par mot de passe — injectable pour les témoins. */
   readonly passwordLogin?: typeof auth.login;
@@ -124,7 +137,7 @@ export function LoginDoors({
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
 
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(email ?? '');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [focused, setFocused] = useState<'username' | 'password' | 'code' | null>(null);
@@ -279,6 +292,7 @@ export function LoginDoors({
         <MagicLinkPanel
           {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
           next={next}
+          initialEmail={email ?? ''}
           footer={
             <div className="mt-1 grid justify-items-center gap-2">
               <Link
@@ -374,6 +388,7 @@ export function LoginDoors({
             </Link>
             <Link
               to="forgotPassword"
+              search={{ [EMAIL_PARAM]: isEmailValid(username) ? username.trim() : undefined }}
               className="inline-flex items-center font-medium text-title"
               style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
               aria-label="Mot de passe oublié"

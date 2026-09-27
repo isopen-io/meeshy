@@ -73,7 +73,8 @@ struct WelcomeView: View {
                 // carrousel au prochain lancement d'un utilisateur connecté
                 // serait un écran mort posé devant sa messagerie.
                 onComplete: { completeWelcome() },
-                onSwitchToLogin: {
+                onSwitchToLogin: { email in
+                    LoginEmailHandoff.shared.hold(email)
                     isShowingSignup = false
                     completeWelcome()
                 },

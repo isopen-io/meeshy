@@ -19,6 +19,9 @@ export const createUserValidationSchema = z.object({
   role: z.string().optional(),
   systemLanguage: z.string().length(2).optional(),
   regionalLanguage: z.string().length(2).nullable().optional(),
+  // L'administrateur ATTESTE l'adresse (#8217) : sans numéro, un compte n'est
+  // actif qu'une fois son adresse prouvée (#8055) — l'attestation vaut preuve.
+  emailVerified: z.boolean().optional(),
 });
 
 /**

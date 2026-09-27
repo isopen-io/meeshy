@@ -145,6 +145,11 @@ public struct RegisterRequest: Encodable, Sendable {
     /// La clé de visite de `/affiliate/track-visit`, quand le client en tient
     /// une. Ne voyage qu'avec `affiliateToken`.
     public let affiliateSessionKey: String?
+    /// « Ce n'est pas moi » (#8214 × #8216) : l'adresse est détenue par un
+    /// autre compte, celui-ci la REVENDIQUE. La passerelle crée le compte sans
+    /// session et envoie un code à l'adresse ; seule sa preuve la lui donne.
+    /// `nil` ⇒ absent de la charge, jamais `false`.
+    public let claimEmail: Bool?
 
     public init(
         displayName: String? = nil,
@@ -158,8 +163,10 @@ public struct RegisterRequest: Encodable, Sendable {
         firstName: String? = nil,
         lastName: String? = nil,
         affiliateToken: String? = nil,
-        affiliateSessionKey: String? = nil
+        affiliateSessionKey: String? = nil,
+        claimEmail: Bool? = nil
     ) {
+        self.claimEmail = claimEmail == true ? true : nil
         self.affiliateToken = affiliateToken
         self.affiliateSessionKey = affiliateToken == nil ? nil : affiliateSessionKey
         self.displayName = displayName
@@ -186,7 +193,20 @@ public struct RegisterRequest: Encodable, Sendable {
             systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
             username: username, firstName: firstName, lastName: lastName,
             affiliateToken: token,
-            affiliateSessionKey: (key?.isEmpty ?? true) ? nil : key
+            affiliateSessionKey: (key?.isEmpty ?? true) ? nil : key,
+            claimEmail: claimEmail
+        )
+    }
+
+    /// La même charge, qui REVENDIQUE l'adresse (#8214 × #8216).
+    public func claimingEmail() -> RegisterRequest {
+        RegisterRequest(
+            displayName: displayName, email: email, password: password,
+            phoneNumber: phoneNumber, phoneCountryCode: phoneCountryCode,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            username: username, firstName: firstName, lastName: lastName,
+            affiliateToken: affiliateToken, affiliateSessionKey: affiliateSessionKey,
+            claimEmail: true
         )
     }
 }

@@ -509,3 +509,22 @@ describe('createHttpTransport — le délai de garde PAR APPEL', () => {
     expect(await abortedAfterATick(calls[0]!.init)).toBe(false);
   });
 });
+
+describe('createHttpTransport — le détenteur masqué d’un EMAIL_TAKEN (#8214 × #8216)', () => {
+  test('`emailOwner` à la racine d’un 409 voyage jusqu’à l’écran', async () => {
+    const emailOwner = { maskedDisplayName: 'A** L***', maskedUsername: 'a**l', avatar: null };
+    const { impl } = fakeFetch({
+      status: 409,
+      body: { success: false, error: 'Email déjà utilisé', code: 'EMAIL_TAKEN', field: 'email', emailOwner },
+    });
+    const result = await createHttpTransport({ base: '', fetchImpl: impl }).request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.emailOwner).toEqual(emailOwner);
+  });
+
+  test('sans `emailOwner` (ancienne passerelle) : aucune clé fabriquée', async () => {
+    const { impl } = fakeFetch({ status: 409, body: { success: false, error: 'x', code: 'EMAIL_TAKEN' } });
+    const result = await createHttpTransport({ base: '', fetchImpl: impl }).request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok ? true : 'emailOwner' in result).toBe(false);
+  });
+});
