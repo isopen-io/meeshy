@@ -82,6 +82,9 @@ export type DraftStore = {
    * concerne et ignore le reste. Rend la fonction de désabonnement.
    */
   readonly subscribe: (listener: DraftListener) => () => void;
+  /** LA DÉCONNEXION D'UN COMPTE (#8286) — oublie tous les brouillons de ce
+   * lecteur, en mémoire comme sur le disque. */
+  readonly forgetScope: (scope: string) => void;
 };
 
 /**
@@ -148,7 +151,12 @@ export function createDraftStore(backend: StorageLike | null | undefined = resol
     };
   };
 
-  return { getDraft, setDraft, subscribe };
+  const forgetScope = (scope: string): void => {
+    const prefix = draftKey(scope, '');
+    [...memory.keys()].filter((key) => key.startsWith(prefix)).forEach(remove);
+  };
+
+  return { getDraft, setDraft, subscribe, forgetScope };
 }
 
 /** Le magasin de l'application — résout le `localStorage` réel une seule fois. */

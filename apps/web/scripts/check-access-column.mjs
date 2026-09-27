@@ -118,7 +118,7 @@ const ETATS = [
     chemin: '/signup',
     pret: '#signup-phone',
     /* Le numéro fait paraître l'adresse, l'adresse la carte d'identité, le
-       mot de passe, la langue et le parrainage (D-142, phases vivantes) :
+       mot de passe, la langue et le parrainage (D-143, phases vivantes) :
        c'est l'état le plus long de la page. */
     geste: async (page) => {
       await remplit(page, [['#signup-phone', '0612345678']]);

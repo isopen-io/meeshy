@@ -4353,7 +4353,20 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Conséquences.** Aucune publication ne part par surprise. La scène plein écran à contrôles flottants, le panneau Cadre et la frise « Animé » de la même maquette sont des lots suivants, chacun sous son issue.
 
-## D-142 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
+## D-142 — Plusieurs comptes sur l'appareil : un COFFRE liste les comptes et range les jetons des comptes gardés NON actifs ; la session active reste la seule dans `meeshy.session` (2026-09-27, #8286)
+
+**Ce qui est tranché.**
+- **Deux gestes distincts dans les réglages.** « Changer de compte » garde les sessions et ouvre la liste des comptes de l'appareil (`routes/settings-accounts.tsx`) ; « Déconnexion » ferme la session du compte actuel (serveur compris) et efface ses données locales (`signOutOfThisDevice`, `lib/api/device-accounts.ts`) — le compte RESTE listé, et y revenir exige le mot de passe ou un lien magique.
+- **Le coffre (`lib/api/accounts.ts`, clé `meeshy.accounts`) ne porte jamais les jetons du compte ACTIF.** Ils vivent dans `meeshy.session`, seul porteur de la session active. Quitter un compte gardé les RANGE dans le coffre, y revenir les REPREND (et les en retire). Conséquence voulue : une session qui meurt — déconnexion, 401 (`client.ts#onUnauthorized`), session d'un lien magique qui la remplace — ne laisse aucun jeton derrière elle, sans que le coffre ait à observer le magasin de session.
+- **« Rester connecté sur cet appareil »** n'est proposée qu'au compte SUPPLÉMENTAIRE, c'est-à-dire dès qu'un AUTRE compte garde sa session (`offersKeepSignedIn`) ; le premier compte est gardé sans question. Décochée : `rememberDevice: false` part au serveur, et quitter ce compte ferme sa session côté passerelle (`endServerSession`) au lieu de la ranger.
+- **Aucune fuite entre comptes après bascule**, sans code nouveau côté écrans : `establish` d'une autre identité purge déjà le cache de requêtes, `reactionStore` et le registre des médias absents (`query-client.ts`), rouvre le socket sur le nouveau jeton (`realtime.ts`), redéclare le jeton push au compte actif (`push/shell-push.ts` ; la passerelle désactive l'ancienne liaison du même jeton) et vide la file des accusés (`receipts.ts`). Brouillons, modes de lecture et dernières ouvertures sont déjà rangés par identité (`u_<id>`) : changer de compte les GARDE, la déconnexion les EFFACE (`purgeAccountLocalData`, `draftStore.forgetScope`).
+- **Décodage en `zod/mini`**, jamais un schéma de `@meeshy/shared` ; le coffre n'est importé que par les écrans qui le montrent (connexion, réglages) — la première peinture n'en paie rien.
+
+**Côté serveur : rien.** Une session par compte existe déjà (`UserSession`, `POST /auth/logout` sur les en-têtes du compte quitté).
+
+**Suivi assumé.** Le cache de requêtes est unique et purgé à chaque bascule : revenir à un compte recharge ses écrans depuis le réseau (dimension 2 — un cache partitionné par compte relève d'une issue à part). Miroir iOS : `apps/ios/decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md`. Kotlin natif : rien (gel).
+
+## D-143 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
 
 **Contexte.** Directive porteur 2026-09-27 : réagencer l'inscription « en 3–4 phases rapides, plus moderne, sexy, dynamique », web ET iOS, sans seconde machine. D-72 avait posé deux barreaux (le contact, puis l'identité) ; l'écran du code (`/auth/verify-email`) restait une page à part.
 

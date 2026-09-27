@@ -23,6 +23,21 @@ const draftOf = (overrides: Partial<ComposerDraft> = {}): ComposerDraft => ({
   ...overrides,
 });
 
+describe('draftStore — la déconnexion d’un compte (#8286)', () => {
+  test('forgetScope oublie les brouillons de CE lecteur, en mémoire comme sur le disque', () => {
+    const backend = fakeStorage();
+    const store = createDraftStore(backend);
+    store.setDraft('u_a', 'c1', draftOf());
+    store.setDraft('u_b', 'c1', draftOf({ text: 'Bob' }));
+
+    store.forgetScope('u_a');
+
+    expect(store.getDraft('u_a', 'c1')).toBeNull();
+    expect(Object.keys(backend.data)).toEqual(['meeshy.draft.u_b.c1']);
+    expect(store.getDraft('u_b', 'c1')?.text).toBe('Bob');
+  });
+});
+
 describe('draftStore — une clé par (lecteur, conversation)', () => {
   test('un brouillon écrit pour (u_a, c1) ne fuit ni vers un autre lecteur ni vers une autre conversation', () => {
     const backend = fakeStorage();
