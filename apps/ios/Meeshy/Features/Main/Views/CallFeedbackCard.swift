@@ -12,7 +12,7 @@ struct CallFeedbackCard: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let starColor = Color(hex: "F5B400")
+    private static let starColor = MeeshyColors.warning
     private static let issueColumns = [GridItem(.adaptive(minimum: 132), spacing: 8)]
 
     var body: some View {
