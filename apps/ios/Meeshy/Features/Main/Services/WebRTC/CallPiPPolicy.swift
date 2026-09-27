@@ -14,6 +14,7 @@
 //
 
 import AVFoundation
+import CoreGraphics
 
 // MARK: - PiP
 
@@ -36,6 +37,15 @@ enum CallPiPPolicy {
         return sourceChanged || trackChanged
     }
 
+    /// #8435 — entrer en PiP QUITTE le plein écran. Le `fullScreenCover`
+    /// restait présenté derrière la fenêtre flottante, et ses rendus vidéo
+    /// tournaient pour personne. Le mode réduit le ferme ; la source AVKit
+    /// survit, montée par `CallPresentationLayer` hors plein écran.
+    /// `nil` = déjà réduit (pastille, bulle), rien à fermer.
+    static func displayModeOnStart(current: CallDisplayMode) -> CallDisplayMode? {
+        current == .fullScreen ? .pip : nil
+    }
+
     /// C2 — mode d'affichage à appliquer quand la fenêtre PiP se ferme.
     /// `nil` = ne rien toucher.
     ///
@@ -50,18 +60,63 @@ enum CallPiPPolicy {
     /// `onStart` ait tiré. Avec une valeur non optionnelle on restaurerait le
     /// mode d'un PiP PRÉCÉDENT — un échec de démarrage après un PiP ouvert
     /// depuis la pilule dégraderait en pilule un appel devenu plein écran.
+    ///
+    /// #8435 — le mode d'origine n'est rendu QUE sur le retour dans l'app
+    /// d'un PiP AUTOMATIQUE (C2). Une fenêtre FERMÉE (la croix, depuis
+    /// n'importe où) garde l'appel réduit : c'est ce que la croix demande.
     static func displayModeAfterStop(
         callIsActive: Bool,
         isRestoringUI: Bool,
-        modeAtStart: CallDisplayMode?
+        modeAtStart: CallDisplayMode?,
+        origin: CallPiPStartOrigin,
+        appIsForeground: Bool
     ) -> CallDisplayMode? {
         // Appel terminé pendant le PiP : `endCallInternal` a déjà posé le mode
         // porteur du panneau de fin (cf. `shouldRestoreFullScreenBeforeTeardown`).
         guard callIsActive else { return nil }
-        // Tap « revenir » : `onRestoreUI` a déjà posé `.fullScreen` en amont.
+        // Tap « agrandir » : `onRestoreUI` a déjà posé `.fullScreen` en amont.
         guard !isRestoringUI else { return nil }
+        guard origin == .automatic, appIsForeground else { return nil }
         // Le PiP n'a jamais démarré : il n'y a rien à restaurer.
         return modeAtStart
+    }
+
+    /// #8435 — le glissé vers le bas d'un appel en DUO quitte le plein écran,
+    /// en vidéo comme en audio : vers le PiP système quand l'appel y est
+    /// éligible, sinon vers la pastille. En groupe la scène garde ses propres
+    /// gestes ; barre d'effets ouverte, ses curseurs gardent les leurs.
+    ///
+    /// Le geste est PROGRESSIF et ANNULABLE (directive 2026-08-30) : l'écran
+    /// suit le doigt sur sa course, et relâcher avant 75 % de la course le
+    /// ramène — sauf un lancer franc, dont la fin prévue dépasse la course.
+    static let swipeDownCourse: CGFloat = 300
+    static let swipeDownCommitFraction: CGFloat = 0.75
+
+    /// Le décalage que l'écran d'appel suit pendant le geste.
+    static func swipeDownOffset(translation: CGFloat, isGroup: Bool, isEffectsOpen: Bool) -> CGFloat {
+        guard !isGroup, !isEffectsOpen else { return 0 }
+        return min(max(translation, 0), swipeDownCourse)
+    }
+
+    static func swipeDownOutcome(
+        translation: CGFloat,
+        predictedTranslation: CGFloat,
+        isGroup: Bool,
+        isEffectsOpen: Bool,
+        canSystemPiP: Bool
+    ) -> CallSwipeDownOutcome {
+        guard !isGroup, !isEffectsOpen, translation > 0 else { return .none }
+        let isCommitted = translation >= swipeDownCourse * swipeDownCommitFraction
+            || predictedTranslation >= swipeDownCourse
+        guard isCommitted else { return .none }
+        return canSystemPiP ? .systemPiP : .pill
+    }
+
+    /// #8435 — `PiPCallController.start()` sort en silence quand AVKit ne peut
+    /// pas démarrer. Si, le délai passé, aucune fenêtre n'a démarré et que
+    /// l'appel est toujours plein écran, le geste retombe sur la pastille.
+    static func shouldFallBackToPill(isPiPActive: Bool, displayMode: CallDisplayMode) -> Bool {
+        !isPiPActive && displayMode == .fullScreen
     }
 
     /// C6 — l'appel se termine pendant que la fenêtre PiP flotte au-dessus
@@ -81,6 +136,20 @@ enum CallPiPPolicy {
     ) -> Bool {
         isPiPActive && currentMode != .fullScreen
     }
+}
+
+/// Qui a ouvert la fenêtre PiP : le bouton ou le glissé (`manual`), ou AVKit
+/// au passage de l'app en arrière-plan (`automatic`).
+enum CallPiPStartOrigin: Equatable, Sendable {
+    case manual
+    case automatic
+}
+
+/// Ce que fait le glissé vers le bas de l'écran d'appel.
+enum CallSwipeDownOutcome: Equatable, Sendable {
+    case none
+    case systemPiP
+    case pill
 }
 
 // MARK: - Session audio

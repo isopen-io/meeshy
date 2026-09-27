@@ -223,3 +223,14 @@ describe('le Cadre du fond voyage dans ce qui part (#8414)', () => {
     expect(background?.payload.transform).toEqual({ videoFitMode: 'fill', backdrop: 'white' });
   });
 });
+
+describe('la scène animée voyage dans ce qui part (#8415)', () => {
+  test('`timelineDuration` sur la scène et `timing` sur le texte', () => {
+    const base = pageWithText(emptyStudioPage('page-1', 'text-1', 'fr'), 'text-1', 'Bonjour');
+    const page = { ...base, duration: 6, texts: base.texts.map((layer) => ({ ...layer, timing: { start: 1, end: 4 } })) };
+    const publication = onlyPublication(documentPlan([page], new Map<string, SettledPage>([['page-1', [NONE, NONE, NONE]]])));
+    const scene = publication?.storyEffects.scenes?.[0];
+    expect(scene?.timelineDuration).toBe(6);
+    expect(scene?.objects.find((o) => o.kind === 'text')?.timing).toEqual({ start: 1, end: 4 });
+  });
+});

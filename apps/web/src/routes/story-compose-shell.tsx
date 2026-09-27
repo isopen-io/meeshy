@@ -26,6 +26,7 @@ export function StudioShell({
   rail,
   menu,
   floor,
+  onCancel,
   children,
 }: {
   readonly kind: PublicationKind;
@@ -35,6 +36,8 @@ export function StudioShell({
   readonly menu?: ReactNode;
   /** Le SOL de la scène (`StudioFloorLayer`). */
   readonly floor?: ReactNode;
+  /** ✕ d'une RETOUCHE (#8416) — l'hôte referme la couche, aucune navigation. */
+  readonly onCancel?: () => void;
   readonly children: ReactNode;
 }) {
   const lang = currentInterfaceLanguage();
@@ -42,18 +45,31 @@ export function StudioShell({
     <main data-story-studio className="relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
       {floor}
       <header data-story-studio-top className="relative z-20 flex shrink-0 items-center gap-3 px-4 pt-safe pb-2">
-        <Link
-          to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
-          aria-label={translate(lang, 'story.studio.cancel')}
-          className={ROUND_GLASS}
-          style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
-        >
-          <Glyph name="x" size={18} />
-        </Link>
+        {onCancel !== undefined ? (
+          <button
+            type="button"
+            data-story-retouch-cancel
+            onClick={onCancel}
+            aria-label={translate(lang, 'story.studio.retouch.cancel')}
+            className={ROUND_GLASS}
+            style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
+          >
+            <Glyph name="x" size={18} />
+          </button>
+        ) : (
+          <Link
+            to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
+            aria-label={translate(lang, 'story.studio.cancel')}
+            className={ROUND_GLASS}
+            style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
+          >
+            <Glyph name="x" size={18} />
+          </Link>
+        )}
         {/* Aucun titre peint (maquette : ✕ et ⋯ seuls, « le type se choisit à
             l'ENVOI ») — il reste pour le lecteur d'écran. */}
         {rail ?? <span aria-hidden="true" className="flex-1" />}
-        <h1 className="offscreen">{translate(lang, TITLE_KEY[kind])}</h1>
+        <h1 className="offscreen">{translate(lang, onCancel !== undefined ? 'story.studio.retouch.title' : TITLE_KEY[kind])}</h1>
         {menu}
       </header>
       {children}

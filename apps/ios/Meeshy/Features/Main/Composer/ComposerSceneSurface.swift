@@ -215,6 +215,19 @@ struct ComposerSceneSurface: View {
     /// le contenu du panneau « Fond » de l'atelier, en entier (#4403).
     var bandOpeningEffect: StoryTransitionEffect?
     var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
+    /// Le panneau Cadre (#8414) : le cadrage et le fond que le meuble lit sur
+    /// la slide, et les deux écritures qu'il en attend.
+    var bandFitMode: String = StoryBackgroundFraming.fill
+    var bandBackdrop: StoryBackdrop = .blur
+    var onPickBandFitMode: ((String) -> Void)?
+    var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
+
+    /// **Le mode Animé** (#8415) : la bascule de la barre haute, la frise qui
+    /// prend le bas tant qu'elle est ouverte, et le pont qui la laisse piloter
+    /// le canvas. Trois `nil` ⇒ une scène statique, comme avant.
+    var animatedToggle: AnyView?
+    var timelinePanel: AnyView?
+    var timelineBridge: StoryCanvasTimelineBridge?
 
     /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
     /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
@@ -536,7 +549,7 @@ struct ComposerSceneSurface: View {
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture { onBackgroundTapped?() }
-            .allowsHitTesting(drawingSurface == nil)
+            .allowsHitTesting(drawingSurface == nil && timelinePanel == nil)
             .task(id: floorKey) {
                 // Anti-rebond : un geste de cadrage change la clé à chaque image,
                 // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
@@ -551,7 +564,7 @@ struct ComposerSceneSurface: View {
     @State private var floorHash: String?
 
     /// Ce qui change le RÉSULTAT au point de changer son hachage : la slide, son
-    /// fond, sa matière et les bitmaps chargés. Une position ou une échelle ne
+    /// fond, sa matière, son cadrage et les bitmaps chargés. Une position ou une échelle ne
     /// la touchent pas — le sol n'a pas à être recalculé à chaque image d'un
     /// geste, et un hachage de 32 pixels ne verrait pas la différence.
     private var floorKey: ComposerSceneFloorKey {
@@ -559,6 +572,8 @@ struct ComposerSceneSurface: View {
                               background: slide.effects.background,
                               media: slide.effects.mediaObjects?.map(\.id) ?? [],
                               texts: slide.effects.textObjects.map(\.id),
+                              framing: [slide.effects.backgroundTransform?.videoFitMode,
+                                        slide.effects.backgroundTransform?.backdrop],
                               imagesVersion: sceneImagesVersion)
     }
 
@@ -594,7 +609,8 @@ struct ComposerSceneSurface: View {
             onInlineTextEditEnded: onInlineTextEditEnded,
             // « Un seul objet à la fois » a son témoin sur la scène (#4073).
             selectedItemId: selectedItemId,
-            selectionBadge: selectionBadge
+            selectionBadge: selectionBadge,
+            timelineBridge: timelineBridge
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
@@ -632,6 +648,7 @@ struct ComposerSceneSurface: View {
         .padding(.top, ComposerTopBar.height + 4)
         .padding(.bottom, 4)
         .ignoresSafeArea(.keyboard)
+        .allowsHitTesting(timelinePanel == nil)
     }
 
     private var chromeLayer: some View {
@@ -640,7 +657,8 @@ struct ComposerSceneSurface: View {
                 slideRailSlot: slideRailSlot,
                 overflowMenu: overflowMenu,
                 onClose: onClose,
-                plateauTint: plateauTint
+                plateauTint: plateauTint,
+                trailingAccessory: animatedToggle
             )
 
             // **La trace du son de FOND, en tête** (#5001, #5017) : elle se lit
@@ -657,6 +675,20 @@ struct ComposerSceneSurface: View {
 
             freeZone
 
+            // **La frise prend le bas tant qu'elle est ouverte** (#8415) : les
+            // étages qui outillent la scène image par image n'ont rien à y
+            // faire, et deux zones basses se recouvriraient.
+            if let timelinePanel {
+                timelinePanel
+            } else {
+                lowerFloors
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var lowerFloors: some View {
+        VStack(alignment: .leading, spacing: 0) {
             // **Ce que la publication EMPORTE** (#5002, #5036) — hashtags et
             // mentions, juste sous la scène libre. Il CÈDE aux options d'un
             // outil (#5010), par `ComposerCanonicalZone`, jamais par un
@@ -681,7 +713,12 @@ struct ComposerSceneSurface: View {
                                       colors: bandColors,
                                       onPickColor: onPickBandColor,
                                       openingEffect: bandOpeningEffect,
-                                      onPickOpening: onPickBandOpening)
+                                      onPickOpening: onPickBandOpening,
+                                      fitMode: bandFitMode,
+                                      backdrop: bandBackdrop,
+                                      plateauTint: plateauTint,
+                                      onPickFitMode: onPickBandFitMode,
+                                      onPickBackdrop: onPickBandBackdrop)
             case .nothing:
                 EmptyView()
             }
@@ -702,6 +739,18 @@ struct ComposerSceneSurface: View {
     /// se touche. Les deux rails y flottent au bas, à portée du pouce, avec les
     /// MÊMES marges (#4633) ; le volet de description s'y pose entre eux (#4993).
     private var freeZone: some View {
+        ZStack(alignment: .bottom) {
+            // **Frise ouverte, la scène se RÈGLE dans le temps** (#8415) : les
+            // rails et le volet s'effacent, et le canvas ne prend plus de geste.
+            // La frise réécrit la slide à sa fermeture ; une pose ou un
+            // déplacement faits pendant qu'elle est ouverte seraient écrasés.
+            if timelinePanel == nil { composingFloors }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    @ViewBuilder
+    private var composingFloors: some View {
         ZStack(alignment: .bottom) {
             HStack(alignment: .bottom, spacing: 0) {
                 floatingRail
@@ -748,5 +797,7 @@ struct ComposerSceneFloorKey: Hashable {
     let background: String?
     let media: [String]
     let texts: [String]
+    /// Le cadrage et le fond du panneau Cadre (#8414) : ils changent le composite.
+    let framing: [String?]
     let imagesVersion: UInt64
 }

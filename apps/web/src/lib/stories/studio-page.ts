@@ -3,7 +3,7 @@ import type { ApiFailure } from '@/lib/api/http';
 import { MEDIA_CAPTION_MAX } from './media-caption';
 import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
 import { clampPose, type StudioPose } from './studio-pose';
-import { newTextLayer, type StudioTextLayer } from './studio-text';
+import { newTextLayer, type StudioTextLayer, type StudioTiming } from './studio-text';
 
 /**
  * **UNE PAGE DU STUDIO** (#7684) — ce que #6900/#6943/#6944 posaient sur UN
@@ -57,6 +57,8 @@ export type StudioVisualAsset = {
   /** LE CADRE du FOND (#8414) — Ajuster/Remplir et ce qui se peint autour.
    * Absent ⇒ ajusté, flou (`lib/canvas/backdrop.ts`). */
   readonly frame?: StoryFrame;
+  /** La fenêtre d'apparition du CALQUE en mode Animé (#8415). */
+  readonly timing?: StudioTiming;
 };
 
 export type StudioSoundAsset = {
@@ -84,6 +86,9 @@ export type StudioPage = {
   readonly background: StudioVisualAsset | null;
   readonly overlay: StudioVisualAsset | null;
   readonly sound: StudioSoundAsset | null;
+  /** LA DURÉE de la scène animée (#8415), en secondes — `timelineDuration`
+   * du document. Absente : une scène statique. */
+  readonly duration?: number;
 };
 
 /** Une page NEUVE, avec UN texte vide sélectionné — même loi que

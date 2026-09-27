@@ -1483,9 +1483,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // > dit « une porte a cessé de passer par le meuble et recopie son
             // > envoi ». Les deux se lisent dans un diff, et c'est pour ça que la
             // > liste est écrite en toutes lettres plutôt que comptée.
+            //
+            // **Une porte de plus, 2026-09-28** (#8416) : la RETOUCHE d'une image
+            // du fil (`ConversationImageSceneDoor`) monte le meuble au lieu de
+            // l'éditeur d'image à part. Elle passe les trois canaux — et n'en
+            // publie aucun : son socle rend l'image au message.
             ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift",
+             "ConversationImageSceneDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
@@ -1522,8 +1528,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // deux choses (quel contenu reprendre, quelle audience il autorise)
             // parce que les séparer aurait permis d'en passer une sans l'autre,
             // c'est-à-dire de republier SANS PLAFOND, silencieusement.
+            // `onReturnImage` ferme la liste (#8416) : la retouche d'une image du
+            // fil rend l'image composée au lieu de la publier.
             ["intent", "initialVisibility", "draftId", "hydration", "onPublishAllInBackground",
-             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss"],
+             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss", "onReturnImage"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
                 + "découvrir à la compilation, et pour que la sous-suite ci-dessous ait une référence stable."

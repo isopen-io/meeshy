@@ -13,6 +13,7 @@ import {
   mayAttach,
   pendingAttachmentOf,
   removePendingAttachment,
+  replacePendingAttachment,
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
@@ -702,6 +703,10 @@ export const Composer = memo(function Composer({
             variant="above"
             pending={pending}
             onRemove={removeAttachment}
+            onReplace={(localId, file) => {
+              releasePreviewUrl(localId);
+              setPending((prev) => replacePendingAttachment(prev, localId, file));
+            }}
             notice={notice}
             place={locator.place}
             onRemovePlace={locator.clear}

@@ -54,6 +54,9 @@ extension CallView {
             // primary). Swap flips both with one tap.
             videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
                 .frame(width: Self.pipSize.width, height: Self.pipSize.height)
+                // #8441 — la vignette montre MON image : la pincer zoome la
+                // caméra envoyée, deux touches rendent 1×.
+                .callCameraZoom(isEnabled: !effectiveSwapStreams)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -87,8 +90,20 @@ extension CallView {
                 }
                 .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
                 .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
+
+            if !effectiveSwapStreams {
+                CallCameraZoomAccessibilityElement()
+                    .frame(width: Self.pipSize.width, height: Self.zoomAccessibilityHeight)
+                    .position(
+                        x: base.x + pipDragOffset.width,
+                        y: base.y + pipDragOffset.height + (Self.pipSize.height - Self.zoomAccessibilityHeight) / 2
+                    )
+            }
         }
     }
+
+    /// Bande basse de la vignette tenue par l'élément VoiceOver du zoom (44 pt).
+    private static let zoomAccessibilityHeight: CGFloat = 44
 
     /// True when the survival layer has auto-dropped our outbound video while the
     /// user still wants the camera on (distinct from a deliberate camera-off).
