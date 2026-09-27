@@ -346,6 +346,11 @@ const en = {
   'admin.identity.suggestions': 'Available usernames',
   'admin.identity.noLanguage': 'None',
   'admin.security.twoFactorNotEnrolled': 'The member must first pair an authenticator app.',
+  'admin.quick.title': 'Quick actions',
+  'admin.quick.activate': 'Activate the account',
+  'admin.quick.activated': 'Account activated',
+  'admin.quick.validateEmail': 'Validate the email',
+  'admin.quick.validatePhone': 'Validate the phone',
 } satisfies AdminInterfaceCatalog;
 
 export default en;

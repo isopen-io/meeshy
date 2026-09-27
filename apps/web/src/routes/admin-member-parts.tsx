@@ -24,7 +24,18 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 export const INK = 'var(--color-ios-ink)';
 export const INK2 = 'var(--color-ios-ink-2)';
 export const BRAND = 'var(--color-ios-brand)';
-const CARTE = { backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' } as const;
+/**
+ * LA CARTE DE VERRE (#8289, design validé de l'inscription #8288) — la matière
+ * est celle du site UNIQUE `styles/glass.css` (`glass glass-card`, jamais un
+ * flou réécrit ici) ; le bord et l'ombre sont ceux de la carte d'identité de
+ * l'inscription (`signup-identity-card.tsx`), en jetons, donc justes dans les
+ * deux schémas.
+ */
+export const GLASS_CARD_CLASS = 'glass glass-card rounded-[26px]';
+export const GLASS_CARD_EDGE = {
+  border: '1px solid color-mix(in srgb, var(--color-ios-ink) 12%, transparent)',
+  boxShadow: '0 18px 48px color-mix(in srgb, var(--color-ios-ink) 14%, transparent)',
+} as const;
 
 export type SectionState =
   | { readonly phase: 'idle' }
@@ -61,15 +72,25 @@ export function useMemberWrite({
   const [state, setState] = useState<SectionState>({ phase: 'idle' });
   const [failure, setFailure] = useState<ApiFailure | null>(null);
 
+  /**
+   * `optimistic` (#8289) — le membre tel qu'il sera, posé dans le cache AVANT
+   * la réponse : le badge bascule au geste. Un refus remet l'instantané pris
+   * juste avant, jamais une valeur recalculée.
+   */
   async function run(
     gesture: () => Promise<ApiResult<AdminUserDetail>>,
     success: AdminPlainCatalogKey = 'admin.edit.saved',
+    optimistic?: (avant: AdminUserDetail) => AdminUserDetail,
   ): Promise<AdminUserDetail | null> {
     if (state.phase === 'saving') return null;
+    const cle = adminUserDetailQueryKey(userId);
+    const instantane = client.getQueryData<AdminUserDetail>(cle);
+    if (optimistic !== undefined && instantane !== undefined) client.setQueryData(cle, optimistic(instantane));
     setState({ phase: 'saving' });
     setFailure(null);
     const result = await gesture();
     if (!result.ok) {
+      if (optimistic !== undefined && instantane !== undefined) client.setQueryData(cle, instantane);
       const message = refusalOf(result, language);
       setState({ phase: 'error', message });
       setFailure(result);
@@ -121,13 +142,13 @@ export function MemberSection({
   const titreId = useId();
   const envoi = state.phase === 'saving';
   return (
-    <section className="grid gap-2" aria-labelledby={titreId} data-admin-member-section={name}>
-      <h2 id={titreId} className="text-caption font-medium" style={{ color: INK2 }}>
+    <section className="grid gap-3" aria-labelledby={titreId} data-admin-member-section={name}>
+      <h2 id={titreId} className="px-1 text-body font-semibold" style={{ color: INK }}>
         {titre}
       </h2>
       <form
-        className="grid gap-4 rounded-card px-4 py-4"
-        style={CARTE}
+        className={`${GLASS_CARD_CLASS} grid gap-5 p-5`}
+        style={GLASS_CARD_EDGE}
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -353,8 +374,12 @@ export function BadgeVerifie({ verifie, language }: { readonly verifie: boolean;
   return (
     <span
       data-admin-verified={verifie ? 'true' : 'false'}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold"
-      style={{ color: teinte, border: `1px solid color-mix(in srgb, ${teinte} 45%, transparent)` }}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-caption font-semibold"
+      style={{
+        color: teinte,
+        backgroundColor: `color-mix(in srgb, ${teinte} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${teinte} 40%, transparent)`,
+      }}
     >
       {verifie ? <span aria-hidden="true">✓</span> : null}
       {translateAdmin(language, verifie ? 'admin.contact.verified' : 'admin.contact.unverified')}

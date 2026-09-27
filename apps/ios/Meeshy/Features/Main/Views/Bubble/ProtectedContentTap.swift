@@ -46,6 +46,15 @@ nonisolated enum ProtectedContentTap {
         return .openFullscreen(attachment)
     }
 
+    /// Ce que fait un toucher sur le VOILE d'un message flouté qui porte
+    /// `media` : le plein écran de sa première pièce visuelle, sinon le texte
+    /// en clair. La Rivière, qui ne rend aucun média (#8310), pose ici la même
+    /// question que la bulle — sans elle, son voile ne dévoilait qu'un texte
+    /// vide et l'image restait inatteignable.
+    static func veiledMessage(media: [MessageAttachment]) -> ProtectedContentTap {
+        media.first(where: opensFullscreen).map(ProtectedContentTap.openFullscreen) ?? .revealText
+    }
+
     /// Seules une image (sticker compris) et une vidéo ont un plein écran.
     static func opensFullscreen(_ attachment: MessageAttachment) -> Bool {
         attachment.type == .image || attachment.type == .video
@@ -121,9 +130,6 @@ extension BubbleContent {
             return .openFullscreen(media)
         }
         guard isBlurred else { return .none }
-        if let first = visualMedia.first(where: ProtectedContentTap.opensFullscreen) {
-            return .openFullscreen(first)
-        }
-        return .revealText
+        return .veiledMessage(media: visualMedia)
     }
 }

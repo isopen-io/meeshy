@@ -96,6 +96,8 @@ struct RiverStreamHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// #8310 — le plein écran d'un média flouté, ouvert par `ConversationView`.
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -563,7 +565,8 @@ struct RiverStreamHost: View {
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
-                onConsumeViewOnce: onConsumeViewOnce
+                onConsumeViewOnce: onConsumeViewOnce,
+                onMediaTap: onMediaTap
             )
                 .equatable()
                 .longMessageFocus(expansion(for: bubble.messageId), accentHex: DynamicColorGenerator.colorForName(content.colorSeed))

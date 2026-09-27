@@ -21,7 +21,9 @@ import itCallCaptions from './catalog-it-call-captions';
 import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
+import itGallery from './catalog-it-gallery';
 import itMentions from './catalog-it-mentions';
+import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
@@ -1157,6 +1159,8 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itEphemeral,
+  ...itGallery,
   ...itConversationCard,
   ...itStoriesMine,
   ...itContactCard,
