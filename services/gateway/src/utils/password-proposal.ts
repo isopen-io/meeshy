@@ -5,10 +5,20 @@
  *
  * | niveau | forme | exemple |
  * |---|---|---|
- * | `simple` | le pseudo (6 lettres au plus) + 3 chiffres | `alice482` |
+ * | `simple` | lettres voisines au clavier OU le pseudo, parfois une lettre doublée, 4 chiffres proches ou répétés, parfois un symbole | `AA4545zert`, `defi2334@` |
  * | `easy` | le pseudo capitalisé + `-` + 4 chiffres + 1 symbole | `Alice-4821!` |
  * | `medium` | le pseudo capitalisé + `.` + 4 alphanumériques + 1 symbole + 4 chiffres | `Alice.k7Qm!4821` |
  * | `hard` | 20 caractères aléatoires, sans lien avec le pseudo | `Xq4!mR9…` |
+ *
+ * ## Le niveau simple se tape sans se deviner (#8192)
+ *
+ * Décision porteur : « simple » se complète de chiffres, et le pseudo n'y
+ * entre que PARFOIS. L'ancienne forme (pseudo + 3 chiffres) ne laissait que
+ * 512 secrets possibles à qui connaît le pseudo, qui est public. La forme
+ * actuelle assemble des morceaux faciles à taper — une suite de touches
+ * voisines (`zert`, `qsdf`), une lettre doublée (`AA`), des chiffres proches
+ * ou répétés (`4545`, `2334`, `3456`), un symbole — dont le TIRAGE et l'ORDRE
+ * sont aléatoires : quelques millions de secrets possibles.
  *
  * ## Pourquoi c'est la passerelle qui compose
  *
@@ -62,6 +72,19 @@ const DIGITS = '23456789';
 const ALPHANUMERIC = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const SYMBOLS = '!?#*';
 const HARD_ALPHABET = `${ALPHANUMERIC}!@#$%^&*_+=?-`;
+const SIMPLE_SYMBOLS = '!?#*@';
+const PAIR_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
+const PSEUDO_ODDS = 3;
+
+const KEYBOARD_ROWS = ['azertyuiop', 'qsdfghjkm', 'wxcvbn', 'qwertyuiop', 'asdfghjk', 'zxcvbnm'];
+const KEYBOARD_RUN_LENGTH = 4;
+const KEYBOARD_RUNS: readonly string[] = [
+  ...new Set(
+    KEYBOARD_ROWS.flatMap((row) =>
+      Array.from({ length: row.length - KEYBOARD_RUN_LENGTH + 1 }, (_, start) => row.slice(start, start + KEYBOARD_RUN_LENGTH)),
+    ),
+  ),
+];
 
 export const HARD_PASSWORD_LENGTH = 20;
 export const DRAWS_PER_LEVEL = 16;
@@ -93,8 +116,49 @@ const draw = (alphabet: string, length: number, random: RandomBelow): string =>
 
 const capitalized = (word: string): string => `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
 
+const pick = <T>(choices: readonly T[], random: RandomBelow): T => choices[random(choices.length)] ?? choices[0]!;
+
+const coin = (random: RandomBelow): boolean => random(2) === 0;
+
+const DIGIT_PATTERNS: ReadonlyArray<(random: RandomBelow) => readonly number[]> = [
+  (random) => {
+    const [a, b] = [2 + random(8), 2 + random(8)];
+    return [a, b, a, b];
+  },
+  (random) => {
+    const [a, b] = [2 + random(8), 2 + random(8)];
+    return [a, a, b, b];
+  },
+  (random) => {
+    const a = 2 + random(6);
+    return [a, a + 1, a + 1, a + 2];
+  },
+  (random) => {
+    const a = 2 + random(5);
+    return [a, a + 1, a + 2, a + 3];
+  },
+];
+
+const nearDigits = (random: RandomBelow): string => pick(DIGIT_PATTERNS, random)(random).join('');
+
+const simpleWord = (base: string, random: RandomBelow): string => {
+  const word = random(PSEUDO_ODDS) === 0 ? base.slice(0, 6) : pick(KEYBOARD_RUNS, random);
+  return coin(random) ? capitalized(word) : word;
+};
+
+const doubledLetter = (random: RandomBelow): string => pick([...PAIR_LETTERS], random).repeat(2);
+
+const simpleShape = (base: string, random: RandomBelow): string => {
+  const word = simpleWord(base, random);
+  const digits = nearDigits(random);
+  const pair = coin(random) ? doubledLetter(random) : '';
+  const symbol = coin(random) ? pick([...SIMPLE_SYMBOLS], random) : '';
+  const orders = [`${word}${pair}${digits}`, `${pair}${digits}${word}`, `${digits}${word}${pair}`];
+  return `${pick(orders, random)}${symbol}`;
+};
+
 const SHAPES: Readonly<Record<PasswordProposalLevel, (base: string, random: RandomBelow) => string>> = {
-  simple: (base, random) => `${base.slice(0, 6)}${draw(DIGITS, 3, random)}`,
+  simple: simpleShape,
   easy: (base, random) => `${capitalized(base.slice(0, 8))}-${draw(DIGITS, 4, random)}${draw(SYMBOLS, 1, random)}`,
   medium: (base, random) =>
     `${capitalized(base.slice(0, 8))}.${draw(ALPHANUMERIC, 4, random)}${draw(SYMBOLS, 1, random)}${draw(DIGITS, 4, random)}`,
