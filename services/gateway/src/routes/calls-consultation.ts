@@ -463,7 +463,9 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
         properties: {
           limit: { type: 'integer', minimum: 1, maximum: 50, default: 30 },
           cursor: { type: 'string', description: 'Opaque cursor (call id) for the next page' },
-          filter: { type: 'string', enum: ['all', 'missed'], default: 'all' }
+          filter: { type: 'string', enum: ['all', 'missed'], default: 'all' },
+          type: { type: 'string', enum: ['all', 'audio', 'video'], default: 'all', description: 'Call media type (#8203)' },
+          q: { type: 'string', maxLength: 100, description: 'Name shown by the row — peer, then username, then conversation title; accent- and case-insensitive (#8203)' }
         }
       },
       response: {
@@ -550,14 +552,16 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
       }
 
       const parsed = callHistoryQuerySchema.safeParse(request.query);
-      const { limit, cursor, filter } = parsed.success
+      const { limit, cursor, filter, type, q } = parsed.success
         ? parsed.data
-        : { limit: 30, cursor: undefined as string | undefined, filter: 'all' as const };
+        : { limit: 30, cursor: undefined as string | undefined, filter: 'all' as const, type: 'all' as const, q: undefined };
 
       const result = await callService.listHistory(userId, {
         limit,
         cursor,
         filter,
+        type,
+        q,
         viewer: viewerFromRequest(request)
       });
 
