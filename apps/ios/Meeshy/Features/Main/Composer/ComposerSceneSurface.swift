@@ -476,7 +476,8 @@ struct ComposerSceneSurface: View {
     private var descriptionOverlay: some View {
         if let descriptionPanel {
             descriptionPanel
-                .padding(.horizontal, ComposerRailGeometry.lane)
+                .padding(.leading, ComposerRailGeometry.lane)
+                .padding(.trailing, ComposerRailGeometry.tileLane)
                 .padding(.bottom, 10)
         }
     }
@@ -510,42 +511,55 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        // **La barre de statut s'efface** (directive porteur 2026-09-27 : la
+        // croix et le `⋯` « un peu plus haut pour ne pas être sur la scène »).
+        // Comme le lecteur de stories : la rangée de l'horloge rend sa hauteur,
+        // et la croix monte dans celle de la Dynamic Island, aux coins.
+        .statusBarHidden(true)
     }
 
-    /// **Ce que la carte laisse du viewport appartient ENCORE à la scène.**
+    /// **Le SOL de la scène : le thumbhash de son propre résultat** (directive
+    /// porteur 2026-09-27 : « la scène doit avoir un sol peint en thumbhash du
+    /// résultat de la scène »).
     ///
-    /// Une scène 9:16 est moins haute qu'un iPhone : cadrée sur l'écran, elle
-    /// laisse deux bandes (80 pt chacune sur un iPhone 16 Pro). La maquette les
-    /// remplit du FLOU de la scène elle-même, pas d'un plateau — c'est ce qui
-    /// fait que la scène prend tout le viewport sans rien rogner de ce qui sera
-    /// publié. La même loi que `canvasLetterbox` de l'atelier : le flou du
-    /// média de fond, à défaut la couleur de fond, voilés pour que le bord de la
-    /// carte se lise encore. Tapable comme le fond du canvas, dont il a
-    /// l'apparence ; inerte pendant un tracé, qui possède l'écran entier.
+    /// Une scène 9:16 est moins haute qu'un iPhone, et elle se cadre entre la
+    /// barre haute et le socle : ce qu'elle laisse du viewport n'est pas un
+    /// plateau, c'est son SOL — la loi du lecteur (`SceneBackdropView`,
+    /// `.thumbHash`), peinte du hachage du COMPOSITE de la slide, ce que la
+    /// publication emportera. Le composer et le lecteur posent ainsi la même
+    /// scène sur le même sol.
+    ///
+    /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
+    /// pendant un tracé, qui possède l'écran entier.
     private var sceneLetterbox: some View {
-        Group {
-            if let fond = letterboxImage {
-                Color.clear
-                    .overlay(Image(uiImage: fond).resizable().scaledToFill())
-                    .clipped()
-                    .blur(radius: 34, opaque: true)
-                    .overlay(Color.black.opacity(0.20))
-            } else {
-                Rectangle()
-                    .fill(storyBackgroundStyle(
-                        slide.effects.background?.replacingOccurrences(of: "#", with: "")))
-                    .overlay(Color.black.opacity(0.28))
+        SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { onBackgroundTapped?() }
+            .allowsHitTesting(drawingSurface == nil)
+            .task(id: floorKey) {
+                // Anti-rebond : un geste de cadrage change la clé à chaque image,
+                // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                guard !Task.isCancelled else { return }
+                floorHash = StorySlideRenderer.computeThumbHash(slide: slide,
+                                                                bgImage: nil,
+                                                                loadedImages: sceneImages)
             }
-        }
-        .ignoresSafeArea()
-        .contentShape(Rectangle())
-        .onTapGesture { onBackgroundTapped?() }
-        .allowsHitTesting(drawingSurface == nil)
     }
 
-    private var letterboxImage: UIImage? {
-        guard let fond = slide.effects.mediaObjects?.first(where: { $0.isBackground }) else { return nil }
-        return sceneImages[fond.id]
+    @State private var floorHash: String?
+
+    /// Ce qui change le RÉSULTAT au point de changer son hachage : la slide, son
+    /// fond, sa matière et les bitmaps chargés. Une position ou une échelle ne
+    /// la touchent pas — le sol n'a pas à être recalculé à chaque image d'un
+    /// geste, et un hachage de 32 pixels ne verrait pas la différence.
+    private var floorKey: ComposerSceneFloorKey {
+        ComposerSceneFloorKey(slideId: slide.id,
+                              background: slide.effects.background,
+                              media: slide.effects.mediaObjects?.map(\.id) ?? [],
+                              texts: slide.effects.textObjects.map(\.id),
+                              imagesVersion: sceneImagesVersion)
     }
 
     private var sceneLayer: some View {
@@ -609,7 +623,15 @@ struct ComposerSceneSurface: View {
                             horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
             }
         }
-        .ignoresSafeArea()
+        // **La scène se pose ENTRE la barre haute et le socle** (directive
+        // porteur 2026-09-27). Ni la croix ni la capsule Publier ne se posent
+        // sur le dessin : la zone sûre du bas porte déjà le socle
+        // (`composerFloatingSocle`), celle du haut porte la barre, et la carte
+        // se cadre dans ce qui reste. Le clavier, lui, ne la pousse pas — le
+        // sol et le chrome montent, la scène reste où l'auteur la regarde.
+        .padding(.top, ComposerTopBar.height + 4)
+        .padding(.bottom, 4)
+        .ignoresSafeArea(.keyboard)
     }
 
     private var chromeLayer: some View {
@@ -690,7 +712,8 @@ struct ComposerSceneSurface: View {
                                      onAddSlide: onAddSlide,
                                      onUndo: onUndo,
                                      onRedo: onRedo,
-                                     pushesToThumb: false)
+                                     pushesToThumb: false,
+                                     labeledTiles: true)
                     .padding(.trailing, ComposerRailGeometry.outerMargin)
                     .padding(.bottom, ComposerRailGeometry.gutter)
             }
@@ -717,4 +740,13 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
+}
+
+/// La clé du SOL de la scène — ce qui en change le hachage (#8370).
+struct ComposerSceneFloorKey: Hashable {
+    let slideId: String
+    let background: String?
+    let media: [String]
+    let texts: [String]
+    let imagesVersion: UInt64
 }

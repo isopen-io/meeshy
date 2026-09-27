@@ -45,6 +45,12 @@ struct ComposerTopBar: View {
     /// le 2026-09-27). Teinté du plateau, il reste sombre partout.
     let plateauTint: Color
 
+    static let topPadding: CGFloat = 12
+
+    /// **Ce que la barre occupe sous la zone sûre** — lu par la scène plein
+    /// écran (#8370) pour se poser JUSTE SOUS la croix, jamais dessous.
+    static var height: CGFloat { topPadding + ComposerControlMetrics.visualDiameter }
+
     // **L'historique a quitté cette barre le 2026-08-30.** Il y lisait mal :
     // pendant qu'un outil est ouvert, « Annuler » se comprend comme « fermer
     // l'outil » et non « défaire le dernier geste » — le mot dit les deux en
@@ -73,7 +79,7 @@ struct ComposerTopBar: View {
             if let overflowMenu { overflowMenu.fixedSize() }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.top, Self.topPadding)
     }
 
 

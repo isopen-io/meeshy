@@ -107,6 +107,8 @@ extension MeeshyComposerHost {
     /// lisent sans monter une vue.
     func perform(_ entry: ComposerOverflowEntry) {
         switch entry {
+        case .preview:
+            performSoclePreview()
         case .pickBackground:
             // Bascule : le même geste ouvre et referme la bande. « Ouvrir »
             // sans « refermer » rendrait les ≈ 170 pt à sens unique.
