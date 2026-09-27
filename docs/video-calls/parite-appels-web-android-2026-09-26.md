@@ -138,9 +138,9 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | H2 | Bulle « appel en cours » avec Rejoindre | ✅ | ✅ | 🟡 sans bouton | 🟡 | 3 | iOS `LiveCallJoiner.swift` |
 | H3 | Bandeau / pastille « Rejoindre » dans l'en-tête du fil | ✅ | ✅ sondage 15 s | ❌ | ❌ | 3 | legacy `use-call-banner.ts`, `OngoingCallBanner.tsx` |
 | H4 | Ligne de liste « appel en cours » + Rejoindre | ✅ (#7616) | ❌ | 🟡 sans bouton | 🟡 | 3 | web `lens-preview-line.tsx:23` |
-| H5 | Journal des appels (Tous / Manqués, cache d'abord, pages) | 🟡 1re page seule | ❌ | ✅ | ✅ | — | web `routes/calls.tsx` |
+| H5 | Journal des appels (Tous / Manqués, cache d'abord, pages, recherche par nom, participants d'un appel de groupe) | ✅ (#8066) | ❌ | ✅ (#8066) | ✅ | — | web `routes/calls.tsx` · iOS `CallsTab.swift`, `CallsViewModel.swift` · passerelle `callHistoryParticipants.ts` |
 | H6 | Fiche détail d'un appel | ✅ | ❌ | ❌ (#6383) | ❌ | 3 | iOS `CallDetailSheet.swift` |
-| H7 | Supprimer / vider le journal | ❌ | ❌ | ❌ | ❌ | — | aucune route serveur |
+| H7 | Supprimer / vider le journal (pour soi seul, optimiste, confirmation pour tout effacer) | ✅ (#8066) | ❌ | ✅ (#8066) | ✅ | — | `DELETE /api/v1/calls/history[/:callId]` · web `call-history-actions.ts` · iOS `CallsViewModel.hide`/`clearAll` |
 
 ### I. Appels de groupe
 
