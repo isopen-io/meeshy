@@ -484,46 +484,11 @@ public protocol OfflineMessageQueueing: Sendable {
         /// représente, sinon le destinataire reçoit une image muette.
         sticker: MessageSticker?,
         deletesSourceFiles: Bool,
-        createdAt: Date?
+        createdAt: Date?,
+        /// La protection armée à l'envoi (#8350) — sur l'EXIGENCE, pour la
+        /// même raison que `sticker` : un mock doit la voir passer.
+        protection: MessageProtectionIntent
     ) async throws -> OfflineQueue.EnqueueMediaResult
-}
-
-extension OfflineMessageQueueing {
-    /// Shim de compatibilité source pour les appelants antérieurs au sticker
-    /// (#4823) : même signature qu'avant l'ajout de `sticker` à l'exigence,
-    /// délègue avec `sticker: nil`. Sur l'extension du PROTOCOLE, pas sur
-    /// l'implémentation concrète : un mock voit toujours passer la valeur.
-    @discardableResult
-    public func enqueueMedia(
-        sourceMediaURLs: [URL],
-        kinds: [String],
-        conversationId: String,
-        content: String?,
-        clientMessageId: String,
-        originalLanguage: String?,
-        replyToId: String?,
-        forwardedFromId: String?,
-        forwardedFromConversationId: String?,
-        copyAttachmentsFromClientMessageId: String?,
-        deletesSourceFiles: Bool,
-        createdAt: Date?
-    ) async throws -> OfflineQueue.EnqueueMediaResult {
-        try await enqueueMedia(
-            sourceMediaURLs: sourceMediaURLs,
-            kinds: kinds,
-            conversationId: conversationId,
-            content: content,
-            clientMessageId: clientMessageId,
-            originalLanguage: originalLanguage,
-            replyToId: replyToId,
-            forwardedFromId: forwardedFromId,
-            forwardedFromConversationId: forwardedFromConversationId,
-            copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
-            sticker: nil,
-            deletesSourceFiles: deletesSourceFiles,
-            createdAt: createdAt
-        )
-    }
 }
 
 extension OfflineQueue: OfflineMessageQueueing {}
@@ -1531,7 +1496,8 @@ public actor OfflineQueue {
         originalLanguage: String? = nil,
         replyToId: String? = nil,
         forwardedFromId: String? = nil,
-        forwardedFromConversationId: String? = nil
+        forwardedFromConversationId: String? = nil,
+        protection: MessageProtectionIntent = .none
     ) async throws -> EnqueueAudiosResult {
         guard let pool = outboxPool else { throw EnqueueAudioError.poolNotConfigured }
 
@@ -1554,6 +1520,8 @@ public actor OfflineQueue {
             attachmentKinds: Array(repeating: AttachmentKind.audio.rawValue, count: sourceAudioURLs.count),
             localAudioPath: nil,
             localAudioPaths: relativePaths,
+            protectionFlags: protection.persistedFlags,
+            ephemeralDuration: protection.ephemeralDurationSeconds,
             createdAt: now
         )
 
@@ -1694,7 +1662,8 @@ public actor OfflineQueue {
         copyAttachmentsFromClientMessageId: String? = nil,
         sticker: MessageSticker? = nil,
         deletesSourceFiles: Bool = true,
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        protection: MessageProtectionIntent = .none
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1724,6 +1693,8 @@ public actor OfflineQueue {
             localMediaPaths: relativePaths,
             sticker: sticker,
             copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
+            protectionFlags: protection.persistedFlags,
+            ephemeralDuration: protection.ephemeralDurationSeconds,
             createdAt: now
         )
 
