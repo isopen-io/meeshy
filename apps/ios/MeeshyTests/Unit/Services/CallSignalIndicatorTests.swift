@@ -454,8 +454,10 @@ final class CallHangupFastPathTests: XCTestCase {
 
     func test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatingOverlay() throws {
         let view = try AppSourceGuard.callViewSource()
-        guard let range = view.range(of: "var connectedView: some View {") else {
-            XCTFail("CallView must define connectedView")
+        // #8394 — la disposition 1:1 (vidéo plein écran ou duo d'avatars) vit
+        // dans `duoLayout`, que `connectedView` monte hors scène de groupe.
+        guard let range = view.range(of: "private var duoLayout: some View {") else {
+            XCTFail("CallView must define duoLayout, the 1:1 layout of connectedView")
             return
         }
         let end = view.index(range.lowerBound, offsetBy: 4000, limitedBy: view.endIndex) ?? view.endIndex
