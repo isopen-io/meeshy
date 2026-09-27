@@ -9,9 +9,7 @@ public extension ReplyReference {
     /// (« video », posé par la bulle optimiste et l'instantané `attachmentReplyTo`).
     /// Le MIME des faits l'emporte : c'est le plus précis des deux.
     var quotedMediaKind: AttachmentKind? {
-        let raw = attachmentMimeType ?? attachmentType
-        guard let raw, !raw.isEmpty else { return nil }
-        return AttachmentKind(rawValue: raw) ?? AttachmentKind(mimeType: raw)
+        AttachmentKind(quotedType: attachmentMimeType ?? attachmentType)
     }
 
     /// La pièce jointe que cette citation décrit, reconstruite depuis ce
@@ -63,5 +61,19 @@ public extension ReplyReference {
         case .audio: return "audio/mp4"
         default: return nil
         }
+    }
+}
+
+// MARK: - Le décodeur des DEUX formes d'un genre cité
+
+public extension AttachmentKind {
+    /// Le genre d'un média cité, depuis le rawValue court (« video ») ou le
+    /// MIME brut (« video/mp4 ») — les deux formes qu'`attachmentType` porte
+    /// selon qu'il vient de la bulle optimiste ou du cache. `nil` seulement
+    /// sans valeur ; un type inconnu rend `.other`. Site UNIQUE : la citation
+    /// côté app (`BubbleQuotedReply.resolveAttachmentKind`) le délègue ici.
+    init?(quotedType: String?) {
+        guard let quotedType, !quotedType.isEmpty else { return nil }
+        self = AttachmentKind(rawValue: quotedType) ?? AttachmentKind(mimeType: quotedType)
     }
 }
