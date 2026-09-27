@@ -56,7 +56,7 @@ describe("Politique de confidentialité — le carnet d'adresses (#8130)", () =>
     expect(text).toMatch(/personne n'est contacté à votre place/i);
   });
 
-  test('elle dit la conservation et les deux chemins de suppression', () => {
+  test('elle dit la conservation et l’effacement à la suppression du compte', () => {
     expect(text).toMatch(/conserv/i);
     expect(text).toMatch(/effac/i);
     expect(text).toMatch(/suppression de votre compte/i);
@@ -66,18 +66,21 @@ describe("Politique de confidentialité — le carnet d'adresses (#8130)", () =>
     expect(text).toContain('Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail');
   });
 
-  /* #8167 — l'effacement se fait depuis l'app, sans écrire au support : la
-     carte nomme les deux chemins tels que l'app les affiche, et dit ce qui
-     part avec le carnet et ce qui n'arrive plus ensuite. */
-  test('la carte « Effacement » cite les chemins in-app, iOS et web', () => {
-    expect(text).toContain("Effacer mon carnet d'adresses");
-    expect(text).toMatch(/Répertoire/);
-    expect(text).toMatch(/Paramètres > Confidentialité/);
+  /* #8284 — décision porteur : le carnet s'efface à la suppression du compte,
+     jamais par un geste à part. La carte le dit, avec ce qui part avec lui,
+     et ne promet plus aucun chemin manuel qui n'existe pas. */
+  test('la carte « Effacement » dit que supprimer son compte efface le carnet synchronisé', () => {
+    expect(text).toMatch(/supprimer votre compte efface aussi votre carnet synchronisé/i);
   });
 
-  test('elle dit que les annonces tirées du carnet partent avec lui, et qu’aucun renvoi n’est silencieux', () => {
+  test('elle dit que les annonces d’arrivée et les notifications partent avec lui', () => {
     expect(text).toMatch(/annonc/i);
-    expect(text).toMatch(/de nouveau/i);
+    expect(text).toMatch(/notifications/i);
+  });
+
+  test('elle ne promet plus d’effacement manuel', () => {
+    expect(text).not.toContain("Effacer mon carnet d'adresses");
+    expect(text).not.toMatch(/au bas du Répertoire/);
   });
 
   test('la date de mise à jour suit la modification', () => {
