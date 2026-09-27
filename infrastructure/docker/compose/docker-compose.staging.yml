@@ -358,7 +358,7 @@ services:
   # pour servir du code que personne ne modifiait plus.
   #
   # La v3.1 (`apps/web-v2`) est le SEUL chantier web. `docker.yml` construit
-  # déjà son image (`meeshy-web-v31`) et la tague `staging` sur `dev` : il ne
+  # déjà son image (`meeshy-webapp`, ex `meeshy-web-v31`) et la tague `staging` sur `dev` : il ne
   # manquait que ce raccordement pour qu'elle soit SERVIE. Une image construite
   # et déployée nulle part est un build qui ne prouve rien.
   #
@@ -373,7 +373,7 @@ services:
   # `NEXT_PUBLIC_*` du legacy y seraient INERTES, et une variable inerte se lit
   # comme une configuration active.
   frontend-staging:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-web-v31:staging}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-webapp:staging}
     container_name: meeshy-frontend-staging
     restart: unless-stopped
     # PAS de `depends_on: gateway-staging`. Le legacy en avait besoin : son

@@ -1827,7 +1827,7 @@ Directive du porteur : le legacy `apps/web` reste en production ; le chantier s'
 Le déplacement est parti SEUL dans son commit, avant toute réécriture, pour que git suive chaque fichier comme un renommage à 100 %. Les chemins, le nom du paquet, les jobs de CI, les gardes, les lockfiles (régénérés) et les pointeurs de commentaire du gateway, d'iOS et du SDK ont suivi au commit suivant. Le dossier de captures local devient `.cache/web-v2-workflow` ; les captures déjà prises sous l'ancien nom ne sont pas déplacées.
 
 **Ce qui NE bouge pas, délibérément** :
-- les identifiants de DÉPLOIEMENT — `web-v31` et `web_v31` dans `docker.yml`, l'image `isopen/meeshy-web-v31`, le service `frontend-staging`. L'hôte de staging tire l'image depuis son propre compose ; les renommer est un geste d'hôte, suivi par #6043 ;
+- les identifiants de DÉPLOIEMENT — `web-v31` et `web_v31` dans `docker.yml`, l'image `isopen/meeshy-web-v31`, le service `frontend-staging`. L'hôte de staging tire l'image depuis son propre compose ; les renommer est un geste d'hôte, suivi par #6043 ; **Renommés depuis, le 2026-09-28 (#7709)** : service `webapp`, image `isopen/meeshy-webapp`, tirée par `FRONTEND_IMAGE` dans le `.env` des deux hôtes ;
 - le label GitHub `web-v3` (104 issues, dont celles de l'ancienne refonte) et les noms de branches cités par les dossiers de cibles (`claude/web-v3-parite`) : ce sont des identifiants PUBLIÉS, pas des chemins ;
 - le nom du workflow `meeshy-web-v3-bout-en-bout`, qu'on invoque par ce nom — ses chemins, eux, désignent `apps/web-v2` ;
 - D-12 ci-dessus, qui raconte le renommage précédent avec les noms de son jour.
