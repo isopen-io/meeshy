@@ -951,8 +951,8 @@ function StoryStudio({
           rangée iOS (`MeeshyComposerHost+Socle.swift:43-51`) dessous :
           l'audience, un espace, le texte du post (un POST seulement), la
           capsule Publier. VERROUILLÉ pendant l'envoi (#7707). */}
-      <div data-story-studio-bottom className="relative z-20 flex shrink-0 flex-col gap-2 px-3 pt-1 pb-safe">
-        <div className="glass flex flex-col gap-1 rounded-2xl px-3 py-2">
+      <footer data-story-studio-bottom className="relative z-20 flex shrink-0 flex-col gap-2 px-2 pt-1 pb-safe">
+        <div className="glass flex flex-col gap-1 rounded-2xl px-2.5 py-2">
           {editorOpen ? (
             <div data-story-editor-panel className="overflow-y-auto" style={{ maxHeight: 200 }} inert={publishing}>
               <Suspense fallback={null}>
@@ -1005,7 +1005,7 @@ function StoryStudio({
             onChoose={setChoice}
           />
         </div>
-      </div>
+      </footer>
 
       {audienceOpen ? (
         <Suspense fallback={null}>

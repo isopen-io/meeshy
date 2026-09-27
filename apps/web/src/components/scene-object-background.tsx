@@ -139,8 +139,10 @@ export function BackgroundLayer({
       />
     ) : (
       // Le FLOU déborde de sa boîte : la bande se rogne à la scène, jamais
-      // au-delà (`scale` compense le liseré transparent du flou au bord).
-      <span aria-hidden="true" className="absolute inset-0 block overflow-hidden">
+      // au-delà. Il se pose sur un fond NOIR (le canvas d'iOS), jamais sur
+      // l'aplat de carte : à `LETTERBOX_FILL_OPACITY`, ce qui transparaît ne
+      // doit pas changer avec le schéma.
+      <span aria-hidden="true" className="absolute inset-0 block overflow-hidden" style={{ backgroundColor: '#000' }}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <img
           data-scene-letterbox
@@ -149,7 +151,7 @@ export function BackgroundLayer({
           alt=""
           aria-hidden="true"
           className="absolute inset-0 size-full object-cover"
-          style={{ opacity: LETTERBOX_FILL_OPACITY, filter: 'blur(24px)', transform: 'scale(1.15)' }}
+          style={{ opacity: LETTERBOX_FILL_OPACITY, filter: 'blur(20px)', transform: 'scale(1.35)' }}
         />
       </span>
     );

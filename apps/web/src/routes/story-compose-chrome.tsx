@@ -130,14 +130,13 @@ export function StudioTile({
       {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
       disabled={disabled}
       onClick={onPress}
-      className="glass flex flex-col items-center justify-center gap-1 px-1 py-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+      className={`${pressed === true ? PRESSED_TILE : 'glass'} flex flex-col items-center justify-center gap-1 px-1 py-2 focus-visible:outline-2 focus-visible:outline-offset-2`}
       style={{
         width: 60,
         minHeight: 56,
         borderRadius: 14,
         outlineColor: 'var(--color-ios-brand)',
         color: pressed === true ? '#fff' : 'var(--color-ios-ink)',
-        ...(pressed === true ? { backgroundColor: 'var(--color-ios-brand)' } : {}),
         opacity: disabled ? 0.4 : 1,
       }}
     >
@@ -148,6 +147,10 @@ export function StudioTile({
     </button>
   );
 }
+
+/** Une tuile ENFONCÉE (Réglages ou Cadre ouverts) n'est plus du verre : elle
+ * prend la couleur de marque pleine, comme la puce pressée du studio. */
+const PRESSED_TILE = 'bg-[var(--color-ios-brand)]';
 
 /** Un bouton ROND en verre de la barre haute ou du socle — ✕, ⋯, texte du post. */
 export const ROUND_GLASS = 'glass grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2';
