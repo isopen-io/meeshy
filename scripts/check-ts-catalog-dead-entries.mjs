@@ -383,7 +383,13 @@ export const parseCatalogBlock = (blockLines) => {
 // passe proposés à un administrateur ; son client web
 // (`apps/web/src/lib/api/admin-user-password.ts`) écrit l'adresse en
 // littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 476;
+// 476 → 478 (#8217) : `admin.usersByUserIdProfileImageCandidates` et
+// `admin.usersByUserIdProfileImagesByKind` — photo et bannière d'un membre
+// posées par un administrateur ; leur client web
+// (`apps/web/src/lib/api/admin-user-images.ts`) écrit les adresses en
+// littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27
+// (CI de dev rouge sur 7943044432, relevé fusionné sans le cliquet).
+const BASELINE_DEAD_ENTRIES = 478;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
