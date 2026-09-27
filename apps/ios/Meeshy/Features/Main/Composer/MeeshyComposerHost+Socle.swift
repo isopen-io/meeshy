@@ -42,10 +42,12 @@ extension MeeshyComposerHost {
 
     var socle: some View {
         HStack(spacing: 10) {
-            if paintedSocleZones.contains(.audience) { audienceChip }
-            Spacer()
-            if socleServesPostText { postTextButton }
-            publishButton
+            if returnsImageToConversation { Spacer(); returnImageButton } else {
+                if paintedSocleZones.contains(.audience) { audienceChip }
+                Spacer()
+                if socleServesPostText { postTextButton }
+                publishButton
+            }
         }
         .padding(.horizontal, 14)
         // **Plus bas, sous la scène** (directive porteur 2026-09-27) : il

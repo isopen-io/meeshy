@@ -347,7 +347,10 @@ extension ConversationView {
         )) {
             if let id = scrollState.editingPendingAttachmentId,
                let thumb = composerState.pendingThumbnails[id] {
-                MeeshyImageEditorView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
+                // **La même scène que toute composition** (#8416) : la retouche
+                // d'une image du brouillon ouvre le composer plein écran, et
+                // « Terminé » rend l'image composée ici, au message.
+                ConversationImageSceneEditor(image: thumb, onDone: { editedImage in
                     composerState.pendingThumbnails[id] = editedImage
                     Task {
                         let result = await MediaCompressor.shared.compressImage(editedImage)
@@ -372,7 +375,7 @@ extension ConversationView {
                             scrollState.editingPendingAttachmentId = nil
                         }
                     }
-                }
+                }, onCancel: { scrollState.editingPendingAttachmentId = nil })
             } else {
                 // The thumbnail vanished out from under the presentation
                 // (attachment removed mid-race, or generation never
@@ -404,7 +407,7 @@ extension ConversationView {
             set: { if !$0 { scrollState.recentImageToEdit = nil } }
         )) {
             if let image = scrollState.recentImageToEdit {
-                MeeshyImageEditorView(image: image, context: .message, accentColor: accentColor, onAccept: { edited in
+                ConversationImageSceneEditor(image: image, onDone: { edited in
                     scrollState.recentImageToEdit = nil
                     handleCameraCapture(edited)
                 }, onCancel: {

@@ -858,6 +858,20 @@ extension MeeshyComposerHost {
               let plan = ComposerSeedIngestion.plan(for: mediaSeed) else { return }
         seedIngestedIntoDocument = true
 
+        // **En retouche d'une image du fil, l'image devient un VRAI fond**
+        // (#8416). Le modèle la range en fond hérité (`slideImages`), que la
+        // scène du meuble ne lit pas — elle restait noire. Hors publication, on
+        // la retire de là et la boucle de placement la pose en média de fond,
+        // par le chemin de la porte Photos (le Cadre s'y applique donc aussi).
+        if returnsImageToConversation, case .image? = mediaSeed?.payload {
+            viewModel.detachSeededBackgroundImage()
+            // Posée « par le rail » : hors Post, la boucle de placement ne pose
+            // sur la scène que ce que le rail a demandé (`posePourLaScene`).
+            railPosesNextMedia = true
+            ecrireDansLaListeDuDocument([plan.media], rail: .consomme)
+            return
+        }
+
         mediaRoleByURL[plan.media.url] = plan.foundsScene ? .background : .foreground
         if plan.foundsScene {
             slideIdByMediaURL[plan.media.url] = viewModel.currentSlide.id
