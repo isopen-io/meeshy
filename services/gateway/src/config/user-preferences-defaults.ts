@@ -204,7 +204,7 @@ export interface PrivacyPreferencesDefaults {
 
   // Qui peut faire SONNER (#8073) — lue par `services/calls/callRingPolicy.ts`.
   // Postérieure à janvier 2026 : aucune ligne kebab-case héritée.
-  allowCallsFromNonContacts: boolean;
+  acceptCallsFromNonContacts: boolean;
 
   // Data settings
   saveMediaToGallery: boolean;
@@ -233,7 +233,7 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
 
   // Le défaut DÉCLARÉ par le schéma partagé, lu et non recopié : ce que
   // l'écran montre est ce que la porte obéit.
-  allowCallsFromNonContacts: PRIVACY_PREFERENCE_DEFAULTS.allowCallsFromNonContacts,
+  acceptCallsFromNonContacts: PRIVACY_PREFERENCE_DEFAULTS.acceptCallsFromNonContacts,
 
   // Data settings
   saveMediaToGallery: false, // disabled by default for privacy

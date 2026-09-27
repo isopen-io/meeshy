@@ -145,7 +145,7 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "callsNonContacts", icon: "phone.arrow.down.left",
                     title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
-                    color: "FF6B6B", keyPath: \.allowCallsFromNonContacts,
+                    color: "FF6B6B", keyPath: \.acceptCallsFromNonContacts,
                     info: SettingsInfo(
                         id: "privacy.calls_non_contacts",
                         title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),

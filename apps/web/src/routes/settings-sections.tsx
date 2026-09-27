@@ -347,7 +347,7 @@ const PRIVACY_TOGGLES = [
     tint: 'var(--ios-indigo-500)',
   },
   {
-    key: 'allowCallsFromNonContacts',
+    key: 'acceptCallsFromNonContacts',
     label: 'settings.privacy.calls_non_contacts',
     caption: 'settings.privacy.calls_non_contacts.info',
     icon: { set: 'socle', name: 'phone' },

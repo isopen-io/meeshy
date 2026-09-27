@@ -23,7 +23,7 @@ import type { ApiResult, HttpTransport } from './http';
  *  - `privacy.showTypingIndicator` — `PrivacyPreferencesService` ;
  *  - `privacy.hideProfileFromSearch` — toutes les recherches par identifiant
  *    (numéro, e-mail, carnet) et l'annonce « X a rejoint Meeshy » (#8104, #8105) ;
- *  - `privacy.allowCallsFromNonContacts` — la porte de sonnerie des appels
+ *  - `privacy.acceptCallsFromNonContacts` — la porte de sonnerie des appels
  *    (`services/calls/callRingPolicy.ts`, #8073).
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
@@ -50,7 +50,7 @@ const Privacy = z.object({
   showReadReceipts: z.boolean(),
   showTypingIndicator: z.boolean(),
   hideProfileFromSearch: z.boolean(),
-  allowCallsFromNonContacts: z.boolean(),
+  acceptCallsFromNonContacts: z.boolean(),
 });
 
 const Complete = z.object({ application: Application, notification: Notification, privacy: Privacy });
@@ -80,7 +80,7 @@ export const APP_PREFERENCE_FIELDS = {
   showReadReceipts: 'privacy',
   showTypingIndicator: 'privacy',
   hideProfileFromSearch: 'privacy',
-  allowCallsFromNonContacts: 'privacy',
+  acceptCallsFromNonContacts: 'privacy',
 } as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
 
 type PreferenceKey = keyof typeof APP_PREFERENCE_FIELDS;

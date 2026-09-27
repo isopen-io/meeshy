@@ -52,7 +52,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   showReadReceipts: true,
   showTypingIndicator: true,
   hideProfileFromSearch: false,
-  allowCallsFromNonContacts: false,
+  acceptCallsFromNonContacts: true,
   ...overrides,
 });
 
@@ -189,7 +189,7 @@ describe('la confidentialité — cinq bascules que la passerelle obéit', () =>
     const host = dom(
       <PrivacySection
         language="fr"
-        view={ready({ allowCallsFromNonContacts: false })}
+        view={ready({ acceptCallsFromNonContacts: false })}
         disabled={false}
         onToggle={(key, value) => edits.push([key, value])}
         onRetry={noop}
@@ -197,7 +197,7 @@ describe('la confidentialité — cinq bascules que la passerelle obéit', () =>
     );
     const toggle = switchNamed(host, 'Appels hors contacts');
     expect(toggle?.getAttribute('aria-checked')).toBe('false');
-    expect(toggle?.getAttribute('data-setting')).toBe('allowCallsFromNonContacts');
+    expect(toggle?.getAttribute('data-setting')).toBe('acceptCallsFromNonContacts');
     expect(host.textContent).toContain('seuls vos amis peuvent vous faire sonner');
   });
 

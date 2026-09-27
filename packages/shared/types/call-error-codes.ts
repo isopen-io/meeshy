@@ -23,7 +23,7 @@ export const CALL_ERROR_CODES = {
    */
   CONVERSATION_CLOSED: 'CONVERSATION_CLOSED',
   /**
-   * L'interlocuteur a coupé « Appels hors contacts » (`allowCallsFromNonContacts`)
+   * L'interlocuteur a coupé « Appels hors contacts » (`acceptCallsFromNonContacts`)
    * et l'appelant n'est pas un ami accepté (#8073). Refusé à l'OUVERTURE d'un
    * appel direct : aucune session, aucune sonnerie, aucun appel manqué. En
    * groupe, le membre concerné n'est simplement pas sonné.

@@ -34,8 +34,8 @@ final class PrivacySettingsViewComingSoonTests: XCTestCase {
 
     /// La passerelle refuse de faire sonner un non-contact quand le réglage
     /// est coupé (#8073) : l'interrupteur a un effet, il n'est plus « bientôt ».
-    func test_isComingSoon_allowCallsFromNonContacts_isLiveSinceTheGatewayAppliesIt() {
-        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.allowCallsFromNonContacts))
+    func test_isComingSoon_acceptCallsFromNonContacts_isLiveSinceTheGatewayAppliesIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.acceptCallsFromNonContacts))
     }
 
     func test_isComingSoon_saveMediaToGallery_returnsTrue() {

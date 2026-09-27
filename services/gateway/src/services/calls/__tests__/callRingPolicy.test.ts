@@ -14,7 +14,6 @@ import {
   partitionRingableCallees,
 } from '../callRingPolicy';
 import { clearPrivacyPreferencesCache } from '../../preferences/privacy-cache';
-import { PRIVACY_PREFERENCES_DEFAULTS } from '../../../config/user-preferences-defaults';
 
 jest.mock('../../../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
@@ -48,8 +47,8 @@ const fakePrisma = (opts: {
   };
 };
 
-const refusing = (userId: string): PrivacyDoc => ({ userId, privacy: { allowCallsFromNonContacts: false } });
-const allowing = (userId: string): PrivacyDoc => ({ userId, privacy: { allowCallsFromNonContacts: true } });
+const refusing = (userId: string): PrivacyDoc => ({ userId, privacy: { acceptCallsFromNonContacts: false } });
+const allowing = (userId: string): PrivacyDoc => ({ userId, privacy: { acceptCallsFromNonContacts: true } });
 
 describe('partitionRingableCallees', () => {
   beforeEach(() => clearPrivacyPreferencesCache());
@@ -88,7 +87,7 @@ describe('partitionRingableCallees', () => {
     expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
   });
 
-  it("applique le défaut produit quand la préférence est absente", async () => {
+  it("fait sonner un non-contact quand la préférence est absente — le défaut ouvre à tous", async () => {
     const prisma = fakePrisma({ documents: [] });
 
     const result = await partitionRingableCallees(prisma as never, {
@@ -96,10 +95,18 @@ describe('partitionRingableCallees', () => {
       calleeUserIds: [SILENT],
     });
 
-    const expected = PRIVACY_PREFERENCES_DEFAULTS.allowCallsFromNonContacts
-      ? { ringable: [SILENT], refused: [] }
-      : { ringable: [], refused: [SILENT] };
-    expect(result).toEqual(expected);
+    expect(result).toEqual({ ringable: [SILENT], refused: [] });
+  });
+
+  it("ignore l'ancienne clé allowCallsFromNonContacts : un false que personne n'a choisi ne ferme rien", async () => {
+    const prisma = fakePrisma({ documents: [{ userId: SILENT, privacy: { allowCallsFromNonContacts: false } }] });
+
+    const result = await partitionRingableCallees(prisma as never, {
+      callerUserId: CALLER,
+      calleeUserIds: [SILENT],
+    });
+
+    expect(result).toEqual({ ringable: [SILENT], refused: [] });
   });
 
   it('partage un groupe : seuls les non-contacts gardés sont retirés', async () => {

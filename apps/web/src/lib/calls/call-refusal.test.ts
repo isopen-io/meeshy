@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
+import { PRIVACY_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
+
+import { fixtureAppPreferences } from '@/lib/api/fixtures-app-preferences';
 
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
@@ -38,5 +41,10 @@ describe('refus « Appels hors contacts »', () => {
     const texts = SUPPORTED_INTERFACE_LANGUAGES.map((language) => translate(language, 'call.ended.refusedNonContacts'));
     expect(texts.every((text) => text.length > 0 && text !== 'call.ended.refusedNonContacts')).toBe(true);
     expect(new Set(texts).size).toBe(SUPPORTED_INTERFACE_LANGUAGES.length);
+  });
+
+  test('par défaut, tout le monde peut faire sonner — le réglage ne se ferme que si on le coupe', () => {
+    expect(PRIVACY_PREFERENCE_DEFAULTS.acceptCallsFromNonContacts).toBe(true);
+    expect(fixtureAppPreferences().acceptCallsFromNonContacts).toBe(true);
   });
 });

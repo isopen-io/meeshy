@@ -32,7 +32,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     showReadReceipts: true,
     showTypingIndicator: false,
     hideProfileFromSearch: true,
-    allowCallsFromNonContacts: false,
+    acceptCallsFromNonContacts: false,
     allowAnalytics: true,
     ...overrides.privacy,
   },
@@ -47,7 +47,7 @@ const expected: AppPreferences = {
   showReadReceipts: true,
   showTypingIndicator: false,
   hideProfileFromSearch: true,
-  allowCallsFromNonContacts: false,
+  acceptCallsFromNonContacts: false,
 };
 
 const transportAnswering = (answer: ApiResult<unknown>) => {
@@ -109,7 +109,7 @@ describe('preferencesPatchBody — un réglage retrouve SA catégorie', () => {
   });
 
   test('« appels hors contacts » part sous `privacy`, là où la porte de sonnerie la lit (#8073)', () => {
-    expect(preferencesPatchBody({ allowCallsFromNonContacts: true })).toEqual({ privacy: { allowCallsFromNonContacts: true } });
+    expect(preferencesPatchBody({ acceptCallsFromNonContacts: true })).toEqual({ privacy: { acceptCallsFromNonContacts: true } });
   });
 
   test('une catégorie que le geste ne touche pas ne part pas', () => {
@@ -154,7 +154,7 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
     expect(calls[0]?.body).toEqual({ privacy: { showTypingIndicator: true } });
     expect(result).toEqual({
       ok: true,
-      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false, hideProfileFromSearch: true, allowCallsFromNonContacts: false },
+      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false, hideProfileFromSearch: true, acceptCallsFromNonContacts: false },
     });
   });
 

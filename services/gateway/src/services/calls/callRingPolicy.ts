@@ -1,5 +1,5 @@
 /**
- * « Appels hors contacts » (`allowCallsFromNonContacts`, #8073) — qui a le
+ * « Appels hors contacts » (`acceptCallsFromNonContacts`, #8073) — qui a le
  * droit de faire SONNER qui.
  *
  * Un destinataire qui a coupé le réglage ne sonne que pour ses amis acceptés.
@@ -19,8 +19,8 @@ export type CallRingPartition = {
   readonly refused: ReadonlyArray<string>;
 };
 
-const opensToEveryone = (stored: { allowCallsFromNonContacts?: boolean } | undefined): boolean =>
-  stored?.allowCallsFromNonContacts ?? PRIVACY_PREFERENCES_DEFAULTS.allowCallsFromNonContacts;
+const opensToEveryone = (stored: { acceptCallsFromNonContacts?: boolean } | undefined): boolean =>
+  stored?.acceptCallsFromNonContacts ?? PRIVACY_PREFERENCES_DEFAULTS.acceptCallsFromNonContacts;
 
 export async function partitionRingableCallees(
   prisma: PrismaClient,

@@ -19,7 +19,7 @@ const INITIAL: AppPreferences = {
   showReadReceipts: true,
   showTypingIndicator: true,
   hideProfileFromSearch: false,
-  allowCallsFromNonContacts: false,
+  acceptCallsFromNonContacts: true,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };

@@ -2,9 +2,9 @@ import { jest } from '@jest/globals';
 
 type UserIdFilter = { where: { userId: { in: ReadonlyArray<string> } } };
 
-const privacyDocuments = (allowCallsFromNonContacts: boolean) =>
+const privacyDocuments = (acceptCallsFromNonContacts: boolean) =>
   jest.fn(async ({ where }: UserIdFilter) =>
-    where.userId.in.map((userId) => ({ userId, privacy: { allowCallsFromNonContacts } }))
+    where.userId.in.map((userId) => ({ userId, privacy: { acceptCallsFromNonContacts } }))
   );
 
 export const openCallRingTables = () => ({
