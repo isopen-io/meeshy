@@ -260,3 +260,23 @@ describe('les permissions que la coque ne DEMANDE PAS (#8242)', () => {
     expect(auditForbiddenPermissions({ manifest })).toEqual([]);
   });
 });
+
+describe('la galerie (#8336) écrit sans lire : aucune permission de stockage', () => {
+  const GALLERY_READS = [
+    'android.permission.READ_MEDIA_IMAGES',
+    'android.permission.READ_MEDIA_VIDEO',
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+  ];
+
+  test('le plugin Media hors androidGalleryMode écrit dans Android/media/<appId> : le manifeste de la coque ne demande rien', () => {
+    expect(auditForbiddenPermissions({ manifest: manifestWith(REQUIRED_PERMISSIONS.map(declaration)) })).toEqual([]);
+  });
+
+  for (const permission of GALLERY_READS) {
+    test(`${permission} déclarée → violation qui la nomme (elle ouvrirait la photothèque entière)`, () => {
+      const manifest = manifestWith([...REQUIRED_PERMISSIONS.map(declaration), declaration(permission)]);
+      expect(auditForbiddenPermissions({ manifest })).toEqual([permission]);
+    });
+  }
+});

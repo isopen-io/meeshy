@@ -14,7 +14,7 @@ import {
   type GalleryStorage,
 } from './auto-save';
 import { saveToGallery } from './save-to-gallery';
-import { GALLERY_ALBUM, NULL_GALLERY_SAVER, galleryHostOf, shellGallerySaver, type GallerySaver } from './gallery-saver';
+import { GALLERY_ALBUM, GALLERY_BRIDGE_MAX_BYTES, NULL_GALLERY_SAVER, galleryHostOf, shellGallerySaver, type GallerySaveOutcome, type GallerySaver } from './gallery-saver';
 
 /**
  * **LES MÉDIAS REÇUS S'ENREGISTRENT SEULS, UNE SEULE FOIS, DANS L'ALBUM MEESHY**
@@ -169,7 +169,7 @@ describe('l’interrupteur des réglages médias', () => {
   });
 });
 
-function fakeSaver(outcome: 'saved' | 'failed' = 'saved') {
+function fakeSaver(outcome: GallerySaveOutcome = 'saved') {
   const saved: string[] = [];
   const saver: GallerySaver = {
     available: true,
@@ -266,9 +266,26 @@ describe('la décision à la réception', () => {
 
 type NativeCall = { readonly methode: string; readonly options: Record<string, unknown> };
 
-function fakeShell(options: { readonly platform?: string; readonly withMedia?: boolean; readonly albums?: ReadonlyArray<{ name: string; identifier: string }> } = {}) {
+const ALBUMS_ROOT = '/storage/emulated/0/Android/media/me.meeshy.app';
+
+/**
+ * Le faux plugin rejoue les réponses RÉELLES de `MediaPlugin.java` 9.1.0 hors
+ * `androidGalleryMode` : `getAlbums` → `{ albums: [{ name, identifier }] }`
+ * (l'identifiant est le chemin du dossier), `createAlbum` → vide, ou REJET
+ * « Album already exists » si le dossier existe, `savePhoto`/`saveVideo` →
+ * `{ filePath }` où le plugin AJOUTE l'extension tirée du type au `fileName`.
+ */
+function fakeShell(
+  options: {
+    readonly platform?: string;
+    readonly withMedia?: boolean;
+    readonly albums?: ReadonlyArray<{ name: string; identifier: string }>;
+    readonly hiddenAlbumOnFirstRead?: boolean;
+  } = {},
+) {
   const calls: NativeCall[] = [];
   const albums = [...(options.albums ?? [])];
+  let reads = 0;
   const shell: CoqueNative = {
     getPlatform: () => options.platform ?? 'android',
     PluginHeaders:
@@ -276,13 +293,21 @@ function fakeShell(options: { readonly platform?: string; readonly withMedia?: b
         ? [{ name: 'PushNotifications', methods: [] }]
         : [{ name: 'Media', methods: ['getAlbums', 'createAlbum', 'savePhoto', 'saveVideo'].map((name) => ({ name })) }],
     nativePromise: async (_plugin, methode, opts) => {
-      calls.push({ methode, options: opts as Record<string, unknown> });
-      if (methode === 'getAlbums') return { albums };
+      const o = opts as Record<string, unknown>;
+      calls.push({ methode, options: o });
+      if (methode === 'getAlbums') {
+        reads += 1;
+        return { albums: options.hiddenAlbumOnFirstRead === true && reads === 1 ? [] : albums };
+      }
       if (methode === 'createAlbum') {
-        albums.push({ name: String((opts as { name: string }).name), identifier: '/storage/Pictures/Meeshy' });
+        const name = String(o.name);
+        if (albums.some((album) => album.name === name) || options.hiddenAlbumOnFirstRead === true) {
+          throw Object.assign(new Error('Album already exists'), { code: 'filesystemError' });
+        }
+        albums.push({ name, identifier: `${ALBUMS_ROOT}/${name}` });
         return {};
       }
-      return { filePath: '/storage/Pictures/Meeshy/a.jpg' };
+      return { filePath: `${String(o.albumIdentifier)}/${String(o.fileName)}.jpg` };
     },
   };
   return { shell, calls };
@@ -303,7 +328,7 @@ describe('le saver de la coque — plugin Media optionnel', () => {
     expect(calls.map((c) => c.methode)).toEqual(['getAlbums', 'createAlbum', 'getAlbums', 'savePhoto']);
     expect(calls[1]?.options).toEqual({ name: GALLERY_ALBUM });
     const save = calls[3]?.options ?? {};
-    expect(save.albumIdentifier).toBe('/storage/Pictures/Meeshy');
+    expect(save.albumIdentifier).toBe(`${ALBUMS_ROOT}/Meeshy`);
     expect(String(save.path).startsWith('data:image/jpeg;base64,')).toBe(true);
   });
 
@@ -313,6 +338,47 @@ describe('le saver de la coque — plugin Media optionnel', () => {
     await saver.save({ blob: new Blob(['x']), fileName: 'b.mp4', mimeType: 'video/mp4' });
     await saver.save({ blob: new Blob(['y']), fileName: 'c.mp4', mimeType: 'video/mp4' });
     expect(calls.map((c) => c.methode)).toEqual(['getAlbums', 'saveVideo', 'saveVideo']);
+  });
+
+  test('le nom natif ne porte ni extension ni chemin — le plugin ajoute l’extension du type', async () => {
+    const { shell, calls } = fakeShell({ albums: [{ name: GALLERY_ALBUM, identifier: '/p/Meeshy' }] });
+    await shellGallerySaver(shell).save({ blob: new Blob(['x']), fileName: '../../evil/Vacances été.jpg', mimeType: 'image/jpeg' });
+    const fileName = String(calls.find((c) => c.methode === 'savePhoto')?.options.fileName);
+    expect(fileName.startsWith('Vacances_été-')).toBe(true);
+    expect(fileName).not.toContain('.');
+    expect(fileName).not.toContain('/');
+  });
+
+  test('deux pièces du même nom ne s’écrasent pas dans l’album', async () => {
+    const { shell, calls } = fakeShell({ albums: [{ name: GALLERY_ALBUM, identifier: '/p/Meeshy' }] });
+    const saver = shellGallerySaver(shell);
+    await Promise.all([
+      saver.save({ blob: new Blob(['x']), fileName: 'image.jpg', mimeType: 'image/jpeg' }),
+      saver.save({ blob: new Blob(['y']), fileName: 'image.jpg', mimeType: 'image/jpeg' }),
+    ]);
+    const names = calls.filter((c) => c.methode === 'savePhoto').map((c) => c.options.fileName);
+    expect(names).toHaveLength(2);
+    expect(new Set(names).size).toBe(2);
+  });
+
+  test('un nom vide ou sans lettre retombe sur « meeshy »', async () => {
+    const { shell, calls } = fakeShell({ albums: [{ name: GALLERY_ALBUM, identifier: '/p/Meeshy' }] });
+    await shellGallerySaver(shell).save({ blob: new Blob(['x']), fileName: '.jpg', mimeType: 'image/jpeg' });
+    expect(String(calls.find((c) => c.methode === 'savePhoto')?.options.fileName).startsWith('meeshy-')).toBe(true);
+  });
+
+  test('« Album already exists » n’est pas un échec : l’album est relu', async () => {
+    const { shell, calls } = fakeShell({ albums: [{ name: GALLERY_ALBUM, identifier: '/p/Meeshy' }], hiddenAlbumOnFirstRead: true });
+    expect(await shellGallerySaver(shell).save({ blob: new Blob(['x']), fileName: 'a.jpg', mimeType: 'image/jpeg' })).toBe('saved');
+    expect(calls.map((c) => c.methode)).toEqual(['getAlbums', 'createAlbum', 'getAlbums', 'savePhoto']);
+    expect(calls[3]?.options.albumIdentifier).toBe('/p/Meeshy');
+  });
+
+  test('une pièce au-delà du plafond du pont n’est pas envoyée au plugin', async () => {
+    const { shell, calls } = fakeShell({ albums: [{ name: GALLERY_ALBUM, identifier: '/p/Meeshy' }] });
+    const big = { size: GALLERY_BRIDGE_MAX_BYTES + 1, type: 'video/mp4' } as Blob;
+    expect(await shellGallerySaver(shell).save({ blob: big, fileName: 'long.mp4', mimeType: 'video/mp4' })).toBe('unavailable');
+    expect(calls).toEqual([]);
   });
 
   test('un type qui n’est ni image ni vidéo n’est pas enregistré', async () => {
@@ -357,6 +423,11 @@ describe('« Enregistrer » dans la visionneuse', () => {
   test('un refus du plugin se dit en échec', async () => {
     const { saver } = fakeSaver('failed');
     expect(await saveToGallery({ saver, ...input })).toBe('media.viewer.save_failed');
+  });
+
+  test('une pièce que la galerie ne prend pas (trop lourde pour le pont) ⇒ la voie actuelle reste', async () => {
+    const { saver } = fakeSaver('unavailable');
+    expect(await saveToGallery({ saver, ...input })).toBeNull();
   });
 
   test('un document n’est pas un média de galerie ⇒ la voie actuelle reste', async () => {

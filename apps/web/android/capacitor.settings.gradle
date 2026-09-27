@@ -2,5 +2,8 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../../../node_modules/.bun/@capacitor+android@8.5.1+537b06cc52f15837/node_modules/@capacitor/android/capacitor')
 
+include ':capacitor-community-media'
+project(':capacitor-community-media').projectDir = new File('../../../node_modules/.bun/@capacitor-community+media@9.1.0+537b06cc52f15837/node_modules/@capacitor-community/media/android')
+
 include ':capacitor-push-notifications'
 project(':capacitor-push-notifications').projectDir = new File('../../../node_modules/.bun/@capacitor+push-notifications@8.1.2+537b06cc52f15837/node_modules/@capacitor/push-notifications/android')

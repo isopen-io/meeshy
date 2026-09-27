@@ -4394,6 +4394,13 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Conséquences.** `base64De` (`media/file-delivery-host.ts`) est exporté et partagé. Deux clés `settings.gallery.*` rejoignent les sept catalogues en tranche `catalog-<l>-gallery.ts`.
 
+**Suite (#8336, 2026-09-27) — le plugin est posé.** `@capacitor-community/media` 9.1.0 (MIT, peer `@capacitor/core >=8`, coque en 8.5.1) rejoint les dépendances ; `cap sync android` l'inscrit dans `capacitor.settings.gradle` / `capacitor.build.gradle`. Contrat relu dans `MediaPlugin.java` et tenu par les témoins :
+- **Hors `androidGalleryMode`** (défaut, non posé) : l'album est le dossier `Android/media/<appId>/Meeshy` (`getExternalMediaDirs()[0]`), propre à l'app et indexé par MediaStore, donc visible des galeries — et **aucune permission** n'est demandée, à aucun niveau d'API. Le « `WRITE_EXTERNAL_STORAGE` ≤ 28 » envisagé plus haut est donc SANS objet : `READ_MEDIA_IMAGES/VIDEO` et `READ/WRITE_EXTERNAL_STORAGE` rejoignent `FORBIDDEN_PERMISSIONS` (`scripts/check-android-manifest.mjs`). Pas de dialogue ⇒ aucun refus possible, aucune boucle. Revers assumé : désinstaller l'app efface ce dossier (comme WhatsApp).
+- `createAlbum` REJETTE « Album already exists » : le saver relit l'album au lieu d'échouer.
+- `savePhoto`/`saveVideo` ajoutent l'extension du type au `fileName` et **écrasent** un homonyme : le nom natif est une tige assainie (sans chemin ni extension) suffixée d'un identifiant unique.
+- Le `data:` base64 traverse le pont en mémoire : au-delà de `GALLERY_BRIDGE_MAX_BYTES` (32 Mio) la pièce n'est pas confiée au plugin (`unavailable`) ; « Enregistrer » retombe alors sur la voie actuelle.
+- La coque iOS (`CapApp-SPM`) n'a pas été resynchronisée : le saver ne sert que `android`.
+
 ## D-145 — La flamme-œil ne décompte rien et se consomme en QUITTANT le fil ; une protection armée reste armée dans la conversation (2026-09-27, #8304, #8306)
 
 **Contexte.** Directive porteur 2026-09-27, contrat serveur #8302 : un éphémère « flamme-œil » (`EPHEMERAL | EPHEMERAL_AFTER_READ`, sans `ephemeralDuration`) disparaît chez chaque lecteur quand il l'a VU puis a QUITTÉ la conversation ; l'éphémère gagne 15 s ; et une protection armée (éphémère, flou, vue unique) ne se désarme plus à l'envoi.
