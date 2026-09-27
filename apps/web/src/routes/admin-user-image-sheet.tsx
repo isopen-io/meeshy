@@ -44,13 +44,17 @@ const TITRES: Readonly<Record<ProfileImageKind, AdminPlainCatalogKey>> = {
   banner: 'admin.gallery.banner',
 };
 
-type Refus = 'offline' | 'unreadable' | 'failed' | null;
+type Refus = 'offline' | 'unreadable' | 'failed' | 'forbidden' | null;
 
 const REFUS: Readonly<Record<Exclude<Refus, null>, AdminPlainCatalogKey>> = {
   offline: 'admin.images.offline',
   unreadable: 'admin.images.unreadable',
   failed: 'admin.images.failed',
+  forbidden: 'admin.prefs.reserved',
 };
+
+/** Un 403 est un RANG insuffisant, jamais « échec » : l'administrateur doit savoir que réessayer n'y fera rien. */
+const refusDuStatut = (status: number): Exclude<Refus, null> => (status === 403 ? 'forbidden' : 'failed');
 
 export function AdminUserImageSheet({
   membre,
@@ -59,6 +63,8 @@ export function AdminUserImageSheet({
   onClose,
   onSaved,
   onAnnounce,
+  onPreview,
+  onFailed,
   deps = apiDeps,
   isOnline = () => navigator.onLine,
 }: {
@@ -66,8 +72,17 @@ export function AdminUserImageSheet({
   readonly kind: ProfileImageKind;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
-  readonly onSaved: (membre: AdminUserDetail) => void;
+  readonly onSaved: (membre: AdminUserDetail, kind: ProfileImageKind) => void;
   readonly onAnnounce: (texte: string) => void;
+  /**
+   * L'APERÇU IMMÉDIAT (#8289) — l'image choisie, avant que la passerelle ne
+   * réponde : une adresse `blob:` pour un fichier, l'adresse de la candidate
+   * pour une image publique, `null` pour un retrait. La fiche la montre à la
+   * place de la valeur servie jusqu'à `onSaved` ou `onFailed`.
+   */
+  readonly onPreview?: (kind: ProfileImageKind, url: string | null) => void;
+  /** Le geste a échoué : la fiche retire son aperçu et dit pourquoi. */
+  readonly onFailed?: (kind: ProfileImageKind, message: string) => void;
   readonly deps?: AdminDeps;
   readonly isOnline?: () => boolean;
 }) {
@@ -89,19 +104,26 @@ export function AdminUserImageSheet({
 
   function conclure(aJour: AdminUserDetail, cle: AdminPlainCatalogKey) {
     onAnnounce(translateAdmin(language, cle));
-    onSaved(aJour);
+    onSaved(aJour, kind);
     onClose();
   }
 
-  async function poser(geste: string, choix: AdminImageChoice) {
+  function echouer(cause: Exclude<Refus, null>) {
+    const message = translateAdmin(language, REFUS[cause]);
+    setRefus(cause);
+    onAnnounce(message);
+    onFailed?.(kind, message);
+  }
+
+  async function poser(geste: string, choix: AdminImageChoice, apercu: string | null) {
     if (enVol !== null) return;
     setEnVol(geste);
     setRefus(null);
+    onPreview?.(kind, apercu);
     const resultat = await setAdminUserImage({ ...deps, userId: membre.id, kind, choice: choix });
     setEnVol(null);
     if (!resultat.ok) {
-      setRefus('failed');
-      onAnnounce(translateAdmin(language, 'admin.images.failed'));
+      echouer(refusDuStatut(resultat.status));
       return;
     }
     conclure(resultat.data, choix.source === 'none' ? 'admin.images.removed' : 'admin.images.saved');
@@ -111,23 +133,25 @@ export function AdminUserImageSheet({
     if (enVol !== null) return;
     setEnVol('upload');
     setRefus(null);
+    if (typeof URL.createObjectURL === 'function') onPreview?.(kind, URL.createObjectURL(file));
     const issue = await performAdminImageUpload({ userId: membre.id, kind, file, deps: { ...deps, isOnline } });
     setEnVol(null);
     if (issue.status === 'saved') {
       conclure(issue.membre, 'admin.images.saved');
       return;
     }
-    if (issue.status === 'cancelled') return;
-    const cause: Exclude<Refus, null> = issue.status === 'refused' ? 'failed' : issue.status;
-    setRefus(cause);
-    onAnnounce(translateAdmin(language, REFUS[cause]));
+    if (issue.status === 'cancelled') {
+      onFailed?.(kind, '');
+      return;
+    }
+    echouer(issue.status === 'refused' ? refusDuStatut(issue.httpStatus ?? 0) : issue.status);
   }
 
   const occupe = enVol !== null;
   const liste = candidates.data?.candidates ?? [];
 
   return (
-    <Sheet title={translateAdmin(language, TITRES[kind])} bodyAs="div" onClose={onClose}>
+    <Sheet title={translateAdmin(language, TITRES[kind])} bodyAs="div" presentation="centered" onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-admin-image-sheet={kind}>
         <div className="grid gap-4">
           <figure
@@ -164,7 +188,7 @@ export function AdminUserImageSheet({
               {translateAdmin(language, enVol === 'upload' ? 'admin.images.uploading' : 'admin.images.upload')}
             </ActionButton>
             {actuelle === '' ? null : (
-              <ActionButton tone="secondary" disabled={occupe} data={{ 'data-admin-image-remove': '' }} onClick={() => void poser('none', { source: 'none' })}>
+              <ActionButton tone="secondary" disabled={occupe} data={{ 'data-admin-image-remove': '' }} onClick={() => void poser('none', { source: 'none' }, null)}>
                 {translateAdmin(language, 'admin.images.remove')}
               </ActionButton>
             )}
@@ -198,7 +222,7 @@ export function AdminUserImageSheet({
                       disabled={occupe}
                       data-admin-image-candidate={candidate.id}
                       aria-label={translateAdmin(language, 'admin.images.useCandidate', { n: String(rang + 1), total: String(liste.length) })}
-                      onClick={() => void poser(candidate.id, { source: 'media', mediaId: candidate.id })}
+                      onClick={() => void poser(candidate.id, { source: 'media', mediaId: candidate.id }, candidate.fileUrl)}
                       className="grid aspect-square w-full place-items-center overflow-hidden rounded-chip focus-visible:outline-2"
                       style={{
                         minHeight: 44,

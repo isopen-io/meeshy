@@ -17,7 +17,7 @@ import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 import { AdminUserCreateSheet } from '@/routes/admin-user-create-sheet';
-import { ActionButton } from '@/routes/link-page-parts';
+import { SectionButton } from '@/routes/admin-member-parts';
 import {
   AdminFilterBar,
   AdminPager,
@@ -46,6 +46,7 @@ import { Link, href, navigate } from '@/routes/route-table';
  * posée seulement à l'étage du dessus ne garde que l'escalier.
  */
 
+const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
 type UserListState = ListState<(typeof USER_LIST_SPEC.sortKeys)[number], keyof typeof USER_LIST_SPEC.filters>;
@@ -244,14 +245,23 @@ export default function AdminUsersScreen() {
   );
 
   return (
-    <AdminScreenFrame language={language} title={titre} back="admin">
-      {/* CRÉER UN COMPTE (#8217) — le compte créé s'ouvre aussitôt dans sa
-          fiche, où l'on pose sa photo et sa bannière. */}
-      <div className="grid sm:justify-end">
-        <ActionButton data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
+    <AdminScreenFrame
+      language={language}
+      title={titre}
+      back="admin"
+      heading="content"
+      backLabel={titre}
+      /* CRÉER UN COMPTE (#8217) — en haut à droite de l'en-tête (#8289) ; le
+         compte créé s'ouvre aussitôt dans sa fiche. */
+      actions={
+        <SectionButton tone="primary" data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
           {translateAdmin(language, 'admin.create.open')}
-        </ActionButton>
-      </div>
+        </SectionButton>
+      }
+    >
+      <h1 className="pb-3 text-title font-bold" style={{ color: INK }} data-admin-page-title="">
+        {titre}
+      </h1>
       <Filtres language={language} state={state} write={write} draft={draft} setDraft={setDraft} />
 
       {liste.isPending ? (

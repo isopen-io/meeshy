@@ -334,7 +334,12 @@ export const callersIn = (contents, nsNames) => {
 // appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
 // 335 → 334 (#8167, 2026-09-27) : Paramètres > Confidentialité efface le
 // carnet d'adresses par `directory.contacts` (`lib/api/address-book.ts`).
-const BASELINE_DEAD_ENTRIES = 334;
+// 334 → 332 (#8289, 2026-09-27) : la fiche éditable d'un membre appelle
+// `admin.usersByUserIdVerifications`, `admin.usersByUserIdSecurity` et la
+// route neuve `admin.usersByUserIdVerificationRequests`
+// (`lib/api/admin-user-verifications.ts`) — trois entrées vivantes pour une
+// entrée ajoutée.
+const BASELINE_DEAD_ENTRIES = 332;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
