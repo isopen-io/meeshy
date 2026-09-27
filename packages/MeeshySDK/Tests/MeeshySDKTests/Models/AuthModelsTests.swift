@@ -179,9 +179,32 @@ final class AuthModelsTests: XCTestCase {
         XCTAssertEqual(decoded.avatarURL, "https://example.com/avatar.png")
     }
 
+    /// #8286 — une entrée écrite AVANT le choix « Rester connecté » ne porte
+    /// pas la clé : elle appartient au temps où tout compte gardait sa
+    /// session. L'absence vaut donc `true`, jamais une corruption.
+    func testSavedAccountWithoutKeepsSessionKeyDecodesAsKept() throws {
+        let legacy = #"{"id":"sa1","username":"atabeth","lastActiveAt":0}"#
+        let decoded = try JSONDecoder().decode(SavedAccount.self, from: Data(legacy.utf8))
+        XCTAssertTrue(decoded.keepsSession)
+    }
+
+    func testSavedAccountKeepsSessionRoundtrips() throws {
+        let original = SavedAccount(id: "sa2", username: "b", displayName: nil, avatarURL: nil, lastActiveAt: Date(), keepsSession: false)
+        let decoded = try JSONDecoder().decode(SavedAccount.self, from: JSONEncoder().encode(original))
+        XCTAssertFalse(decoded.keepsSession)
+    }
+
     func testSavedAccountShortNameReturnsDisplayName() {
         let account = SavedAccount(id: "1", username: "user1", displayName: "Display Name", avatarURL: nil, lastActiveAt: Date())
         XCTAssertEqual(account.shortName, "Display Name")
+    }
+
+    /// Mesuré au simulateur (#8286) : `/auth/me` peut servir un nom
+    /// d'affichage VIDE — la rangée « Changer de compte » n'affichait alors ni
+    /// nom ni initiales.
+    func testSavedAccountShortNameFallsBackToUsernameWhenDisplayNameIsBlank() {
+        let account = SavedAccount(id: "3", username: "user3", displayName: "  ", avatarURL: nil, lastActiveAt: Date())
+        XCTAssertEqual(account.shortName, "user3")
     }
 
     func testSavedAccountShortNameFallsBackToUsername() {

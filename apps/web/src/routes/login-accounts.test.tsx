@@ -107,6 +107,14 @@ describe('la liste des comptes de l’appareil', () => {
     expect(row?.textContent).toContain('Connecté');
   });
 
+  test('un nom d’affichage vide laisse la place au pseudo (mesuré sur staging)', () => {
+    const accounts = makeAccounts();
+    accounts.vault.noteActive({ id: 'c3', username: 'carol', displayName: '' });
+    const el = mount(accounts);
+
+    expect(el.querySelector('[data-device-account="carol"] .truncate.text-body')?.textContent).toBe('carol');
+  });
+
   test('toucher un compte gardé l’ouvre, sans mot de passe', () => {
     const accounts = makeAccounts();
     withSuspended(accounts, alice, 'tA');

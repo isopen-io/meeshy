@@ -133,7 +133,7 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
+                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)

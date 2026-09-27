@@ -32,7 +32,7 @@ export function DeviceAccountList({
   return (
     <ul aria-label={translate(language, 'accounts.list.label')} data-device-accounts className="grid w-full gap-2.5">
       {accounts.map((account) => {
-        const name = account.user.displayName ?? account.user.username;
+        const name = account.user.displayName?.trim() || account.user.username;
         const isActive = account.user.id === activeId;
         const status = isActive
           ? translate(language, 'accounts.row.current')
