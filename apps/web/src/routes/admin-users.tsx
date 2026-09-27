@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { adminIdentityQueryOptions, adminUsersQueryKey, loadAdminUsers, type AdminUserRow } from '@/lib/api/admin';
+import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { adminMoment } from '@/lib/admin/format';
 import { toggleSort, withFilter, withPage, type ListState } from '@/lib/admin/list-state';
@@ -12,7 +14,10 @@ import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
-import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminUserCreateSheet } from '@/routes/admin-user-create-sheet';
+import { ActionButton } from '@/routes/link-page-parts';
 import {
   AdminFilterBar,
   AdminPager,
@@ -25,7 +30,7 @@ import {
   Td,
 } from '@/routes/admin-table';
 /** `Link` vient de la TABLE, pas du module générique : `to` n'accepte qu'une clé réelle. */
-import { Link } from '@/routes/route-table';
+import { Link, href, navigate } from '@/routes/route-table';
 
 /**
  * **LES COMPTES** (#6432, #7873) — la section d'administration la plus
@@ -189,6 +194,10 @@ export default function AdminUsersScreen() {
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
   const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((s) => s.id === 'users');
 
+  const [creation, setCreation] = useState(false);
+  const annonceur = useLiveAnnouncer();
+  const client = useQueryClient();
+
   const liste = useQuery({
     queryKey: adminUsersQueryKey(address),
     queryFn: async ({ signal }) => {
@@ -236,6 +245,13 @@ export default function AdminUsersScreen() {
 
   return (
     <AdminScreenFrame language={language} title={titre} back="admin">
+      {/* CRÉER UN COMPTE (#8217) — le compte créé s'ouvre aussitôt dans sa
+          fiche, où l'on pose sa photo et sa bannière. */}
+      <div className="grid sm:justify-end">
+        <ActionButton data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
+          {translateAdmin(language, 'admin.create.open')}
+        </ActionButton>
+      </div>
       <Filtres language={language} state={state} write={write} draft={draft} setDraft={setDraft} />
 
       {liste.isPending ? (
@@ -279,6 +295,21 @@ export default function AdminUsersScreen() {
           />
         </>
       )}
+
+      {creation ? (
+        <AdminUserCreateSheet
+          language={language}
+          onClose={() => setCreation(false)}
+          onAnnounce={annonceur.announce}
+          onCreated={(membre) => {
+            setCreation(false);
+            client.setQueryData(adminUserDetailQueryKey(membre.id), membre);
+            void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+            navigate(href(cible, { user: membre.id }));
+          }}
+        />
+      ) : null}
+      <AdminAnnouncement text={annonceur.text} />
     </AdminScreenFrame>
   );
 }

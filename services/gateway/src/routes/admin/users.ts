@@ -41,6 +41,7 @@ import { registerUserProfileReadRoutes } from './user-profile-reads';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
 import { registerUserProfileImageRoutes } from './user-profile-images';
+import { evaluerLoiDesChamps } from './user-field-law';
 import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -296,16 +297,28 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      // Attester l'adresse (#8217) est le geste de `PATCH …/verifications` posé
+      // à la naissance du compte : il passe par la loi du MÊME champ.
+      if (validatedData.emailVerified === true) {
+        const refus = evaluerLoiDesChamps({ role: adminRole, champs: ['emailVerified'] });
+        if (refus) {
+          sendForbidden(reply, refus.message, { message: refus.message });
+          return;
+        }
+      }
+
       // Creer l'utilisateur
       const newUser = await userManagementService.createUser(
         validatedData as CreateUserDTO
       );
 
-      // Log d'audit
+      // Log d'audit — jamais la VALEUR du mot de passe (#8217) : la trace
+      // recopiait le corps validé, secret en clair compris, dans
+      // `AdminAuditLog.changes`. Elle dit qu'il a été posé, rien de plus.
       await userAuditService.logCreateUser(
         authContext.registeredUser!.id,
         newUser.id,
-        validatedData as unknown as Record<string, unknown>,
+        { ...validatedData, password: '[set]' },
         request.ip,
         request.headers['user-agent']
       );

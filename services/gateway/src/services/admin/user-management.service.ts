@@ -247,7 +247,10 @@ export class UserManagementService {
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        // L'administrateur ATTESTE l'adresse (#8217) : sans numéro, un compte
+        // n'est actif qu'une fois son adresse prouvée (#8055).
+        ...(data.emailVerified === true ? { emailVerifiedAt: new Date() } : {})
         // TODO: Initialize UserPreferences.application when implemented
       }
     }).catch(rethrowIdentifierTaken);

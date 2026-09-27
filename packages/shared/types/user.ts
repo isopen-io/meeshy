@@ -284,6 +284,8 @@ export interface CreateUserDTO {
   role?: string;
   systemLanguage?: string;
   regionalLanguage?: string;
+  /** L'administrateur atteste l'adresse : le compte naît actif (#8217). */
+  emailVerified?: boolean;
 }
 
 /**
