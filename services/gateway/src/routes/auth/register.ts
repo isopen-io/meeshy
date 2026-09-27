@@ -175,7 +175,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created - verification email (code + link) sent, and the account is usable at once: the response carries the session (`token`, `sessionToken`) and `user.activation`, the email grace period (#8238: quiet for 7 days, invite until day 28, then blocked until the email is proven — never blocked with a phone number). An email CLAIM (`claimEmail`, #8214) is the exception: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent, and the account is usable at once: the response carries the session (`token`, `sessionToken`), the watch token `pendingSessionToken` (#8288: POST /auth/verification/status tells the signup card when the link was opened elsewhere) and `user.activation`, the email grace period (#8238: quiet for 7 days, invite until day 28, then blocked until the email is proven — never blocked with a phone number). An email CLAIM (`claimEmail`, #8214) is the exception: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -464,12 +464,16 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // (fenêtre glissante), sur la même clé que `POST /login`.
       const { token, sessionToken } = await openSession(authService, user, requestContext);
       const permissions = authService.getUserPermissions(user);
+      // #8288 — la carte de l'inscription attend son code SUR PLACE : le jeton
+      // d'attente (#8083) lui apprend que le lien a été ouvert ailleurs.
+      const attente = await pendingSessionTokenForAccount(context.prisma, user.id);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
         token,
         sessionToken,
-        expiresIn: 24 * 60 * 60
+        expiresIn: 24 * 60 * 60,
+        ...attente
       });
 
     } catch (error) {

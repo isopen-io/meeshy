@@ -16,6 +16,16 @@ const esSignup = {
   'signup.emailTaken.itsMe': 'Soy yo — recuperar mi cuenta',
   'signup.emailTaken.notMe': 'No soy yo',
   'signup.emailTaken.notMeNote': 'Se pedirá el código enviado a esta dirección para obtenerla.',
+  'signup.phone.skip': 'Continuar solo con el correo',
+  'signup.card.title': 'Tu cuenta',
+  'signup.card.validateNow': 'Validar mi cuenta ahora',
+  'signup.card.validateNow.busy': 'Creando la cuenta…',
+  'signup.card.code.lead': 'Introduce el código de 6 cifras enviado a {email} o abre el enlace recibido.',
+  'signup.card.verified': '¡Cuenta validada!',
+  'signup.card.verified.lead': 'Todo listo: tus contactos te leen en su idioma.',
+  'signup.submit': 'Registrarse',
+  'signup.submit.busy': 'Registrando…',
+  'signup.talk': 'Hablar con los demás',
 };
 
 export default esSignup;

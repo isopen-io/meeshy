@@ -71,9 +71,42 @@ extension AuthManager {
         return EmailProvenSession(token: token, sessionToken: data.sessionToken, user: user)
     }
 
+    // MARK: - Inscription, session tenue (#8288)
+
+    /// Crée le compte SANS poser la session : l'écran d'inscription la tient
+    /// le temps que sa carte reçoive le code, puis la pose par `openSession`.
+    /// Mêmes drapeaux que `registerThrowing` (`isLoading`, `errorMessage`), et
+    /// mêmes refus : `PhoneOwnershipConflict`, `MeeshyError`.
+    public func registerHoldingSession(request: RegisterRequest) async throws -> RegistrationHold {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let data = try await authService.register(request: request)
+            // Le conflit de numéro est un 200 qui n'a RIEN créé : le tester
+            // avant `token`/`user` évite de le rendre comme une réponse tronquée.
+            if data.phoneOwnershipConflict == true {
+                throw PhoneOwnershipConflict()
+            }
+            if let pending = data.pendingEmailVerification(typedIdentifier: request.email) {
+                return .verificationRequired(pending)
+            }
+            guard let token = data.token, let user = data.user else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
+            let watch = data.pendingSessionToken.flatMap { $0.isEmpty ? nil : $0 }
+            let proven = EmailProvenSession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+            return .session(proven, pendingSessionToken: watch)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            throw error
+        }
+    }
+
     /// Pose la session prouvée par `verifyEmail`, comme une connexion réussie.
     public func openSession(_ proven: EmailProvenSession) {
-        applySession(token: proven.token, sessionToken: proven.sessionToken, user: proven.user, origin: .login)
+        applySession(token: proven.token, sessionToken: proven.sessionToken, user: proven.user, origin: proven.origin)
     }
 }
 
@@ -82,11 +115,21 @@ public struct EmailProvenSession: Sendable {
     public let token: String
     public let sessionToken: String?
     public let user: MeeshyUser
+    /// D'où vient la session qu'on posera — une preuve d'adresse ouvre une
+    /// CONNEXION ; la carte de l'inscription (#8288) tient celle d'un compte
+    /// qu'elle vient de CRÉER, et le report de la demande de notifications en dépend.
+    public let origin: SessionOrigin
 
-    public init(token: String, sessionToken: String?, user: MeeshyUser) {
+    public init(token: String, sessionToken: String?, user: MeeshyUser, origin: SessionOrigin = .login) {
         self.token = token
         self.sessionToken = sessionToken
         self.user = user
+        self.origin = origin
+    }
+
+    /// La même session, sous une autre origine.
+    public func originating(from origin: SessionOrigin) -> EmailProvenSession {
+        EmailProvenSession(token: token, sessionToken: sessionToken, user: user, origin: origin)
     }
 }
 

@@ -194,3 +194,31 @@ describe('revendication + numéro TRANSFÉRÉ — refusée explicitement (#8227)
     await app.close();
   });
 });
+
+describe('inscription ordinaire — la session ET le jeton d’attente (#8288)', () => {
+  const cree = () => jest.fn<any>().mockResolvedValue({ user: { ...REVENDIQUANT, email: 'ada@example.com', isActive: true } });
+
+  it('la carte de l’inscription apprend que le lien a été ouvert ailleurs : l’attente se lie au NOUVEAU compte', async () => {
+    const app = await monter(cree());
+
+    const res = await inscrire(app, { email: 'ada@example.com' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ token: 'jwt', pendingSessionToken: 'attente-du-revendiquant' });
+    expect(mockPendingForAccount).toHaveBeenCalledWith(expect.anything(), REVENDIQUANT.id);
+    expect(mockPendingForEmail).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('une attente impossible à émettre ne coûte pas l’inscription', async () => {
+    mockPendingForAccount.mockResolvedValueOnce({} as never);
+    const app = await monter(cree());
+
+    const res = await inscrire(app, { email: 'ada@example.com' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.token).toBe('jwt');
+    expect(res.json().data).not.toHaveProperty('pendingSessionToken');
+    await app.close();
+  });
+});

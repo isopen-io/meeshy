@@ -62,7 +62,24 @@ function mountAt(url: string, validation: ReferralValidation = VALID): HTMLDivEl
   return container;
 }
 
+/**
+ * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288) — un numéro donné puis
+ * effacé la fait paraître SANS choisir « l'e-mail seulement » : l'alerte
+ * « sans numéro » (#8040) reste alors due, comme avant le réagencement.
+ */
+function revealEmail(el: HTMLElement) {
+  if (el.querySelector('#signup-email') !== null) return;
+  for (const value of ['612345678', '']) {
+    const phone = el.querySelector('#signup-phone') as HTMLInputElement;
+    act(() => {
+      phone.value = value;
+      phone.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+}
+
 function type(el: HTMLDivElement, selector: string, value: string) {
+  if (selector === '#signup-email') revealEmail(el);
   const input = el.querySelector(selector) as HTMLInputElement;
   act(() => {
     input.value = value;
@@ -239,14 +256,14 @@ describe('le code de parrainage part AVEC l’inscription (#8058)', () => {
     forgetPendingVerification();
   });
 
-  test('sans numéro (écran du code) : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {
+  test('sans numéro (code dans la carte) : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {
     const { el, sent } = mountRegistering('/signup?ref=aff_abc123', AWAITING_CODE);
     openIdentity(el);
     await submit(el, { withPhone: false });
     expect(sent.length).toBe(1);
     expect(sent[0]?.affiliateToken).toBe('aff_abc123');
     expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY)).toBeNull();
-    expect(window.location.pathname).toBe('/auth/verify-email');
+    expect(window.location.pathname).toBe('/signup');
   });
 
   test('avec numéro (session immédiate) : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {

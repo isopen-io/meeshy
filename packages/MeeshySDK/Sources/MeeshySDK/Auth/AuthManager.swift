@@ -373,29 +373,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// compte). `.authenticated` quand la session est appliquée.
     @discardableResult
     public func registerThrowing(request: RegisterRequest) async throws -> RegistrationOutcome {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-
-        do {
-            let data = try await authService.register(request: request)
-            // Le conflit de numéro est un 200 qui n'a RIEN créé : le tester
-            // avant `token`/`user` évite de le rendre comme une réponse
-            // tronquée — et c'est le seul refus dont l'écran connaît le remède.
-            if data.phoneOwnershipConflict == true {
-                throw PhoneOwnershipConflict()
-            }
-            if let pending = data.pendingEmailVerification(typedIdentifier: request.email) {
-                return .verificationRequired(pending)
-            }
-            guard let token = data.token, let user = data.user else {
-                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
-            }
-            applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+        switch try await registerHoldingSession(request: request) {
+        case .session(let proven, _):
+            openSession(proven)
             return .authenticated
-        } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            throw error
+        case .verificationRequired(let pending):
+            return .verificationRequired(pending)
         }
     }
 
