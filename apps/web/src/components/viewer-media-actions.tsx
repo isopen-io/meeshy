@@ -7,6 +7,8 @@ import { appQueryClient } from '@/lib/api/query-client';
 import type { Attachment } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
+import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { performAttachmentReaction } from '@/lib/view/attachment-reaction';
@@ -65,9 +67,11 @@ async function savePiece(attachment: Attachment): Promise<NoticeKey> {
   try {
     const fetched = await fetchPiece(attachment);
     if (fetched.status === 'failed') return fetched.notice;
+    const mimeType = fetched.blob.type !== '' ? fetched.blob.type : attachment.mimeType;
+    const gallery = await saveToGallery({ saver: currentGallerySaver(), blob: fetched.blob, fileName: fetched.fileName, mimeType });
+    if (gallery !== null) return gallery;
     const { fileDeliveryPortal } = await import('@/lib/media/deliver-file');
     const portal = fileDeliveryPortal(browserFileDeliveryHost());
-    const mimeType = fetched.blob.type !== '' ? fetched.blob.type : attachment.mimeType;
     const outcome = portal === null ? 'unavailable' : await portal.deliver(fetched.blob, fetched.fileName, mimeType);
     if (outcome === 'delivered') return 'media.viewer.saved';
     return outcome === 'expired' ? 'media.viewer.retry' : 'media.viewer.save_failed';

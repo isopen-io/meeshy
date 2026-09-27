@@ -346,6 +346,11 @@ const ar = {
   'admin.identity.suggestions': 'أسماء مستخدم متاحة',
   'admin.identity.noLanguage': 'لا شيء',
   'admin.security.twoFactorNotEnrolled': 'يجب على العضو أولًا ربط تطبيق مصادقة.',
+  'admin.quick.title': 'إجراءات سريعة',
+  'admin.quick.activate': 'تفعيل الحساب',
+  'admin.quick.activated': 'تم تفعيل الحساب',
+  'admin.quick.validateEmail': 'تأكيد البريد الإلكتروني',
+  'admin.quick.validatePhone': 'تأكيد الهاتف',
 } satisfies AdminInterfaceCatalog;
 
 export default ar;

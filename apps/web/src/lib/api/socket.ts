@@ -10,6 +10,7 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
+import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
 import { decodeNotification } from '@/lib/notifications/record';
@@ -303,6 +304,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
+    /* LA GALERIE DE LA COQUE ANDROID (#8308) — à la RÉCEPTION, une seule fois,
+       jamais un média protégé ni le mien ; sans effet hors de la coque. */
+    noteGalleryReception(payload, deps.viewerId());
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {

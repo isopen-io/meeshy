@@ -344,7 +344,11 @@ export const callersIn = (contents, nsNames) => {
 // route neuve `admin.usersByUserIdVerificationRequests`
 // (`lib/api/admin-user-verifications.ts`) — trois entrées vivantes pour une
 // entrée ajoutée.
-const BASELINE_DEAD_ENTRIES = 333;
+// 333 → 334 (#8302, 2026-09-27) : `conversations.byIdMessagesAfterReadConsume`,
+// la flamme-œil consommée, GÉNÉRÉE depuis `route-manifest.json`. Le web
+// l'appelle déjà par un chemin relatif (`lib/api/after-read.ts`) plutôt que par
+// le catalogue ; passer ce site au catalogue ramène cette valeur à 333.
+const BASELINE_DEAD_ENTRIES = 334;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

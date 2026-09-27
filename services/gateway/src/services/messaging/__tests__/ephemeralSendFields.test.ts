@@ -78,3 +78,30 @@ describe('composeMessageEffectFlags', () => {
       .toBe(MESSAGE_EFFECT_FLAGS.BLURRED);
   });
 });
+
+describe('flamme-œil à l\'envoi (#8302)', () => {
+  const AFTER_READ = MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const EPHEMERAL = MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+
+  it('garde le bit flamme-œil et le complète du bit EPHEMERAL qui lui manque', () => {
+    expect(composeMessageEffectFlags({ effectFlags: AFTER_READ })).toBe(AFTER_READ | EPHEMERAL);
+  });
+
+  it('garde le bit flamme-œil déjà accompagné, sans rien ajouter', () => {
+    expect(composeMessageEffectFlags({ effectFlags: AFTER_READ | EPHEMERAL })).toBe(AFTER_READ | EPHEMERAL);
+  });
+
+  it('sans durée, pose le PLAFOND de rétention : un message jamais lu finit quand même détruit', () => {
+    expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+
+  it('ignore une durée envoyée à côté : rien ne décompte à la réception d\'une flamme-œil', () => {
+    expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, ephemeralDuration: 30, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+});
