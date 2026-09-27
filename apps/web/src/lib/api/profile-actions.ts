@@ -1,8 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { recompressImage } from '@/lib/profile/image-recompress';
+import { uploadProfileImage } from '@/lib/profile/image-upload';
 
-import { uploadAttachments } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import {
   LANGUAGE_PATCH_KEYS,
@@ -155,28 +154,11 @@ export type ImageUpdateDeps = ProfileActionDeps & {
   readonly recompress?: (file: Blob, kind: ProfileImageKind) => Promise<Blob>;
 };
 
-const EXTENSIONS: Readonly<Record<string, string>> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
-
-const cancelled = (signal: AbortSignal | undefined, code: string | undefined): boolean =>
-  signal?.aborted === true || code === 'ABORTED';
-
-async function readableImage(
-  file: Blob,
-  kind: ProfileImageKind,
-  recompress: (file: Blob, kind: ProfileImageKind) => Promise<Blob>,
-): Promise<Blob | null> {
-  try {
-    return await recompress(file, kind);
-  } catch {
-    return null;
-  }
-}
-
 /**
  * **CHANGER SA PHOTO OU SA BANNIÈRE** — le chemin d'iOS
  * (`ProfileView.uploadAvatar`, `:925-943`) : recompresser, téléverser par
- * `POST /api/v1/attachments/upload` (le port déjà employé par le composeur,
- * `attachments.ts`), puis poser l'URL servie par `PATCH /users/me/avatar` ou
+ * `POST /api/v1/attachments/upload` (`uploadProfileImage`, partagé avec
+ * l'administration — #8217), puis poser l'URL servie par `PATCH /users/me/avatar` ou
  * `/banner`. L'APERÇU local est tenu par l'écran, jamais par ce cache : une URL
  * `blob:` persistée survivrait au rechargement sans rien désigner.
  *
@@ -190,28 +172,14 @@ export async function performImageUpdate(params: {
   readonly deps: ImageUpdateDeps;
 }): Promise<ImageUpdateOutcome> {
   const { kind, file, signal, deps } = params;
-  if (!deps.isOnline()) return { status: 'offline' };
-
-  const image = await readableImage(file, kind, deps.recompress ?? recompressImage);
-  if (image === null) return { status: 'unreadable' };
-  if (signal?.aborted === true) return { status: 'cancelled' };
-
-  const upload = await uploadAttachments({
-    source: deps.source,
-    transport: deps.transport,
-    pending: [{ file: new File([image], `${kind}.${EXTENSIONS[image.type] ?? 'jpg'}`, { type: image.type }) }],
-    ...(signal === undefined ? {} : { signal }),
-  });
-  if (!upload.ok) return cancelled(signal, upload.code) ? { status: 'cancelled' } : { status: 'refused', error: upload.error };
-
-  const url = upload.data.attachments[0]?.fileUrl;
-  if (url === undefined || url === '') return { status: 'refused', error: 'Téléversement sans adresse' };
-  if (cancelled(signal, undefined)) return { status: 'cancelled' };
+  const upload = await uploadProfileImage({ kind, file, deps, ...(signal === undefined ? {} : { signal }) });
+  if (upload.status !== 'uploaded') return upload;
+  const { url, bytesSent } = upload;
 
   const result = await patchMyImage(deps, kind, url);
   if (!result.ok) return { status: 'refused', error: result.error };
 
   deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, result.data);
   deps.session.getState().updateUser(sessionFieldsOfProfile(result.data));
-  return { status: 'saved', url, bytesSent: image.size };
+  return { status: 'saved', url, bytesSent };
 }

@@ -239,13 +239,15 @@ export function AdminUserEditSheet({
   );
 }
 
-/** `onInput`, jamais `onChange` — voir l'en-tête du fichier. */
-function Texte({
+/** `onInput`, jamais `onChange` — voir l'en-tête du fichier. Partagé avec la
+ * création d'un compte (#8217) : un seul champ texte d'administration. */
+export function Texte({
   id,
   label,
   valeur,
   type = 'text',
   focus,
+  error,
   onFocus,
   onBlur,
   onValeur,
@@ -253,23 +255,25 @@ function Texte({
   readonly id: string;
   readonly label: string;
   readonly valeur: string;
-  readonly type?: 'text' | 'email';
+  readonly type?: 'text' | 'email' | 'password';
   readonly focus: boolean;
+  readonly error?: string | undefined;
   readonly onFocus: () => void;
   readonly onBlur: () => void;
   readonly onValeur: (valeur: string) => void;
 }) {
   return (
-    <Field id={id} label={label} tint={BRAND} focused={focus}>
+    <Field id={id} label={label} tint={BRAND} focused={focus} error={error}>
       {({ id: champId, describedBy }) => (
         <input
           id={champId}
           type={type}
           value={valeur}
           autoCapitalize="none"
-          autoComplete="off"
+          autoComplete={type === 'password' ? 'new-password' : 'off'}
           spellCheck={false}
           aria-describedby={describedBy}
+          aria-invalid={error === undefined ? undefined : true}
           onInput={(event) => onValeur(event.currentTarget.value)}
           onFocus={onFocus}
           onBlur={onBlur}
