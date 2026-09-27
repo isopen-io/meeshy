@@ -104,4 +104,17 @@ enum CallAudioSessionPolicy {
         guard !isiOSAppOnMac else { return .default }
         return videoUIActive ? .videoChat : .voiceChat
     }
+
+    /// #8269 — the activation `configureAudioSession` may request: `nil` means
+    /// "apply the configuration, leave activation alone".
+    ///
+    /// With CallKit, `provider:didActivate` owns activation — and on an
+    /// OUTGOING call it lands BEFORE the setup task reaches the configuration.
+    /// `setConfiguration(_, active: false)` is `setActive(false)` on the
+    /// session CallKit just activated: the audio unit stops, nobody hears
+    /// anyone while video keeps flowing (incident 2026-09-27). Without CallKit
+    /// (iOS-app-on-Mac, foreground in-app call) we own activation: activate now.
+    static func activation(usesCallKit: Bool) -> Bool? {
+        usesCallKit ? nil : true
+    }
 }
