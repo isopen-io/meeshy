@@ -444,7 +444,8 @@ struct RiverBubbleView: View, Equatable {
             if content.bubble.isFirstInGroup {
                 identityHeader
             }
-            messageBox
+            // #8303 — la flamme-œil en filigrane, au bord d'attaque de la bulle.
+            messageBox.afterReadWatermark(content.protection.isAfterRead, gutter: 36, tint: ComposerProtection.ephemeral.tint, overhang: 22)
         }
         .background(
             GeometryReader { proxy in
