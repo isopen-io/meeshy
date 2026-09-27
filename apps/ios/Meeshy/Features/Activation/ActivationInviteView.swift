@@ -115,14 +115,19 @@ struct ActivationInviteView: View {
 /// L'adresse : « Recevoir le code » (`POST /auth/resend-verification`), puis la
 /// saisie du code dans la feuille. L'utilisateur est déjà connecté : la session
 /// que rend la preuve n'est PAS rouverte, seul le compte passe à `done`.
-private struct ActivationEmailStep: View {
+///
+/// La garde de l'e-mail (#8365) la réutilise avec `sendsOnAppear` : le code
+/// part dès l'ouverture, sans geste.
+struct ActivationEmailStep: View {
     let onProven: () -> Void
+    private let sendsOnAppear: Bool
     @StateObject private var code: EmailVerificationViewModel
     @State private var sent = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(email: String, onProven: @escaping () -> Void) {
+    init(email: String, sendsOnAppear: Bool = false, onProven: @escaping () -> Void) {
         self.onProven = onProven
+        self.sendsOnAppear = sendsOnAppear
         _code = StateObject(wrappedValue: EmailVerificationViewModel(email: email))
     }
 
@@ -144,6 +149,10 @@ private struct ActivationEmailStep: View {
                 }
                 sendButton
             }
+        }
+        .task {
+            guard sendsOnAppear, !sent, !code.isResending else { return }
+            await code.resendCode()
         }
         .onReceive(code.$resendSuccess.filter { $0 }) { _ in sent = true }
         .onReceive(code.$verificationSuccess.filter { $0 }.first()) { _ in

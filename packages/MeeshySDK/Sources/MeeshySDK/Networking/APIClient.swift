@@ -610,7 +610,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         )
     }
 
-    func requestWithHeaders<T: Decodable>(
+    /// La requête NUE — `requestWithHeaders(resolved:…)` l'enveloppe de la garde
+    /// de l'e-mail (#8365, `EmailVerificationGate.swift`).
+    func performRequestWithHeaders<T: Decodable>(
         resolved: ResolvedEndpoint,
         method: String,
         body: Data?,

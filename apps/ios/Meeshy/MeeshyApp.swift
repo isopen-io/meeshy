@@ -66,6 +66,10 @@ struct MeeshyApp: App {
         // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
 
+        // #8365 — publier, inviter par e-mail ou créer un lien sans adresse
+        // prouvée ouvre la validation, puis la requête repart (`APIClient`).
+        EmailVerificationGate.current = EmailVerificationGateController.shared
+
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que
         // ReportCrash throttle et que MetricKit tronque (stack overflows du
