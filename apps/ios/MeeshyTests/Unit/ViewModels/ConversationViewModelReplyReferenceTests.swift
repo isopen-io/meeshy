@@ -186,6 +186,44 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
         XCTAssertEqual(reference.previewText, MediaKindLabel.summary(.audio))
     }
 
+    func test_optimisticReplyReference_voice_carriesItsFileUrl() {
+        let sut = makeSUT()
+        let quoted = makeQuoted(content: "", attachments: [makeVoice()])
+        sut.messages = [quoted]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        XCTAssertEqual(reference.attachmentFileUrl, "https://cdn.meeshy.me/a-voice.m4a",
+                       "#8230 — sans l'adresse, la citation d'un vocal ne peut pas l'ouvrir en plein écran hors fenêtre")
+    }
+
+    func test_optimisticReplyReference_videoWithoutThumbnail_carriesItsFileUrlForThePoster() {
+        let sut = makeSUT()
+        let video = MessageAttachment(id: "a-video", mimeType: "video/mp4", fileUrl: "https://cdn.meeshy.me/a-video.mp4")
+        let quoted = makeQuoted(content: "", attachments: [video])
+        sut.messages = [quoted]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        XCTAssertNil(reference.attachmentThumbnailUrl, "une vidéo n'emprunte pas son fichier comme vignette")
+        XCTAssertEqual(reference.attachmentFileUrl, "https://cdn.meeshy.me/a-video.mp4",
+                       "#8230 — le poster s'extrait de la première frame du fichier")
+    }
+
+    func test_optimisticReplyReference_protectedMedia_neverCarriesItsFileUrl() {
+        let sut = makeSUT()
+        let viewOnceMessage = makeQuoted(id: "q-vo", content: "", attachments: [makePhoto()],
+                                         effects: MessageEffects(flags: [.viewOnce]))
+        let viewOncePiece = makeQuoted(id: "q-vp", content: "", attachments: [makePhoto(isViewOnce: true)])
+        let encryptedVoice = makeQuoted(id: "q-enc", content: "", attachments: [makeVoice()], isEncrypted: true)
+        sut.messages = [viewOnceMessage, viewOncePiece, encryptedVoice]
+
+        for quoted in [viewOnceMessage, viewOncePiece, encryptedVoice] {
+            XCTAssertNil(sut.optimisticReplyReference(quoting: quoted).attachmentFileUrl,
+                         "\(quoted.id) — le fichier d'un média protégé EST le secret")
+        }
+    }
+
     func test_optimisticReplyReference_contactCard_saysTheContactNameNeverTheFile() {
         let sut = makeSUT()
         let card = MessageAttachment(

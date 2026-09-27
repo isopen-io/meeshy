@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// #8072 — ce qui sort de la note d'après-appel : la charge émise par
 /// `call:quality-feedback`, et la date de la dernière demande, qui borne la
-/// fréquence (D-138). La date vit dans `UserDefaults` : c'est un confort par
+/// fréquence (D-139). La date vit dans `UserDefaults` : c'est un confort par
 /// appareil, jamais un état qu'un autre appareil devrait connaître.
 @MainActor
 protocol CallFeedbackServiceProviding: AnyObject {

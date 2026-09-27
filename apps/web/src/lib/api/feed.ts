@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -17,7 +18,7 @@ import type { ApiResult, HttpTransport } from './http';
  * dans le hook ni dans l'écran (même motif que `conversations.ts`) : les
  * fixtures sont servies par le MÊME chemin.
  *
- * `GET /api/v1/social/posts?scope=home&limit=20[&cursor=<c>]`
+ * `GET social.posts?scope=home&limit=20[&cursor=<c>]`
  * (`services/gateway/src/routes/posts/feed.ts:207,741-792`, `optionalAuth` à
  * la porte mais `scope=home` EXIGE une session — 401 `UNAUTHORIZED` sans
  * elle, § 3.1 de la spécification #5893). Le curseur est OPAQUE, transmis
@@ -63,7 +64,7 @@ export async function loadFeedPage(
   });
   const result = await params.transport.request<readonly FeedPost[]>({
     method: 'GET',
-    path: `/api/v1/social/posts?${query.toString()}`,
+    path: `${socialEndpoints.posts}?${query.toString()}`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

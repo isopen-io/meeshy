@@ -460,7 +460,7 @@ export { PROTECTION_CONVERSATION_ID };
 
 /**
  * `userPreferences` mime EXACTEMENT la forme que sert
- * `GET /api/v1/conversations` : un TABLEAU d'au plus une entrée
+ * `GET conversations.root` : un TABLEAU d'au plus une entrée
  * (`services/gateway/src/routes/conversations/core-list.ts:360-365`, `take: 1`),
  * projetée par `conversationUserPreferencesSelect`
  * (`services/gateway/src/routes/conversations/core-selects.ts:62-80`) — jamais
@@ -669,7 +669,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
 
 /**
  * LA PRÉFÉRENCE DE MODE DE LECTURE PAR CONVERSATION (#5566, §3.4) — à la
- * forme EXACTE de `GET /api/v1/user-preferences/conversations/:id`
+ * forme EXACTE de `GET userPreferences.conversationsByConversationId`
  * (`services/gateway/src/routes/conversation-preferences.ts:191`) : ligne
  * absente ⇒ défauts (`readingMode: 'auto'`, `version: 0`, `isDefault: true`).
  * `c-amina` porte un choix COLLANT (`script`, `version` > 0) pour que le
@@ -862,7 +862,7 @@ let sentMessageCounter = 0;
 
 /**
  * L'UPLOAD MULTIPART, EN FIXTURES (#5668) — mime
- * `POST /api/v1/attachments/upload` (`upload.ts:201`, `sendSuccess(reply, {
+ * `POST attachments.upload` (`upload.ts:201`, `sendSuccess(reply, {
  * attachments })`) : chaque fichier reçu devient un `Attachment` du domaine,
  * indexé par SON id pour que `recordSentMessage` puisse l'associer au message
  * qu'il accompagne — le même geste que `associateAttachmentsToMessage`

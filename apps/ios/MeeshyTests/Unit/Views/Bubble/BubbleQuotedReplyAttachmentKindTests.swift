@@ -378,8 +378,8 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     func test_loiDesZones_uneCapaciteUnSite_leGlypheNeDoubleJamaisLaMiniature() throws {
         let code = try quotedReplySource()
         XCTAssertTrue(
-            code.contains("thumbnailUrlString == nil && (attachmentKind?.isMedia ?? false)"),
-            "le glyphe ne peut être tactile QUE sans miniature (sinon deux zones pour une capacité) et QUE pour " +
+            code.contains("mediaFace == nil && (attachmentKind?.isMedia ?? false)"),
+            "le glyphe ne peut être tactile QUE sans face média — vignette, poster ou vocal (#8230) — (sinon deux zones pour une capacité) et QUE pour " +
             "un média réellement ouvrable (sinon il double la zone 3)."
         )
         XCTAssertTrue(
@@ -586,7 +586,7 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             "inventaire des zones tactiles de BubbleQuotedReply : \(total) au lieu de 3. Les trois SITES " +
             "attendus sont (1) l'avatar → profil, (2) la miniature → plein écran, (3) le glyphe de la ligne " +
             "d'aperçu → plein écran / lecture. Les sites 2 et 3 s'excluent par construction " +
-            "(`glyphOpensTheMedia` exige `thumbnailUrlString == nil`) : à l'exécution la citation n'offre " +
+            "(`glyphOpensTheMedia` exige `mediaFace == nil`) : à l'exécution la citation n'offre " +
             "jamais plus de DEUX cibles ici, la troisième classe (retour au message cité) étant posée par " +
             "l'hôte. Une zone de plus dans ce fichier est une QUATRIÈME classe — la directive du 2026-08-24 " +
             "n'en admet que trois."
@@ -655,7 +655,7 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
         let host = try anchored(
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "func openQuotedMedia(_ reference: ReplyReference)", floor: 50_000
+            "onQuotedMediaTap: { [weak self] ref in", floor: 50_000
         )
         XCTAssertTrue(
             host.contains("onQuotedAuthorTap: { [weak self] ref in"),
@@ -676,8 +676,8 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// Élargir une porte sans son verrou est une régression d'exposition.
     func test_loiDesZones_lHoteRefuseUnMediaProtege_commeLaGrilleDeLaBulle() throws {
         let code = try anchored(
-            "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "func openQuotedMedia(_ reference: ReplyReference)", floor: 50_000
+            "Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift",
+            "func openQuotedMedia(_ reference: ReplyReference)", floor: 1_500
         )
         let body = try slice(
             of: code,

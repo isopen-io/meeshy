@@ -118,6 +118,12 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
     }
 
+    /// Les deux résolutions de la citation ont quitté le contrôleur (hors
+    /// budget) pour leur extension (#8230) ; le MONTAGE des rappels y reste.
+    private func quotedMediaHostSource() throws -> String {
+        try source("Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift")
+    }
+
     // MARK: - La loi : le NOM n'est plus une zone
 
     /// LA nouveauté du 2026-08-24, et la seule assertion qui la dise. Le NOM
@@ -387,7 +393,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     // MARK: - Zone 3 : la résolution hôte, inchangée
 
     func test_host_resolvesQuotedAuthor_fromLocalStore_withNameOnlyFallback() throws {
-        let code = try hostSource()
+        let code = try quotedMediaHostSource()
         XCTAssertTrue(
             code.contains("func openQuotedAuthorProfile(_ reference: ReplyReference)"),
             "L'hôte doit résoudre l'auteur cité — la vue ne porte que la référence, jamais l'identité complète."
@@ -402,8 +408,17 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         )
     }
 
-    func test_host_routesQuotedMedia_byAttachmentType_withJumpFallback() throws {
-        let code = try hostSource()
+    /// **#8230 (directive porteur 2026-09-27) a RETOURNÉ l'audio** : « on
+    /// devrait pouvoir lancer un audio ou vidéo en full screen à partir de la
+    /// citation ». La zone média d'un vocal cité lançait la lecture dans le fil
+    /// (`playAudio`) — cette garde l'exigeait. Elle exige désormais l'inverse :
+    /// les trois genres passent par `onMediaTap`, que l'hôte route vers la
+    /// galerie ou le plein écran audio, et plus aucun `playAudio` ici.
+    ///
+    /// Et le cité HORS fenêtre ne retombe plus sur le saut quand la citation
+    /// porte de quoi reconstruire la pièce.
+    func test_host_routesQuotedMedia_toFullscreen_forImageVideoAndAudio() throws {
+        let code = try quotedMediaHostSource()
         guard let start = code.range(of: "func openQuotedMedia(_ reference: ReplyReference)"),
               let end = code.range(of: "\n    }", range: start.upperBound..<code.endIndex)
         else {
@@ -412,16 +427,20 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         }
         let body = code[start.lowerBound..<end.upperBound]
         XCTAssertTrue(
-            body.contains("onMediaTap?(attachment)"),
-            "Image/vidéo citée → la MÊME galerie plein écran que la rangée (onMediaTap), jamais une surface parallèle."
+            body.contains("case .image, .video, .audio:") && body.contains("onMediaTap?(attachment)"),
+            "Image, vidéo ET audio cités → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
+        )
+        XCTAssertFalse(
+            body.contains("playAudio("),
+            "un vocal cité s'ouvre en PLEIN ÉCRAN (#8230) — le lancer dans le fil est le comportement retiré."
         )
         XCTAssertTrue(
-            body.contains("playAudio(attachmentId: attachment.id)"),
-            "Audio cité → la MÊME file de lecture que la rangée (playAudio)."
+            body.contains("reference.quotedAttachment"),
+            "un message cité hors fenêtre s'ouvre depuis la pièce RECONSTRUITE par la citation, pas par un saut."
         )
         XCTAssertTrue(
             body.contains("scrollToMessage(localId: localId)"),
-            "Document ou cité hors fenêtre → repli sur le saut à l'original — jamais un no-op silencieux."
+            "Document ou pièce introuvable → repli sur le saut à l'original — jamais un no-op silencieux."
         )
     }
 

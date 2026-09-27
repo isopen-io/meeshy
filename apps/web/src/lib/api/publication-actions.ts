@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { POST_CONTENT_MAX_LENGTH } from '@/lib/feed/publication-edit';
 
@@ -81,7 +82,7 @@ export async function deletePost(params: { readonly postId: string; readonly dep
   const { postId, deps } = params;
   removeEverywhere(deps.queryClient, postId);
 
-  const result = outcome(await send(deps, 'DELETE', `/api/v1/posts/${encodeURIComponent(postId)}`));
+  const result = outcome(await send(deps, 'DELETE', postsEndpoints.byPostId(postId)));
   if (result === 'done') {
     /* UNE RELECTURE PENDANT LE VOL (revue-correction #6149) — une autre
        suppression refusée, un `story:viewed`, un retour au premier plan :
@@ -99,7 +100,7 @@ export async function deletePost(params: { readonly postId: string; readonly dep
 /** ÉPINGLER sur son profil — iOS n'offre que l'épinglage depuis le fil (la
  * carte ne porte pas l'état épinglé), le web fait de même. */
 export async function pinPost(params: { readonly postId: string; readonly deps: PostActionDeps }): Promise<PostActionOutcome> {
-  return outcome(await send(params.deps, 'POST', `/api/v1/posts/${encodeURIComponent(params.postId)}/pin`));
+  return outcome(await send(params.deps, 'POST', postsEndpoints.byPostIdPin(params.postId)));
 }
 
 /** Le TEXTE de `source` (et ses traductions) posé sur `post`, qui garde tout
@@ -123,7 +124,7 @@ const editInFlight = new Set<string>();
 /**
  * MODIFIER LE TEXTE — OPTIMISTE, retour en arrière EXACT sur refus (#7534),
  * miroir `FeedViewModel.updatePost` (`:1325-1370`) et la route réelle
- * `PUT /api/v1/posts/:postId` (`core.ts:513-661`, corps `UpdatePostSchema`
+ * `PUT posts.byPostId` (`core.ts:513-661`, corps `UpdatePostSchema`
  * — `{ content }` SEUL, cette tranche ne portant que le texte). Aucun
  * `X-Client-Mutation-Id` : cette route ne passe pas par `withMutationLog`
  * (`core.ts:401` ne l'applique qu'à `POST /posts`).
@@ -177,7 +178,7 @@ export async function editPost(params: { readonly postId: string; readonly conte
   try {
     replaceCardContent(deps.queryClient, postId, (post) => ({ ...post, content, translations: {} }));
 
-    const result = await send(deps, 'PUT', `/api/v1/posts/${encodeURIComponent(postId)}`, {
+    const result = await send(deps, 'PUT', postsEndpoints.byPostId(postId), {
       body: { content },
       fixture: { ...held, content, translations: {} },
     });

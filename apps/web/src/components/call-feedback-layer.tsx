@@ -13,7 +13,7 @@ import { CallFeedbackCard } from './call-feedback-card';
  * La carte de note d'après-appel (#8072), branchée au magasin d'appel :
  * chunk à part, monté par `call-layer.tsx` seulement quand une note est
  * demandée ET qu'aucun appel n'occupe l'écran. Au plus une demande par
- * jour glissant (D-138) : au-delà, la demande se retire sans rien montrer.
+ * jour glissant (D-139) : au-delà, la demande se retire sans rien montrer.
  */
 const cooldown = feedbackCooldown(safeLocalStorage());
 

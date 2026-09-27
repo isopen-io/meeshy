@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 /// #8072 — la règle de la note d'après-appel, pure, jumelle de
-/// `feedbackPromptFor` (web) et arrêtée par D-138 : un appel qui a vraiment
+/// `feedbackPromptFor` (web) et arrêtée par D-139 : un appel qui a vraiment
 /// eu lieu (≥ 10 s, raccroché ou perdu), un sur cinq au hasard, toujours
 /// celui qui a souffert (reprise, lien dégradé, connexion perdue), et au plus
 /// une demande par jour glissant.

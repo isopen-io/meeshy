@@ -143,7 +143,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     expect(dialog().querySelector('[data-viewer-actions]')).toBeNull();
   });
 
-  test('sans hôte d’actions (écran des médias), la visionneuse reste nue', async () => {
+  test('sans hôte d’actions, la visionneuse reste nue', async () => {
     mount({ items: photos(['a', 'b']), startIndex: 0 });
     await settle();
     expect(dialog().querySelectorAll('[data-viewer-action]')).toHaveLength(0);

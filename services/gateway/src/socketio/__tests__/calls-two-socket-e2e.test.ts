@@ -42,6 +42,7 @@ import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallService } from '../../services/CallService';
+import { openCallRingTables } from '../../__tests__/helpers/call-ring-policy-tables';
 
 const CALL_ID = '507f1f77bcf86cd799439031';
 const CONV_ID = '507f1f77bcf86cd799439032';
@@ -136,6 +137,7 @@ const callServiceStub = {
 } as unknown as CallService;
 
 const prismaStub = {
+  ...openCallRingTables(),
   participant: {
     findFirst: async () => ({ id: 'pa' }),
     findMany: async () => [{ userId: USER_B }],

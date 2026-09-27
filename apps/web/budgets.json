@@ -233,7 +233,7 @@
       "kb": {
         "value": 4,
         "status": "CIBLE -- MESUREE PAR #8072, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 2,03 Ko -- la carte de note d apres-appel (`components/call-feedback-layer.tsx`, `call-feedback-card.tsx`, `glyphs-call-feedback.ts`) et sa borne d une demande par jour (`lib/calls/call-feedback-cooldown.ts`, D-138). Montee A LA DEMANDE par `components/call-layer.tsx` seulement quand une note est demandee et qu aucun appel n occupe l ecran : elle ne pese ni sur la premiere peinture ni sur `call_overlay`. La regle de tirage (`lib/calls/call-feedback.ts`, 0,34 Ko) est partagee avec le moteur et sort en chunk commun. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 2,03 Ko -- la carte de note d apres-appel (`components/call-feedback-layer.tsx`, `call-feedback-card.tsx`, `glyphs-call-feedback.ts`) et sa borne d une demande par jour (`lib/calls/call-feedback-cooldown.ts`, D-139). Montee A LA DEMANDE par `components/call-layer.tsx` seulement quand une note est demandee et qu aucun appel n occupe l ecran : elle ne pese ni sur la premiere peinture ni sur `call_overlay`. La regle de tirage (`lib/calls/call-feedback.ts`, 0,34 Ko) est partagee avec le moteur et sort en chunk commun. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
     "reel_images": {

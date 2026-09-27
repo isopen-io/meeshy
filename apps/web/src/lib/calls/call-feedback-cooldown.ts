@@ -1,7 +1,7 @@
 import type { SafeStorage } from '@/lib/storage';
 
 /**
- * La note d'après-appel (#8072, D-138) n'est demandée qu'UNE fois par jour
+ * La note d'après-appel (#8072, D-139) n'est demandée qu'UNE fois par jour
  * glissant, quel que soit le tirage : un réseau mauvais ne transforme pas
  * chaque raccrochage en questionnaire. Chargé avec la carte, jamais par le
  * moteur. Redemander pour le même appel reste accordé ; une valeur illisible

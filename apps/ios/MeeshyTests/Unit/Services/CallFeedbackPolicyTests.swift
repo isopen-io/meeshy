@@ -3,7 +3,7 @@ import MeeshySDK
 @testable import Meeshy
 
 /// #8072 — QUAND on demande la note d'après-appel. Même règle que le web
-/// (`apps/web/src/lib/calls/call-feedback.ts`, D-138) : un appel qui a
+/// (`apps/web/src/lib/calls/call-feedback.ts`, D-139) : un appel qui a
 /// vraiment eu lieu (≥ 10 s, raccroché ou perdu), un sur cinq au hasard,
 /// toujours celui qui a souffert ; et jamais plus d'une demande par jour.
 @MainActor

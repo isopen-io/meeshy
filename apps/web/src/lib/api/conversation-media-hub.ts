@@ -1,8 +1,10 @@
 import type { InfiniteData } from '@tanstack/react-query';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { itemsOfKind, type MediaHubKind } from '@/lib/view/media-hub';
 
 import { unwrap } from './client';
+import { mediaHubConversationKey } from './media-hub-cache';
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 import { decodeMessage } from './decode';
@@ -11,7 +13,7 @@ import type { Message } from './types';
 
 /**
  * **LE PORT DE L'INDEX D'UNE CONVERSATION (#8103)** —
- * `GET /api/v1/conversations/:id/messages?view=media&kinds=<genre>&q=<terme>&before=<id>&limit=N`
+ * `GET conversations.byIdMessages?view=media&kinds=<genre>&q=<terme>&before=<id>&limit=N`
  * (`services/gateway/src/routes/conversations/messages-list-views.ts`, genres :
  * `messages-media-kinds.ts`, #8095 puis #8098).
  *
@@ -43,9 +45,9 @@ export function mediaHubSearchTerm(raw: string): string | null {
   return term.length >= MIN_SEARCH_LENGTH ? term : null;
 }
 
-/** Hors de `['conversations', …]` : ce préfixe porte des conversations et des fils, parcourus comme tels. */
+/** Une clé par segment et par recherche, sous le préfixe de la conversation (`media-hub-cache.ts`). */
 export const mediaHubQueryKey = (conversationId: string, kind: MediaHubKind, term: string | null) =>
-  ['conversation-media-hub', conversationId, kind, term ?? ''] as const;
+  [...mediaHubConversationKey(conversationId), kind, term ?? ''] as const;
 
 export function mediaHubPath(params: {
   readonly conversationId: string;
@@ -56,7 +58,7 @@ export function mediaHubPath(params: {
   const query = new URLSearchParams({ view: 'media', kinds: params.kind, limit: String(MEDIA_HUB_PAGE_SIZE) });
   if (params.term !== null) query.set('q', params.term);
   if (params.before !== undefined) query.set('before', params.before);
-  return `/api/v1/conversations/${encodeURIComponent(params.conversationId)}/messages?${query.toString()}`;
+  return `${conversationsEndpoints.byIdMessages(params.conversationId)}?${query.toString()}`;
 }
 
 /** Le filtre des fixtures MIME celui de la passerelle : le genre, puis le terme dans le contenu ou un nom de pièce. */

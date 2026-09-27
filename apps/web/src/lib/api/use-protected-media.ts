@@ -34,7 +34,7 @@ const PENDING: UseProtectedMediaSrcResult = { src: null, reason: null };
  * l'écrasante majorité des médias (pièces jointes, `blob:`, `data:`), et cela
  * SYNCHRONEMENT : aucun rendu supplémentaire, aucune fenêtre sans son.
  *
- * Pour la seule route protégée (`/api/v1/static/`), rend `{ src: null, reason:
+ * Pour la seule route protégée (`static.byFilename`), rend `{ src: null, reason:
  * null }` d'abord (en attente), puis `{ src: url, reason: null }` une fois les
  * octets obtenus, ou `{ src: null, reason }` — POUR TOUJOURS — si la
  * passerelle refuse, si le fichier a disparu ou si le réseau tombe. Un

@@ -1,5 +1,6 @@
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 import type { PostVisibility } from '@meeshy/shared/types/post';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { unclaimedStoryMediaIds } from '@/lib/stories/story-document';
@@ -11,7 +12,7 @@ import type { ApiResult } from './http';
 
 /**
  * LE PORT DE PUBLICATION D'UNE STORY (#6900, § 3.3 de la spécification) —
- * `POST /api/v1/posts` (`services/gateway/src/routes/posts/core.ts:370-462`),
+ * `POST posts.root` (`services/gateway/src/routes/posts/core.ts:370-462`),
  * `type: 'STORY'`. `CANVAS_CAPS_HEADERS` part comme sur les trois autres ports
  * de `lib/api/stories.ts`.
  *
@@ -128,7 +129,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
 
   return params.transport.request<PublishStoryResult>({
     method: 'POST',
-    path: '/api/v1/posts',
+    path: postsEndpoints.root,
     headers: CANVAS_CAPS_HEADERS,
     body: {
       type: params.type ?? 'STORY',
