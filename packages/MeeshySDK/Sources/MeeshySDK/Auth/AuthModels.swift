@@ -765,15 +765,40 @@ public struct SavedAccount: Codable, Identifiable, Sendable {
     public let displayName: String?
     public let avatarURL: String?
     public let lastActiveAt: Date
+    /// #8286 — la session de ce compte survit-elle quand on le QUITTE ?
+    /// `true` pour le premier compte de l'appareil ; au-delà, la case
+    /// « Rester connecté sur cet appareil » de la connexion.
+    public let keepsSession: Bool
 
-    public var shortName: String { displayName ?? username }
+    /// Un nom d'affichage vide ou blanc n'en est pas un : le pseudo le remplace.
+    public var shortName: String {
+        guard let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return username }
+        return name
+    }
 
-    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date) {
+    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date, keepsSession: Bool = true) {
         self.id = id
         self.username = username
         self.displayName = displayName
         self.avatarURL = avatarURL
         self.lastActiveAt = lastActiveAt
+        self.keepsSession = keepsSession
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, username, displayName, avatarURL, lastActiveAt, keepsSession
+    }
+
+    /// Une entrée écrite avant #8286 n'a pas `keepsSession` : tout compte
+    /// gardait alors sa session, l'absence vaut donc `true`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        username = try container.decode(String.self, forKey: .username)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        avatarURL = try container.decodeIfPresent(String.self, forKey: .avatarURL)
+        lastActiveAt = try container.decode(Date.self, forKey: .lastActiveAt)
+        keepsSession = try container.decodeIfPresent(Bool.self, forKey: .keepsSession) ?? true
     }
 }
 

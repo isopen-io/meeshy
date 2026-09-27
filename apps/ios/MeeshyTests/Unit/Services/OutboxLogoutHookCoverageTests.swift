@@ -162,6 +162,9 @@ final class OutboxLogoutHookCoverageTests: XCTestCase {
         let cablages = [
             racine.appendingPathComponent("apps/ios/Meeshy/Core/DependencyContainer.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift"),
+            // #8286 — la sortie de session (déconnexion ET changement de compte)
+            // vit dans l'extension `leaveActiveSession(endingIt:)`.
+            racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift"),
         ]
         let texteDesCablages = try cablages.map { try String(contentsOf: $0, encoding: .utf8) }.joined(separator: "\n")
