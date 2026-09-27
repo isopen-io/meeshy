@@ -273,6 +273,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 }
             }
 
+            // #8358 — la photo reçue app suspendue rejoindra l'album : le push
+            // NOTE, le premier plan VIDE (aucun téléchargement sur ce budget).
+            if let convId {
+                PushedMediaAutoSaveQueue.shared.notePush(conversationId: convId, messageId: messageId)
+                if application.applicationState == .active { await PushedMediaAutoSaveQueue.shared.drain() }
+            }
+
             // **#3945 — ce qui vient d'être synchronisé doit avoir touché le
             // DISQUE avant qu'on rende le budget.**
             //
@@ -657,6 +664,9 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
                         )
                     }
                 }
+                // #8358 — au premier plan, la photo synchronisée rejoint l'album tout de suite.
+                PushedMediaAutoSaveQueue.shared.notePush(conversationId: convId, messageId: messageId)
+                await PushedMediaAutoSaveQueue.shared.drain()
             }
         }
         let type = userInfo["type"] as? String ?? "unknown"
