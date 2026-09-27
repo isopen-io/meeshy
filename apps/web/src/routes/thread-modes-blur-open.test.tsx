@@ -14,12 +14,13 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { ThreadModes } from './thread-modes';
 
 /**
- * TOUCHER UNE IMAGE FLOUTÉE OUVRE LE PLEIN ÉCRAN — DANS CHAQUE MODE (#8008,
- * milestone « Toucher un message flouté ou à vue unique en montre clairement
- * le contenu »). `ProtectedContent` n'ouvre la visionneuse que si son HÔTE lui
- * passe `media` : une peau qui l'oublierait laisserait l'image voilée
- * inouvrable. La garde vit donc au niveau du FIL, mode par mode, et la table
- * croise l'énumération partagée : un mode ajouté demain est mesuré d'office.
+ * TOUCHER UNE IMAGE FLOUTÉE LA RÉVÈLE SUR PLACE, LE TOUCHER SUIVANT L'OUVRE EN
+ * PLEIN ÉCRAN — DANS CHAQUE MODE (#8389, directive porteur du 2026-09-27, qui
+ * défait le plein écran direct de #8008). `ProtectedContent` ne rend la grille
+ * des substituts que si son HÔTE lui passe `media` : une peau qui l'oublierait
+ * laisserait l'image voilée sans forme. La garde vit donc au niveau du FIL,
+ * mode par mode, et la table croise l'énumération partagée : un mode ajouté
+ * demain est mesuré d'office.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -154,15 +155,21 @@ test('la table des modes couvre TOUTE l’énumération partagée', () => {
 });
 
 for (const mode of ConversationReadingModeSchema.options.filter((m) => MODE_CONTRACT[m].rendersRows)) {
-  test(`mode ${mode} : toucher l’image floutée ouvre la visionneuse plein écran`, async () => {
+  test(`mode ${mode} : toucher l’image floutée la révèle sur place ; le toucher suivant l’ouvre en plein écran`, async () => {
     const host = await monte(mode, [
       messageOf({ id: 'm-flou', content: '', messageType: 'image', isBlurred: true, attachments: [photo] }),
     ]);
     expect(host.querySelector('[data-protected-media]')).not.toBeNull();
-    expect(document.body.querySelector('[data-media-viewer]')).toBeNull();
     const tile = host.querySelector<HTMLElement>('[data-protected-media] button');
     expect(tile).not.toBeNull();
     await mounter.click(tile);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await mounter.settle();
+    expect(document.body.querySelector('[data-media-viewer]')).toBeNull();
+    const revealed = host.querySelector<HTMLElement>('[data-protected="revealed"] button[data-media-tile]');
+    expect(revealed?.querySelector('img')?.getAttribute('src')).toContain('plage');
+
+    await mounter.click(revealed);
     await new Promise((resolve) => setTimeout(resolve, 50));
     await mounter.settle();
     expect(document.body.querySelector('[data-media-viewer]')).not.toBeNull();

@@ -1120,7 +1120,7 @@ const es = {
   'message.withheld': 'Contenido retenido',
   'message.withheld.a11y': 'Contenido retenido: este mensaje existe y no se muestra',
   'message.veiled': 'Contenido oculto',
-  'message.veiled.hint': 'Toca para revelar el contenido',
+  'message.veiled.hint': 'Toca para ver',
   'message.veiled.error': 'No se puede revelar por ahora',
   'message.ephemeral.a11y': 'Mensaje efímero, desaparece en {remaining}',
   'message.ephemeral.awaiting': 'Esperando la recepción',

@@ -148,6 +148,7 @@ export const MediaGrid = memo(function MediaGrid({
   displayLanguage,
   fallbackLanguage,
   onOpen,
+  maskedTap = 'open',
 }: {
   readonly items: readonly Attachment[];
   readonly frame: MediaGridFrame;
@@ -155,6 +156,12 @@ export const MediaGrid = memo(function MediaGrid({
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
   readonly onOpen: (index: number) => void;
+  /**
+   * Ce que fait le toucher d'une case masquée (#8389) : ouvrir la visionneuse,
+   * révéler le message flouté sur place, ou rien — la forme au repos que
+   * l'aperçu de l'appui long reprend, sans aucun bouton.
+   */
+  readonly maskedTap?: 'open' | 'reveal' | 'none';
 }) {
   const maskedAttachment = useAttachmentMasked();
   /* UNE CASE MASQUÉE S'OUVRE SI ELLE A QUELQUE CHOSE À OUVRIR (#8008) — la
@@ -162,12 +169,13 @@ export const MediaGrid = memo(function MediaGrid({
      fichier au serveur, #6862), aucun bouton, faute de quoi le toucher
      promettrait une visionneuse vide (loi 4). */
   const openable = (attachment: Attachment, index: number) =>
-    typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '' ? { onOpen: () => onOpen(index) } : {};
+    maskedTap !== 'none' && typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '' ? { onOpen: () => onOpen(index) } : {};
+  const tap = maskedTap === 'reveal' ? 'reveal' : 'open';
   if (items.length === 0) return null;
 
   if (items.length === 1) {
     const only = items[0]!;
-    if (maskedAttachment(only)) return <MaskedAttachment attachment={only} {...openable(only, 0)} />;
+    if (maskedAttachment(only)) return <MaskedAttachment attachment={only} tap={tap} {...openable(only, 0)} />;
     if (kindOf(only) === 'video') {
       return <VideoTile attachment={only} solo onExpand={() => onOpen(0)} />;
     }
@@ -210,7 +218,7 @@ export const MediaGrid = memo(function MediaGrid({
          `revealedAttachment`). */
       return (
         <div key={attachment.id} className={CELL_CLASS[frame]} {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}>
-          <MaskedAttachment attachment={attachment} fill {...openable(attachment, index)} />
+          <MaskedAttachment attachment={attachment} fill tap={tap} {...openable(attachment, index)} />
         </div>
       );
     }

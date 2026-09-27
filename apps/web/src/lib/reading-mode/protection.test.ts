@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   closeViewOnce,
   formatRemaining,
+  holdReveal,
   openViewOnce,
+  rearmReveal,
   protectionOf,
   requiresConsume,
   rendersContent,
@@ -222,6 +224,36 @@ describe('openViewOnce / closeViewOnce — la vue unique n\'a pas d\'horloge (#7
 
   test('une vue unique déjà ouverte ne se rouvre pas', () => {
     expect(openViewOnce({ phase: 'consumed' })).toEqual({ phase: 'consumed' });
+  });
+});
+
+describe('holdReveal / rearmReveal — un flou révélé ouvert en plein écran ne se referme pas sous le lecteur (#8389)', () => {
+  test('tenu, la fenêtre ne se referme plus seule : settle la laisse, quel que soit le temps écoulé', () => {
+    const held = holdReveal(reveal({ phase: 'hidden' }, { now: 0 }));
+    expect(held.phase).toBe('revealed');
+    expect(settle(held, { now: Number.MAX_SAFE_INTEGER, isViewOnce: false })).toBe(held);
+  });
+
+  test('tenu pendant le brouillard d’un flou, le contenu revient en clair', () => {
+    const fogging = settle(reveal({ phase: 'hidden' }, { now: 0 }), { now: 5000, isViewOnce: false });
+    expect(holdReveal(fogging)).toEqual({ phase: 'revealed', until: Number.POSITIVE_INFINITY });
+  });
+
+  test('jamais une vue unique qui se referme, jamais un voile au repos', () => {
+    const closing = closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000 });
+    expect(holdReveal(closing)).toBe(closing);
+    expect(holdReveal({ phase: 'hidden' })).toEqual({ phase: 'hidden' });
+    expect(holdReveal({ phase: 'consumed' })).toEqual({ phase: 'consumed' });
+  });
+
+  test('relâché, une fenêtre neuve de cinq secondes repart de maintenant', () => {
+    const held = holdReveal(reveal({ phase: 'hidden' }, { now: 0 }));
+    expect(rearmReveal(held, { now: 60_000 })).toEqual({ phase: 'revealed', until: 65_000 });
+  });
+
+  test('relâcher ne touche à rien d’autre qu’une fenêtre ouverte', () => {
+    expect(rearmReveal({ phase: 'hidden' }, { now: 60_000 })).toEqual({ phase: 'hidden' });
+    expect(rearmReveal({ phase: 'consumed' }, { now: 60_000 })).toEqual({ phase: 'consumed' });
   });
 });
 

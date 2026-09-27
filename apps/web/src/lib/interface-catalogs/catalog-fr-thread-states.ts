@@ -31,7 +31,7 @@ const frThreadStates = {
   'message.withheld': 'Contenu retenu',
   'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
   'message.veiled': 'Contenu masqué',
-  'message.veiled.hint': 'Toucher pour révéler le contenu',
+  'message.veiled.hint': 'Touchez pour afficher',
   'message.veiled.error': 'Révélation impossible pour l’instant',
   'message.ephemeral.a11y': 'Message éphémère, disparaît dans {remaining}',
   'message.ephemeral.awaiting': 'En attente de réception',

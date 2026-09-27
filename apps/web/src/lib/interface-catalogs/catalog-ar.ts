@@ -1117,7 +1117,7 @@ const ar = {
   'message.withheld': 'محتوى محجوب',
   'message.withheld.a11y': 'محتوى محجوب: هذه الرسالة موجودة ولا تُعرض',
   'message.veiled': 'محتوى مخفي',
-  'message.veiled.hint': 'اضغط لإظهار المحتوى',
+  'message.veiled.hint': 'المس للعرض',
   'message.veiled.error': 'يتعذّر الإظهار في الوقت الحالي',
   'message.ephemeral.a11y': 'رسالة مؤقتة، تختفي خلال {remaining}',
   'message.ephemeral.awaiting': 'في انتظار الاستلام',

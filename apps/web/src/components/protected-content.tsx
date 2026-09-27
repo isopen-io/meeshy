@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
   BLUR_RADIUS_PX,
   REVEAL_ERROR_NOTICE_MS,
   closeViewOnce,
+  holdReveal,
   isViewOnceKind,
   openViewOnce,
+  rearmReveal,
   rendersContent,
   requiresConsume,
   reveal,
@@ -28,7 +30,7 @@ import { partitionAttachments } from '@/lib/view/media-grid-layout';
 
 import { Glyph } from './glyph';
 import { ProtectedMediaGrid, ProtectedMediaViewer, type ProtectedMediaContext } from './protected-media';
-import { ViewOnceOpenedContext, revealedAttachment } from './view-once-opened';
+import { VeilRevealContext, ViewOnceOpenedContext, revealedAttachment, type VeilReveal } from './view-once-opened';
 
 /**
  * LE VOILE, LE TOMBSTONE ET LE MINUTEUR — miroir de `FocalProtectedContent.swift`
@@ -95,13 +97,15 @@ export function ProtectedContent({
   readonly revealable?: boolean;
   readonly onConsumeViewOnce?: ((messageId: string) => Promise<boolean>) | undefined;
   /**
-   * UN MÉDIA CACHÉ S'OUVRE DIRECTEMENT EN PLEIN ÉCRAN (#8008, demande porteur
-   * du 2026-09-26). Quand l'hôte le fournit et que le message porte une image
-   * ou une vidéo, toucher le message — la puce d'une vue unique, le voile ou
-   * une case d'un flou — ouvre la visionneuse sur CE média, en clair ; jamais
-   * un dévoilement dans la rangée suivi d'un second toucher. Une vue unique
-   * est consommée à la FERMETURE de la visionneuse, comme iOS (#7499) : c'est
-   * en sortant qu'on a vu.
+   * LE MÉDIA D'UN MESSAGE PROTÉGÉ — ce que la grille et la visionneuse ont
+   * besoin de savoir. Deux règles, par NATURE de protection :
+   * - VUE UNIQUE (#8008) : toucher la puce ouvre la visionneuse sur CE média,
+   *   en clair ; il est consommé à la FERMETURE, comme iOS (#7499) ;
+   * - FLOU (#8389, directive porteur du 2026-09-27, qui défait ce que #8008
+   *   avait posé pour lui) : au repos, la grille des SUBSTITUTS garde la
+   *   forme du message ; tout toucher le RÉVÈLE sur place, par la même
+   *   fenêtre que le texte (`reveal`) ; le toucher suivant, sur le média
+   *   révélé, l'ouvre en plein écran comme n'importe quel média.
    */
   readonly media?: ProtectedMediaContext | undefined;
   readonly now?: (() => number) | undefined;
@@ -260,6 +264,19 @@ export function ProtectedContent({
     void purgeViewOnceMedia(closed.urls);
   }, [viewing, isViewOnce, now, onConsumeViewOnce, messageId]);
 
+  /**
+   * LE FLOU RÉVÉLÉ SE TIENT PENDANT SON PLEIN ÉCRAN (#8389) — le contenu
+   * révélé l'annonce (`Attachments`, `VeilRevealContext`) ; la fenêtre se tient
+   * tant que la visionneuse est ouverte, et repart pour une fenêtre neuve à sa
+   * fermeture. La même machine que le texte : `holdReveal` / `rearmReveal`.
+   */
+  const veilReveal = useMemo<VeilReveal>(
+    () => ({
+      onViewer: (open) => setPhase((current) => (open ? holdReveal(current) : rearmReveal(current, { now: now() }))),
+    }),
+    [now],
+  );
+
   const viewer =
     viewing !== null && media !== undefined ? (
       <ProtectedMediaViewer items={viewing.items} startIndex={viewing.startIndex} media={media} onClose={closeMedia} />
@@ -361,27 +378,24 @@ export function ProtectedContent({
   const veilLanguage = currentInterfaceLanguage();
 
   /**
-   * LE FLOU D'UN MÉDIA (#8008) — au repos, le voile du TEXTE (s'il y en a) et
-   * la grille des SUBSTITUTS ; tout toucher ouvre la visionneuse, le texte y
-   * vient en légende (`carrier.caption`). Rien n'est jamais dévoilé dans la
-   * rangée : la fenêtre de cinq secondes est celle du texte seul.
+   * LE FLOU D'UN MÉDIA AU REPOS (#8008 pour la forme, #8389 pour le geste) —
+   * le voile du TEXTE (s'il y en a) et la grille des SUBSTITUTS, qui gardent
+   * la place du message ; tout toucher le RÉVÈLE sur place (`onTap`, la
+   * fenêtre du texte), jamais la visionneuse.
    */
-  if (kind === 'veiled' && opensMedia) {
+  const veiledMedia = kind === 'veiled' && media !== undefined && visualPieces.length > 0 ? media : undefined;
+
+  if (veiledMedia !== undefined && showsAffordance(kind, phase)) {
     return (
-      <div data-protected="hidden" data-protected-media="" className="flex flex-col gap-1.5">
-        {contentLength > 0 ? (
-          <VeilButton
-            messageId={messageId}
-            surface={surface}
-            contentLength={contentLength}
-            language={veilLanguage}
-            hintKey="attachment.protected.open.hint"
-            onTap={() => openMedia(0)}
-          />
-        ) : null}
-        <ProtectedMediaGrid pieces={visualPieces} media={media} onOpen={openMedia} />
-        {viewer}
-      </div>
+      <VeiledMediaRest
+        messageId={messageId}
+        surface={surface}
+        contentLength={contentLength}
+        language={veilLanguage}
+        pieces={visualPieces}
+        media={veiledMedia}
+        onTap={onTap}
+      />
     );
   }
 
@@ -389,12 +403,26 @@ export function ProtectedContent({
     // LE BROUILLARD JOUE À LA FERMETURE, PAS À L'OUVERTURE (D-23 §1.4 point 6,
     // revue #5676 défaut 5) : `data-protected` reste `"revealed"` pendant
     // les DEUX phases qui rendent le contenu ; seul `data-fog` bascule.
+    // Le contenu révélé d'un FLOU lève le masque de flou de ses pièces
+    // (`VeilRevealContext`, #8389) — lui seul : la forme au repos ci-dessous
+    // reste masquée, c'est elle que l'aperçu de l'appui long reprend.
     return (
       <div data-protected="revealed" className="protected-revealed">
-        {children}
+        {kind === 'veiled' ? <VeilRevealContext.Provider value={veilReveal}>{children}</VeilRevealContext.Provider> : children}
         <span className="protected-fog" data-fog={phase.phase === 'fogging' ? 'closing' : 'clear'} aria-hidden />
         <ProtectedRest>
-          <VeilSurrogate surface={surface} contentLength={contentLength} />
+          {veiledMedia !== undefined ? (
+            <VeiledMediaRest
+              messageId={messageId}
+              surface={surface}
+              contentLength={contentLength}
+              language={veilLanguage}
+              pieces={visualPieces}
+              media={veiledMedia}
+            />
+          ) : (
+            <VeilSurrogate surface={surface} contentLength={contentLength} />
+          )}
         </ProtectedRest>
       </div>
     );
@@ -411,7 +439,6 @@ export function ProtectedContent({
         surface={surface}
         contentLength={contentLength}
         language={veilLanguage}
-        hintKey="message.veiled.hint"
         pending={pending}
         maskedMedia={attachmentCount > 0}
         onTap={onTap}
@@ -470,16 +497,16 @@ function Surrogate({ contentLength }: { readonly contentLength: number }) {
  * `bubble.content.hidden.hint` (`FocalProtectedContent.swift:56-73`). Sur le
  * web, `aria-label` REMPLACE le contenu dans le calcul du nom accessible :
  * l'indice est donc rendu par `aria-describedby`, lu APRÈS le nom, exactement
- * comme un `accessibilityHint`. L'indice dit ce que fait LE toucher : révéler
- * à sa place (`message.veiled.hint`), ou ouvrir le plein écran d'un média
- * (`attachment.protected.open.hint`, #8008).
+ * comme un `accessibilityHint`. L'indice dit ce que fait LE toucher, le même
+ * mot que la puce de la vue unique : « Touchez pour afficher »
+ * (`message.veiled.hint`, #8389) — le flou se révèle à sa place, texte comme
+ * média.
  */
 function VeilButton({
   messageId,
   surface,
   contentLength,
   language,
-  hintKey,
   pending = false,
   maskedMedia = false,
   onTap,
@@ -488,7 +515,6 @@ function VeilButton({
   readonly surface: 'row' | 'bubble';
   readonly contentLength: number;
   readonly language: ReturnType<typeof currentInterfaceLanguage>;
-  readonly hintKey: 'message.veiled.hint' | 'attachment.protected.open.hint';
   readonly pending?: boolean;
   readonly maskedMedia?: boolean;
   readonly onTap: () => void;
@@ -509,12 +535,50 @@ function VeilButton({
     >
       <Surrogate contentLength={contentLength} />
       <span className="sr-only" id={`${messageId}-reveal-hint`}>
-        {translate(language, hintKey)}
+        {translate(language, 'message.veiled.hint')}
       </span>
       {/* LE FLOU N'A NI PUCE NI ŒIL (#7580) : c'est la LIGNE qui est floutée.
           Un média flouté garde sa place, sans libellé par-dessus. */}
       {maskedMedia ? <span data-masked-media aria-hidden /> : null}
     </button>
+  );
+}
+
+/**
+ * UN MÉDIA FLOUTÉ AU REPOS (#8389) — le voile du texte (s'il y en a) puis la
+ * grille des substituts. Avec `onTap`, c'est l'affordance : le voile et
+ * chaque case RÉVÈLENT le message sur place. Sans lui, c'est la forme au
+ * repos que la fenêtre ouverte garde cachée pour l'aperçu de l'appui long
+ * (`ProtectedRest`), qui ne la montre jamais qu'inerte.
+ */
+function VeiledMediaRest({
+  messageId,
+  surface,
+  contentLength,
+  language,
+  pieces,
+  media,
+  onTap,
+}: {
+  readonly messageId: string;
+  readonly surface: 'row' | 'bubble';
+  readonly contentLength: number;
+  readonly language: ReturnType<typeof currentInterfaceLanguage>;
+  readonly pieces: readonly Attachment[];
+  readonly media: ProtectedMediaContext;
+  readonly onTap?: () => void;
+}) {
+  const text =
+    contentLength === 0 ? null : onTap === undefined ? (
+      <VeilSurrogate surface={surface} contentLength={contentLength} />
+    ) : (
+      <VeilButton messageId={messageId} surface={surface} contentLength={contentLength} language={language} onTap={onTap} />
+    );
+  return (
+    <div data-protected="hidden" data-protected-media="" className="flex flex-col gap-1.5">
+      {text}
+      <ProtectedMediaGrid pieces={pieces} media={media} onReveal={onTap} />
+    </div>
   );
 }
 

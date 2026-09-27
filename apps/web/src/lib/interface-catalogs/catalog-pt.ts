@@ -1124,7 +1124,7 @@ const pt = {
   'message.withheld': 'Conteúdo retido',
   'message.withheld.a11y': 'Conteúdo retido: esta mensagem existe e não é exibida',
   'message.veiled': 'Conteúdo oculto',
-  'message.veiled.hint': 'Toque para revelar o conteúdo',
+  'message.veiled.hint': 'Toque para ver',
   'message.veiled.error': 'Não é possível revelar por enquanto',
   'message.ephemeral.a11y': 'Mensagem efêmera, desaparece em {remaining}',
   'message.ephemeral.awaiting': 'Aguardando o recebimento',

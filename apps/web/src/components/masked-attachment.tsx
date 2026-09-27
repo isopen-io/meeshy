@@ -46,10 +46,19 @@ export function MaskedAttachment({
   attachment,
   fill = false,
   onOpen,
+  tap = 'open',
 }: {
   readonly attachment: Attachment;
   readonly fill?: boolean;
   readonly onOpen?: () => void;
+  /**
+   * CE QUE FAIT LE TOUCHER, dit au lecteur d'écran (#8389) — `open` : la
+   * visionneuse s'ouvre sur la pièce (une case masquée d'une grille
+   * ordinaire) ; `reveal` : le message flouté se révèle sur place, et l'indice
+   * est celui du voile, « Touchez pour afficher », lu APRÈS le nom comme un
+   * `accessibilityHint`.
+   */
+  readonly tap?: 'open' | 'reveal';
 }) {
   const kind = kindOf(attachment);
   /* LE VOILE DIT SA NATURE, DANS LA LANGUE DU LECTEUR (#7337) — les trois
@@ -96,6 +105,31 @@ export function MaskedAttachment({
     </span>
   );
   const ratio = { [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) };
+
+  if (onOpen !== undefined && tap === 'reveal') {
+    const hintId = `${attachment.id}-reveal-hint`;
+    return (
+      <button
+        type="button"
+        data-media-tile
+        data-protected-attachment="hidden"
+        {...ratio}
+        aria-label={libelle}
+        aria-describedby={hintId}
+        className={`${className} cursor-pointer appearance-none border-0 p-0`}
+        style={style}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+      >
+        {face}
+        <span className="sr-only" id={hintId}>
+          {translate(language, 'message.veiled.hint')}
+        </span>
+      </button>
+    );
+  }
 
   if (onOpen !== undefined) {
     return (

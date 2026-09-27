@@ -219,6 +219,27 @@ export function closeViewOnce(
 }
 
 /**
+ * LE PLEIN ÉCRAN D'UN FLOU RÉVÉLÉ TIENT LA FENÊTRE (#8389) — un média révélé
+ * sur place s'ouvre en plein écran au toucher suivant ; la fenêtre de cinq
+ * secondes ne doit pas le refermer sous les yeux du lecteur. `until` infini :
+ * `settle` la laisse, comme une vue unique ouverte. Un toucher pendant le
+ * brouillard d'un flou rend le contenu ; une vue unique qui se referme, un
+ * voile au repos ou une vue consommée restent tels quels.
+ */
+export function holdReveal(phase: RevealPhase): RevealPhase {
+  if (phase.phase === 'revealed' || (phase.phase === 'fogging' && phase.next === 'hidden')) {
+    return { phase: 'revealed', until: Number.POSITIVE_INFINITY };
+  }
+  return phase;
+}
+
+/** LE PLEIN ÉCRAN REFERMÉ — une fenêtre NEUVE repart de maintenant, puis le flou revient par le chemin ordinaire. */
+export function rearmReveal(phase: RevealPhase, input: { readonly now: number }): RevealPhase {
+  if (phase.phase !== 'revealed') return phase;
+  return { phase: 'revealed', until: input.now + REVEAL_DURATION_SECONDS * 1000 };
+}
+
+/**
  * LE PREMIER PAS HORS DE `revealed` : la fenêtre s'éteint à `until` et
  * entre en `fogging` — le contenu reste monté (`rendersContent` le couvre),
  * le brouillard couvre l'écran en `FOG_DURATION_MS`, PUIS `settleFog`

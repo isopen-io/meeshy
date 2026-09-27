@@ -1120,7 +1120,7 @@ const it = {
   'message.withheld': 'Contenuto trattenuto',
   'message.withheld.a11y': 'Contenuto trattenuto: questo messaggio esiste e non viene mostrato',
   'message.veiled': 'Contenuto nascosto',
-  'message.veiled.hint': 'Tocca per rivelare il contenuto',
+  'message.veiled.hint': 'Tocca per vedere',
   'message.veiled.error': 'Impossibile rivelare per ora',
   'message.ephemeral.a11y': 'Messaggio effimero, scompare tra {remaining}',
   'message.ephemeral.awaiting': 'In attesa della ricezione',
