@@ -20,6 +20,20 @@ const esCallScreen = {
   'call.fullscreen.enter': 'Pantalla completa',
   'call.fullscreen.exit': 'Salir de pantalla completa',
   'call.screen.of': 'Pantalla de {name}',
+  'call.effects': 'Efectos',
+  'call.effects.open': 'Efectos de mi vídeo',
+  'call.effects.close': 'Cerrar los efectos',
+  'call.effects.presets': 'Ajustes predefinidos',
+  'call.effects.preset.natural': 'Natural',
+  'call.effects.preset.warm': 'Cálido',
+  'call.effects.preset.cool': 'Frío',
+  'call.effects.preset.vivid': 'Vivo',
+  'call.effects.preset.muted': 'Suave',
+  'call.effects.brightness': 'Brillo',
+  'call.effects.blur': 'Desenfoque de fondo',
+  'call.zoom': 'Zoom de mi cámara',
+  'call.zoom.in': 'Acercar',
+  'call.zoom.out': 'Alejar',
 } as const;
 
 export default esCallScreen;

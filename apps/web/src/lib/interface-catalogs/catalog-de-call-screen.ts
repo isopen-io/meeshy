@@ -20,6 +20,20 @@ const deCallScreen = {
   'call.fullscreen.enter': 'Vollbild',
   'call.fullscreen.exit': 'Vollbild beenden',
   'call.screen.of': 'Bildschirm von {name}',
+  'call.effects': 'Effekte',
+  'call.effects.open': 'Effekte meines Videos',
+  'call.effects.close': 'Effekte schließen',
+  'call.effects.presets': 'Voreinstellungen',
+  'call.effects.preset.natural': 'Natürlich',
+  'call.effects.preset.warm': 'Warm',
+  'call.effects.preset.cool': 'Kühl',
+  'call.effects.preset.vivid': 'Lebendig',
+  'call.effects.preset.muted': 'Sanft',
+  'call.effects.brightness': 'Helligkeit',
+  'call.effects.blur': 'Hintergrund weichzeichnen',
+  'call.zoom': 'Zoom meiner Kamera',
+  'call.zoom.in': 'Vergrößern',
+  'call.zoom.out': 'Verkleinern',
 } as const;
 
 export default deCallScreen;

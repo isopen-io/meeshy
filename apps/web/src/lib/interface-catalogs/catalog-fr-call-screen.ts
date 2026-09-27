@@ -5,7 +5,9 @@
  * bannière de celui qui regarde (`call-screen.tsx`).
  *
  * Et la vue d'appel « C adapté » (#8391, #8392) : le `(…)` de la pilule, les
- * légendes des rangées de groupe, la mise à la une d'un écran partagé. Ici
+ * légendes des rangées de groupe, la mise à la une d’un écran partagé ; les
+ * effets de ma vidéo (#8442), le zoom de ma caméra (#8441) et le bouton
+ * « Conversation » de l’en-tête (#8436). Ici
  * plutôt qu'une tranche de plus : `catalog-fr.ts` est au plafond du budget.
  */
 const frCallScreen = {
@@ -24,6 +26,20 @@ const frCallScreen = {
   'call.fullscreen.enter': 'Plein écran',
   'call.fullscreen.exit': 'Quitter le plein écran',
   'call.screen.of': 'Écran de {name}',
+  'call.effects': 'Effets',
+  'call.effects.open': 'Effets de ma vidéo',
+  'call.effects.close': 'Fermer les effets',
+  'call.effects.presets': 'Préréglages',
+  'call.effects.preset.natural': 'Naturel',
+  'call.effects.preset.warm': 'Chaud',
+  'call.effects.preset.cool': 'Froid',
+  'call.effects.preset.vivid': 'Vif',
+  'call.effects.preset.muted': 'Doux',
+  'call.effects.brightness': 'Luminosité',
+  'call.effects.blur': 'Flou d’arrière-plan',
+  'call.zoom': 'Zoom de ma caméra',
+  'call.zoom.in': 'Zoomer',
+  'call.zoom.out': 'Dézoomer',
 } as const;
 
 export default frCallScreen;

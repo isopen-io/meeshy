@@ -11,8 +11,9 @@ import { callLayout, type CallLayout } from './call-view';
  * chaque famille est celui de la planche :
  *
  * - **mon image** — ce que JE montre : Caméra (qui fait aussi passer d'audio à
- *   vidéo), Retourner (seulement caméra allumée), Écran (là où le navigateur
- *   sait partager, ou pour arrêter un partage en cours) ;
+ *   vidéo), Retourner (seulement caméra allumée), Effets (caméra allumée, hors
+ *   partage d'écran, là où le navigateur sait les faire — #8442), Écran (là où
+ *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
  *   (appel connecté et identifié). La conversation de l'appel n'est PAS une
  *   action : un seul chemin y mène, « Conversation » dans l'en-tête (#8436).
@@ -21,7 +22,7 @@ import { callLayout, type CallLayout } from './call-view';
  * pilule grandit et les monte en RANGÉES légendées.
  */
 
-export type MineAction = 'camera' | 'flip' | 'screen';
+export type MineAction = 'camera' | 'flip' | 'effects' | 'screen';
 
 export type CallAction = 'captions' | 'record';
 
@@ -32,6 +33,8 @@ export type ControlsArrangement = 'rails' | 'rows';
 type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'screenSharing'> & {
   /** Le navigateur sait émettre un écran (`getDisplayMedia`). */
   readonly canShare: boolean;
+  /** Le navigateur sait traiter ma vidéo, ou la caméra offre son flou (#8442). */
+  readonly canEffect: boolean;
 };
 
 const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'connected' || phase === 'reconnecting';
@@ -39,7 +42,12 @@ const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'conne
 /** Les actions que `(…)` sort, famille par famille, dans l'ordre de la planche. */
 export function callControlSet(context: ControlsContext): CallControlSet {
   const inCall = joined(context.phase.kind);
-  const mine: readonly MineAction[] = ['camera', ...(context.cameraOn ? (['flip'] as const) : []), ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : [])];
+  const mine: readonly MineAction[] = [
+    'camera',
+    ...(context.cameraOn ? (['flip'] as const) : []),
+    ...(context.cameraOn && context.canEffect && !context.screenSharing ? (['effects'] as const) : []),
+    ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
+  ];
   const call: readonly CallAction[] = [
     ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),

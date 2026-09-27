@@ -199,11 +199,11 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (overrides: Partial<ActiveCall> = {}) => {
+  const mount = (overrides: Partial<ActiveCall> = {}, effectsSupport: { readonly color: boolean; readonly blur: boolean } = { color: false, blur: false }) => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
-    act(() => root.render(<CallScreen call={call(overrides)} canShare />));
+    act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={effectsSupport} />));
     const find = (selector: string) => host.querySelector(selector);
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const done = () => {
@@ -228,6 +228,43 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail="mine"] button')?.getAttribute('title')).toBe('Activer la caméra');
     view.press('[data-call-more]');
     expect(view.find('[data-call-rail]')).toBeNull();
+    view.done();
+  });
+
+  test('caméra allumée, « Effets » vient dans le rail de mon image, entre Retourner et Écran (#8442)', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    view.press('[data-call-more]');
+    const mine = [...view.host.querySelectorAll('[data-call-rail="mine"] button')].map((button) => button.getAttribute('aria-label'));
+    expect(mine).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    view.done();
+  });
+
+  test('« Effets » absent là où le navigateur ne sait rien en faire, et caméra éteinte', () => {
+    const unsupported = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    unsupported.press('[data-call-more]');
+    expect(unsupported.find('[data-call-control="effects"]')).toBeNull();
+    unsupported.done();
+    const cameraOff = mount({ members: { 'u-peer': member() } }, { color: true, blur: true });
+    cameraOff.press('[data-call-more]');
+    expect(cameraOff.find('[data-call-control="effects"]')).toBeNull();
+    cameraOff.done();
+  });
+
+  test('« Effets » ouvre le panneau au-dessus de la pilule, et le referme', async () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    view.press('[data-call-more]');
+    view.press('[data-call-control="effects"]');
+    await act(async () => {
+      await import('./call-effects-panel');
+    });
+    await act(async () => {});
+    expect(view.find('[data-call-control="effects"]')?.getAttribute('aria-expanded')).toBe('true');
+    const panel = view.find('[data-call-effects-panel]');
+    expect(panel).not.toBeNull();
+    expect(panel?.closest('[data-call-controls]')).not.toBeNull();
+    view.press('[data-call-effects-close]');
+    expect(view.find('[data-call-effects-panel]')).toBeNull();
+    expect(view.find('[data-call-control="effects"]')?.getAttribute('aria-expanded')).toBe('false');
     view.done();
   });
 

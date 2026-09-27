@@ -17,8 +17,8 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   callId: 'call-1',
   cameraOn: false,
   screenSharing: false,
-  conversationId: 'c-1',
   canShare: true,
+  canEffect: true,
   ...overrides,
 });
 
@@ -27,8 +27,14 @@ describe('ce que (…) sort', () => {
     expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record'] });
   });
 
-  test('Retourner n’existe que caméra allumée, juste après Caméra', () => {
-    expect(callControlSet(context({ cameraOn: true })).mine).toEqual(['camera', 'flip', 'screen']);
+  test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
+    expect(callControlSet(context({ cameraOn: true })).mine).toEqual(['camera', 'flip', 'effects', 'screen']);
+  });
+
+  test('Effets n’existe que caméra allumée, là où le navigateur sait les faire, et jamais sur un écran partagé (#8442)', () => {
+    expect(callControlSet(context({ cameraOn: false })).mine).not.toContain('effects');
+    expect(callControlSet(context({ cameraOn: true, canEffect: false })).mine).toEqual(['camera', 'flip', 'screen']);
+    expect(callControlSet(context({ cameraOn: true, screenSharing: true })).mine).not.toContain('effects');
   });
 
   test('sans getDisplayMedia, Écran n’est jamais promis — sauf pour arrêter un partage en cours', () => {

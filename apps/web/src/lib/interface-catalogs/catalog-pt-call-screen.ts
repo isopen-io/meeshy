@@ -20,6 +20,20 @@ const ptCallScreen = {
   'call.fullscreen.enter': 'Ecrã inteiro',
   'call.fullscreen.exit': 'Sair do ecrã inteiro',
   'call.screen.of': 'Ecrã de {name}',
+  'call.effects': 'Efeitos',
+  'call.effects.open': 'Efeitos do meu vídeo',
+  'call.effects.close': 'Fechar os efeitos',
+  'call.effects.presets': 'Predefinições',
+  'call.effects.preset.natural': 'Natural',
+  'call.effects.preset.warm': 'Quente',
+  'call.effects.preset.cool': 'Frio',
+  'call.effects.preset.vivid': 'Vívido',
+  'call.effects.preset.muted': 'Suave',
+  'call.effects.brightness': 'Brilho',
+  'call.effects.blur': 'Desfoque de fundo',
+  'call.zoom': 'Zoom da minha câmera',
+  'call.zoom.in': 'Aproximar',
+  'call.zoom.out': 'Afastar',
 } as const;
 
 export default ptCallScreen;

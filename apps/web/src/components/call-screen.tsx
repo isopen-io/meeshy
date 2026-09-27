@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { CallRails } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
@@ -18,6 +18,7 @@ import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { useCallRemoval } from '@/lib/calls/use-call-removal';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from '@/lib/calls/video-effects';
 
 /**
  * **L'ÉCRAN D'APPEL** (#6382, #8045, #8391) — miroir de `CallView.swift` et
@@ -33,6 +34,11 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * durée » (`call-screen-header.tsx`). En vidéo, tout s'efface après 4 s sans
  * geste (`use-call-chrome.ts`). Au-dessus d'un écran partagé, fond clair par
  * nature, les verres prennent leur teinte plus sombre.
+ *
+ * « Effets » (#8442), dans le rail de mon image caméra allumée, ouvre le
+ * panneau des effets AU-DESSUS de la pilule (`call-effects-panel.tsx`, chunk à
+ * part) ; il n'existe que là où le navigateur sait traiter la vidéo ou que la
+ * caméra offre son flou.
  *
  * L'appel entrant, l'écran de fin, la pastille, la bulle et la fenêtre PiP ne
  * changent pas.
@@ -104,6 +110,16 @@ const CallCaptionsPanel = lazy(() =>
   })),
 );
 
+const CallEffectsPanel = lazy(() => import('./call-effects-panel').then((module) => ({ default: module.CallEffectsPanel })));
+
+type EffectsSupport = { readonly color: boolean; readonly blur: boolean };
+
+/** Ce que ma caméra sait faire en effets — relu quand la piste envoyée change. */
+function useEffectsSupport(stream: MediaStream | null, forced: EffectsSupport | undefined): EffectsSupport {
+  const sent = stream?.getVideoTracks()[0] ?? null;
+  return useMemo(() => forced ?? { color: browserColorSupport(), blur: blurCapable(sent === null ? null : cameraSourceOf(sent)) }, [forced, sent]);
+}
+
 const CallDeclineSheet = lazy(() =>
   import('./call-decline-entry').then((module) => ({
     default: module.ConnectedCallDeclineSheet,
@@ -147,14 +163,17 @@ type CallScreenProps = {
   readonly canShare?: boolean;
   /** Les actions sorties dès l'ouverture — pour un rendu sans geste (témoins, captures). */
   readonly initiallyExpanded?: boolean;
+  /** Ce que le navigateur sait faire en effets — imposé par les témoins. */
+  readonly effectsSupport?: EffectsSupport;
 };
 
-export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false }: CallScreenProps) {
+export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport }: CallScreenProps) {
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [declineOpen, setDeclineOpen] = useState(false);
+  const [effectsOpen, setEffectsOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -183,7 +202,14 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     controls,
   });
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
-  const set = callControlSet({ ...call, canShare });
+  const support = useEffectsSupport(call.localStream, effectsSupport);
+  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support) });
+  const effectsShown = effectsOpen && set.mine.includes('effects');
+  const effects = { open: effectsShown, onToggle: () => setEffectsOpen((open) => !open) };
+  const closeEffects = () => {
+    setEffectsOpen(false);
+    root.current?.querySelector<HTMLElement>('[data-call-control="effects"]')?.focus();
+  };
   const arrangement = controlsArrangement(call);
 
   useEffect(() => {
@@ -323,7 +349,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           <div className="flex flex-col gap-3 pb-6">
             {captionsFramed ? null : captions}
             <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
-              {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} /> : null}
+              {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} effects={effects} /> : null}
+              {effectsShown ? (
+                <Suspense fallback={null}>
+                  <CallEffectsPanel language={language} colorAvailable={support.color} blurAvailable={support.blur} onClose={closeEffects} />
+                </Suspense>
+              ) : null}
               <CallControlPill
                 call={call}
                 language={language}
@@ -333,6 +364,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 onToggle={() => setExpanded((value) => !value)}
                 prominent={sharedScreenShown}
                 framedCaptions={captionsFramed ? captions : null}
+                effects={effects}
               />
             </div>
           </div>

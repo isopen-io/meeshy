@@ -20,6 +20,20 @@ const arCallScreen = {
   'call.fullscreen.enter': 'ملء الشاشة',
   'call.fullscreen.exit': 'الخروج من ملء الشاشة',
   'call.screen.of': 'شاشة {name}',
+  'call.effects': 'التأثيرات',
+  'call.effects.open': 'تأثيرات الفيديو الخاص بي',
+  'call.effects.close': 'إغلاق التأثيرات',
+  'call.effects.presets': 'الإعدادات المسبقة',
+  'call.effects.preset.natural': 'طبيعي',
+  'call.effects.preset.warm': 'دافئ',
+  'call.effects.preset.cool': 'بارد',
+  'call.effects.preset.vivid': 'زاهٍ',
+  'call.effects.preset.muted': 'ناعم',
+  'call.effects.brightness': 'السطوع',
+  'call.effects.blur': 'تمويه الخلفية',
+  'call.zoom': 'تكبير الكاميرا',
+  'call.zoom.in': 'تكبير',
+  'call.zoom.out': 'تصغير',
 } as const;
 
 export default arCallScreen;
