@@ -1,6 +1,7 @@
 import * as z from 'zod/mini';
 
 import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -9,7 +10,7 @@ import { unreadableFailure } from './link-failure';
 
 /**
  * **LE PORT DE L'ACCUEIL POST-INSCRIPTION** (#7729) — `GET`/`PATCH
- * /api/v1/me/onboarding` (`services/gateway/src/routes/me/onboarding.ts`).
+ * me.onboarding` (`services/gateway/src/routes/me/onboarding.ts`).
  *
  * La FORME est celle de `packages/shared/types/onboarding.ts` : les TYPES en
  * viennent (`import type`, effacé à la compilation), le DÉCODEUR est écrit en
@@ -29,7 +30,7 @@ export const ONBOARDING_QUERY_KEY = ['me', 'onboarding'] as const;
 
 export type OnboardingDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-const PATH = '/api/v1/me/onboarding';
+const PATH = meEndpoints.onboarding;
 
 /** L'ordre du parcours — le même que `ONBOARDING_STEP_IDS` (shared), lu sans
  * importer `zod`. `satisfies` + `ExhaustiveSteps` le tiennent complet. */

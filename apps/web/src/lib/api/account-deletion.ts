@@ -1,4 +1,6 @@
 import * as z from 'zod/mini';
+import * as accountEndpoints from '@meeshy/shared/api/endpoints/account';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
@@ -8,12 +10,12 @@ import { reachFailureOf, unreadableFailure, type ReachFailure } from './link-fai
  * **LE PORT DE LA SUPPRESSION DE COMPTE** (#6715) — obligation réglementaire,
  * deux portes de la passerelle :
  *
- * - `POST /api/v1/account/deletion/resolve` (`routes/account-deletion.ts`) —
+ * - `POST account.deletionResolve` (`routes/account-deletion.ts`) —
  *   PUBLIQUE : le lien de l'e-mail (`buildDeletionPageUrl`,
  *   `routes/me/delete-account.ts`, `?token=&action=confirm|cancel|purge`). Elle
  *   n'exige pas de session parce que la personne qui ANNULE sa suppression a
  *   pu perdre l'accès à son compte — c'est même le cas nominal ;
- * - `POST /api/v1/me/account/deletion` — la demande ouverte depuis les
+ * - `POST me.accountDeletion` — la demande ouverte depuis les
  *   réglages, sous session ET mot de passe courant (#4183), miroir
  *   `AccountService.openDeletionRequest` (iOS) et `AccountDeletionApi`
  *   (Android). Elle envoie l'e-mail qui porte les deux liens ci-dessus.
@@ -60,7 +62,7 @@ export async function resolveAccountDeletion(deps: AccountDeletionDeps, link: De
   }
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/account/deletion/resolve',
+    path: accountEndpoints.deletionResolve,
     body: { token: link.token, action: link.action },
   });
   if (!result.ok) return result;
@@ -99,7 +101,7 @@ export async function requestAccountDeletion(deps: AccountDeletionDeps, currentP
   }
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/me/account/deletion',
+    path: meEndpoints.accountDeletion,
     body: { confirmationPhrase: DELETION_CONFIRMATION_PHRASE, currentPassword },
   });
   return result.ok ? { ok: true, data: null } : result;

@@ -393,7 +393,9 @@ export const callersIn = (contents, nsNames) => {
 // groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
 // 443 → 436 (#7716, lot appels) : le web appelle ces entrées par le module de
 // groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-const BASELINE_DEAD_ENTRIES = 436;
+// 436 → 407 (#7716, lot authentification et compte) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+const BASELINE_DEAD_ENTRIES = 407;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

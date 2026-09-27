@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as affiliateEndpoints from '@meeshy/shared/api/endpoints/affiliate';
 
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
@@ -9,10 +10,10 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  * l'`affiliateLink` d'un jeton de campagne ; la v3.1 partageait l'origine du
  * site, SANS code : un filleul arrivé par là n'était rattaché à personne.
  *
- * - `GET /api/v1/affiliate/tokens?limit=50` (`routes/affiliate.ts:231`) — les
+ * - `GET affiliate.tokens?limit=50` (`routes/affiliate.ts:231`) — les
  *   jetons CRÉÉS PAR le lecteur, les plus récents d'abord. Le premier qui est
  *   actif, non expiré et non épuisé est choisi.
- * - `POST /api/v1/affiliate/tokens { name }` (`:87`) — seulement si AUCUN ne
+ * - `POST affiliate.tokens { name }` (`:87`) — seulement si AUCUN ne
  *   l'est : le premier partage crée le jeton, le lecteur n'a rien à régler.
  *
  * **Le lien est RECOMPOSÉ depuis l'origine servie**, jamais recopié
@@ -91,7 +92,7 @@ export async function loadShareableReferralLink(params: {
 
   const listed = await deps.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/affiliate/tokens?limit=${TOKENS_PAGE_LIMIT}`,
+    path: `${affiliateEndpoints.tokens}?limit=${TOKENS_PAGE_LIMIT}`,
   });
   if (!listed.ok) return listed;
   if (!Array.isArray(listed.data)) return UNREADABLE;
@@ -103,7 +104,7 @@ export async function loadShareableReferralLink(params: {
 
   const created = await deps.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/affiliate/tokens',
+    path: affiliateEndpoints.tokens,
     body: { name: REFERRAL_TOKEN_NAME },
   });
   if (!created.ok) return created;
