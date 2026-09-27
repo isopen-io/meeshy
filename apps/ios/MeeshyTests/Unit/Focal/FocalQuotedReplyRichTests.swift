@@ -408,16 +408,16 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         )
     }
 
-    /// **#8230 (directive porteur 2026-09-27) a RETOURNÉ l'audio** : « on
-    /// devrait pouvoir lancer un audio ou vidéo en full screen à partir de la
-    /// citation ». La zone média d'un vocal cité lançait la lecture dans le fil
-    /// (`playAudio`) — cette garde l'exigeait. Elle exige désormais l'inverse :
-    /// les trois genres passent par `onMediaTap`, que l'hôte route vers la
-    /// galerie ou le plein écran audio, et plus aucun `playAudio` ici.
+    /// **#8230 a envoyé l'audio cité en plein écran ; #8320 (directive porteur
+    /// du 2026-09-27, plus tardive) le fait JOUER SUR PLACE** : « jouer les
+    /// miniatures audio dans les reply lorsqu'on touche la zone play
+    /// uniquement ». Image et vidéo gardent le plein écran (`onMediaTap`) ; un
+    /// vocal passe par le lecteur PARTAGÉ (`toggleQuotedAudio`), jamais par
+    /// `playAudio`, qui mettrait en file les vocaux suivant l'original.
     ///
     /// Et le cité HORS fenêtre ne retombe plus sur le saut quand la citation
     /// porte de quoi reconstruire la pièce.
-    func test_host_routesQuotedMedia_toFullscreen_forImageVideoAndAudio() throws {
+    func test_host_routesQuotedMedia_imageVideoToFullscreen_audioInPlace() throws {
         let code = try quotedMediaHostSource()
         guard let start = code.range(of: "func openQuotedMedia(_ reference: ReplyReference)"),
               let end = code.range(of: "\n    }", range: start.upperBound..<code.endIndex)
@@ -427,12 +427,16 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         }
         let body = code[start.lowerBound..<end.upperBound]
         XCTAssertTrue(
-            body.contains("case .image, .video, .audio:") && body.contains("onMediaTap?(attachment)"),
-            "Image, vidéo ET audio cités → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
+            body.contains("case .image, .video:") && body.contains("onMediaTap?(attachment)"),
+            "Image et vidéo citées → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
+        )
+        XCTAssertTrue(
+            body.contains("toggleQuotedAudio(reference)"),
+            "un vocal cité se joue SUR PLACE par le lecteur partagé (#8320)."
         )
         XCTAssertFalse(
             body.contains("playAudio("),
-            "un vocal cité s'ouvre en PLEIN ÉCRAN (#8230) — le lancer dans le fil est le comportement retiré."
+            "une citation ne met pas en file les vocaux qui suivent l'original — `playAudio` n'a rien à faire ici."
         )
         XCTAssertTrue(
             body.contains("reference.quotedAttachment"),
