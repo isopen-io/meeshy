@@ -916,7 +916,9 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
                        "Toucher un média à vue unique doit l'OUVRIR, pas le consommer.")
         // #8009 — le plein écran s'ouvre sur CETTE pièce, jamais par le
         // carrousel en ligne qui dévoilerait les autres dans la bulle.
-        XCTAssertTrue(corps.contains("fullscreenAttachment = media"),
+        // #8310 — par l'ouvreur DIRECT de l'hôte, jamais par la liaison
+        // `fullscreenAttachment`, détour que #8009 avait mesuré mort.
+        XCTAssertTrue(corps.contains("onOpenProtected(media)"),
                       "La révélation doit ouvrir le plein écran dans le même geste.")
     }
 
@@ -932,8 +934,8 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         XCTAssertTrue(galerie.contains("viewModel.consumeViewOnce(messageId:"),
                       "La consommation reste l'appel serveur existant, déplacé — pas réécrit.")
 
-        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(hôte.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
+        // #8310 — l'ouvreur du fil vit à côté de la galerie (`openMediaFullscreen`).
+        XCTAssertTrue(galerie.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
                       "L'ouverture arme la consommation, sur le chemin qui ouvre la galerie.")
     }
 

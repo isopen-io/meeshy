@@ -961,7 +961,7 @@ struct ReelPageView: View {
         case .document: attachmentKind = .document
         case .image: attachmentKind = .image
         }
-        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+        mediaSaveCoordinator.save(MediaSaveRequest(
             kind: attachmentKind,
             origin: .composed,
             remoteURLString: url,
