@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
-import { ACTIVE_CALL_QUERY_KEY, loadActiveCall } from '@/lib/api/call-sessions';
+import { ACTIVE_CALL_QUERY_KEY, type CallSession, loadActiveCall } from '@/lib/api/call-sessions';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -10,7 +10,7 @@ import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { callActions } from '@/lib/calls/call-actions';
 import { callIdentityOf } from '@/lib/calls/call-notice';
-import { resumableCall } from '@/lib/calls/call-resume';
+import { forgetEndedCall, resumableCall } from '@/lib/calls/call-resume';
 import { callStore } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -37,9 +37,12 @@ import { CALLS_GLYPHS } from './glyphs-calls';
  *
  * Un appel qui se termine EN LOCAL invalide la lecture : sans cela, la
  * bannière rejouerait l'appel qu'on vient de raccrocher jusqu'au prochain
- * sondage.
+ * sondage. Et comme la passerelle émet `call:ended` AVANT d'écrire la fin
+ * (#8366), la relecture peut encore le dire vivant : l'id de l'appel raccroché
+ * est retenu, et une réponse qui le porte ne rouvre pas la bannière.
  */
 export const ACTIVE_CALL_POLL_MS = 30_000;
+const ENDED_CALLS_KEPT = 4;
 
 export default function CallResumeBanner() {
   const language = currentInterfaceLanguage();
@@ -49,7 +52,10 @@ export default function CallResumeBanner() {
   const route = useOptionalRoute();
   const openThread = route?.key === 'thread' ? (route.params.conversation ?? null) : null;
   const localPhase = local?.phase.kind ?? null;
+  const localCallId = local?.callId ?? null;
   const previous = useRef(localPhase);
+  const previousCallId = useRef(localCallId);
+  const endedCallIds = useRef<readonly string[]>([]);
 
   const active = useQuery(
     {
@@ -65,14 +71,22 @@ export default function CallResumeBanner() {
 
   useEffect(() => {
     const was = previous.current;
+    const endedCallId = localCallId ?? previousCallId.current;
     previous.current = localPhase;
+    previousCallId.current = localCallId;
     const ended = was !== null && was !== 'ended' && (localPhase === null || localPhase === 'ended');
-    if (ended) void appQueryClient.invalidateQueries({ queryKey: ACTIVE_CALL_QUERY_KEY });
-  }, [localPhase]);
+    if (!ended && localCallId !== null && localPhase !== 'ended') endedCallIds.current = endedCallIds.current.filter((id) => id !== localCallId);
+    if (!ended) return;
+    if (endedCallId !== null) {
+      endedCallIds.current = [endedCallId, ...endedCallIds.current.filter((id) => id !== endedCallId)].slice(0, ENDED_CALLS_KEPT);
+      appQueryClient.setQueryData<CallSession | null>(ACTIVE_CALL_QUERY_KEY, (cached) => forgetEndedCall(cached, endedCallId));
+    }
+    void appQueryClient.invalidateQueries({ queryKey: ACTIVE_CALL_QUERY_KEY });
+  }, [localPhase, localCallId]);
 
   if (!signedIn) return null;
   const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
-  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread });
+  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread, endedCallIds: endedCallIds.current });
   if (request === null) return null;
 
   return (
