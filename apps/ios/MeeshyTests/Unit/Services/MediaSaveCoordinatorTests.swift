@@ -101,6 +101,35 @@ final class MediaSaveCoordinatorTests: XCTestCase {
         MediaSaveRequest(kind: kind, origin: origin, remoteURLString: url, suggestedFileName: suggestedName)
     }
 
+    // MARK: « Enregistrer » d'une image ou d'une vidéo (#8307)
+
+    func test_save_image_vaDroitÀLAlbum_sansDemanderOù() async throws {
+        let (sut, resolver, photos, _) = makeSUT()
+        resolver.result = .success(try makeTempSourceFile(named: "photo.jpg"))
+
+        sut.save(makeRequest(kind: .image))
+
+        XCTAssertNil(sut.pendingRequest, "aucune feuille de destinations pour une image")
+        for _ in 0..<50 where photos.savedImageData.isEmpty { try await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertEqual(photos.savedImageData.count, 1)
+    }
+
+    func test_save_document_garderLeChoixDeDestination() {
+        let (sut, _, photos, _) = makeSUT()
+
+        sut.save(makeRequest(kind: .pdf, url: "https://x/doc.pdf", suggestedName: "Contrat.pdf"))
+
+        XCTAssertEqual(sut.pendingRequest?.destinations, [.files, .share])
+        XCTAssertTrue(photos.savedImageData.isEmpty)
+    }
+
+    func test_savesStraightToAlbum_imageEtVidéoSeulement() {
+        XCTAssertTrue(MediaSaveCoordinator.savesStraightToAlbum(.image))
+        XCTAssertTrue(MediaSaveCoordinator.savesStraightToAlbum(.video))
+        XCTAssertFalse(MediaSaveCoordinator.savesStraightToAlbum(.audio))
+        XCTAssertFalse(MediaSaveCoordinator.savesStraightToAlbum(.pdf))
+    }
+
     // MARK: Présentation
 
     func test_requestSave_publishesPendingRequestWithDestinations() {
