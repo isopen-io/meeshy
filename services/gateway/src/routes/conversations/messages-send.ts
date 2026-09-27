@@ -271,6 +271,7 @@ export function registerSendMessageRoute(
       if (isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
       if ((expiresAt || ephemeralDuration) && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
       if (isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+      if (effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
 
       const userId = authRequest.authContext.userId;
       let participantId: string;

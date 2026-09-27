@@ -1,4 +1,4 @@
-import { servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import { hasPerReaderEphemeralDeadline, servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { loadEphemeralReaderDeadlines, type EphemeralDeadlinesPrisma } from '../ephemeralReaderDeadlines';
 
 /**
@@ -20,6 +20,7 @@ export interface ListLastMessage {
   readonly id: string;
   readonly senderId?: string | null;
   readonly ephemeralDuration?: number | null;
+  readonly effectFlags?: number | null;
   readonly expiresAt?: Date | null;
 }
 
@@ -30,7 +31,7 @@ export async function loadListEphemeralExpiries(
 ): Promise<ReadonlyMap<string, Date | null>> {
   const ephemeral = rows.filter(
     (row): row is { conversationId: string; message: ListLastMessage } =>
-      typeof row.message?.ephemeralDuration === 'number' && row.message.ephemeralDuration > 0,
+      row.message !== undefined && hasPerReaderEphemeralDeadline(row.message),
   );
   const served = await Promise.all(
     ephemeral.map(async ({ conversationId, message }) => {
@@ -40,6 +41,7 @@ export async function loadListEphemeralExpiries(
         message.id,
         servedEphemeralExpiresAt({
           ephemeralDuration: message.ephemeralDuration,
+          effectFlags: message.effectFlags,
           rawExpiresAt: message.expiresAt ?? null,
           isSender: resolution?.isSender ?? false,
           readerDeadline: resolution?.readerDeadline ?? null,
