@@ -1,5 +1,9 @@
+import { useCallback, useRef } from 'react';
+
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import {
   DURATION_BADGE_OPACITY,
@@ -8,10 +12,12 @@ import {
   soloVideoSlot,
 } from '@/lib/view/media-grid-layout';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { handOffVideoPosition } from '@/lib/view/video-handoff';
 
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
+import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
 /** `duration` en MILLISECONDES (même convention que `VoiceAttachment`) → `m:ss`. */
@@ -49,15 +55,30 @@ const intrinsicRatio = (attachment: Attachment): number | undefined =>
     ? attachment.width / attachment.height
     : undefined;
 
+/** Le diamètre des deux petits contrôles de tête (son, plein écran) — `28 × 28` d'iOS (`MeeshyVideoPlayer+Controls.swift`, `topBar`). */
+const HEAD_CONTROL_PX = 28;
+
 /**
- * `VideoTile` (#6221) — LA LECTURE VIDÉO INLINE, miroir de `BubbleGridVideo
- * ThumbnailView`/`videoBody` (`+Media.swift:477-749`) : poster servi, bouton
- * central play/pause (`PLAY_DIAMETER_SOLO`/`MULTI`), badge de durée, barre
- * de progression en pied, bande d'erreur avec reprise.
+ * `VideoTile` (#6221, #8234) — LA VIDÉO REÇUE DANS LE FIL, miroir de
+ * `MeeshyVideoPlayer(.inline, controls: .inlineMinimal, surfaceTapExpands:
+ * true)` (#8231, directive porteur du 2026-09-27, amendée : « il faut
+ * permettre de jouer en inline mais avec peu de contrôleurs : son,
+ * pause/play et plein écran »).
  *
- * `onExpand` — tap HORS du bouton central ⇒ la visionneuse (§1.5 tableau
- * d'écarts) ; le bouton, lui, ne fait QUE piloter la lecture INLINE
- * (`useMediaPlayback`, coordinateur PARTAGÉ avec les vocaux — #6221).
+ * UN GESTE, UN EFFET :
+ *  - toucher la SURFACE (hors contrôles) ouvre le plein écran DIRECTEMENT,
+ *    avant comme pendant la lecture. Pendant la lecture, la tuile se met en
+ *    pause et CONFIE sa position à la visionneuse (`handOffVideoPosition`),
+ *    qui reprend à la même image. La surface est un `<button>` : Entrée et
+ *    Espace l'activent nativement ;
+ *  - le bouton ▶︎ lit DANS LE FIL. Une fois la lecture partie, EXACTEMENT trois
+ *    contrôles : pause/lecture au centre, son et plein écran en tête. Ni
+ *    barre, ni temps, ni vitesse, ni image dans l'image : c'est la visionneuse
+ *    qui les porte. Les contrôles ne se masquent pas — toucher la surface
+ *    ouvre le plein écran, il ne pourrait plus les faire revenir.
+ *
+ * La tuile reste un `<div>` : la surface et les contrôles sont des boutons
+ * VOISINS, jamais imbriqués.
  *
  * `solo` NE CHOISIT PLUS SEULEMENT UN DIAMÈTRE : IL DÉCIDE QUI DIMENSIONNE
  * (#7016). En GRILLE, la case est déjà dimensionnée par `mediaGridSlots` et la
@@ -100,7 +121,7 @@ export function VideoTile({
    * vivent à côté d'eux sur le même objet.
    */
   const consumption = attachment.currentUserConsumption;
-  const { status, progress, toggle, bind } = useMediaPlayback({
+  const { status, muted, toggle, setMuted, bind } = useMediaPlayback({
     attachmentId: attachment.id,
     report: {
       kind: 'watched',
@@ -110,6 +131,19 @@ export function VideoTile({
         : {}),
     },
   });
+  /* La position au moment d'ouvrir le plein écran se lit sur l'ÉLÉMENT : le
+     moteur ne la suit pas hors visionneuse (`tracksTime`), et la tuile n'a pas
+     à se re-rendre chaque seconde pour un chiffre qu'elle ne montre pas. Un
+     `ref` STABLE : un rappel neuf à chaque rendu délierait puis relierait
+     l'élément, et `bind(null)` ramène la lecture à `idle`. */
+  const elementRef = useRef<HTMLMediaElement | null>(null);
+  const bindElement = useCallback(
+    (element: HTMLMediaElement | null) => {
+      elementRef.current = element;
+      bind(element);
+    },
+    [bind],
+  );
 
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
 
@@ -118,19 +152,34 @@ export function VideoTile({
   const durationLabel = durationLabelOf(attachment.duration);
   const isPlaying = status === 'playing';
   const isError = status === 'error';
+  /* La lecture est PARTIE dès le premier ▶︎ : les trois contrôles restent
+     ensuite, en pause comme en lecture. Au repos, le poster et son ▶︎ seuls. */
+  const started = status === 'playing' || status === 'paused';
+  const language = currentInterfaceLanguage();
   const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
+
+  const expand = (): void => {
+    const element = elementRef.current;
+    if (started && element !== null) {
+      handOffVideoPosition({ attachmentId: attachment.id, positionMs: Math.round(element.currentTime * 1000) });
+    }
+    if (isPlaying) toggle();
+    onExpand();
+  };
+
+  const headControlStyle = {
+    width: HEAD_CONTROL_PX,
+    height: HEAD_CONTROL_PX,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  };
 
   return (
     <div
       data-attachment={attachment.id}
       data-video-status={status}
-      /* `data-media-tile` (#6169) — MANQUANT jusqu'ici : une grille comptant
-         3 pièces dont une vidéo ne rendait que 2 `[data-media-tile]`,
-         `ImageTile`/`GridCellImage` étant les SEULS à le poser. La tuile
-         reste un `<div onClick>` (pas un `<button>`) — le clic pilote la
-         lecture inline (`onExpand`), un rôle distinct d'« ouvrir la
-         visionneuse » que `ImageTile`/`GridCellImage` remplissent en bouton
-         — mais elle occupe une CASE de la grille au même titre qu'elles. */
+      /* `data-media-tile` (#6169) — la tuile occupe une CASE de la grille au
+         même titre qu'`ImageTile`/`GridCellImage` ; ses gestes vivent dans ses
+         boutons (#8234). */
       data-media-tile
       {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}
       className={
@@ -141,15 +190,13 @@ export function VideoTile({
       {...(slot !== undefined
         ? { style: { width: slot.width, maxWidth: '100%', aspectRatio: `${slot.width} / ${slot.height}` } }
         : {})}
-      onClick={onExpand}
-      role="presentation"
     >
       {/* `key={attachment.fileUrl}` (même dispositif que `VoiceAttachment`) —
           une source qui change REMONTE l'élément, jamais une réutilisation
           silencieuse d'un `<video>` déjà lié à une autre piste. */}
       <video
         key={attachment.fileUrl}
-        ref={bind}
+        ref={bindElement}
         preload="none"
         playsInline
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
@@ -157,14 +204,22 @@ export function VideoTile({
         className="absolute inset-0 size-full object-cover"
       />
 
+      {/* LA SURFACE (#8234) — tout ce qui n'est pas un contrôle ouvre le plein
+          écran. Posée SOUS les contrôles, qui la recouvrent là où ils sont. */}
       <button
         type="button"
+        data-video-surface
+        onClick={expand}
+        aria-label={translate(language, 'media.viewer.open_fullscreen')}
+        className="absolute inset-0 size-full"
+      />
+
+      <button
+        type="button"
+        data-video-control="play-pause"
         data-play-diameter={diameter}
-        onClick={(event) => {
-          event.stopPropagation();
-          toggle();
-        }}
-        aria-label={isPlaying ? 'Mettre en pause' : 'Lire la vidéo'}
+        onClick={toggle}
+        aria-label={translate(language, isPlaying ? 'media.video.pause' : 'media.video.play')}
         className="tap-target-34 absolute inset-0 m-auto grid place-items-center rounded-full"
         style={{
           width: diameter,
@@ -179,9 +234,33 @@ export function VideoTile({
         )}
       </button>
 
-      {durationLabel !== undefined ? (
+      {started ? (
+        <div data-video-head className="absolute inset-x-0 top-1.5 flex justify-center gap-2.5">
+          <button
+            type="button"
+            data-video-control="expand"
+            onClick={expand}
+            aria-label={translate(language, 'media.viewer.open_fullscreen')}
+            className="tap-target-34 grid place-items-center rounded-full text-white"
+            style={headControlStyle}
+          >
+            <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
+          </button>
+          <button
+            type="button"
+            data-video-control="mute"
+            onClick={() => setMuted(!muted)}
+            aria-label={translate(language, muted ? 'media.video.unmute' : 'media.video.mute')}
+            className="tap-target-34 grid place-items-center rounded-full text-white"
+            style={headControlStyle}
+          >
+            <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={13} />
+          </button>
+        </div>
+      ) : durationLabel !== undefined ? (
         <span
-          className="absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-mini font-medium text-white tabular-nums"
+          aria-hidden
+          className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-mini font-medium text-white tabular-nums"
           style={{ backgroundColor: `rgba(0,0,0,${DURATION_BADGE_OPACITY})` }}
         >
           {durationLabel}
@@ -190,15 +269,6 @@ export function VideoTile({
 
       <AttachmentReactionBadge attachment={attachment} />
 
-      {isPlaying || progress > 0 ? (
-        <span
-          aria-hidden
-          data-video-progress
-          className="absolute inset-x-0 bottom-0 block h-[3px] origin-left"
-          style={{ backgroundColor: 'var(--accent)', transform: `scaleX(${progress})` }}
-        />
-      ) : null}
-
       {isError ? (
         <div
           data-video-error-band
@@ -206,10 +276,7 @@ export function VideoTile({
         >
           <button
             type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              toggle();
-            }}
+            onClick={toggle}
             className="text-mini text-white underline"
             style={{ minHeight: 44 }}
           >

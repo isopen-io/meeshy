@@ -34,6 +34,7 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { takeVideoHandoff } from '@/lib/view/video-handoff';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
@@ -352,15 +353,21 @@ function ViewerVideoPage({
    * doit remonter. Même verbe et mêmes champs que la tuile du fil
    * (`video-tile.tsx`) : `watched`, `lastWatchPositionMs`/`watchedComplete`. */
   const consumption = attachment.currentUserConsumption;
+  /* LA POSITION CONFIÉE PAR LA TUILE DU FIL (#8234) — passer au plein écran
+     pendant la lecture reprend à la même image ; elle prime sur la reprise
+     SERVIE, plus ancienne qu'elle par construction. Lue UNE fois, au montage. */
+  const [handedOffMs] = useState(() => takeVideoHandoff(attachment.id));
   const playback = useMediaPlayback({
     attachmentId: attachment.id,
     tracksTime: true,
     report: {
       kind: 'watched',
       ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
-      ...(consumption != null
-        ? { resume: { positionMs: consumption.lastWatchPositionMs, complete: consumption.watchedComplete } }
-        : {}),
+      ...(handedOffMs !== null
+        ? { resume: { positionMs: handedOffMs, complete: false } }
+        : consumption != null
+          ? { resume: { positionMs: consumption.lastWatchPositionMs, complete: consumption.watchedComplete } }
+          : {}),
     },
   });
   const { status, toggle, bind } = playback;
