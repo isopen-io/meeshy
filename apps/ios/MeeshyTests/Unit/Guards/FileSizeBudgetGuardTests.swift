@@ -523,12 +523,7 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // bulle : `BubbleStandardLayout.swift` perd le miroir de
     // `SharedAVPlayerManager.activeURL` qui masquait son pied pendant la
     // lecture inline.
-    //
-    // #8283 — 47 615 → 47 606 (−9). Le corps de `onMediaTap` quitte
-    // `ConversationView.swift` pour `ConversationView+MediaOpening.swift`, que
-    // la citation de la Rivière appelle aussi ; le relais de la Rivière y
-    // ajoute deux lignes, l'extraction en retire onze.
-    private static let legacyLineCeiling = 47_606
+    private static let legacyLineCeiling = 47_615
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -774,8 +774,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// l'acquittement, on est au bout d'UN message, et il en reste à partir.
     func test_leDésarmement_seFaitAuTapEtPasÀLAcquittement() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertTrue(send.contains("func consumeArmedProtection()"),
-                      "La saisie-et-désarmement doit être UNE fonction nommée, appelée par le tap.")
+        XCTAssertTrue(send.contains("func captureArmedProtection()"),
+                      "La saisie doit être UNE fonction nommée, appelée par le tap — elle ne désarme plus (#8305).")
 
         guard let finalize = send.range(of: "func finalizeSuccessfulSend") else {
             return XCTFail("Impossible de localiser la finalisation d'un envoi acquitté.")
@@ -870,7 +870,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
         let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
         XCTAssertEqual(
-            src.components(separatedBy: "viewModel.consumeArmedProtection()").count - 1, 1,
+            src.components(separatedBy: "viewModel.captureArmedProtection()").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
         let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
@@ -916,7 +916,9 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
                        "Toucher un média à vue unique doit l'OUVRIR, pas le consommer.")
         // #8009 — le plein écran s'ouvre sur CETTE pièce, jamais par le
         // carrousel en ligne qui dévoilerait les autres dans la bulle.
-        XCTAssertTrue(corps.contains("fullscreenAttachment = media"),
+        // #8310 — par l'ouvreur DIRECT de l'hôte, jamais par la liaison
+        // `fullscreenAttachment`, détour que #8009 avait mesuré mort.
+        XCTAssertTrue(corps.contains("onOpenProtected(media)"),
                       "La révélation doit ouvrir le plein écran dans le même geste.")
     }
 
@@ -932,10 +934,8 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         XCTAssertTrue(galerie.contains("viewModel.consumeViewOnce(messageId:"),
                       "La consommation reste l'appel serveur existant, déplacé — pas réécrit.")
 
-        // #8283 — l'ouverture a quitté `ConversationView.body` pour le site
-        // partagé du Fil et de la Rivière.
-        let hôte = try source(at: "Features/Main/Views/ConversationView+MediaOpening.swift")
-        XCTAssertTrue(hôte.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
+        // #8310 — l'ouvreur du fil vit à côté de la galerie (`openMediaFullscreen`).
+        XCTAssertTrue(galerie.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
                       "L'ouverture arme la consommation, sur le chemin qui ouvre la galerie.")
     }
 

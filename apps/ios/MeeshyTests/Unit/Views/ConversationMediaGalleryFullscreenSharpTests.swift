@@ -241,7 +241,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
 
     private static let gallery = "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"
     private static let conversation = "Meeshy/Features/Main/Views/ConversationView.swift"
-    private static let mediaOpening = "Meeshy/Features/Main/Views/ConversationView+MediaOpening.swift"
+    private static let mediaOpener = "Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift"
     private static let legacyPlayer = "Meeshy/Features/Main/Views/VideoLegacySupport.swift"
     private static let resolver = "Meeshy/Features/Main/Views/VideoPosterResolver.swift"
 
@@ -387,12 +387,13 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// Au tap dans la conversation, on préchauffe ce que le plein écran AFFICHE
     /// — pas l'original (`fileUrl`), sinon les deux se téléchargeaient.
     func test_conversationTap_prewarmsTheDisplayedVariant_notTheOriginal() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.conversation))
-        let host = try block(from: "onMediaTap: { attachment in", upTo: "onConsumeViewOnce:", in: code)
-        XCTAssertTrue(host.contains("presentMediaFullscreen(attachment)"),
-                      "le toucher d'un média passe par le site partagé avec la Rivière (#8283)")
-        let opening = AppSourceGuard.stripComments(try source(Self.mediaOpening))
-        let tap = try block(from: "func presentMediaFullscreen(", upTo: "func openQuotedMediaFromRiver(", in: opening)
+        // #8310 — l'ouvreur a quitté la fermeture littérale de l'hôte pour
+        // `openMediaFullscreen`, partagé par le fil et la Rivière.
+        let host = AppSourceGuard.stripComments(try source(Self.conversation))
+        XCTAssertTrue(host.contains("onMediaTap: openMediaFullscreen"), "le fil ouvre par l'ouvreur unique")
+        let code = AppSourceGuard.stripComments(try source(Self.mediaOpener))
+        let tap = try block(from: "func openMediaFullscreen(_ attachment: MessageAttachment) {",
+                            upTo: "scrollState.galleryStartAttachment = attachment", in: code)
         XCTAssertTrue(tap.contains("GalleryPrewarm.warm(attachment)"))
         XCTAssertFalse(tap.contains("images.data(for:"), "plus de préchauffage de l'original dans le store images")
     }

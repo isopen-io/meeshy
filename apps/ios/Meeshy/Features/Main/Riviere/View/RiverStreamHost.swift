@@ -100,6 +100,8 @@ struct RiverStreamHost: View {
     /// quand il n'y a rien d'honnête à ouvrir (média protégé, document, pièce
     /// introuvable), et la citation retombe alors sur son saut (`openReply`).
     var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
+    /// #8310 — le plein écran d'un média flouté, ouvert par `ConversationView`.
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -578,7 +580,8 @@ struct RiverStreamHost: View {
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
-                onConsumeViewOnce: onConsumeViewOnce
+                onConsumeViewOnce: onConsumeViewOnce,
+                onMediaTap: onMediaTap
             )
                 .equatable()
                 .longMessageFocus(expansion(for: bubble.messageId), accentHex: DynamicColorGenerator.colorForName(content.colorSeed))

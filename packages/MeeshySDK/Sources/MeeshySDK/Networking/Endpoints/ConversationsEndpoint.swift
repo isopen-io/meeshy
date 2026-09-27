@@ -33,6 +33,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdMarkRead(id: String)
     case byIdMarkUnread(id: String)
     case byIdMessages(id: String)
+    case byIdMessagesAfterReadConsume(id: String)
     case byIdMessagesByMessageId(id: String, messageId: String)
     case byIdMessagesByMessageIdConsume(id: String, messageId: String)
     case byIdMessagesByMessageIdPin(id: String, messageId: String)
@@ -79,6 +80,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdMarkRead(let id): return "/api/v1/conversations/\(id)/mark-read"
         case .byIdMarkUnread(let id): return "/api/v1/conversations/\(id)/mark-unread"
         case .byIdMessages(let id): return "/api/v1/conversations/\(id)/messages"
+        case .byIdMessagesAfterReadConsume(let id): return "/api/v1/conversations/\(id)/messages/after-read/consume"
         case .byIdMessagesByMessageId(let id, let messageId): return "/api/v1/conversations/\(id)/messages/\(messageId)"
         case .byIdMessagesByMessageIdConsume(let id, let messageId): return "/api/v1/conversations/\(id)/messages/\(messageId)/consume"
         case .byIdMessagesByMessageIdPin(let id, let messageId): return "/api/v1/conversations/\(id)/messages/\(messageId)/pin"

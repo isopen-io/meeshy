@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isEphemeralServable, servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import {
+  hasPerReaderEphemeralDeadline,
+  isEphemeralServable,
+  servedEphemeralExpiresAt,
+} from '@meeshy/shared/utils/ephemeral-countdown';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'ephemeralReaderDeadlines' });
@@ -52,6 +56,8 @@ interface EphemeralRow {
   readonly id: string;
   readonly senderId?: string | null;
   readonly ephemeralDuration?: number | null;
+  /** Porte la flamme-œil (#8302) : une échéance par lecteur, sans durée. */
+  readonly effectFlags?: number | null;
 }
 
 /** Ce que la carte rend pour un message qu'aucune échéance ne concerne. */
@@ -74,7 +80,7 @@ export async function loadEphemeralReaderDeadlines(
   const resolutions = new Map<string, EphemeralReaderResolution>();
 
   const ephemeralIds = messages
-    .filter((message) => typeof message.ephemeralDuration === 'number' && message.ephemeralDuration > 0)
+    .filter((message) => hasPerReaderEphemeralDeadline(message))
     .map((message) => message.id);
   if (ephemeralIds.length === 0) return resolutions;
 
@@ -150,8 +156,10 @@ export function isEphemeralServableToReader(
 ): boolean {
   return isEphemeralServable({
     ephemeralDuration: message.ephemeralDuration,
+    effectFlags: message.effectFlags,
     servedExpiresAt: servedEphemeralExpiresAt({
       ephemeralDuration: message.ephemeralDuration,
+      effectFlags: message.effectFlags,
       rawExpiresAt: message.expiresAt ?? null,
       isSender: resolution?.isSender ?? false,
       readerDeadline: resolution?.readerDeadline ?? null,

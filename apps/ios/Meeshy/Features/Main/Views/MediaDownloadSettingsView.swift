@@ -14,6 +14,8 @@ struct MediaDownloadSettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     @ObservedObject private var store = MediaDownloadPreferencesStore.shared
+    /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy. Actif par défaut.
+    @AppStorage(ReceivedMediaAutoSaveUserSetting.key) private var autoSaveToAlbum = true
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -37,6 +39,7 @@ struct MediaDownloadSettingsView: View {
     private var pageContent: some View {
         VStack(spacing: 20) {
             infoSection
+            autoSaveSection
             policyPicker(
                 title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
                 binding: $store.preferences.image
@@ -85,6 +88,35 @@ struct MediaDownloadSettingsView: View {
                 .accessibilityElement(children: .combine)
             }
             .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
+        }
+    }
+
+    // MARK: - Enregistrement automatique (#8307)
+
+    private var autoSaveSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(title: String(localized: "settings.media.autosave.header", defaultValue: "Galerie", bundle: .main),
+                          icon: "photo.on.rectangle", color: accentColor)
+            Toggle(isOn: $autoSaveToAlbum) {
+                HStack(spacing: 12) {
+                    fieldIcon("square.and.arrow.down.on.square.fill", color: accentColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "settings.media.autosave.title", defaultValue: "Enregistrer dans Photos", bundle: .main))
+                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                        Text(String(localized: "settings.media.autosave.subtitle",
+                                    defaultValue: "Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.",
+                                    bundle: .main))
+                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .foregroundColor(theme.textMuted)
+                            .lineSpacing(2)
+                    }
+                }
+            }
+            .tint(Color(hex: accentColor))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(sectionBackground(tint: accentColor))
         }
     }
 

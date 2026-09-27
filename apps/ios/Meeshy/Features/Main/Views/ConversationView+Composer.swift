@@ -207,7 +207,7 @@ extension ConversationView {
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
-            ephemeralDuration: $viewModel.ephemeralDuration,
+            ephemeralChoice: $viewModel.ephemeralChoice,
             hideEphemeral: composerState.editingMessageId != nil,
             isBlurEnabled: $viewModel.isBlurEnabled,
             hideBlur: composerState.editingMessageId != nil,
@@ -227,7 +227,7 @@ extension ConversationView {
             focusTrigger: $composerState.focusRequested
             )
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralChoice != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isViewOnceEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)

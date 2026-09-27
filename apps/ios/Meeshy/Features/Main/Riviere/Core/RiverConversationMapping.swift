@@ -287,6 +287,7 @@ nonisolated enum RiverConversationMapping {
                 isBurning: message.isBurning,
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
                 isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
+                protectedTap: protectedTap(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
                 contactCards: RiverContactCards(items: contactCards(of: message)),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
@@ -460,6 +461,16 @@ nonisolated enum RiverConversationMapping {
         guard !displayed.isEmpty else { return nil }
         let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap)
         return resolved.firstLinkURL == nil ? nil : resolved
+    }
+
+    /// #8310 — le toucher du voile d'un message flouté, par la règle UNIQUE
+    /// (`ProtectedContentTap.veiledMessage`). La vue unique garde son propre
+    /// chemin (la puce) ; un message sans flou n'a pas de voile.
+    @MainActor static func protectedTap(of message: MeeshyMessage) -> ProtectedContentTap {
+        guard message.effects.flags.contains(.blurred), !message.holdsViewOnce else {
+            return message.protection().requiresVeil ? .revealText : .none
+        }
+        return .veiledMessage(media: message.attachments)
     }
 
     @MainActor static func contactCards(of message: MeeshyMessage) -> [MessageAttachment] {

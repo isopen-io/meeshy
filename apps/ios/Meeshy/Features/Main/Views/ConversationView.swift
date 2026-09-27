@@ -325,7 +325,7 @@ struct ConversationView: View {
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
-            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue,
+            ephemeralDurationRawValue: viewModel.ephemeralChoice?.storageValue,
             attachments: (refs?.isEmpty ?? true) ? nil : refs
         )
         DraftStore.shared.save(draft, for: viewModel.conversationId)
@@ -931,7 +931,7 @@ struct ConversationView: View {
                     onSaveMedia: {
                         guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                         HapticFeedback.light()
-                        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                        mediaSaveCoordinator.save(MediaSaveRequest(
                             kind: attachment.kind,
                             origin: .transmitted,
                             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
@@ -1143,8 +1143,8 @@ struct ConversationView: View {
                         viewModel.isBlurEnabled = true
                     }
                     if let raw = draft.ephemeralDurationRawValue,
-                       let duration = EphemeralDuration(rawValue: raw) {
-                        viewModel.ephemeralDuration = duration
+                       let choice = EphemeralChoice(storageValue: raw) {
+                        viewModel.ephemeralChoice = choice
                     }
                     // Pièces jointes du brouillon (copiées en durable au
                     // background) : restaure les survivantes dans le tray —
@@ -1177,7 +1177,7 @@ struct ConversationView: View {
             .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.ephemeralChoice?.storageValue) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
@@ -1603,10 +1603,7 @@ struct ConversationView: View {
                 onFocalShareFile: { url in
                     focalShareFileItem = FocalShareFileItem(url: url)
                 },
-                onMediaTap: { attachment in
-                    // Site partagé avec la citation de la Rivière (#8283).
-                    presentMediaFullscreen(attachment)
-                },
+                onMediaTap: openMediaFullscreen,
                 onConsumeViewOnce: { messageId, completion in
                     // #7618 — la puce d'une vue unique OUVRE : plein écran pour
                     // un média, lecture sur place pour un texte. On arme, on ne
@@ -1752,8 +1749,7 @@ struct ConversationView: View {
                     onConsumeViewOnce: { messageId, completion in
                         completion(openViewOnce(messageId: messageId))
                     },
-                    // #8283 — la citation d'un média s'ouvre dans le plein écran de Script.
-                    onOpenQuotedMedia: { reference in openQuotedMediaFromRiver(reference) },
+                    onMediaTap: openMediaFullscreen,
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le
@@ -2533,7 +2529,7 @@ struct ConversationView: View {
                     // que pour un message à exactement UN attachment.
                     guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                     HapticFeedback.light()
-                    mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                    mediaSaveCoordinator.save(MediaSaveRequest(
                         kind: attachment.kind,
                         origin: .transmitted,
                         remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
@@ -2706,7 +2702,7 @@ struct ConversationView: View {
             Button {
                 guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                 HapticFeedback.light()
-                mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                mediaSaveCoordinator.save(MediaSaveRequest(
                     kind: attachment.kind,
                     origin: .transmitted,
                     remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,

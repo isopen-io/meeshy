@@ -140,6 +140,38 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertNil(preview?.media, "un média protégé n'a ni aperçu ni ouverture, dans la Rivière comme ailleurs")
     }
 
+    // MARK: - #8310 — toucher un média flouté ouvre le plein écran en Rivière
+
+    private func contents(of messages: [MeeshyMessage]) -> [RiverBubbleContent] {
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        return RiverConversationMapping.contents(geometry: geometry, messages: messages, viewerId: "me",
+                                                 text: { $0.content }, time: { _ in "12:45" })
+    }
+
+    private func photo(_ id: String, messageId: String) -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(id: id, messageId: messageId, fileName: "p.jpg", mimeType: "image/jpeg",
+                                fileUrl: "https://staging.meeshy.me/p.jpg", isBlurred: true)
+    }
+
+    func test_contents_blurredPhotoMessage_tapOpensThePhotoFullscreen() {
+        var blurred = message("m1", sender: "bob", minutes: 0)
+        blurred.attachments = [photo("p1", messageId: "m1"), photo("p2", messageId: "m1")]
+        blurred.effects.flags.insert(.blurred)
+        let content = contents(of: [blurred]).first
+        XCTAssertEqual(content?.protectedTap, .openFullscreen(photo("p1", messageId: "m1")),
+                       "la Rivière ne rend pas le média : le voile doit l'ouvrir, sinon rien ne s'ouvre")
+    }
+
+    func test_contents_blurredTextMessage_tapRevealsInPlace() {
+        var blurred = message("m1", sender: "bob", minutes: 0)
+        blurred.effects.flags.insert(.blurred)
+        XCTAssertEqual(contents(of: [blurred]).first?.protectedTap, .revealText)
+    }
+
+    func test_contents_unprotectedMessage_tapIsNone() {
+        XCTAssertEqual(contents(of: [message("m1", sender: "bob", minutes: 0)]).first?.protectedTap, ProtectedContentTap.none)
+    }
+
     func test_initialCursor_isTheMostRecentBubble_orTheReadersShoreWhenEmpty() {
         let messages = [message("m1", sender: "alice", minutes: 0), message("m2", sender: "bob", minutes: 1), message("m3", sender: "alice", minutes: 2)]
         let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))

@@ -2,6 +2,8 @@ import { ephemeralDeadline, type EphemeralDeadline } from '@meeshy/shared/utils/
 
 import type { Message } from '@/lib/api/types';
 
+import { isAfterReadMessage } from './after-read';
+
 /**
  * LA RÉCEPTION LOCALE D'UN ÉPHÉMÈRE — l'autre moitié de la règle partagée
  * (`@meeshy/shared/utils/ephemeral-deadline`), celle qui ne peut PAS vivre
@@ -94,7 +96,10 @@ export function resetEphemeralReception(): void {
   servedDeadlines.clear();
 }
 
-export type EphemeralMessageFields = Pick<Message, 'id' | 'expiresAt' | 'ephemeralDuration'> & { readonly isViewOnce?: boolean };
+export type EphemeralMessageFields = Pick<Message, 'id' | 'expiresAt' | 'ephemeralDuration'> & {
+  readonly isViewOnce?: boolean;
+  readonly effectFlags?: number;
+};
 
 /**
  * LA RÈGLE, APPLIQUÉE À CE MESSAGE POUR CE LECTEUR — site UNIQUE d'appel de
@@ -125,6 +130,11 @@ export function resolveEphemeralDeadline(input: {
      `expiresAt` est la destruction SERVEUR programmée quand tous les
      destinataires l'ont ouverte (#7578), jamais un décompte pour le lecteur. */
   if (message.isViewOnce === true && !hasDuration) return { state: 'none' };
+  /* LA FLAMME-ŒIL NE DÉCOMPTE RIEN (#8304) : ni pastille ni chrono, chez
+     l'expéditeur comme chez le lecteur — c'est la SORTIE de la conversation
+     qui la retire, et son filigrane la désigne. Une échéance servie (la
+     rétention d'un message jamais lu, #8302) ne se montre pas non plus. */
+  if (isAfterReadMessage(message)) return { state: 'none' };
   if (!isMine && hasDuration) noteEphemeralReception(message.id, now);
 
   return ephemeralDeadline({

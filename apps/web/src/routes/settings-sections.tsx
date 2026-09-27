@@ -172,9 +172,12 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
    que le jour où sa destination existe (loi 4). L'EXPORT est la première à
    revenir (#6725), à une adresse propre à la v2 — `/settings/data-export`,
    jamais l'ancienne `meeshy.me/settings#privacy`. */
-export function DataSection({ language }: { readonly language: InterfaceLanguage }) {
+export type GalleryToggle = { readonly enabled: boolean; readonly onToggle: (enabled: boolean) => void };
+
+export function DataSection({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery?: GalleryToggle }) {
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
+      {gallery === undefined ? null : <GalleryToggleRow language={language} gallery={gallery} />}
       <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
@@ -183,6 +186,35 @@ export function DataSection({ language }: { readonly language: InterfaceLanguage
         <Chevron />
       </Link>
     </GroupedSection>
+  );
+}
+
+/* LA GALERIE DE LA COQUE ANDROID (#8308) — réglage LOCAL à l'appareil (la
+   galerie est la sienne), offert sur la seule coque qui sait y écrire (loi 4) :
+   l'écran l'omet partout ailleurs. Actif par défaut. */
+function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery: GalleryToggle }) {
+  const captionId = useId();
+  const label = translate(language, 'settings.gallery.auto_save');
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon tint="var(--color-success)">
+        <IconOf icon={{ set: 'socle', name: 'image' }} size={15} />
+      </RowIcon>
+      <RowText label={label} caption={translate(language, 'settings.gallery.auto_save.info')} captionId={captionId} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={gallery.enabled}
+        aria-label={label}
+        aria-describedby={captionId}
+        data-setting="galleryAutoSave"
+        onClick={() => gallery.onToggle(!gallery.enabled)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <Switch checked={gallery.enabled} />
+      </button>
+    </div>
   );
 }
 

@@ -39,8 +39,7 @@ struct RiverConversationHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
-    /// #8283 — le plein écran du média cité, relayé jusqu'à la bulle.
-    var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
     /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
     /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
     /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
@@ -84,7 +83,7 @@ struct RiverConversationHost: View {
         onOpenInThread: ((String) -> Void)? = nil,
         onReply: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
-        onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil,
+        onMediaTap: ((MessageAttachment) -> Void)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -100,7 +99,7 @@ struct RiverConversationHost: View {
         self.onOpenInThread = onOpenInThread
         self.onReply = onReply
         self.onConsumeViewOnce = onConsumeViewOnce
-        self.onOpenQuotedMedia = onOpenQuotedMedia
+        self.onMediaTap = onMediaTap
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
@@ -129,6 +128,22 @@ struct RiverConversationHost: View {
     }
 
     @State private var memo = ContentsMemo()
+
+    /// #8283 — la zone média d'une citation ouvre le MÊME plein écran que
+    /// depuis Script : la pièce et son verrou sont ceux du Fil
+    /// (`QuotedMediaOpening`), l'ouverture celle du toucher d'un média
+    /// (`onMediaTap`). `false` ⇒ rien d'honnête à ouvrir (média protégé,
+    /// document, pièce introuvable), et la citation retombe sur son saut.
+    private var openQuotedMedia: ((ReplyReference) -> Bool)? {
+        guard let onMediaTap else { return nil }
+        let messages = messages
+        return { reference in
+            let quoted = messages.first { $0.id == reference.messageId }
+            guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else { return false }
+            onMediaTap(attachment)
+            return true
+        }
+    }
 
     /// `RiverConversationMapping.contents` construit un dictionnaire de TOUS
     /// les messages puis, par bulle, résout nom d'affichage, heure, texte,
@@ -206,7 +221,8 @@ struct RiverConversationHost: View {
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
                 onConsumeViewOnce: onConsumeViewOnce,
-                onOpenQuotedMedia: onOpenQuotedMedia,
+                onOpenQuotedMedia: openQuotedMedia,
+                onMediaTap: onMediaTap,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

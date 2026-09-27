@@ -63,18 +63,22 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         let stream = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
         XCTAssertTrue(stream.contains("onQuotedMediaTap: quotedMediaTap"))
         let host = try source("Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift")
-        XCTAssertTrue(host.contains("onOpenQuotedMedia: onOpenQuotedMedia"))
+        XCTAssertTrue(host.contains("onOpenQuotedMedia: openQuotedMedia"),
+                      "l'hôte remet l'ouverture à la peau")
+        XCTAssertTrue(host.contains("onMediaTap(attachment)"),
+                      "la pièce citée s'ouvre par le MÊME geste que le toucher d'un média")
         let conversation = try source("Meeshy/Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(conversation.contains("onOpenQuotedMedia: { reference in openQuotedMediaFromRiver(reference) }"))
+        XCTAssertTrue(conversation.contains("onMediaTap: openMediaFullscreen"),
+                      "la conversation relaie son ouvreur unique jusqu'à la Rivière")
 
-        // Deux petits fichiers : le plancher de `source(_:)` les refuserait,
+        // Lecture directe : le plancher de `source(_:)` refuserait le plus petit,
         // l'ancre ci-dessous suffit à prouver qu'ils sont lus.
         let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
         for path in [
-            "Meeshy/Features/Main/Views/ConversationView+MediaOpening.swift",
+            "Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift",
             "Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift"
         ] {
             let code = AppSourceGuard.stripComments(
