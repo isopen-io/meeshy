@@ -17,13 +17,13 @@ import os
 // L'audio seul retombe sur la prise micro (`CallRecordingService`) quand
 // ReplayKit est indisponible ou refusé : mieux vaut la voix locale que rien.
 
-enum CallScreenCaptureTrack: Equatable, Sendable {
+nonisolated enum CallScreenCaptureTrack: Equatable, Sendable {
     case video
     case appAudio
     case micAudio
 }
 
-struct CallScreenCapturePlan: Equatable, Sendable {
+nonisolated struct CallScreenCapturePlan: Equatable, Sendable {
     struct Mixdown: Equatable, Sendable {
         let presetName: String
         let fileType: AVFileType
