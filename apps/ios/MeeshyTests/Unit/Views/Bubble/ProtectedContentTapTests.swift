@@ -109,6 +109,40 @@ final class ProtectedContentTapTests: XCTestCase {
         XCTAssertEqual(grid.protectedTap(on: second), .openFullscreen(second))
     }
 
+    // MARK: - Les cases d'un message flouté prennent leur toucher (#8340)
+
+    /// En Bulles, le voile couvrait toute la grille : toucher la case orange
+    /// d'un message flouté bleu + orange ouvrait la bleue. Les cases visuelles
+    /// d'un message flouté à plusieurs pièces reçoivent chacune leur toucher.
+    func test_veiledGridCells_blurredMultiImage_givesEveryVisualCell() {
+        let first = photo(id: "p1"), second = photo(id: "p2")
+        let grid = content(message(text: "", attachments: [first, second, video()], blurred: true))
+        XCTAssertEqual(grid.veiledGridCells.map(\.id), ["p1", "p2", "v1"])
+    }
+
+    func test_veiledGridCells_singleImage_isEmpty_theVeilAlreadyOpensIt() {
+        XCTAssertTrue(content(message(text: "", attachments: [photo()], blurred: true)).veiledGridCells.isEmpty)
+    }
+
+    func test_veiledGridCells_unblurredGrid_isEmpty() {
+        XCTAssertTrue(content(message(text: "", attachments: [photo(id: "p1"), photo(id: "p2")])).veiledGridCells.isEmpty)
+    }
+
+    func test_veiledGridCells_viewOnce_isEmpty_theViewOnceKeepsItsOwnGesture() {
+        let sealed = content(message(text: "", attachments: [photo(id: "p1"), photo(id: "p2")], viewOnce: true))
+        XCTAssertTrue(sealed.veiledGridCells.isEmpty)
+    }
+
+    func test_wiring_bubbleVeil_letsEachGridCellTakeItsTap() throws {
+        let layout = try String(contentsOf: Self.iosRoot.appendingPathComponent(
+            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"), encoding: .utf8)
+        XCTAssertTrue(layout.contains("ProtectedGridCellTapLayer(cells: shouldBlur ? content.veiledGridCells : [], open: openProtectedMedia)"),
+                      "le voile de la bulle doit laisser chaque case ouvrir SA pièce")
+        let cell = try body(of: "fileprivate struct BubbleGridCell: View",
+                            in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        XCTAssertTrue(cell.contains(".protectedGridCellBounds(attachment.id)"), "la case doit publier son cadre")
+    }
+
     func test_resolve_blurredAttachmentCell_inUnblurredMessage_opensFullscreen() {
         let cell = photo(isBlurred: true)
         XCTAssertEqual(ProtectedContentTap.resolve(cell: cell), .openFullscreen(cell))
