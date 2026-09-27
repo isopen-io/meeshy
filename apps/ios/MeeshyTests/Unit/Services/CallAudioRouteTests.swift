@@ -71,6 +71,31 @@ final class CallAudioPortKindTests: XCTestCase {
 }
 
 @MainActor
+final class CallSpeakerRouteReconciliationTests: XCTestCase {
+
+    func test_speakerFlag_pickerChoseBluetooth_clearsSpeaker() {
+        XCTAssertFalse(CallManager.speakerFlag(afterOverrideTo: .bluetooth, current: true))
+    }
+
+    func test_speakerFlag_pickerChoseAirPlay_clearsSpeaker() {
+        XCTAssertFalse(CallManager.speakerFlag(afterOverrideTo: .airPlay, current: true))
+    }
+
+    func test_speakerFlag_pickerChoseReceiver_clearsSpeaker() {
+        XCTAssertFalse(CallManager.speakerFlag(afterOverrideTo: .receiver, current: true))
+    }
+
+    func test_speakerFlag_speakerOutput_keepsCurrentPreference() {
+        XCTAssertTrue(CallManager.speakerFlag(afterOverrideTo: .speaker, current: true))
+        XCTAssertFalse(CallManager.speakerFlag(afterOverrideTo: .speaker, current: false))
+    }
+
+    func test_speakerFlag_unknownRoute_keepsCurrentPreference() {
+        XCTAssertTrue(CallManager.speakerFlag(afterOverrideTo: nil, current: true))
+    }
+}
+
+@MainActor
 final class CallAudioRouteStateTests: XCTestCase {
 
     private let iphoneMic = CallAudioPort(id: "mic", name: "iPhone Microphone", kind: .builtInMicrophone)
