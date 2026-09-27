@@ -150,7 +150,7 @@ internal struct _InlineRenderer: View {
                     isMuted: engineIsMuted,
                     enablesPip: Self.surfaceEnablesPip(controls: player.controls)
                 )
-                    .onTapGesture { toggleControls() }
+                    .onTapGesture { handleSurfaceTap() }
                 if isLoadingAsset {
                     loadingIndicator
                 }
@@ -168,7 +168,8 @@ internal struct _InlineRenderer: View {
                     attachment: player.attachment,
                     accentColor: player.accentColor,
                     showPlayBadge: false,
-                    showDurationBadge: player.controls.contains(.duration)
+                    showDurationBadge: player.controls.contains(.duration),
+                    onTap: surfaceTapAction == .expand ? player.onExpand : nil
                 )
                 playButton
             }
@@ -448,12 +449,48 @@ internal struct _InlineRenderer: View {
         manager.release(urlString: player.attachment.fileUrl)
     }
 
+    /// Ce que fait un toucher sur la vidéo HORS de ses contrôles.
+    nonisolated enum SurfaceTapAction: Equatable, Sendable {
+        case toggleControls
+        case expand
+    }
+
+    /// Décision pure (#8231) : le plein écran n'est choisi que si l'appelant
+    /// le demande ET fournit l'hôte qui le présente — sinon le toucher ne
+    /// ferait rien, pire que son effet historique.
+    nonisolated static func surfaceTapAction(surfaceTapExpands: Bool, hasExpandHandler: Bool) -> SurfaceTapAction {
+        surfaceTapExpands && hasExpandHandler ? .expand : .toggleControls
+    }
+
+    /// Quand le toucher ouvre le plein écran, il ne peut plus faire revenir
+    /// des contrôles masqués : ils restent donc à l'écran, sans quoi pause et
+    /// son deviendraient inatteignables pendant la lecture.
+    nonisolated static func autoHidesControls(surfaceTapAction: SurfaceTapAction) -> Bool {
+        surfaceTapAction == .toggleControls
+    }
+
+    private var surfaceTapAction: SurfaceTapAction {
+        Self.surfaceTapAction(surfaceTapExpands: player.surfaceTapExpands,
+                              hasExpandHandler: player.onExpand != nil)
+    }
+
+    private func handleSurfaceTap() {
+        switch surfaceTapAction {
+        case .expand:
+            HapticFeedback.light()
+            player.onExpand?()
+        case .toggleControls:
+            toggleControls()
+        }
+    }
+
     private func toggleControls() {
         showControls.toggle()
         if showControls { scheduleControlsHide() }
     }
 
     private func scheduleControlsHide() {
+        guard Self.autoHidesControls(surfaceTapAction: surfaceTapAction) else { return }
         controlsTimer?.invalidate()
         controlsTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
             Task { @MainActor in

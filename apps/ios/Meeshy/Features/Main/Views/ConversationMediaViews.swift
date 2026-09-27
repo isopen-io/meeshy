@@ -56,6 +56,11 @@ struct DownloadBadgeView: View {
     /// plate, carrousel) : deux boutons, deux anneaux, deux téléchargeurs dont
     /// aucun ne voyait l'autre. Il ne sert plus que l'image, dont la vue n'a pas
     /// d'autre affordance.
+    ///
+    /// Depuis #8231 ce lecteur, dans le fil, n'a que trois contrôles (son,
+    /// lecture/pause, plein écran) ; son bouton central garde le
+    /// téléchargement. La tuile de débordement et la pièce protégée ne
+    /// montrent qu'un poster : c'est le plein écran qui y télécharge.
     var yieldsToThePlayer: Bool {
         attachment.type == .video
     }

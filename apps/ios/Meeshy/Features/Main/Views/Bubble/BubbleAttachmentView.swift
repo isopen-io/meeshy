@@ -26,6 +26,9 @@ struct BubbleAttachmentView: View {
     /// `ConversationViewModel.playAudio(attachmentId:)`. Nil-default keeps
     /// non-audio attachment renders unchanged.
     var onPlayAudio: ((String) -> Void)? = nil
+    /// Ouvre la vidéo en plein écran — la seule lecture qu'une vidéo du fil
+    /// connaisse (#8231). Nil : le poster reste inerte.
+    var onOpenVideo: ((MessageAttachment) -> Void)? = nil
 
     var body: some View {
         switch attachment.type {
@@ -37,20 +40,22 @@ struct BubbleAttachmentView: View {
             )
 
         case .video:
-            // Dead path in practice — videos route through visualMediaGrid in
-            // BubbleStandardLayout. Keep a sound fallback that uses the
-            // unified MeeshyVideoPlayer so we don't ship a UX regression
-            // if a routing change ever lands a video in this branch.
+            // Chemin mort en pratique — une vidéo passe par `visualMediaGrid`
+            // (`BubbleStandardLayout`). S'il était atteint, il suivrait la même
+            // règle que le fil (#8231) : trois contrôles, et le toucher de la
+            // vidéo hors contrôles remis à l'hôte qui ouvre le plein écran.
             VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
                 MeeshyVideoPlayer(
                     attachment: attachment,
                     style: .inline,
-                    controls: .inlineDefault,
+                    controls: .inlineMinimal,
                     accentColor: accentHex,
                     frame: .bubble,
                     availability: availability,
                     performance: .inline,
-                    onDownload: onDownload
+                    surfaceTapExpands: true,
+                    onDownload: onDownload,
+                    onExpand: { onOpenVideo?(attachment) }
                 )
             }
 
