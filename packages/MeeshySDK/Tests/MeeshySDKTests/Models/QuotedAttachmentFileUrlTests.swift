@@ -72,6 +72,60 @@ struct QuotedAttachmentFileUrlTests {
         #expect(ref.attachmentFileUrl == nil)
     }
 
+    // MARK: - La pièce reconstruite — ce que le plein écran ouvre hors fenêtre
+
+    @Test("une vidéo citée se reconstruit avec son ancre, son fichier et ses faits")
+    func reconstructsTheCitedVideo() throws {
+        let json = """
+        {"id":"q1","content":"","originalLanguage":"fr","senderId":"p-bob",
+         "sender":{"id":"p-bob","displayName":"Bob","userId":"u-bob"},
+         "attachmentReplyTo":{"attachmentId":"v2","kind":"video"},
+         "attachments":[\(Self.video),{"id":"v2","mimeType":"video/quicktime","duration":900,"width":1080,"height":1920,"fileUrl":"https://cdn.meeshy.me/v2.mov"}]}
+        """
+        let piece = try #require(try Self.reference(json).quotedAttachment)
+        #expect(piece.id == "v2")
+        #expect(piece.messageId == "q1")
+        #expect(piece.type == .video)
+        #expect(piece.mimeType == "video/quicktime")
+        #expect(piece.fileUrl == "https://cdn.meeshy.me/v2.mov")
+        #expect(piece.duration == 900)
+        #expect(piece.width == 1080)
+        #expect(piece.height == 1920)
+    }
+
+    @Test("un vocal cité par son seul genre se reconstruit en audio")
+    func reconstructsAnAudioFromItsKind() throws {
+        let ref = ReplyReference(messageId: "m1", authorName: "Bob", previewText: "", attachmentType: "audio",
+                                 attachmentFileUrl: "https://cdn.meeshy.me/a.m4a")
+        let piece = try #require(ref.quotedAttachment)
+        #expect(piece.type == .audio)
+        #expect(piece.id == "quoted-m1", "sans ancre, un identifiant STABLE dérivé du message cité")
+    }
+
+    @Test("rien à reconstruire : protégé, sans fichier, document ou story")
+    func reconstructsNothingDishonest() {
+        let url = "https://cdn.meeshy.me/x"
+        let cases: [ReplyReference] = [
+            ReplyReference(messageId: "m1", authorName: "Bob", previewText: "", attachmentType: "video",
+                           attachmentFileUrl: url, attachmentIsProtected: true),
+            ReplyReference(messageId: "m2", authorName: "Bob", previewText: "", attachmentType: "video"),
+            ReplyReference(messageId: "m3", authorName: "Bob", previewText: "", attachmentType: "pdf",
+                           attachmentFileUrl: url),
+            ReplyReference(messageId: "m4", authorName: "Story", previewText: "", attachmentType: "video",
+                           attachmentFileUrl: url, isStoryReply: true)
+        ]
+        for ref in cases {
+            #expect(ref.quotedAttachment == nil, "\(ref.messageId) ne doit rien reconstruire")
+        }
+    }
+
+    @Test("le genre se lit sur le MIME des faits comme sur le rawValue court")
+    func kindReadsBothForms() {
+        #expect(ReplyReference(authorName: "B", previewText: "", attachmentType: "video/mp4").quotedMediaKind == .video)
+        #expect(ReplyReference(authorName: "B", previewText: "", attachmentType: "audio").quotedMediaKind == .audio)
+        #expect(ReplyReference(authorName: "B", previewText: "").quotedMediaKind == nil)
+    }
+
     @Test("changer le texte garde l'adresse ; sceller la citation la retire")
     func followKeepsThenSealsTheAddress() {
         let ref = ReplyReference(messageId: "m1", authorName: "Bob", previewText: "a", attachmentType: "audio",
