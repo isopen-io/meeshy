@@ -73,6 +73,20 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <!-- #7307 — la bannière d'un push rendue par FCM, app fermée : sans ces
+             deux entrées, Android prend l'icône de lancement (un carré blanc
+             dans la barre d'état) et le canal par défaut de FCM au lieu de
+             celui que la passerelle nomme. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_meeshy" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/meeshy_notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meeshy_notifications" />
+
         <!-- #8049 — l'appel natif de la coque. Le MessagingService du plugin
              @capacitor/push-notifications est RETIRÉ à la fusion : deux services
              MESSAGING_EVENT se concurrencent (FCM n'en sert qu'un). Le nôtre

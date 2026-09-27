@@ -5,6 +5,7 @@ import ptMediaHub from './catalog-pt-media-hub';
 import ptMediaViewer from './catalog-pt-media-viewer';
 import ptActivation from './catalog-pt-activation';
 import ptVerifyEmail from './catalog-pt-verify-email';
+import ptDevicePush from './catalog-pt-device-push';
 import ptPassword from './catalog-pt-password';
 import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
@@ -221,6 +222,7 @@ const pt = {
   ...ptVerifyEmail,
   ...ptActivation,
   ...ptPassword,
+  ...ptDevicePush,
   ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
