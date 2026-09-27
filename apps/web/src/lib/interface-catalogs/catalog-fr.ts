@@ -11,6 +11,7 @@
  */
 import frGallery from './catalog-fr-gallery';
 import frMentions from './catalog-fr-mentions';
+import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
@@ -1155,6 +1156,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frStudioChrome,
   ...frEphemeral,
   ...frGallery,
   ...frConversationCard,

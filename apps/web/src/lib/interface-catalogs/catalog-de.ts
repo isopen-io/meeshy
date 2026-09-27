@@ -23,6 +23,7 @@ import deSignup from './catalog-de-signup';
 
 import deGallery from './catalog-de-gallery';
 import deMentions from './catalog-de-mentions';
+import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
@@ -1158,6 +1159,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deStudioChrome,
   ...deEphemeral,
   ...deGallery,
   ...deConversationCard,

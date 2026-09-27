@@ -314,7 +314,7 @@ describe('ScenePlayer — le sol d’un fond AJUSTÉ, peint DANS le moteur (revu
         preferredLanguages={['fr']}
       />,
     );
-    expect(el.querySelector('[data-scene-letterbox]')?.getAttribute('src')).toStartWith('data:image/bmp;base64,');
+    expect(el.querySelector('[data-scene-letterbox]')?.getAttribute('src')).toMatch(/^data:image\/bmp;base64,/);
   });
 
   test('un fond TEINTÉ au Cadre (#8414) peint ses bandes de la teinte du contrat', () => {
