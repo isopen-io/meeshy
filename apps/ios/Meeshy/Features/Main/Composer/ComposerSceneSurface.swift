@@ -485,8 +485,9 @@ struct ComposerSceneSurface: View {
                                 // la dernière entrée déborde sous elle.
                                 pushesToThumb: false,
                                 badges: railBadges)
-                // Les MÊMES deux marges que le rail *trailing* : elles le
-                // posent dans le couloir du plateau, jamais sur la scène.
+                // Les MÊMES deux marges que le rail *trailing* : depuis la
+                // scène plein écran (#8370), elles le posent SUR la scène, à
+                // `outerMargin` du bord.
                 .padding(.leading, ComposerRailGeometry.outerMargin)
                 .padding(.bottom, ComposerRailGeometry.gutter)
         )
