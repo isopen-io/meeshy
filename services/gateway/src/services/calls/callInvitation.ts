@@ -5,6 +5,7 @@ import type { CallControlErrorCode, CallInvitedUser } from '@meeshy/shared/types
 import type { CallService } from '../CallService';
 import { amitieAcceptee } from '../friendship';
 import { activeCallStanding } from './callModerationPolicy';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 
 /**
  * INVITER UNE PERSONNE DANS UN APPEL EN COURS (#8433).
@@ -136,7 +137,7 @@ export async function resolveInvitedGuestParticipantId(
 
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
-    select: { username: true, displayName: true, avatar: true },
+    select: { username: true, displayName: true, avatar: true, ...RECIPIENT_LANG_SELECT },
   });
   if (!user) return null;
 
@@ -149,6 +150,7 @@ export async function resolveInvitedGuestParticipantId(
       displayName: user.displayName ?? user.username,
       avatar: user.avatar,
       role: CALL_GUEST_ROLE,
+      language: recipientLanguage(user, 'en'),
       permissions: { ...GUEST_PERMISSIONS },
       isActive: false,
       joinedAt: now,

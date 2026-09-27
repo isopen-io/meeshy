@@ -36,10 +36,10 @@ type World = {
   participants: ParticipantRow[];
 };
 
-const USERS: Record<string, { id: string; username: string; displayName: string | null; avatar: string | null }> = {
+const USERS: Record<string, { id: string; username: string; displayName: string | null; avatar: string | null; [prism: string]: string | null }> = {
   alice: { id: 'alice', username: 'alice', displayName: 'Alice', avatar: null },
   bob: { id: 'bob', username: 'bob', displayName: null, avatar: null },
-  dave: { id: 'dave', username: 'dave', displayName: 'Dave', avatar: 'https://cdn/dave.png' },
+  dave: { id: 'dave', username: 'dave', displayName: 'Dave', avatar: 'https://cdn/dave.png', systemLanguage: null, regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null },
 };
 
 const fakePrisma = (world: World) => ({
@@ -164,6 +164,7 @@ describe('resolveInvitedGuestParticipantId — l’invitation ouvre CET appel, p
       type: 'user',
       role: CALL_GUEST_ROLE,
       displayName: 'Dave',
+      language: 'es',
       isActive: false,
       leftAt: NOW,
       permissions: expect.objectContaining({ canSendMessages: false, canViewHistory: false }),
