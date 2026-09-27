@@ -63,7 +63,7 @@ nonisolated enum ComposerReturnImage {
     static let paintingDoors: Set<ComposerRailDoor> = [.media, .text, .sticker, .drawing, .background]
 
     static func renderSize(ratio: CGFloat) -> CGSize {
-        guard ratio > 0 else { return CGSize(width: longEdgePoints * 9 / 16, height: longEdgePoints) }
+        guard ratio > 0 else { return CGSize(width: longEdgePoints * SceneShape.aspect, height: longEdgePoints) }
         return ratio >= 1
             ? CGSize(width: longEdgePoints, height: longEdgePoints / ratio)
             : CGSize(width: longEdgePoints * ratio, height: longEdgePoints)
