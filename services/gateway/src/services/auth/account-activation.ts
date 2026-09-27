@@ -88,3 +88,15 @@ export function resolveAccountActivation(subject: ActivationSubject, now: Date):
 export function isActivationBlocked(subject: ActivationSubject, now: Date): boolean {
   return resolveAccountActivation(subject, now).phase === 'blocked';
 }
+
+/**
+ * Le délai est passé : une session EXISTANTE est refusée (`401
+ * ACCOUNT_ACTIVATION_REQUIRED` au middleware REST, `auth:session-revoked` au
+ * socket), la prochaine connexion mène au code.
+ */
+export class ActivationBlockedError extends Error {
+  constructor() {
+    super('Account activation required');
+    this.name = 'ActivationBlockedError';
+  }
+}

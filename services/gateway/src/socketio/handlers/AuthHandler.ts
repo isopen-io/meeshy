@@ -16,6 +16,7 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
+import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -72,6 +73,8 @@ export interface AuthHandlerDependencies {
    * callbacks above.
    */
   absorbAlreadyEndedCallLeave?: (opts: { callId: string; error: CallAlreadyEndedError }) => Promise<void>;
+  /** L'horloge du délai de grâce de l'adresse (#8238) — injectée par les témoins. */
+  now?: () => Date;
 }
 
 export class AuthHandler {
@@ -86,6 +89,7 @@ export class AuthHandler {
   private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
   private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
   private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
+  private readonly now: () => Date;
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -99,6 +103,7 @@ export class AuthHandler {
     this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
     this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
     this.absorbAlreadyEndedCallLeave = deps.absorbAlreadyEndedCallLeave;
+    this.now = deps.now ?? (() => new Date());
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -211,6 +216,7 @@ export class AuthHandler {
         customDestinationLanguage: true,
         deviceLocale: true,
         isActive: true,
+        ...ACTIVATION_SELECT,
       }
     });
 
@@ -229,6 +235,19 @@ export class AuthHandler {
     // reconnexion ultérieure avec le même JWT, encore valide.
     if (user.isActive === false) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled' });
+      socket.disconnect(true);
+      return;
+    }
+
+    // #8238 — le délai de grâce de l'adresse est passé : un JWT encore valide
+    // n'ouvre plus de canal temps réel, et la connexion mènera au code.
+    if (user.createdAt instanceof Date && isActivationBlocked(user, this.now())) {
+      logger.info('socket refusé — délai de grâce de l\'adresse passé', { socketId: socket.id, userId: user.id });
+      socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+        code: 'session_revoked',
+        message: 'Confirm your email address to continue — please sign in again.',
+        reason: 'activation_required',
+      });
       socket.disconnect(true);
       return;
     }
