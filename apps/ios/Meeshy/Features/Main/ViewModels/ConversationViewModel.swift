@@ -180,6 +180,10 @@ class ConversationViewModel: ObservableObject {
     /// (#7618) — lues par chaque mode via `MeeshyMessage.isViewOnceRevealed`.
     @Published var revealedViewOnceIds: [String: Bool] = [:]
 
+    /// Les éphémères EN COMBUSTION (#8382) — lus par les cellules du fil, qui
+    /// rendent `MessageStore` et non `messages`.
+    @Published var burningEphemeralIds: [String: Bool] = [:]
+
     struct BubbleLanguageSelection: Equatable {
         var activeDisplayLangCode: String?
         var secondaryLangCode: String?

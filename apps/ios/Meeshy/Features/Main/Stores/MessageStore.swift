@@ -563,6 +563,17 @@ public final class MessageStore: ObservableObject {
         messagesDidChange.send()
     }
 
+    /// **Retire les éphémères morts DEPUIS la dernière publication** (#8382).
+    ///
+    /// `publishUnchecked` ne pose la question qu'à une écriture : un éphémère
+    /// qui échoit à l'écran n'en provoque aucune. L'hôte appelle ce point à la
+    /// fin de la combustion ; sans mort, rien n'est publié.
+    func dropGoneEphemerals() {
+        let kept = messages.filter { !ExpiredEphemeralRow.isGone($0) }
+        guard kept.count != messages.count else { return }
+        publishUnchecked(records: kept, mergeInMemory: false)
+    }
+
     /// `true` quand publier `records` rendrait EXACTEMENT le tableau déjà
     /// affiché — auquel cas la publication n'a rien à dire et tout à coûter.
     ///
