@@ -263,3 +263,44 @@ export function StudioPostTextButton({
     </button>
   );
 }
+
+function BoltMark({ size = 16 }: { readonly size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13 2L4 14h7l-1 8 9-12h-7z" />
+    </svg>
+  );
+}
+
+/**
+ * **LA BASCULE « ANIMÉ »** (#8415, miroir `sceneAnimatedToggle` iOS) — une
+ * pastille de verre dans la barre haute, avant ⋯ ; ACTIVE, elle prend la
+ * couleur de marque pleine (et n'est plus du verre). Elle ouvre ou referme la
+ * frise ; la scène garde ses pistes quand on la referme.
+ */
+export function StudioAnimatedToggle({
+  lang,
+  active,
+  onToggle,
+  disabled = false,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly active: boolean;
+  readonly onToggle: () => void;
+  readonly disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      data-story-animated={active ? 'on' : 'off'}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onToggle}
+      className={`${active ? PRESSED_TILE : 'glass'} flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2`}
+      style={{ outlineColor: 'var(--color-ios-brand)', color: active ? '#fff' : 'var(--color-ios-ink)', opacity: disabled ? 0.4 : 1 }}
+    >
+      <BoltMark />
+      {translate(lang, 'story.studio.animated')}
+    </button>
+  );
+}

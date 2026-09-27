@@ -321,6 +321,22 @@ final class TimelineExportController: ObservableObject {
 
 /// Contenu de la sheet timeline du composer : switcher Quick/Pro + flux
 /// d'export (overlay de progression, aperçu partageable, alerte d'échec).
+/// **La frise, montable hors de l'atelier** (#8415) : la scène plein écran du
+/// meuble l'ouvre par sa bascule « Animé ». Même contenu que le panneau de
+/// l'atelier — export compris —, le cycle de vie restant chez l'hôte
+/// (`openTimelinePanel` / `closeTimelinePanel`).
+public struct SceneTimelinePanel: View {
+    private let composer: StoryComposerViewModel
+
+    public init(composer: StoryComposerViewModel) {
+        self.composer = composer
+    }
+
+    public var body: some View {
+        TimelineSheetContent(composer: composer)
+    }
+}
+
 struct TimelineSheetContent: View {
 
     let composer: StoryComposerViewModel

@@ -27,6 +27,19 @@ const enStudioChrome = {
   'story.studio.backdrop.white': 'White',
   'story.studio.backdrop.indigo': 'Indigo',
   'story.studio.backdrop.sand': 'Sand',
+  'story.studio.animated': 'Animated',
+  'story.studio.timeline': 'Scene timeline',
+  'story.studio.timeline.play': 'Play',
+  'story.studio.timeline.pause': 'Pause',
+  'story.studio.timeline.start': 'Start of {name}',
+  'story.studio.timeline.end': 'End of {name}',
+  'story.studio.timeline.empty': 'Write a text or place a layer: each object gets its own track.',
+  'story.studio.timeline.overlay': 'Layer',
+  'story.studio.retouch.title': 'Edit the image',
+  'story.studio.retouch.done': 'Done',
+  'story.studio.retouch.cancel': 'Discard the edit',
+  'composer.attachment.edit': 'Edit {name}',
+  'story.studio.retouch.failed': 'The image could not be rendered.',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

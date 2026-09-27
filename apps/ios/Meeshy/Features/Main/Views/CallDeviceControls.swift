@@ -3,12 +3,13 @@ import AVKit
 import UIKit
 import MeeshyUI
 
-// #8394 — les boutons de la vue d'appel « C adapté ». Ils se posent DANS un
-// verre (la pilule, un rail, une rangée) et n'en portent jamais eux-mêmes :
-// un verre par groupe, pas de verre sur verre.
+// #8394 — les boutons de la vue d'appel « C adapté ». #8432 — chacun est un
+// bouton de VERRE interactif (`CallButtonGlass`) ; le groupe qui les porte
+// (la pilule, les actions déployées) n'a qu'un voile non vitré dessous : pas
+// de verre sur verre.
 
-/// L'état visuel d'un bouton de la pilule : actif = pastille blanche et glyphe
-/// sombre, Fin = rouge, pause automatique = glyphe ambre.
+/// L'état visuel d'un bouton de la pilule : actif = verre blanc plein et glyphe
+/// sombre, Fin = verre rouge, pause automatique = glyphe ambre.
 enum CallPillButtonKind: Equatable {
     case normal
     case active
@@ -16,20 +17,24 @@ enum CallPillButtonKind: Equatable {
     case warning
 }
 
-/// Le glyphe rond d'un bouton de la pilule. Doctrine 86i : un glyphe dans un
-/// cercle de taille fixe garde une taille figée ; c'est la légende, dessous,
-/// qui porte le Dynamic Type.
+/// Le glyphe rond d'un bouton de la pilule, dans son propre cercle de verre.
+/// Doctrine 86i : un glyphe dans un cercle de taille fixe garde une taille
+/// figée ; c'est la légende, dessous, qui porte le Dynamic Type.
 struct CallPillGlyph: View {
     let symbol: String
     let kind: CallPillButtonKind
     let diameter: CGFloat
+
+    @Environment(\.callGlassMorph) private var morph
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: diameter * 0.4, weight: .semibold))
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
-            .background(Circle().fill(background))
+            .modifier(CallButtonGlass(kind: kind))
+            .modifier(CallGlassMorphModifier(tag: morph, reduceMotion: reduceMotion))
             .accessibilityHidden(true)
     }
 
@@ -38,14 +43,6 @@ struct CallPillGlyph: View {
         case .normal, .destructive: return .white
         case .active: return MeeshyColors.indigo950
         case .warning: return MeeshyColors.warning
-        }
-    }
-
-    private var background: Color {
-        switch kind {
-        case .normal, .warning: return Color.white.opacity(0.12)
-        case .active: return .white
-        case .destructive: return MeeshyColors.error
         }
     }
 }
@@ -80,7 +77,7 @@ struct CallPillButton: View {
     let label: String
     var caption: String? = nil
     var hint: String? = nil
-    /// `nil` : le bouton n'est pas une bascule (Fin, Retourner, Messages…).
+    /// `nil` : le bouton n'est pas une bascule (Fin, Retourner…).
     var toggleState: Bool? = nil
     var diameter: CGFloat = 48
     let action: () -> Void

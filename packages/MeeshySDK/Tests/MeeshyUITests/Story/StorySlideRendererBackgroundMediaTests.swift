@@ -107,4 +107,37 @@ final class StorySlideRendererBackgroundMediaTests: XCTestCase {
         XCTAssertGreaterThan(corner.b, 150, "corner should be the blue bg colour")
         XCTAssertLessThan(corner.r, 110)
     }
+
+    // MARK: - Le cadrage et le fond du panneau Cadre (#8414)
+
+    /// **Un fond AJUSTÉ se rend entier**, et ses bandes prennent le fond choisi.
+    /// Le composite est la miniature, la couverture ET le sol du composer : le
+    /// peindre REMPLI quand la scène est ajustée faisait mentir les trois.
+    func test_renderComposite_unFondAjuste_peintSesBandesDuFondChoisi() throws {
+        let bgMedia = StoryMediaObject(id: "bg1", mediaType: "image", aspectRatio: 1.0, isBackground: true)
+        var effects = StoryEffects(background: "0000FF", mediaObjects: [bgMedia])
+        effects.backgroundTransform = StoryBackgroundTransform(videoFitMode: "fit", backdrop: "sand")
+        let composite = try XCTUnwrap(StorySlideRenderer.renderComposite(
+            slide: StorySlide(effects: effects), bgImage: nil, loadedImages: ["bg1": solidImage(.red)]))
+
+        let echelle = composite.scale
+        let bande = try XCTUnwrap(pixel(composite, at: CGPoint(x: 50 * echelle, y: 3 * echelle)))
+        XCTAssertGreaterThan(bande.r, 230, "bande : sable (FDE68A)")
+        XCTAssertGreaterThan(bande.g, 200, "bande : sable (FDE68A)")
+        let centre = try XCTUnwrap(pixel(composite, at: CGPoint(x: 50 * echelle, y: 89 * echelle)))
+        XCTAssertGreaterThan(centre.r, 150, "le média entier au centre")
+        XCTAssertLessThan(centre.g, 90, "le média entier au centre")
+    }
+
+    /// Le FLOU peint les bandes du média lui-même, jamais du noir.
+    func test_renderComposite_unFondAjusteFlou_peintSesBandesDuMedia() throws {
+        let bgMedia = StoryMediaObject(id: "bg1", mediaType: "image", aspectRatio: 1.0, isBackground: true)
+        var effects = StoryEffects(background: "0000FF", mediaObjects: [bgMedia])
+        effects.backgroundTransform = StoryBackgroundTransform(videoFitMode: "fit")
+        let composite = try XCTUnwrap(StorySlideRenderer.renderComposite(
+            slide: StorySlide(effects: effects), bgImage: nil, loadedImages: ["bg1": solidImage(.red)]))
+
+        let bande = try XCTUnwrap(pixel(composite, at: CGPoint(x: 50 * composite.scale, y: 3 * composite.scale)))
+        XCTAssertGreaterThan(bande.r, 120, "bande : le média flouté, pas du noir")
+    }
 }

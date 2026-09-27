@@ -532,7 +532,17 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // (pilule, en-tête, scène connectée, vignette perso, sous-titres). Il sort
     // de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
     // pesait à la sortie.
-    private static let legacyLineCeiling = 45_449
+    //
+    // #8431 — 45 449 → 45 362 (−87). La bande basse du composeur quitte
+    // `StoryViewerView+Canvas.swift` pour `StoryViewerView+CanvasComposerLayer.swift`
+    // (−91 net) AVANT d'y recevoir son repli ; le lecteur y gagne la cession au
+    // composeur (`StoryViewerView` +2, `+Content` +2).
+    //
+    // #8435/#8434 — 45 362 → 45 292 (−70). Le PiP système quitte
+    // `CallManager.swift` pour `CallManager+SystemPiP.swift`, et la
+    // resynchronisation du micro naît dans `CallManager+MuteSync.swift` sans
+    // qu'une ligne nette n'entre dans le fichier hors budget.
+    private static let legacyLineCeiling = 45_292
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

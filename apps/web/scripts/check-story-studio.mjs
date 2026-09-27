@@ -16,7 +16,8 @@
  *     socle — la carte ne passe ni sous ✕/⋯ ni sous la capsule Publier (±1 px),
  *     il prend toute la largeur de l'écran, et seuls les deux rails FLOTTENT
  *     dessus (`position: absolute`). Le sol (`[data-story-studio-floor]`) est
- *     peint dès qu'un fond image est posé.
+ *     peint dès qu'un fond image est posé, puis du thumbhash du COMPOSITE de
+ *     la scène (#8425).
  *  4. Cinq cibles ≥ 44 px : les deux portes, Publier, Retirer (fond), le
  *     bouton son.
  *  5. LA SAISIE EST ALIGNÉE SUR CE QU'ELLE FAIT PEINDRE (défaut 1,
@@ -270,6 +271,14 @@ async function runScheme(colorScheme) {
       await page.evaluate(() => document.querySelector('[data-story-studio-floor] img') !== null),
       `${tag} : un fond image posé doit peindre le sol de la scène`,
     );
+    /* LE SOL DU COMPOSITE (#8425) : dans un vrai navigateur, le rendu réduit
+       de la scène se hache (canvas hors écran, `blob:` de même origine) —
+       le sol quitte l'image de fond pour le hash du RÉSULTAT. */
+    const solHache = await page
+      .waitForSelector('[data-story-studio-floor="hash"]', { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    check(solHache, `${tag} : le sol doit être peint du thumbhash du COMPOSITE de la scène ([data-story-studio-floor="hash"])`);
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */
     const tailles = await targetSizesOf(page, [
@@ -464,6 +473,34 @@ async function runScheme(colorScheme) {
     check(
       afterPublish.value === 'COMMUNITY' && afterPublish.source === 'chosen' && afterPublish.text === '',
       `${tag} : rouvert après publication, le studio doit avoir purgé le brouillon et relu la mémoire (COMMUNITY/chosen, texte vide) — ${JSON.stringify(afterPublish)}`,
+    );
+
+    /* ── LE MODE ANIMÉ (#8415) : la pastille ouvre la frise, les rails se
+       retirent, la tête de lecture AVANCE sur l'horloge du moteur, et la
+       refermer rend les rails. ─────────────────────────────────────────── */
+    await page.fill('#story-studio-text', 'Animé');
+    await page.click('[data-story-animated]');
+    await page.waitForSelector('[data-story-timeline] [data-story-track]', { timeout: 8000 });
+    const avant = await page.evaluate(() => document.querySelector('[data-story-timeline-head]')?.style.left ?? null);
+    // Une CONDITION, jamais un délai fixe : la tête doit quitter sa position.
+    await page
+      .waitForFunction((depart) => {
+        const left = document.querySelector('[data-story-timeline-head]')?.style.left ?? null;
+        return left !== null && left !== depart && left !== '0%';
+      }, avant, { timeout: 4000 })
+      .catch(() => undefined);
+    const anime = await page.evaluate(() => ({
+      tete: document.querySelector('[data-story-timeline-head]')?.style.left ?? null,
+      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+      pistes: document.querySelectorAll('[data-story-track]').length,
+      publier: document.querySelector('[data-story-publish]') !== null,
+    }));
+    check(anime.rails === 0 && anime.pistes >= 1 && anime.publier, `${tag} : frise ouverte, rails retirés, une piste par objet, Publier gardé — ${JSON.stringify(anime)}`);
+    check(avant !== anime.tete && anime.tete !== '0%', `${tag} : la tête de lecture doit avancer pendant la lecture (${avant} → ${anime.tete})`);
+    await page.click('[data-story-animated]');
+    check(
+      await page.evaluate(() => document.querySelector('[data-story-timeline]') === null && document.querySelectorAll('[data-story-studio-rail]').length === 2),
+      `${tag} : refermer Animé rend les deux rails`,
     );
 
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);

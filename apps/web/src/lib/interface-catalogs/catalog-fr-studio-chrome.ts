@@ -30,6 +30,19 @@ const frStudioChrome = {
   'story.studio.backdrop.white': 'Blanc',
   'story.studio.backdrop.indigo': 'Indigo',
   'story.studio.backdrop.sand': 'Sable',
+  'story.studio.animated': 'Animé',
+  'story.studio.timeline': 'Frise de la scène',
+  'story.studio.timeline.play': 'Lire',
+  'story.studio.timeline.pause': 'Pause',
+  'story.studio.timeline.start': 'Début de {name}',
+  'story.studio.timeline.end': 'Fin de {name}',
+  'story.studio.timeline.empty': 'Écrivez un texte ou posez un calque : chaque objet y prend sa piste.',
+  'story.studio.timeline.overlay': 'Calque',
+  'story.studio.retouch.title': 'Retoucher l’image',
+  'story.studio.retouch.done': 'Terminé',
+  'story.studio.retouch.cancel': 'Abandonner la retouche',
+  'composer.attachment.edit': 'Éditer {name}',
+  'story.studio.retouch.failed': 'L’image n’a pas pu être rendue.',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

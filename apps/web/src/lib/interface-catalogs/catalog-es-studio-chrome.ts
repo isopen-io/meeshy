@@ -27,6 +27,19 @@ const esStudioChrome = {
   'story.studio.backdrop.white': 'Blanco',
   'story.studio.backdrop.indigo': 'Índigo',
   'story.studio.backdrop.sand': 'Arena',
+  'story.studio.animated': 'Animado',
+  'story.studio.timeline': 'Línea de tiempo de la escena',
+  'story.studio.timeline.play': 'Reproducir',
+  'story.studio.timeline.pause': 'Pausa',
+  'story.studio.timeline.start': 'Inicio de {name}',
+  'story.studio.timeline.end': 'Fin de {name}',
+  'story.studio.timeline.empty': 'Escribe un texto o coloca una capa: cada objeto tiene su pista.',
+  'story.studio.timeline.overlay': 'Capa',
+  'story.studio.retouch.title': 'Editar la imagen',
+  'story.studio.retouch.done': 'Listo',
+  'story.studio.retouch.cancel': 'Descartar la edición',
+  'composer.attachment.edit': 'Editar {name}',
+  'story.studio.retouch.failed': 'No se pudo generar la imagen.',
 } satisfies StudioChromeCatalogSlice;
 
 export default esStudioChrome;

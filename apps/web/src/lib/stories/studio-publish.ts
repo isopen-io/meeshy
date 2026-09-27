@@ -131,6 +131,7 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
   return {
     id: page.id,
     texts: page.texts,
+    ...(page.duration !== undefined ? { duration: page.duration } : {}),
     ...(background !== undefined && page.background !== null
       ? {
           background: {
@@ -148,6 +149,7 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
             mediaType: page.overlay.mediaType,
             ...(page.overlay.aspectRatio !== undefined ? { aspectRatio: page.overlay.aspectRatio } : {}),
             pose: page.overlay.pose,
+            ...(page.overlay.timing !== undefined ? { timing: page.overlay.timing } : {}),
           },
         }
       : {}),
