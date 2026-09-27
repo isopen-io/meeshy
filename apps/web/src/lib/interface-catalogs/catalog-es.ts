@@ -28,6 +28,7 @@ import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
 import esQuote from './catalog-es-quote';
+import esContactDiscovery from './catalog-es-contact-discovery';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -461,9 +462,6 @@ const es = {
   'settings.privacy.read_receipts.info':
     'Es recíproco: si no envías confirmaciones de lectura, tampoco verás si han leído tus mensajes.',
   'settings.privacy.typing_indicator': 'Indicador de escritura',
-  'settings.privacy.hide_from_search': 'No sugerirme a quien tenga mi número o mi correo',
-  'settings.privacy.hide_from_search.info':
-    'Tus contactos no te encontrarán por tu número o tu correo, y no se les avisará de tu llegada.',
   'settings.section.appearance': 'Apariencia',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1166,6 +1164,7 @@ const es = {
   ...esStoriesMine,
   ...esContactCard,
   ...esQuote,
+  ...esContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default es;

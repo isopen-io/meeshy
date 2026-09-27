@@ -17,6 +17,7 @@ import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-h
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
 import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
+import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifications/contact-recently-active';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -378,6 +379,9 @@ export class AuthHandler {
       }
 
       await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
+      // « X était sur Meeshy récemment » (#8285) : APRÈS l'écriture d'activité,
+      // jamais en ligne — la tâche porte son verrou de 3 h et ses erreurs.
+      scheduleContactRecentlyActiveAnnouncement(this.prisma, user.id);
     }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {

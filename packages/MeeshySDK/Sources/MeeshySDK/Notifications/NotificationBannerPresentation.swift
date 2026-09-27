@@ -131,7 +131,9 @@ public extension SocketNotificationEvent {
             // pas. `subtitle` est la phrase d'action localisée. Leur somme EST
             // le titre riche que le serveur persiste — on ne le réécrit pas ici.
             let head = nonBlank(title) ?? actor
-            guard let action = nonBlank(subtitle) else { return head }
+            // Un titre serveur qui PORTE déjà l'action (« Marie était sur
+            // Meeshy récemment ») ne la reçoit pas une seconde fois.
+            guard let action = nonBlank(subtitle), !head.hasSuffix(action) else { return head }
             return "\(head) \(action)"
         }
     }

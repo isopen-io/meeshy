@@ -65,6 +65,10 @@ export const PrivacyPreferenceSchema = z.object({
   // Blocage et filtrage
   blockScreenshots: z.boolean().default(false),
   hideProfileFromSearch: z.boolean().default(false),
+  // « Prévenir mes contacts quand je reviens sur Meeshy » (#8285) — OPT-OUT
+  // (défaut `true`, décision porteur 2026-09-27). Coupé, ou `showOnlineStatus`
+  // coupé, rien ne part. Lue par `services/gateway/…/contact-recently-active.ts`.
+  notifyContactsOnReturn: z.boolean().default(true),
 
   // Encryption et sécurité
   encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),
@@ -111,6 +115,7 @@ export const PRIVACY_PREFERENCE_DEFAULTS: PrivacyPreference = {
   shareUsageData: false,
   blockScreenshots: false,
   hideProfileFromSearch: false,
+  notifyContactsOnReturn: true,
   encryptionPreference: 'optional',
   autoEncryptNewConversations: false,
   showEncryptionStatus: true,

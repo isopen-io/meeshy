@@ -59,6 +59,7 @@
 - [Le sous-arbre `dma-interoperability` est COMPILÉ (2026-08-22, cycle 94)](decisions/le-sous-arbre-dma-interoperability-est-compile-2026-08-22-cycle-94.md)
 - [L'amnistie de type-check est SCINDÉE, pas levée (2026-08-23, cycle 105 bis)](decisions/l-amnistie-de-type-check-est-scindee-pas-levee-2026-08-23-cycle-105-bis.md)
 - [Visibilité de la présence : soi / ami accepté / ADMIN+ — le partage d'une conversation ou d'une communauté ne donne rien (2026-08-25)](decisions/visibilite-de-la-presence-soi-ami-accepte-admin-le-partage-d-une-conversation.md)
+- [Le retour d'un contact s'annonce, une fois toutes les 3 heures — l'unique exception à la visibilité de la présence (2026-09-27, #8285)](decisions/2026-09-27-le-retour-d-un-contact-s-annonce-une-fois-toutes-les-3-heures.md)
 - [Retirer un lien de partage retire l'accès à ses invités (2026-08-28, cycle 131 bis)](decisions/retirer-un-lien-de-partage-retire-l-acces-a-ses-invites-2026-08-28-cycle-131-bis.md)
 - [La succession du créateur est UNE loi, et elle est totale (2026-08-30, #4058)](decisions/la-succession-du-createur-est-une-loi-et-elle-est-totale-2026-08-30-4058.md)
 - [Suppression de compte — ce qui part, ce qui reste anonymisé, ce qui survit (#4225)](decisions/suppression-de-compte-ce-qui-part-ce-qui-reste-anonymise-ce-qui-survit-4225.md)

@@ -20,6 +20,8 @@ const INITIAL: AppPreferences = {
   showTypingIndicator: true,
   hideProfileFromSearch: false,
   acceptCallsFromNonContacts: true,
+  notifyContactsOnReturn: true,
+  contactActivityEnabled: true,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };
