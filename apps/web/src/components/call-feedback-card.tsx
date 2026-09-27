@@ -105,7 +105,7 @@ export function CallFeedbackCard({
                     type="button"
                     aria-pressed={on}
                     onClick={() => toggle(issue)}
-                    className="min-h-9 rounded-chip px-3 text-check"
+                    className="min-h-11 rounded-chip px-3 text-check"
                     style={{
                       backgroundColor: on ? 'var(--color-ios-brand)' : 'var(--color-ios-surface)',
                       color: on ? '#fff' : 'var(--color-ios-ink)',

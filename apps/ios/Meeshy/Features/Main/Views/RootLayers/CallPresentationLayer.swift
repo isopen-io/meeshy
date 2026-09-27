@@ -210,5 +210,6 @@ struct CallPresentationLayer: ViewModifier {
                     .padding(.top, MeeshySpacing.sm)
                 }
             }
+            .modifier(CallFeedbackLayer(callManager: callManager))
     }
 }
