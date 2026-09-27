@@ -35,6 +35,10 @@ enum EmailVerificationGateScreen {
 }
 
 private final class GateHostingController: UIHostingController<EmailVerificationGateView>, UIAdaptivePresentationControllerDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage
+    // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     var onSwipeDismiss: (() -> Void)?
 
     override func viewDidLoad() {

@@ -62,16 +62,24 @@ final class EmailVerificationGateControllerTests: XCTestCase {
 
     // MARK: - La validation se présente et tranche
 
+    /// Laisse les tâches du main actor avancer jusqu'à ce que la feuille soit
+    /// présentée — borné, pour qu'un défaut rougisse au lieu de pendre.
+    private func waitUntilPresented(_ presenter: Presenter, count: Int = 1) async {
+        for _ in 0..<200 where presenter.shown.count < count {
+            await Task.yield()
+        }
+    }
+
     func test_verifyEmail_presentsReasonAndAddress_andCodeValidatedAnswersTrue() async {
         let (sut, presenter) = makeSUT(user: makeUser())
 
-        async let answer = sut.verifyEmail(for: .publish)
-        await Task.yield()
+        let answer = Task { await sut.verifyEmail(for: .publish) }
+        await waitUntilPresented(presenter)
         XCTAssertEqual(presenter.shown.map(\.reason), [.publish])
         XCTAssertEqual(presenter.shown.first?.email, "amina@example.test")
 
         presenter.settle?(true)
-        let verified = await answer
+        let verified = await answer.value
         XCTAssertTrue(verified)
         XCTAssertEqual(presenter.dismissCount, 1)
 
@@ -82,14 +90,14 @@ final class EmailVerificationGateControllerTests: XCTestCase {
     func test_verifyEmail_concurrentRequests_shareOnePresentationAndOneAnswer() async {
         let (sut, presenter) = makeSUT(user: makeUser())
 
-        async let first = sut.verifyEmail(for: .publish)
-        async let second = sut.verifyEmail(for: .link)
-        await Task.yield()
-        await Task.yield()
+        let first = Task { await sut.verifyEmail(for: .publish) }
+        await waitUntilPresented(presenter)
+        let second = Task { await sut.verifyEmail(for: .link) }
+        for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(presenter.shown.count, 1)
 
         presenter.settle?(false)
-        let answers = await [first, second]
+        let answers = [await first.value, await second.value]
         XCTAssertEqual(answers, [false, false])
     }
 

@@ -8,9 +8,10 @@ import MeeshySDK
 /// `/conversations/:id/new-link`. `APIClient` — seul site par lequel ces cinq
 /// routes passent — ouvre la validation et REJOUE la même requête : rien du
 /// brouillon n'est perdu.
+@MainActor
 final class EmailVerificationGateTests: XCTestCase {
 
-    private final class FakeGate: EmailVerificationGating, @unchecked Sendable {
+    private final class FakeGate: EmailVerificationGating {
         let knownUnproven: Bool
         let answer: Bool
         private(set) var asked: [EmailGateReason] = []

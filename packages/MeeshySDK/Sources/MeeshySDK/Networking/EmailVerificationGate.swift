@@ -14,6 +14,7 @@ public enum EmailGateReason: String, Sendable, Identifiable {
 /// Celui qui sait si l'adresse du compte courant est prouvée, et qui sait la
 /// faire prouver. Le SDK n'en connaît que ce contrat : la vue, le moment où
 /// elle se présente et ce qu'elle dit restent l'affaire de l'app.
+@MainActor
 public protocol EmailVerificationGating: AnyObject, Sendable {
     /// L'adresse est CONNUE non prouvée — la validation s'ouvre avant l'envoi.
     func emailKnownUnproven() async -> Bool
@@ -53,23 +54,40 @@ public enum EmailVerificationGate {
         set { registry.withLock { $0 = newValue } }
     }
 
-    private static let newLinkPattern = try? NSRegularExpression(pattern: "^/conversations/[^/]+/new-link$")
+    /// Les routes gardées, lues dans le CATALOGUE — jamais recopiées en
+    /// littéral (`ApiPathLiteralGuardTests`).
+    private static let guardedRoutes: [(path: String, reason: EmailGateReason)] = [
+        (PostsEndpoint.root.path, .publish),
+        (PostsEndpoint.fromAttachment.path, .publish),
+        (InvitationsEndpoint.email.path, .invite),
+        (LinksEndpoint.root.path, .link),
+    ]
 
-    /// La raison d'une requête gardée, `nil` pour toute autre.
+    /// Le préfixe d'API du catalogue (`/api/v1`), déduit d'une de ses routes.
+    private static let apiPrefix: String = {
+        let root = PostsEndpoint.root.path
+        return root.lastIndex(of: "/").map { String(root[..<$0]) } ?? ""
+    }()
+
+    /// `…/conversations/<id>/new-link` : le préfixe et le suffixe autour de
+    /// l'identifiant, lus dans le catalogue.
+    private static let newLinkShape: (prefix: String, suffix: String) = {
+        let marker = "\u{1}"
+        let parts = ConversationsEndpoint.byIdNewLink(id: marker).path.components(separatedBy: marker)
+        return (parts.first ?? "", parts.last ?? "")
+    }()
+
+    /// La raison d'une requête gardée, `nil` pour toute autre. Le chemin peut
+    /// être complet (`/api/v1/posts`) ou relatif au préfixe d'API (`/posts`,
+    /// un chemin persisté de la file hors-ligne).
     public static func reason(method: String, path: String) -> EmailGateReason? {
         guard method.uppercased() == "POST" else { return nil }
         let route = routePath(path)
-        switch route {
-        case "/posts", "/posts/from-attachment":
-            return .publish
-        case "/invitations/email":
-            return .invite
-        case "/links":
-            return .link
-        default:
-            let range = NSRange(route.startIndex..., in: route)
-            return newLinkPattern?.firstMatch(in: route, range: range) != nil ? .link : nil
-        }
+        if let hit = guardedRoutes.first(where: { $0.path == route }) { return hit.reason }
+        let (prefix, suffix) = newLinkShape
+        guard route.hasPrefix(prefix), route.hasSuffix(suffix), route.count > prefix.count + suffix.count else { return nil }
+        let id = route.dropFirst(prefix.count).dropLast(suffix.count)
+        return id.contains("/") ? nil : .link
     }
 
     /// Le corps demande une STORY — jamais retenue d'avance (#7907).
@@ -113,7 +131,7 @@ public enum EmailVerificationGate {
     private static func routePath(_ path: String) -> String {
         let withoutQuery = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
         let absolute = withoutQuery.hasPrefix("http") ? (URLComponents(string: withoutQuery)?.path ?? withoutQuery) : withoutQuery
-        return absolute.hasPrefix("/api/v1/") ? String(absolute.dropFirst("/api/v1".count)) : absolute
+        return absolute.hasPrefix(apiPrefix + "/") ? absolute : apiPrefix + absolute
     }
 }
 
