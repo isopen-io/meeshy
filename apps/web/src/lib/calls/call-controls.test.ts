@@ -1,0 +1,104 @@
+import { describe, expect, test } from 'bun:test';
+
+import { callControlSet, chromeHidden, CHROME_IDLE_MS, controlsArrangement, isVideoScene } from './call-controls';
+import type { ActiveCall, CallMember } from './call-store';
+
+/**
+ * LES COMMANDES DE L'APPEL EN « C ADAPTÉ » (#8391) — ce que `(…)` sort, où
+ * ça sort, et quand une vidéo efface ses commandes.
+ */
+
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
+
+const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }] } as unknown as MediaStream;
+
+const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) => ({
+  phase: { kind: 'connected' } as ActiveCall['phase'],
+  callId: 'call-1',
+  cameraOn: false,
+  screenSharing: false,
+  conversationId: 'c-1',
+  canShare: true,
+  ...overrides,
+});
+
+describe('ce que (…) sort', () => {
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer, Messages', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record', 'messages'] });
+  });
+
+  test('Retourner n’existe que caméra allumée, juste après Caméra', () => {
+    expect(callControlSet(context({ cameraOn: true })).mine).toEqual(['camera', 'flip', 'screen']);
+  });
+
+  test('sans getDisplayMedia, Écran n’est jamais promis — sauf pour arrêter un partage en cours', () => {
+    expect(callControlSet(context({ canShare: false })).mine).toEqual(['camera']);
+    expect(callControlSet(context({ canShare: false, screenSharing: true })).mine).toEqual(['camera', 'screen']);
+  });
+
+  test('pendant la sonnerie : ni Écran, ni Sous-titres, ni Enregistrer — Caméra et Messages restent', () => {
+    expect(callControlSet(context({ phase: { kind: 'outgoing' } }))).toEqual({ mine: ['camera'], call: ['messages'] });
+  });
+
+  test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
+    expect(callControlSet(context({ callId: null })).call).toEqual(['captions', 'messages']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'messages']);
+  });
+
+  test('Messages seulement quand on connaît la conversation', () => {
+    expect(callControlSet(context({ conversationId: '' })).call).toEqual(['captions', 'record']);
+  });
+});
+
+describe('où les actions sortent', () => {
+  test('en duo : deux rails ; en groupe : des rangées dans la pilule', () => {
+    expect(controlsArrangement({ isGroup: false })).toBe('rails');
+    expect(controlsArrangement({ isGroup: true })).toBe('rows');
+  });
+});
+
+describe('la scène vidéo', () => {
+  const call = (overrides: Partial<Parameters<typeof isVideoScene>[0]> = {}) => ({ members: {}, cameraOn: false, remoteStreams: {}, isGroup: false, phase: { kind: 'connected' } as ActiveCall['phase'], ...overrides });
+
+  test('un appel vocal n’est jamais une scène vidéo', () => {
+    expect(isVideoScene(call({ members: { a: member() } }))).toBe(false);
+  });
+
+  test('ma caméra, celle du pair ou un écran partagé en font une', () => {
+    expect(isVideoScene(call({ cameraOn: true }))).toBe(true);
+    expect(isVideoScene(call({ members: { a: member({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } }))).toBe(true);
+    expect(isVideoScene(call({ members: { a: member({ screenSharing: true }) }, remoteStreams: { 'u-a': liveVideo } }))).toBe(true);
+  });
+
+  test('une grille de groupe sans aucune caméra reste un appel vocal', () => {
+    const members = { a: member(), b: member({ userId: 'u-b' }) };
+    expect(isVideoScene(call({ isGroup: true, members }))).toBe(false);
+    expect(isVideoScene(call({ isGroup: true, members: { ...members, b: member({ userId: 'u-b', cameraOn: true }) } }))).toBe(true);
+  });
+
+  test('pendant la sonnerie, rien ne s’efface', () => {
+    expect(isVideoScene(call({ cameraOn: true, phase: { kind: 'outgoing' } }))).toBe(false);
+  });
+});
+
+describe('le masquage automatique', () => {
+  const state = (overrides: Partial<Parameters<typeof chromeHidden>[0]> = {}) => ({ videoScene: true, idleMs: CHROME_IDLE_MS, keyboardInside: false, reducedMotion: false, ...overrides });
+
+  test('une vidéo efface ses commandes après 4 s sans geste', () => {
+    expect(CHROME_IDLE_MS).toBe(4000);
+    expect(chromeHidden(state())).toBe(true);
+    expect(chromeHidden(state({ idleMs: CHROME_IDLE_MS - 1 }))).toBe(false);
+  });
+
+  test('jamais en audio', () => {
+    expect(chromeHidden(state({ videoScene: false, idleMs: 60_000 }))).toBe(false);
+  });
+
+  test('jamais avec le focus clavier dans les commandes', () => {
+    expect(chromeHidden(state({ keyboardInside: true, idleMs: 60_000 }))).toBe(false);
+  });
+
+  test('jamais sous prefers-reduced-motion', () => {
+    expect(chromeHidden(state({ reducedMotion: true, idleMs: 60_000 }))).toBe(false);
+  });
+});
