@@ -373,11 +373,57 @@ type PreferenceSectionProps = {
    d'adresse depuis le décommissionnement du legacy (#6702) : leur rangée
    « Plus d'options » est MASQUÉE jusqu'à leur portage — jamais une rangée qui
    ne mène nulle part (loi 4). */
-export function PrivacySection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
+export function PrivacySection({
+  language,
+  view,
+  disabled,
+  onToggle,
+  onRetry,
+  children,
+}: PreferenceSectionProps & { readonly children?: ReactNode }) {
   return (
     <GroupedSection id="settings-privacy" title={upper(language, 'settings.privacy.title')} icon={SECTION_ICON({ set: 'socle', name: 'lock' })}>
       <Toggles language={language} view={view} specs={PRIVACY_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
+      {children}
     </GroupedSection>
+  );
+}
+
+/**
+ * **EFFACER MON CARNET D'ADRESSES** (#8167) — miroir du pied de
+ * `PhonebookListView` (iOS). La rangée dit à quoi sert le carnet avant
+ * d'offrir de l'effacer ; le geste ouvre une confirmation (l'écran la porte),
+ * et l'état `erased` — optimiste — la fige jusqu'au prochain montage.
+ */
+export function AddressBookRow({
+  language,
+  state,
+  disabled,
+  onErase,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly state: 'kept' | 'erased';
+  readonly disabled: boolean;
+  readonly onErase: () => void;
+}) {
+  const captionId = useId();
+  const erased = state === 'erased';
+  const label = translate(language, erased ? 'settings.address_book.erased' : 'settings.address_book.erase');
+  return (
+    <button
+      type="button"
+      data-settings-address-book={state}
+      aria-describedby={captionId}
+      disabled={disabled || erased}
+      onClick={onErase}
+      className={`w-full ${ROW_CLASS}`}
+      style={{ ...ROW_STYLE, opacity: disabled && !erased ? 0.5 : 1 }}
+    >
+      <RowIcon tint="var(--color-error)">
+        <GlyphSvg glyph={SETTINGS_GLYPHS.trash} size={15} />
+      </RowIcon>
+      <RowText label={label} caption={translate(language, 'settings.address_book.erase.info')} captionId={captionId} />
+    </button>
   );
 }
 

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { performAddressBookErase, type AddressBookState } from '@/lib/api/address-book';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { canEnterAdmin } from '@/lib/admin/sections';
 import { performPreferenceEdit, type PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
@@ -25,6 +26,7 @@ import { href, navigate } from '@/routes/route-table';
 import {
   AboutSection,
   AccountSection,
+  AddressBookRow,
   AppearanceSection,
   DataSection,
   LogoutButton,
@@ -100,6 +102,8 @@ export default function SettingsScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [addressBook, setAddressBook] = useState<AddressBookState>('kept');
+  const [confirmingErase, setConfirmingErase] = useState(false);
 
   useEffect(() => {
     if (notice === null) return undefined;
@@ -134,6 +138,12 @@ export default function SettingsScreen() {
     });
   };
 
+  const eraseAddressBook = async () => {
+    setConfirmingErase(false);
+    const outcome = await performAddressBookErase({ deps: apiDeps, onState: setAddressBook });
+    setNotice(translate(language, outcome === 'erased' ? 'settings.address_book.done' : 'settings.address_book.failed'));
+  };
+
   const logOut = async () => {
     setConfirming(false);
     setLoggingOut(true);
@@ -152,7 +162,11 @@ export default function SettingsScreen() {
             user={sessionUser === null ? null : { username: sessionUser.username, displayName: sessionUser.displayName ?? null, avatar: sessionUser.avatar ?? null }}
           />
           <AccountSection language={language} />
-          <PrivacySection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
+          <PrivacySection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()}>
+            {enabled ? (
+              <AddressBookRow language={language} state={addressBook} disabled={!online} onErase={() => setConfirmingErase(true)} />
+            ) : null}
+          </PrivacySection>
           <AppearanceSection
             language={language}
             theme={theme}
@@ -190,6 +204,18 @@ export default function SettingsScreen() {
           tone="destructive"
           onConfirm={() => void logOut()}
           onCancel={() => setConfirming(false)}
+        />
+      ) : null}
+      {confirmingErase ? (
+        <ConfirmDialog
+          name="address-book-erase"
+          title={translate(language, 'settings.address_book.confirm.title')}
+          body={translate(language, 'settings.address_book.confirm.body')}
+          cancelLabel={translate(language, 'common.cancel')}
+          confirmLabel={translate(language, 'settings.address_book.confirm.action')}
+          tone="destructive"
+          onConfirm={() => void eraseAddressBook()}
+          onCancel={() => setConfirmingErase(false)}
         />
       ) : null}
       <p
