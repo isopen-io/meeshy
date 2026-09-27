@@ -61,6 +61,9 @@ function useSecondTick(active: boolean): number {
   return now;
 }
 
+/* Refuser et Accepter gardent leur couleur de signal ; le neutre prend le verre d'appel. */
+const SIGNAL_TONE = { danger: { background: HANGUP, color: INK }, accept: { background: ANSWER, color: INK } } as const;
+
 /**
  * Le bouton rond de l'appel entrant et de l'écran de fin. Neutre, il porte le
  * verre d'appel comme tout bouton qui flotte seul (#8432) ; Refuser est rouge,
@@ -95,7 +98,7 @@ function RoundButton({
         {...(control === undefined ? {} : { 'data-call-control': control })}
         onClick={onPress}
         className={`${glass ? 'glass-call ' : ''}grid place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none`}
-        style={glass ? { width: size, height: size } : { width: size, height: size, background: tone === 'danger' ? HANGUP : ANSWER, color: INK }}
+        style={tone === 'plain' ? { width: size, height: size } : { width: size, height: size, ...SIGNAL_TONE[tone] }}
       >
         {glyph}
       </button>
