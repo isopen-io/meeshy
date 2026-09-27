@@ -83,7 +83,7 @@ const EPHEMERAL_ONLY_TYPES = [
   'friend_new_mood',
 ];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
-const PROFILE_TYPES = ['contact_joined'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active'];
 const PROGRESSION_TYPES = [
   'achievement_unlocked',
   'ACHIEVEMENT_UNLOCKED',
