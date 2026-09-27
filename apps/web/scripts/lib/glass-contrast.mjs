@@ -298,6 +298,15 @@ export const GLASS_CONTRAST_INVENTORY = [
     density: 'glass',
     kind: 'text',
   },
+  {
+    /* #8288 — le champ téléphone de l'inscription se pose sur `glass glass-card` ;
+       son chevron de choix de pays est un GLYPHE à l'encre `--ios-ink-3`. */
+    site: 'src/components/signup-phone-glass.tsx — le chevron du choix de pays (#8288)',
+    tone: '--ios-surface-card',
+    ink: '--ios-ink-3',
+    density: 'glass',
+    kind: 'non-text',
+  },
 ];
 
 export const MIN_RATIO = { text: 4.5, 'non-text': 3 };
