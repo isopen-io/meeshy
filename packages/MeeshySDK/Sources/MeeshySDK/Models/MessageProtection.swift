@@ -66,6 +66,10 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
     /// L'état de l'horloge, même quand aucun badge n'en découle (expiré).
     public let ephemeralState: EphemeralDeadline.State
 
+    /// Flamme-œil (#8303) : ni décompte ni pastille — le fil la dit par une
+    /// flamme en filigrane, et elle part quand le lecteur quitte la conversation.
+    public let isAfterRead: Bool
+
     public var isEmpty: Bool { badges.isEmpty }
     public var isExpired: Bool { ephemeralState == .expired }
     public var isViewOnce: Bool { badges.contains(.viewOnce) }
@@ -85,7 +89,8 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
     /// (`ViewOnceChip`, #7619) : un état se dit une fois. L'éphémère et le
     /// flou restent.
     public var withoutViewOnce: MessageProtectionDescriptor {
-        MessageProtectionDescriptor(badges: badges.filter { $0 != .viewOnce }, ephemeralState: ephemeralState)
+        MessageProtectionDescriptor(badges: badges.filter { $0 != .viewOnce }, ephemeralState: ephemeralState,
+                                    isAfterRead: isAfterRead)
     }
 
     /// Aucune protection — le cas de l'écrasante majorité des messages.
@@ -95,9 +100,10 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
         badges: [], ephemeralState: .notEphemeral
     )
 
-    public init(badges: [Badge], ephemeralState: EphemeralDeadline.State) {
+    public init(badges: [Badge], ephemeralState: EphemeralDeadline.State, isAfterRead: Bool = false) {
         self.badges = badges
         self.ephemeralState = ephemeralState
+        self.isAfterRead = isAfterRead
     }
 
     /// Résout le chrome depuis les drapeaux du message et les deux sources
@@ -121,12 +127,15 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
         let declaresEphemeral = flags.contains(.ephemeral)
             || servedExpiresAt != nil
             || (ephemeralDuration ?? 0) > 0
+        // Flamme-œil (#8303) : aucune durée ne décompte. Seule une échéance
+        // SERVIE (la consommation, posée par le serveur) peut la faire échoir.
+        let isAfterRead = flags.contains(.ephemeralAfterRead)
 
         let ephemeralState: EphemeralDeadline.State = declaresEphemeral
             ? EphemeralDeadline.resolve(
                 servedExpiresAt: servedExpiresAt,
-                ephemeralDuration: ephemeralDuration,
-                localReceivedAt: localReceivedAt,
+                ephemeralDuration: isAfterRead ? nil : ephemeralDuration,
+                localReceivedAt: isAfterRead ? nil : localReceivedAt,
                 now: now
             )
             : .notEphemeral
@@ -136,14 +145,15 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
         case .running, .imminent, .awaitingReception:
             // `.running` et `.imminent` portent tous deux un badge : c'est le
             // CHIFFRE qui distingue les deux, pas la présence de la flamme
-            // (#7467). Un éphémère s'annonce dès sa réception.
-            badges.append(.ephemeral(ephemeralState))
+            // (#7467). Un éphémère s'annonce dès sa réception — sauf la
+            // flamme-œil, qui n'a ni décompte ni pastille (#8303).
+            if !isAfterRead { badges.append(.ephemeral(ephemeralState)) }
         case .notEphemeral, .expired:
             break
         }
         if flags.contains(.viewOnce) { badges.append(.viewOnce) }
         if flags.contains(.blurred) { badges.append(.blurred) }
 
-        return MessageProtectionDescriptor(badges: badges, ephemeralState: ephemeralState)
+        return MessageProtectionDescriptor(badges: badges, ephemeralState: ephemeralState, isAfterRead: isAfterRead)
     }
 }

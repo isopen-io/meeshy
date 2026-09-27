@@ -286,8 +286,8 @@ class ConversationViewModel: ObservableObject {
     /// viewing/sending into a conversation they no longer belong to.
     @Published var accessRevoked: Bool = false
 
-    /// Selected ephemeral duration for next message
-    @Published var ephemeralDuration: EphemeralDuration?
+    /// L'éphémère armé pour les prochains messages : la flamme-œil ou une durée (#8303).
+    @Published var ephemeralChoice: EphemeralChoice?
 
     /// When true, next message will be sent with blur (recipient must tap to reveal)
     @Published var isBlurEnabled: Bool = false
@@ -499,6 +499,9 @@ class ConversationViewModel: ObservableObject {
     let messageSocket: MessageSocketProviding
     let networkMonitor: NetworkMonitorProviding
     let offlineQueue: OfflineMessageQueueing
+    /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
+    var afterReadVisit = AfterReadVisit()
+    let afterReadConsumer: AfterReadConsumptionProviding
     private let activeCallService: ActiveCallServiceProviding
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
@@ -582,8 +585,10 @@ class ConversationViewModel: ObservableObject {
         liveCallJoin: LiveCallJoinContext = .live,
         translationService: TranslationServiceProviding = TranslationService.shared,
         attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
-        messageEncryptor: DirectMessageEncrypting = SessionManager.shared
+        messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
+        afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared
     ) {
+        self.afterReadConsumer = afterReadConsumer
         self.activeCallService = activeCallService
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
@@ -988,6 +993,7 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        afterReadVisit.note(displayed: (messageIds ?? []) + visibleIds, among: messages)
         let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
         if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
         sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
@@ -1009,6 +1015,7 @@ class ConversationViewModel: ObservableObject {
     /// aucun `MessageStatusEntry.readAt` individuel n'est gelé pour un
     /// message que le lecteur n'a pas vu bulle par bulle.
     func markCaughtUpFromSummaryOrRiver() {
+        afterReadVisit.noteAll(among: messages)
         guard !hasNewerMessages, let newest = newestServerMessageId() else { return }
         lastCaughtUpMessageId = newest
         sendReadReceipt(messageIds: nil, caughtUpId: newest)

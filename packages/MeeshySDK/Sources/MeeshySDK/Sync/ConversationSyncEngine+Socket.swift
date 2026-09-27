@@ -483,6 +483,17 @@ extension ConversationSyncEngine {
         await cache.dropFromConversationMedia(conversationId: conversationId, messageId: messageId)
     }
 
+    /// **La flamme-œil lue, retirée à la sortie** (#8303) — le MÊME effet local
+    /// qu'un `message:expired` servi : contenu vidé, ligne GRDB marquée, index
+    /// média purgé, mort gravée au registre, aperçu recalculé. Le serveur
+    /// n'émet `message:expired` qu'aux AUTRES appareils du lecteur ; celui qui
+    /// consomme applique donc lui-même ce que les autres recevront.
+    public func expireLocally(conversationId: String, messageIds: [String]) async {
+        for messageId in messageIds {
+            await handleExpiredMessage(MessageExpiredEvent(messageId: messageId, conversationId: conversationId))
+        }
+    }
+
     /// `message:expired` — même effet local que la suppression : contenu vidé,
     /// aperçu recalculé. La table canonique reçoit `.expired`, que l'hôte
     /// applique comme la conversation ouverte (citations scellées, favori

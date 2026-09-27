@@ -63,7 +63,7 @@ extension ConversationViewModel {
     /// d'envoi n'en applique que deux sur trois.
     var armedProtection: MessageProtectionIntent {
         MessageProtectionIntent(
-            ephemeralDurationSeconds: ephemeralDuration?.rawValue,
+            ephemeral: ephemeralChoice,
             isBlurred: isBlurEnabled,
             isViewOnce: isViewOnceEnabled
         )
@@ -82,7 +82,7 @@ extension ConversationViewModel {
     /// upload, à lui faire croire que le prochain envoi sera protégé aussi.
     func consumeArmedProtection() -> MessageProtectionIntent {
         let intent = armedProtection
-        if ephemeralDuration != nil { ephemeralDuration = nil }
+        if ephemeralChoice != nil { ephemeralChoice = nil }
         if isBlurEnabled { isBlurEnabled = false }
         if isViewOnceEnabled { isViewOnceEnabled = false }
         return intent
@@ -102,6 +102,15 @@ extension ConversationViewModel {
     func optimisticEffectFlags(_ intent: MessageProtectionIntent) -> MessageEffectFlags {
         let apparence: MessageEffectFlags = pendingEffects.hasAnyEffect ? pendingEffects.flags : MessageEffectFlags(rawValue: 0)
         return apparence.union(intent.lifecycleFlags)
+    }
+
+    /// Le `effectFlags` du corps REST : l'axe apparition/persistant choisi au
+    /// composeur, uni aux bits de protection qu'aucune colonne ne porte — la
+    /// flamme-œil (#8303). `nil` quand il n'y a rien, comme avant.
+    func wireEffectFlags(_ intent: MessageProtectionIntent) -> UInt32? {
+        let apparence: MessageEffectFlags = pendingEffects.hasAnyEffect ? pendingEffects.flags : []
+        let bits = apparence.union(intent.wireEffectFlags)
+        return bits.isEmpty ? nil : bits.rawValue
     }
 
     // MARK: - Délai de garde de l'envoi REST
@@ -276,6 +285,10 @@ extension ConversationViewModel {
         // Stop typing emission on send
         socketHandler?.stopTypingEmission()
 
+        // La protection de CET envoi, saisie avant toute branche (#8303) : la
+        // file hors ligne la rejoue désormais, elle doit donc la connaître.
+        let intent = protection ?? armedProtection
+
         // Offline: enqueue for later delivery + show optimistic message.
         // NOTE: we only gate on network availability here — NOT on socket
         // connection state. The send path is a plain REST POST which works
@@ -300,7 +313,8 @@ extension ConversationViewModel {
                 attachmentKinds: offlineKinds,
                 location: location,
                 sticker: sticker,
-                attachmentReplyTo: attachmentReplyTo?.attachmentId
+                attachmentReplyTo: attachmentReplyTo?.attachmentId,
+                protection: intent
             )
             // Lieu partagé encodé pour la colonne `locationJson` du record
             // optimiste : une écriture GRDB concurrente déclenche
@@ -341,8 +355,8 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: nil, forwardedFromJson: nil,
-                expiresAt: nil, effectFlags: 0,
-                maxViewOnceCount: nil, viewOnceCount: 0,
+                expiresAt: intent.expiresAt(), effectFlags: optimisticEffectFlags(intent).rawValue,
+                maxViewOnceCount: intent.maxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
                 senderName: authManager.currentUser?.displayName,
@@ -428,7 +442,6 @@ extension ConversationViewModel {
         // eux (rejeu d'outbox, envoi programmatique) : ils lisent ce qui est
         // armé, comme avant. Un chemin ne peut donc pas partir SANS protection
         // par oubli ; il faudrait passer `.none` délibérément.
-        let intent = protection ?? armedProtection
         let resolvedExpiresAt = intent.expiresAt()
         let resolvedEphemeralDuration = intent.ephemeralDurationSeconds
         let resolvedIsViewOnce = intent.isViewOnce
@@ -595,7 +608,7 @@ extension ConversationViewModel {
                 isViewOnce: resolvedIsViewOnce ? true : nil,
                 maxViewOnceCount: resolvedMaxViewOnceCount,
                 isBlurred: resolvedBlur,
-                effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
+                effectFlags: wireEffectFlags(intent),
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId,
@@ -618,6 +631,7 @@ extension ConversationViewModel {
                 && !isEncrypted
                 && (attachmentIds?.isEmpty ?? true)
                 && resolvedExpiresAt == nil
+                && !intent.ephemeralAfterRead
                 && !resolvedIsViewOnce
                 && resolvedBlur != true
                 && !pendingEffects.hasAnyEffect
@@ -720,6 +734,7 @@ extension ConversationViewModel {
             // canal socket ne transporte pas intégralement : ceux-là restent sur
             // le retry REST de l'outbox qui, lui, les préserve.
             let hasSpecialProps = resolvedExpiresAt != nil
+                || intent.ephemeralAfterRead
                 || resolvedIsViewOnce
                 || resolvedBlur == true
                 || pendingEffects.hasAnyEffect
@@ -786,7 +801,8 @@ extension ConversationViewModel {
                 attachmentKinds: retryKinds,
                 location: location,
                 sticker: sticker,
-                attachmentReplyTo: attachmentReplyTo?.attachmentId
+                attachmentReplyTo: attachmentReplyTo?.attachmentId,
+                protection: intent
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).

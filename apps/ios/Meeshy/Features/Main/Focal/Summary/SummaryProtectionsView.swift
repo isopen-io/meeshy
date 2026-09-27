@@ -45,7 +45,8 @@ enum LivingSummaryProtections {
     static func entries(messages: [MeeshyMessage], now: Date = Date()) -> [SummaryProtectionEntry] {
         messages.compactMap { message in
             let descriptor = message.protection(now: now)
-            guard !descriptor.isEmpty else { return nil }
+            // #8303 — la flamme-œil n'a pas de pastille, mais elle va disparaître.
+            guard !descriptor.isEmpty || descriptor.isAfterRead else { return nil }
             return SummaryProtectionEntry(
                 id: message.id,
                 senderDisplayName: message.senderName ?? message.senderUsername ?? message.senderId,
@@ -74,6 +75,10 @@ struct SummaryProtectionsView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     ForEach(entries) { entry in
                         HStack(spacing: MeeshySpacing.sm) {
+                            // #8303 — la flamme-œil n'a pas de pastille : son pictogramme la désigne.
+                            if entry.descriptor.isAfterRead {
+                                FlameEyeGlyph(size: 18, tint: ComposerProtection.ephemeral.tint)
+                            }
                             Text(entry.senderDisplayName)
                                 .font(MeeshyFont.relative(13, weight: .semibold))
                                 .foregroundColor(isDark ? .white.opacity(0.9) : .black.opacity(0.85))
