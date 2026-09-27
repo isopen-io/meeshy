@@ -23,6 +23,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 jest.mock('../../../../services/auth/email-verification-watch', () => ({
   pendingSessionTokenFor: jest.fn(async () => ({ pendingSessionToken: 'attente-opaque' })),
+  pendingSessionTokenForAccount: jest.fn(async () => ({ pendingSessionToken: 'attente-du-compte' })),
 }));
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -237,6 +238,7 @@ describe('inscription SANS numéro — actif tout de suite, pendant le délai de
     expect(res.json().data.status).toBeUndefined();
     expect(res.json().data.token).toBe('jwt-token');
     expect(res.json().data.sessionToken).toBe('session-token-inscription');
+    expect(res.json().data.pendingSessionToken).toBe('attente-du-compte');
     expect(res.json().data.user.activation).toEqual(ACTIVATION_QUIET);
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
     await app.close();
