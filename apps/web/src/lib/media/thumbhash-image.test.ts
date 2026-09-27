@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { averageColorOfThumbHash } from './thumbhash';
-import { thumbHashImage, thumbHashToRgba } from './thumbhash-image';
+import { rgbaToThumbHash, thumbHashImage, thumbHashToBase64, thumbHashToRgba } from './thumbhash-image';
 
 /** Un hash RÉEL du corpus (fixtures du fil) — paysage, sans alpha. */
 const HASH = '3nQFFAT4WIiod4WYZ6joeo+u9w==';
@@ -55,5 +55,51 @@ describe('thumbHashImage — un `data:` BMP, sans canvas, identique sur les troi
     expect(thumbHashImage(undefined)).toBeUndefined();
     expect(thumbHashImage('')).toBeUndefined();
     expect(thumbHashImage('%%%')).toBeUndefined();
+  });
+});
+
+/** L'ENCODEUR (#8425) — pour hacher le COMPOSITE de la scène au composer :
+ * un aller-retour encodage → décodage rend l'image qu'on a donnée. */
+describe('rgbaToThumbHash — encoder un rendu réduit, le relire', () => {
+  const gradient = (w: number, h: number) => {
+    const rgba = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        rgba[i] = Math.round((255 * x) / (w - 1));
+        rgba[i + 1] = 80;
+        rgba[i + 2] = Math.round((255 * y) / (h - 1));
+        rgba[i + 3] = 255;
+      }
+    }
+    return rgba;
+  };
+
+  test('portrait 9:16 : le hash relu est vertical et garde la moyenne', () => {
+    const rgba = gradient(56, 100);
+    const decoded = thumbHashToRgba(rgbaToThumbHash(56, 100, rgba))!;
+    expect(decoded.height).toBe(32);
+    expect(decoded.width).toBeLessThan(decoded.height);
+    const mean = (img: Uint8Array, o: number) => {
+      let sum = 0;
+      for (let i = o; i < img.length; i += 4) sum += img[i]!;
+      return sum / (img.length / 4);
+    };
+    expect(Math.abs(mean(decoded.rgba, 0) - mean(rgba, 0))).toBeLessThan(16);
+    expect(Math.abs(mean(decoded.rgba, 2) - mean(rgba, 2))).toBeLessThan(16);
+  });
+
+  test('le dégradé survit : la gauche reste plus sombre en rouge que la droite', () => {
+    const decoded = thumbHashToRgba(rgbaToThumbHash(56, 100, gradient(56, 100)))!;
+    const row = 16 * decoded.width * 4;
+    expect(decoded.rgba[row]!).toBeLessThan(decoded.rgba[row + (decoded.width - 1) * 4]!);
+  });
+
+  test('au-delà de 100 px de côté, l’encodeur refuse', () => {
+    expect(() => rgbaToThumbHash(101, 10, new Uint8Array(101 * 10 * 4))).toThrow();
+  });
+
+  test('le hash se sert en base64, relu par `thumbHashImage`', () => {
+    expect(thumbHashImage(thumbHashToBase64(rgbaToThumbHash(56, 100, gradient(56, 100))))).toMatch(/^data:image\/bmp;base64,/);
   });
 });

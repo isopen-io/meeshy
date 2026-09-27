@@ -16,7 +16,8 @@
  *     socle — la carte ne passe ni sous ✕/⋯ ni sous la capsule Publier (±1 px),
  *     il prend toute la largeur de l'écran, et seuls les deux rails FLOTTENT
  *     dessus (`position: absolute`). Le sol (`[data-story-studio-floor]`) est
- *     peint dès qu'un fond image est posé.
+ *     peint dès qu'un fond image est posé, puis du thumbhash du COMPOSITE de
+ *     la scène (#8425).
  *  4. Cinq cibles ≥ 44 px : les deux portes, Publier, Retirer (fond), le
  *     bouton son.
  *  5. LA SAISIE EST ALIGNÉE SUR CE QU'ELLE FAIT PEINDRE (défaut 1,
@@ -270,6 +271,14 @@ async function runScheme(colorScheme) {
       await page.evaluate(() => document.querySelector('[data-story-studio-floor] img') !== null),
       `${tag} : un fond image posé doit peindre le sol de la scène`,
     );
+    /* LE SOL DU COMPOSITE (#8425) : dans un vrai navigateur, le rendu réduit
+       de la scène se hache (canvas hors écran, `blob:` de même origine) —
+       le sol quitte l'image de fond pour le hash du RÉSULTAT. */
+    const solHache = await page
+      .waitForSelector('[data-story-studio-floor="hash"]', { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    check(solHache, `${tag} : le sol doit être peint du thumbhash du COMPOSITE de la scène ([data-story-studio-floor="hash"])`);
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */
     const tailles = await targetSizesOf(page, [

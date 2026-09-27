@@ -221,7 +221,7 @@ export function StudioAssetRow({
         <span
           role={upload.phase === 'failed' ? 'alert' : 'status'}
           className="min-w-0 flex-1 truncate"
-          style={{ color: upload.phase === 'failed' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
+          style={{ color: upload.phase === 'failed' ? 'var(--color-error)' : 'var(--color-ios-ink)' }}
         >
           {upload.phase === 'uploading'
             ? translate(lang, 'story.studio.upload.progress', { percent: String(Math.round(upload.progress * 100)) })
