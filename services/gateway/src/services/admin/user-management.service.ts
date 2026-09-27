@@ -221,6 +221,7 @@ export class UserManagementService {
     // `utils/password-hash`, et il n'y a plus de site où le retaper.
     const email = normalizeEmail(data.email);
     await this.assertEmailAvailable(email);
+    await this.assertUsernameAvailable(data.username);
 
     const hashedPassword = await hashPassword(data.password);
 
@@ -330,6 +331,18 @@ export class UserManagementService {
       select: { id: true },
     });
     if (taken) throw new AdminIdentifierTakenError('email');
+  }
+
+  /**
+   * La même question pour le pseudonyme (#8217) — celle que pose
+   * l'inscription publique (`registration-identity.ts`), insensible à la casse.
+   */
+  private async assertUsernameAvailable(username: string): Promise<void> {
+    const taken = await this.prisma.user.findFirst({
+      where: { username: { equals: username, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (taken) throw new AdminIdentifierTakenError('username');
   }
 
   private async emailDiffersFromCurrent(userId: string, email: string): Promise<boolean> {

@@ -40,6 +40,7 @@ import { registerUserPasswordProposalRoutes } from './user-password-proposals';
 import { registerUserProfileReadRoutes } from './user-profile-reads';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
+import { registerUserProfileImageRoutes } from './user-profile-images';
 import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -145,6 +146,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // préférences lues / écrites sous les gardes des écritures de compte.
   registerUserMemberStatsRoutes(fastify);
   registerUserMemberPreferencesRoutes(fastify, { userAuditService });
+
+  // Photo et bannière posées par l'administration (#8217) : téléversées, ou
+  // choisies parmi les images DÉJÀ publiques du membre.
+  registerUserProfileImageRoutes(fastify, { userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
