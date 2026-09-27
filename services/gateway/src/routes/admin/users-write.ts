@@ -15,6 +15,7 @@ import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalE
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 import { logError } from '../../utils/logger.js';
+import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 
 /**
  * Les écritures d'un compte administré, gouvernées par la loi de leur CHAMP (#4154).
@@ -215,6 +216,7 @@ function rendreErreur(
     sendBadRequest(reply, 'Invalid input data');
     return;
   }
+  if (replyIdentifierTaken(reply, error)) return;
   logError(fastify.log, message, error);
   sendInternalError(reply, 'Internal server error', { message });
 }

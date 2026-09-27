@@ -3,12 +3,25 @@
  * — QUATRE niveaux, du plus lisible au plus sûr, et UN seul site qui les
  * compose.
  *
- * | niveau | forme | exemple |
- * |---|---|---|
- * | `simple` | le pseudo (6 lettres au plus) + 3 chiffres | `alice482` |
- * | `easy` | le pseudo capitalisé + `-` + 4 chiffres + 1 symbole | `Alice-4821!` |
- * | `medium` | le pseudo capitalisé + `.` + 4 alphanumériques + 1 symbole + 4 chiffres | `Alice.k7Qm!4821` |
- * | `hard` | 20 caractères aléatoires, sans lien avec le pseudo | `Xq4!mR9…` |
+ * | niveau | longueur | forme | exemples |
+ * |---|---|---|---|
+ * | `simple` | 6 | 4 lettres + 2 chiffres, ou lettre doublée + 4 chiffres | `zert34`, `AA4545` |
+ * | `easy` | 8 | 4 lettres + 4 chiffres, 4 lettres + lettre doublée + 2 chiffres, ou 4 lettres + 3 chiffres + symbole | `qsdf2334`, `KKYuio55`, `alic345@` |
+ * | `medium` | 12 | 4 lettres capitalisées + `.` + 3 alphanumériques + 1 symbole + 3 chiffres | `Zert.k7Q!482` |
+ * | `hard` | 16 | aléatoire, sans lien avec le pseudo | `Xq4!mR9…` |
+ *
+ * Les « 4 lettres » sont une suite de touches voisines au clavier (`zert`,
+ * `qsdf`) ou, une fois sur trois, le début du pseudo ; les chiffres sont
+ * voisins ou répétés ; l'ordre des morceaux est tiré au hasard.
+ *
+ * ## Faciles à taper, sans se deviner depuis le pseudo (#8192, #8220)
+ *
+ * Décisions porteur du 2026-09-27 : les niveaux se complètent de chiffres, le
+ * pseudo n'y entre que PARFOIS, et chaque niveau a sa longueur — 6, 8, 12,
+ * 16. L'ancienne forme (pseudo + 3 ou 4 chiffres) ne laissait que 512 ou
+ * 16 384 secrets à qui connaît le pseudo, qui est public. Le tirage des
+ * morceaux ET de leur ordre élargit l'espace, dans la limite de ce qu'une
+ * longueur de 6 permet.
  *
  * ## Pourquoi c'est la passerelle qui compose
  *
@@ -62,8 +75,29 @@ const DIGITS = '23456789';
 const ALPHANUMERIC = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const SYMBOLS = '!?#*';
 const HARD_ALPHABET = `${ALPHANUMERIC}!@#$%^&*_+=?-`;
+const SIMPLE_SYMBOLS = '!?#*@';
+const PAIR_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
+const PSEUDO_ODDS = 3;
+const WORD_LENGTH = 4;
 
-export const HARD_PASSWORD_LENGTH = 20;
+const KEYBOARD_ROWS = ['azertyuiop', 'qsdfghjkm', 'wxcvbn', 'qwertyuiop', 'asdfghjk', 'zxcvbnm'];
+const KEYBOARD_RUNS: readonly string[] = [
+  ...new Set(
+    KEYBOARD_ROWS.flatMap((row) =>
+      Array.from({ length: row.length - WORD_LENGTH + 1 }, (_, start) => row.slice(start, start + WORD_LENGTH)),
+    ),
+  ),
+];
+
+/** La longueur EXACTE de chaque niveau (directive porteur 2026-09-27, #8220). */
+export const PASSWORD_LEVEL_LENGTHS: Readonly<Record<PasswordProposalLevel, number>> = {
+  simple: 6,
+  easy: 8,
+  medium: 12,
+  hard: 16,
+};
+
+export const HARD_PASSWORD_LENGTH = PASSWORD_LEVEL_LENGTHS.hard;
 export const DRAWS_PER_LEVEL = 16;
 const HARD_DRAWS_CEILING = 64;
 const MIN_BASE_LENGTH = 3;
@@ -93,11 +127,71 @@ const draw = (alphabet: string, length: number, random: RandomBelow): string =>
 
 const capitalized = (word: string): string => `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
 
-const SHAPES: Readonly<Record<PasswordProposalLevel, (base: string, random: RandomBelow) => string>> = {
-  simple: (base, random) => `${base.slice(0, 6)}${draw(DIGITS, 3, random)}`,
-  easy: (base, random) => `${capitalized(base.slice(0, 8))}-${draw(DIGITS, 4, random)}${draw(SYMBOLS, 1, random)}`,
+const pick = <T>(choices: readonly T[], random: RandomBelow): T => choices[random(choices.length)] ?? choices[0]!;
+
+const coin = (random: RandomBelow): boolean => random(2) === 0;
+
+const digitsOf = (values: readonly number[]): string => values.join('');
+
+const digit = (random: RandomBelow): number => 2 + random(8);
+
+/** Deux chiffres voisins ou répétés : `55`, `34`, `43`. */
+const nearPair = (random: RandomBelow): string => {
+  const a = 2 + random(7);
+  return digitsOf(pick([[a, a], [a, a + 1], [a + 1, a]], random));
+};
+
+/** Trois chiffres voisins ou répétés : `345`, `554`, `464`. */
+const nearTriple = (random: RandomBelow): string => {
+  const [a, b] = [digit(random), digit(random)];
+  const c = 2 + random(6);
+  return digitsOf(pick([[c, c + 1, c + 2], [a, a, b], [a, b, a]], random));
+};
+
+/** Quatre chiffres voisins ou répétés : `4545`, `2288`, `2334`, `3456`. */
+const nearQuad = (random: RandomBelow): string => {
+  const [a, b] = [digit(random), digit(random)];
+  const c = 2 + random(6);
+  const d = 2 + random(5);
+  return digitsOf(pick([[a, b, a, b], [a, a, b, b], [c, c + 1, c + 1, c + 2], [d, d + 1, d + 2, d + 3]], random));
+};
+
+/** Quatre lettres faciles à taper : une suite de touches voisines, ou — parfois — le début du pseudo. */
+const easyWord = (base: string, random: RandomBelow): string => {
+  const usesPseudo = base.length >= WORD_LENGTH && random(PSEUDO_ODDS) === 0;
+  const word = usesPseudo ? base.slice(0, WORD_LENGTH) : pick(KEYBOARD_RUNS, random);
+  return coin(random) ? capitalized(word) : word;
+};
+
+const doubledLetter = (random: RandomBelow): string => pick([...PAIR_LETTERS], random).repeat(2);
+
+const symbolOf = (random: RandomBelow): string => pick([...SIMPLE_SYMBOLS], random);
+
+/** Les morceaux dans un ordre tiré au hasard (Fisher-Yates sur une copie). */
+const shuffled = (chunks: readonly string[], random: RandomBelow): string =>
+  chunks
+    .reduce<string[]>((order, chunk, index) => {
+      const slot = random(index + 1);
+      return [...order.slice(0, slot), chunk, ...order.slice(slot)];
+    }, [])
+    .join('');
+
+type Shape = (base: string, random: RandomBelow) => string;
+
+const oneOf = (shapes: readonly Shape[]): Shape => (base, random) => pick(shapes, random)(base, random);
+
+const SHAPES: Readonly<Record<PasswordProposalLevel, Shape>> = {
+  simple: oneOf([
+    (base, random) => shuffled([easyWord(base, random), nearPair(random)], random),
+    (_base, random) => shuffled([doubledLetter(random), nearQuad(random)], random),
+  ]),
+  easy: oneOf([
+    (base, random) => shuffled([easyWord(base, random), nearQuad(random)], random),
+    (base, random) => shuffled([easyWord(base, random), doubledLetter(random), nearPair(random)], random),
+    (base, random) => `${shuffled([easyWord(base, random), nearTriple(random)], random)}${symbolOf(random)}`,
+  ]),
   medium: (base, random) =>
-    `${capitalized(base.slice(0, 8))}.${draw(ALPHANUMERIC, 4, random)}${draw(SYMBOLS, 1, random)}${draw(DIGITS, 4, random)}`,
+    `${capitalized(easyWord(base, random))}.${draw(ALPHANUMERIC, 3, random)}${draw(SYMBOLS, 1, random)}${draw(DIGITS, 3, random)}`,
   hard: (_base, random) => draw(HARD_ALPHABET, HARD_PASSWORD_LENGTH, random),
 };
 
