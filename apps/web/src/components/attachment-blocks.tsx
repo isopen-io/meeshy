@@ -9,6 +9,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { coqueCourante } from '@/lib/native-shell';
 import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
@@ -417,6 +418,17 @@ function VoiceAttachment({
  * }`) — `isMine` ferme le rapport pour sa propre pièce, jamais l'ouverture
  * elle-même.
  */
+/**
+ * LA COQUE N'A QU'UNE FENÊTRE (#8402) — `target="_blank"` y est ignoré, et
+ * `Bridge.launchIntent` laisse passer `blob:` sans le confier au système : la
+ * WebView naviguerait SUR le fichier en cours d'envoi, à la place de l'app.
+ * La rangée redevient un lien dès que l'envoi rend l'URL de la passerelle.
+ */
+const inShell = (): boolean => {
+  const platform = coqueCourante()?.getPlatform?.();
+  return platform !== undefined && platform !== 'web';
+};
+
 function FileAttachmentRow({
   attachment,
   isMine,
@@ -428,12 +440,11 @@ function FileAttachmentRow({
 }) {
   const lang = currentInterfaceLanguage();
   const name = attachment.originalName;
+  const opensInPlace = inShell() && attachment.fileUrl.startsWith('blob:');
 
   return (
     <a
-      href={attachmentSrc(attachment.fileUrl)}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...(opensInPlace ? {} : { href: attachmentSrc(attachment.fileUrl), target: '_blank', rel: 'noopener noreferrer' })}
       aria-label={translate(lang, 'message-detail.attachment.open', { name })}
       data-attachment-file={attachment.id}
       className="flex items-center gap-2 py-1"
