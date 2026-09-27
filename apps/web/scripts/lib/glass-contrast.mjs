@@ -333,9 +333,19 @@ export const GLASS_CONTRAST_INVENTORY = [
        les commandes posées sur un écran partagé à la une. Les noms de couleur
        des locuteurs y sont mesurés par `call-speaker-color.test.ts`, contre
        CE fond. */
-    site: 'src/components/call-captions-panel.tsx + call-controls-*.tsx — l’encre blanche sur le verre d’appel sombre (#8391, #8393)',
+    site: 'src/components/call-captions-panel.tsx + call-control-*.tsx — l’encre blanche sur le verre d’appel sombre (#8391, #8393)',
     tone: '--ios-indigo-950',
     ink: 'white',
+    density: 'glass-call-prominent',
+    canvas: 'white',
+    kind: 'text',
+  },
+  {
+    /* #8393 — l'encre SECONDE du bandeau des sous-titres : le mode, la note,
+       l'étiquette « EN → FR », l'original déplié, l'heure du journal. */
+    site: 'src/components/call-captions-panel.tsx — l’encre seconde (blanc 72 %) du bandeau des sous-titres (#8393)',
+    tone: '--ios-indigo-950',
+    ink: 'color-mix(in srgb, white 72%, transparent)',
     density: 'glass-call-prominent',
     canvas: 'white',
     kind: 'text',

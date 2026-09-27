@@ -1,30 +1,41 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { CallGrid, Portrait } from '@/components/call-grid';
+import { CallRails } from '@/components/call-control-actions';
+import { CallControlPill } from '@/components/call-control-pill';
+import { Portrait } from '@/components/call-grid';
 import { CallPeerAlerts } from '@/components/call-quality';
-import { StreamVideo } from '@/components/call-media-elements';
-import { CallScreenTools } from '@/components/call-screen-tools';
+import { CallScreenHeader } from '@/components/call-screen-header';
+import { CallStage } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { useCallRemoval } from '@/lib/calls/use-call-removal';
+import { callControlSet, controlsArrangement, isVideoScene } from '@/lib/calls/call-controls';
+import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
+import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { useCallChrome } from '@/lib/calls/use-call-chrome';
+import { useCallRemoval } from '@/lib/calls/use-call-removal';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **L'ÉCRAN D'APPEL** (#6382, #8045) — miroir de `CallView.swift` et
+ * **L'ÉCRAN D'APPEL** (#6382, #8045, #8391) — miroir de `CallView.swift` et
  * d'`IncomingCallView.swift` : toujours sombre (iOS peint l'appel sur fond
  * noir quel que soit le schéma), un portrait pulsé pendant la sonnerie, la
- * durée une fois connecté, la vidéo distante plein cadre avec la vignette
- * locale en coin, une grille pour un groupe, la barre de contrôles en bas.
+ * vidéo distante plein cadre avec la vignette locale en coin, une grille pour
+ * un groupe.
  *
- * Les contrôles suivent l'ordre d'iOS : Micro, Vidéo, Caméra (quand elle
- * tourne), Écran (#8063, là où le navigateur sait partager), Sous-titres
- * (quand l'autre en envoie), Raccrocher. La vignette locale s'inverse d'un
- * toucher avec la vidéo distante, comme sur iOS. L'écran partagé d'un pair
- * prend la scène ENTIER (`contain`), sous une bannière qui le nomme.
+ * Connecté, la vue suit « C adapté » : en bas, une pilule de verre identique en
+ * audio, vidéo et groupe — `(…)` · Micro · Sortie · Fin (`call-control-pill.tsx`) ;
+ * `(…)` sort les actions en deux rails en duo, en rangées dans la pilule en
+ * groupe (`call-control-actions.tsx`) ; en haut, Réduire et la puce « Nom ·
+ * durée » (`call-screen-header.tsx`). En vidéo, tout s'efface après 4 s sans
+ * geste (`use-call-chrome.ts`). Au-dessus d'un écran partagé, fond clair par
+ * nature, les verres prennent leur teinte plus sombre.
+ *
+ * L'appel entrant, l'écran de fin, la pastille, la bulle et la fenêtre PiP ne
+ * changent pas.
  */
 
 const INK = '#ffffff';
@@ -44,46 +55,37 @@ function useSecondTick(active: boolean): number {
   return now;
 }
 
+/** Le bouton rond de l'appel entrant et de l'écran de fin — ceux-là ne changent pas. */
 function RoundButton({
   label,
   glyph,
   onPress,
   tone = 'plain',
-  pressed,
   size = 56,
   caption,
   popup = false,
-  disabled = false,
   control,
-  marker,
 }: {
   readonly label: string;
   readonly glyph: ReactNode;
   readonly onPress: () => void;
-  readonly tone?: 'plain' | 'danger' | 'accept' | 'active';
-  readonly pressed?: boolean;
+  readonly tone?: 'plain' | 'danger' | 'accept';
   readonly size?: number;
   readonly caption?: string;
   readonly popup?: boolean;
-  readonly disabled?: boolean;
   readonly control?: string;
-  readonly marker?: string;
 }) {
-  const background = tone === 'danger' ? HANGUP : tone === 'accept' ? ANSWER : tone === 'active' ? INK : PILL;
-  const color = tone === 'active' ? '#111' : INK;
+  const background = tone === 'danger' ? HANGUP : tone === 'accept' ? ANSWER : PILL;
   return (
     <div className="flex flex-col items-center gap-1.5">
       <button
         type="button"
         aria-label={label}
-        {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
         {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
         {...(control === undefined ? {} : { 'data-call-control': control })}
         onClick={onPress}
-        disabled={disabled}
-        {...(marker === undefined ? {} : { [marker]: '' })}
-        className="grid place-items-center rounded-full transition-transform active:scale-95 disabled:opacity-40"
-        style={{ width: size, height: size, background, color }}
+        className="grid place-items-center rounded-full transition-transform active:scale-95"
+        style={{ width: size, height: size, background, color: INK }}
       >
         {glyph}
       </button>
@@ -96,38 +98,93 @@ function RoundButton({
   );
 }
 
-const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.original', original: 'call.captions.off' } as const satisfies Record<ActiveCall['captionsMode'], PlainCallKey>;
+const CallCaptionsPanel = lazy(() =>
+  import('./call-captions-panel').then((module) => ({
+    default: module.CallCaptionsPanel,
+  })),
+);
 
-const CallCaptionsPanel = lazy(() => import('./call-captions-panel').then((module) => ({ default: module.CallCaptionsPanel })));
-
-const CallDeclineSheet = lazy(() => import('./call-decline-entry').then((module) => ({ default: module.ConnectedCallDeclineSheet })));
+const CallDeclineSheet = lazy(() =>
+  import('./call-decline-entry').then((module) => ({
+    default: module.ConnectedCallDeclineSheet,
+  })),
+);
 
 const screenGlyph = (name: CallScreenGlyphName, size = 24) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
-
-
 const browserCanShare = (): boolean => typeof navigator !== 'undefined' && canShareScreen(navigator.mediaDevices);
 
-export function CallScreen({ call, canShare = browserCanShare() }: { readonly call: ActiveCall; readonly canShare?: boolean }) {
+/** Le plein écran de l'écran partagé : l'API Fullscreen sur la scène, et, sans elle, tout le reste s'efface. */
+function useImmersive(stage: React.RefObject<HTMLElement | null>, available: boolean): readonly [boolean, () => void] {
+  const [immersive, setImmersive] = useState(false);
+  useEffect(() => {
+    const onChange = () => {
+      if (document.fullscreenElement === null) setImmersive(false);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  useEffect(() => {
+    if (available || !immersive) return;
+    setImmersive(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, [available, immersive]);
+  const toggle = () => {
+    const element = stage.current;
+    if (immersive) {
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      setImmersive(false);
+      return;
+    }
+    if (element !== null && typeof element.requestFullscreen === 'function' && document.fullscreenEnabled) void element.requestFullscreen().catch(() => undefined);
+    setImmersive(true);
+  };
+  return [available && immersive, toggle] as const;
+}
+
+type CallScreenProps = {
+  readonly call: ActiveCall;
+  readonly canShare?: boolean;
+  /** Les actions sorties dès l'ouverture — pour un rendu sans geste (témoins, captures). */
+  readonly initiallyExpanded?: boolean;
+};
+
+export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false }: CallScreenProps) {
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
-  const [swapped, setSwapped] = useState(false);
-  const [featuredId, setFeaturedId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
+  const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [declineOpen, setDeclineOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const controls = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const removal = useCallRemoval(call);
   const now = useSecondTick(call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
   const phase = call.phase.kind;
+  const joined = phase === 'connected' || phase === 'reconnecting';
   const statusKey = callStatusKey(call);
-  const members = orderedMembers(call.members);
-  const layout = phase === 'connected' || phase === 'reconnecting' ? callLayout(call) : 'portrait';
-  const firstPeer = members[0];
-  const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
-  const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
+  const layout = joined ? callLayout(call) : 'portrait';
   const live = phase !== 'ended' && phase !== 'incoming';
   const clock = call.connectedAt === null ? null : formatCallClock(elapsedSeconds(call, now));
   const endedClock = phase === 'ended' && call.endedDurationSec !== null && call.endedDurationSec > 0 ? formatCallClock(call.endedDurationSec) : null;
+  const spotlight =
+    layout === 'grid'
+      ? resolveSpotlight({
+          members: orderedMembers(call.members),
+          choice,
+          remoteStreams: call.remoteStreams,
+        })
+      : null;
+  const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
+  const [immersive, toggleImmersive] = useImmersive(stageRef, sharedScreenShown);
+  const chromeHidden = useCallChrome({
+    videoScene: live && isVideoScene(call),
+    root,
+    controls,
+  });
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
-  const selfMirrored = call.facing === 'user' && !call.screenSharing;
+  const set = callControlSet({ ...call, canShare });
+  const arrangement = controlsArrangement(call);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -137,24 +194,6 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
     return () => window.removeEventListener('keydown', onKey);
   }, [live]);
 
-  const header = (
-    <div className="flex min-h-11 items-center justify-between gap-2 px-4">
-      {live ? (
-        <button type="button" aria-label={t('call.minimize')} onClick={callActions.minimize} className="grid size-11 place-items-center rounded-full" style={{ color: INK }}>
-          {screenGlyph('arrowsInSimple', 22)}
-        </button>
-      ) : (
-        <span className="size-11" />
-      )}
-      {call.isGroup && phase !== 'incoming' ? (
-        <span className="truncate text-mini" style={{ color: INK_2 }}>
-          {translate(language, 'call.members', { count: String(Object.keys(call.members).length + 1) })}
-        </span>
-      ) : null}
-      <CallScreenTools call={call} />
-    </div>
-  );
-
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
       <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} />
@@ -163,7 +202,9 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
       </h2>
       {phase === 'incoming' && call.isGroup && call.callerName !== null ? (
         <p className="text-body" style={{ color: INK_2 }}>
-          {translate(language, 'call.incoming.group', { caller: call.callerName })}
+          {translate(language, 'call.incoming.group', {
+            caller: call.callerName,
+          })}
         </p>
       ) : null}
       <p className="text-body" role="status" aria-live="polite" style={{ color: INK_2 }} data-call-status="">
@@ -177,9 +218,9 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
   const pillRow = live ? (
     <>
       {pills.length > 0 ? (
-        <div className="flex flex-wrap justify-center gap-2 px-4">
+        <div className="flex flex-wrap justify-center gap-2 px-4" data-call-pill-row="">
           {pills.map((pill) => (
-            <span key={pill} className="rounded-full px-3 py-1 text-mini" style={{ background: PILL, color: INK }} data-call-pill={pill}>
+            <span key={pill} className="glass-call rounded-full px-3 py-1 text-mini" data-call-pill={pill}>
               {t(STATUS_PILL_KEY[pill])}
             </span>
           ))}
@@ -189,193 +230,84 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
     </>
   ) : null;
 
-  const stage = (() => {
-    if (layout === 'grid') {
-      return (
-        <CallGrid
-          members={members}
-          remoteStreams={call.remoteStreams}
-          self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfMirrored }}
-          featuredId={featuredId}
-          onFeature={setFeaturedId}
-          removal={removal}
-          language={language}
-        />
-      );
-    }
-    if (layout === 'screen' && sharer !== null) {
-      return (
-        <div className="absolute inset-0" data-call-shared-screen="">
-          <StreamVideo
-            stream={call.remoteStreams[sharer.userId] ?? null}
-            mirrored={false}
-            fit="contain"
-            className="absolute inset-0 size-full"
-            label={translate(language, 'call.screen.peerSharing', { name: sharer.name })}
-          />
-          {call.cameraOn ? (
-            <div className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg" style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }} data-call-corner="">
-              <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" />
-            </div>
-          ) : null}
-        </div>
-      );
-    }
-    if (layout === 'video-duo') {
-      const main = swapped ? call.localStream : remoteStream;
-      const corner = swapped ? remoteStream : call.localStream;
-      const mainOn = swapped ? call.cameraOn : remoteVideoOn;
-      const cornerOn = swapped ? remoteVideoOn : call.cameraOn;
-      return (
-        <div className="absolute inset-0">
-          {mainOn ? (
-            <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? t('call.you') : call.title} />
-          ) : (
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="flex flex-col items-center gap-3">
-                <Portrait name={swapped ? t('call.you') : call.title} avatar={swapped ? null : call.avatar} size={96} pulse={false} />
-                <span className="text-body" style={{ color: INK_2 }}>
-                  {t(swapped ? 'call.camera.off' : remoteStream === null ? 'call.video.connecting' : 'call.camera.peerOff')}
-                </span>
-              </div>
-            </div>
-          )}
-          {cornerOn ? (
-            <button
-              type="button"
-              aria-label={t('call.video.swap')}
-              onClick={() => setSwapped((value) => !value)}
-              className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg"
-              style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}
-              data-call-corner=""
-            >
-              <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" />
-            </button>
-          ) : null}
-        </div>
-      );
-    }
-    return null;
-  })();
+  const stage = <CallStage call={call} layout={layout} language={language} choice={choice} onChoose={setChoice} immersive={immersive} onToggleImmersive={toggleImmersive} removal={removal} />;
 
-  const controls = (() => {
-    if (phase === 'incoming') {
-      return (
-        <div className="flex flex-col gap-6">
-          <div className="flex justify-center">
-            <RoundButton
-              label={translate(language, 'callDecline.title')}
-              caption={translate(language, 'callDecline.open')}
-              size={48}
-              glyph={screenGlyph('chatCircleText', 22)}
-              onPress={() => setDeclineOpen(true)}
-              popup
-              control="decline-message"
-            />
-          </div>
-        <div className="flex items-start justify-around gap-6 px-8">
-          <RoundButton label={t('call.decline')} caption={t('call.decline')} tone="danger" size={68} glyph={screenGlyph('phoneDisconnect', 30)} onPress={callActions.decline} />
-          {call.media === 'video' ? (
-            <RoundButton label={t('call.accept.audioOnly')} caption={t('call.accept.audioOnly')} size={68} glyph={<Glyph name="phone" size={28} />} onPress={() => callActions.accept({ audioOnly: true })} />
-          ) : null}
-          <RoundButton
-            label={t('call.accept')}
-            caption={t('call.accept')}
-            tone="accept"
-            size={68}
-            glyph={call.media === 'video' ? screenGlyph('videoCamera', 30) : <Glyph name="phone" size={28} />}
-            onPress={() => callActions.accept()}
-          />
-        </div>
-        </div>
-      );
-    }
-    if (phase === 'ended') {
-      return (
-        <div className="flex items-start justify-center gap-10 px-8">
-          <RoundButton label={t('call.close')} caption={t('call.close')} size={60} glyph={screenGlyph('arrowsInSimple', 24)} onPress={callActions.dismiss} />
-          {canRetry(call) ? <RoundButton label={t('call.retry')} caption={t('call.retry')} tone="accept" size={60} glyph={<Glyph name="phone" size={26} />} onPress={callActions.retry} /> : null}
-        </div>
-      );
-    }
-    const invited = call.captionsMode === 'off' && call.captionPeers.length > 0;
-    const shareOffered = canShare && (phase === 'connected' || phase === 'reconnecting');
-    return (
-      <div className="flex flex-wrap items-start justify-center gap-4 px-4">
+  const incomingControls = (
+    <div className="flex flex-col gap-6">
+      <div className="flex justify-center">
         <RoundButton
-          label={t(call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
-          pressed={call.micMuted}
-          tone={call.micMuted ? 'active' : 'plain'}
-          glyph={call.micMuted ? screenGlyph('microphoneSlash') : <Glyph name="microphone" size={24} />}
-          onPress={callActions.toggleMic}
+          label={translate(language, 'callDecline.title')}
+          caption={translate(language, 'callDecline.open')}
+          size={48}
+          glyph={screenGlyph('chatCircleText', 22)}
+          onPress={() => setDeclineOpen(true)}
+          popup
+          control="decline-message"
         />
-        <RoundButton
-          label={t(call.cameraOn ? 'call.camera.off' : 'call.camera.on')}
-          pressed={call.cameraOn}
-          tone={call.cameraOn ? 'active' : 'plain'}
-          glyph={screenGlyph(call.cameraOn ? 'videoCamera' : 'videoCameraSlash')}
-          onPress={callActions.toggleCamera}
-          disabled={call.screenSharing}
-        />
-        {call.cameraOn ? <RoundButton label={t('call.camera.switch')} glyph={screenGlyph('cameraRotate')} onPress={callActions.switchCamera} /> : null}
-        {shareOffered || call.screenSharing ? (
-          <RoundButton
-            label={t(call.screenSharing ? 'call.screen.stop' : 'call.screen.share')}
-            pressed={call.screenSharing}
-            tone={call.screenSharing ? 'active' : 'plain'}
-            glyph={screenGlyph('monitorArrowUp')}
-            onPress={callActions.toggleScreen}
-            marker="data-call-screen-share"
-          />
-        ) : null}
-        {phase === 'connected' || phase === 'reconnecting' ? (
-          <RoundButton
-            label={t(invited ? 'call.captions.invited' : CAPTIONS_KEY[call.captionsMode])}
-            pressed={call.captionsMode !== 'off'}
-            tone={call.captionsMode === 'off' ? 'plain' : 'active'}
-            glyph={
-              <span className="relative">
-                {screenGlyph('closedCaptioning')}
-                {invited ? <span className="absolute -right-1 -top-1 size-2.5 rounded-full" style={{ background: ANSWER }} /> : null}
-              </span>
-            }
-            onPress={callActions.toggleCaptions}
-            marker="data-call-captions"
-          />
-        ) : null}
-        <RoundButton label={t('call.hangup')} tone="danger" glyph={screenGlyph('phoneDisconnect', 26)} onPress={callActions.hangup} />
       </div>
-    );
-  })();
+      <div className="flex items-start justify-around gap-6 px-8">
+        <RoundButton label={t('call.decline')} caption={t('call.decline')} tone="danger" size={68} glyph={screenGlyph('phoneDisconnect', 30)} onPress={callActions.decline} />
+        {call.media === 'video' ? <RoundButton label={t('call.accept.audioOnly')} caption={t('call.accept.audioOnly')} size={68} glyph={<Glyph name="phone" size={28} />} onPress={() => callActions.accept({ audioOnly: true })} /> : null}
+        <RoundButton label={t('call.accept')} caption={t('call.accept')} tone="accept" size={68} glyph={call.media === 'video' ? screenGlyph('videoCamera', 30) : <Glyph name="phone" size={28} />} onPress={() => callActions.accept()} />
+      </div>
+    </div>
+  );
+
+  const endedControls = (
+    <div className="flex items-start justify-center gap-10 px-8">
+      <RoundButton label={t('call.close')} caption={t('call.close')} size={60} glyph={screenGlyph('arrowsInSimple', 24)} onPress={callActions.dismiss} />
+      {canRetry(call) ? <RoundButton label={t('call.retry')} caption={t('call.retry')} tone="accept" size={60} glyph={<Glyph name="phone" size={26} />} onPress={callActions.retry} /> : null}
+    </div>
+  );
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
+  const hidden = chromeHidden || immersive;
+  /* Les sous-titres ne s'effacent JAMAIS avec les commandes : posés dans le
+     cadre de la pilule déployée d'un groupe, ils en sortent quand elle
+     s'efface, et restent lus (et annoncés) au-dessus de sa place. */
+  const captionsFramed = expanded && arrangement === 'rows' && !hidden;
+  const captions =
+    call.captionsMode === 'off' || !live ? null : (
+      <Suspense fallback={null}>
+        <CallCaptionsPanel call={call} language={language} colorOf={(caption) => (caption.mine ? SELF_SPEAKER_COLOR : speakerColor(caption.speakerId))} surface={captionsFramed ? 'inset' : 'glass'} />
+      </Suspense>
+    );
+  const fade = `transition-opacity duration-300 motion-reduce:transition-none ${hidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`;
 
   return (
     <div
+      ref={root}
       role="dialog"
       aria-modal="true"
       aria-label={translate(language, 'call.a11y.screen', { name: call.title })}
       className="fixed inset-0 z-[200] flex flex-col pb-safe pt-safe"
       style={{ background: BACKDROP, color: INK }}
       data-call-screen={phase}
+      data-call-chrome={hidden ? 'hidden' : 'shown'}
     >
-      {overlayVideo ? stage : null}
+      {overlayVideo ? (
+        <div ref={stageRef} className="absolute inset-0">
+          {stage}
+        </div>
+      ) : null}
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
-        {header}
+        <div className={fade} aria-hidden={hidden ? true : undefined}>
+          <CallScreenHeader call={call} language={language} clock={joined ? clock : null} prominent={sharedScreenShown} />
+        </div>
         {layout === 'grid' ? (
           <>
-            {pillRow}
-            {stage}
+            {immersive ? null : pillRow}
+            <div ref={stageRef} className="flex min-h-0 flex-1 flex-col">
+              {stage}
+            </div>
           </>
         ) : overlayVideo ? (
-          <div className="flex flex-col items-center gap-2 px-6">
-            <span className="rounded-full px-3 py-1 text-body font-semibold" style={{ background: 'rgba(0,0,0,0.35)' }}>
-              {call.title}
-              {clock === null ? null : ` · ${clock}`}
-            </span>
+          <div className={`flex flex-col items-center gap-2 px-6 ${fade}`}>
             {sharer === null ? null : (
-              <span className="rounded-full px-3 py-1 text-mini" style={{ background: 'rgba(0,0,0,0.55)', color: INK }} role="status" data-call-screen-banner="">
-                {translate(language, 'call.screen.peerSharing', { name: sharer.name })}
+              <span className="glass-call-prominent rounded-full px-3 py-1 text-mini" role="status" data-call-screen-banner="">
+                {translate(language, 'call.screen.peerSharing', {
+                  name: sharer.name,
+                })}
               </span>
             )}
             {pillRow}
@@ -386,13 +318,27 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
             {pillRow}
           </div>
         )}
-        {overlayVideo || layout === 'grid' ? <div className="flex-1" /> : null}
-        {call.captionsMode === 'off' ? null : (
-          <Suspense fallback={null}>
-            <CallCaptionsPanel call={call} language={language} />
-          </Suspense>
+        {overlayVideo ? <div className="flex-1" /> : null}
+        {live ? (
+          <div className="flex flex-col gap-3 pb-6">
+            {captionsFramed ? null : captions}
+            <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
+              {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} /> : null}
+              <CallControlPill
+                call={call}
+                language={language}
+                set={set}
+                arrangement={arrangement}
+                expanded={expanded}
+                onToggle={() => setExpanded((value) => !value)}
+                prominent={sharedScreenShown}
+                framedCaptions={captionsFramed ? captions : null}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="pb-6">{phase === 'incoming' ? incomingControls : endedControls}</div>
         )}
-        <div className="pb-6">{controls}</div>
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>
             <CallDeclineSheet call={call} language={language} onClose={() => setDeclineOpen(false)} />

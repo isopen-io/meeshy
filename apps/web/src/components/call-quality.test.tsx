@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallPeerAlerts, CallQualityIndicator } from './call-quality';
+import { CallPeerAlerts, CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
 import { CallScreen } from './call-screen';
 
@@ -53,14 +53,30 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 
 const barsLit = (html: string): number => (html.match(/data-bar="on"/g) ?? []).length;
 
-describe('l’indicateur de qualité (#8047)', () => {
-  test('quatre barres, allumées selon le niveau, et un nom qui DIT le niveau', () => {
-    const levels = (['excellent', 'good', 'fair', 'poor'] as const).map((level) => renderToStaticMarkup(<CallQualityIndicator quality={quality({ level })} language="fr" />));
+describe('l’indicateur de qualité (#8047), dans la puce « Nom · durée » (#8391)', () => {
+  const chip = (overrides: Partial<CallQuality> | null = {}) => renderToStaticMarkup(<CallQualityChip title="Nadia Benali" clock="1:23" quality={overrides === null ? null : quality(overrides)} language="fr" prominent={false} />);
+
+  test('quatre barres, allumées selon le niveau, et un nom qui DIT la puce ET le niveau', () => {
+    const levels = (['excellent', 'good', 'fair', 'poor'] as const).map((level) => chip({ level }));
     expect(levels.map(barsLit)).toEqual([4, 3, 2, 1]);
-    expect(levels[3]).toContain('aria-label="Qualité de l’appel : faible"');
+    expect(levels[3]).toContain('aria-label="Nadia Benali · 1:23 — Qualité de l’appel : faible"');
     expect(levels[3]).toContain('data-call-quality="poor"');
     expect(levels[0]).toContain('aria-expanded="false"');
-    expect(levels[0]).toContain('size-11');
+    expect(levels[0]).toContain('aria-haspopup="dialog"');
+    expect(levels[0]).toContain('min-h-11');
+  });
+
+  test('une puce de verre qui montre le nom et la durée', () => {
+    const html = chip();
+    expect(html).toContain('glass-call');
+    expect(html).toContain('Nadia Benali · 1:23');
+  });
+
+  test('sans relevé de qualité, la puce ne promet aucun détail : pas de bouton', () => {
+    const html = chip(null);
+    expect(html).toContain('Nadia Benali · 1:23');
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('data-call-quality=');
   });
 
   test('le détail : perte, latence, gigue et débits, dans les unités de la langue', () => {

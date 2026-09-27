@@ -78,6 +78,17 @@ declare module 'bun:test' {
   };
 
   export function expect(value: unknown): Expectations & { readonly not: Expectations };
+
+  /**
+   * L'horloge simulée (#8391) — le masquage des commandes d'une vidéo après
+   * 4 s sans geste se prouve sans attendre 4 s : `setTimeout` ET `Date.now()`
+   * avancent ensemble.
+   */
+  export const jest: {
+    useFakeTimers(): void;
+    useRealTimers(): void;
+    advanceTimersByTime(ms: number): void;
+  };
 }
 
 /**

@@ -39,12 +39,38 @@ function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
   );
 }
 
-export function CallQualityIndicator({ quality, language }: { readonly quality: CallQuality; readonly language: InterfaceLanguage }) {
+type CallQualityChipProps = {
+  readonly title: string;
+  readonly clock: string | null;
+  readonly quality: CallQuality | null;
+  readonly language: InterfaceLanguage;
+  /** Teinte plus sombre au-dessus d'un fond clair (écran partagé à la une). */
+  readonly prominent: boolean;
+};
+
+/**
+ * LA PUCE « NOM · DURÉE » DE L'EN-TÊTE (#8391) — à droite de l'en-tête d'appel,
+ * un verre qui porte le nom, la durée et les barres de qualité ; la toucher
+ * ouvre le détail. Son nom accessible DIT ce qu'elle montre puis le niveau :
+ * la légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la
+ * puce n'est qu'une étiquette : aucun bouton ne promet un détail absent.
+ */
+export function CallQualityChip({ title, clock, quality, language, prominent }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
-  const label = translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) });
+  const shown = clock === null ? title : `${title} · ${clock}`;
+  const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
+  if (quality === null) {
+    return (
+      <span className={glass} data-call-chip="">
+        <span className="truncate">{shown}</span>
+      </span>
+    );
+  }
+  const label = `${shown} — ${translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) })}`;
   return (
-    <div className="relative">
-      <button type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className="grid size-11 place-items-center rounded-full" data-call-quality={quality.level}>
+    <div className="relative min-w-0">
+      <button type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
+        <span className="truncate">{shown}</span>
         <SignalBars level={quality.level} />
       </button>
       {open ? (
@@ -70,7 +96,7 @@ export function CallPeerAlerts({ members, language }: { readonly members: Readon
       {peers
         .filter((member) => member.weakNetwork)
         .map((member) => (
-          <span key={`network-${member.userId}`} className="rounded-full px-3 py-1 text-mini" style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }} data-call-alert="weak-network">
+          <span key={`network-${member.userId}`} className="glass-call rounded-full px-3 py-1 text-mini" data-call-alert="weak-network">
             {translate(language, 'call.alert.weakNetwork', { name: member.name })}
           </span>
         ))}

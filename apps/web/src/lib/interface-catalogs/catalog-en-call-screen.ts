@@ -9,6 +9,18 @@ const enCallScreen = {
   'call.screen.stop': 'Stop sharing screen',
   'call.screen.sharing': 'You are sharing your screen',
   'call.screen.peerSharing': '{name} is sharing their screen',
+  'call.more': 'More actions',
+  'call.section.mine': 'My video',
+  'call.section.call': 'Call',
+  'call.flip': 'Flip',
+  'call.screen.short': 'Screen',
+  'call.record.short': 'Record',
+  'call.messages': 'Messages',
+  'call.messages.open': 'Open messages',
+  'call.flip.label': 'Flip camera',
+  'call.fullscreen.enter': 'Full screen',
+  'call.fullscreen.exit': 'Exit full screen',
+  'call.screen.of': '{name}’s screen',
 } as const;
 
 export default enCallScreen;

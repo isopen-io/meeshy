@@ -38,11 +38,7 @@ const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'conne
 /** Les actions que `(…)` sort, famille par famille, dans l'ordre de la planche. */
 export function callControlSet(context: ControlsContext): CallControlSet {
   const inCall = joined(context.phase.kind);
-  const mine: readonly MineAction[] = [
-    'camera',
-    ...(context.cameraOn ? (['flip'] as const) : []),
-    ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
-  ];
+  const mine: readonly MineAction[] = ['camera', ...(context.cameraOn ? (['flip'] as const) : []), ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : [])];
   const call: readonly CallAction[] = [
     ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
