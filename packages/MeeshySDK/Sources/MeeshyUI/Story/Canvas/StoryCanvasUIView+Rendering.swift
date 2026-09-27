@@ -56,6 +56,9 @@ extension StoryCanvasUIView {
         // `backgroundTransform` (n'est pas une coord géométrique).
         let bgTransform: BackgroundTransform = {
             let videoFitMode = slide.effects.backgroundTransform?.videoFitMode
+            // Le fond des bandes (#8414) voyage comme le cadrage : il n'est pas
+            // une coordonnée, il reste sur `backgroundTransform`.
+            let backdrop = slide.effects.backgroundTransform?.backdrop
             // Source unique : `mediaObjects[bg]` est TOUJOURS la source de
             // vérité dès qu'il existe — y compris quand toutes ses valeurs
             // sont aux défauts (scale=1.0, x=y=0.5, rotation=0). L'ancienne
@@ -71,7 +74,8 @@ extension StoryCanvasUIView {
                     offsetX: (bg.x - 0.5) * Double(geometry.renderSize.width),
                     offsetY: (bg.y - 0.5) * Double(geometry.renderSize.height),
                     rotation: bg.rotation,
-                    videoFitMode: videoFitMode
+                    videoFitMode: videoFitMode,
+                    backdrop: backdrop
                 )
             }
             if let t = slide.effects.backgroundTransform {
@@ -79,10 +83,10 @@ extension StoryCanvasUIView {
                                            offsetX: Double(t.offsetX ?? 0),
                                            offsetY: Double(t.offsetY ?? 0),
                                            rotation: t.rotation ?? 0,
-                                           videoFitMode: videoFitMode)
+                                           videoFitMode: videoFitMode, backdrop: backdrop)
             }
             return BackgroundTransform(scale: 1, offsetX: 0, offsetY: 0,
-                                       rotation: 0, videoFitMode: videoFitMode)
+                                       rotation: 0, videoFitMode: videoFitMode, backdrop: backdrop)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
         // Letterbox fill : la couleur de fond de la slide n'habille les bandes QUE

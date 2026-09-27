@@ -426,11 +426,7 @@ extension MeeshyComposerHost {
                     textEditing: viewModel.textEditingMode.activeTextId != nil),
                 expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
                 expandedTextTool: viewModel.textEditingMode.expandedTool,
-                doors: ComposerRailDoor.offered(
-                    served: ComposerSceneCapabilities.doors,
-                    format: selectedFormat,
-                    allowsCapture: profile.allowsCapture
-                )
+                doors: sceneDoors
             ),
             // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
             // ICI parce que les deux magasins vivent ici — la slide pour ce qui
@@ -475,7 +471,7 @@ extension MeeshyComposerHost {
             onTrailingAction: { action in handleTrailingRailAction(action) },
             // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
             // d'où sa place tout en haut du rail et son séparateur.
-            onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
+            onAddSlide: returnsImageToConversation ? nil : { viewModel.addSlide(); HapticFeedback.light() },
             // **L'historique a quitté le socle** (#4586). La question posée est
             // la MÊME que celle que le socle posait — `ComposerHistoryService`
             // reste le juge unique de « cet écran sert-il l'historique ? » — et
@@ -542,6 +538,13 @@ extension MeeshyComposerHost {
                 viewModel.openingEffect = effect
                 HapticFeedback.light()
             },
+            bandFitMode: sceneFitMode,
+            bandBackdrop: sceneBackdrop,
+            onPickBandFitMode: { applySceneFitMode($0) },
+            onPickBandBackdrop: { applySceneBackdrop($0) },
+            animatedToggle: returnsImageToConversation ? nil : sceneAnimatedToggle,
+            timelinePanel: sceneTimelinePanel,
+            timelineBridge: viewModel.canvasTimelineBridge,
             // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE
             // le trait, et les contrôleurs qui règlent le pinceau. Les deux
             // flottent sur la scène, et ce sont ceux de l'ATELIER — pinceau
@@ -602,7 +605,7 @@ extension MeeshyComposerHost {
                 guard editedObject == nil else { return }
                 viewModel.exitTextEditingMode()
             },
-            descriptionPanel: sceneDescriptionPanel,
+            descriptionPanel: returnsImageToConversation ? nil : sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
