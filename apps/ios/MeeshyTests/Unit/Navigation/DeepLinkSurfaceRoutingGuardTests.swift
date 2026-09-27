@@ -30,19 +30,14 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         "send": "meeshy://send?contactId=conv1&message=Salut",
         // Widgets « Non lus » / « Récentes » et App Shortcut « Open Recent
         // Conversation » : élus par `ConversationListEntry` (#7811).
-        "conversations": "meeshy://conversations/unread"
+        "conversations": "meeshy://conversations/unread",
+        "call": "meeshy://call?contactId=conv1&type=video"
     ]
 
     /// Hosts émis SANS destination, et pourquoi ils le restent. Chacun demande
     /// une surface produit qui n'existe pas aujourd'hui — les brancher sur une
     /// destination approximative serait pire que l'inaction actuelle.
     private static let deliberatelyUnroutedHosts: Set<String> = [
-        // `meeshy://call/mute`, `meeshy://call/end` (boutons de la Live
-        // Activity) et `meeshy://call?contactId=…&type=…` (App Shortcut
-        // « Call Contact »). Les deux premiers sont hors d'atteinte : le
-        // l'app ne démarre aucune Live Activity (le stub qui l'annonçait a été
-        // retiré, #7681). Le troisième demande l'amorçage d'un appel depuis un lien.
-        "call",
         // `meeshy://translate?text=…&target=…` (App Shortcut « Translate
         // Text »). Traduire un texte ARBITRAIRE — hors de toute conversation —
         // n'a pas d'écran dans l'app.
@@ -183,7 +178,9 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
             // simulateur pour vérifier un routage.
             let defaults = UserDefaults(suiteName: "DeepLinkSurfaceRoutingGuard.\(UUID().uuidString)")!
             let router = DeepLinkRouter(
-                drafts: DraftStore(userDefaults: defaults, userIdProvider: { "guard" })
+                drafts: DraftStore(userDefaults: defaults, userIdProvider: { "guard" }),
+                isAuthenticated: { true },
+                dialConversationCall: { _, _ in }
             )
             XCTAssertTrue(
                 router.handle(url: url),
@@ -219,7 +216,6 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
     func test_everyDeliberatelyUnroutedHost_stillHasNoDestination() {
         let samples = [
             "conversations": "meeshy://conversations/recent",
-            "call": "meeshy://call/end",
             "translate": "meeshy://translate?text=bonjour&target=es"
         ]
 
