@@ -179,7 +179,10 @@ export class AuthService {
         // ajout de ce chemin : c'est le seul à le confronter (#4554).
         select: {
           ...AUTH_USER_SELECT,
-          password: true
+          password: true,
+          // #8214 — lu par la seule porte du mot de passe : un compte qui a
+          // cédé son adresse n'a plus à la prouver pour s'activer.
+          emailReleasedAt: true
         }
       });
 
@@ -250,7 +253,9 @@ export class AuthService {
        * plus tard. Les comptes HISTORIQUES non vérifiés sans numéro passent
        * désormais eux aussi par le code — c'est la règle voulue.
        */
-      if (!user.emailVerifiedAt && !user.phoneNumber) {
+      // #8214 — un compte qui a CÉDÉ son adresse à une revendication prouvée
+      // n'a plus d'adresse à prouver : son mot de passe reste sa porte.
+      if (!user.emailVerifiedAt && !user.phoneNumber && !user.emailReleasedAt) {
         logger.info(`[AUTH_SERVICE] compte non actif (adresse à prouver, aucun numéro): ${user.username}`);
         throw new ActivationRequiresEmailProofError(user.email);
       }
@@ -301,7 +306,7 @@ export class AuthService {
 
       // Un compte actif par son NUMÉRO dont l'adresse reste à prouver (#8055) :
       // la session s'ouvre, et le code de vérification est renvoyé.
-      if (!user.emailVerifiedAt) {
+      if (!user.emailVerifiedAt && !user.emailReleasedAt) {
         logger.info(`[AUTH_SERVICE] ⚠️ Email non vérifié pour user.email=${user.email}`);
         try {
           await this.resendVerificationEmail(user.email);
