@@ -81,7 +81,7 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(entrees.first { $0.format == .post }).layouts, [])
     }
 
-    func test_chaqueEntree_publieEnUnSeulGeste() throws {
+    func test_chaqueEntree_seChoisitEnUnSeulGeste() throws {
         let entrees = ComposerPublishMenuRule.entries(candidates: candidats, offered: candidats,
                                                       carriesMoreThanText: true, slideCount: 2,
                                                       layoutsTravel: true)
@@ -121,6 +121,49 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
                                                               offered: [.post], carriesMoreThanText: true,
                                                               slideCount: 2, layoutsTravel: true))
         XCTAssertEqual(menu.first?.layouts, ComposerMosaicChoice.ordered)
+    }
+
+    // MARK: - Le chevron CHOISIT, seule la partie principale publie (maquette plein écran, 2026-09-27)
+
+    private func menuTroisFormats(slides: Int = 2) -> [ComposerPublishMenuRule.Entry] {
+        ComposerPublishMenuRule.entries(candidates: candidats, offered: candidats,
+                                        carriesMoreThanText: true, slideCount: slides,
+                                        layoutsTravel: true)
+    }
+
+    func test_armed_sansChoix_publieLeFormatDeLaPorte() {
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: nil, defaultFormat: .story,
+                                                     entries: menuTroisFormats()),
+                       ComposerPublishChoice(format: .story, layout: nil))
+    }
+
+    func test_armed_retientLeChoixDuChevron_avecSonAgencement() {
+        let choix = ComposerPublishChoice(format: .post, layout: ComposerMosaicChoice.ordered[0])
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: choix, defaultFormat: .story,
+                                                     entries: menuTroisFormats()), choix)
+    }
+
+    func test_armed_retombeSurLaPorte_quandLeChoixNestPlusOffert() {
+        let choix = ComposerPublishChoice(format: .post, layout: ComposerMosaicChoice.ordered[0])
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: choix, defaultFormat: .story,
+                                                     entries: menuTroisFormats(slides: 1)),
+                       ComposerPublishChoice(format: .story, layout: nil),
+                       "Une slide retirée efface l'agencement : on ne publie pas ce que le menu n'offre plus.")
+        let grise = ComposerPublishMenuRule.entries(candidates: candidats, offered: [.story, .post],
+                                                    carriesMoreThanText: true, slideCount: 1,
+                                                    layoutsTravel: true)
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: ComposerPublishChoice(format: .reel, layout: nil),
+                                                     defaultFormat: .story, entries: grise),
+                       ComposerPublishChoice(format: .story, layout: nil))
+    }
+
+    func test_leChevron_choisitSansPublier_laPartiePrincipalePublieLeChoixArme() throws {
+        let fleche = compact(try XCTUnwrap(bloc("var publishButton", dans: try hostCode())))
+        XCTAssertTrue(fleche.contains("onChoose:{armedPublishChoice=$0}"),
+                      "Le chevron RETIENT le choix ; il ne publie pas.")
+        XCTAssertFalse(fleche.contains("onPublish:"), "Le chevron ne publie plus.")
+        XCTAssertTrue(fleche.contains("performSoclePublish(armedChoice)"),
+                      "Seule la partie principale publie, et elle publie ce qui est armé.")
     }
 
     // MARK: - OÙ part la publication choisie
