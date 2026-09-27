@@ -568,11 +568,9 @@ struct ComposerObjectEditorView: View {
         // portent la même pièce, et l'auteur n'a rien à réapprendre en passant
         // de l'un à l'autre.
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: ComposerObjectEditorRail.railWidth / 2,
-                             style: .continuous)
-                .fill(plateauTint.opacity(0.55))
-        )
+        // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370).
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: ComposerObjectEditorRail.railWidth / 2, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
     }

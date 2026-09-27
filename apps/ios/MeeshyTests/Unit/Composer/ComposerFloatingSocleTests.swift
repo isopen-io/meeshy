@@ -33,6 +33,7 @@ final class ComposerFloatingSocleTests: XCTestCase {
 
     private struct Harness: View {
         let showsSocle: Bool
+        let size: CGSize
         var body: some View {
             VStack(spacing: 0) {
                 Marker(identifier: "scene")
@@ -49,20 +50,25 @@ final class ComposerFloatingSocleTests: XCTestCase {
                 }
             }
             .background(Marker(identifier: "backdrop").ignoresSafeArea())
-            .frame(width: 402, height: 800)
+            .frame(width: size.width, height: size.height)
         }
     }
 
     private var window: UIWindow?
 
-    private func render(showsSocle: Bool = true) -> UIView {
-        let host = UIHostingController(rootView: Harness(showsSocle: showsSocle))
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 800))
+    /// L'iPhone 16 Pro et l'iPad (10e génération) en portrait : l'encart ne
+    /// dépend pas de la taille, et le témoin le vérifie sur les deux cibles.
+    private static let iPhone = CGSize(width: 402, height: 800)
+    private static let iPad = CGSize(width: 820, height: 1180)
+
+    private func render(showsSocle: Bool = true, size: CGSize = iPhone) -> UIView {
+        let host = UIHostingController(rootView: Harness(showsSocle: showsSocle, size: size))
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
         window.rootViewController = host
         window.isHidden = false
         window.makeKeyAndVisible()
         self.window = window
-        host.view.frame = CGRect(x: 0, y: 0, width: 402, height: 800)
+        host.view.frame = CGRect(origin: .zero, size: size)
         window.layoutIfNeeded()
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
@@ -87,22 +93,26 @@ final class ComposerFloatingSocleTests: XCTestCase {
     }
 
     func test_laRangeeBasse_finitAuDessusDuSocle() throws {
-        let root = render()
-        let lowRow = try XCTUnwrap(frame("lowRow", in: root), "rangée basse introuvable")
-        let socle = try XCTUnwrap(frame("socle", in: root), "socle introuvable")
+        for size in [Self.iPhone, Self.iPad] {
+            let root = render(size: size)
+            let lowRow = try XCTUnwrap(frame("lowRow", in: root), "\(size) : rangée basse introuvable")
+            let socle = try XCTUnwrap(frame("socle", in: root), "\(size) : socle introuvable")
 
-        XCTAssertLessThanOrEqual(lowRow.maxY, socle.minY + 0.5,
-                                 "Le socle recouvre la rangée d'outils : rangée \(lowRow), socle \(socle).")
-        XCTAssertEqual(socle.height, Self.socleHeight, accuracy: 0.5)
+            XCTAssertLessThanOrEqual(lowRow.maxY, socle.minY + 0.5,
+                                     "\(size) : le socle recouvre la rangée d'outils — rangée \(lowRow), socle \(socle).")
+            XCTAssertEqual(socle.height, Self.socleHeight, accuracy: 0.5, "\(size)")
+        }
     }
 
     func test_leSocle_flotteSurLeFondDeLaScene() throws {
-        let root = render()
-        let backdrop = try XCTUnwrap(frame("backdrop", in: root), "fond introuvable")
-        let socle = try XCTUnwrap(frame("socle", in: root))
+        for size in [Self.iPhone, Self.iPad] {
+            let root = render(size: size)
+            let backdrop = try XCTUnwrap(frame("backdrop", in: root), "\(size) : fond introuvable")
+            let socle = try XCTUnwrap(frame("socle", in: root), "\(size)")
 
-        XCTAssertTrue(backdrop.contains(socle),
-                      "Le fond de la scène doit passer SOUS le socle — fond \(backdrop), socle \(socle).")
+            XCTAssertTrue(backdrop.contains(socle),
+                          "\(size) : le fond de la scène doit passer SOUS le socle — fond \(backdrop), socle \(socle).")
+        }
     }
 
     func test_sansSocle_laSurfaceGardeToutLeBas() throws {
