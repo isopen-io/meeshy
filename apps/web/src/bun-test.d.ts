@@ -122,3 +122,6 @@ declare const __FIXTURES__: boolean;
  * un littéral recopié dans un écran.
  */
 declare const __APP_VERSION__: string;
+
+/** `__API_PROXY_TARGET__` — la passerelle du proxy de dev (#8287), `vite.config.ts`. */
+declare const __API_PROXY_TARGET__: string;

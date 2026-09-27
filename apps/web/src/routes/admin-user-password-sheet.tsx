@@ -171,7 +171,7 @@ export function AdminUserPasswordSheet({
   const pretAAppliquer = !envoi && motDePasse.length >= ADMIN_PASSWORD_MIN_LENGTH;
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.password.title')} onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.password.title')} presentation="centered" onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
         <p
           className="rounded-card px-4 py-3 text-caption"

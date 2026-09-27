@@ -296,7 +296,7 @@ export function AdminConversationSettingsSheet({
   );
 
   return (
-    <Sheet title={t('admin.convSettings.title')} bodyAs="div" onClose={onClose}>
+    <Sheet title={t('admin.convSettings.title')} bodyAs="div" presentation="centered" onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-admin-conv-settings={conversation.id}>
         <div className="grid gap-4">
           <p className="truncate text-caption" style={{ color: INK2 }}>

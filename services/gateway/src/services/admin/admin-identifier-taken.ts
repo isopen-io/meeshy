@@ -1,5 +1,5 @@
 import type { FastifyReply } from 'fastify';
-import { sendConflict } from '../../utils/response';
+import { sendError } from '../../utils/response';
 
 /**
  * Un identifiant que l'administration voulait écrire est déjà porté par une
@@ -23,11 +23,18 @@ const CHAMPS: readonly AdminIdentifierField[] = ['email', 'username'];
 
 export class AdminIdentifierTakenError extends Error {
   readonly field: AdminIdentifierField;
+  /**
+   * Des pseudos LIBRES dérivés de celui demandé (#8289) — servis avec le refus
+   * pour que la fiche d'administration propose sans un second aller-retour.
+   * Jamais pour une adresse : proposer une adresse n'a pas de sens.
+   */
+  readonly suggestions: readonly string[];
 
-  constructor(field: AdminIdentifierField) {
+  constructor(field: AdminIdentifierField, suggestions: readonly string[] = []) {
     super(`${field} already in use`);
     this.name = 'AdminIdentifierTakenError';
     this.field = field;
+    this.suggestions = suggestions;
   }
 }
 
@@ -50,8 +57,12 @@ export function rethrowIdentifierTaken(error: unknown): never {
 /** Rend le refus en 409 typé ; `false` si l'erreur n'en est pas un. */
 export function replyIdentifierTaken(reply: FastifyReply, error: unknown): boolean {
   if (!(error instanceof AdminIdentifierTakenError)) return false;
-  sendConflict(reply, `This ${error.field} is already used by another account`, {
+  sendError(reply, 409, `This ${error.field} is already used by another account`, {
     code: CODE_PAR_CHAMP[error.field],
+    details: {
+      field: error.field,
+      ...(error.suggestions.length > 0 ? { suggestions: [...error.suggestions] } : {}),
+    },
   });
   return true;
 }

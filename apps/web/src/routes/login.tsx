@@ -8,6 +8,7 @@ import { GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { auth, isVerificationRequired } from '@/lib/api/auth';
+import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
 import { holdPendingVerification } from '@/lib/pending-verification';
@@ -87,6 +88,24 @@ const EMAIL_PARAM = 'email';
 
 type LoginMethod = 'lien' | 'password';
 
+/**
+ * LE SERVEUR MONTRÉ À LA CONNEXION (#8287) — miroir du sélecteur iOS réservé au
+ * simulateur : en DÉVELOPPEMENT local seulement, jamais dans un build de
+ * production. La base relative du dev part par le proxy : c'est sa cible qu'on nomme.
+ */
+export function loginServerLabel({
+  dev,
+  base,
+  proxyTarget,
+}: {
+  readonly dev: boolean | undefined;
+  readonly base: string;
+  readonly proxyTarget: string;
+}): string | null {
+  if (dev !== true) return null;
+  return base === '' ? proxyTarget : base.replace(/\/api\/v1\/?$/, '');
+}
+
 export function loginMethodFromSearch(raw: string | null): LoginMethod {
   return raw === PASSWORD_METHOD || raw === LEGACY_PASSWORD_METHOD ? 'password' : 'lien';
 }
@@ -119,6 +138,7 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
       next={search.get(NEXT_PARAM)}
       email={search.get(EMAIL_PARAM)}
       {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
+      serverLabel={import.meta.env.DEV ? loginServerLabel({ dev: true, base: apiConfig.base, proxyTarget: __API_PROXY_TARGET__ }) : null}
     />
   );
 }
@@ -130,6 +150,7 @@ export function LoginDoors({
   magicLinkDeps,
   passwordLogin = auth.login,
   accounts = { vault: accountVault, switcher: accountSwitcher },
+  serverLabel = null,
 }: {
   readonly method: LoginMethod;
   /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
@@ -141,6 +162,8 @@ export function LoginDoors({
   readonly passwordLogin?: typeof auth.login;
   /** Le coffre des comptes et la bascule (#8286) — injectables pour les témoins. */
   readonly accounts?: { readonly vault: AccountVault; readonly switcher: AccountSwitcher };
+  /** Le serveur visé, montré en développement seulement (#8287) — `null` : rien. */
+  readonly serverLabel?: string | null;
 }) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
@@ -459,6 +482,12 @@ export function LoginDoors({
           Créer un compte
         </Link>
       </p>
+
+      {serverLabel === null ? null : (
+        <p data-login-server className="font-mono text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {translate(language, 'login.server_origin', { origin: serverLabel })}
+        </p>
+      )}
 
       <AuthBrandFooter />
     </AuthColumn>

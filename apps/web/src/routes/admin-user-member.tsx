@@ -8,9 +8,8 @@ import {
   ADMIN_READ_ONLY_PREFERENCES,
   ADMIN_STAT_KEYS,
   adminUserPreferencesQueryKey,
-  adminUserStatsQueryKey,
+  adminUserStatsQueryOptions,
   loadAdminUserPreferences,
-  loadAdminUserStats,
   patchAdminUserPreferences,
   type AdminPreferenceCategory,
   type AdminPreferenceDocument,
@@ -96,15 +95,7 @@ export function AdminUserStatsSection({
   readonly language: InterfaceLanguage;
   readonly deps?: AdminDeps;
 }) {
-  const chiffres = useQuery({
-    queryKey: adminUserStatsQueryKey(userId),
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserStats({ ...deps, userId, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    retry: false,
-  });
+  const chiffres = useQuery(adminUserStatsQueryOptions(deps, userId));
   return (
     <AdminSection titre={translateAdmin(language, 'admin.stats.title')}>
       {chiffres.isPending ? (
