@@ -47,7 +47,9 @@ function maillonsDuComposite(): Set<string> {
     scripts: Record<string, string>;
   };
   const gate = pkg.scripts.gate ?? '';
-  return new Set([...gate.matchAll(/scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!));
+  return new Set(
+    [...gate.matchAll(/(?<!\.\.\/\.\.\/)scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!),
+  );
 }
 
 /**
