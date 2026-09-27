@@ -346,6 +346,11 @@ const de = {
   'admin.identity.suggestions': 'Freie Benutzernamen',
   'admin.identity.noLanguage': 'Keine',
   'admin.security.twoFactorNotEnrolled': 'Das Mitglied muss zuerst eine Authentifizierungs-App koppeln.',
+  'admin.quick.title': 'Schnellaktionen',
+  'admin.quick.activate': 'Konto aktivieren',
+  'admin.quick.activated': 'Konto aktiviert',
+  'admin.quick.validateEmail': 'E-Mail bestätigen',
+  'admin.quick.validatePhone': 'Telefon bestätigen',
 } satisfies AdminInterfaceCatalog;
 
 export default de;

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { AuthAmbient } from '@/components/auth-chrome';
 import { Avatar } from '@/components/avatar';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
@@ -17,6 +18,7 @@ import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
 import { AdminMemberContactSection } from './admin-member-contact';
+import { AdminMemberQuickActions } from './admin-member-quick-actions';
 import { AdminMemberIdentitySection } from './admin-member-identity';
 import { AdminMemberImagesSection } from './admin-member-images';
 import { AdminMemberRoleSection } from './admin-member-role';
@@ -123,12 +125,16 @@ export default function AdminUserScreen() {
 
   return (
     <AdminScreenFrame {...cadre}>
-      <div className="grid gap-5" data-admin-user={membre.id}>
+      {/* LE HALO DE L'INSCRIPTION (#8288), réutilisé : les cartes de verre de
+          la fiche ne se lisent comme du verre que posées sur une lumière. */}
+      <div className="relative grid gap-6" data-admin-user={membre.id}>
+        <AuthAmbient />
         <Entete membre={membre} language={language} />
+        <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} />
         <Onglets language={language} actif={onglet} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
         <div role="tabpanel" id={`admin-user-panel-${onglet}`} aria-labelledby={`admin-user-tab-${onglet}`} data-admin-user-panel={onglet}>
           {onglet === 'profile' ? (
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-2">
               <div className="lg:col-span-2">
                 <AdminMemberImagesSection key={`images-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} />
               </div>
