@@ -258,13 +258,6 @@ describe('callRoutes', () => {
       expect(routes).toHaveLength(12);
     });
 
-    it('registers POST /calls/:callId/recordings/:recordingId/attachment', () => {
-      const { routes } = setup();
-      expect(
-        routes.some((r) => r.method === 'POST' && r.path === '/calls/:callId/recordings/:recordingId/attachment')
-      ).toBe(true);
-    });
-
     it('registers GET /calls/:callId/transcript', () => {
       const { routes } = setup();
       expect(

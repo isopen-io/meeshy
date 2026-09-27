@@ -70,7 +70,8 @@ const world = (overrides: { recording?: Row; attachment?: Row; bubble?: boolean 
 
 const harness = (prisma: ReturnType<typeof world>) => {
   const handlers: Array<(req: unknown, reply: unknown) => Promise<unknown>> = [];
-  const fastify = { post: (_path: string, _opts: unknown, handler: (req: unknown, reply: unknown) => Promise<unknown>) => handlers.push(handler) };
+  const paths: string[] = [];
+  const fastify = { post: (path: string, _opts: unknown, handler: (req: unknown, reply: unknown) => Promise<unknown>) => { paths.push(path); handlers.push(handler); } };
   const broadcastEdited = jest.fn(async (_message: unknown, _conversationId: string) => undefined);
   const createNotification = jest.fn(async (_input: { userId: string; type: string; content: string }) => ({ id: 'n1' }));
   registerCallsRecordingRoutes(fastify as never, {
@@ -95,10 +96,14 @@ const harness = (prisma: ReturnType<typeof world>) => {
     await new Promise((resolve) => setImmediate(resolve));
     return reply;
   };
-  return { call, broadcastEdited, createNotification };
+  return { call, paths, broadcastEdited, createNotification };
 };
 
 describe('POST /calls/:callId/recordings/:recordingId/attachment — le fichier rejoint la bulle d’appel (#8064)', () => {
+  it('la route est déclarée à cette adresse', () => {
+    expect(harness(world()).paths).toEqual(['/calls/:callId/recordings/:recordingId/attachment']);
+  });
+
   it('l’enregistreur rattache son fichier audio à la bulle, qui est rediffusée, et les consentants sont prévenus', async () => {
     const prisma = world();
     const h = harness(prisma);
