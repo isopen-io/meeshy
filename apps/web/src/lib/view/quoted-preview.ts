@@ -151,7 +151,7 @@ const namedPieceIdOf = (quoted: object): string | undefined => {
 };
 
 /** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
-const representativeOf = (
+export const representativeOf = (
   quoted: Pick<Message, 'attachments'>,
 ): { readonly attachment: Attachment; readonly single: boolean } | undefined => {
   const namedId = namedPieceIdOf(quoted);

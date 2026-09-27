@@ -53,6 +53,8 @@ public extension ReplyReference {
             storyUnavailable: storyUnavailable
         )
         copy.quotedMessageDeletedAt = quotedMessageDeletedAt
+        copy.quotedExpiresAt = quotedExpiresAt
+        copy.quotedAudioTracks = quotedAudioTracks
         return copy
     }
 

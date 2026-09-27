@@ -192,7 +192,8 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     const host = mount(quoting([VOCAL]));
     const zone = host.querySelector<HTMLButtonElement>('button[data-quote-open="audio"]');
     expect(zone).not.toBeNull();
-    expect(zone?.getAttribute('aria-label')).toBe('Lire l’audio');
+    // #8320 — la zone nomme son action : écouter le message CITÉ.
+    expect(zone?.getAttribute('aria-label')).toBe('Écouter le message cité');
     expect(zone?.querySelectorAll('[data-quote-wave] > span').length).toBeGreaterThan(0);
     expect(zone?.textContent).toContain('0:12');
     expect(zone?.parentElement?.closest('button')).toBeNull();
@@ -217,7 +218,7 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     });
     expect(plays).toBe(1);
     expect(jumps).toBe(0);
-    expect(host.querySelector('button[data-quote-open="audio"]')?.getAttribute('aria-label')).toBe('Pause');
+    expect(host.querySelector('button[data-quote-open="audio"]')?.getAttribute('aria-label')).toBe('Mettre en pause le message cité');
   });
 
   test('un document cité n’a aucune zone média', () => {

@@ -167,6 +167,15 @@ for (const mode of ConversationReadingModeSchema.options.filter((m) => MODE_CONT
       expect(host.querySelector('[data-after-read-watermark]')).not.toBeNull();
     });
 
+    test('la sonde de lecture (#8343) : sur une flamme-œil REÇUE, jamais sur la sienne', async () => {
+      const recue = await monte(mode, [messageOf({ id: 'm-flamme', effectFlags: AFTER_READ })]);
+      expect(recue.querySelector('[data-after-read-probe]')).not.toBeNull();
+      const mienne = await monte(mode, [
+        messageOf({ id: 'm-flamme', effectFlags: AFTER_READ, senderId: 'u-viewer', sender: senderOf('Vous', 'u-viewer') }),
+      ]);
+      expect(mienne.querySelector('[data-after-read-probe]')).toBeNull();
+    });
+
     test('un message ordinaire ne porte aucun filigrane', async () => {
       const host = await monte(mode, [messageOf({ id: 'm-ordinaire' })]);
       expect(host.querySelector('[data-after-read-watermark]')).toBeNull();
