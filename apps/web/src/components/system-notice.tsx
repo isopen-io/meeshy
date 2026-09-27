@@ -8,6 +8,7 @@ import type { SystemRow } from '@/lib/view/message-badges';
 import { systemRowText } from '@/lib/view/message-badges';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
+import { Attachments } from './attachment-blocks';
 import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
@@ -32,14 +33,17 @@ export function SystemNotice({
   timeString,
   surface,
   callTarget = null,
+  languages = [],
 }: {
   readonly row: SystemRow;
   readonly timeString: string;
   readonly surface: 'row' | 'bubble';
   readonly callTarget?: CallNoticeTarget | null;
+  /** Le prisme du lecteur — la piste et la transcription de l'enregistrement d'appel s'y résolvent (#8064). */
+  readonly languages?: readonly string[];
 }) {
   const label = systemRowText(row);
-  const action = row.kind === 'call' && callTarget !== null ? <CallNoticeAction target={callTarget} /> : null;
+  const action = row.kind === 'call' && callTarget !== null ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
   const content = <SystemNoticeContent row={row} />;
   /* LA TEINTE (revue-correction #5936, défaut majeur 5) — `--color-ios-ink-2`
      à `META_TEXT_OPACITY` (0,55), le cran MÉTA déjà dérivé et déjà tenu pour
@@ -149,7 +153,7 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
  */
 const CallTranscriptPanel = lazy(() => import('./call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
 
-function CallNoticeAction({ target }: { readonly target: CallNoticeTarget }) {
+function CallNoticeAction({ target, languages }: { readonly target: CallNoticeTarget; readonly languages: readonly string[] }) {
   const language = currentInterfaceLanguage();
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const transcriptId = target.callId === null ? undefined : `call-transcript-${target.callId}`;
@@ -184,6 +188,16 @@ function CallNoticeAction({ target }: { readonly target: CallNoticeTarget }) {
           </button>
         ) : null}
       </span>
+      {target.recording !== null ? (
+        <div data-call-recording={target.recording.attachment.id} className="flex w-full max-w-[320px] justify-center">
+          <Attachments
+            attachments={[target.recording.attachment]}
+            languages={languages}
+            fallbackLanguage={target.recording.language}
+            mediaFrame="box"
+          />
+        </div>
+      ) : null}
       {transcriptOpen && target.callId !== null ? (
         <div id={transcriptId} className="flex w-full justify-center">
           <Suspense fallback={null}>

@@ -2,6 +2,8 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 
 import type { SocketClient } from '@/lib/net/socket';
 
+import { CALL_RECORDING_SERVER_EVENTS } from './call-recording';
+import { callRecording } from './call-recording-live';
 import { bindCallTransport } from './call-transport';
 
 /**
@@ -44,6 +46,11 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
     socket.on(event, handler);
     return [event, handler] as const;
   });
+  const recordingHandlers = CALL_RECORDING_SERVER_EVENTS.map((event) => {
+    const handler = (payload: unknown): void => callRecording.receive(event, payload);
+    socket.on(event, handler);
+    return [event, handler] as const;
+  });
   /* `call:check-active` à CHAQUE authentification, la première comprise : la
      passerelle rejoue alors `call:initiated` pour un appel qui sonne encore
      (onglet rouvert, coupure pendant la sonnerie) — miroir iOS au `.connect`. */
@@ -53,7 +60,7 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
   };
   socket.on(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   return () => {
-    for (const [event, handler] of handlers) socket.off(event, handler);
+    for (const [event, handler] of [...handlers, ...recordingHandlers]) socket.off(event, handler);
     socket.off(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
     binding.detach();
   };

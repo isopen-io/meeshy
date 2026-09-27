@@ -18,6 +18,7 @@ import enCallDevices from './catalog-en-call-devices';
 import enCallScreen from './catalog-en-call-screen';
 import enCallQuality from './catalog-en-call-quality';
 import enCallCaptions from './catalog-en-call-captions';
+import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -224,6 +225,7 @@ const en = {
   ...enCallScreen,
   ...enCallQuality,
   ...enCallCaptions,
+  ...enCallRecording,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',

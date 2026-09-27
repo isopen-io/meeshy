@@ -24,6 +24,9 @@ export const byCallIdParticipants = (callId: string): string => `/api/v1/calls/$
 /** DELETE /api/v1/calls/:callId/participants/:participantId */
 export const byCallIdParticipantsByParticipantId = (callId: string, participantId: string): string => `/api/v1/calls/${encodeURIComponent(callId)}/participants/${encodeURIComponent(participantId)}`;
 
+/** POST /api/v1/calls/:callId/recordings/:recordingId/attachment */
+export const byCallIdRecordingsByRecordingIdAttachment = (callId: string, recordingId: string): string => `/api/v1/calls/${encodeURIComponent(callId)}/recordings/${encodeURIComponent(recordingId)}/attachment`;
+
 /** GET /api/v1/calls/:callId/transcript */
 export const byCallIdTranscript = (callId: string): string => `/api/v1/calls/${encodeURIComponent(callId)}/transcript`;
 

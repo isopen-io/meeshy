@@ -122,7 +122,8 @@ extension BubbleContent {
                 isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
                 fallbackText: message.content,
                 timeString: resolvedTimeString,
-                timestamp: message.createdAt
+                timestamp: message.createdAt,
+                recording: CallRecording.from(message.attachments)
             )
         } else {
             self.callNotice = nil

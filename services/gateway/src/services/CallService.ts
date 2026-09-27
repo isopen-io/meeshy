@@ -79,7 +79,7 @@ const ACTIVE_STATUSES: CallStatus[] = [
 // P3 — sender include for the call-summary system message, mirroring the
 // `message:new` broadcast shape produced by the normal message path so iOS/web
 // can render it like any other message.
-const CALL_SUMMARY_MESSAGE_INCLUDE = {
+export const CALL_SUMMARY_MESSAGE_INCLUDE = {
   sender: {
     select: {
       id: true,
