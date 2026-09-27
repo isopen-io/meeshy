@@ -13,6 +13,7 @@ import {
   type CallHistoryPeer,
   type CallHistoryRow
 } from '../callHistory';
+import { resolveGroupCallParticipants } from './callHistoryParticipants';
 
 /** Call journal sliding window: 3 months. */
 export const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -48,7 +49,8 @@ const journalScope = (userId: string, windowStart: Date): Prisma.CallSessionWher
  * conversation's other member — resolved from the conversation roster, not the
  * call participants — so a missed outgoing call (callee never joined) still
  * shows who was dialed. Group calls carry no peer (the conversation
- * name/avatar identifies them).
+ * name/avatar identifies them) and name who joined in `participants`
+ * (`resolveGroupCallParticipants`, #8066) — never with any presence field.
  *
  * Peer presence (`CallHistoryPeer.isOnline`) is gated STRICT (directive
  * produit 2026-08-25) — `options.viewer` (the caller themselves, from
@@ -180,12 +182,16 @@ export async function listCallHistory(
     for (const p of myParticipations) participatedCallIds.add(p.callSessionId);
   }
 
+  const groupCallIds = page.filter((r) => r.conversation.type !== 'direct').map((r) => r.id);
+  const participantsByCall = await resolveGroupCallParticipants(prisma, groupCallIds, userId);
+
   const items = page.map((row) =>
     buildCallHistoryItem(
       row as CallHistoryRow,
       userId,
       row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null,
-      participatedCallIds.has(row.id)
+      participatedCallIds.has(row.id),
+      participantsByCall.get(row.id) ?? []
     )
   );
 

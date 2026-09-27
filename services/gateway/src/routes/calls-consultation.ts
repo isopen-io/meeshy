@@ -503,6 +503,19 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
                       phoneNumber: { type: ['string', 'null'] },
                       isOnline: { type: 'boolean' }
                     }
+                  },
+                  participants: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        participantId: { type: 'string' },
+                        userId: { type: ['string', 'null'] },
+                        username: { type: ['string', 'null'] },
+                        displayName: { type: 'string' },
+                        avatar: { type: ['string', 'null'] }
+                      }
+                    }
                   }
                 }
               }
