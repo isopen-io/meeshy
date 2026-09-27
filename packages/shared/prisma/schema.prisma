@@ -2418,6 +2418,38 @@ model CallParticipant {
   @@index([participantId])
 }
 
+/// L'enregistrement d'un appel, consenti par TOUS (#8064).
+///
+/// La passerelle est l'autorité du consentement : une demande (`requesterId`)
+/// fige la liste des participants dont l'accord est requis
+/// (`requiredUserIds`) ; chaque accord s'ajoute à `consentedUserIds` par une
+/// écriture conditionnelle. `startedAt` n'est posé que lorsque la liste est
+/// complète, par UNE écriture gardée (`startedAt: null, stoppedAt: null`) —
+/// deux accords simultanés ne démarrent pas deux fois. Un refus, le délai, ou
+/// l'arrivée d'un participant qui n'a pas consenti posent `stoppedAt` +
+/// `stopReason`. La phase se lit des dates, jamais d'un booléen.
+///
+/// L'enregistrement est fait CÔTÉ CLIENT, par l'appareil du demandeur (pas de
+/// SFU) : le fichier arrive par le chemin d'upload des pièces jointes et se
+/// rattache à la bulle d'appel (`attachmentId`, `linkedAt`), seulement par
+/// son enregistreur. Décision : `apps/web/decisions.md`, entrée « enregistrement d'appel » (#8064).
+model CallRecording {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  callSessionId    String    @db.ObjectId
+  requesterId      String    @db.ObjectId
+  requiredUserIds  String[]  @db.ObjectId
+  consentedUserIds String[]  @db.ObjectId
+  requestedAt      DateTime  @default(now())
+  startedAt        DateTime?
+  stoppedAt        DateTime?
+  stopReason       String?
+  stoppedByUserId  String?   @db.ObjectId
+  attachmentId     String?   @db.ObjectId
+  linkedAt         DateTime?
+
+  @@index([callSessionId])
+}
+
 /// Transcription - Phase 2A/2B (prepared for future)
 /// Stores transcriptions from client or server
 model Transcription {
