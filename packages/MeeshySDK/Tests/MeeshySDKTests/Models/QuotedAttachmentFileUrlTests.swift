@@ -36,7 +36,7 @@ struct QuotedAttachmentFileUrlTests {
 
     @Test("un blob gravé avant le champ décode, l'adresse à nil")
     func legacyBlobDecodes() throws {
-        let legacy = #"{"messageId":"m9","authorName":"Bob","authorColor":"#31B6BA","previewText":"","isMe":false,"attachmentType":"video","isStoryReply":false}"#
+        let legacy = ##"{"messageId":"m9","authorName":"Bob","authorColor":"#31B6BA","previewText":"","isMe":false,"attachmentType":"video","isStoryReply":false}"##
         let decoded = try JSONDecoder().decode(ReplyReference.self, from: Data(legacy.utf8))
         #expect(decoded.attachmentType == "video")
         #expect(decoded.attachmentFileUrl == nil)
