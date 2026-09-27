@@ -53,7 +53,7 @@ final class CallPiPPolicyTests: XCTestCase {
     /// DÉGRADÉ en pilule alors que l'utilisateur revenait précisément à lui.
     func test_displayModeAfterStop_restoresTheModeInEffectWhenPiPStarted() {
         XCTAssertEqual(
-            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: .fullScreen),
+            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: .fullScreen, origin: .automatic, appIsForeground: true),
             .fullScreen
         )
     }
@@ -63,14 +63,14 @@ final class CallPiPPolicyTests: XCTestCase {
     /// la bulle disparaissait sans que l'utilisateur ait rien demandé.
     func test_displayModeAfterStop_fromBubble_returnsToBubbleNotPill() {
         XCTAssertEqual(
-            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: .bubble),
+            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: .bubble, origin: .automatic, appIsForeground: true),
             .bubble
         )
     }
 
     func test_displayModeAfterStop_fromPill_returnsToPill() {
         XCTAssertEqual(
-            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: .pip),
+            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: .pip, origin: .automatic, appIsForeground: true),
             .pip
         )
     }
@@ -79,7 +79,7 @@ final class CallPiPPolicyTests: XCTestCase {
     /// fermeture n'arrive. Repasser dessus rejouerait une transition inutile.
     func test_displayModeAfterStop_whenRestoringUI_touchesNothing() {
         XCTAssertNil(
-            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: true, modeAtStart: .pip)
+            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: true, modeAtStart: .pip, origin: .automatic, appIsForeground: true)
         )
     }
 
@@ -87,7 +87,7 @@ final class CallPiPPolicyTests: XCTestCase {
     /// place (cf. C6), le rétablissement ne doit pas l'écraser.
     func test_displayModeAfterStop_whenCallEnded_touchesNothing() {
         XCTAssertNil(
-            CallPiPPolicy.displayModeAfterStop(callIsActive: false, isRestoringUI: false, modeAtStart: .pip)
+            CallPiPPolicy.displayModeAfterStop(callIsActive: false, isRestoringUI: false, modeAtStart: .pip, origin: .automatic, appIsForeground: true)
         )
     }
 
@@ -97,8 +97,109 @@ final class CallPiPPolicyTests: XCTestCase {
     /// appel entre-temps repassé en plein écran.
     func test_displayModeAfterStop_whenPiPNeverStarted_touchesNothing() {
         XCTAssertNil(
-            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: nil)
+            CallPiPPolicy.displayModeAfterStop(callIsActive: true, isRestoringUI: false, modeAtStart: nil, origin: .automatic, appIsForeground: true)
         )
+    }
+
+    // MARK: - #8435 · entrer en PiP quitte le plein écran
+
+    /// Le plein écran restait présenté DERRIÈRE la fenêtre PiP : ses rendus
+    /// vidéo tournaient pour rien. Entrer en PiP ferme le `fullScreenCover`.
+    func test_displayModeOnStart_fromFullScreen_returnsReducedMode() {
+        XCTAssertEqual(CallPiPPolicy.displayModeOnStart(current: .fullScreen), .pip)
+    }
+
+    /// Déjà réduit (pastille, bulle) : rien à fermer, le mode reste le sien.
+    func test_displayModeOnStart_alreadyReduced_touchesNothing() {
+        XCTAssertNil(CallPiPPolicy.displayModeOnStart(current: .pip))
+        XCTAssertNil(CallPiPPolicy.displayModeOnStart(current: .bubble))
+    }
+
+    /// Fermer la fenêtre (croix) après un PiP demandé par le bouton ou le
+    /// glissé : l'appel reste réduit, le plein écran ne revient pas de force.
+    func test_displayModeAfterStop_manualPiPClosed_keepsReducedMode() {
+        XCTAssertNil(
+            CallPiPPolicy.displayModeAfterStop(
+                callIsActive: true, isRestoringUI: false, modeAtStart: .fullScreen,
+                origin: .manual, appIsForeground: true
+            )
+        )
+    }
+
+    /// PiP automatique (l'app est passée en arrière-plan), fermé par la croix
+    /// DEPUIS une autre app : l'appel reste réduit.
+    func test_displayModeAfterStop_automaticPiPClosedInBackground_keepsReducedMode() {
+        XCTAssertNil(
+            CallPiPPolicy.displayModeAfterStop(
+                callIsActive: true, isRestoringUI: false, modeAtStart: .fullScreen,
+                origin: .automatic, appIsForeground: false
+            )
+        )
+    }
+
+    /// « Agrandir » : `onRestoreUI` a déjà rouvert le plein écran.
+    func test_displayModeAfterStop_manualPiPRestored_touchesNothing() {
+        XCTAssertNil(
+            CallPiPPolicy.displayModeAfterStop(
+                callIsActive: true, isRestoringUI: true, modeAtStart: .fullScreen,
+                origin: .manual, appIsForeground: true
+            )
+        )
+    }
+
+    // MARK: - #8435 · le glissé vers le bas
+
+    func test_swipeDownOutcome_duoLongSwipeWithPiP_returnsSystemPiP() {
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: 140, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
+            .systemPiP
+        )
+    }
+
+    /// Audio seul, ou appareil sans PiP : la pastille.
+    func test_swipeDownOutcome_duoLongSwipeWithoutPiP_returnsPill() {
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: 140, isGroup: false, isEffectsOpen: false, canSystemPiP: false),
+            .pill
+        )
+    }
+
+    func test_swipeDownOutcome_shortSwipe_returnsNone() {
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: 100, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
+            .none
+        )
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: -300, isGroup: false, isEffectsOpen: false, canSystemPiP: true),
+            .none
+        )
+    }
+
+    /// La barre d'effets a ses propres glissés (curseurs, carrousel).
+    func test_swipeDownOutcome_effectsOpen_returnsNone() {
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: 200, isGroup: false, isEffectsOpen: true, canSystemPiP: true),
+            .none
+        )
+    }
+
+    /// En groupe, la scène a ses propres gestes (vignette à la une, plein écran).
+    func test_swipeDownOutcome_group_returnsNone() {
+        XCTAssertEqual(
+            CallPiPPolicy.swipeDownOutcome(translation: 200, isGroup: true, isEffectsOpen: false, canSystemPiP: true),
+            .none
+        )
+    }
+
+    /// `PiPCallController.start()` sort en silence quand AVKit ne peut pas
+    /// démarrer : le geste ne doit pas rester sans effet.
+    func test_shouldFallBackToPill_pipDidNotStartAndStillFullScreen_returnsTrue() {
+        XCTAssertTrue(CallPiPPolicy.shouldFallBackToPill(isPiPActive: false, displayMode: .fullScreen))
+    }
+
+    func test_shouldFallBackToPill_pipStartedOrAlreadyReduced_returnsFalse() {
+        XCTAssertFalse(CallPiPPolicy.shouldFallBackToPill(isPiPActive: true, displayMode: .fullScreen))
+        XCTAssertFalse(CallPiPPolicy.shouldFallBackToPill(isPiPActive: false, displayMode: .pip))
     }
 
     // MARK: - C6 · fin d'appel pendant le PiP

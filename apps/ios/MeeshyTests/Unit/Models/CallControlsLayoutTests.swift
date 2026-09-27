@@ -2,8 +2,9 @@ import XCTest
 @testable import Meeshy
 
 /// #8394 — la pilule d'appel « C adapté » : ce que le (…) déploie, et quelles
-/// actions rejoignent le rail « mon image » et le rail « l'appel » selon le
-/// contexte de l'appel.
+/// actions rejoignent le groupe « mon image » et le groupe « l'appel » selon le
+/// contexte de l'appel. #8432 — les actions montent AU-DESSUS de la pilule, en
+/// duo comme en groupe. #8436 — la conversation n'a qu'une porte : l'en-tête.
 @MainActor
 final class CallControlsLayoutTests: XCTestCase {
 
@@ -13,8 +14,7 @@ final class CallControlsLayoutTests: XCTestCase {
         hasSelectableCameras: Bool = false,
         isConnected: Bool = true,
         mayRecord: Bool = false,
-        canPictureInPicture: Bool = false,
-        hasConversation: Bool = false
+        canPictureInPicture: Bool = false
     ) -> CallActionContext {
         CallActionContext(
             isOnMac: isOnMac,
@@ -22,8 +22,7 @@ final class CallControlsLayoutTests: XCTestCase {
             hasSelectableCameras: hasSelectableCameras,
             isConnected: isConnected,
             mayRecord: mayRecord,
-            canPictureInPicture: canPictureInPicture,
-            hasConversation: hasConversation
+            canPictureInPicture: canPictureInPicture
         )
     }
 
@@ -45,8 +44,8 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertEqual(collapsed.presentation(isGroup: true), .hidden)
     }
 
-    func test_presentation_expandedDuo_returnsRails() {
-        XCTAssertEqual(CallControlsDisclosure(isExpanded: true).presentation(isGroup: false), .rails)
+    func test_presentation_expandedDuo_returnsRowAbovePill() {
+        XCTAssertEqual(CallControlsDisclosure(isExpanded: true).presentation(isGroup: false), .row)
     }
 
     func test_presentation_expandedGroup_returnsRows() {
@@ -58,7 +57,7 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertEqual(CallControlsDisclosure(isExpanded: true).accessibilityState, .expanded)
     }
 
-    // MARK: - Rail gauche « mon image »
+    // MARK: - Groupe « mon image »
 
     func test_myImage_audioCall_offersOnlyCameraAndScreen() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: false))
@@ -85,26 +84,32 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertEqual(actions.myImage, [.camera])
     }
 
-    // MARK: - Rail droit « l'appel »
+    // MARK: - Groupe « l'appel »
 
     func test_theCall_minimal_offersCaptionsOnly() {
         XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions])
     }
 
-    func test_theCall_everythingAvailable_ordersCaptionsRecordPipMessages() {
-        let actions = CallActionSet.resolve(context(mayRecord: true, canPictureInPicture: true, hasConversation: true))
-        XCTAssertEqual(actions.theCall, [.captions, .recording, .pictureInPicture, .messages])
+    func test_theCall_everythingAvailable_ordersCaptionsRecordPip() {
+        let actions = CallActionSet.resolve(context(mayRecord: true, canPictureInPicture: true))
+        XCTAssertEqual(actions.theCall, [.captions, .recording, .pictureInPicture])
     }
 
     func test_theCall_recordingNotAllowed_isAbsent() {
-        let actions = CallActionSet.resolve(context(canPictureInPicture: true, hasConversation: true))
-        XCTAssertEqual(actions.theCall, [.captions, .pictureInPicture, .messages])
+        let actions = CallActionSet.resolve(context(canPictureInPicture: true))
+        XCTAssertEqual(actions.theCall, [.captions, .pictureInPicture])
     }
 
-    // MARK: - Le rail ne porte jamais plus de quatre actions
+    /// #8436 — « Messages » doublait le bouton Conversation de l'en-tête : la
+    /// conversation n'a plus qu'une porte, à droite de la flèche.
+    func test_actionCatalog_neverOffersMessages() {
+        XCTAssertFalse(CallAction.allCases.map(\.rawValue).contains("messages"))
+    }
+
+    // MARK: - Une rangée ne porte jamais plus de quatre actions
 
     func test_resolve_anyContext_neverExceedsFourPerRow() {
-        let all = CallActionSet.resolve(context(isVideoEnabled: true, hasSelectableCameras: true, mayRecord: true, canPictureInPicture: true, hasConversation: true))
+        let all = CallActionSet.resolve(context(isVideoEnabled: true, hasSelectableCameras: true, mayRecord: true, canPictureInPicture: true))
         XCTAssertLessThanOrEqual(all.myImage.count, CallActionSet.maxPerRow)
         XCTAssertLessThanOrEqual(all.theCall.count, CallActionSet.maxPerRow)
     }
