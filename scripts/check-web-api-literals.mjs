@@ -44,7 +44,8 @@ const SOURCE_RE = /\.tsx?$/;
 // 287 → 235 (#7716, lot authentification et compte).
 // 235 → 191 (#7716, lot profil et annuaire).
 // 191 → 138 (#7716, lot conversations et messages).
-const BASELINE = 138;
+// 138 → 116 (#7716, lot liens).
+const BASELINE = 116;
 
 export const isCountedFile = (name) => SOURCE_RE.test(name) && !TEST_FILE_RE.test(name);
 

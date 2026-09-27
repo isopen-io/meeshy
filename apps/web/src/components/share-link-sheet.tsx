@@ -11,7 +11,7 @@ import { partagerInvitation, type PortailPartage } from '@/lib/view/invitation';
  * **LA FEUILLE « CRÉER UN LIEN DE PARTAGE »** (#5652, bloc D) — miroir
  * `ShareLinkPickerSheet` (`ConversationListView.swift:2106-2160`) : liste les
  * conversations ÉLIGIBLES (`canCreateShareLink`), sélectionner l'une d'elles
- * crée le lien IMMÉDIATEMENT (`POST /api/v1/links`, § 3.3) et le PARTAGE — un
+ * crée le lien IMMÉDIATEMENT (`POST links.root`, § 3.3) et le PARTAGE — un
  * geste, un effet, jamais un second écran de réglages (ceux-ci restent un
  * écran de plus, hors lot § 1.4).
  *
