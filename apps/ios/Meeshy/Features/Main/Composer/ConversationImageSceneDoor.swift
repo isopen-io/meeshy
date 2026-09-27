@@ -51,4 +51,8 @@ final class ConversationImageSeed: ObservableObject {
             seed = StoryComposerSeed(payload: .image(image))
         }
     }
+
+    // Sous l'isolation MainActor par défaut, la deinit synthétisée est isolée
+    // et double-libère sur iOS 26.1 (`MainActorDeinitSourceGuardTests`).
+    nonisolated deinit {}
 }
