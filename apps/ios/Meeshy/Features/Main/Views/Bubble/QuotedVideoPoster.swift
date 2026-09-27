@@ -23,16 +23,16 @@ struct QuotedVideoPoster: View {
     let attachment: MessageAttachment
     let size: CGSize
     let cornerRadius: CGFloat
-    let placeholderHex: String
+    let placeholder: Color
 
     @State private var poster: UIImage?
     private let blur: UIImage?
 
-    init(attachment: MessageAttachment, size: CGSize, cornerRadius: CGFloat, placeholderHex: String) {
+    init(attachment: MessageAttachment, size: CGSize, cornerRadius: CGFloat, placeholder: Color) {
         self.attachment = attachment
         self.size = size
         self.cornerRadius = cornerRadius
-        self.placeholderHex = placeholderHex
+        self.placeholder = placeholder
         self.blur = attachment.thumbHash.flatMap { $0.isEmpty ? nil : UIImage.fromThumbHash($0) }
         _poster = State(initialValue: VideoPosterResolver.persistedQuotePoster(for: attachment))
     }
@@ -61,7 +61,7 @@ struct QuotedVideoPoster: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            Color(hex: placeholderHex).opacity(0.3)
+            placeholder
         }
     }
 }

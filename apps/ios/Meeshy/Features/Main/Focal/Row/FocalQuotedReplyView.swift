@@ -356,7 +356,7 @@ struct FocalQuotedReplyView: View, Equatable {
                 attachment: attachment,
                 size: thumbnailSize,
                 cornerRadius: thumbnailRadius,
-                placeholderHex: authorHex
+                placeholder: railColor.opacity(0.18)
             )
             .overlay { timebasedPlayBadge }
         } else if quotedMessageMediaFace == .audio {

@@ -440,6 +440,12 @@ struct BubbleQuotedReply: View, Equatable {
         mediaSize.width > Self.thumbnailSize ? MeeshyRadius.lg : 6
     }
 
+    /// L'aplat d'attente d'une miniature citée — vignette ou poster —, à la
+    /// couleur de l'auteur cité. Une seule résolution pour les deux faces.
+    private var mediaPlaceholder: Color {
+        Color(hex: reply.authorColor).opacity(0.3)
+    }
+
     @ViewBuilder
     private var thumbnailSurface: some View {
         if let thumbUrl = thumbnailUrlString {
@@ -451,7 +457,7 @@ struct BubbleQuotedReply: View, Equatable {
                 // une image (règle partagée, site unique).
                 thumbHash: QuotedReplyPresentation.thumbHash(for: reply)
             ) {
-                Color(hex: reply.authorColor).opacity(0.3)
+                mediaPlaceholder
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: mediaSize.width, height: mediaSize.height)
@@ -470,7 +476,7 @@ struct BubbleQuotedReply: View, Equatable {
                 attachment: attachment,
                 size: mediaSize,
                 cornerRadius: mediaRadius,
-                placeholderHex: reply.authorColor
+                placeholder: mediaPlaceholder
             )
             .overlay { playBadge }
         }
