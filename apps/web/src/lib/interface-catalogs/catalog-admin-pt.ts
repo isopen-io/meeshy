@@ -346,6 +346,11 @@ const pt = {
   'admin.identity.suggestions': 'Nomes de utilizador livres',
   'admin.identity.noLanguage': 'Nenhuma',
   'admin.security.twoFactorNotEnrolled': 'O membro tem primeiro de associar uma aplicação de autenticação.',
+  'admin.quick.title': 'Ações rápidas',
+  'admin.quick.activate': 'Ativar a conta',
+  'admin.quick.activated': 'Conta ativada',
+  'admin.quick.validateEmail': 'Validar o e-mail',
+  'admin.quick.validatePhone': 'Validar o telefone',
 } satisfies AdminInterfaceCatalog;
 
 export default pt;
