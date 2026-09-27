@@ -204,7 +204,7 @@ extension ConversationView {
         // (garde d'éligibilité, popup de consentement vocal) : désarmer avant
         // eux perdrait la protection sans qu'aucun message ne parte, et le
         // popup relance ce même tap sur un état qu'il doit retrouver intact.
-        let protection = viewModel.consumeArmedProtection()
+        let protection = viewModel.captureArmedProtection()
 
         if attachments.isEmpty {
             // Text-only send: clear UI immediately

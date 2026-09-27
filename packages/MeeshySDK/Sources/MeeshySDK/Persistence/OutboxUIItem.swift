@@ -165,6 +165,7 @@ extension OutboxUIItem {
         case .markAsRead,
              .markStoryViewed,
              .reportAttachmentStatus,
+             .consumeAfterRead,
              .sendFriendRequest,
              .respondFriendRequest,
              .blockUser,

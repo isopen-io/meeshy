@@ -346,12 +346,20 @@ extension OutboxDispatcher {
             // source> » au destinataire (décision user, invariant produit).
             let copyAttachmentsFromMessageId = try await resolveCopyAttachmentsFromMessageId(for: item)
 
+            // La protection armée à l'envoi (#8303) — flou, vue unique, durée
+            // et flamme-œil. Le rejeu la perdait : un envoi protégé mis en file
+            // repartait en clair.
+            let protection = item.replayProtection
             let request = SendMessageRequest(
                 content: item.content,
                 replyToId: item.replyToId,
                 forwardedFromId: item.forwardedFromId,
                 forwardedFromConversationId: item.forwardedFromConversationId,
                 attachmentIds: item.attachmentIds,
+                ephemeralDuration: protection.ephemeralDurationSeconds,
+                isViewOnce: protection.wireIsViewOnce,
+                isBlurred: protection.wireIsBlurred,
+                effectFlags: protection.wireEffectFlags.isEmpty ? nil : protection.wireEffectFlags.rawValue,
                 clientMessageId: item.clientMessageId,
                 // Lieu partagé rejoué au renvoi, comme pour un post et un
                 // commentaire : clé top-level `location`, omise quand nil.
