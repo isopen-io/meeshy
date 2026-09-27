@@ -3,6 +3,7 @@ import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
 import itMediaHub from './catalog-it-media-hub';
 import itMediaViewer from './catalog-it-media-viewer';
+import itActivation from './catalog-it-activation';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
@@ -208,6 +209,7 @@ const it = {
   ...itMediaHub,
   ...itMediaViewer,
   ...itVerifyEmail,
+  ...itActivation,
   ...itPassword,
   ...itCall,
   ...itRowActions,

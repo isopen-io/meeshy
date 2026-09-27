@@ -3,6 +3,7 @@ import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 import ptMediaHub from './catalog-pt-media-hub';
 import ptMediaViewer from './catalog-pt-media-viewer';
+import ptActivation from './catalog-pt-activation';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
 import ptCall from './catalog-pt-call';
@@ -212,6 +213,7 @@ const pt = {
   ...ptMediaHub,
   ...ptMediaViewer,
   ...ptVerifyEmail,
+  ...ptActivation,
   ...ptPassword,
   ...ptCall,
   ...ptRowActions,

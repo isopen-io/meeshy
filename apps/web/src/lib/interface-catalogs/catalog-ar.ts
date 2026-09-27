@@ -3,6 +3,7 @@ import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
 import arMediaHub from './catalog-ar-media-hub';
 import arMediaViewer from './catalog-ar-media-viewer';
+import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
@@ -208,6 +209,7 @@ const ar = {
   ...arMediaHub,
   ...arMediaViewer,
   ...arVerifyEmail,
+  ...arActivation,
   ...arPassword,
   ...arCall,
   ...arRowActions,
