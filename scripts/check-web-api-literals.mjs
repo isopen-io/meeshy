@@ -46,7 +46,8 @@ const SOURCE_RE = /\.tsx?$/;
 // 191 → 138 (#7716, lot conversations et messages).
 // 138 → 116 (#7716, lot liens).
 // 116 → 50 (#7716, lot publications, stories et notifications).
-const BASELINE = 50;
+// 50 → 0 (#7716, lot médias et infrastructure).
+const BASELINE = 0;
 
 export const isCountedFile = (name) => SOURCE_RE.test(name) && !TEST_FILE_RE.test(name);
 

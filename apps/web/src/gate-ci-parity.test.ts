@@ -41,19 +41,36 @@ import { describe, expect, test } from 'bun:test';
 const V3 = dirname(fileURLToPath(import.meta.url)) + '/..';
 const CI = join(V3, '..', '..', '.github', 'workflows', 'ci.yml');
 
-/**
- * Les maillons `scripts/*.mjs` DE L'APPLICATION que `bun run gate` enchaîne.
- * Un maillon de la RACINE (`../../scripts/check-web-api-literals.mjs`) n'en
- * est pas un : `maillonsDeLaCI` ne retient que les fichiers de
- * `apps/web/scripts/`, et le comparer à cette liste le déclarerait orphelin
- * alors que `ci.yml` le lance depuis la racine.
- */
+/** Les maillons `scripts/*.mjs` que `bun run gate` enchaîne. */
 function maillonsDuComposite(): Set<string> {
   const pkg = JSON.parse(readFileSync(join(V3, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   };
   const gate = pkg.scripts.gate ?? '';
-  return new Set([...gate.matchAll(/(?<!\.\.\/)scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!));
+  return new Set([...gate.matchAll(/(?<!\.\.\/\.\.\/)scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!));
+}
+
+/**
+ * Les gardes de la RACINE que le composite lance (`node ../../scripts/x.mjs`,
+ * #7716). Ils ne vivent pas sous `apps/web/scripts/` : le départage par
+ * existence de `maillonsDeLaCI()` les écarterait, et le témoin principal les
+ * compterait orphelins alors qu'ils tournent. Ils se vérifient à part.
+ */
+function maillonsRacineDuComposite(): Set<string> {
+  const pkg = JSON.parse(readFileSync(join(V3, 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  const gate = pkg.scripts.gate ?? '';
+  return new Set([...gate.matchAll(/\.\.\/\.\.\/scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!));
+}
+
+function scriptsRacineDeLaCI(): Set<string> {
+  const yml = readFileSync(CI, 'utf8')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('#'))
+    .join('\n');
+  const cites = [...yml.matchAll(/node scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!);
+  return new Set(cites.filter((n) => existsSync(join(V3, '..', '..', 'scripts', n))));
 }
 
 /**
@@ -125,6 +142,13 @@ describe('les gardes du composite tournent en CI — sinon ils sont verts par om
    * du temps de runner à chaque poussée, et que personne ne relira — elle ne
    * rougit pas non plus.
    */
+  test('tout garde de la RACINE que lance le composite tourne aussi en CI', () => {
+    const racine = maillonsRacineDuComposite();
+    const ci = scriptsRacineDeLaCI();
+    expect(racine.has('check-web-api-literals.mjs')).toBe(true);
+    expect([...racine].filter((m) => !ci.has(m)).sort()).toEqual([]);
+  });
+
   test('aucune étape de ci.yml ne lance un garde absent du composite', () => {
     const composite = maillonsDuComposite();
     const ci = maillonsDeLaCI();

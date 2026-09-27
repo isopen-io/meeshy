@@ -5,7 +5,7 @@ import { COMMENTS_PAGE_SIZE, type CommentPage, type PostComment } from './public
 
 /**
  * **LE BOUCHON DU FIL DE COMMENTAIRES** — MIME
- * `GET /api/v1/posts/:postId/comments` et `POST` du même chemin
+ * `GET posts.byPostIdComments` et `POST` du même chemin
  * (`services/gateway/src/routes/posts/comments.ts:66,179` ;
  * `PostCommentService.getComments`, `:402-455`) :
  *
