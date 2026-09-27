@@ -675,6 +675,9 @@ const SETTINGS = [
   /* LES MESSAGES FAVORIS (#7286) — la PREMIERE rangee « Outils », miroir du
      `star.fill` d'iOS (`SettingsView.swift`, teinte `warning`). */
   'star-fill',
+  /* EFFACER MON CARNET D'ADRESSES (#8167) — la rangee de la confidentialite,
+     miroir du `trash` d'iOS (`PhonebookListView.eraseFooter`). */
+  'trash',
 ];
 
 emit({

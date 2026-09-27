@@ -21,7 +21,7 @@ import type { ContentPage } from './type';
  */
 export const PAGE_PRIVACY: ContentPage = {
   title: 'Politique de Confidentialité',
-  mention: 'Dernière mise à jour : 26 septembre 2026',
+  mention: 'Dernière mise à jour : 27 septembre 2026',
   description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   sections: [
     {
@@ -167,7 +167,7 @@ export const PAGE_PRIVACY: ContentPage = {
             },
             {
               title: 'Effacement',
-              body: "Vous pouvez demander à tout moment l'effacement complet de votre carnet à privacy@meeshy.me. Il est aussi effacé avec toutes vos données lors de la suppression de votre compte.",
+              body: "« Effacer mon carnet d'adresses » : au bas du Répertoire sur iPhone, dans Paramètres > Confidentialité sur le web. Il part de nos serveurs avec la trace des arrivées annoncées, et rien n'est renvoyé avant que vous synchronisiez de nouveau. Il est aussi effacé à la suppression de votre compte.",
             },
           ],
         },

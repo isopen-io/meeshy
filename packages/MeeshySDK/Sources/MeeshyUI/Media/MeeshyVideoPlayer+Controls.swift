@@ -40,6 +40,12 @@ internal struct _InlineOverlayControls: View {
         controls.contains(.pip) && isPipSupported
     }
 
+    /// Les sauts ±10 s suivent le jeu de contrôles, comme tous les autres
+    /// boutons de cet overlay (#8231).
+    nonisolated static func showsSkipButtons(controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        controls.contains(.skip)
+    }
+
     var body: some View {
         ZStack {
             scrimGradients
@@ -184,9 +190,13 @@ internal struct _InlineOverlayControls: View {
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 24) {
             HStack(spacing: 24) {
-                skipButton(systemName: "gobackward.10", seconds: -10)
+                if Self.showsSkipButtons(controls: controls) {
+                    skipButton(systemName: "gobackward.10", seconds: -10)
+                }
                 playPauseButton
-                skipButton(systemName: "goforward.10", seconds: 10)
+                if Self.showsSkipButtons(controls: controls) {
+                    skipButton(systemName: "goforward.10", seconds: 10)
+                }
             }
         }
     }

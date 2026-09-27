@@ -106,6 +106,11 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:call:quality-feedback'
   },
+  CALL_RECORDING: {
+    maxRequests: 20,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:recording'
+  },
   CALL_SCREEN_CAPTURE: {
     maxRequests: 20,
     windowMs: 60000, // 1 minute — start/stop toggles only, not a steady stream

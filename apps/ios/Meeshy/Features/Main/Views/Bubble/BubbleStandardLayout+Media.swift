@@ -11,7 +11,7 @@
 //
 //   2. Satellite structs (fileprivate / standalone) :
 //      - `BubbleGridCell` : 1 grid slot (image or video)
-//      - `BubbleGridImageView` / `BubbleGridVideoThumbnailView`
+//      - `BubbleGridImageView` (une vidéo : `ConversationVideoPoster`, #8231)
 //      - `AttachmentBlurOverlayView`
 //      - `BubbleCarouselView` : standalone pager, swipe between slides
 //
@@ -178,8 +178,7 @@ extension BubbleStandardLayout {
             messageDeliveryStatus: message.deliveryStatus,
             footer: resolvedFooter().0,
             isDark: isDark,
-            containerWidth: gridMaxWidth,
-            hasPlayingInlineVideo: hasPlayingInlineVideo
+            containerWidth: gridMaxWidth
         )
     }
 
@@ -229,20 +228,14 @@ extension BubbleStandardLayout {
             visualMediaGrid
                 .background(Color.black)
                 .overlay(alignment: .bottomTrailing) {
-                    // Footer caché pendant la lecture d'une vidéo inline —
-                    // évite la collision avec les contrôles overlay au
-                    // bottom de la vidéo.
-                    if !hasPlayingInlineVideo {
-                        BubbleFooter(
-                            model: resolvedFooter().0,
-                            actions: .none,
-                            style: .overlay,
-                            isDark: isDark
-                        )
-                        .equatable()
-                        .padding(MeeshySpacing.sm)
-                        .transition(.opacity)
-                    }
+                    BubbleFooter(
+                        model: resolvedFooter().0,
+                        actions: .none,
+                        style: .overlay,
+                        isDark: isDark
+                    )
+                    .equatable()
+                    .padding(MeeshySpacing.sm)
                 }
         }
         .compositingGroup()
@@ -344,17 +337,20 @@ fileprivate struct BubbleGridCell: View {
         revealedAttachmentIds.contains(attachment.id)
     }
 
+    /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
+    /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
+    /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
+    /// vidéo n'est qu'un poster.
     var body: some View {
-        if attachment.type == .video, !attachmentIsProtected || isRevealed {
+        if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
             videoBody
         } else {
             standardBody
         }
     }
 
-    /// Standard layout — image cells, protected/blurred video, or any future
-    /// media kind. Tap = fullscreen, DownloadBadge centred (no competing
-    /// play affordance underneath).
+    /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
+    /// écran, DownloadBadge centré pour l'image seule.
     private var standardBody: some View {
         ZStack {
             Color.black
@@ -444,16 +440,17 @@ fileprivate struct BubbleGridCell: View {
         }
     }
 
-    /// Inline video player path. `VideoAvailabilityResolver` resolves download
-    /// policy and passes `VideoAvailability` to `MeeshyVideoPlayer`, which owns
-    /// the play affordance, download badge, and fullscreen expand button.
+    /// **Lecture inline à trois contrôles : son, lecture/pause, plein écran**
+    /// (#8231, porteur 2026-09-27). Le bouton lecture joue DANS la bulle ;
+    /// toucher la vidéo ailleurs — le poster avant, la surface pendant — ouvre
+    /// le plein écran, où la galerie reprend le moteur partagé à la même
+    /// position. Les gestes vivent tous DANS le lecteur : un tap simultané
+    /// posé sur la tuile faisait jouer ET ouvrir sur un seul toucher.
     ///
     /// PAS de `.frame(maxWidth: .infinity, maxHeight: .infinity)` sur le
     /// `VideoAvailabilityResolver` : ça écraserait la contrainte d'`.aspectRatio`
     /// posée par le `_InlineRenderer` interne, et la bulle s'aplatirait en
-    /// paysage au moment du tap-play. Le ratio est piloté EXCLUSIVEMENT par
-    /// le renderer du SDK qui reporte sa frame naturelle (`width × W/ratio`)
-    /// à ce ZStack, lequel se sizes dessus.
+    /// paysage au moment du tap-play.
     private var videoBody: some View {
         ZStack {
             Color.black
@@ -461,17 +458,15 @@ fileprivate struct BubbleGridCell: View {
                 MeeshyVideoPlayer(
                     attachment: attachment,
                     style: .inline,
-                    controls: .inlineDefault,
+                    controls: .inlineMinimal,
                     accentColor: contactColor,
                     frame: .bubble,
                     availability: availability,
                     performance: .inline,
-                    // Grille multi-média : cellules ~150pt de large — le bouton
-                    // play 64pt écrasait la vignette. 44pt (minimum HIG) en
-                    // multi, 64pt conservé pour la vidéo solo pleine largeur.
                     playButtonDiameter: solo ? 64 : 44,
+                    surfaceTapExpands: true,
                     onDownload: onDownload,
-                    onExpand: { fullscreenAttachment = attachment }
+                    onExpand: { openFullscreen() }
                 )
             }
             .overlay(alignment: .bottom) {
@@ -481,20 +476,9 @@ fileprivate struct BubbleGridCell: View {
                     servedConsumption: attachment.currentUserConsumption,
                     totalDuration: Double(attachment.duration ?? 0) / 1000.0)
             }
-            overflowOverlay
             viewCountBadge
         }
         .clipped()
-        .contentShape(Rectangle())
-        // Un SIMPLE tap sur la vignette ouvre le PLEIN ÉCRAN (et y lance la
-        // lecture). Le double-tap est désormais RÉSERVÉ à la barre de réaction
-        // rapide (#4020) — le simple tap redevient donc le geste d'ouverture,
-        // comme sur l'image. Un `.onTapGesture` parent nu NE FAISAIT RIEN (le
-        // player interne capte la couche) ; `.simultaneousGesture` s'enregistre
-        // même sous cette couche. `handleTap` ouvre le carousel si débordement,
-        // sinon pose `fullscreenAttachment` (→ galerie plein écran, autoplay).
-        // Retour porteur 2026-08-27 : « réutilise le simple tap ».
-        .simultaneousGesture(TapGesture(count: 1).onEnded { handleTap() })
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
@@ -505,7 +489,9 @@ fileprivate struct BubbleGridCell: View {
         case .image:
             BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth)
         case .video:
-            BubbleGridVideoThumbnailView(attachment: attachment, contactColor: contactColor, solo: solo)
+            ConversationVideoPoster(attachment: attachment,
+                                    accentHex: contactColor,
+                                    playButtonDiameter: solo ? 64 : 44)
         default:
             EmptyView()
         }
@@ -660,79 +646,6 @@ fileprivate struct BubbleGridImageView: View {
     }
 }
 
-// MARK: - BubbleGridVideoThumbnailView (extracted so its `some View` is bounded)
-
-fileprivate struct BubbleGridVideoThumbnailView: View {
-    let attachment: MessageAttachment
-    let contactColor: String
-    let solo: Bool
-
-    var body: some View {
-        ZStack {
-            thumbnailLayer
-            playIconOverlay
-            durationBadge
-        }
-    }
-
-    @ViewBuilder
-    private var thumbnailLayer: some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        if thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: thumbUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
-            }
-            .aspectRatio(contentMode: .fill)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-            .clipped()
-        } else {
-            Color(hex: attachment.thumbnailColor)
-        }
-    }
-
-    private var playIconOverlay: some View {
-        ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: solo ? 48 : 36, height: solo ? 48 : 36)
-            Circle()
-                .fill(Color(hex: contactColor).opacity(0.85))
-                .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
-            Image(systemName: "play.fill")
-                // Doctrine 86i : glyphe play dans un cercle de lecture de dimension fixe
-                // (48/36) → taille figée, proportionnée au cercle (ne doit pas déborder).
-                .font(.system(size: solo ? 18 : 12, weight: .bold))
-                .foregroundColor(.white)
-                .offset(x: solo ? 2 : 1)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-    }
-
-    @ViewBuilder
-    private var durationBadge: some View {
-        if let formatted = attachment.durationFormatted {
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text(formatted)
-                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.6)))
-                }
-                .padding(.trailing, 4)
-                .padding(.bottom, 4)
-            }
-        }
-    }
-}
-
 // MARK: - Attachment Blur Overlay (standalone struct to avoid type-checker ambiguity)
 
 private struct AttachmentBlurOverlayView: View {
@@ -779,12 +692,6 @@ struct BubbleCarouselView: View {
     var footer: BubbleFooterModel = .empty
     var isDark: Bool = false
     var containerWidth: CGFloat = 260
-    /// Mirror of `BubbleStandardLayout.hasPlayingInlineVideo` — passed in
-    /// by `carouselView` so the carousel hides its `BubbleFooter` overlay
-    /// (timestamp + delivery state) while one of its video slides is the
-    /// active inline player. Avoids collision with the overlay controls
-    /// drawn over the video. Defaults to `false` for non-bubble callers.
-    var hasPlayingInlineVideo: Bool = false
 
     @State private var currentPageID: String?
 
@@ -816,14 +723,12 @@ struct BubbleCarouselView: View {
 
             carouselTopBar
         }
-        // Timestamp + delivery state — overlay footer, masqué pendant la
-        // lecture d'une vidéo inline pour libérer le bottom-trailing.
+        // Timestamp + delivery state — overlay footer. Aucune vidéo ne joue
+        // dans le carrousel (#8231) : il n'a plus de raison de s'effacer.
         .overlay(alignment: .bottomTrailing) {
-            if !hasPlayingInlineVideo {
-                BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
-                    .equatable()
-                    .padding(MeeshySpacing.sm)
-            }
+            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                .equatable()
+                .padding(MeeshySpacing.sm)
         }
         .onAppear {
             let startIndex = max(0, min(carouselIndex, items.count - 1))
@@ -841,8 +746,7 @@ struct BubbleCarouselView: View {
                 let oldAttachment = items[oldIndex]
                 if oldAttachment.type == .video {
                     // BUG E fix : release (URL-gated) plutôt que pause sur
-                    // swipe-away — vide `activeURL` pour que la bulle réaffiche
-                    // son footer et que le player ne traîne pas en mémoire.
+                    // swipe-away — le player ne traîne pas en mémoire.
                     SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)
                 }
                 HapticFeedback.light()
@@ -857,9 +761,7 @@ struct BubbleCarouselView: View {
     private var carouselTopBar: some View {
         HStack(spacing: 0) {
             Button {
-                // BUG E fix : libère le player de la slide active (URL-gated)
-                // pour vider `activeURL`, sinon `hasPlayingInlineVideo` reste
-                // vrai et le footer de la bulle reste masqué après fermeture.
+                // BUG E fix : libère le player de la slide active (URL-gated).
                 let current = items[max(0, min(carouselIndex, items.count - 1))]
                 if current.type == .video {
                     SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
@@ -997,29 +899,31 @@ struct BubbleCarouselView: View {
 
     // MARK: - Video Cell
 
-    @ViewBuilder
+    /// Même lecteur que la tuile (#8231) : trois contrôles, et le toucher de
+    /// la vidéo hors contrôles ouvre le plein écran.
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
         VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
             MeeshyVideoPlayer(
                 attachment: attachment,
                 style: .inline,
-                controls: .inlineDefault,
+                controls: .inlineMinimal,
                 accentColor: contactColor,
                 frame: .bubble,
                 availability: availability,
                 performance: .carousel,
+                surfaceTapExpands: true,
                 onDownload: onDownload,
                 onExpand: { fullscreenAttachment = attachment }
             )
         }
-        .overlay(alignment: .bottom) {
-            MediaConsumptionProgressBar(
+            .overlay(alignment: .bottom) {
+                MediaConsumptionProgressBar(
                     attachmentId: attachment.id,
                     accentHex: contactColor,
                     servedConsumption: attachment.currentUserConsumption,
                     totalDuration: Double(attachment.duration ?? 0) / 1000.0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Prefetch

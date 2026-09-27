@@ -13,10 +13,12 @@ import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
 import arCallFeedback from './catalog-ar-call-feedback';
 import arCallsErase from './catalog-ar-calls-erase';
+import arAddressBook from './catalog-ar-address-book';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arCallQuality from './catalog-ar-call-quality';
 import arCallCaptions from './catalog-ar-call-captions';
+import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
@@ -218,10 +220,12 @@ const ar = {
   ...arCallDecline,
   ...arCallFeedback,
   ...arCallsErase,
+  ...arAddressBook,
   ...arCallDevices,
   ...arCallScreen,
   ...arCallQuality,
   ...arCallCaptions,
+  ...arCallRecording,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',

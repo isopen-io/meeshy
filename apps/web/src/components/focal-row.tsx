@@ -278,7 +278,7 @@ export const FocalRow = memo(function FocalRow({
         }}
       >
         <div style={{ gridColumn: '1 / -1' }}>
-          <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="row" callTarget={callNoticeTarget(message)} />
+          <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="row" callTarget={callNoticeTarget(message)} languages={languages} />
         </div>
       </div>
     );
