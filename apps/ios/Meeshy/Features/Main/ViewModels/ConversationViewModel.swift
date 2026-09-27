@@ -329,7 +329,7 @@ class ConversationViewModel: ObservableObject {
     /// Resolves to the test-injected coordinator under DEBUG when present,
     /// otherwise the shared singleton. Pure UX orchestration lives in the
     /// coordinator — the VM only feeds it.
-    private var audioCoordinator: ConversationAudioCoordinator {
+    var audioCoordinator: ConversationAudioCoordinator {
         #if DEBUG
         return _testAudioCoordinator ?? .shared
         #else
@@ -888,7 +888,7 @@ class ConversationViewModel: ObservableObject {
     /// widget (`AudioTrackLanguageResolver` : bascule manuelle du drapeau
     /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
     /// l'audio entendu corresponde au texte et aux segments affichés.
-    private func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
+    func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
         let tracks = translatedAudioTracks(for: attachment, messageId: message.id)
         let lang = AudioTrackLanguageResolver.resolve(
             manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,

@@ -534,17 +534,26 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             to: "\n    private "
         )
         XCTAssertTrue(
-            block.contains("bubble.reply.author_hint") && block.contains("bubble.reply.open_media"),
-            "les deux actions réemploient les clés que la citation porte déjà — zéro clé neuve, zéro clé morte, " +
-            "cliquet français inchangé."
+            block.contains("QuotedZoneAccessibility.actions("),
+            "les actions nommées de la citation vivent en UN site partagé par les deux rangées (#8320) — " +
+            "une jumelle qu'on modifie deux fois finit par diverger."
+        )
+        let shared = try source("Meeshy/Features/Main/Views/Bubble/QuotedZoneAccessibility.swift")
+        XCTAssertTrue(
+            shared.contains("bubble.reply.author_hint") && shared.contains("bubble.reply.open_media")
+                && shared.contains("bubble.reply.listen_quoted") && shared.contains("bubble.reply.go_to_quoted"),
+            "les actions nomment les trois zones : l'auteur, le média (« Écouter le message cité » pour un " +
+            "audio, #8320), et le saut « Aller au message cité »."
         )
         XCTAssertTrue(
-            block.contains("onQuotedAuthorTap(reference)") && block.contains("onQuotedMediaTap(reference)"),
+            shared.contains("onQuotedAuthorTap(reference)") && shared.contains("onQuotedMediaTap(reference)")
+                && shared.contains("onReplyTap(reference.messageId)"),
             "chaque action doit DÉCLENCHER sa zone : une action nommée sans effet est un contrôle qui ment, et " +
             "le rotor la récite."
         )
         XCTAssertTrue(
-            block.contains("reference.offersAuthorGate") && block.contains("reference.offersMediaGate"),
+            shared.contains("reference.offersAuthorGate") && shared.contains("reference.offersMediaGate")
+                && shared.contains("reference.opensQuotedTarget"),
             "les actions suivent l'ARMEMENT (gestionnaire câblé ET zone offerte par la donnée), jamais la seule " +
             "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story."
         )
