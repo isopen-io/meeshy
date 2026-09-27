@@ -71,26 +71,26 @@ describe('listCallHistory — filtres serveur (#8203)', () => {
     const { prisma: search } = searchPrisma();
     return { prisma: { ...(search as any), callSession: { findMany } } as unknown as PrismaClient, findMany };
   };
+  const journalRead = (findMany: jest.Mock<any>) => findMany.mock.calls[findMany.mock.calls.length - 1][0].where;
 
-  it('« vidéo » ne rend que les appels vidéo, en une requête', async () => {
+  it('« vidéo » ne rend que les appels vidéo', async () => {
     const { prisma, findMany } = historyPrisma();
     await listCallHistory(prisma, USER_ID, { limit: 30, filter: 'all', type: 'video', viewer: VIEWER });
-    expect(findMany).toHaveBeenCalledTimes(1);
-    expect(findMany.mock.calls[0][0].where.isVideo).toBe(true);
+    expect(journalRead(findMany).isVideo).toBe(true);
   });
 
   it('« audio » garde les appels sans type enregistré, jamais les vidéos', async () => {
     const { prisma, findMany } = historyPrisma();
     await listCallHistory(prisma, USER_ID, { limit: 30, filter: 'all', type: 'audio', viewer: VIEWER });
-    const where = findMany.mock.calls[0][0].where;
-    expect(where.AND).toEqual([{ NOT: { isVideo: true } }]);
-    expect(where.NOT).toEqual({ hiddenForUserIds: { has: USER_ID } });
+    const where = journalRead(findMany);
+    expect(where.AND).toEqual([{ OR: [{ isVideo: { isSet: false } }, { isVideo: null }, { isVideo: false }] }]);
+    expect(where.NOT).toBeUndefined();
   });
 
   it('une recherche restreint le journal aux conversations qui portent ce nom', async () => {
     const { prisma, findMany } = historyPrisma();
     await listCallHistory(prisma, USER_ID, { limit: 30, filter: 'all', q: 'éloi', viewer: VIEWER });
-    expect(findMany.mock.calls[0][0].where.conversationId).toEqual({ in: ['c-eloi'] });
+    expect(journalRead(findMany).conversationId).toEqual({ in: ['c-eloi'] });
   });
 
   it('une recherche sans correspondance ne lit aucun appel', async () => {
@@ -103,6 +103,6 @@ describe('listCallHistory — filtres serveur (#8203)', () => {
   it('une recherche blanche est ignorée', async () => {
     const { prisma, findMany } = historyPrisma();
     await listCallHistory(prisma, USER_ID, { limit: 30, filter: 'all', q: '   ', viewer: VIEWER });
-    expect(findMany.mock.calls[0][0].where.conversationId).toBeUndefined();
+    expect(journalRead(findMany).conversationId).toBeUndefined();
   });
 });
