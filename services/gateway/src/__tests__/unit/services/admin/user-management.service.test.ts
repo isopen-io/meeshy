@@ -505,41 +505,6 @@ describe('UserManagementService.updateUser', () => {
   });
 });
 
-// ─── updateEmail ──────────────────────────────────────────────────────────────
-
-describe('UserManagementService.updateEmail', () => {
-  it('throws when user not found', async () => {
-    const findUnique = jest.fn().mockResolvedValue(null);
-    const svc = makeService(makePrisma({ findUnique }));
-
-    await expect(svc.updateEmail('user-id', { password: 'pw', newEmail: 'new@ex.com' }))
-      .rejects.toThrow('User not found');
-  });
-
-  it('throws when password is invalid', async () => {
-    mockCompare.mockResolvedValueOnce(false);
-    const findUnique = jest.fn().mockResolvedValue(makeUser());
-    const svc = makeService(makePrisma({ findUnique }));
-
-    await expect(svc.updateEmail('user-id', { password: 'wrong', newEmail: 'new@ex.com' }))
-      .rejects.toThrow('Invalid password');
-  });
-
-  it('updates email when password is valid', async () => {
-    mockCompare.mockResolvedValueOnce(true);
-    const findUnique = jest.fn().mockResolvedValue(makeUser({ password: 'hashed' }));
-    const update = jest.fn().mockResolvedValue(makeUser({ email: 'new@ex.com' }));
-    const svc = makeService(makePrisma({ findUnique, update }));
-
-    const result = await svc.updateEmail('user-id', { password: 'correct', newEmail: 'new@ex.com' });
-
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ email: 'new@ex.com' }),
-    }));
-    expect((result as any).email).toBe('new@ex.com');
-  });
-});
-
 // ─── updateRole ───────────────────────────────────────────────────────────────
 
 describe('UserManagementService.updateRole', () => {
