@@ -15,7 +15,7 @@ extension CallView {
         case topLeading, topTrailing, bottomLeading, bottomTrailing
     }
 
-    static let pipSize = CGSize(width: 100, height: 140)
+    private static let pipSize = CGSize(width: 100, height: 140)
 
     /// Resting center for the PiP in a given container, accounting for device
     /// safe area insets (landscape notch/Dynamic Island cutouts) plus fixed
@@ -39,7 +39,7 @@ extension CallView {
     }
 
     /// Nearest corner to a point — used to snap on drag end.
-    func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
+    private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
         PiPCorner.allCases.min(by: { a, b in
             let ca = pipCenter(a, in: container, safeArea: safeArea)
             let cb = pipCenter(b, in: container, safeArea: safeArea)
@@ -60,34 +60,6 @@ extension CallView {
                         .stroke(Color.white.opacity(0.3), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-                // Flip + filters live ON the self-view frame, where the user is
-                // already looking at their own camera (user-requested
-                // 2026-07-02). Only when the PiP shows the LOCAL stream — these
-                // controls act on the local camera, not the peer's feed.
-                .overlay(alignment: .bottom) {
-                    if !swapStreams {
-                        HStack(spacing: 8) {
-                            pipFrameButton(
-                                icon: "arrow.triangle.2.circlepath.camera.fill",
-                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main),
-                                hint: String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main)
-                            ) {
-                                callManager.switchCamera()
-                            }
-                            pipFrameButton(
-                                icon: "camera.filters",
-                                label: String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main),
-                                hint: String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main)
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showEffectsToolbar.toggle()
-                                }
-                            }
-                            .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main))
-                        }
-                        .padding(.bottom, 6)
-                    }
-                }
                 .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                 .gesture(
                     DragGesture()
@@ -104,7 +76,9 @@ extension CallView {
                         }
                 )
                 // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
-                // Camera flip also sits on the self-view frame itself.
+                // Retourner et Effets ont quitté la vignette pour le rail
+                // « mon image » (#8394) : la vignette ne fait plus que se
+                // déplacer et permuter.
                 .onTapGesture {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
                         swapStreams.toggle()
@@ -114,31 +88,6 @@ extension CallView {
                 .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
                 .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
         }
-    }
-
-    /// Small circular control pinned to the local self-view frame (flip
-    /// camera, filters). Buttons win the hit-test over the frame's tap-to-swap
-    /// and drag gestures, so they stay usable on the 100×140 tile. Uses the
-    /// same adaptiveGlass-backed callControlGlass as every other circular call
-    /// control (task #17) instead of a bespoke flat dark circle — diameter
-    /// stays 28 (unchanged), only the visual TREATMENT changes.
-    func pipFrameButton(icon: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.95))
-                .callControlGlass(diameter: 28, isActive: false, tint: .white)
-                // Visual glyph stays a compact 28pt (the 100×140 tile has no
-                // room for a 44pt circle), but the hit target itself must meet
-                // the HIG 44×44 minimum — expand invisibly via contentShape.
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel(label)
-        .optionalAccessibilityHint(hint)
     }
 
     /// True when the survival layer has auto-dropped our outbound video while the
@@ -168,7 +117,7 @@ extension CallView {
         }
     }
 
-    var videoSuspendedTileBody: some View {
+    private var videoSuspendedTileBody: some View {
         // Local user's initial (the suspended camera is OURS).
         let localName = AuthManager.shared.currentUser?.displayName
             ?? AuthManager.shared.currentUser?.username

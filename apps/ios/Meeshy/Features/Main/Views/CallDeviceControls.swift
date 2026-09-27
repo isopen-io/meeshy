@@ -1,165 +1,214 @@
 import SwiftUI
 import AVKit
+import UIKit
 import MeeshyUI
 
-// MARK: - Camera Picker
+// #8394 — les boutons de la vue d'appel « C adapté ». Ils se posent DANS un
+// verre (la pilule, un rail, une rangée) et n'en portent jamais eux-mêmes :
+// un verre par groupe, pas de verre sur verre.
 
-struct CallCameraPickerControl: View {
-    let cameras: [CameraDeviceOption]
-    let selectedCameraId: String?
-    let onSelect: (String) -> Void
+/// L'état visuel d'un bouton de la pilule : actif = pastille blanche et glyphe
+/// sombre, Fin = rouge, pause automatique = glyphe ambre.
+enum CallPillButtonKind: Equatable {
+    case normal
+    case active
+    case destructive
+    case warning
+}
+
+/// Le glyphe rond d'un bouton de la pilule. Doctrine 86i : un glyphe dans un
+/// cercle de taille fixe garde une taille figée ; c'est la légende, dessous,
+/// qui porte le Dynamic Type.
+struct CallPillGlyph: View {
+    let symbol: String
+    let kind: CallPillButtonKind
+    let diameter: CGFloat
 
     var body: some View {
-        Menu {
-            ForEach(cameras) { cam in
-                Button {
-                    onSelect(cam.id)
-                } label: {
-                    Label(cam.displayName, systemImage: selectedCameraId == cam.id ? "checkmark" : "camera")
-                }
-            }
-        } label: {
-            CallDeviceControlLabel(
-                symbolName: "camera.badge.ellipsis",
-                isActive: false,
-                caption: String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main)
-            )
+        Image(systemName: symbol)
+            .font(.system(size: diameter * 0.4, weight: .semibold))
+            .foregroundStyle(foreground)
+            .frame(width: diameter, height: diameter)
+            .background(Circle().fill(background))
+            .accessibilityHidden(true)
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .normal, .destructive: return .white
+        case .active: return MeeshyColors.indigo950
+        case .warning: return MeeshyColors.warning
         }
-        .pressable()
-        .accessibilityLabel(String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main))
+    }
+
+    private var background: Color {
+        switch kind {
+        case .normal, .warning: return Color.white.opacity(0.12)
+        case .active: return .white
+        case .destructive: return MeeshyColors.error
+        }
     }
 }
 
-// MARK: - Audio Route Controls
+/// Glyphe + légende facultative (les rangées légendées d'un appel de groupe).
+/// La cible reste de 44 pt au moins, quel que soit le diamètre dessiné.
+struct CallPillButtonLabel: View {
+    let symbol: String
+    let kind: CallPillButtonKind
+    let caption: String?
+    let diameter: CGFloat
 
-struct CallAudioRouteControls: View {
+    var body: some View {
+        VStack(spacing: 4) {
+            CallPillGlyph(symbol: symbol, kind: kind, diameter: diameter)
+            if let caption {
+                Text(caption)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.white.opacity(0.85))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+    }
+}
+
+struct CallPillButton: View {
+    let symbol: String
+    let kind: CallPillButtonKind
+    let label: String
+    var caption: String? = nil
+    var hint: String? = nil
+    /// `nil` : le bouton n'est pas une bascule (Fin, Retourner, Messages…).
+    var toggleState: Bool? = nil
+    var diameter: CGFloat = 48
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            CallPillButtonLabel(symbol: symbol, kind: kind, caption: caption, diameter: diameter)
+        }
+        .pressable()
+        .accessibilityLabel(label)
+        .optionalAccessibilityHint(hint)
+        .toggleStateAccessibility(isToggle: toggleState != nil, isActive: toggleState ?? false)
+    }
+}
+
+// MARK: - Sortie
+
+/// « Sortie » dans la pilule : TOUCHER bascule le haut-parleur (le geste le
+/// plus fréquent), MAINTENIR ouvre le menu — le sélecteur système de sortie
+/// (AirPods, Bluetooth, AirPlay) et, quand il y en a plusieurs, le choix du
+/// micro. `Menu(primaryAction:)` porte exactement ce partage, sans geste
+/// maison ; VoiceOver y accède aussi par une action nommée.
+struct CallOutputPillButton: View {
+    let isSpeaker: Bool
+    let caption: String?
+    let diameter: CGFloat
+    let onToggleSpeaker: () -> Void
+
     @StateObject private var model: CallAudioRouteViewModel
+    @State private var routePicker = CallAudioRoutePickerLauncher()
 
-    init(model: CallAudioRouteViewModel? = nil) {
+    init(isSpeaker: Bool, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
+        self.isSpeaker = isSpeaker
+        self.caption = caption
+        self.diameter = diameter
+        self.onToggleSpeaker = onToggleSpeaker
         _model = StateObject(wrappedValue: model ?? CallAudioRouteViewModel())
     }
 
+    private var isExternal: Bool {
+        model.state.output?.kind.isExternalOutput ?? false
+    }
+
+    private var symbol: String {
+        if isExternal, let output = model.state.output { return output.kind.symbolName }
+        return isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"
+    }
+
+    private var chooseOutputLabel: String {
+        String(localized: "call.control.output", defaultValue: "Choisir la sortie audio", bundle: .main)
+    }
+
+    private var spokenValue: String {
+        let state = isSpeaker
+            ? String(localized: "a11y.toggle.on", defaultValue: "Activé", bundle: .main)
+            : String(localized: "a11y.toggle.off", defaultValue: "Désactivé", bundle: .main)
+        guard let route = model.state.output?.name, !route.isEmpty else { return state }
+        return "\(state), \(route)"
+    }
+
     var body: some View {
-        HStack(spacing: 20) {
-            CallAudioOutputControl(output: model.state.output)
-            if model.state.offersInputChoice {
-                CallAudioInputControl(
-                    inputs: model.state.inputs,
-                    selectedInput: model.state.selectedInput,
-                    onSelect: model.selectInput(id:)
-                )
+        Menu {
+            Button {
+                routePicker.open()
+            } label: {
+                Label(chooseOutputLabel, systemImage: "airplayaudio")
             }
+            if model.state.offersInputChoice {
+                Section {
+                    ForEach(model.state.inputs) { input in
+                        Button {
+                            model.selectInput(id: input.id)
+                        } label: {
+                            Label(input.name, systemImage: model.state.selectedInput?.id == input.id ? "checkmark" : input.kind.symbolName)
+                        }
+                    }
+                } header: {
+                    Text(String(localized: "call.control.input", defaultValue: "Choisir le micro", bundle: .main))
+                }
+            }
+        } label: {
+            CallPillButtonLabel(symbol: symbol, kind: isSpeaker || isExternal ? .active : .normal, caption: caption, diameter: diameter)
+        } primaryAction: {
+            onToggleSpeaker()
         }
+        .menuIndicator(.hidden)
+        .background(routePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
+        .accessibilityLabel(String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main))
+        // UNE valeur : l'état du haut-parleur, puis la sortie courante — deux
+        // `accessibilityValue` empilés se masqueraient l'un l'autre.
+        .accessibilityValue(spokenValue)
+        .accessibilityHint(String(localized: "call.control.output.hint", defaultValue: "Touchez pour basculer le haut-parleur, maintenez pour choisir la sortie", bundle: .main))
+        .accessibilityAction(named: Text(chooseOutputLabel)) { routePicker.open() }
         .onAppear { model.start() }
         .onDisappear { model.stop() }
     }
 }
 
-struct CallAudioOutputControl: View {
-    let output: CallAudioPort?
+/// Ouvre le sélecteur système de sortie audio. `AVRoutePickerView` n'a pas
+/// d'API d'ouverture : on actionne le bouton qu'elle porte — même motif que
+/// `ScreenSharePickerLauncher`. La vue vit dans la hiérarchie (`host`).
+final class CallAudioRoutePickerLauncher {
+    private(set) lazy var picker: AVRoutePickerView = {
+        let view = AVRoutePickerView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        view.prioritizesVideoDevices = false
+        view.tintColor = .clear
+        view.activeTintColor = .clear
+        view.isAccessibilityElement = false
+        view.accessibilityElementsHidden = true
+        return view
+    }()
 
-    private var isExternal: Bool {
-        output?.kind.isExternalOutput ?? false
+    nonisolated deinit {}
+
+    func open() {
+        HapticFeedback.light()
+        picker.subviews
+            .compactMap { $0 as? UIButton }
+            .first?
+            .sendActions(for: .touchUpInside)
     }
 
-    var body: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Image(systemName: output?.kind.symbolName ?? CallAudioPortKind.receiver.symbolName)
-                    .font(.title2.weight(.medium))
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(isExternal ? MeeshyColors.info : .white.opacity(0.9))
-                    .accessibilityHidden(true)
-                CallAudioRoutePicker(
-                    spokenLabel: String(localized: "call.control.output", defaultValue: "Choisir la sortie audio", bundle: .main),
-                    spokenValue: output?.name
-                )
-            }
-            .callControlGlass(diameter: 56, isActive: isExternal, tint: MeeshyColors.info)
-            CallDeviceControlCaption(text: String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main))
-        }
-        .frame(width: 68)
-    }
+    var host: some View { CallAudioRoutePickerHost(picker: picker) }
 }
 
-struct CallAudioInputControl: View {
-    let inputs: [CallAudioPort]
-    let selectedInput: CallAudioPort?
-    let onSelect: (String) -> Void
+private struct CallAudioRoutePickerHost: UIViewRepresentable {
+    let picker: AVRoutePickerView
 
-    var body: some View {
-        Menu {
-            ForEach(inputs) { input in
-                Button {
-                    onSelect(input.id)
-                } label: {
-                    Label(input.name, systemImage: selectedInput?.id == input.id ? "checkmark" : input.kind.symbolName)
-                }
-            }
-        } label: {
-            CallDeviceControlLabel(
-                symbolName: selectedInput?.kind.symbolName ?? CallAudioPortKind.builtInMicrophone.symbolName,
-                isActive: selectedInput.map { $0.kind != .builtInMicrophone } ?? false,
-                caption: String(localized: "call.control.input.caption", defaultValue: "Entrée", bundle: .main)
-            )
-        }
-        .pressable()
-        .accessibilityLabel(String(localized: "call.control.input", defaultValue: "Choisir le micro", bundle: .main))
-        .accessibilityValue(selectedInput?.name ?? "")
-    }
-}
-
-// MARK: - Shared Pieces
-
-struct CallDeviceControlLabel: View {
-    let symbolName: String
-    let isActive: Bool
-    let caption: String
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: symbolName)
-                .font(.title2.weight(.medium))
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                .foregroundColor(isActive ? MeeshyColors.info : .white.opacity(0.9))
-                .callControlGlass(diameter: 56, isActive: isActive, tint: MeeshyColors.info)
-            CallDeviceControlCaption(text: caption)
-        }
-        .frame(width: 68)
-    }
-}
-
-struct CallDeviceControlCaption: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .foregroundColor(.white.opacity(0.7))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-    }
-}
-
-struct CallAudioRoutePicker: UIViewRepresentable {
-    let spokenLabel: String
-    let spokenValue: String?
-
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let picker = AVRoutePickerView()
-        picker.prioritizesVideoDevices = false
-        picker.tintColor = .clear
-        picker.activeTintColor = .clear
-        picker.backgroundColor = .clear
-        return picker
-    }
-
-    func updateUIView(_ picker: AVRoutePickerView, context: Context) {
-        picker.accessibilityLabel = spokenLabel
-        picker.accessibilityValue = spokenValue
-        picker.subviews.compactMap { $0 as? UIButton }.forEach { button in
-            button.accessibilityLabel = spokenLabel
-            button.accessibilityValue = spokenValue
-        }
-    }
+    func makeUIView(context: Context) -> AVRoutePickerView { picker }
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }

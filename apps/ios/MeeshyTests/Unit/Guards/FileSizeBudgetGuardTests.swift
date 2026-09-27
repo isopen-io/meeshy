@@ -48,7 +48,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "AudioFullscreenView.swift",
         "BubbleStandardLayout.swift",
         "CallManager.swift",
-        "CallView.swift",
         "ConversationDashboardView.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",

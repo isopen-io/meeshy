@@ -11,6 +11,81 @@ extension CallView {
     // MARK: - Connected
 
     var connectedView: some View {
+        // #8394 — UN conteneur de verre pour tout ce qui flotte au-dessus de
+        // l'appel établi : la pilule, les deux rails, le bandeau de
+        // sous-titres. Des verres voisins ne se superposent jamais (le verre
+        // ne peut pas échantillonner le verre) ; ils se fondent entre eux.
+        AdaptiveGlassContainer(spacing: 12) {
+            ZStack {
+                if isGroupStage {
+                    groupStageLayout
+                } else {
+                    duoLayout
+                }
+
+                CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
+                    .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
+                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
+                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
+
+                if !isGroupStage {
+                    duoOverlays
+                }
+            }
+        }
+        // Le sélecteur système de diffusion vit dans la hiérarchie en
+        // permanence, et en UN seul endroit : le bouton « Écran » n'existe que
+        // (…) déployé, et passe d'un rail à une rangée selon la disposition.
+        .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
+        // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
+        // showControls flips to true (a reveal tap) or the (…) is used;
+        // no-op for audio / Mac / effects-open via shouldAutoHideControls.
+        .task(id: AutoHideKey(isVisible: showControls, isExpanded: controlsDisclosure.isExpanded)) {
+            guard showControls, shouldAutoHideControls else { return }
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
+            }
+        }
+        // §7.1 — populate the camera list when video turns on so the « mon
+        // image » actions can decide flip vs device picker (Continuity/USB).
+        .task(id: callManager.isVideoEnabled) {
+            if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
+        }
+        .onDisappear { showControls = true }
+        .adaptiveOnChange(of: isGroupStage) { _, isGroup in
+            if !isGroup { isStageFullScreen = false }
+        }
+        // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
+        // tap time (the start path is async — permission request + on-device
+        // recognizer/audio-engine checks all happen after the button already
+        // optimistically opened the transcript panel). Without this, a failed
+        // start (e.g. no on-device speech recognizer for the user's language —
+        // never falls back to Apple's server-side recognizer, privacy decision)
+        // left the panel open and empty with zero feedback — user-reported
+        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        // Échec du moteur LOCAL (permission refusée, langue non supportée
+        // on-device…) : toast explicite, mais le panneau RESTE ouvert en
+        // réception seule — la réception des transcriptions du pair est liée
+        // à la visibilité du panneau (spec 2026-08-13), le fermer ici
+        // couperait aussi ce flux. L'ancien auto-reveal du panneau au premier
+        // segment reçu est retiré par la même spec : panneau caché ⇒
+        // désabonné, aucun segment ne peut plus arriver panneau fermé.
+        .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
+            guard let newError else { return }
+            FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
+        }
+        .adaptiveOnChange(of: latestFinalRemoteSegmentId) { _, _ in
+            announceLatestCaption()
+        }
+        .sheet(isPresented: $showCaptionsJournal) {
+            captionsJournal
+        }
+    }
+
+    /// La disposition 1:1 : le flux primaire plein écran (vidéo) ou le duo
+    /// d'avatars (audio), puis la pilule en bas.
+    private var duoLayout: some View {
         ZStack {
             // §7.2 — full-bleed PRIMARY video is the SINGLE video surface
             // (remote by default, the local camera after a PiP swap). The
@@ -50,7 +125,7 @@ extension CallView {
                     .accessibilityHidden(!shouldAutoHideControls)
             }
 
-            VStack(spacing: 0) {
+            VStack(spacing: 12) {
                 if !callManager.isVideoUIActive {
                     if showTranscript {
                         // Captions active on an audio call: compact header at
@@ -58,11 +133,9 @@ extension CallView {
                         // freed space — replaces the old vertically-centered
                         // avatar layout while captions are on.
                         compactAudioCallHeader
-                            .padding(.top, 16)
+                            .padding(.top, Self.chromeTopInset + 52)
                         transcriptPanel
                             .padding(.horizontal, 16)
-                            .padding(.top, 12)
-                            .padding(.bottom, 12)
                             .frame(maxHeight: .infinity)
                     } else {
                         Spacer()
@@ -71,111 +144,85 @@ extension CallView {
                     }
                 } else {
                     Spacer()
-                }
-
-                // §7.3 — auto-hiding control bar on iPhone video calls; always
-                // visible for audio and on Mac (and while the effects tray is
-                // open). Hidden controls don't capture taps.
-                controlBar
-                    .padding(.bottom, 60)
-                    .opacity(showControls ? 1 : 0)
-                    .allowsHitTesting(showControls)
-                    .animation(.easeInOut(duration: 0.25), value: showControls)
-            }
-
-            // Transcript overlay — video calls ONLY (transcriptOverlay's own doc
-            // comment). Audio calls use the structural transcriptPanel instead
-            // (rendered above, in the VStack). This call site used to run
-            // unconditionally, so on an audio call with captions on, the SAME
-            // transcriptSegmentsList rendered TWICE (once in transcriptPanel,
-            // once here) — user-reported 2026-07-11.
-            if callManager.isVideoUIActive {
-                transcriptOverlay
-            }
-
-            CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
-                .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
-            CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
-                .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
-
-            // Live captions toggle — floating vertical control on the trailing
-            // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
-            // the main horizontal row — mute/speaker/camera/video/PiP/end —
-            // must stay uncrowded). Mirrors controlBar's own auto-hide so it
-            // stays in sync with the rest of the chrome on video calls, but
-            // remains reachable on audio calls (shouldAutoHideControls is
-            // always false there, so showControls never flips off).
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    AdaptiveGlassContainer(spacing: 12) {
-                        VStack(spacing: 12) {
-                            captionsCycleButton
-                        }
+                    // #8396 — le bandeau de sous-titres, juste au-dessus de la
+                    // pilule ; il RESTE quand les actions sont rangées, et
+                    // quand le chrome se masque.
+                    if showTranscript {
+                        captionsBand(hasOwnGlass: true)
+                            .padding(.horizontal, 16)
+                            .transition(.opacity)
                     }
                 }
-            }
-            .padding(.trailing, 16)
-            .padding(.bottom, 150)
-            .opacity(showControls ? 1 : 0)
-            .allowsHitTesting(showControls)
-            .animation(.easeInOut(duration: 0.25), value: showControls)
 
-            // §7.2 — draggable, corner-snapping PiP showing the secondary
-            // stream. Tap to swap it with the full-area primary (FaceTime).
-            if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
-                pipView
-            } else if callManager.isVideoEnabled && callManager.isVideoSuspended {
-                // Survie réseau : depuis L6-1 la piste locale RESTE attachée
-                // (l'encodeur est au plancher), donc `hasLocalVideoTrack` est
-                // vrai et c'est la PiP qui gagne — elle montre l'image
-                // réellement gelée. Cette branche ne sert plus que si la piste
-                // disparaît pour une AUTRE raison (échec de ré-acquisition) :
-                // une tuile « en pause » sur l'avatar plutôt qu'une self-view
-                // qui s'évapore.
-                localVideoSuspendedTile
+                // §7.3 — la pilule se masque avec l'en-tête et les rails en
+                // vidéo (4 s) ; toujours visible en audio, sur Mac, avec
+                // VoiceOver. Masquée, elle ne capte aucun toucher.
+                callControlsPill
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, Self.chromeBottomInset)
+                    .callChromeVisibility(isChromeVisible)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showTranscript)
+        }
+    }
+
+    /// Ce qui flotte AU-DESSUS de la disposition 1:1 : les deux rails du `(…)`
+    /// et la vignette perso.
+    @ViewBuilder
+    private var duoOverlays: some View {
+        if actionsPresentation == .rails {
+            actionRails
+                .callChromeVisibility(isChromeVisible)
+                .transition(.opacity)
+        }
+
+        // §7.2 — draggable, corner-snapping PiP showing the secondary
+        // stream. Tap to swap it with the full-area primary (FaceTime).
+        if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
+            pipView
+        } else if callManager.isVideoEnabled && callManager.isVideoSuspended {
+            // Survie réseau : depuis L6-1 la piste locale RESTE attachée
+            // (l'encodeur est au plancher), donc `hasLocalVideoTrack` est
+            // vrai et c'est la PiP qui gagne — elle montre l'image
+            // réellement gelée. Cette branche ne sert plus que si la piste
+            // disparaît pour une AUTRE raison (échec de ré-acquisition) :
+            // une tuile « en pause » sur l'avatar plutôt qu'une self-view
+            // qui s'évapore.
+            localVideoSuspendedTile
+        }
+    }
+
+    /// #8276 — la scène de groupe entre l'en-tête et la pilule, dans le flux
+    /// de la mise en page : quand la pilule grandit (rangées, sous-titres), la
+    /// grille rétrécit au lieu de passer dessous — en portrait comme en paysage.
+    private var groupStageLayout: some View {
+        VStack(spacing: 8) {
+            Color.clear
+                .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen)
+                .padding(.horizontal, 12)
+            if !isStageFullScreen {
+                callControlsPill
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, Self.chromeBottomInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
-        // showControls flips to true (a reveal tap); no-op for audio / Mac /
-        // effects-open via shouldAutoHideControls.
-        .task(id: showControls) {
-            guard showControls, shouldAutoHideControls else { return }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            if !Task.isCancelled {
-                withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
-            }
-        }
-        .onDisappear { showControls = true }
-        // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
-        // tap time (the start path is async — permission request + on-device
-        // recognizer/audio-engine checks all happen after the button already
-        // optimistically opened the transcript panel). Without this, a failed
-        // start (e.g. no on-device speech recognizer for the user's language —
-        // never falls back to Apple's server-side recognizer, privacy decision)
-        // left the panel open and empty with zero feedback — user-reported
-        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
-        // Échec du moteur LOCAL (permission refusée, langue non supportée
-        // on-device…) : toast explicite, mais le panneau RESTE ouvert en
-        // réception seule — la réception des transcriptions du pair est liée
-        // à la visibilité du panneau (spec 2026-08-13), le fermer ici
-        // couperait aussi ce flux. L'ancien auto-reveal du panneau au premier
-        // segment reçu est retiré par la même spec : panneau caché ⇒
-        // désabonné, aucun segment ne peut plus arriver panneau fermé.
-        .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
-            guard let newError else { return }
-            FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
-        }
+        .padding(.bottom, isStageFullScreen ? DeviceLayout.safeAreaBottom : 0)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isStageFullScreen)
     }
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
     /// (controls are persistent on desktop), never for audio-only (no video to
     /// reveal), never while the effects tray is open, and never while VoiceOver
     /// is running (VoiceOver users can't tap the video to reveal hidden controls).
-    var shouldAutoHideControls: Bool {
+    /// Jamais non plus en groupe : un toucher y met une vignette à la une, il
+    /// ne pourrait pas faire revenir les commandes — le plein écran d'une
+    /// vignette est le geste qui les masque.
+    private var shouldAutoHideControls: Bool {
         callManager.isVideoUIActive
             && !showEffectsToolbar
+            && !isGroupStage
             && !ProcessInfo.processInfo.isiOSAppOnMac
             && !UIAccessibility.isVoiceOverRunning
     }
@@ -206,7 +253,7 @@ extension CallView {
     /// §7.1 — fill (crop) on phone/tablet for an immersive edge-to-edge feed;
     /// fit (letterbox) on Mac where the window is resizable and cropping the
     /// peer is undesirable.
-    var primaryVideoContentMode: UIView.ContentMode {
+    private var primaryVideoContentMode: UIView.ContentMode {
         isOnMac || callManager.screenShare.isRemoteSharing ? .scaleAspectFit : .scaleAspectFill
     }
 
@@ -372,7 +419,7 @@ extension CallView {
         return parts.joined(separator: ", ")
     }
 
-    var isConnectionDegraded: Bool {
+    private var isConnectionDegraded: Bool {
         // Sustained flag only (2 consecutive degraded stats ticks) — a single
         // 5 s sample must never flash the "Connexion instable" pill.
         if callManager.liveVideoQualityLevel != nil {
@@ -384,7 +431,7 @@ extension CallView {
         }
     }
 
-    var durationColor: Color {
+    private var durationColor: Color {
         isConnectionDegraded ? MeeshyColors.warning : MeeshyColors.indigo400
     }
 
@@ -394,75 +441,10 @@ extension CallView {
             // `swapStreams` decides whether the primary is the remote feed
             // (default) or the local camera (after a PiP tap). The OTHER stream
             // is rendered in the draggable PiP. §7.1 — letterbox on Mac, fill on
-            // phone/tablet. `.ignoresSafeArea()` is on the VIDEO only so the feed
-            // reaches the screen edges while the duration badge stays inside the
-            // safe area (never under the notch / Dynamic Island).
+            // phone/tablet. The duration chip lives in the header row
+            // (`topChrome`, #8394), inside the safe area.
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .ignoresSafeArea()
-
-            VStack {
-                HStack {
-                    Spacer()
-                    // Durée + glyphe signal (visible pendant/30 s après une
-                    // dégradation — TransientCallSignalGlyph) ; un
-                    // `wifi.exclamationmark` ambre s'y ajoute tant que le
-                    // RÉSEAU DU CONTACT reste dégradé (l'alerte pill, elle, est
-                    // ponctuelle) — le layout vidéo n'a pas de status row.
-                    HStack(spacing: 6) {
-                        TransientCallSignalGlyph(strength: signalStrength)
-                        Text(callManager.formattedDuration)
-                            .font(.caption2.weight(.medium).monospacedDigit())
-                            .foregroundColor(.white)
-                        if callManager.isRemoteQualityDegraded {
-                            Image(systemName: "wifi.exclamationmark")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(MeeshyColors.warning)
-                        }
-                        // §4.3 — même remplacement pill-compacte qu'en audio
-                        // (voir audioCallLayout) : pas de bandeau plein-écran.
-                        // No per-icon .accessibilityLabel — the badge is one
-                        // opaque element (children: .ignore below); this
-                        // state is folded into videoDurationBadgeAccessibilityLabel.
-                        if case .reconnecting = callManager.callState {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(MeeshyColors.warning)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    // The parent's own .accessibilityLabel below already makes this
-                    // whole badge one opaque VoiceOver element (children: .ignore) —
-                    // every child label is discarded regardless, so hiding them here
-                    // is a no-op today. Kept explicit so a future removal of the
-                    // parent label doesn't silently re-expose fragmented per-child
-                    // announcements (glyph, then digits, then icon) instead of the
-                    // single composed sentence `videoDurationBadgeAccessibilityLabel`.
-                    .accessibilityElement(children: .ignore)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    // iOS 26 Liquid Glass — floating duration badge over the
-                    // full-bleed video stream (SDK Compatibility wrapper gates
-                    // the native effect / `.ultraThinMaterial` fallback).
-                    .adaptiveGlass(in: Capsule())
-                    .clipShape(Capsule())
-                    // Badge collé à DROITE sur la rangée de chrome top, centré
-                    // sur le même axe vertical que le chevron minimize et le
-                    // bouton conversation (leading, top 8 / hauteur 44 — il se
-                    // rendait DERRIÈRE eux en top-leading). Le PiP par défaut
-                    // (top-trailing) se pose dessous via `pipTopClearance`.
-                    .frame(height: 44)
-                    .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
-                    .accessibilityValue(callManager.spokenDuration)
-                    .accessibilityAddTraits(.updatesFrequently)
-                    .callQualityDetailTrigger(isPresented: $showQualityDetail)
-                }
-                .padding(.horizontal, 16)
-                // Même encart que le chevron minimize : les deux rangées
-                // partagent l'axe vertical du chrome haut, et une seule des
-                // deux ré-encartée les aurait désalignées.
-                .padding(.top, Self.chromeTopInset)
-                Spacer()
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -505,7 +487,7 @@ extension CallView {
         }
     }
 
-    var connectingVideoPlaceholder: some View {
+    private var connectingVideoPlaceholder: some View {
         Color.black.opacity(0.4)
             .overlay(
                 VStack(spacing: 12) {
@@ -548,7 +530,7 @@ extension CallView {
     // P0-3 — shown full-area when the remote peer has a video track but turned
     // its camera off, so the user sees the peer's avatar rather than a frozen
     // last frame.
-    var remoteCameraOffPlaceholder: some View {
+    private var remoteCameraOffPlaceholder: some View {
         ZStack {
             Color.black.opacity(0.5)
             VStack(spacing: 14) {

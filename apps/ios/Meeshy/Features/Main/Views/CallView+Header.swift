@@ -56,11 +56,73 @@ extension CallView {
                     .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
                 }
                 Spacer()
+                // #8394 — la puce durée/qualité, à DROITE de la rangée
+                // d'en-tête, en duo vidéo comme en groupe.
+                if showsDurationChip {
+                    durationChip
+                }
             }
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.top, Self.chromeTopInset)
+        // §7.3 — l'en-tête se masque avec la pilule et les rails.
+        .callChromeVisibility(isChromeVisible)
+    }
+
+    /// La puce n'a de sens que sur un appel établi dont le layout n'a pas
+    /// déjà sa propre ligne de statut (l'audio l'a sous l'avatar).
+    private var showsDurationChip: Bool {
+        let showsConnectedLayout: Bool
+        switch callManager.callState {
+        case .connected: showsConnectedLayout = true
+        case .reconnecting: showsConnectedLayout = callManager.hasEstablishedMedia
+        default: showsConnectedLayout = false
+        }
+        return showsConnectedLayout && (callManager.isVideoUIActive || isGroupStage)
+    }
+
+    private var durationChip: some View {
+        HStack(spacing: 6) {
+            TransientCallSignalGlyph(strength: signalStrength)
+            Text(callManager.formattedDuration)
+                .font(.caption2.weight(.medium).monospacedDigit())
+                .foregroundColor(.white)
+            if callManager.isRemoteQualityDegraded {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(MeeshyColors.warning)
+            }
+            // §4.3 — même remplacement pill-compacte qu'en audio
+            // (voir audioCallLayout) : pas de bandeau plein-écran.
+            // No per-icon .accessibilityLabel — the badge is one
+            // opaque element (children: .ignore below); this
+            // state is folded into videoDurationBadgeAccessibilityLabel.
+            if case .reconnecting = callManager.callState {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(MeeshyColors.warning)
+                    .accessibilityHidden(true)
+            }
+        }
+        // The parent's own .accessibilityLabel below already makes this
+        // whole badge one opaque VoiceOver element (children: .ignore) —
+        // every child label is discarded regardless, so hiding them here
+        // is a no-op today. Kept explicit so a future removal of the
+        // parent label doesn't silently re-expose fragmented per-child
+        // announcements (glyph, then digits, then icon) instead of the
+        // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+        .accessibilityElement(children: .ignore)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
+        .callChromeGlass(in: Capsule())
+        .clipShape(Capsule())
+        .frame(height: 44)
+        .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
+        .accessibilityValue(callManager.spokenDuration)
+        .accessibilityAddTraits(.updatesFrequently)
+        .callQualityDetailTrigger(isPresented: $showQualityDetail)
     }
 
     // MARK: - Open Conversation During Call
@@ -109,7 +171,7 @@ extension CallView {
     /// immédiate), avec repli réseau — le socket d'appel étant vivant, le repli
     /// `getById` aboutit. La `Conversation` résolue est postée sur le canal
     /// `.navigateToConversation` que RootView/iPadRootView routent vers le DM.
-    func resolveAndOpenConversation(conversationId: String) async {
+    private func resolveAndOpenConversation(conversationId: String) async {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         switch await CacheCoordinator.shared.conversations.load(for: "list") {
         case .fresh(let list, _), .stale(let list, _):

@@ -252,7 +252,7 @@ extension CallView {
             }
     }
 
-    func localAvatarBadge(size: CGFloat) -> some View {
+    private func localAvatarBadge(size: CGFloat) -> some View {
         let user = AuthManager.shared.currentUser
         let name = user?.displayName ?? user?.username ?? "?"
         let initial = String(name.prefix(1)).uppercased()

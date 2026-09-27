@@ -271,7 +271,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     /// d'accessibilité doit venir de la forme parlée, jamais de celle affichée.
     func test_timerHostsSpeakTheirDurationInWords() {
         let hosts = [
-            "Features/Main/Views/CallView.swift",
+            // #8276 — la minuterie de l'écran d'appel a suivi le découpage.
+            "Features/Main/Views/CallView+Connected.swift",
+            "Features/Main/Views/CallView+Header.swift",
             "Features/Main/Views/FloatingCallPillView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",

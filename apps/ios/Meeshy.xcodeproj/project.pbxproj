@@ -73,6 +73,9 @@
 		07408FC46C804C676E69029A /* InviteFriendsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6834C2BE376B2B08DEEEA67F /* InviteFriendsSheet.swift */; };
 		07759D14018DE6F0B667BEC8 /* ConversationListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075404A5EA3E157B7FA97333 /* ConversationListViewModelTests.swift */; };
 		07E559E4145F4CA45611DFC8 /* CaptionsMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B4A7F8C9D8FD9BA960A7D3 /* CaptionsMode.swift */; };
+		061431366B77B3C245DF30A2 /* CallCaptionLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69359F7BA408396460278944 /* CallCaptionLine.swift */; };
+		5A9CDF14D6F615ECB6B89F8D /* GroupCallSpotlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4568891DF76D74662C5050E2 /* GroupCallSpotlight.swift */; };
+		C47470F6327CCFEF792EE7C5 /* CallControlsLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149F5FD14540104E8B1FF291 /* CallControlsLayout.swift */; };
 		07EED708F04C0A4F0098C0B0 /* AudioTrackLanguageResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35C03EEDDBC36F7E9BECB248 /* AudioTrackLanguageResolver.swift */; };
 		07FBEEBCF37687C9BA22BA75 /* ReelsPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45A4C9A6909529AD1474461B /* ReelsPresenter.swift */; };
 		08022232D6B6647CCE074A85 /* LentilleFocusElectionHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C29086BBE57D590ADE1255 /* LentilleFocusElectionHost.swift */; };
@@ -2052,6 +2055,8 @@
 		E3BC79CC55B2022CB47D134E /* BubbleAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C5C31110268DBE988911ED /* BubbleAnimations.swift */; };
 		E3C8F00F3C49DA012CDCF565 /* MyStoriesFailedItemsGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB24D5C12239F285E8983E34 /* MyStoriesFailedItemsGuardTests.swift */; };
 		E3EE7E279CFECD265A0D939E /* CallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8643AE5BE359B30610A23812 /* CallView.swift */; };
+		C26A1DF7AC90C0A16FBC41BB /* CallView+Pill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E643C1D9D1EF008622F78D7 /* CallView+Pill.swift */; };
+		7118A8C6C677AB7D8D741046 /* CallCaptionsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8E9032B5E66F5B1B90E029 /* CallCaptionsViews.swift */; };
 		D1F247A4DF4E8D3D3BB09D70 /* CallView+Controls.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF52F66F327B6D45645AD51 /* CallView+Controls.swift */; };
 		AE4F9F568EC87A30C0AC1106 /* CallView+Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2FF95F3B8F63E06D53F622F /* CallView+Transcript.swift */; };
 		1ADA6B159DC23A16337C9833 /* CallView+SelfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3BE0F38A74E0F528517581 /* CallView+SelfView.swift */; };
@@ -3617,6 +3622,8 @@
 		861B1044105880D912D64AA3 /* EpisodeSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeSegmenter.swift; sourceTree = "<group>"; };
 		863BC437F65D5290913D0884 /* ConversationInfoSheetLiveConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationInfoSheetLiveConversationTests.swift; sourceTree = "<group>"; };
 		8643AE5BE359B30610A23812 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
+		1E643C1D9D1EF008622F78D7 /* CallView+Pill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+Pill.swift"; sourceTree = "<group>"; };
+		EC8E9032B5E66F5B1B90E029 /* CallCaptionsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCaptionsViews.swift; sourceTree = "<group>"; };
 		DAF52F66F327B6D45645AD51 /* CallView+Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+Controls.swift"; sourceTree = "<group>"; };
 		D2FF95F3B8F63E06D53F622F /* CallView+Transcript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+Transcript.swift"; sourceTree = "<group>"; };
 		8A3BE0F38A74E0F528517581 /* CallView+SelfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+SelfView.swift"; sourceTree = "<group>"; };
@@ -4594,6 +4601,9 @@
 		F698E1CC6ACABA801DBD7907 /* StickerSendPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerSendPipelineTests.swift; sourceTree = "<group>"; };
 		F6995EB6A209F315EDB7BFBF /* CallWaitingBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallWaitingBannerView.swift; sourceTree = "<group>"; };
 		F6B4A7F8C9D8FD9BA960A7D3 /* CaptionsMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionsMode.swift; sourceTree = "<group>"; };
+		69359F7BA408396460278944 /* CallCaptionLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCaptionLine.swift; sourceTree = "<group>"; };
+		4568891DF76D74662C5050E2 /* GroupCallSpotlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCallSpotlight.swift; sourceTree = "<group>"; };
+		149F5FD14540104E8B1FF291 /* CallControlsLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallControlsLayout.swift; sourceTree = "<group>"; };
 		F6C2CFC04928BD7AB646C9FE /* ConversationRowUnreadAnnouncementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationRowUnreadAnnouncementTests.swift; sourceTree = "<group>"; };
 		F6E42477E5E276F0EDD42BCA /* MockTranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTranslationService.swift; sourceTree = "<group>"; };
 		F72F7160F470B756172F92E6 /* ConversationMediaCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMediaCatalog.swift; sourceTree = "<group>"; };
@@ -6556,6 +6566,8 @@
 				4A1029D5829043BA9A8FB7F9 /* CallRecordingControls.swift */,
 				D56D73DA92281A035689C54B /* CallScreenShareControls.swift */,
 				8643AE5BE359B30610A23812 /* CallView.swift */,
+				1E643C1D9D1EF008622F78D7 /* CallView+Pill.swift */,
+				EC8E9032B5E66F5B1B90E029 /* CallCaptionsViews.swift */,
 				DAF52F66F327B6D45645AD51 /* CallView+Controls.swift */,
 				D2FF95F3B8F63E06D53F622F /* CallView+Transcript.swift */,
 				8A3BE0F38A74E0F528517581 /* CallView+SelfView.swift */,
@@ -7741,6 +7753,9 @@
 				35C03EEDDBC36F7E9BECB248 /* AudioTrackLanguageResolver.swift */,
 				DA1C8242E81A7A84C68ABAE4 /* AuthModels.swift */,
 				F6B4A7F8C9D8FD9BA960A7D3 /* CaptionsMode.swift */,
+				69359F7BA408396460278944 /* CallCaptionLine.swift */,
+				4568891DF76D74662C5050E2 /* GroupCallSpotlight.swift */,
+				149F5FD14540104E8B1FF291 /* CallControlsLayout.swift */,
 				74F63518D78D73B02CDFD9A1 /* ContentFetchFailure.swift */,
 				557EAD05D8CBA0599309810A /* Conversation.swift */,
 				116A67EB5F35FDB2C9E39369 /* ConversationFilterComposition.swift */,
@@ -8276,6 +8291,8 @@
 				8A79C7F7EE6D5F78F17E373F /* CallTypeBadgeView.swift in Sources */,
 				99173B85214C9C5EE7AA0420 /* CallView+Copy.swift in Sources */,
 				E3EE7E279CFECD265A0D939E /* CallView.swift in Sources */,
+				C26A1DF7AC90C0A16FBC41BB /* CallView+Pill.swift in Sources */,
+				7118A8C6C677AB7D8D741046 /* CallCaptionsViews.swift in Sources */,
 				D1F247A4DF4E8D3D3BB09D70 /* CallView+Controls.swift in Sources */,
 				AE4F9F568EC87A30C0AC1106 /* CallView+Transcript.swift in Sources */,
 				1ADA6B159DC23A16337C9833 /* CallView+SelfView.swift in Sources */,
@@ -8292,6 +8309,9 @@
 				06D2019475F45C54A665D745 /* CanvasMediaAdoption.swift in Sources */,
 				1B7E586DA2DF2AC712049075 /* CaptionTranslationOffer.swift in Sources */,
 				07E559E4145F4CA45611DFC8 /* CaptionsMode.swift in Sources */,
+				061431366B77B3C245DF30A2 /* CallCaptionLine.swift in Sources */,
+				5A9CDF14D6F615ECB6B89F8D /* GroupCallSpotlight.swift in Sources */,
+				C47470F6327CCFEF792EE7C5 /* CallControlsLayout.swift in Sources */,
 				ED724E1FBA5611B00BC36AD6 /* ChangePasswordView.swift in Sources */,
 				35FE10FA07B11D5DC069B5AA /* CharacterCountLabel.swift in Sources */,
 				5174F8A83070768F7358F768 /* CommentComposerMedia.swift in Sources */,

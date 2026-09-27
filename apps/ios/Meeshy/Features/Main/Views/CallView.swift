@@ -73,6 +73,18 @@ struct CallView: View {
     // l'avatar des cercles d'appel et le fond pleine page.
     @State var remoteProfile: MeeshyUser?
     @State var showQualityDetail = false
+    /// #8276 — le maillage d'un appel de groupe, injecté comme `callManager`
+    /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
+    /// DANS l'écran d'appel, entre l'en-tête et la pilule.
+    @ObservedObject var mesh: GroupCallMeshCoordinator
+    /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
+    @State var controlsDisclosure = CallControlsDisclosure()
+    /// #8395 — plein écran d'une vignette à la une : masque les commandes.
+    @State var isStageFullScreen = false
+    /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
+    /// sous une traduction, traduction sous un original dans le journal).
+    @State var revealedCaptionIds: Set<UUID> = []
+    @State var showCaptionsJournal = false
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).
@@ -86,9 +98,27 @@ struct CallView: View {
     /// `DeviceLayout.safeAreaTop`.
     static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }
 
-    init(callManager: CallManager) {
+    /// Encart inférieur de la pilule — même raison que `chromeTopInset` : la
+    /// racine ignore la safe area, la pilule la retrouve depuis la fenêtre.
+    static var chromeBottomInset: CGFloat { DeviceLayout.safeAreaBottom + 12 }
+
+    init(callManager: CallManager, mesh: GroupCallMeshCoordinator) {
         self.callManager = callManager
         self.transcriptionService = callManager.transcriptionService
+        self.mesh = mesh
+    }
+
+    /// #8276 — un appel de groupe (deux membres distants au moins) remplace la
+    /// disposition 1:1 par sa scène.
+    var isGroupStage: Bool {
+        GroupCallStage.isShown(isMeshActive: mesh.isGroupCallActive, roster: mesh.roster)
+    }
+
+    /// #8394 — l'en-tête, la pilule et les rails se montrent et se masquent
+    /// ENSEMBLE : masquage automatique (vidéo, 4 s) ou plein écran d'une
+    /// vignette à la une.
+    var isChromeVisible: Bool {
+        showControls && !isStageFullScreen
     }
 
     var body: some View {
@@ -119,7 +149,7 @@ struct CallView: View {
 
     /// La surface d'appel elle-même — séparée de `body` pour que son
     /// `clipShape` et son `scaleEffect` s'appliquent à une boîte DÉJÀ pleine.
-    var callSurface: some View {
+    private var callSurface: some View {
         ZStack {
             // PiP système — ancre invisible plein écran : `sourceView` d'où la
             // fenêtre PiP émerge. `attachSystemPiP` se gate sur canActivateSystemPiP
@@ -338,7 +368,7 @@ struct CallView: View {
 
     // MARK: - Background
 
-    var callBackground: some View {
+    private var callBackground: some View {
         ZStack {
             // Call UI is white-on-dark in BOTH video (camera feed) and audio
             // modes — like every platform call screen (FaceTime/WhatsApp). Pin
@@ -424,19 +454,19 @@ struct CallView: View {
     }
 
     /// Flux vidéo distant réellement visible (track présent ET caméra active).
-    var hasActiveRemoteVideo: Bool {
+    private var hasActiveRemoteVideo: Bool {
         callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled
     }
 
     /// Image de fond « du concerné » : bannière de profil d'abord, avatar en
     /// repli. `nil` tant que le profil n'est pas résolu (gradient seul).
-    var remoteBackdropURL: String? {
+    private var remoteBackdropURL: String? {
         if let banner = remoteProfile?.banner, !banner.isEmpty { return banner }
         if let avatar = remoteProfile?.avatar, !avatar.isEmpty { return avatar }
         return nil
     }
 
-    var remoteBackdropThumbHash: String? {
+    private var remoteBackdropThumbHash: String? {
         if let banner = remoteProfile?.banner, !banner.isEmpty { return remoteProfile?.bannerThumbHash }
         return remoteProfile?.avatarThumbHash
     }
@@ -475,13 +505,13 @@ struct CallView: View {
         }
     }
 
-    static func hasBackdropImage(_ user: MeeshyUser) -> Bool {
+    private static func hasBackdropImage(_ user: MeeshyUser) -> Bool {
         (user.banner?.isEmpty == false) || (user.avatar?.isEmpty == false)
     }
 
     // MARK: - Helpers
 
-    func startPulseAnimation() {
+    private func startPulseAnimation() {
         // Audit P2-iOS-9 — skip the repeating animation when Reduce Motion
         // is enabled. A one-shot scale is still informative; the infinite
         // loop is what's problematic for motion-sensitive users.
@@ -491,7 +521,7 @@ struct CallView: View {
         }
     }
 
-    func stopPulseAnimation() {
+    private func stopPulseAnimation() {
         withTransaction(Transaction(animation: nil)) {
             pulseScale = 1.0
         }

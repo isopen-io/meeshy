@@ -24,4 +24,27 @@ extension View {
             .frame(width: diameter, height: diameter)
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
     }
+
+    /// #8394 — le verre d'un GROUPE flottant de l'écran d'appel (pilule, rail,
+    /// bandeau de sous-titres, puce de durée) : un verre par groupe, les
+    /// boutons qu'il porte n'en ont pas. Un voile sombre sous le contenu garde
+    /// le verre lisible sur une image claire (écran partagé, document filmé) :
+    /// sous iOS 26 il teinte le verre adaptatif, avant iOS 26 il assombrit le
+    /// matériau de repli.
+    func callChromeGlass<S: Shape>(in shape: S) -> some View {
+        self
+            .background(shape.fill(Color.black.opacity(0.22)))
+            .adaptiveGlass(in: shape)
+    }
+
+    /// #8394 — le masquage automatique (vidéo, 4 s) retire ENSEMBLE la
+    /// pilule, les rails et l'en-tête : invisibles, ils ne captent plus rien,
+    /// ni un toucher ni VoiceOver.
+    func callChromeVisibility(_ isVisible: Bool) -> some View {
+        self
+            .opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
+            .animation(.easeInOut(duration: 0.25), value: isVisible)
+    }
 }

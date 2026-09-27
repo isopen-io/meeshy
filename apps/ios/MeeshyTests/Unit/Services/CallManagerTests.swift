@@ -6057,7 +6057,7 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
     }
 
     func test_callView_surfacesSignalingDegradedState_viaDiscreetStatusPill() throws {
-        let source = try sourceFile("Meeshy/Features/Main/Views/CallView.swift")
+        let source = try AppSourceGuard.callViewSource()
         XCTAssertTrue(
             source.contains("callManager.isSignalingDegraded"),
             "CallView must still react to the signaling-degraded state"

@@ -184,16 +184,9 @@ final class FloatingCallPillViewTests: XCTestCase {
     }
 
     func test_callView_carriesPipMorphTrioAndCollapseHelper() throws {
-        let viewsDir = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views")
-        let source = try String(
-            contentsOf: viewsDir.appendingPathComponent("CallView.swift"),
-            encoding: .utf8
-        )
+        // L'unité de l'écran d'appel (#8276) : `collapseIntoPip()` vit dans
+        // `CallView+Header.swift` depuis le découpage.
+        let source = try AppSourceGuard.callViewSource()
         XCTAssertTrue(
             source.contains("pipMorphProgress, anchor: .top") ||
             source.contains("scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)"),
@@ -201,7 +194,7 @@ final class FloatingCallPillViewTests: XCTestCase {
             "morph — the banner lives at the top of the viewport."
         )
         XCTAssertTrue(
-            source.contains("private func collapseIntoPip()"),
+            source.contains("func collapseIntoPip()"),
             "All collapse paths (chevron, swipe-down, open-conversation) must " +
             "route through collapseIntoPip() so the shrink morph plays before " +
             "the cover swap."

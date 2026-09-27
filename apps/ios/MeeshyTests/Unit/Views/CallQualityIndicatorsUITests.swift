@@ -24,8 +24,9 @@ final class CallQualityIndicatorsUITests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// L'unité de l'écran d'appel (#8276) — un découpage n'éteint pas ces gardes.
     private func callViewSource() throws -> String {
-        try source("Meeshy/Features/Main/Views/CallView.swift")
+        try AppSourceGuard.callViewSource()
     }
 
     // MARK: - No transient pop-up banners
