@@ -330,7 +330,10 @@ export const callersIn = (contents, nsNames) => {
 // `packages/shared` : routes servies aux clients natifs (catalogue Swift),
 // routes d'administration sans écran web, ou routes sans client. Valeur
 // MESURÉE sur l'arbre fusionné avec `dev` du 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 337;
+// 337 → 335 (2026-09-27) : deux entrées gagnent un appelant web par le module
+// de groupe dans les lots fusionnés après #7716 (dont #8246, journal des
+// appels). Valeur MESURÉE sur `dev` (5e6f59744c).
+const BASELINE_DEAD_ENTRIES = 335;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
