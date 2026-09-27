@@ -3111,6 +3111,9 @@ final class CallManager: ObservableObject {
                     self.callProvider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
                 }
             }
+            // #8270 — the answer to an ICE restart lands on a peer connection
+            // that never left `.connected`: no edge will come, read the level.
+            if self.catchUpConnectedIfNeeded(trigger: "remote answer applied") { return }
             Logger.calls.info("Remote answer received for: \(callId), awaiting ICE connected")
         }
     }
@@ -3251,6 +3254,11 @@ final class CallManager: ObservableObject {
                 case .connecting:
                     reconnectingSince = nil
                     reconnectingWatchedAttempt = nil
+                    if self.catchUpConnectedIfNeeded(trigger: ".connecting watchdog") {
+                        connectingSince = nil
+                        didAttemptConnectingRestart = false
+                        continue
+                    }
                     let since = connectingSince ?? Date()
                     connectingSince = since
                     let elapsed = Date().timeIntervalSince(since)
@@ -3309,6 +3317,11 @@ final class CallManager: ObservableObject {
                     case .waiting:
                         break
                     case .retry:
+                        if self.catchUpConnectedIfNeeded(trigger: ".reconnecting watchdog") {
+                            reconnectingSince = nil
+                            reconnectingWatchedAttempt = nil
+                            break
+                        }
                         // This attempt's ICE restart overran its budget without
                         // reaching `.connected`. Escalate: `attemptReconnection`
                         // advances the counter (or trips the cap → `.connectionLost`).
@@ -3325,6 +3338,19 @@ final class CallManager: ObservableObject {
                 }
             }
         }
+    }
+
+    /// #8270 — level catch-up of `.connected`. See
+    /// `CallReliabilityPolicy.shouldCatchUpConnected`. Returns whether it fired.
+    @discardableResult
+    private func catchUpConnectedIfNeeded(trigger: String) -> Bool {
+        guard CallReliabilityPolicy.shouldCatchUpConnected(
+            callState: callState,
+            peerState: webRTCService.connectionState
+        ) else { return false }
+        Logger.calls.warning("[CallFSM] peer connection already .connected while \(String(describing: self.callState)) — catch-up (\(trigger, privacy: .public))")
+        transitionToConnected()
+        return true
     }
 
     private func transitionToConnected() {
@@ -4304,7 +4330,7 @@ final class CallManager: ObservableObject {
             categoryOptions.insert(AVAudioSession.CategoryOptions(rawValue: 0x100))
         }
         configuration.categoryOptions = categoryOptions
-        let activateNow = !callUsesCallKit
+        let activation = CallAudioSessionPolicy.activation(usesCallKit: callUsesCallKit)
 
         audioSessionQueue.sync {
             CallManager.isAudioSessionExpectedActive = true
@@ -4317,18 +4343,19 @@ final class CallManager: ObservableObject {
             }
             do {
                 Logger.calls.info("[AUDIO_SESS] setConfiguration call")
-                // CALL-FIX 2026-06-06 — iOS defers activation to CallKit's
-                // provider:didActivate (active:false here). On iOS-app-on-Mac there is
-                // no CallKit, so activate NOW (active:true) — otherwise this call would
-                // DEACTIVATE the session the ring-sound manager just brought up, cutting
-                // the ringback/ringtone after a few hundred ms. The [AUDIO_FALLBACK] at
-                // connect then finds it already active (no-op).
-                // When CallKit drives the call it activates the session via
-                // provider:didActivate (active:false here). Without CallKit (Mac, or a
-                // foreground in-app call) WE own activation, so activate now — otherwise
-                // this would DEACTIVATE the session the ring-sound manager just brought
-                // up. The [AUDIO_FALLBACK] at connect then finds it already active.
-                try session.setConfiguration(configuration, active: activateNow)
+                // #8269 — with CallKit, `provider:didActivate` owns activation and
+                // on an OUTGOING call it has already fired by now: the old
+                // `active: false` was `setActive(false)` on that session, which
+                // stopped the audio unit (no audio either way, video still
+                // flowing — incident 2026-09-27). Apply the configuration only.
+                // Without CallKit (Mac, foreground in-app call) WE own activation:
+                // activate now, or this would deactivate the session the
+                // ring-sound manager just brought up.
+                if let activeNow = activation {
+                    try session.setConfiguration(configuration, active: activeNow)
+                } else {
+                    try session.setConfiguration(configuration)
+                }
                 // Prevent Siri, low-battery, and other system alerts from ducking
                 // or interrupting the call (iOS 14.5+). This is an AVAudioSession
                 // *instance* preference, NOT a CategoryOptions flag — best-effort
@@ -4347,7 +4374,7 @@ final class CallManager: ObservableObject {
                 applyBestEffortAudioSetting("preferredIOBufferDuration") {
                     try session.session.setPreferredIOBufferDuration(0.02)
                 }
-                Logger.calls.info("RTCAudioSession pre-configured — videoUI: \(videoUIActive), activeNow=\(activateNow)")
+                Logger.calls.info("RTCAudioSession pre-configured — videoUI: \(videoUIActive), activation=\(activation.map(String.init) ?? "callkit")")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé
                 // AVAudioSession dans un état non-deactivable depuis ce process
