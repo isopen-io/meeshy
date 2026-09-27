@@ -46,6 +46,8 @@
  * dont un décompte court encore.
  */
 
+import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
+
 /**
  * La grâce de la directive : le message a disparu des écrans à `D(u)`, la
  * passerelle cesse de le servir à `u` une heure plus tard.
@@ -106,6 +108,32 @@ export function normalizeEphemeralDuration(input: {
 }
 
 /**
+ * Flamme-œil (#8302) — le message disparaît chez CHAQUE lecteur quand il l'a vu
+ * puis a quitté la conversation. Aucune DURÉE : l'échéance du lecteur est
+ * l'instant de SA consommation (`POST …/messages/after-read/consume`), et
+ * l'expéditeur garde la bulle jusqu'à la destruction du contenu.
+ */
+export function isAfterReadEphemeral(effectFlags?: number | null): boolean {
+  return ((effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ) !== 0;
+}
+
+const hasDeclaredDuration = (duration?: number | null): duration is number =>
+  typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+
+/**
+ * Le message a-t-il une échéance PAR LECTEUR — une durée (#7451) ou la
+ * flamme-œil (#8302) ? C'est la question que posent toutes les portes de
+ * service : quand la réponse est oui, `Message.expiresAt` est une heure INTERNE
+ * de destruction et ne se sert à personne.
+ */
+export function hasPerReaderEphemeralDeadline(input: {
+  readonly ephemeralDuration?: number | null;
+  readonly effectFlags?: number | null;
+}): boolean {
+  return hasDeclaredDuration(input.ephemeralDuration) || isAfterReadEphemeral(input.effectFlags);
+}
+
+/**
  * `D(u)` — l'échéance d'UN destinataire, dérivée de SA première réception.
  *
  * Tant que `receivedAt` est nul, rien ne décompte pour lui : c'est toute la
@@ -159,6 +187,8 @@ export function ephemeralDestructionAt(input: {
  */
 export function servedEphemeralExpiresAt(input: {
   readonly ephemeralDuration?: number | null;
+  /** Porte le bit flamme-œil (#8302) : l'expéditeur n'y reçoit aucune échéance. */
+  readonly effectFlags?: number | null;
   readonly rawExpiresAt?: Date | null;
   readonly isSender: boolean;
   /** `D(lecteur)`, pour un destinataire. */
@@ -166,8 +196,10 @@ export function servedEphemeralExpiresAt(input: {
   /** `max D(u)`, pour l'expéditeur. */
   readonly latestRecipientDeadline?: Date | null;
 }): Date | null {
-  const duration = input.ephemeralDuration;
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
+  if (isAfterReadEphemeral(input.effectFlags)) {
+    return input.isSender ? null : input.readerDeadline ?? null;
+  }
+  if (!hasDeclaredDuration(input.ephemeralDuration)) {
     return input.rawExpiresAt ?? null;
   }
   return (input.isSender ? input.latestRecipientDeadline : input.readerDeadline) ?? null;
@@ -181,12 +213,12 @@ export function servedEphemeralExpiresAt(input: {
  */
 export function isEphemeralServable(input: {
   readonly ephemeralDuration?: number | null;
+  readonly effectFlags?: number | null;
   /** L'échéance SERVIE à ce lecteur — {@link servedEphemeralExpiresAt}. */
   readonly servedExpiresAt?: Date | null;
   readonly now: Date;
 }): boolean {
-  const duration = input.ephemeralDuration;
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return true;
+  if (!hasPerReaderEphemeralDeadline(input)) return true;
 
   const deadline = asDate(input.servedExpiresAt);
   if (!deadline) return true;

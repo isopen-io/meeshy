@@ -25,13 +25,13 @@ extension UniversalComposerBar {
 
     @ViewBuilder
     var ephemeralToggleButton: some View {
-        let isActive = ephemeralDuration.wrappedValue != nil
+        let isActive = ephemeralChoice.wrappedValue != nil
 
         Button {
             onAnyInteraction?()
             HapticFeedback.light()
             if isActive {
-                ephemeralDuration.wrappedValue = nil
+                ephemeralChoice.wrappedValue = nil
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showEphemeralPicker = false
                 }
@@ -43,11 +43,15 @@ extension UniversalComposerBar {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : mutedColor)
+                if ephemeralChoice.wrappedValue == .afterRead {
+                    FlameEyeGlyph(size: 15, tint: ComposerProtection.ephemeral.tint)
+                } else {
+                    Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : mutedColor)
+                }
 
-                if let duration = ephemeralDuration.wrappedValue {
+                if case .duration(let duration) = ephemeralChoice.wrappedValue {
                     Text(duration.label)
                         .font(.caption2).fontWeight(.bold)
                         .foregroundColor(ComposerProtection.ephemeral.tint)
@@ -70,7 +74,7 @@ extension UniversalComposerBar {
             )
         }
         .accessibilityLabel(isActive
-                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")", bundle: .main)
+                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
                             : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
@@ -79,57 +83,32 @@ extension UniversalComposerBar {
     // MARK: - Ephemeral Duration Picker
     // ========================================================================
 
+    /// La flamme-œil, 15 s, puis les durées existantes (#8303).
     var ephemeralDurationPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 Button {
                     HapticFeedback.light()
-                    ephemeralDuration.wrappedValue = nil
+                    ephemeralChoice.wrappedValue = nil
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showEphemeralPicker = false
                     }
                 } label: {
                     Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
+                        .foregroundColor(ephemeralChoice.wrappedValue == nil ? .white : mutedColor)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(ephemeralDuration.wrappedValue == nil
+                                .fill(ephemeralChoice.wrappedValue == nil
                                       ? servedAccent
                                       : style == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                         )
                 }
 
-                ForEach(EphemeralDuration.allCases) { duration in
-                    Button {
-                        HapticFeedback.light()
-                        ephemeralDuration.wrappedValue = duration
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showEphemeralPicker = false
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: MessageProtectionSymbols.ephemeralFilled)
-                                .font(.caption2)
-                            Text(duration.label)
-                                .font(.caption).fontWeight(.semibold)
-                        }
-                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : ComposerProtection.ephemeral.tint)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(ephemeralDuration.wrappedValue == duration
-                                      ? ComposerProtection.ephemeral.tint
-                                      : ComposerProtection.ephemeral.tint.opacity(0.1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.3), lineWidth: 0.5)
-                                )
-                        )
-                    }
+                ForEach(EphemeralChoice.menu) { choice in
+                    ephemeralChoiceChip(choice)
                 }
             }
             .padding(.horizontal, 12)
@@ -153,6 +132,41 @@ extension UniversalComposerBar {
     /// Le fond commun des rails du composeur — durée éphémère, effets.
     var railSurface: Color {
         style == .dark || isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9)
+    }
+
+    /// Une pastille du sélecteur : la flamme-œil porte son pictogramme et son
+    /// libellé, une durée porte la flamme et ses secondes.
+    func ephemeralChoiceChip(_ choice: EphemeralChoice) -> some View {
+        let isSelected = ephemeralChoice.wrappedValue == choice
+        let tint = ComposerProtection.ephemeral.tint
+        return Button {
+            HapticFeedback.light()
+            ephemeralChoice.wrappedValue = choice
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showEphemeralPicker = false
+            }
+        } label: {
+            HStack(spacing: 4) {
+                if choice == .afterRead {
+                    FlameEyeGlyph(size: 13, tint: isSelected ? .white : tint)
+                } else {
+                    Image(systemName: MessageProtectionSymbols.ephemeralFilled)
+                        .font(.caption2)
+                }
+                Text(EphemeralChoiceCopy.chipLabel(choice))
+                    .font(.caption).fontWeight(.semibold)
+            }
+            .foregroundColor(isSelected ? .white : tint)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isSelected ? tint : tint.opacity(0.1))
+                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: 0.5))
+            )
+        }
+        .accessibilityLabel(EphemeralChoiceCopy.displayLabel(choice))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // ========================================================================
@@ -256,7 +270,7 @@ extension UniversalComposerBar {
     /// de la substituer.
     var dominantProtection: ComposerProtection? {
         ComposerProtection.dominant(
-            ephemeral: ephemeralDuration.wrappedValue != nil,
+            ephemeral: ephemeralChoice.wrappedValue != nil,
             viewOnce: isViewOnceEnabled.wrappedValue,
             blurred: isBlurEnabled.wrappedValue
         )

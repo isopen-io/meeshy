@@ -25,6 +25,7 @@ import { registerMarkReadRoute, registerMarkUnreadRoute } from './messages-read-
 import { registerSendMessageRoute } from './messages-send';
 import { registerMessagePinRoutes } from './messages-pin';
 import { registerMessageViewOnceRoutes } from './messages-view-once';
+import { registerMessageAfterReadRoutes } from './messages-after-read';
 import { registerMessageSearchRoute } from './messages-search';
 
 export { SendMessageBodySchema } from './messages-send';
@@ -107,6 +108,8 @@ export function registerMessagesRoutes(
   registerMessagePinRoutes(fastify, prisma, requiredAuth, socketIOHandler);
 
   registerMessageViewOnceRoutes(fastify, prisma, requiredAuth, socketIOHandler);
+
+  registerMessageAfterReadRoutes(fastify, prisma, participantAuth);
 
   registerMessageSearchRoute(fastify, prisma, optionalAuth);
 }

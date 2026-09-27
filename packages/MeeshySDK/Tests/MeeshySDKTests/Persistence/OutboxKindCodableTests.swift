@@ -65,13 +65,27 @@ final class OutboxKindCodableTests: XCTestCase {
     /// pour la même raison : c'est de la télémétrie de consommation, pas un
     /// contenu que l'utilisateur attend de voir partir.
     func test_allKindsExceptAcknowledgements_countTowardSyncIndicator() {
-        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed]
+        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead]
         for kind in OutboxKind.allCases where !acquittements.contains(kind) {
             XCTAssertTrue(
                 kind.countsTowardSyncIndicator,
                 "\(kind) devrait compter pour l'indicateur de synchronisation"
             )
         }
+    }
+
+    /// #8303 — la consommation flamme-œil est un accusé : une ligne coincée
+    /// ne doit ni tenir la pastille de synchronisation, ni être gardée à vie.
+    func test_consumeAfterRead_isAnAcknowledgement_discardableWhenTerminal() {
+        XCTAssertEqual(OutboxKind.consumeAfterRead.rawValue, "consumeAfterRead")
+        XCTAssertFalse(OutboxKind.consumeAfterRead.countsTowardSyncIndicator)
+        XCTAssertTrue(OutboxKind.consumeAfterRead.isDiscardableWhenTerminal)
+    }
+
+    func test_consumeAfterReadPayload_roundTrips() throws {
+        let payload = ConsumeAfterReadPayload(clientMutationId: "cmid_1", conversationId: "c1", messageIds: ["m1", "m2"])
+        let decoded = try JSONDecoder().decode(ConsumeAfterReadPayload.self, from: JSONEncoder().encode(payload))
+        XCTAssertEqual(decoded, payload)
     }
 
     // MARK: - Payload round-trips
