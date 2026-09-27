@@ -19,6 +19,9 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
     /// Le delta demandé — c'est lui qui distingue une première lecture d'un
     /// rattrapage borné (#4163).
     var lastListUpdatedSince: Date?
+    /// Joué au moment où l'effacement part vers le serveur — le seul instant où
+    /// l'on peut voir ce que l'écran montre AVANT la réponse (#8167).
+    var beforeClear: (@MainActor () -> Void)?
 
     func sync(_ request: DirectorySyncRequest) async throws -> DirectorySyncResult {
         syncCallCount += 1
@@ -52,6 +55,7 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
 
     func clear() async throws -> DirectoryClearResult {
         clearCallCount += 1
+        await beforeClear?()
         return try clearResult.get()
     }
 

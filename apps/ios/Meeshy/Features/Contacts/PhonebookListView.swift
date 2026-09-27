@@ -18,6 +18,7 @@ struct PhonebookListView: View {
     @EnvironmentObject private var router: Router
 
     @State private var invitationTarget: PhonebookInvitation?
+    @State private var isConfirmingErase = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +33,18 @@ struct PhonebookListView: View {
             // `SMSComposerView` est le composeur SMS unique de l'app
             // (DiscoverTab.swift) — pas de second composeur à maintenir.
             SMSComposerView(recipients: [invitation.phoneNumber], body: invitation.message)
+        }
+        .confirmationDialog(
+            String(localized: "contacts.phonebook.erase.confirm.title", defaultValue: "Effacer ton carnet d'adresses ?", bundle: .main),
+            isPresented: $isConfirmingErase,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "contacts.phonebook.erase.confirm.button", defaultValue: "Effacer", bundle: .main), role: .destructive) {
+                Task { await viewModel.eraseDirectory() }
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        } message: {
+            Text(String(localized: "contacts.phonebook.erase.confirm.message", defaultValue: "Tes contacts synchronisés sont supprimés de nos serveurs, avec la trace des amis dont l'arrivée t'a été annoncée. Rien n'est renvoyé tant que tu ne synchronises pas de nouveau.", bundle: .main))
         }
     }
 
@@ -130,6 +143,8 @@ struct PhonebookListView: View {
 
                     if viewModel.showsPlatformResults {
                         platformSection
+                    } else if !viewModel.isEmpty {
+                        eraseFooter
                     }
                 }
                 .padding(.top, 4)
@@ -177,6 +192,37 @@ struct PhonebookListView: View {
                 }
             }
         }
+    }
+
+    /// Effacer le carnet conservé côté serveur (#8167) — au pied de la liste,
+    /// là où l'on arrive après l'avoir parcourue, jamais sous le pouce.
+    private var eraseFooter: some View {
+        VStack(spacing: 8) {
+            Text(String(localized: "contacts.phonebook.erase.hint", defaultValue: "Tes contacts servent uniquement à te prévenir quand un ami rejoint Meeshy.", bundle: .main))
+                .font(.footnote)
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(role: .destructive) {
+                HapticFeedback.light()
+                isConfirmingErase = true
+            } label: {
+                Label(
+                    String(localized: "contacts.phonebook.erase.action", defaultValue: "Effacer mon carnet d'adresses", bundle: .main),
+                    systemImage: "trash"
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(Color(uiColor: .systemRed))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "contacts.phonebook.erase.hint", defaultValue: "Tes contacts servent uniquement à te prévenir quand un ami rejoint Meeshy.", bundle: .main))
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 32)
     }
 
     private var emptyState: some View {

@@ -26,6 +26,7 @@ import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
 import frCallFeedback from './catalog-fr-call-feedback';
 import frCallsErase from './catalog-fr-calls-erase';
+import frAddressBook from './catalog-fr-address-book';
 import frCallDevices from './catalog-fr-call-devices';
 import frCallScreen from './catalog-fr-call-screen';
 import frCallQuality from './catalog-fr-call-quality';
@@ -209,6 +210,7 @@ const fr = {
   ...frCallDecline,
   ...frCallFeedback,
   ...frCallsErase,
+  ...frAddressBook,
   ...frCallDevices,
   ...frCallScreen,
   ...frCallQuality,
