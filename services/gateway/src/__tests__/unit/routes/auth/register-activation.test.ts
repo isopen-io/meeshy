@@ -1,13 +1,13 @@
 /**
- * `POST /register` — sans numéro, le compte attend la preuve de l'adresse ;
- * avec un numéro, il est actif tout de suite (#8055).
+ * `POST /register` — avec ou sans numéro, le compte s'utilise TOUT DE SUITE
+ * (#8238, délai de grâce de l'adresse, qui remplace le blocage immédiat de
+ * #8055).
  *
- * Règle porteur 2026-09-26. Sans numéro : même réponse que la connexion d'une
- * adresse inconnue (#8033) — `{ status: "verification-required",
- * accountCreated: true, email }`, AUCUNE session, AUCUN jeton ; le code et le
- * lien sont partis avec l'e-mail de vérification de l'inscription, et c'est
- * `POST /auth/verify-email` qui ouvrira la session. Le mot de passe choisi est
- * enregistré (la personne l'a tapé sur SA page d'inscription).
+ * Règle porteur 2026-09-27 : « pouvoir créer un compte avec un e-mail
+ * simplement et avoir jusqu'à une semaine d'utilisation sans dérangement ».
+ * Sans numéro, la session s'ouvre comme avec un numéro, et l'état
+ * `activation` servi dit `quiet` ; le code et le lien sont partis avec
+ * l'e-mail de vérification de l'inscription, pour plus tard.
  *
  * Ces témoins passent par `app.inject` sur la VRAIE déclaration de réponse de
  * la route : un champ non déclaré au schéma 200 serait retiré à la
@@ -223,25 +223,22 @@ beforeEach(() => {
   mockConvertAffiliateVisit.mockClear();
 });
 
-describe('inscription SANS numéro — le compte attend son code', () => {
-  it('rend « vérification requise », accountCreated true, et l’adresse — les trois champs survivent à la sérialisation', async () => {
-    const { app } = await buildApp();
+describe('inscription SANS numéro — actif tout de suite, pendant le délai de grâce (#8238)', () => {
+  const ACTIVATION_QUIET = { phase: 'quiet', deadline: '2026-10-27T00:00:00.000Z', missing: ['email', 'phone'] };
+
+  it('ouvre la session, sert le jeton et l’état `activation` — qui survit à la sérialisation', async () => {
+    const authService = makeAuthService({
+      register: jest.fn<any>().mockResolvedValue({ user: { ...mockUser, activation: ACTIVATION_QUIET } }),
+    });
+    const { app } = await buildApp({ authService });
     const res = await inscrire(app);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({
-      success: true,
-      data: { status: 'verification-required', accountCreated: true, email: 'alice@test.com', pendingSessionToken: 'attente-opaque' },
-    });
-    await app.close();
-  });
-
-  it("n'ouvre AUCUNE session et n'émet aucun jeton", async () => {
-    const { app, authService } = await buildApp();
-    await inscrire(app);
-
-    expect(mockCreateSession).not.toHaveBeenCalled();
-    expect(authService.generateToken).not.toHaveBeenCalled();
+    expect(res.json().data.status).toBeUndefined();
+    expect(res.json().data.token).toBe('jwt-token');
+    expect(res.json().data.sessionToken).toBe('session-token-inscription');
+    expect(res.json().data.user.activation).toEqual(ACTIVATION_QUIET);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
@@ -289,13 +286,13 @@ describe('inscription AVEC numéro — actif tout de suite', () => {
 });
 
 describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
-  it('sans numéro : le rattachement au parrain est créé à la création, et aucune session ne s’ouvre', async () => {
+  it('sans numéro : le rattachement au parrain est créé à la création, et la session s’ouvre', async () => {
     const { app, prisma } = await buildApp();
     const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123', affiliateSessionKey: 'visite-9' });
 
-    expect(res.json().data.status).toBe('verification-required');
+    expect(res.json().data.token).toBe('jwt-token');
     expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(prisma, 'aff-123', USER_ID, 'visite-9');
-    expect(mockCreateSession).not.toHaveBeenCalled();
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
@@ -317,7 +314,7 @@ describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
     const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'faux' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ status: 'verification-required', accountCreated: true, email: 'alice@test.com', pendingSessionToken: 'attente-opaque' });
+    expect(res.json().data.token).toBe('jwt-token');
     expect(authService.register).toHaveBeenCalledTimes(1);
     await app.close();
   });
@@ -328,7 +325,7 @@ describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
     const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe('verification-required');
+    expect(res.json().data.token).toBe('jwt-token');
     await app.close();
   });
 

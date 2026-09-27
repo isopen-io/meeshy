@@ -56,6 +56,7 @@ import {
 import { verifyEmailProof, type EmailProof, type EmailProofResult } from './auth/email-proof.service';
 import { emailCodeLink, mintEmailCodePair, verificationTtlMinutes } from './auth/email-code';
 import { isPhoneVerified, sendPhoneVerificationCode, verifyPhoneCode } from './auth/phone-verification';
+import { isActivationBlocked, resolveAccountActivation } from './auth/account-activation';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -107,6 +108,8 @@ export type AuthServiceOptions = {
    * Absent ⇒ le singleton `getCacheStore()`, résolu à l'appel.
    */
   readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
+  /** L'horloge du délai de grâce (#8238) — injectée par les témoins. Absente ⇒ l'horloge murale. */
+  readonly now?: () => Date;
 };
 
 export class AuthService {
@@ -116,12 +119,14 @@ export class AuthService {
   private frontendUrl: string;
   private readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
   private readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
+  private readonly now: () => Date;
 
   constructor(prisma: PrismaClient, jwtSecret: string, options: AuthServiceOptions = {}) {
     this.prisma = prisma;
     this.jwtSecret = jwtSecret;
     this.resolveSocketManager = options.resolveSocketManager;
     this.accountThrottle = options.accountThrottle;
+    this.now = options.now ?? (() => new Date());
     this.emailService = new EmailService();
     this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
 
@@ -172,10 +177,7 @@ export class AuthService {
         // ajout de ce chemin : c'est le seul à le confronter (#4554).
         select: {
           ...AUTH_USER_SELECT,
-          password: true,
-          // #8214 — lu par la seule porte du mot de passe : un compte qui a
-          // cédé son adresse n'a plus à la prouver pour s'activer.
-          emailReleasedAt: true
+          password: true
         }
       });
 
@@ -235,21 +237,18 @@ export class AuthService {
       logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
 
       /**
-       * SANS NUMÉRO, UN COMPTE N'EST ACTIF QU'UNE FOIS SON ADRESSE PROUVÉE
-       * (#8055, règle porteur 2026-09-26).
+       * LE DÉLAI DE GRÂCE DE L'ADRESSE (#8238, qui remplace le blocage
+       * immédiat de #8055) : un compte sans numéro dont l'adresse n'est pas
+       * prouvée se connecte pendant 28 jours, puis n'ouvre plus de session
+       * avant le code. Loi : `./auth/account-activation`.
        *
        * Lu APRÈS le mot de passe et le verrou : seul qui connaît le mot de
        * passe apprend que le compte attend son code — un essai faux reste un
        * `null` ordinaire, compté. Lu AVANT le second facteur et toute écriture
-       * de présence : un compte inactif ne passe pas « en ligne ». Un numéro
-       * donné à l'inscription active le compte ; l'adresse se vérifie alors
-       * plus tard. Les comptes HISTORIQUES non vérifiés sans numéro passent
-       * désormais eux aussi par le code — c'est la règle voulue.
+       * de présence : un compte bloqué ne passe pas « en ligne ».
        */
-      // #8214 — un compte qui a CÉDÉ son adresse à une revendication prouvée
-      // n'a plus d'adresse à prouver : son mot de passe reste sa porte.
-      if (!user.emailVerifiedAt && !user.phoneNumber && !user.emailReleasedAt) {
-        logger.info(`[AUTH_SERVICE] compte non actif (adresse à prouver, aucun numéro): ${user.username}`);
+      if (isActivationBlocked(user, this.now())) {
+        logger.info(`[AUTH_SERVICE] délai de grâce passé (adresse à prouver, aucun numéro): ${user.username}`);
         throw new ActivationRequiresEmailProofError(user.email);
       }
 
@@ -297,16 +296,9 @@ export class AuthService {
         }
       });
 
-      // Un compte actif par son NUMÉRO dont l'adresse reste à prouver (#8055) :
-      // la session s'ouvre, et le code de vérification est renvoyé.
-      if (!user.emailVerifiedAt && !user.emailReleasedAt) {
-        logger.info(`[AUTH_SERVICE] ⚠️ Email non vérifié pour user.email=${user.email}`);
-        try {
-          await this.resendVerificationEmail(user.email);
-        } catch (emailError) {
-          logger.error('[AUTH_SERVICE] ⚠️ Échec du renvoi de l\'email de vérification:', emailError);
-        }
-      }
+      // Plus aucun code renvoyé à la connexion (#8238) : pendant le délai de
+      // grâce rien n'est demandé (`quiet`), puis les clients invitent
+      // (`invite`) et l'envoi se fait à la demande de la personne.
 
       // Convertir en SocketIOUser (with emailVerifiedAt included)
       const socketIOUser = this.userToSocketIOUser(user);
@@ -884,7 +876,10 @@ export class AuthService {
       lastLoginDevice: user.lastLoginDevice,
       // Profile metadata
       timezone: user.timezone,
-      profileCompletionRate: user.profileCompletionRate
+      profileCompletionRate: user.profileCompletionRate,
+      // #8238 — le délai de grâce de l'adresse, calculé ici et nulle part
+      // ailleurs pour les portes qui passent par ce projecteur.
+      ...(user.createdAt instanceof Date ? { activation: resolveAccountActivation(user, this.now()) } : {})
     };
   }
 
