@@ -264,6 +264,32 @@ describe('phase 4 — « Valider mon compte maintenant », le code dans la carte
     expect(location()).toBe('/signup');
   });
 
+  /** `auth.register` ÉTABLIT la session avant de répondre (#4264) : la carte
+   * ne doit pas être emmenée vers la liste par la redirection des comptes
+   * déjà connectés, sous les doigts de celui qui attend son code. */
+  test('la session que l’inscription établit ne fait pas quitter la carte', async () => {
+    window.history.replaceState({}, '', '/signup');
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <SignupScreen
+          register={async () => {
+            sessionStore.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 86_400 });
+            await Promise.resolve();
+            return WITH_SESSION;
+          }}
+          verification={{ verifyEmail: async () => SIGNED_IN, verificationStatus: async () => PENDING }}
+        />,
+      );
+    });
+    toCard(container);
+    await click(container, '[data-signup-validate-now]');
+    expect(location()).toBe('/signup');
+    expect(phase(container)).toBe('code');
+  });
+
   test('le code juste : feu d’artifice, et « S’inscrire » devient « Parler aux autres »', async () => {
     const { el, codes } = mount();
     toCard(el);
@@ -318,6 +344,16 @@ describe('« S’inscrire » depuis la carte', () => {
     await click(el, '[data-signup-primary]');
     expect(sent.length).toBe(1);
     expect(location()).toBe('/onboarding');
+  });
+
+  test('« Continuer avec l’e-mail seulement » était la question : aucune alerte « sans numéro » ne la repose', async () => {
+    const { el, sent } = mount();
+    await click(el, '[data-signup-skip-phone]');
+    type(el, '#signup-email', EMAIL);
+    await click(el, '[data-signup-primary]');
+    expect(el.querySelector('dialog[data-confirm-dialog="signup-phone-nudge"]')).toBeNull();
+    expect(sent.length).toBe(1);
+    expect(sent[0]?.phoneNumber).toBeUndefined();
   });
 
   test('une invitation (`next`) garde la priorité', async () => {

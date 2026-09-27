@@ -265,11 +265,17 @@ export default function SignupScreen({
     const setBusy = intent === 'validate' ? setValidating : setSubmitting;
     setBusy(true);
     setFeedback(EMPTY_FEEDBACK);
+    /* La session que `auth.register` établit REND le magasin « connecté »
+       AVANT la suite de cet `await` : l'effet de redirection doit déjà
+       savoir que c'est cet écran qui l'a ouverte, sinon il mène à la liste
+       sous les doigts de la carte (#8288). */
+    setJustRegistered(true);
 
     const body = composeRegisterBody(form, { referralCode: referral.code });
     const result = await register(claimEmail ? { ...body, claimEmail: true } : body);
     setBusy(false);
 
+    if (!result.ok || isPhoneConflict(result.data)) setJustRegistered(false);
     if (!result.ok) {
       const placed = placeSignupFailure(result);
       setFeedback(placed);

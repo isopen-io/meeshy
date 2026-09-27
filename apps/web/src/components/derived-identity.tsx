@@ -62,9 +62,11 @@ export function DerivedIdentity({
       style={framed ? { backgroundColor: 'var(--color-ios-card)' } : undefined}
       data-derived-identity
     >
-      <p className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Votre identité
-      </p>
+      {framed ? (
+        <p className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
+          Votre identité
+        </p>
+      ) : null}
 
       <IdentityInput
         id="signup-display-name"
