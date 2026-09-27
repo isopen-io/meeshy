@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { defaultMagicLinkDeps, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
-import type { RegisterResponseData } from '@/lib/api/auth';
+import type { RegisterBody, RegisterResponseData } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
 import ForgotPasswordScreen from '@/routes/forgot-password';
@@ -155,6 +155,86 @@ describe('EMAIL_TAKEN — l’écran dit ce qui se passe et offre le lien', () =
     const { el } = await refusedSignup();
     const bare = [...el.querySelectorAll('a')].filter((a) => a.getAttribute('href') === '/login');
     expect(bare).toEqual([]);
+  });
+});
+
+/**
+ * « EST-CE VOUS ? » (#8216 × #8214, décision porteur 2026-09-27) — le 409
+ * porte le détenteur MASQUÉ (`emailOwner`). « C'est moi » récupère le compte
+ * par le lien ; « Ce n'est pas moi » renvoie la MÊME inscription avec
+ * `claimEmail: true`, et le code envoyé à l'adresse décide.
+ */
+describe('EMAIL_TAKEN avec son détenteur masqué', () => {
+  const TAKEN_WITH_OWNER = {
+    ...EMAIL_TAKEN,
+    emailOwner: { maskedDisplayName: 'A** L*******', maskedUsername: 'a**l', avatar: null },
+  } as ApiResult<RegisterResponseData>;
+
+  async function refusedWithOwner() {
+    window.history.replaceState({}, '', '/signup');
+    const { calls, deps } = linkRequestsCapturing();
+    const sent: RegisterBody[] = [];
+    const replies: ApiResult<RegisterResponseData>[] = [
+      TAKEN_WITH_OWNER,
+      { ok: true, status: 200, data: { status: 'verification-required', accountCreated: true, email: EMAIL } },
+    ];
+    const el = render(
+      <SignupScreen
+        register={async (body) => {
+          sent.push(body);
+          return replies[sent.length - 1] ?? TAKEN_WITH_OWNER;
+        }}
+        magicLinkDeps={deps}
+      />,
+    );
+    type(el, '#signup-email', EMAIL);
+    type(el, '#signup-phone', '612345678');
+    await act(async () => {
+      el.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    return { el, calls, sent };
+  }
+
+  test('« Est-ce vous ? » montre le nom et le @pseudo MASQUÉS', async () => {
+    const { el } = await refusedWithOwner();
+    const card = el.querySelector('[data-signup-email-owner]');
+    expect(text(card)).toContain('Est-ce vous ?');
+    expect(text(card)).toContain('A** L*******');
+    expect(text(card)).toContain('@a**l');
+  });
+
+  test('« C’est moi — récupérer mon compte » envoie le lien à l’adresse saisie', async () => {
+    const { el, calls } = await refusedWithOwner();
+    await act(async () => {
+      button(el, 'C’est moi — récupérer mon compte')?.click();
+      await Promise.resolve();
+    });
+    expect(calls).toEqual([{ email: EMAIL }]);
+    expect(text(el)).toContain('E-mail envoyé');
+  });
+
+  test('« Mot de passe oublié ? » reste à côté', async () => {
+    const { el } = await refusedWithOwner();
+    expect(anchor(el, 'Mot de passe oublié ?')?.getAttribute('href')).toBe('/forgot-password?email=ada%40meeshy.example');
+  });
+
+  test('« Ce n’est pas moi » renvoie la MÊME inscription avec claimEmail, puis l’écran du code', async () => {
+    const { el, sent } = await refusedWithOwner();
+    expect(text(el)).toContain('Le code envoyé à cette adresse sera demandé pour l’obtenir.');
+    await act(async () => {
+      button(el, 'Ce n’est pas moi')?.click();
+    });
+    expect(sent.length).toBe(2);
+    expect(sent[1]).toEqual({ ...sent[0], claimEmail: true } as RegisterBody);
+    expect(window.location.pathname).toBe('/auth/verify-email');
+    expect(new URLSearchParams(window.location.search).get('email')).toBe(EMAIL);
+  });
+
+  test('sans `emailOwner` (ancienne passerelle) : aucune carte « Est-ce vous ? », la récupération seule', async () => {
+    const { el } = await refusedSignup();
+    expect(el.querySelector('[data-signup-email-owner]')).toBeNull();
+    expect(button(el, 'Ce n’est pas moi')).toBeUndefined();
+    expect(button(el, 'Recevoir un lien de connexion')).toBeDefined();
   });
 });
 

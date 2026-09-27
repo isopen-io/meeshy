@@ -12,6 +12,10 @@ const deSignup = {
   'signup.emailTaken.message': 'Mit dieser Adresse existiert bereits ein Konto.',
   'signup.emailTaken.sendLink': 'Anmeldelink erhalten',
   'signup.emailTaken.forgotPassword': 'Passwort vergessen?',
+  'signup.emailTaken.isItYou': 'Sind Sie das?',
+  'signup.emailTaken.itsMe': 'Das bin ich — Konto wiederherstellen',
+  'signup.emailTaken.notMe': 'Das bin ich nicht',
+  'signup.emailTaken.notMeNote': 'Der an diese Adresse gesendete Code wird verlangt, um sie zu erhalten.',
 };
 
 export default deSignup;

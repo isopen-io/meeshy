@@ -12,6 +12,10 @@ const itSignup = {
   'signup.emailTaken.message': 'Esiste già un account con questo indirizzo.',
   'signup.emailTaken.sendLink': 'Ricevi un link di accesso',
   'signup.emailTaken.forgotPassword': 'Password dimenticata?',
+  'signup.emailTaken.isItYou': 'Sei tu?',
+  'signup.emailTaken.itsMe': 'Sono io — recupera il mio account',
+  'signup.emailTaken.notMe': 'Non sono io',
+  'signup.emailTaken.notMeNote': 'Per ottenerlo verrà richiesto il codice inviato a questo indirizzo.',
 };
 
 export default itSignup;

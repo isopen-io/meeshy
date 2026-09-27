@@ -12,6 +12,10 @@ const ptSignup = {
   'signup.emailTaken.message': 'Já existe uma conta com este endereço.',
   'signup.emailTaken.sendLink': 'Receber um link de acesso',
   'signup.emailTaken.forgotPassword': 'Esqueceu a senha?',
+  'signup.emailTaken.isItYou': 'É você?',
+  'signup.emailTaken.itsMe': 'Sou eu — recuperar minha conta',
+  'signup.emailTaken.notMe': 'Não sou eu',
+  'signup.emailTaken.notMeNote': 'O código enviado para este endereço será pedido para obtê-lo.',
 };
 
 export default ptSignup;

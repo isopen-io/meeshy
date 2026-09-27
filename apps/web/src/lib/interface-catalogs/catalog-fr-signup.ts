@@ -13,6 +13,10 @@ const frSignup = {
   'signup.emailTaken.message': 'Un compte existe déjà avec cette adresse.',
   'signup.emailTaken.sendLink': 'Recevoir un lien de connexion',
   'signup.emailTaken.forgotPassword': 'Mot de passe oublié ?',
+  'signup.emailTaken.isItYou': 'Est-ce vous ?',
+  'signup.emailTaken.itsMe': 'C’est moi — récupérer mon compte',
+  'signup.emailTaken.notMe': 'Ce n’est pas moi',
+  'signup.emailTaken.notMeNote': 'Le code envoyé à cette adresse sera demandé pour l’obtenir.',
 } as const;
 
 export default frSignup;

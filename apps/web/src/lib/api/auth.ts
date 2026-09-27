@@ -126,6 +126,13 @@ export type RegisterBody = {
   /** La clé de session d'affiliation (`sessionKey` de `/affiliate/register`),
    * seulement quand elle est connue. */
   readonly affiliateSessionKey?: string;
+  /**
+   * « CE N'EST PAS MOI » (#8214 × #8216) — l'adresse est détenue par un autre
+   * compte ; celui-ci la REVENDIQUE. La passerelle crée le compte sans
+   * session et envoie un code à l'adresse : seule sa preuve la lui donne.
+   * OMISE sinon, jamais `false`.
+   */
+  readonly claimEmail?: true;
 };
 
 /** La branche « compte créé » (`register.ts:383-388`) — l'inscription CRÉE une

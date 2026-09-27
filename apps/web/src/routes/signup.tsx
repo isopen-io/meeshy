@@ -128,6 +128,7 @@ const EMPTY_FEEDBACK: SignupFeedback = {
   bannerError: null,
   showSignIn: false,
   usernameSuggestions: [],
+  emailOwner: null,
 };
 
 /**
@@ -376,11 +377,15 @@ export default function SignupScreen({
     else setPhoneFocusRequest((n) => n + 1);
   }
 
-  async function createAccount() {
+  /** `claimEmail` — « Ce n'est pas moi » (#8214 × #8216) : la MÊME
+   * inscription, qui revendique l'adresse ; la réponse mène à l'écran du
+   * code, dont la preuve seule donne l'adresse au nouveau compte. */
+  async function createAccount({ claimEmail = false }: { readonly claimEmail?: boolean } = {}) {
     setSubmitting(true);
     setFeedback(EMPTY_FEEDBACK);
 
-    const result = await register(composeRegisterBody(form, { referralCode }));
+    const body = composeRegisterBody(form, { referralCode });
+    const result = await register(claimEmail ? { ...body, claimEmail: true } : body);
     setSubmitting(false);
 
     if (!result.ok) {
@@ -515,9 +520,12 @@ export default function SignupScreen({
             {isEmailTaken && typedEmail !== undefined ? (
               <EmailTakenActions
                 email={typedEmail}
+                owner={feedback.emailOwner}
                 language={interfaceLanguage}
                 linkClassName={INDIGO_LINK}
+                isClaiming={isSubmitting}
                 onSendLink={() => setSignInLinkEmail(typedEmail)}
+                onClaim={() => void createAccount({ claimEmail: true })}
               />
             ) : null}
           </div>

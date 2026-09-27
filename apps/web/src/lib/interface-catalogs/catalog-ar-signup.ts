@@ -12,6 +12,10 @@ const arSignup = {
   'signup.emailTaken.message': 'يوجد حساب بهذا العنوان بالفعل.',
   'signup.emailTaken.sendLink': 'تلقي رابط تسجيل الدخول',
   'signup.emailTaken.forgotPassword': 'نسيت كلمة المرور؟',
+  'signup.emailTaken.isItYou': 'هل هذا أنت؟',
+  'signup.emailTaken.itsMe': 'هذا أنا — استعادة حسابي',
+  'signup.emailTaken.notMe': 'ليس أنا',
+  'signup.emailTaken.notMeNote': 'سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه.',
 };
 
 export default arSignup;
