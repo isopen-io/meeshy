@@ -6,7 +6,7 @@ final class CallDeepLinkTests: XCTestCase {
 
     private func makeRouter(
         authenticated: Bool = true,
-        dialed: @escaping (String, Bool) -> Void
+        dialed: @escaping @MainActor (String, Bool) -> Void
     ) -> DeepLinkRouter {
         let defaults = UserDefaults(suiteName: "CallDeepLinkTests.\(UUID().uuidString)")!
         return DeepLinkRouter(
