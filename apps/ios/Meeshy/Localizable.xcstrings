@@ -128886,6 +128886,53 @@
         }
       }
     },
+    "notification.contactRecentlyActive.fallbackTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ était sur Meeshy récemment"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was on Meeshy recently"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ estuvo en Meeshy hace poco"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ war vor Kurzem auf Meeshy"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ è stato su Meeshy di recente"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ esteve no Meeshy recentemente"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كان %@ على Meeshy مؤخرًا"
+          }
+        }
+      }
+    },
     "notification.reply.toComment.preview": {
       "localizations": {
         "ar": {
@@ -150945,6 +150992,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pedidos de contato"
+          }
+        }
+      }
+    },
+    "settings.notifications.contact_activity": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand un contact revient sur Meeshy"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When a contact is back on Meeshy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuando un contacto vuelve a Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn ein Kontakt zurück auf Meeshy ist"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando un contatto torna su Meeshy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando um contato volta ao Meeshy"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عندما يعود أحد جهات الاتصال إلى Meeshy"
           }
         }
       }
@@ -202683,6 +202777,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني"
+          }
+        }
+      }
+    },
+    "settings.privacy.notify_contacts_on_return": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévenir mes contacts quand je reviens sur Meeshy"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Let my contacts know when I'm back on Meeshy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avisar a mis contactos cuando vuelvo a Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Kontakte benachrichtigen, wenn ich zurück auf Meeshy bin"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvisa i miei contatti quando torno su Meeshy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avisar meus contatos quando eu voltar ao Meeshy"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعلام جهات اتصالي عند عودتي إلى Meeshy"
+          }
+        }
+      }
+    },
+    "settings.privacy.notify_contacts_on_return.info": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friends and people who have your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus amigos y quienes tienen tu número o tu correo ven «estuvo en Meeshy hace poco», como máximo una vez cada 3 horas. Nunca si tu estado en línea está oculto."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi amici e chi ha il tuo numero o la tua e-mail vedono «è stato su Meeshy di recente», al massimo una volta ogni 3 ore. Mai se il tuo stato online è nascosto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se seu status online estiver oculto."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية."
           }
         }
       }

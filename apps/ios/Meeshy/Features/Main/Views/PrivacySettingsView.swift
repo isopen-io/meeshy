@@ -85,6 +85,20 @@ struct PrivacySettingsView: View {
                     )
                 ),
                 ToggleSpec(
+                    id: "notifyOnReturn", icon: "person.crop.circle.badge.clock",
+                    title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Prévenir mes contacts quand je reviens sur Meeshy", bundle: .main),
+                    color: "4ECDC4", keyPath: \.notifyContactsOnReturn,
+                    info: SettingsInfo(
+                        id: "privacy.notify_contacts_on_return",
+                        title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Prévenir mes contacts quand je reviens sur Meeshy", bundle: .main),
+                        message: String(
+                            localized: "settings.privacy.notify_contacts_on_return.info",
+                            defaultValue: "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.",
+                            bundle: .main
+                        )
+                    )
+                ),
+                ToggleSpec(
                     id: "lastSeen", icon: "clock.fill",
                     title: String(localized: "settings.privacy.last_seen", defaultValue: "Dernière connexion", bundle: .main),
                     color: MeeshyColors.infoHex, keyPath: \.showLastSeen

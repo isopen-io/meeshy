@@ -173,6 +173,10 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public var shareUsageData: Bool
     public var blockScreenshots: Bool
     public var hideProfileFromSearch: Bool
+    /// Prévenir mes amis et les porteurs de mon numéro/e-mail que je reviens sur
+    /// Meeshy (« X était sur Meeshy récemment », #8285). Activé par défaut ; la
+    /// passerelle ne l'émet jamais si `showOnlineStatus` est coupé.
+    public var notifyContactsOnReturn: Bool
     public var encryptionPreference: EncryptionPreference
     public var autoEncryptNewConversations: Bool
     public var showEncryptionStatus: Bool
@@ -184,6 +188,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         showTypingIndicator: true, allowContactRequests: true, allowGroupInvites: true,
         acceptCallsFromNonContacts: true, saveMediaToGallery: false, allowAnalytics: false,
         shareUsageData: false, blockScreenshots: false, hideProfileFromSearch: false,
+        notifyContactsOnReturn: true,
         encryptionPreference: .optional, autoEncryptNewConversations: false,
         showEncryptionStatus: true, warnOnUnencrypted: false, extras: [:]
     )
@@ -193,6 +198,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         showTypingIndicator: Bool = true, allowContactRequests: Bool = true, allowGroupInvites: Bool = true,
         acceptCallsFromNonContacts: Bool = true, saveMediaToGallery: Bool = false, allowAnalytics: Bool = false,
         shareUsageData: Bool = false, blockScreenshots: Bool = false, hideProfileFromSearch: Bool = false,
+        notifyContactsOnReturn: Bool = true,
         encryptionPreference: EncryptionPreference = .optional, autoEncryptNewConversations: Bool = false,
         showEncryptionStatus: Bool = true, warnOnUnencrypted: Bool = false, extras: [String: CodableValue] = [:]
     ) {
@@ -202,6 +208,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         self.acceptCallsFromNonContacts = acceptCallsFromNonContacts; self.saveMediaToGallery = saveMediaToGallery
         self.allowAnalytics = allowAnalytics; self.shareUsageData = shareUsageData
         self.blockScreenshots = blockScreenshots; self.hideProfileFromSearch = hideProfileFromSearch
+        self.notifyContactsOnReturn = notifyContactsOnReturn
         self.encryptionPreference = encryptionPreference; self.autoEncryptNewConversations = autoEncryptNewConversations
         self.showEncryptionStatus = showEncryptionStatus; self.warnOnUnencrypted = warnOnUnencrypted
         self.extras = extras
@@ -211,7 +218,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         case showOnlineStatus, showLastSeen, showReadReceipts, showTypingIndicator
         case allowContactRequests, allowGroupInvites, acceptCallsFromNonContacts
         case saveMediaToGallery, allowAnalytics, shareUsageData
-        case blockScreenshots, hideProfileFromSearch
+        case blockScreenshots, hideProfileFromSearch, notifyContactsOnReturn
         case encryptionPreference, autoEncryptNewConversations, showEncryptionStatus, warnOnUnencrypted
         case extras
     }
@@ -230,6 +237,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         shareUsageData = try c.decodeIfPresent(Bool.self, forKey: .shareUsageData) ?? Self.defaults.shareUsageData
         blockScreenshots = try c.decodeIfPresent(Bool.self, forKey: .blockScreenshots) ?? Self.defaults.blockScreenshots
         hideProfileFromSearch = try c.decodeIfPresent(Bool.self, forKey: .hideProfileFromSearch) ?? Self.defaults.hideProfileFromSearch
+        notifyContactsOnReturn = try c.decodeIfPresent(Bool.self, forKey: .notifyContactsOnReturn) ?? Self.defaults.notifyContactsOnReturn
         encryptionPreference = try c.decodeIfPresent(EncryptionPreference.self, forKey: .encryptionPreference) ?? Self.defaults.encryptionPreference
         autoEncryptNewConversations = try c.decodeIfPresent(Bool.self, forKey: .autoEncryptNewConversations) ?? Self.defaults.autoEncryptNewConversations
         showEncryptionStatus = try c.decodeIfPresent(Bool.self, forKey: .showEncryptionStatus) ?? Self.defaults.showEncryptionStatus
@@ -420,6 +428,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     public var commentReplyEnabled: Bool
     public var commentLikeEnabled: Bool
     public var friendContentEnabled: Bool
+    /// « Quand un contact revient sur Meeshy » (`contact_recently_active`,
+    /// #8285). Activé par défaut.
+    public var contactActivityEnabled: Bool
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
@@ -442,6 +453,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: true,
         postLikeEnabled: true, postCommentEnabled: true, postRepostEnabled: true, storyReactionEnabled: true,
         commentReplyEnabled: true, commentLikeEnabled: true, friendContentEnabled: true,
+        contactActivityEnabled: true,
         dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [], dndUtcOffsetMinutes: 0,
         showPreview: true, showSenderName: true, groupNotifications: true, notificationBadgeEnabled: true,
         extras: [:]
@@ -455,7 +467,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = true,
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
-        friendContentEnabled: Bool = true,
+        friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true,
         dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
@@ -474,6 +486,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.postRepostEnabled = postRepostEnabled; self.storyReactionEnabled = storyReactionEnabled
         self.commentReplyEnabled = commentReplyEnabled; self.commentLikeEnabled = commentLikeEnabled
         self.friendContentEnabled = friendContentEnabled
+        self.contactActivityEnabled = contactActivityEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
         self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
@@ -487,7 +500,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case conversationEnabled, replyEnabled, mentionEnabled, reactionEnabled
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
-        case commentReplyEnabled, commentLikeEnabled, friendContentEnabled
+        case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled
         case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
@@ -519,6 +532,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         commentReplyEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentReplyEnabled) ?? Self.defaults.commentReplyEnabled
         commentLikeEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentLikeEnabled) ?? Self.defaults.commentLikeEnabled
         friendContentEnabled = try c.decodeIfPresent(Bool.self, forKey: .friendContentEnabled) ?? Self.defaults.friendContentEnabled
+        contactActivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .contactActivityEnabled) ?? Self.defaults.contactActivityEnabled
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime
