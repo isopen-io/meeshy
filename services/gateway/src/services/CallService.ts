@@ -34,6 +34,7 @@ import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
+import { commitCallEnd } from './calls/endCallRetry';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -2237,61 +2238,53 @@ export class CallService {
     // `version: call.version` (same optimistic-lock field `joinCallAttempt`
     // uses) makes the losing writer's update a no-op and roll back its
     // participant `leftAt` stamps too, instead of corrupting the record.
+    // #8293 — a P2034 is NOT proof of a concurrent terminal writer (the
+    // hang-up's own `call:analytics` writes a CallParticipant row in the same
+    // millisecond): `commitCallEnd` re-reads, retries while the call is still
+    // open, and reports `lost` only once it is terminal.
     const versionConflict = Symbol('versionConflict');
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      await tx.callParticipant.updateMany({
-        where: {
-          callSessionId: callId,
-          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
-        },
-        data: { leftAt: endedAt }
-      });
+    const outcome = await commitCallEnd({
+      write: () => this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.updateMany({
+          where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+          data: { leftAt: endedAt }
+        });
 
-      const lock = await tx.callSession.updateMany({
-        where: { id: callId, version: call.version },
-        data: {
-          status: targetStatus,
-          endedAt,
-          duration,
-          endReason,
-          metadata: {
-            ...(call.metadata as Record<string, unknown>),
-            endedBy
-          },
-          version: { increment: 1 }
+        const lock = await tx.callSession.updateMany({
+          where: { id: callId, version: call.version },
+          data: {
+            status: targetStatus,
+            endedAt,
+            duration,
+            endReason,
+            metadata: { ...(call.metadata as Record<string, unknown>), endedBy },
+            version: { increment: 1 }
+          }
+        });
+
+        if (lock.count === 0) throw versionConflict;
+      }).then(
+        () => 'written' as const,
+        (error) => {
+          if (error === versionConflict) return 'version-conflict' as const;
+          throw error;
         }
-      });
+      ),
+      readCurrent: () => this.getCallSession(callId),
+      isTerminal: (current) => TERMINAL_STATUSES.includes(current.status),
+      isTransientConflict: (error) => this.isTransientWriteConflict(error)
+    });
 
-      if (lock.count === 0) {
-        throw versionConflict;
-      }
-    }).then(
-      () => 'ended' as const,
-      (error) => {
-        if (error === versionConflict || this.isTransientWriteConflict(error)) {
-          return 'conflict' as const;
-        }
-        throw error;
-      }
-    );
-
-    if (outcome === 'conflict') {
-      // Issue #3581 follow-up — this branch used to silently RETURN the
-      // fresh session, same as the stale-read guard above did before #3581.
-      // The loser of this race is exactly the "already ended by someone
-      // else" case that fix exists for: a resolved promise here is
-      // indistinguishable from "I just ended it" to both callers
-      // (CallEventsHandler, routes/calls.ts), which fall through to
-      // re-broadcast call:ended, re-post the call-summary, and (for a
-      // `missed` outcome) re-fire the missed-call notification for a call
-      // this request did not actually end. Throw the same
-      // CallAlreadyEndedError the stale-read guard throws so both callers
-      // absorb it as the idempotent no-op it is.
-      const current = await this.getCallSession(callId);
+    if (outcome.kind === 'lost') {
+      // Issue #3581 follow-up — the loser of this race is the "already ended
+      // by someone else" case: resolving would make both callers
+      // (CallEventsHandler, routes/calls.ts) re-broadcast call:ended, re-post
+      // the call-summary and re-fire the missed-call notification. Throw the
+      // same CallAlreadyEndedError as the stale-read guard above.
       logger.warn('⚠️ Call end lost race to a concurrent terminal write', {
-        callId, endedBy, currentStatus: current.status
+        callId, endedBy, currentStatus: outcome.current.status
       });
-      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
+      throw new CallAlreadyEndedError(outcome.current.endReason ?? CallEndReason.completed);
     }
 
     this.clearHeartbeats(callId);
