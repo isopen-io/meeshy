@@ -204,7 +204,7 @@ extension ConversationView {
         // (garde d'éligibilité, popup de consentement vocal) : désarmer avant
         // eux perdrait la protection sans qu'aucun message ne parte, et le
         // popup relance ce même tap sur un état qu'il doit retrouver intact.
-        let protection = viewModel.consumeArmedProtection()
+        let protection = viewModel.captureArmedProtection()
 
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
@@ -439,7 +439,8 @@ extension ConversationView {
                             content: nil,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
+                            replyToId: send.group.carriesReply ? replyId : nil,
+                            protection: protection
                         )
                         anySuccess = true
                         Logger.messages.info("Audio group queued offline for \(send.tempId)")
@@ -475,7 +476,8 @@ extension ConversationView {
                             content: nil,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
+                            replyToId: send.group.carriesReply ? replyId : nil,
+                            protection: protection
                         )
                         anySuccess = true
                         Logger.messages.info("Visual group queued offline for \(send.tempId)")
@@ -667,7 +669,8 @@ extension ConversationView {
                                 content: nil,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
+                                replyToId: send.group.carriesReply ? replyId : nil,
+                                protection: protection
                             )) != nil
                         }
                     } else {
@@ -684,7 +687,8 @@ extension ConversationView {
                                 content: nil,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
+                                replyToId: send.group.carriesReply ? replyId : nil,
+                                protection: protection
                             )) != nil
                         }
                     }

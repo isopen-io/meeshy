@@ -3,6 +3,18 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// #8287 — le choix du serveur n'existe qu'au simulateur. La décision se prend
+/// à la COMPILATION : un binaire d'appareil ne contient pas la branche.
+enum LoginServerPicker {
+    static var isAvailable: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var theme = ThemeManager.shared
@@ -15,6 +27,9 @@ struct LoginView: View {
     @State private var selectedAccount: SavedAccount? = nil
     @State private var accountPassword = ""
     @State private var showNormalLogin = false
+    /// #8286 — « Rester connecté sur cet appareil », proposée au compte
+    /// SUPPLÉMENTAIRE seulement (`AuthManager.offersKeepSignedIn`).
+    @State private var keepSignedIn = true
 
     // UI state
     @State private var glowPulse = false
@@ -167,8 +182,9 @@ struct LoginView: View {
                 .opacity(showFields ? 1 : 0)
 
                 // Sélecteur d'environnement (Production/Staging/Localhost/Custom +
-                // « Connecté à … ») réservé à l'environnement de simulation.
-                if Self.isSimulator {
+                // « Connecté à … ») : au SIMULATEUR seulement, décidé à la
+                // compilation (#8287) — jamais dans un binaire d'appareil.
+                if LoginServerPicker.isAvailable {
                     environmentSelector
                         .padding(.bottom, MeeshySpacing.md)
                         .opacity(showFields ? 1 : 0)
@@ -240,6 +256,7 @@ struct LoginView: View {
             // L'accueil referme l'inscription AVANT que cet écran n'existe
             // (#8216) : l'adresse qu'on y avait tapée l'attend ici.
             adoptSignupEmail(LoginEmailHandoff.shared.take())
+            adoptAccountIntent(LoginAccountHandoff.shared.take())
         }
         // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
         // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
@@ -293,6 +310,19 @@ struct LoginView: View {
         showNormalLogin = true
     }
 
+    /// « Changer de compte » a quitté le compte actuel pour en ouvrir un
+    /// autre (#8286) : son formulaire attend ici, sans passer par le sélecteur.
+    private func adoptAccountIntent(_ intent: LoginAccountHandoff.Intent?) {
+        switch intent {
+        case .addAccount:
+            showNormalLogin = true
+        case .account(let id):
+            if let account = authManager.savedAccounts.first(where: { $0.id == id }) { select(account) }
+        case nil:
+            break
+        }
+    }
+
     // MARK: - Account Picker Section
 
     private var accountPickerSection: some View {
@@ -342,48 +372,58 @@ struct LoginView: View {
     }
 
     private func savedAccountRow(_ account: SavedAccount) -> some View {
-        Button {
+        let status = SavedAccountStatus.of(
+            account,
+            activeId: nil,
+            isPreserved: authManager.hasPreservedSession(for: account.id)
+        )
+        return Button {
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                selectedAccount = account
-                username = account.username
-                accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
+            // #8286 — un compte GARDÉ s'ouvre sans mot de passe.
+            if status.opensWithoutPassword {
+                Task { await authManager.switchAccount(to: account.id) }
+                return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                focusedField = .accountPassword
-            }
+            select(account)
         } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                accountAvatar(account, size: 44)
-
-                VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
-                    Text(account.shortName)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                    Text("@\(account.username)")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted.opacity(0.5))
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(theme.inputBorder.opacity(0.3), lineWidth: 1)
-                    )
+            SavedAccountRow(
+                account: account,
+                status: status,
+                textPrimary: theme.textPrimary,
+                textMuted: theme.textMuted,
+                fill: theme.inputBackground,
+                stroke: theme.inputBorder.opacity(0.3)
             )
         }
         .buttonStyle(.plain)
         .bounceOnTap()
+        .accessibilityIdentifier("auth.login.account.\(account.username)")
+    }
+
+    private func select(_ account: SavedAccount) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            selectedAccount = account
+            username = account.username
+            accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            focusedField = .accountPassword
+        }
+    }
+
+    /// #8286 — proposée dès qu'un AUTRE compte garde sa session ; le premier
+    /// compte de l'appareil est gardé sans question.
+    @ViewBuilder
+    private var keepSignedInToggle: some View {
+        if authManager.offersKeepSignedIn {
+            Toggle(isOn: $keepSignedIn) {
+                Text(String(localized: "accounts.keep_signed_in", defaultValue: "Rester connecté sur cet appareil", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+            }
+            .tint(MeeshyColors.indigo500)
+            .accessibilityIdentifier("auth.login.keep_signed_in")
+        }
     }
 
     private func selectedAccountView(_ account: SavedAccount) -> some View {
@@ -458,6 +498,8 @@ struct LoginView: View {
                     )
             )
             .bounceOnFocus(focusedField == .accountPassword)
+
+            keepSignedInToggle
 
             errorRow
 
@@ -559,6 +601,8 @@ struct LoginView: View {
                     )
             )
             .bounceOnFocus(focusedField == .password)
+
+            keepSignedInToggle
 
             errorRow
 
@@ -742,11 +786,16 @@ struct LoginView: View {
 
     // MARK: - Actions
 
+    /// Le premier compte est gardé ; les suivants, selon la case.
+    private var keepsNewSession: Bool {
+        authManager.offersKeepSignedIn ? keepSignedIn : true
+    }
+
     private func attemptLogin() {
         focusedField = nil
         showError = false
         Task {
-            let outcome = await authManager.login(username: username, password: password)
+            let outcome = await authManager.login(username: username, password: password, keepSignedIn: keepsNewSession)
             presentCodeEntryIfNeeded(outcome, password: password)
         }
     }
@@ -769,7 +818,7 @@ struct LoginView: View {
         showError = false
         guard let account = selectedAccount else { return }
         Task {
-            let outcome = await authManager.login(username: account.username, password: accountPassword)
+            let outcome = await authManager.login(username: account.username, password: accountPassword, keepSignedIn: keepsNewSession)
             presentCodeEntryIfNeeded(outcome, password: accountPassword)
         }
     }

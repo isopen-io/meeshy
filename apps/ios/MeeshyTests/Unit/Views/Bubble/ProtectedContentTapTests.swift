@@ -65,62 +65,142 @@ final class ProtectedContentTapTests: XCTestCase {
     // MARK: - Texte flouté
 
     func test_resolve_blurredText_revealsInPlace() {
-        XCTAssertEqual(content(message(blurred: true)).protectedTap(), .revealText)
+        XCTAssertEqual(content(message(blurred: true)).protectedTap(), .revealInPlace)
     }
 
     func test_resolve_blurredText_mine_revealsInPlaceToo() {
-        XCTAssertEqual(content(message(blurred: true, isMe: true)).protectedTap(), .revealText)
+        XCTAssertEqual(content(message(blurred: true, isMe: true)).protectedTap(), .revealInPlace)
     }
 
-    func test_resolve_blurredTextWithDocument_revealsInPlace_noFullscreenForADocument() {
-        let tap = content(message(attachments: [document()], blurred: true)).protectedTap()
-        XCTAssertEqual(tap, .revealText, "un document n'a pas de plein écran : il se dévoile sur place")
+    func test_resolve_blurredTextWithDocument_revealsInPlace() {
+        XCTAssertEqual(content(message(attachments: [document()], blurred: true)).protectedTap(), .revealInPlace)
     }
 
-    // MARK: - Média flouté : plein écran DIRECT
+    // MARK: - Média flouté : révélé SUR PLACE (#8389)
 
-    func test_resolve_blurredPhoto_opensFullscreenOnThatPhoto() {
-        let tap = content(message(text: "", attachments: [photo()], blurred: true)).protectedTap()
-        XCTAssertEqual(tap, .openFullscreen(photo()))
+    /// Directive porteur du 2026-09-27 : « lorsqu'on touche un message en flou,
+    /// cela doit l'AFFICHER et NON le montrer en plein écran ». Le premier
+    /// toucher lève le voile dans la bulle ; le plein écran n'arrive qu'au
+    /// toucher suivant, sur la case révélée.
+    func test_resolve_blurredPhoto_revealsInPlace_neverFullscreen() {
+        XCTAssertEqual(content(message(text: "", attachments: [photo()], blurred: true)).protectedTap(), .revealInPlace)
     }
 
-    func test_resolve_blurredPhotoWithCaption_opensFullscreen_notAnInBubbleReveal() {
-        let tap = content(message(text: "légende", attachments: [photo()], blurred: true)).protectedTap()
-        XCTAssertEqual(tap, .openFullscreen(photo()),
-                       "le média caché s'ouvre en plein écran, sans dévoilement préalable dans la bulle")
+    func test_resolve_blurredPhotoWithCaption_revealsInPlace() {
+        XCTAssertEqual(content(message(text: "légende", attachments: [photo()], blurred: true)).protectedTap(), .revealInPlace)
     }
 
-    func test_resolve_blurredVideo_opensFullscreen() {
-        var blurred = message(text: "", attachments: [video()], blurred: true)
-        blurred.isBlurred = true
-        XCTAssertEqual(content(blurred).protectedTap(), .openFullscreen(video()))
+    func test_resolve_blurredVideo_revealsInPlace() {
+        XCTAssertEqual(content(message(text: "", attachments: [video()], blurred: true)).protectedTap(), .revealInPlace)
     }
 
-    func test_resolve_blurredPhoto_mine_opensFullscreenToo() {
-        let tap = content(message(text: "", attachments: [photo()], blurred: true, isMe: true)).protectedTap()
-        XCTAssertEqual(tap, .openFullscreen(photo()))
+    func test_resolve_blurredPhoto_mine_revealsInPlaceToo() {
+        XCTAssertEqual(content(message(text: "", attachments: [photo()], blurred: true, isMe: true)).protectedTap(), .revealInPlace)
     }
 
-    // MARK: - Cellule de grille : CE média
-
-    func test_resolve_tappedGridCell_opensThatCell_notTheFirst() {
-        let first = photo(id: "p1"), second = photo(id: "p2")
-        let grid = content(message(text: "", attachments: [first, second], blurred: true))
-        XCTAssertEqual(grid.protectedTap(on: second), .openFullscreen(second))
+    func test_resolve_tappedGridCellOfBlurredMessage_revealsInPlace() {
+        let grid = content(message(text: "", attachments: [photo(id: "p1"), photo(id: "p2")], blurred: true))
+        XCTAssertEqual(grid.protectedTap(on: photo(id: "p2")), .revealInPlace)
     }
 
-    func test_resolve_blurredAttachmentCell_inUnblurredMessage_opensFullscreen() {
+    // MARK: - Cellule de grille qui porte SA protection
+
+    func test_resolve_blurredAttachmentCell_revealsInPlace() {
+        XCTAssertEqual(ProtectedContentTap.resolve(cell: photo(isBlurred: true)), .revealInPlace)
+    }
+
+    func test_resolve_blurredAttachmentCell_inUnblurredMessage_revealsInPlace() {
         let cell = photo(isBlurred: true)
-        XCTAssertEqual(ProtectedContentTap.resolve(cell: cell), .openFullscreen(cell))
+        XCTAssertEqual(content(message(text: "", attachments: [cell])).protectedTap(on: cell), .revealInPlace)
     }
 
-    func test_resolve_viewOnceAttachmentCell_opensFullscreen() {
+    func test_resolve_viewOnceAttachmentCell_stillOpensFullscreen() {
         let cell = photo(isViewOnce: true)
         XCTAssertEqual(ProtectedContentTap.resolve(cell: cell), .openFullscreen(cell))
     }
 
     func test_resolve_unprotectedCell_isNone() {
         XCTAssertEqual(ProtectedContentTap.resolve(cell: photo()), .none)
+    }
+
+    // MARK: - Le toucher SUIVANT, une fois révélé (Rivière)
+
+    /// La Rivière ne rend aucun média : une fois le voile levé, c'est le
+    /// toucher suivant sur le contenu révélé qui ouvre la première pièce
+    /// visuelle — le plein écran reste atteignable, jamais au premier geste.
+    func test_afterReveal_withPhotoAfterDocument_opensTheFirstVisual() {
+        let first = photo(id: "p1")
+        XCTAssertEqual(ProtectedContentTap.afterReveal(media: [document(), first, photo(id: "p2")]), .openFullscreen(first))
+    }
+
+    func test_afterReveal_withoutVisual_isNone() {
+        XCTAssertEqual(ProtectedContentTap.afterReveal(media: [document()]), .none)
+        XCTAssertEqual(ProtectedContentTap.afterReveal(media: []), .none)
+    }
+
+    // MARK: - Câblage : aucun plein écran au premier toucher (#8389)
+
+    func test_wiring_noVeilLayerOpensFullscreenAnyMore() throws {
+        for path in ["Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
+                     "Meeshy/Features/Main/Focal/Row/FocalRow.swift",
+                     "Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
+                     "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
+                     "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"] {
+            let source = try String(contentsOf: Self.iosRoot.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertFalse(source.contains("ProtectedGridCellTapLayer"), "\(path) : la couche qui ouvrait chaque case sous le voile est retirée")
+            XCTAssertFalse(source.contains("protectedGridCellBounds"), path)
+        }
+        let reveal = try body(of: "private func revealBlurredContent()",
+                              in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
+        XCTAssertFalse(reveal.contains("openProtectedMedia"), "le voile de la bulle lève le flou, il n'ouvre rien : \(reveal)")
+        XCTAssertTrue(reveal.contains("blurController.requestReveal"), reveal)
+    }
+
+    func test_wiring_blurredGridCell_revealsInPlace_viewOnceCellStillOpens() throws {
+        let reveal = try body(of: "private func handleReveal()",
+                              in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        XCTAssertTrue(reveal.contains("revealedAttachmentIds.insert(attachment.id)"), reveal)
+        XCTAssertTrue(reveal.contains("onOpenProtected(media)"), reveal)
+    }
+
+    func test_wiring_focalProtectedContent_neverOpensOnTheFirstTap() throws {
+        let affordance = try body(of: "private var revealAffordance: some View",
+                                  in: "Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift")
+        XCTAssertFalse(affordance.contains("onMediaTap"), affordance)
+    }
+
+    func test_wiring_focalBlurredCell_revealsInPlace() throws {
+        let cell = try body(of: "struct FocalGridCell: View",
+                            in: "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        XCTAssertTrue(cell.contains("isRevealed: isRevealed"), "l'état de protection lit la révélation de la case")
+        XCTAssertTrue(cell.contains("case .revealInPlace"), cell)
+    }
+
+    func test_wiring_riverVeil_opensTheMediaOnlyAfterReveal() throws {
+        let url = Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains("tapAfterReveal: content.tapAfterReveal, onMediaTap: onMediaTap"),
+                      "la Rivière ouvre le média au toucher SUIVANT la révélation")
+    }
+
+    private static var iosRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func body(of anchor: String, in relativePath: String) throws -> String {
+        let source = try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let start = try XCTUnwrap(source.range(of: anchor), "ancre absente : \(anchor)")
+        let open = try XCTUnwrap(source[start.upperBound...].firstIndex(of: "{"))
+        var depth = 0
+        var index = open
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" { depth -= 1; if depth == 0 { break } }
+            index = source.index(after: index)
+        }
+        return String(source[open...index])
     }
 
     // MARK: - Vue unique
@@ -168,7 +248,7 @@ final class ProtectedContentTapTests: XCTestCase {
         XCTAssertNil(ProtectedContentTap.none.accessibilityHint)
         XCTAssertNil(ProtectedContentTap.alreadyOpened.accessibilityHint)
         let hints = [
-            ProtectedContentTap.revealText.accessibilityHint,
+            ProtectedContentTap.revealInPlace.accessibilityHint,
             ProtectedContentTap.openFullscreen(photo()).accessibilityHint,
             ProtectedContentTap.openViewOnce(fullscreen: false).accessibilityHint,
             ProtectedContentTap.closeViewOnce.accessibilityHint
@@ -192,6 +272,12 @@ final class ProtectedContentTapTests: XCTestCase {
     func test_accessibilityLabel_clearText_stillReadsTheText() {
         let label = MessageAccessibilityLabelComposer.compose(content(message(text: "code 4242")))
         XCTAssertTrue(label.contains("4242"), label)
+    }
+
+    func test_accessibilityHint_blurredMedia_saysItShowsInPlace_notFullscreen() {
+        let hint = content(message(text: "", attachments: [photo()], blurred: true)).protectedTap().accessibilityHint ?? ""
+        XCTAssertEqual(hint, ProtectedContentTap.revealInPlace.accessibilityHint)
+        XCTAssertFalse(hint.localizedCaseInsensitiveContains("plein écran"), hint)
     }
 
     func test_accessibilityHint_fullscreenSaysFullscreen() {

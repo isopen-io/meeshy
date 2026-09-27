@@ -78,6 +78,22 @@ export type QuotedMedia = {
    * décrivent ce que le lecteur n'a pas le droit de voir.
    */
   readonly frame: QuotedFrame | null;
+  /**
+   * LE FICHIER D'UNE PISTE TEMPORELLE (#8233) — la vidéo dont on tire la
+   * première image quand le serveur n'a servi aucune vignette, le vocal qu'on
+   * joue depuis la citation. `null` pour une image (sa vignette suffit), un
+   * document, une pièce sans fichier ou PROTÉGÉE : l'URL d'un secret est le
+   * secret (cycle 125).
+   */
+  readonly fileSrc: string | null;
+  /**
+   * LA PIÈCE QUE L'APERÇU OUVRE (#8233, miroir `ReplyReference.quotedAttachment`
+   * iOS) — image, vidéo ou vocal, reconstruite depuis la citation elle-même :
+   * elle s'ouvre même quand le message cité est hors de la fenêtre chargée.
+   * `null` sur un document, une pièce sans fichier ou protégée — la zone média
+   * n'existe alors pas, et le toucher reste « aller au message ».
+   */
+  readonly openable: Attachment | null;
 };
 
 /**
@@ -135,7 +151,7 @@ const namedPieceIdOf = (quoted: object): string | undefined => {
 };
 
 /** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
-const representativeOf = (
+export const representativeOf = (
   quoted: Pick<Message, 'attachments'>,
 ): { readonly attachment: Attachment; readonly single: boolean } | undefined => {
   const namedId = namedPieceIdOf(quoted);
@@ -152,6 +168,10 @@ const representativeOf = (
  * vaut QUE pour une image : servir le `fileUrl` d'une vidéo ou d'un PDF dans
  * un `<img>` peindrait une case brisée.
  */
+const OPENABLE_KINDS: ReadonlySet<QuotedMediaKind> = new Set(['image', 'video', 'audio']);
+
+const hasFile = (attachment: Attachment): boolean => typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '';
+
 const thumbnailOf = (attachment: Attachment, kind: QuotedMediaKind): string | null => {
   const raw = attachment.thumbnailUrl ?? (kind === 'image' ? attachment.fileUrl : undefined);
   if (raw === undefined || raw === '') return null;
@@ -187,14 +207,17 @@ const mediaOf = (params: {
   const kind: QuotedMediaKind = contactLabel !== null ? 'contact' : kindOf(attachment);
   const mayTravel = !messageIsProtected && !quotedIsProtected(attachment);
   const framed = mayTravel && single && (kind === 'image' || kind === 'video');
+  const timebased = kind === 'video' || kind === 'audio';
   return {
     kind,
     label: contactLabel ?? translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
     thumbnailSrc: mayTravel ? thumbnailOf(attachment, kind) : null,
     placeholderSrc: (mayTravel ? thumbHashPlaceholder(attachment.thumbHash) : undefined) ?? null,
     durationLabel: mayTravel ? attachmentDurationLabel(attachment.duration) : null,
-    timebased: kind === 'video' || kind === 'audio',
+    timebased,
     frame: framed ? frameOf(attachment) : null,
+    fileSrc: mayTravel && timebased && hasFile(attachment) ? attachmentSrc(attachment.fileUrl) : null,
+    openable: mayTravel && OPENABLE_KINDS.has(kind) && hasFile(attachment) ? attachment : null,
   };
 };
 

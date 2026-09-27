@@ -11,7 +11,10 @@ const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post'
 /** La barre haute d'iOS (`ComposerTopBar.swift:49-71`) : ✕ · rail · ⋯. Le
  * rail des scènes (#7684) prend la place du titre dès la deuxième page — le
  * titre reste pour le lecteur d'écran, et la scène ne change pas de hauteur
- * quand le rail apparaît. */
+ * quand le rail apparaît.
+ *
+ * PLEIN ÉCRAN (maquette 2026-09-27, #8370) : la scène prend tout l'écran et la
+ * barre FLOTTE dessus, en verre — elle n'occupe plus de bande à elle. */
 export function StudioShell({
   kind,
   origin,
@@ -25,8 +28,8 @@ export function StudioShell({
 }) {
   const lang = currentInterfaceLanguage();
   return (
-    <main data-story-studio className="flex h-dvh flex-col overflow-hidden pt-safe" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
-      <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
+    <main data-story-studio className="relative h-dvh overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
+      <header data-story-studio-top className="glass absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 pt-safe pb-2">
         <Link
           to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
           aria-label={translate(lang, 'story.studio.cancel')}

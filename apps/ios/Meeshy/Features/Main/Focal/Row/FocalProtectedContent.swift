@@ -23,9 +23,11 @@ struct FocalProtectedContent<Content: View>: View {
     var isDark: Bool = false
     let messageId: String
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
-    /// Ce que fait le toucher (#8009) — un média caché s'ouvre en plein écran
-    /// par `onMediaTap`, sans dévoilement préalable de la rangée.
-    var tap: ProtectedContentTap = .revealText
+    /// Ce que dit le voile à VoiceOver : le toucher le lève SUR PLACE (#8389).
+    var tap: ProtectedContentTap = .revealInPlace
+    /// Ce que fait le toucher SUIVANT sur le contenu révélé, là où l'hôte ne
+    /// rend aucune case (la Rivière) : le plein écran de sa première pièce.
+    var tapAfterReveal: ProtectedContentTap = .none
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     @ViewBuilder let content: Content
 
@@ -48,6 +50,15 @@ struct FocalProtectedContent<Content: View>: View {
             .overlay {
                 if isMasked {
                     revealAffordance
+                } else if reveal.isRevealed, case .openFullscreen(let media) = tapAfterReveal, let onMediaTap {
+                    Button {
+                        HapticFeedback.light()
+                        onMediaTap(media)
+                    } label: {
+                        Color.clear.contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(tapAfterReveal.accessibilityHint ?? "")
                 }
             }
     }
@@ -62,7 +73,6 @@ struct FocalProtectedContent<Content: View>: View {
         // disait qu'une vue unique se CONSOMME au toucher.
         ProtectedVeilAffordance(isViewOnce: isViewOnce, isDark: isDark, hint: tap.accessibilityHint) {
             HapticFeedback.medium()
-            if case .openFullscreen(let media) = tap, let onMediaTap { onMediaTap(media); return }
             reveal.requestReveal(
                 request: BubbleBlurRevealLifecycle.RevealRequest(
                     messageId: messageId,

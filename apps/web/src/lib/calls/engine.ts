@@ -478,7 +478,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       return false;
     }
     session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
-    for (const member of decodeSessionMembers(ack.data.callSession)) remember(member, member.participantId);
+    for (const member of decodeSessionMembers(ack.data.callSession)) remember(member, member.participantId, member.flags);
     return true;
   };
 
@@ -594,7 +594,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       callId: event.callId,
       callerName: event.initiator.name,
     });
-    remember(event.initiator, null);
+    remember(event.initiator, null, event.initiatorFlags);
     deps.tones.start('ring', { titleLabel: deps.ringLabel() });
     incomingTimer = deps.schedule(() => {
       incomingTimer = null;

@@ -6,6 +6,7 @@ import itMediaViewer from './catalog-it-media-viewer';
 import itActivation from './catalog-it-activation';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
+import itAccounts from './catalog-it-accounts';
 import itCall from './catalog-it-call';
 import itRowActions from './catalog-it-row-actions';
 import itCallShell from './catalog-it-call-shell';
@@ -13,7 +14,6 @@ import itCallJoin from './catalog-it-call-join';
 import itCallDecline from './catalog-it-call-decline';
 import itCallFeedback from './catalog-it-call-feedback';
 import itCallsErase from './catalog-it-calls-erase';
-import itAddressBook from './catalog-it-address-book';
 import itCallDevices from './catalog-it-call-devices';
 import itCallScreen from './catalog-it-call-screen';
 import itCallQuality from './catalog-it-call-quality';
@@ -21,10 +21,14 @@ import itCallCaptions from './catalog-it-call-captions';
 import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
+import itGallery from './catalog-it-gallery';
 import itMentions from './catalog-it-mentions';
+import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
+import itQuote from './catalog-it-quote';
+import itContactDiscovery from './catalog-it-contact-discovery';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -213,6 +217,7 @@ const it = {
   ...itVerifyEmail,
   ...itActivation,
   ...itPassword,
+  ...itAccounts,
   ...itCall,
   ...itRowActions,
   ...itCallShell,
@@ -220,7 +225,6 @@ const it = {
   ...itCallDecline,
   ...itCallFeedback,
   ...itCallsErase,
-  ...itAddressBook,
   ...itCallDevices,
   ...itCallScreen,
   ...itCallQuality,
@@ -458,9 +462,6 @@ const it = {
   'settings.privacy.read_receipts.info':
     'È reciproco: se non invii conferme di lettura, non vedrai nemmeno se i tuoi messaggi sono stati letti.',
   'settings.privacy.typing_indicator': 'Indicatore di digitazione',
-  'settings.privacy.hide_from_search': 'Non propormi a chi ha il mio numero o la mia email',
-  'settings.privacy.hide_from_search.info':
-    'I tuoi contatti non ti troveranno tramite il tuo numero o la tua email, e non saranno avvisati del tuo arrivo.',
   'settings.section.appearance': 'Aspetto',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1117,7 +1118,7 @@ const it = {
   'message.withheld': 'Contenuto trattenuto',
   'message.withheld.a11y': 'Contenuto trattenuto: questo messaggio esiste e non viene mostrato',
   'message.veiled': 'Contenuto nascosto',
-  'message.veiled.hint': 'Tocca per rivelare il contenuto',
+  'message.veiled.hint': 'Tocca per vedere',
   'message.veiled.error': 'Impossibile rivelare per ora',
   'message.ephemeral.a11y': 'Messaggio effimero, scompare tra {remaining}',
   'message.ephemeral.awaiting': 'In attesa della ricezione',
@@ -1157,9 +1158,13 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itEphemeral,
+  ...itGallery,
   ...itConversationCard,
   ...itStoriesMine,
   ...itContactCard,
+  ...itQuote,
+  ...itContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default it;

@@ -247,3 +247,30 @@ describe('la rangée « a rejoint Meeshy »', () => {
     expect(html).toContain('Dites-lui bonjour 👋');
   });
 });
+
+/**
+ * « X ÉTAIT SUR MEESHY RÉCEMMENT » (#8285) — la passerelle compose titre et
+ * corps dans la langue du destinataire : la rangée les AFFICHE, tire ses
+ * initiales du nom de X, et MÈNE à son profil.
+ */
+describe('la rangée « était sur Meeshy récemment »', () => {
+  const back = record({
+    type: 'contact_recently_active',
+    title: 'Marie était sur Meeshy récemment',
+    content: 'C’est le moment de lui écrire 👋',
+    actor: { id: 'u-marie', username: 'marie', displayName: 'Marie', avatar: null },
+    context: {},
+    metadata: {},
+  });
+
+  test('elle affiche ce que le serveur a composé, sous les initiales de X', () => {
+    const html = row(back);
+    expect(html).toContain('Marie était sur Meeshy récemment');
+    expect(html).toContain('C’est le moment de lui écrire 👋');
+    expect(html).toContain('>MA</span>');
+  });
+
+  test('elle mène au profil de X', () => {
+    expect(row(back)).toContain('href="/u/marie"');
+  });
+});

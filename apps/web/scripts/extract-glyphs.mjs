@@ -403,9 +403,11 @@ emit({
  * vocal bascule `fillPlay` (socle) ⇄ `pause` selon `AudioPlaybackStatus`,
  * `fill/pause-fill.svg`, meme dispositif que `fill-play`). Charge avec
  * `attachment-blocks.tsx`, deja dans le chunk du fil (monte par bubble.tsx
- * et focal-row.tsx) — jamais dans le socle.
+ * et focal-row.tsx) — jamais dans le socle. `arrows-out-simple` (#8234) :
+ * le bouton plein ecran de la lecture dans le fil (`VideoTile`), miroir de
+ * `arrow.up.left.and.arrow.down.right` (`MeeshyVideoPlayer+Controls.swift`).
  */
-const MEDIA = ['pause'];
+const MEDIA = ['pause', 'arrows-out-simple'];
 
 emit({
   ids: MEDIA,
@@ -675,9 +677,6 @@ const SETTINGS = [
   /* LES MESSAGES FAVORIS (#7286) — la PREMIERE rangee « Outils », miroir du
      `star.fill` d'iOS (`SettingsView.swift`, teinte `warning`). */
   'star-fill',
-  /* EFFACER MON CARNET D'ADRESSES (#8167) — la rangee de la confidentialite,
-     miroir du `trash` d'iOS (`PhonebookListView.eraseFooter`). */
-  'trash',
 ];
 
 emit({
@@ -840,6 +839,26 @@ emit({
   constant: 'CALL_DEVICES_GLYPHS',
   type: 'CallDevicesGlyphName',
   role: "LE JEU DE LA BULLE, DE L'IMAGE DANS L'IMAGE ET DES PERIPHERIQUES (#8046), charge avec la couche d'appel, jamais dans le socle.",
+});
+
+/**
+ * LA VUE D'APPEL « C ADAPTE » (#8391, #8392) — la pilule de verre et la une :
+ *
+ * | role | phosphor |
+ * |---|---|
+ * | `(…)`, les actions de l'appel | `dots-three` |
+ * | Sortie (audio et appareils) | `speaker-high` |
+ * | Grille (quitter la une) | `squares-four` |
+ * | Plein ecran / le quitter | `corners-out` / `corners-in` |
+ *
+ * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
+ */
+emit({
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in'],
+  output: join(HERE, '../src/components/glyphs-call-view.ts'),
+  constant: 'CALL_VIEW_GLYPHS',
+  type: 'CallViewGlyphName',
+  role: "LA VUE D'APPEL « C ADAPTE » (#8391, #8392) : le (…) de la pilule, la sortie, la grille et le plein ecran, charge avec l'ecran d'appel, jamais dans le socle.",
 });
 
 /**

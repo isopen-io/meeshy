@@ -132,8 +132,14 @@ extension MeeshyComposerHost {
         // compose dans l'ATELIER, que ce flux monte à la place. Un composant
         // écrit, câblé et invisible parce qu'il est posé sur la surface que
         // l'écran n'affiche pas.
+        //
+        // Retiré de la place d'un rail de chaque côté (#8388) : les rails
+        // flottent sur la scène depuis #8370, et un volet pleine largeur
+        // recouvrait leurs dernières entrées.
         .storyComposerBelowCanvasAccessory {
-            if let volet = sceneDescriptionPanel { volet }
+            if let volet = sceneDescriptionPanel {
+                volet.padding(.horizontal, ComposerRailGeometry.lane)
+            }
         }
         // **#4361 — ce que le meuble occupe en bas, l'atelier le libère.** Le
         // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
@@ -995,10 +1001,14 @@ extension MeeshyComposerHost {
     /// La pile du meuble — plateau, surface, socle. Extraite du `body` le
     /// 2026-09-04 pour que le viseur puisse l'ENVELOPPER : ce qui doit couvrir
     /// le socle ne peut pas être un modificateur posé après lui.
+    ///
+    /// **Le socle n'est plus empilé SOUS la surface : il flotte sur elle**
+    /// (#8370). `composerFloatingSocle` le pose en surimpression au bas de la
+    /// scène et réserve sa hauteur, pour que la rangée d'outils du bas reste
+    /// entière au-dessus du verre.
     @ViewBuilder
     var composerStack: some View {
-        VStack(spacing: 0) {
-            surfaceWithIntakePortals
+        surfaceWithIntakePortals.composerFloatingSocle {
             // **La description a quitté le bas au #4124.** Elle y vivait en
             // permanence — d'abord une barre à chevron, puis le calque de
             // lecture — et prenait la place que la scène CENTRÉE réclame, pour

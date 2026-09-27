@@ -6,6 +6,7 @@ import esMediaViewer from './catalog-es-media-viewer';
 import esActivation from './catalog-es-activation';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
+import esAccounts from './catalog-es-accounts';
 import esCall from './catalog-es-call';
 import esRowActions from './catalog-es-row-actions';
 import esCallShell from './catalog-es-call-shell';
@@ -13,7 +14,6 @@ import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
 import esCallFeedback from './catalog-es-call-feedback';
 import esCallsErase from './catalog-es-calls-erase';
-import esAddressBook from './catalog-es-address-book';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
 import esCallQuality from './catalog-es-call-quality';
@@ -21,10 +21,14 @@ import esCallCaptions from './catalog-es-call-captions';
 import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
+import esGallery from './catalog-es-gallery';
 import esMentions from './catalog-es-mentions';
+import esEphemeral from './catalog-es-ephemeral';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
+import esQuote from './catalog-es-quote';
+import esContactDiscovery from './catalog-es-contact-discovery';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -213,6 +217,7 @@ const es = {
   ...esVerifyEmail,
   ...esActivation,
   ...esPassword,
+  ...esAccounts,
   ...esCall,
   ...esRowActions,
   ...esCallShell,
@@ -220,7 +225,6 @@ const es = {
   ...esCallDecline,
   ...esCallFeedback,
   ...esCallsErase,
-  ...esAddressBook,
   ...esCallDevices,
   ...esCallScreen,
   ...esCallQuality,
@@ -458,9 +462,6 @@ const es = {
   'settings.privacy.read_receipts.info':
     'Es recíproco: si no envías confirmaciones de lectura, tampoco verás si han leído tus mensajes.',
   'settings.privacy.typing_indicator': 'Indicador de escritura',
-  'settings.privacy.hide_from_search': 'No sugerirme a quien tenga mi número o mi correo',
-  'settings.privacy.hide_from_search.info':
-    'Tus contactos no te encontrarán por tu número o tu correo, y no se les avisará de tu llegada.',
   'settings.section.appearance': 'Apariencia',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1117,7 +1118,7 @@ const es = {
   'message.withheld': 'Contenido retenido',
   'message.withheld.a11y': 'Contenido retenido: este mensaje existe y no se muestra',
   'message.veiled': 'Contenido oculto',
-  'message.veiled.hint': 'Toca para revelar el contenido',
+  'message.veiled.hint': 'Toca para ver',
   'message.veiled.error': 'No se puede revelar por ahora',
   'message.ephemeral.a11y': 'Mensaje efímero, desaparece en {remaining}',
   'message.ephemeral.awaiting': 'Esperando la recepción',
@@ -1157,9 +1158,13 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esEphemeral,
+  ...esGallery,
   ...esConversationCard,
   ...esStoriesMine,
   ...esContactCard,
+  ...esQuote,
+  ...esContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default es;

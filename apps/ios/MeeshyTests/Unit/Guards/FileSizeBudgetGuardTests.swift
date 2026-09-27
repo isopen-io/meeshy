@@ -48,7 +48,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "AudioFullscreenView.swift",
         "BubbleStandardLayout.swift",
         "CallManager.swift",
-        "CallView.swift",
         "ConversationDashboardView.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
@@ -523,7 +522,17 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // bulle : `BubbleStandardLayout.swift` perd le miroir de
     // `SharedAVPlayerManager.activeURL` qui masquait son pied pendant la
     // lecture inline.
-    private static let legacyLineCeiling = 47_615
+    //
+    // #8389 — 47 615 → 47 614 (−1). Le voile d'une bulle floutée se lève sur
+    // place : `BubbleStandardLayout.swift` perd la couche qui ouvrait chaque
+    // case en plein écran sous le voile.
+    //
+    // #8276 — 47 614 → 45 449 (−2 165). `CallView.swift` repasse SOUS le
+    // budget : ses surfaces partent dans les extensions `CallView+*.swift`
+    // (pilule, en-tête, scène connectée, vignette perso, sous-titres). Il sort
+    // de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    private static let legacyLineCeiling = 45_449
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

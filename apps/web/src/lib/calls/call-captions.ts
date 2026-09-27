@@ -19,6 +19,8 @@ export type CaptionsMode = 'off' | 'translated' | 'original';
 /** `idle` : rien à capter · `listening` : mon micro est transcrit · `unsupported` : le navigateur ne sait pas · `denied` : refusé. */
 export type TranscriptionState = 'idle' | 'listening' | 'unsupported' | 'denied';
 
+export type CaptionLanguagePair = { readonly from: string; readonly to: string };
+
 export type CallCaption = {
   readonly id: string;
   readonly speakerId: string;
@@ -26,6 +28,8 @@ export type CallCaption = {
   readonly original: string;
   /** La traduction servie par la passerelle dans la langue du lecteur — `null` tant qu'aucune n'est arrivée. */
   readonly translated: string | null;
+  /** Les langues de cette traduction (`sourceLanguage` → `targetLanguage`), arrivées avec elle — `null` sans traduction (#8393). */
+  readonly pair: CaptionLanguagePair | null;
   readonly isFinal: boolean;
   /** L'horloge murale de capture chez le locuteur — la clé d'ordre du journal. */
   readonly at: number;
@@ -50,6 +54,18 @@ export function captionText(caption: CallCaption, mode: CaptionsMode): string {
   return mode === 'translated' && !caption.mine && caption.translated !== null ? caption.translated : caption.original;
 }
 
+const languageCode = (tag: string): string => (tag.split('-')[0] ?? tag).toUpperCase();
+
+/**
+ * La petite étiquette « EN → FR » d'une ligne LUE traduite (#8393) — le Prisme
+ * reste discret mais dit qu'il a agi. Rien quand la ligne servie est
+ * l'original, ni quand la traduction est arrivée sans ses langues.
+ */
+export function captionLanguageLabel(caption: CallCaption, mode: CaptionsMode): string | null {
+  if (caption.pair === null || captionText(caption, mode) === caption.original) return null;
+  return `${languageCode(caption.pair.from)} → ${languageCode(caption.pair.to)}`;
+}
+
 /**
  * Fusion par identifiant d'énoncé : une révision partielle remplace la
  * précédente, un final ne redevient jamais partiel, une traduction arrivée
@@ -65,6 +81,7 @@ export function mergeCaption(journal: readonly CallCaption[], incoming: CallCapt
           speakerName: incoming.speakerName !== '' ? incoming.speakerName : existing.speakerName,
           original: existing.isFinal && !incoming.isFinal ? existing.original : incoming.original,
           translated: incoming.translated ?? existing.translated,
+          pair: incoming.translated === null ? existing.pair : incoming.pair,
           isFinal: existing.isFinal || incoming.isFinal,
           at: Math.min(existing.at, incoming.at),
         };
@@ -105,6 +122,9 @@ export function decodeTranslatedSegment(payload: unknown): { readonly callId: st
   if (callId === null || speakerId === null || original === null) return null;
   const startMs = finite(segment.startMs) ?? 0;
   const translated = text(segment.translatedText);
+  const served = translated !== null && translated !== original ? translated : null;
+  const from = text(segment.sourceLanguage);
+  const to = text(segment.targetLanguage);
   return {
     callId,
     speakerName: text(segment.speakerDisplayName),
@@ -113,7 +133,8 @@ export function decodeTranslatedSegment(payload: unknown): { readonly callId: st
       speakerId,
       speakerName: text(segment.speakerDisplayName) ?? '',
       original,
-      translated: translated !== null && translated !== original ? translated : null,
+      translated: served,
+      pair: served !== null && from !== null && to !== null ? { from, to } : null,
       isFinal: segment.isFinal !== false,
       at: finite(segment.capturedAtMs) ?? 0,
     },

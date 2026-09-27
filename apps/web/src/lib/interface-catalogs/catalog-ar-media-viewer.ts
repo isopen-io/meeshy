@@ -16,6 +16,8 @@ const arMediaViewer = {
   'media.viewer.react_failed': 'تعذّر التفاعل',
   'media.viewer.react_limit': 'تم بلوغ الحد الأقصى للتفاعلات',
   'media.viewer.compose_failed': 'تعذّر فتح هذه الوسائط في الاستوديو',
+  'media.viewer.open_fullscreen': 'فتح بملء الشاشة',
+  'media.audio.play': 'تشغيل الصوت',
 };
 
 export default arMediaViewer;

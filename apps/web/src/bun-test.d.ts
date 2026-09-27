@@ -78,6 +78,17 @@ declare module 'bun:test' {
   };
 
   export function expect(value: unknown): Expectations & { readonly not: Expectations };
+
+  /**
+   * L'horloge simulée (#8391) — le masquage des commandes d'une vidéo après
+   * 4 s sans geste se prouve sans attendre 4 s : `setTimeout` ET `Date.now()`
+   * avancent ensemble.
+   */
+  export const jest: {
+    useFakeTimers(): void;
+    useRealTimers(): void;
+    advanceTimersByTime(ms: number): void;
+  };
 }
 
 /**
@@ -122,3 +133,6 @@ declare const __FIXTURES__: boolean;
  * un littéral recopié dans un écran.
  */
 declare const __APP_VERSION__: string;
+
+/** `__API_PROXY_TARGET__` — la passerelle du proxy de dev (#8287), `vite.config.ts`. */
+declare const __API_PROXY_TARGET__: string;

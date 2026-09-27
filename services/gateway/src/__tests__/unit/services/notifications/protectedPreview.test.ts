@@ -21,6 +21,7 @@ import {
   formatEphemeralDuration,
 } from '../../../../services/notifications/notification-preview';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import { ephemeralSendFields } from '../../../../services/messaging/ephemeralSendFields';
 
 describe('contentTypeIcon', () => {
   it.each([
@@ -48,30 +49,29 @@ describe('contentTypeIcon', () => {
   });
 });
 
-describe('formatEphemeralDuration', () => {
-  const created = new Date('2026-01-01T10:00:00Z');
-
+describe('formatEphemeralDuration — depuis la DURÉE déclarée (secondes), jamais la colonne (#8344)', () => {
   it('returns "Ns" for sub-minute TTLs', () => {
-    expect(formatEphemeralDuration(new Date('2026-01-01T10:00:30Z'), created)).toBe('30s');
+    expect(formatEphemeralDuration(30)).toBe('30s');
   });
 
   it('returns "Nmin" for sub-hour TTLs', () => {
-    expect(formatEphemeralDuration(new Date('2026-01-01T10:05:00Z'), created)).toBe('5min');
+    expect(formatEphemeralDuration(300)).toBe('5min');
   });
 
   it('returns "Nh" for sub-day TTLs', () => {
-    expect(formatEphemeralDuration(new Date('2026-01-01T12:00:00Z'), created)).toBe('2h');
+    expect(formatEphemeralDuration(7200)).toBe('2h');
   });
 
   it('returns "Nj" for multi-day TTLs', () => {
-    expect(formatEphemeralDuration(new Date('2026-01-04T10:00:00Z'), created)).toBe('3j');
+    expect(formatEphemeralDuration(3 * 86400)).toBe('3j');
   });
 
-  it('returns undefined for non-positive durations or missing inputs', () => {
-    expect(formatEphemeralDuration(new Date('2026-01-01T09:00:00Z'), created)).toBeUndefined(); // past
-    expect(formatEphemeralDuration(created, created)).toBeUndefined();                          // zero
-    expect(formatEphemeralDuration(null, created)).toBeUndefined();
-    expect(formatEphemeralDuration(new Date(), null)).toBeUndefined();
+  it('returns undefined for non-positive or missing durations', () => {
+    expect(formatEphemeralDuration(0)).toBeUndefined();
+    expect(formatEphemeralDuration(-5)).toBeUndefined();
+    expect(formatEphemeralDuration(Number.NaN)).toBeUndefined();
+    expect(formatEphemeralDuration(null)).toBeUndefined();
+    expect(formatEphemeralDuration(undefined)).toBeUndefined();
   });
 });
 
@@ -90,21 +90,32 @@ describe('protectedPreview', () => {
     ).toBeNull();
   });
 
-  it('renders ephemeral text with duration: "🔥 💬 5min"', () => {
+  it('renders ephemeral text with its declared duration: "🔥 💬 5min"', () => {
     const result = protectedPreview({
       messageType: 'text',
-      expiresAt: new Date('2026-01-01T10:05:00Z'),
-      createdAt: baseCreatedAt,
+      ephemeralDuration: 300,
+      expiresAt: new Date('2026-01-08T10:00:00Z'),
     });
     expect(result?.preview).toBe('🔥 💬 5min');
     expect(result?.locKey).toBe('notification.ephemeral_message');
   });
 
-  it('renders ephemeral audio without duration when createdAt is missing', () => {
+  it('#8344 — un éphémère de 30 s, tel que l’envoi le STOCKE (colonne = plafond de rétention), annonce 30s, jamais 7j', () => {
+    const now = baseCreatedAt;
+    const stored = ephemeralSendFields({ ephemeralDuration: 30, now });
+    expect(stored.expiresAt?.getTime()).toBeGreaterThan(now.getTime() + 86_400_000);
+    const result = protectedPreview({
+      messageType: 'text',
+      ephemeralDuration: stored.ephemeralDuration,
+      expiresAt: stored.expiresAt,
+    });
+    expect(result?.preview).toBe('🔥 💬 30s');
+  });
+
+  it('#8344 — sans durée déclarée, aucun suffixe : la colonne ne dit pas la durée', () => {
     const result = protectedPreview({
       messageType: 'audio',
-      expiresAt: new Date('2026-01-01T10:30:00Z'),
-      createdAt: null,
+      expiresAt: new Date('2026-01-08T10:00:00Z'),
     });
     expect(result?.preview).toBe('🔥 🎵');
     expect(result?.locKey).toBe('notification.ephemeral_message');
@@ -164,8 +175,8 @@ describe('protectedPreview', () => {
       isEncrypted: true,
       isViewOnce: true,
       isBlurred: true,
-      expiresAt: new Date('2026-01-01T10:00:30Z'),
-      createdAt: baseCreatedAt,
+      ephemeralDuration: 30,
+      expiresAt: new Date('2026-01-08T10:00:00Z'),
     });
     expect(result?.preview).toBe('🔥 🎵 30s');
     expect(result?.locKey).toBe('notification.ephemeral_message');

@@ -179,9 +179,10 @@ enum ConversationFirstRenderWarmup {
         _ = vm.activeLiveLocations
         _ = vm.activeTranslationOverrides
         _ = vm.bubbleLanguageSelections
+        _ = vm.burningEphemeralIds
         _ = vm.currentConversation
         _ = vm.currentSearchQuery
-        _ = vm.ephemeralDuration
+        _ = vm.ephemeralChoice
         _ = vm.error
         _ = vm.firstUnreadMessageId
         _ = vm.hasNewerMessages

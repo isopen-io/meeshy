@@ -13,14 +13,10 @@ import XCTest
 @MainActor
 final class CallViewLayoutGuardTests: XCTestCase {
 
+    /// L'UNITÉ de l'écran d'appel (#8276) : `CallView.swift` et ses
+    /// extensions — un découpage ne doit pas éteindre ces gardes.
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.callViewSource()
     }
 
     /// Le backdrop plein écran doit être confiné dans un overlay layout-neutre.
@@ -127,19 +123,20 @@ final class CallViewLayoutGuardTests: XCTestCase {
     /// chrome flottant. Posé à 8 pt nus, le chevron minimize et le badge durée
     /// se rendraient SOUS la Dynamic Island — le défaut que l'ancien `.padding(
     /// .top, 50)` compensait à la main avant que le conteneur ne s'en charge.
-    /// L'encart est PARTAGÉ : deux rangées le lisent, et deux constantes les
-    /// auraient désalignées.
+    /// Depuis #8394 la puce durée/qualité vit DANS la rangée d'en-tête, à
+    /// droite : une seule rangée porte l'encart, et la puce ne peut plus se
+    /// désaligner du chevron.
     func test_topChromeReInsetsTheSafeAreaItself_fromTheWindow() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("private static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }"),
+            source.contains("static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }"),
             "L'encart doit venir de la FENÊTRE : `GeometryProxy.safeAreaInsets` " +
             "répond 0 dans un sous-arbre qui ignore la safe area."
         )
         XCTAssertEqual(
-            source.components(separatedBy: ".padding(.top, Self.chromeTopInset)").count - 1, 2,
-            "Les deux rangées de chrome haut (chevron/conversation, badge durée " +
-            "vidéo) doivent partager le MÊME encart — sinon elles se désalignent."
+            source.components(separatedBy: ".padding(.top, Self.chromeTopInset)").count - 1, 1,
+            "Une seule rangée de chrome haut (Réduire, Conversation, puce durée) " +
+            "porte l'encart — une seconde rangée se désalignerait d'elle (#8394)."
         )
     }
 

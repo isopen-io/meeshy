@@ -121,6 +121,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         // réécrites — et rien ne rougirait.
         "apps/ios/Meeshy/Features/Auth/Signup/SignupView.swift",
         "apps/ios/Meeshy/Features/Auth/Signup/SignupViewModel.swift",
+        // #8288 — l'inscription se découpe par PHASE : ses extraits restent
+        // dans le cliquet, sinon leurs clés en sortiraient au moment même où
+        // elles sont déplacées.
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Phone.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Card.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupCountrySheet.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
         "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
         // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles

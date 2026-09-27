@@ -83,6 +83,12 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
+    /// Ce que fait le toucher sur le voile : le lever SUR PLACE (#8389).
+    /// Projeté par `RiverConversationMapping`, jamais décidé ici.
+    let protectedTap: ProtectedContentTap
+    /// Le toucher SUIVANT, sur le contenu révélé : la Rivière ne rend aucun
+    /// média (#8310), c'est lui qui ouvre le plein écran de l'image floutée.
+    let tapAfterReveal: ProtectedContentTap
 
     /// Le premier lien du texte servi et ce qu'il porte (carte de
     /// conversation, façade vidéo, aperçu) — rendu par le MÊME
@@ -117,6 +123,8 @@ struct RiverBubbleContent: Equatable {
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
         isViewOnceRevealed: Bool = false,
+        protectedTap: ProtectedContentTap = .none,
+        tapAfterReveal: ProtectedContentTap = .none,
         linkEmbed: BubbleContent.Text? = nil,
         contactCards: RiverContactCards = RiverContactCards(items: []),
         identity: RiverBubbleIdentity? = nil
@@ -137,6 +145,8 @@ struct RiverBubbleContent: Equatable {
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
         self.isViewOnceRevealed = isViewOnceRevealed
+        self.protectedTap = protectedTap
+        self.tapAfterReveal = tapAfterReveal
         self.linkEmbed = linkEmbed
         self.contactCards = contactCards
     }
@@ -254,6 +264,15 @@ enum RiverSystemNotice: Equatable {
 struct RiverReplyPreview: Equatable {
     let authorDisplayName: String
     let text: String
+    /// #8283 — l'aperçu du média cité (vignette, poster, vocal), sous la
+    /// ligne. `nil` ⇒ la citation reste la seule ligne de texte.
+    let media: RiverQuotedMedia?
+
+    init(authorDisplayName: String, text: String, media: RiverQuotedMedia? = nil) {
+        self.authorDisplayName = authorDisplayName
+        self.text = text
+        self.media = media
+    }
 }
 
 // MARK: - Initiales — pures, testables sans monter la vue
@@ -337,6 +356,11 @@ struct RiverBubbleView: View, Equatable {
     /// pose le curseur sur le message cité et le cadre. Reçu, jamais résolu
     /// ici : cette vue ne connaît ni la géométrie ni le défilement.
     var onOpenReply: ((String) -> Void)? = nil
+    /// #8283 — tap sur l'APERÇU du média cité ⇒ le plein écran de la
+    /// conversation, comme en Script. L'hôte retombe lui-même sur le saut
+    /// quand il n'a rien d'honnête à ouvrir ; le reste de la citation garde
+    /// `onOpenReply`.
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
     /// R-5 — le nom (et l'avatar) ouvrent la fiche de la voix ; le cercle de
     /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
@@ -352,6 +376,8 @@ struct RiverBubbleView: View, Equatable {
     /// défaut — un texte à vue unique ne doit jamais s'afficher parce qu'un
     /// site de montage a oublié de brancher son canal.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// #8310 — le plein écran de l'hôte, le MÊME que celui du Fil.
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -436,7 +462,8 @@ struct RiverBubbleView: View, Equatable {
             if content.bubble.isFirstInGroup {
                 identityHeader
             }
-            messageBox
+            // #8303 — la flamme-œil en filigrane, au bord d'attaque de la bulle.
+            messageBox.afterReadWatermark(content.protection.isAfterRead, gutter: 36, tint: ComposerProtection.ephemeral.tint, overhang: 22)
         }
         .background(
             GeometryReader { proxy in
@@ -448,7 +475,19 @@ struct RiverBubbleView: View, Equatable {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityActions { quotedMediaAccessibilityAction }
         .contextMenu { bubbleMenu }
+    }
+
+    /// #8283 — la bulle se lit d'un seul élément : l'ouverture du média cité y
+    /// devient une action nommée, présente seulement quand elle est armée.
+    @ViewBuilder
+    private var quotedMediaAccessibilityAction: some View {
+        if content.storyCitation == nil, let media = content.replyPreview?.media, let onQuotedMediaTap {
+            Button(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main)) {
+                onQuotedMediaTap(media.reference)
+            }
+        }
     }
 
     /// Le texte du message, nu. Extrait pour que le voile de protection
@@ -577,7 +616,9 @@ struct RiverBubbleView: View, Equatable {
                     isViewOnce: content.protection.isViewOnce,
                     isDark: isDark,
                     messageId: content.bubble.messageId,
-                    onConsumeViewOnce: onConsumeViewOnce
+                    onConsumeViewOnce: onConsumeViewOnce,
+                    tap: content.protectedTap,
+                    tapAfterReveal: content.tapAfterReveal, onMediaTap: onMediaTap
                 ) {
                     riverText
                 }
@@ -810,8 +851,50 @@ struct RiverBubbleView: View, Equatable {
 
     // MARK: - Citation de réponse — une ligne, jamais plus (§7ter A4)
 
-    @ViewBuilder
+    /// La ligne, puis — #8283 — l'aperçu du média cité, que le rail longe
+    /// sans rupture. Deux zones : l'APERÇU ouvre le plein écran, TOUT LE
+    /// RESTE garde le saut au message cité (R-6).
     private func quotedReply(_ reply: RiverReplyPreview) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            quotedReplyLine(reply)
+            if let media = reply.media {
+                quotedMediaRow(media)
+            }
+        }
+    }
+
+    private func quotedMediaRow(_ media: RiverQuotedMedia) -> some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(laneColor.opacity(0.6))
+                .frame(width: FocalMetrics.Quote.railWidth)
+            RiverQuotedMediaFace(media: media, tint: laneColor, audioTint: metaTint, isArmed: onQuotedMediaTap != nil)
+                .equatable()
+                .contentShape(Rectangle())
+                .onTapGesture { openQuotedMedia(media.reference) }
+                .padding(.leading, 8)
+                .padding(.top, 4)
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .contentShape(Rectangle())
+        .onTapGesture { followQuote() }
+    }
+
+    /// Le plein écran quand l'hôte l'offre, le saut à l'original sinon : une
+    /// zone qu'on touche n'est jamais une cible morte (loi 4).
+    private func openQuotedMedia(_ reference: ReplyReference) {
+        guard let onQuotedMediaTap else { return followQuote() }
+        onQuotedMediaTap(reference)
+    }
+
+    private func followQuote() {
+        guard let targetId = content.bubble.replyToMessageId else { return }
+        onOpenReply?(targetId)
+    }
+
+    @ViewBuilder
+    private func quotedReplyLine(_ reply: RiverReplyPreview) -> some View {
         if let targetId = content.bubble.replyToMessageId, let onOpenReply {
             // R-6 : la citation est une RÉFÉRENCE — et une référence se suit.
             Button { onOpenReply(targetId) } label: { quotedReplyLabel(reply) }

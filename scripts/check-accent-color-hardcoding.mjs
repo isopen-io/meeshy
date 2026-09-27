@@ -177,8 +177,16 @@
 // (`contactColor`) disparaissent, remplacés par UN poster partagé
 // (`ConversationVideoPoster`, un seul appel à `accentHex`) pour la grille,
 // le carrousel et Focal. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8395, #8396) — variables inconnues 438 → 440. La vue d'appel
+// « C adapté » donne à chaque PERSONNE d'un appel une couleur stable
+// (`CallSpeakerColor.hex(for:)`), la même au liseré de sa vignette de groupe
+// (`GroupCallStageView`, `tile.accentHex`) et à son nom dans les sous-titres
+// (`CallCaptionsViews`, `line.speakerColorHex`). C'est l'identité d'un
+// participant, pas le contexte d'une conversation : `accentColor` n'y aurait
+// aucun sens. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 438;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 440;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

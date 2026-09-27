@@ -426,6 +426,20 @@ final class SomeViewModelTests: XCTestCase {
 > publication ; et sur la rangée à gauche, ce sont les features qui apparaissent
 > sur le canvas visuellement. »
 
+> **⚠️ SUPERSÉDÉ PAR LA MAQUETTE PLEIN ÉCRAN (directive porteur 2026-09-27, #8281).**
+> La scène occupe désormais tout l'écran et les contrôles FLOTTENT dessus ; la
+> géographie « rails dans les couloirs » des §§ 1 à 2 quater ci-dessous se porte
+> vers `docs/product/composer-plein-ecran/` par lots, chacun sous son issue — elle
+> reste en place tant que son lot n'est pas livré, et ce paragraphe dit laquelle
+> gagne. Deux règles s'appliquent déjà : **le type se choisit à l'envoi** (capsule
+> `[Publier … | ^]`, aucun sélecteur en haut) et **la flèche CHOISIT sans publier —
+> seul l'appui sur Publier envoie** (`ComposerPublishMenuRule.armed`), sur iOS,
+> iPad, web mobile et navigateur à l'identique. Chaque média garde son format
+> (panneau Cadre : Ajuster/Remplir + fond). **Lot 2 (#8370)** : les deux rails
+> FLOTTENT sur la scène, qui prend toute la largeur
+> (`ComposerRailGeometry.floatingInset = 0`) — le § 1 ci-dessous ne vaut plus
+> pour les rails.
+
 ### 1. Aucun contrôle ne se pose SUR la scène
 
 Les rails, les contrôleurs et les portes vivent **dans les couloirs du plateau**,

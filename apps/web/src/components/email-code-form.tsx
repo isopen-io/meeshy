@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { auth } from '@/lib/api/auth';
 import { translate } from '@/lib/i18n-catalog';
@@ -47,11 +47,25 @@ export type EmailCodeFormDeps = {
   readonly verificationStatus: VerificationStatusReader;
 };
 
-function useAddressProvenElsewhere(pendingSessionToken: string | null, read: VerificationStatusReader): boolean {
+function useAddressProvenElsewhere(
+  pendingSessionToken: string | null,
+  read: VerificationStatusReader,
+  onProven: (() => void) | undefined,
+): boolean {
   const [proven, setProven] = useState(false);
+  const notify = useRef(onProven);
+  notify.current = onProven;
   useEffect(() => {
     if (pendingSessionToken === null || pendingSessionToken === '') return;
-    return watchVerificationStatus({ token: pendingSessionToken, read, view: window, onProven: () => setProven(true) });
+    return watchVerificationStatus({
+      token: pendingSessionToken,
+      read,
+      view: window,
+      onProven: () => {
+        setProven(true);
+        notify.current?.();
+      },
+    });
   }, [pendingSessionToken, read]);
   return proven;
 }
@@ -96,6 +110,7 @@ export function EmailCodeForm({
   next,
   onVerified,
   onSignedIn,
+  onProvenElsewhere,
   verifyEmail = auth.verifyEmail,
   verificationStatus = auth.verificationStatus,
   pendingSessionToken = null,
@@ -108,6 +123,9 @@ export function EmailCodeForm({
   readonly onVerified: () => void;
   /** La session ouverte par le code — `goToLanding(next)` si absent. */
   readonly onSignedIn?: () => void;
+  /** L'adresse prouvée AILLEURS (#8083) — l'hôte déjà connecté (la carte de
+   * l'inscription, #8288) la tient pour validée ; les autres la disent seulement. */
+  readonly onProvenElsewhere?: () => void;
   readonly verifyEmail?: EmailCodeFormDeps['verifyEmail'];
   readonly verificationStatus?: EmailCodeFormDeps['verificationStatus'];
   /** Le jeton d'attente de CET appareil (#8083) — `null` : rien à surveiller. */
@@ -121,7 +139,7 @@ export function EmailCodeForm({
   const [focused, setFocused] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
-  const provenElsewhere = useAddressProvenElsewhere(pendingSessionToken, verificationStatus);
+  const provenElsewhere = useAddressProvenElsewhere(pendingSessionToken, verificationStatus, onProvenElsewhere);
 
   const isComplete = code.length === 6;
 

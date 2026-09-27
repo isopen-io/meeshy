@@ -24,6 +24,8 @@ const cached: AppPreferences = {
   showTypingIndicator: true,
   hideProfileFromSearch: false,
   acceptCallsFromNonContacts: false,
+  notifyContactsOnReturn: true,
+  contactActivityEnabled: true,
 };
 
 const deferred = () => {
@@ -59,7 +61,7 @@ describe('performPreferenceEdit', () => {
     const pending = performPreferenceEdit({ patch: { showOnlineStatus: false }, deps });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(read()?.showOnlineStatus).toBe(false);
-    answer.resolve({ ok: true, data: { privacy: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: true, hideProfileFromSearch: false, acceptCallsFromNonContacts: false } } });
+    answer.resolve({ ok: true, data: { privacy: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: true, hideProfileFromSearch: false, acceptCallsFromNonContacts: false, notifyContactsOnReturn: true } } });
     expect(await pending).toEqual({ status: 'saved' });
   });
 
@@ -70,7 +72,7 @@ describe('performPreferenceEdit', () => {
     const { deps, read } = depsWith({
       online: true,
       seed: cached,
-      answer: Promise.resolve({ ok: true, data: { notification: { pushEnabled: true, soundEnabled: false } } }),
+      answer: Promise.resolve({ ok: true, data: { notification: { pushEnabled: true, soundEnabled: false, contactActivityEnabled: true } } }),
     });
     expect(await performPreferenceEdit({ patch: { pushEnabled: false }, deps })).toEqual({ status: 'saved' });
     expect(read()).toEqual({ ...cached, pushEnabled: true });
@@ -122,9 +124,9 @@ describe('performPreferenceEdit', () => {
     const sound = performPreferenceEdit({ patch: { soundEnabled: false }, deps });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    answers[1]?.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: false } } });
+    answers[1]?.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: false, contactActivityEnabled: true } } });
     expect(await sound).toEqual({ status: 'saved' });
-    answers[0]?.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: true } } });
+    answers[0]?.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: true, contactActivityEnabled: true } } });
     expect(await push).toEqual({ status: 'saved' });
 
     expect(queryClient.getQueryData<AppPreferences>(APP_PREFERENCES_QUERY_KEY)).toEqual({ ...cached, pushEnabled: false, soundEnabled: false });

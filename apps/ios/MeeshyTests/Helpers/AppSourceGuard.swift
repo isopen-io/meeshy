@@ -275,4 +275,18 @@ enum AppSourceGuard {
     static func storyViewModelSource() throws -> String {
         try unit(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
     }
+
+    /// L'unité de l'écran d'APPEL (#8276) : `CallView.swift`, ses extensions
+    /// `CallView+*.swift` (en-tête, états, appel établi, vignette perso,
+    /// sous-titres, pilule…), et les vues feuilles de la pilule et des
+    /// sous-titres sorties au #8394/#8396, qui ne portent pas le préfixe.
+    static let callViewPath = "Meeshy/Features/Main/Views/CallView.swift"
+    static let callViewCompanions = [
+        "Meeshy/Features/Main/Views/CallDeviceControls.swift",
+        "Meeshy/Features/Main/Views/CallCaptionsViews.swift",
+    ]
+
+    static func callViewSource() throws -> String {
+        try unit(callViewPath, alsoIncluding: callViewCompanions)
+    }
 }

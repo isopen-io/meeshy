@@ -166,6 +166,11 @@ struct OnboardingHost: ViewModifier {
                 .receive(on: DispatchQueue.main)) { isElsewhere in
                 model.routingChanged(isElsewhere: isElsewhere)
             }
+            // La célébration de l'arrivée (#8089) passe AVANT la première
+            // carte : lue, comme le routage, avant l'état serveur.
+            .onReceive(ArrivalCelebrationController.shared.$isShowing.removeDuplicates()) { showing in
+                model.celebrationChanged(isShowing: showing)
+            }
             .onReceive(AuthManager.shared.$currentUser.receive(on: DispatchQueue.main)) { user in
                 guard let user, startedForUserId != user.id else { return }
                 startedForUserId = user.id

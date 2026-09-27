@@ -6,6 +6,7 @@ import ptMediaViewer from './catalog-pt-media-viewer';
 import ptActivation from './catalog-pt-activation';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
+import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
 import ptRowActions from './catalog-pt-row-actions';
 import ptCallShell from './catalog-pt-call-shell';
@@ -13,7 +14,6 @@ import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
 import ptCallFeedback from './catalog-pt-call-feedback';
 import ptCallsErase from './catalog-pt-calls-erase';
-import ptAddressBook from './catalog-pt-address-book';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptCallScreen from './catalog-pt-call-screen';
 import ptCallQuality from './catalog-pt-call-quality';
@@ -21,10 +21,14 @@ import ptCallCaptions from './catalog-pt-call-captions';
 import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
+import ptGallery from './catalog-pt-gallery';
 import ptMentions from './catalog-pt-mentions';
+import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
+import ptQuote from './catalog-pt-quote';
+import ptContactDiscovery from './catalog-pt-contact-discovery';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -217,6 +221,7 @@ const pt = {
   ...ptVerifyEmail,
   ...ptActivation,
   ...ptPassword,
+  ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
   ...ptCallShell,
@@ -224,7 +229,6 @@ const pt = {
   ...ptCallDecline,
   ...ptCallFeedback,
   ...ptCallsErase,
-  ...ptAddressBook,
   ...ptCallDevices,
   ...ptCallScreen,
   ...ptCallQuality,
@@ -462,9 +466,6 @@ const pt = {
   'settings.privacy.read_receipts.info':
     'É recíproco: se você não enviar confirmações de leitura, também não verá se suas mensagens foram lidas.',
   'settings.privacy.typing_indicator': 'Indicador de digitação',
-  'settings.privacy.hide_from_search': 'Não me sugerir a quem tem meu número ou e-mail',
-  'settings.privacy.hide_from_search.info':
-    'Seus contatos não vão te encontrar pelo seu número ou e-mail, e não serão avisados da sua chegada.',
   'settings.section.appearance': 'Aparência',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1121,7 +1122,7 @@ const pt = {
   'message.withheld': 'Conteúdo retido',
   'message.withheld.a11y': 'Conteúdo retido: esta mensagem existe e não é exibida',
   'message.veiled': 'Conteúdo oculto',
-  'message.veiled.hint': 'Toque para revelar o conteúdo',
+  'message.veiled.hint': 'Toque para ver',
   'message.veiled.error': 'Não é possível revelar por enquanto',
   'message.ephemeral.a11y': 'Mensagem efêmera, desaparece em {remaining}',
   'message.ephemeral.awaiting': 'Aguardando o recebimento',
@@ -1161,9 +1162,13 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptEphemeral,
+  ...ptGallery,
   ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,
+  ...ptQuote,
+  ...ptContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default pt;

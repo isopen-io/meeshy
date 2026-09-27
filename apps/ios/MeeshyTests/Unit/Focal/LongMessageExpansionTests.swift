@@ -151,4 +151,83 @@ final class LongMessageExpansionTests: XCTestCase {
         let riverBubble = try source("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
         XCTAssertTrue(riverBubble.contains("BubbleExpandableText("), "Rivière : le texte long est tronqué comme ailleurs")
     }
+
+    // MARK: - La hauteur s'anime comme sur le web (#8232)
+
+    func test_heightTiming_playsTheWebTempoAndCurve() {
+        let timing = LongMessageExpansionLaw.heightTiming(reduceMotion: false)
+        XCTAssertEqual(timing?.duration, 0.3)
+        XCTAssertEqual(timing?.controlPoints, [0.2, 0, 0, 1])
+    }
+
+    func test_heightTiming_underReduceMotion_isAbsent_theHeightLandsAtOnce() {
+        XCTAssertNil(LongMessageExpansionLaw.heightTiming(reduceMotion: true))
+    }
+
+    func test_pin_invertedList_theVisualTopIsTheEndOfTheSpan() {
+        XCTAssertEqual(LongMessageExpansionLaw.pin(for: .top, listIsInverted: true), .end)
+        XCTAssertEqual(LongMessageExpansionLaw.pin(for: .bottom, listIsInverted: true), .origin)
+        XCTAssertEqual(LongMessageExpansionLaw.pin(for: .top, listIsInverted: false), .origin)
+    }
+
+    private typealias Span = LongMessageExpansionLaw.Span
+
+    func test_heightMotion_expanding_unrollsFromTheHeldTop_throughTheWholeCell() {
+        // Liste renversée : le haut visuel (tenu) est la FIN de l'intervalle.
+        let before = Span(origin: 400, length: 120)
+        let after = Span(origin: 100, length: 420)
+        let motion = LongMessageExpansionLaw.heightMotion(before: before, after: after, pin: .end)
+        XCTAssertEqual(motion?.translationFrom, 0, "le haut n'a pas bougé : aucun glissement du texte")
+        XCTAssertEqual(motion?.revealFrom, Span(origin: 300, length: 120), "on voit d'abord l'extrait, collé au haut ; la suite se déroule dessous")
+    }
+
+    func test_heightMotion_expandingAtTheBottomOfTheThread_growsUpward_revealingFromTheBottom() {
+        let before = Span(origin: 0, length: 120)
+        let after = Span(origin: 0, length: 420)
+        let motion = LongMessageExpansionLaw.heightMotion(before: before, after: after, pin: .end)
+        XCTAssertEqual(motion?.translationFrom, -300, "le haut part de son ancienne place et monte")
+        XCTAssertEqual(motion?.revealFrom, Span(origin: 300, length: 120))
+    }
+
+    func test_heightMotion_collapsing_isTheMirror_theNeighboursCloseTheGap_nothingIsClipped() {
+        let before = Span(origin: 100, length: 420)
+        let after = Span(origin: 100, length: 120)
+        let collapsed = LongMessageExpansionLaw.heightMotion(before: before, after: after, pin: .origin)
+        XCTAssertNil(collapsed, "le bas tenu ne bouge pas, la cellule ne grandit pas : rien à jouer sur elle")
+        let neighbour = LongMessageExpansionLaw.heightMotion(
+            before: Span(origin: 520, length: 60), after: Span(origin: 220, length: 60), pin: .origin
+        )
+        XCTAssertEqual(neighbour, .init(translationFrom: 300, revealFrom: nil), "le voisin au-dessus redescend sur la durée, il ne saute pas")
+    }
+
+    func test_regionShift_expandThenCollapse_moveTheNeighbourByOppositeAmounts() {
+        let expand = LongMessageExpansionLaw.regionShift(
+            beyondEnd: true, expandedBefore: Span(origin: 100, length: 120), expandedAfter: Span(origin: 100, length: 420)
+        )
+        let collapse = LongMessageExpansionLaw.regionShift(
+            beyondEnd: true, expandedBefore: Span(origin: 100, length: 420), expandedAfter: Span(origin: 100, length: 120)
+        )
+        XCTAssertEqual(expand, 300)
+        XCTAssertEqual(collapse, -expand, "le repli rejoue le dépliage à l'envers")
+        XCTAssertEqual(
+            LongMessageExpansionLaw.regionShift(beyondEnd: false, expandedBefore: Span(origin: 100, length: 120), expandedAfter: Span(origin: 100, length: 420)),
+            0,
+            "ce qui est avant l'origine tenue ne bouge pas"
+        )
+    }
+
+    func test_heightMotion_anUnmovedCell_playsNothing() {
+        XCTAssertNil(LongMessageExpansionLaw.heightMotion(before: Span(origin: 10, length: 50), after: Span(origin: 10, length: 50), pin: .origin))
+    }
+
+    func test_everyThreadHost_playsTheSharedTiming_andHonoursReduceMotion() throws {
+        let host = try source("Meeshy/Features/Main/Views/MessageListViewController+LongMessage.swift")
+        XCTAssertTrue(
+            host.contains("LongMessageExpansionLaw.heightTiming(reduceMotion: UIAccessibility.isReduceMotionEnabled)"),
+            "Bulles, Script, Focal : la hauteur joue le tempo partagé, coupé sous Réduire le mouvement"
+        )
+        let river = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        XCTAssertTrue(river.contains("LongMessageExpansionLaw.heightTiming(reduceMotion: reduceMotion)"), "Rivière : même tempo, même courbe")
+        XCTAssertFalse(river.contains(".easeInOut(duration: FocalMetrics.Focus.expandDuration)"), "Rivière : plus de courbe locale")
+    }
 }

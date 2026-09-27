@@ -17,6 +17,8 @@ import type { ApiResult, HttpTransport } from './http';
  *    (`ThemeManager.observeRemoteThemeSync`) ;
  *  - `notification.pushEnabled` / `soundEnabled` — la porte et la sourdine de
  *    `PushNotificationService` (`shouldSendPush`, `muted`) ;
+ *  - `notification.contactActivityEnabled` — la RÉCEPTION de « X était sur
+ *    Meeshy récemment » (#8285) ;
  *  - `privacy.showOnlineStatus` / `showLastSeen` — `PresenceVisibilityService`
  *    et l'audience de `user:status` (`socketio/presence-audience.ts`) ;
  *  - `privacy.showReadReceipts` — `MessageReadStatusService`,
@@ -25,11 +27,14 @@ import type { ApiResult, HttpTransport } from './http';
  *  - `privacy.hideProfileFromSearch` — toutes les recherches par identifiant
  *    (numéro, e-mail, carnet) et l'annonce « X a rejoint Meeshy » (#8104, #8105) ;
  *  - `privacy.acceptCallsFromNonContacts` — la porte de sonnerie des appels
- *    (`services/calls/callRingPolicy.ts`, #8073).
+ *    (`services/calls/callRingPolicy.ts`, #8073) ;
+ *  - `privacy.notifyContactsOnReturn` — l'ÉMISSION de « X était sur Meeshy
+ *    récemment » vers les amis et les porteurs du numéro ou de l'e-mail
+ *    (#8285), jamais quand la présence est masquée.
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
  *
- * **La lecture est une PROJECTION** : `?fields=` ne demande que ces neuf
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces onze
  * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
  * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
  * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
@@ -44,7 +49,7 @@ export type AppPreferencesDeps = { readonly source: DataSource; readonly transpo
 const ThemeMode = z.enum(['light', 'dark', 'auto']);
 
 const Application = z.object({ theme: ThemeMode });
-const Notification = z.object({ pushEnabled: z.boolean(), soundEnabled: z.boolean() });
+const Notification = z.object({ pushEnabled: z.boolean(), soundEnabled: z.boolean(), contactActivityEnabled: z.boolean() });
 const Privacy = z.object({
   showOnlineStatus: z.boolean(),
   showLastSeen: z.boolean(),
@@ -52,6 +57,7 @@ const Privacy = z.object({
   showTypingIndicator: z.boolean(),
   hideProfileFromSearch: z.boolean(),
   acceptCallsFromNonContacts: z.boolean(),
+  notifyContactsOnReturn: z.boolean(),
 });
 
 const Complete = z.object({ application: Application, notification: Notification, privacy: Privacy });
@@ -76,12 +82,14 @@ export const APP_PREFERENCE_FIELDS = {
   theme: 'application',
   pushEnabled: 'notification',
   soundEnabled: 'notification',
+  contactActivityEnabled: 'notification',
   showOnlineStatus: 'privacy',
   showLastSeen: 'privacy',
   showReadReceipts: 'privacy',
   showTypingIndicator: 'privacy',
   hideProfileFromSearch: 'privacy',
   acceptCallsFromNonContacts: 'privacy',
+  notifyContactsOnReturn: 'privacy',
 } as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
 
 type PreferenceKey = keyof typeof APP_PREFERENCE_FIELDS;

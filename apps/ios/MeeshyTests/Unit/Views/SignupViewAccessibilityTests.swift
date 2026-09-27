@@ -24,6 +24,16 @@ final class SignupViewAccessibilityTests: XCTestCase {
         .deletingLastPathComponent()   // apps/ios
 
     private static let signupView = "Meeshy/Features/Auth/Signup/SignupView.swift"
+    /// #8288 — l'écran se découpe par PHASE : le téléphone, la carte, le
+    /// sélecteur de pays vivent dans leurs fichiers. Les gardes de cet écran
+    /// lisent donc l'ÉCRAN, pas un fichier — sinon un extrait les rendrait
+    /// vertes par omission.
+    private static let signupViewFiles = [
+        signupView,
+        "Meeshy/Features/Auth/Signup/SignupView+Phone.swift",
+        "Meeshy/Features/Auth/Signup/SignupView+Card.swift",
+        "Meeshy/Features/Auth/Signup/SignupCountrySheet.swift",
+    ]
     private static let signupViewModel = "Meeshy/Features/Auth/Signup/SignupViewModel.swift"
     private static let welcomeView = "Meeshy/Features/Main/Views/WelcomeView.swift"
     /// Descendu dans MeeshyUI au #6644 : « Mot de passe oublié », qui vit dans le
@@ -45,6 +55,11 @@ final class SignupViewAccessibilityTests: XCTestCase {
             .joined(separator: "\n")
     }
 
+    /// Le code de TOUT l'écran d'inscription, ses extensions de phase comprises.
+    private func signupViewCode() throws -> String {
+        try Self.signupViewFiles.map { try code($0) }.joined(separator: "\n")
+    }
+
     private func occurrences(of needle: String, in haystack: String) -> Int {
         guard !needle.isEmpty else { return 0 }
         var count = 0
@@ -63,7 +78,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Une pause posée sur un succès est une LENTEUR, donc un bug — pas un
     /// arbitrage de goût (`CLAUDE.md` § roadmap).
     func test_signup_neverDelaysTheUser() throws {
-        for path in [Self.signupView, Self.signupViewModel, Self.welcomeView] {
+        for path in Self.signupViewFiles + [Self.signupViewModel, Self.welcomeView] {
             let body = try code(path)
             XCTAssertFalse(body.contains("asyncAfter"),
                            "\(path) : aucune pause ne se pose entre l'utilisateur et son compte")
@@ -78,7 +93,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// depuis #4158 la passerelle ne répond plus « déjà pris » à un appelant
     /// anonyme : ils coûtaient trois attentes pour zéro information.
     func test_signup_neverProbesAvailabilityBeforeSubmitting() throws {
-        let body = try code(Self.signupViewModel) + code(Self.signupView)
+        let body = try code(Self.signupViewModel) + signupViewCode()
         XCTAssertFalse(body.contains("checkAvailability"),
                        "l'écran ne sonde plus la disponibilité : c'est la soumission qui tranche")
         XCTAssertFalse(body.contains("checkPhoneOwnership"),
@@ -93,7 +108,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// générateurs en singletons `@MainActor` et appelle `prepare()` avant
     /// chaque événement — c'est la seule voie autorisée.
     func test_signupAndWelcome_routeEveryHapticThroughTheDesignSystem() throws {
-        for path in [Self.signupView, Self.welcomeView] {
+        for path in Self.signupViewFiles + [Self.welcomeView] {
             let body = try code(path)
             XCTAssertFalse(body.contains("UIImpactFeedbackGenerator("),
                            "\(path) : générateur monté à la main — il ne sera jamais chaud")
@@ -104,6 +119,13 @@ final class SignupViewAccessibilityTests: XCTestCase {
 
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
+    ///
+    /// **QUINZE depuis les phases vivantes (#8288).** Aux onze d'avant — dont le
+    /// crayon d'identité, retiré par #7897 et remplacé par la ligne dépliable
+    /// « Pourquoi mettre un mot de passe maintenant ? » — s'ajoutent : passer le
+    /// numéro (« Continuer avec l'e-mail seulement »), la réussite et l'échec de
+    /// « Valider mon compte maintenant », et le compte VALIDÉ (code juste ou
+    /// lien ouvert), qui se sent avec son feu d'artifice.
     ///
     /// `SignupView` en porte ONZE — fermer, sous une adresse déjà utilisée
     /// « Recevoir un lien de connexion », « Mot de passe oublié ? » et « Ce
@@ -120,9 +142,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// une parce que ses deux voisins d'usage en ont une : ouvrir le sélecteur
     /// de pays et ouvrir la feuille de langue. Un contrôle qui RÉVÈLE quelque
     /// chose se sent, sur cet écran, depuis #5555.
-    func test_signupView_keepsItsElevenHaptics_andTheInfoHintCarriesTheTwelfth() throws {
-        let body = try code(Self.signupView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 11)
+    func test_signupView_keepsItsFifteenHaptics_andTheInfoHintCarriesItsOwn() throws {
+        let body = try signupViewCode()
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 15)
         XCTAssertEqual(occurrences(of: "HapticFeedback.", in: try code(Self.infoHint)), 1,
                        "déplier un (i) se sent — et UNE fois, dans le composant partagé")
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
@@ -147,7 +169,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// bouton ordinaire : l'utilisateur entend l'action, jamais l'état — et
     /// c'est l'état qui porte le Prisme.
     func test_languageChip_announcesItsSelectedState() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains(".accessibilityAddTraits(.isSelected)"),
                       "la pastille de langue doit annoncer qu'elle porte une sélection")
         XCTAssertTrue(body.contains("accessibilityHint"),
@@ -157,7 +179,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Elle porte son propre libellé : sans `children: .ignore`, VoiceOver
     /// énumère le drapeau, la phrase et le mot « Changer » comme trois éléments.
     func test_languageChip_readsAsOneElement() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains(".accessibilityElement(children: .ignore)"))
     }
 
@@ -169,7 +191,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// La croix de fermeture passe par `meeshyTapTarget()`, qui pose 44×44
     /// autour d'un glyphe plus petit.
     func test_everyControl_declaresAHitRegionOfAtLeast44() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains("meeshyTapTarget()"),
                       "la croix de fermeture est un glyphe : sans cadre déclaré, sa cible EST son dessin")
         XCTAssertGreaterThanOrEqual(
@@ -183,7 +205,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// La rangée du sélecteur de pays est une LISTE : chaque ligne doit être
     /// touchable sur 44 pt, et annoncer celle qui est retenue.
     func test_countrySheet_rowsAreTouchableAndAnnounceTheSelection() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains(".frame(minHeight: 44)"))
         XCTAssertTrue(body.contains("country.id == selection.id ? [.isSelected] : []"),
                       "le pays retenu doit s'entendre, pas seulement se voir")
@@ -195,7 +217,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// protéger, donc pas d'exception à réclamer (doctrine 53i / 82i / 86i,
     /// mesurée par `FixedFontSizeGuardTests` sur tout le dépôt).
     func test_signupAndWelcome_haveNoFrozenFontSize() throws {
-        for path in [Self.signupView, Self.welcomeView] {
+        for path in Self.signupViewFiles + [Self.welcomeView] {
             XCTAssertFalse(try code(path).contains(".font(.system(size:"),
                            "\(path) : une taille figée ignore Dynamic Type")
         }
@@ -206,7 +228,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Un message d'erreur muet ne corrige rien : VoiceOver doit le lire comme
     /// un texte à part entière, sous la saisie qu'il vise.
     func test_fieldErrors_areRenderedAsFootnotesWithTheirOwnLabel() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains(".font(.footnote)"),
                       "le refus se pose en `.footnote` sous son champ")
         XCTAssertTrue(body.contains(".accessibilityLabel(message)"),
@@ -224,10 +246,12 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// pour un champ dont il ne parle pas. Une garde nommée pour une chose et
     /// mesurée sur une autre finit toujours par accuser la mauvaise.
     private func fieldBody(_ name: String, in code: String) throws -> String {
-        let start = try XCTUnwrap(code.range(of: "private var \(name): some View {"),
+        let start = try XCTUnwrap(code.range(of: "var \(name): some View {"),
                                   "champ `\(name)` introuvable dans SignupView")
         let rest = code[start.upperBound...]
-        let end = rest.range(of: "\n    private var ") ?? rest.range(of: "\n    // MARK:")
+        let end = [rest.range(of: "\n    private var "), rest.range(of: "\n    var "), rest.range(of: "\n    // MARK:")]
+            .compactMap { $0 }
+            .min { $0.lowerBound < $1.lowerBound }
         return String(end == nil ? rest : rest[..<end!.lowerBound])
     }
 
@@ -241,7 +265,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// décision à prendre, et la taire laisserait la personne l'ignorer — le
     /// témoin jumeau ci-dessous exige qu'elle soit dite.
     func test_phoneField_isNeverAnnouncedAsOptional() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         let phone = try fieldBody("phoneField", in: body)
         XCTAssertFalse(phone.lowercased().contains("facultat"),
                        "aucun « facultatif » sur le champ téléphone")
@@ -272,7 +296,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Sans ce témoin, la note disparaîtrait au premier remaniement d'écran
     /// sans que rien ne rougisse — un champ muet n'échoue jamais.
     func test_phoneField_statesWhatTheNumberUnlocks() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains("auth.signup.phone.benefit"),
                       "l'écran DOIT dire ce que le numéro ouvre")
         let phone = try fieldBody("phoneField", in: body)
@@ -295,7 +319,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// une rangée de 48 pt — `meeshyTapTarget()` y tient ses 44 pt sans ajouter
     /// la moindre hauteur, ce qui est exactement la raison de l'avoir mis là.
     func test_fieldHints_areReachableWithoutUnfolding() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         let hint = try code(Self.infoHint)
 
         // #8054 a porté libellé et détail dans `FieldBlockAccessibility`, pour
@@ -330,7 +354,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// se dit plus « facultatif » (#6582, comme le web) : le bouton actif
     /// sans lui le prouve.
     func test_passwordField_explainsItsConsequence_throughAnUnfoldingLine() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         let password = try fieldBody("passwordField", in: body)
 
         XCTAssertFalse(password.lowercased().contains("facultatif"))
@@ -367,7 +391,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// le display name [et] le pseudo directement sans action supplémentaire
     /// c'est ok ») : deux SAISIES déjà remplies, sans bouton « Modifier ».
     func test_derivedIdentity_showsWhatWillBeCreated_asDirectInputs() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         let bloc = try fieldBody("derivedIdentityBlock", in: body)
 
         XCTAssertTrue(bloc.contains("effectiveUsername"), "le PSEUDO qui partira, déjà rempli")
@@ -379,7 +403,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Aucun geste intermédiaire : ni état « en édition », ni bouton crayon,
     /// ni prénom / nom (ils se changent depuis l'espace de compte).
     func test_derivedIdentity_hasNoEditButton_andNoCivilNames() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertFalse(body.contains("isEditingIdentity"), "plus de bloc replié derrière « Modifier »")
         let bloc = try fieldBody("derivedIdentityBlock", in: body)
         XCTAssertFalse(bloc.contains("\"pencil\""), "plus de bouton crayon")
@@ -389,7 +413,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le mot de passe paraît quand l'identité est DÉFINIE, avec sa ligne
     /// dépliable « Pourquoi mettre un mot de passe maintenant ? » (#7897).
     func test_passwordField_waitsForTheIdentity_andExplainsItselfOnDemand() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         XCTAssertTrue(body.contains("isIdentityDefined"))
         XCTAssertTrue(body.contains("auth.signup.password.why"))
     }
@@ -405,7 +429,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Ce qui ne doit pas se perdre, c'est son TEXTE — d'où la seconde moitié :
     /// le (i) du champ e-mail déplie toujours la note de validation.
     func test_emailField_foldsTheVerificationNoticeBehindAnInfoHint() throws {
-        let body = try code(Self.signupView)
+        let body = try signupViewCode()
         let email = try fieldBody("emailField", in: body)
         XCTAssertTrue(email.contains("hint: emailHint"),
                       "le champ e-mail monte son (i)")

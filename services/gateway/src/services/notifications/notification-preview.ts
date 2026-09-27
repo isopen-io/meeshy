@@ -7,6 +7,7 @@
  */
 
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
+import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
@@ -207,9 +208,12 @@ export function contentTypeIcon(messageType: string | null | undefined): string 
 }
 
 /**
- * Compact human-readable duration for an ephemeral message TTL. Returns
- * undefined when the duration is non-positive or unknown so the caller can
- * omit the suffix entirely.
+ * Compact human-readable duration for an ephemeral message TTL, from the
+ * DECLARED duration in seconds (`Message.ephemeralDuration`). Never from
+ * `expiresAt − createdAt` : since #7451 the column carries the RETENTION CAP
+ * (7 days) at send time, so a 30 s ephemeral announced « 7j » (#8344).
+ * Returns undefined when the duration is non-positive or unknown so the
+ * caller can omit the suffix entirely.
  *
  * Outputs (rounded, FR-style abbreviations to stay locale-neutral) :
  *   < 60s   → "Ns"      ("30s")
@@ -217,14 +221,11 @@ export function contentTypeIcon(messageType: string | null | undefined): string 
  *   < 24h   → "Nh"      ("2h")
  *   else    → "Nj"      ("3j" — for "jours/days")
  */
-export function formatEphemeralDuration(
-  expiresAt: Date | null | undefined,
-  createdAt: Date | null | undefined,
-): string | undefined {
-  if (!expiresAt || !createdAt) return undefined;
-  const ms = expiresAt.getTime() - createdAt.getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return undefined;
-  const sec = Math.round(ms / 1000);
+export function formatEphemeralDuration(ephemeralDuration: number | null | undefined): string | undefined {
+  if (typeof ephemeralDuration !== 'number' || !Number.isFinite(ephemeralDuration) || ephemeralDuration <= 0) {
+    return undefined;
+  }
+  const sec = Math.round(ephemeralDuration);
   if (sec < 60)     return `${sec}s`;
   const min = Math.round(sec / 60);
   if (min < 60)     return `${min}min`;
@@ -282,7 +283,8 @@ export function protectedPreview(input: {
   isBlurred?: boolean | null;
   effectFlags?: number | null;
   expiresAt?: Date | null;
-  createdAt?: Date | null;
+  /** La durée DÉCLARÉE (secondes) — seule source du suffixe (#8344). */
+  ephemeralDuration?: number | null;
 }): { preview: string; locKey: string } | null {
   const { ephemeral: isEphemeral, viewOnce: isViewOnce, blurred: isBlurred, encrypted: isEncrypted } = messageProtection({
     ...input,
@@ -293,7 +295,10 @@ export function protectedPreview(input: {
   const icon = contentTypeIcon(input.messageType);
 
   if (isEphemeral) {
-    const duration = formatEphemeralDuration(input.expiresAt ?? null, input.createdAt ?? null);
+    // Flamme-œil (#8302) : aucune durée — rien ne décompte à la réception.
+    const duration = isAfterReadEphemeral(input.effectFlags)
+      ? undefined
+      : formatEphemeralDuration(input.ephemeralDuration);
     const preview = duration
       ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
       : `${PROTECTION_ICON.ephemeral} ${icon}`;

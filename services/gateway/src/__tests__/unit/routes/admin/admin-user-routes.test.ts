@@ -97,7 +97,7 @@ const mockUser = {
   isActive: true,
   emailVerified: new Date(),
   phoneVerified: null,
-  twoFactorEnabled: null,
+  twoFactorSecret: 'JBSWY3DPEHPK3PXP', // appairé : armer le second facteur est admis (#8289)
   avatar: null,
   createdAt: new Date('2024-01-01'),
   lastActiveAt: null,

@@ -80,6 +80,8 @@ final class OnboardingViewModel: ObservableObject {
     private var rewardSequence = 0
     private var storyUploadIdsAtOpen: Set<String>?
     private var isRoutingElsewhere = false
+    /// La célébration de l'arrivée (#8089) est à l'écran : elle passe d'abord.
+    private var isArrivalCelebrated = false
     private var awaitsRoute = false
     /// Le score serveur relu en dernier : un gain affiché est une DIFFÉRENCE
     /// entre deux lectures, jamais un barème recopié (#7908).
@@ -181,7 +183,20 @@ final class OnboardingViewModel: ObservableObject {
     /// se retire jamais pour une navigation.
     func routingChanged(isElsewhere: Bool) {
         isRoutingElsewhere = isElsewhere
-        guard !isElsewhere, awaitsRoute else { return }
+        presentIfNoLongerHeld()
+    }
+
+    /// La célébration de l'arrivée (#8089) précède la première carte : le
+    /// calque attend qu'elle parte, puis s'ouvre sur SA première étape.
+    func celebrationChanged(isShowing: Bool) {
+        isArrivalCelebrated = isShowing
+        presentIfNoLongerHeld()
+    }
+
+    private var isHeld: Bool { isRoutingElsewhere || isArrivalCelebrated }
+
+    private func presentIfNoLongerHeld() {
+        guard !isHeld, awaitsRoute else { return }
         awaitsRoute = false
         isPresented = true
     }
@@ -240,7 +255,7 @@ final class OnboardingViewModel: ObservableObject {
         let notificationsUnseen = !state.seenSteps.contains(.notifications)
         notificationsPending = notificationsUnseen ? await permission.currentStatus() == .notDetermined : false
         plannedSteps = queue + (notificationsPending ? [.notifications] : [])
-        if isRoutingElsewhere {
+        if isHeld {
             awaitsRoute = true
         } else {
             isPresented = true

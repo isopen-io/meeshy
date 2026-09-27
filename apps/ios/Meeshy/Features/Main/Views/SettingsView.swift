@@ -12,7 +12,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var showLogoutConfirm = false
-    @State private var showSwitchAccountConfirm = false
+    @State private var showAccountSwitcher = false
     /// Choix explicite de langue d'interface — `nil` = suit la langue
     /// principale du compte. Lu une fois au montage depuis `UILanguageOverride`.
     @State private var interfaceLanguageChoice: String? = UILanguageOverride.explicitChoice
@@ -77,27 +77,11 @@ struct SettingsView: View {
                         defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
                         bundle: .main))
         }
-        .alert(String(localized: "settings.switchAccount.title",
-                      defaultValue: "Changer de compte", bundle: .main),
-               isPresented: $showSwitchAccountConfirm) {
-            Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
-            Button(String(localized: "settings.switchAccount.title",
-                          defaultValue: "Changer de compte", bundle: .main)) {
-                // Même quiesce-then-purge que la déconnexion — seule l'entrée
-                // du sélecteur survit (`forgettingAccount: false`), pour que
-                // l'écran de connexion propose encore ce compte. Le mot de
-                // passe reste exigé : `attemptAccountLogin` appelle
-                // `login(username:password:)`.
-                isLoggingOut = true
-                Task {
-                    await authManager.logout(forgettingAccount: false)
-                    isLoggingOut = false
-                }
-            }
-        } message: {
-            Text(String(localized: "settings.switchAccount.message",
-                        defaultValue: "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé.",
-                        bundle: .main))
+        // #8286 — « Changer de compte » GARDE les sessions : la feuille liste
+        // les comptes de l'appareil, un compte gardé s'ouvre sans mot de passe.
+        .sheet(isPresented: $showAccountSwitcher) {
+            AccountSwitcherSheet()
+                .environmentObject(authManager)
         }
         .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
             Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
@@ -108,8 +92,10 @@ struct SettingsView: View {
                 // il est intégré au logout().
                 // Q6 — overlay loading pendant l'await (300-800ms p50/p95).
                 isLoggingOut = true
+                // #8286 — la session et les données locales partent, le compte
+                // RESTE listé : y revenir redemande le mot de passe.
                 Task {
-                    await authManager.logout()
+                    await authManager.logout(forgettingAccount: false)
                     isLoggingOut = false
                 }
             }
@@ -821,16 +807,16 @@ struct SettingsView: View {
 
     // MARK: - Switch Account Section
 
-    /// **Quitter un compte sans l'oublier.**
+    /// **Changer de compte sans rien perdre (#8286).**
     ///
-    /// La déconnexion efface l'entrée du sélecteur (`removeFromSavedAccounts`) :
-    /// revenir sur le compte imposait donc de retaper son identifiant. Cette
-    /// rangée fait la même chose SAUF cela — d'où un habit neutre, et non celui
-    /// de la destruction : rien n'est perdu qu'une session.
+    /// Deux gestes distincts : celui-ci GARDE les sessions et ouvre la liste
+    /// des comptes de l'appareil (`AccountSwitcherSheet`) ; « Déconnexion »,
+    /// juste dessous, ferme celle du compte actuel. D'où un habit neutre, et non
+    /// celui de la destruction : rien n'est perdu.
     private var switchAccountSection: some View {
         Button {
             HapticFeedback.light()
-            showSwitchAccountConfirm = true
+            showAccountSwitcher = true
         } label: {
             HStack {
                 Image(systemName: "person.2.arrow.trianglehead.counterclockwise")
@@ -853,7 +839,7 @@ struct SettingsView: View {
         }
         .disabled(isLoggingOut)
         .accessibilityHint(String(localized: "settings.switchAccount.message",
-                                  defaultValue: "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé.",
+                                  defaultValue: "Passez d’un compte à l’autre sans vous déconnecter.",
                                   bundle: .main))
     }
 

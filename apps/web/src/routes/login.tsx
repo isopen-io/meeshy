@@ -8,6 +8,7 @@ import { GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { auth, isVerificationRequired } from '@/lib/api/auth';
+import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
 import { holdPendingVerification } from '@/lib/pending-verification';
@@ -17,13 +18,18 @@ import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 import { PasswordInput } from '@/components/password-input';
+import { DeviceAccountList } from '@/components/device-account-list';
+import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
+import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
  *
- * TROIS sections EXCLUSIVES : la connexion normale, le second facteur, et le
- * sélecteur de comptes sauvegardés — ce dernier NON REPRIS (§ 9 Q3 de la
- * spécification, aucun trousseau web). La section active se lit sur le
+ * DEUX sections EXCLUSIVES : la connexion normale et le second facteur. La
+ * liste des comptes de l'appareil (#8286) les précède — elle ouvre un compte
+ * GARDÉ sans mot de passe, et préremplit l'identifiant des autres. La section active se lit sur le
  * MAGASIN DE SESSION partagé (`session.status === 'pending2fa'`), jamais un
  * état local dupliqué : c'est la MÊME source que `SessionGate` (`main.tsx`)
  * consulte pour décider si cet écran doit même rester affiché.
@@ -82,6 +88,24 @@ const EMAIL_PARAM = 'email';
 
 type LoginMethod = 'lien' | 'password';
 
+/**
+ * LE SERVEUR MONTRÉ À LA CONNEXION (#8287) — miroir du sélecteur iOS réservé au
+ * simulateur : en DÉVELOPPEMENT local seulement, jamais dans un build de
+ * production. La base relative du dev part par le proxy : c'est sa cible qu'on nomme.
+ */
+export function loginServerLabel({
+  dev,
+  base,
+  proxyTarget,
+}: {
+  readonly dev: boolean | undefined;
+  readonly base: string;
+  readonly proxyTarget: string;
+}): string | null {
+  if (dev !== true) return null;
+  return base === '' ? proxyTarget : base.replace(/\/api\/v1\/?$/, '');
+}
+
 export function loginMethodFromSearch(raw: string | null): LoginMethod {
   return raw === PASSWORD_METHOD || raw === LEGACY_PASSWORD_METHOD ? 'password' : 'lien';
 }
@@ -114,6 +138,7 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
       next={search.get(NEXT_PARAM)}
       email={search.get(EMAIL_PARAM)}
       {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
+      serverLabel={import.meta.env.DEV ? loginServerLabel({ dev: true, base: apiConfig.base, proxyTarget: __API_PROXY_TARGET__ }) : null}
     />
   );
 }
@@ -124,6 +149,8 @@ export function LoginDoors({
   email = null,
   magicLinkDeps,
   passwordLogin = auth.login,
+  accounts = { vault: accountVault, switcher: accountSwitcher },
+  serverLabel = null,
 }: {
   readonly method: LoginMethod;
   /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
@@ -133,6 +160,10 @@ export function LoginDoors({
   readonly magicLinkDeps?: MagicLinkPanelDeps;
   /** La connexion par mot de passe — injectable pour les témoins. */
   readonly passwordLogin?: typeof auth.login;
+  /** Le coffre des comptes et la bascule (#8286) — injectables pour les témoins. */
+  readonly accounts?: { readonly vault: AccountVault; readonly switcher: AccountSwitcher };
+  /** Le serveur visé, montré en développement seulement (#8287) — `null` : rien. */
+  readonly serverLabel?: string | null;
 }) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
@@ -143,6 +174,13 @@ export function LoginDoors({
   const [focused, setFocused] = useState<'username' | 'password' | 'code' | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const language = currentInterfaceLanguage();
+  const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
+  /** Proposée au compte SUPPLÉMENTAIRE seulement : le premier est gardé sans
+   * question. Lue au montage — la liste ne change pas sous la saisie. */
+  const [offersKeepSignedIn] = useState(() => accounts.switcher.offersKeepSignedIn());
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
 
   const requires2FA = session.status === 'pending2fa';
   /** Ce que les liens qui RÉÉCRIVENT l'adresse transmettent — changer de porte
@@ -159,15 +197,30 @@ export function LoginDoors({
    * restent `allow` partout, délibérément, pour ne pas casser le POC).
    */
   useEffect(() => {
-    if (session.status === 'authenticated') navigate(landingAfterSession(next, href('list')), true);
+    if (session.status !== 'authenticated') return;
+    accounts.vault.noteActive(session.user, offersKeepSignedIn ? keepSignedIn : undefined);
+    navigate(landingAfterSession(next, href('list')), true);
   }, [session.status, next]);
+
+  function chooseAccount(account: DeviceAccount) {
+    if (accounts.switcher.switchTo(account.user.id) === 'switched') return;
+    setUsername(account.user.username);
+    setPassword('');
+    setErrorMessage(null);
+    if (method !== 'password') navigate(href('login', undefined, { [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }), true);
+  }
+
+  function forgetAccount(account: DeviceAccount) {
+    accounts.vault.forget(account.user.id);
+    setDeviceAccounts(accounts.vault.list());
+  }
 
   async function handleLoginSubmit(event: FormEvent) {
     event.preventDefault();
     if (username.trim() === '' || password === '' || isSubmitting) return;
     setSubmitting(true);
     setErrorMessage(null);
-    const result = await passwordLogin({ username, password });
+    const result = await passwordLogin({ username, password, ...(offersKeepSignedIn ? { rememberDevice: keepSignedIn } : {}) });
     setSubmitting(false);
     if (!result.ok) {
       setErrorMessage(placeLoginFailure(result).message);
@@ -227,6 +280,17 @@ export function LoginDoors({
         <p className="w-full rounded-[14px] px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
           Hors ligne — la connexion n’est pas possible pour l’instant.
         </p>
+      ) : null}
+
+      {!requires2FA && deviceAccounts.length > 0 ? (
+        <DeviceAccountList
+          language={language}
+          accounts={deviceAccounts}
+          activeId={null}
+          isPreserved={accounts.vault.hasPreservedSession}
+          onChoose={chooseAccount}
+          onForget={forgetAccount}
+        />
       ) : null}
 
       {requires2FA ? (
@@ -354,6 +418,19 @@ export function LoginDoors({
             </p>
           ) : null}
 
+          {offersKeepSignedIn ? (
+            <label data-keep-signed-in className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
+              <input
+                type="checkbox"
+                checked={keepSignedIn}
+                onChange={(e) => setKeepSignedIn(e.currentTarget.checked)}
+                className="size-5 shrink-0"
+                style={{ accentColor: 'var(--color-ios-brand)' }}
+              />
+              {translate(language, 'accounts.keep_signed_in')}
+            </label>
+          ) : null}
+
           <AuthSubmitButton
             disabled={username.trim() === '' || password === '' || !online}
             isSubmitting={isSubmitting}
@@ -405,6 +482,12 @@ export function LoginDoors({
           Créer un compte
         </Link>
       </p>
+
+      {serverLabel === null ? null : (
+        <p data-login-server className="font-mono text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {translate(language, 'login.server_origin', { origin: serverLabel })}
+        </p>
+      )}
 
       <AuthBrandFooter />
     </AuthColumn>

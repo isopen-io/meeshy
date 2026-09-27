@@ -6,6 +6,7 @@ import enMediaViewer from './catalog-en-media-viewer';
 import enActivation from './catalog-en-activation';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
+import enAccounts from './catalog-en-accounts';
 import enCall from './catalog-en-call';
 import enRowActions from './catalog-en-row-actions';
 import enCallShell from './catalog-en-call-shell';
@@ -13,7 +14,6 @@ import enCallJoin from './catalog-en-call-join';
 import enCallDecline from './catalog-en-call-decline';
 import enCallFeedback from './catalog-en-call-feedback';
 import enCallsErase from './catalog-en-calls-erase';
-import enAddressBook from './catalog-en-address-book';
 import enCallDevices from './catalog-en-call-devices';
 import enCallScreen from './catalog-en-call-screen';
 import enCallQuality from './catalog-en-call-quality';
@@ -21,10 +21,14 @@ import enCallCaptions from './catalog-en-call-captions';
 import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
+import enGallery from './catalog-en-gallery';
 import enMentions from './catalog-en-mentions';
+import enEphemeral from './catalog-en-ephemeral';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
+import enQuote from './catalog-en-quote';
+import enContactDiscovery from './catalog-en-contact-discovery';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -213,6 +217,7 @@ const en = {
   ...enVerifyEmail,
   ...enActivation,
   ...enPassword,
+  ...enAccounts,
   ...enCall,
   ...enRowActions,
   ...enCallShell,
@@ -220,7 +225,6 @@ const en = {
   ...enCallDecline,
   ...enCallFeedback,
   ...enCallsErase,
-  ...enAddressBook,
   ...enCallDevices,
   ...enCallScreen,
   ...enCallQuality,
@@ -458,9 +462,6 @@ const en = {
   'settings.privacy.read_receipts.info':
     "This works both ways: if you don't send read receipts, you won't see whether your own messages were read.",
   'settings.privacy.typing_indicator': 'Typing indicator',
-  'settings.privacy.hide_from_search': 'Don\'t suggest me to people who have my number or email',
-  'settings.privacy.hide_from_search.info':
-    'Your contacts won\'t find you by your number or email, and won\'t be told when you join.',
   'settings.section.appearance': 'Appearance',
   'settings.theme': 'Theme',
   'settings.theme.auto': 'Auto',
@@ -1117,7 +1118,7 @@ const en = {
   'message.withheld': 'Content withheld',
   'message.withheld.a11y': 'Content withheld: this message exists and is not shown',
   'message.veiled': 'Hidden content',
-  'message.veiled.hint': 'Tap to reveal the content',
+  'message.veiled.hint': 'Tap to view',
   'message.veiled.error': 'Can’t reveal this right now',
   'message.ephemeral.a11y': 'Ephemeral message, disappears in {remaining}',
   'message.ephemeral.awaiting': 'Waiting to be received',
@@ -1157,9 +1158,13 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enEphemeral,
+  ...enGallery,
   ...enConversationCard,
   ...enStoriesMine,
   ...enContactCard,
+  ...enQuote,
+  ...enContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default en;

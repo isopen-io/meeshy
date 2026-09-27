@@ -354,37 +354,16 @@ struct BubbleStandardLayout: View {
         return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
-    /// **LOI DES ZONES — la moitié VoiceOver.** Les zones 1 (avatar → profil) et
-    /// 2 (miniature / icône de lecture → plein écran) sont des gestes posés
-    /// DANS `BubbleQuotedReply`. Deux lignes plus haut, cette rangée pose
-    /// `.accessibilityElement(children: .combine)` — elle devient UN seul
-    /// élément — puis `.accessibilityLabel(messageAccessibilityLabel)`, qui
-    /// REMPLACE le libellé composé des enfants. Le trait de bouton, l'indice et
-    /// le libellé que la citation pose sur son avatar et sur sa miniature ne
-    /// sont donc jamais prononcés, et VoiceOver n'a ni tap localisé ni appui
-    /// long pour les atteindre : sans action nommée, les deux capacités sont
-    /// indisponibles au lecteur d'écran.
-    ///
-    /// Même parade que `BubbleSystemViews.joinNotice` (« VoiceOver n'a pas
-    /// d'appui long : l'action lui est offerte explicitement »). Les actions
-    /// suivent l'ARMEMENT, jamais la présence à l'écran : une action nommée qui
-    /// ne déclenche rien serait un contrôle qui ment (loi 4 du dépôt), pire ici
-    /// qu'ailleurs puisque le rotor la RÉCITE. Les deux clés sont celles que la
-    /// citation emploie déjà — zéro clé neuve, zéro clé morte.
-    @ViewBuilder
+    /// **LOI DES ZONES — la moitié VoiceOver.** Site unique des deux rangées :
+    /// `QuotedZoneAccessibility` (#8320), qui y ajoute l'écoute d'un audio cité
+    /// et le saut au message cité.
     private var quotedZoneAccessibilityActions: some View {
-        if let reference = content.reply?.reference {
-            if let onQuotedAuthorTap, reference.offersAuthorGate {
-                Button(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main)) {
-                    onQuotedAuthorTap(reference)
-                }
-            }
-            if let onQuotedMediaTap, reference.offersMediaGate {
-                Button(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main)) {
-                    onQuotedMediaTap(reference)
-                }
-            }
-        }
+        QuotedZoneAccessibility.actions(
+            reference: content.reply?.reference,
+            onQuotedAuthorTap: onQuotedAuthorTap,
+            onQuotedMediaTap: onQuotedMediaTap,
+            onReplyTap: onReplyTap
+        )
     }
 
     /// Mentions d'accessibilité des contenus non média : lieu + fichiers.
@@ -511,7 +490,6 @@ struct BubbleStandardLayout: View {
                 ZStack {
                     contentStack(shouldBlur: shouldBlur)
 
-                    // Fog condensation effect (appears when blur returns)
                     if blurController.fogOpacity > 0 {
                         fogOverlay
                     }
@@ -1457,10 +1435,10 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Blur reveal action (delegated to controller)
 
-    /// #8009 — un média caché s'ouvre en plein écran, sans dévoilement dans la bulle.
+    /// #8389 — le voile se lève SUR PLACE, médias compris : chaque case
+    /// révélée ouvre ensuite son plein écran par son propre toucher.
     private func revealBlurredContent() {
         HapticFeedback.medium()
-        if case .openFullscreen(let media) = content.protectedTap() { return openProtectedMedia(media) }
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
                 messageId: content.messageId,

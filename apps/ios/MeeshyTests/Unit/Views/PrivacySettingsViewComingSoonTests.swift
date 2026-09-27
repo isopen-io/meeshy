@@ -28,6 +28,12 @@ final class PrivacySettingsViewComingSoonTests: XCTestCase {
         XCTAssertFalse(PrivacySettingsView.isComingSoon(\.hideProfileFromSearch))
     }
 
+    /// La passerelle lit ce réglage avant d'annoncer « X était sur Meeshy
+    /// récemment » (#8285) : l'interrupteur a un effet dès sa naissance.
+    func test_isComingSoon_notifyContactsOnReturn_isLiveSinceTheGatewayAppliesIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.notifyContactsOnReturn))
+    }
+
     func test_isComingSoon_blockScreenshots_returnsTrue() {
         XCTAssertTrue(PrivacySettingsView.isComingSoon(\.blockScreenshots))
     }

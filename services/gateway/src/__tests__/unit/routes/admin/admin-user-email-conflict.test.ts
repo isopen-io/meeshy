@@ -128,4 +128,25 @@ describe('adresse déjà portée par un autre compte — 409 typé (#8215)', () 
     expect(audit.createAuditLog).not.toHaveBeenCalled();
     await app.close();
   });
+
+  it('PATCH /admin/users/:userId answers 409 USERNAME_TAKEN with the free candidates at the root (#8289)', async () => {
+    service.updateUser.mockRejectedValue(new AdminIdentifierTakenError('username', ['alice7', 'alice_']));
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/users/${CIBLE_ID}`,
+      payload: { username: 'Alice' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      success: false,
+      code: 'USERNAME_TAKEN',
+      field: 'username',
+      suggestions: ['alice7', 'alice_'],
+    });
+    expect(audit.createAuditLog).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

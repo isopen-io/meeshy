@@ -115,7 +115,29 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// champ — même convention `decodeIfPresent` que `location` et `sticker`,
     /// pour que les payloads déjà sur disque décodent sans migration.
     public let attachmentReplyTo: String?
+    /// **La protection armée à l'envoi** (#8303) — les bits de cycle de vie
+    /// (`MessageProtectionIntent.lifecycleFlags`) et la durée d'un éphémère.
+    ///
+    /// Le rejeu les perdait TOUS : un message flouté, à vue unique ou éphémère
+    /// envoyé hors ligne repartait en clair — alors que l'envoi en ligne
+    /// renvoie ses échecs ici en affirmant que « l'outbox les préserve ».
+    /// `nil` pour un message non protégé ET pour les lignes écrites avant ce
+    /// champ (`decodeIfPresent`, même convention que `location`).
+    public let protectionFlags: UInt32?
+    public let ephemeralDuration: Int?
     public let createdAt: Date
+
+    /// La protection que le dispatcher rejoue — l'intention reconstruite
+    /// depuis ce que la ligne a persisté.
+    public var replayProtection: MessageProtectionIntent {
+        let flags = MessageEffectFlags(rawValue: protectionFlags ?? 0)
+        return MessageProtectionIntent(
+            ephemeralDurationSeconds: ephemeralDuration,
+            ephemeralAfterRead: flags.contains(.ephemeralAfterRead),
+            isBlurred: flags.contains(.blurred),
+            isViewOnce: flags.contains(.viewOnce)
+        )
+    }
 
     public init(
         conversationId: String,
@@ -134,9 +156,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         sticker: MessageSticker? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
-        attachmentReplyTo: String? = nil
+        attachmentReplyTo: String? = nil,
+        protection: MessageProtectionIntent = .none
     ) {
         self.id = UUID().uuidString
+        self.protectionFlags = protection.persistedFlags
+        self.ephemeralDuration = protection.ephemeralDurationSeconds
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.conversationId = conversationId
         self.content = content
@@ -178,9 +203,13 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
         attachmentReplyTo: String? = nil,
+        protectionFlags: UInt32? = nil,
+        ephemeralDuration: Int? = nil,
         createdAt: Date
     ) {
         self.id = id
+        self.protectionFlags = protectionFlags
+        self.ephemeralDuration = ephemeralDuration
         self.clientMessageId = clientMessageId
         self.conversationId = conversationId
         self.content = content
@@ -220,6 +249,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case copyAttachmentsFromClientMessageId
         case copyAttachmentsFromServerMessageId
         case attachmentReplyTo
+        case protectionFlags
+        case ephemeralDuration
         case createdAt
     }
 
@@ -246,6 +277,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.attachmentReplyTo = try c.decodeIfPresent(String.self, forKey: .attachmentReplyTo)
+        self.protectionFlags = try c.decodeIfPresent(UInt32.self, forKey: .protectionFlags)
+        self.ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
@@ -269,6 +302,16 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)
         try c.encodeIfPresent(copyAttachmentsFromServerMessageId, forKey: .copyAttachmentsFromServerMessageId)
         try c.encodeIfPresent(attachmentReplyTo, forKey: .attachmentReplyTo)
+        try c.encodeIfPresent(protectionFlags, forKey: .protectionFlags)
+        try c.encodeIfPresent(ephemeralDuration, forKey: .ephemeralDuration)
         try c.encode(createdAt, forKey: .createdAt)
+    }
+}
+
+extension MessageProtectionIntent {
+    /// Les bits que la file persiste — `nil` pour un envoi non protégé, la
+    /// forme des lignes écrites avant la protection (#8303, #8350).
+    var persistedFlags: UInt32? {
+        isEmpty ? nil : lifecycleFlags.rawValue
     }
 }

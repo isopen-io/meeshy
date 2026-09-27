@@ -238,3 +238,30 @@ describe('contact_joined ouvre le profil de l’arrivant', () => {
     expect(pushTapTarget({ type: 'post_like', senderUsername: 'awa' })).toEqual({ route: 'notifications' });
   });
 });
+
+/**
+ * « X ÉTAIT SUR MEESHY RÉCEMMENT » (#8285) — la notification annonce, elle
+ * aussi, une PERSONNE : son toucher ouvre le profil de X, là où l'on trouve
+ * « Écrire ». Même adresse que `contact_joined`, sur la cloche comme au tap.
+ */
+describe('contact_recently_active ouvre le profil du contact revenu', () => {
+  const revenu = { id: 'u-marie', username: 'marie', displayName: 'Marie', avatar: null };
+
+  test('la cloche ouvre `/u/<pseudo>` de l’acteur', () => {
+    expect(notificationTarget(record({ type: 'contact_recently_active', actor: revenu }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'marie' },
+    });
+  });
+
+  test('le tap d’une bannière suit le pseudonyme porté par la charge', () => {
+    expect(pushTapTarget({ type: 'contact_recently_active', senderUsername: 'marie' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'marie' },
+    });
+  });
+
+  test('sans pseudonyme, le tap retombe sur la liste plutôt que d’inventer une adresse', () => {
+    expect(pushTapTarget({ type: 'contact_recently_active' })).toEqual({ route: 'notifications' });
+  });
+});

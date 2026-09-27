@@ -21,7 +21,7 @@ export const blocks = '/api/v1/directory/blocks';
 /** PUT · DELETE /api/v1/directory/blocks/:userId */
 export const blocksByUserId = (userId: string): string => `/api/v1/directory/blocks/${encodeURIComponent(userId)}`;
 
-/** GET · PUT · PATCH · DELETE /api/v1/directory/contacts */
+/** GET · PUT · PATCH /api/v1/directory/contacts */
 export const contacts = '/api/v1/directory/contacts';
 
 /** GET · POST /api/v1/directory/friend-requests */

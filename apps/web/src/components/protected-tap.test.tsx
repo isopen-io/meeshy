@@ -16,9 +16,11 @@ import { FocalRow } from './focal-row';
  *
  * - un TEXTE flouté se montre en clair à sa place ;
  * - un TEXTE à vue unique s'affiche en clair, consommé au toucher ;
- * - un MÉDIA flouté ou à vue unique ouvre DIRECTEMENT la visionneuse plein
- *   écran sur CE média, déflouté — jamais un dévoilement dans la rangée suivi
- *   d'un second toucher. À la fermeture, une vue unique est consommée ;
+ * - un MÉDIA flouté se RÉVÈLE sur place, comme le texte (#8389, directive
+ *   porteur du 2026-09-27, qui défait ce que #8008 avait posé pour le flou) ;
+ *   un SECOND toucher sur le média révélé l'ouvre en plein écran ;
+ * - un MÉDIA à vue unique ouvre DIRECTEMENT la visionneuse plein écran sur CE
+ *   média ; à la fermeture, il est consommé ;
  * - rien du contenu n'est dans le document avant le toucher.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -159,6 +161,10 @@ const awaitViewer = async (): Promise<HTMLElement | null> => {
   return null;
 };
 
+/** Les substituts MONTRÉS — hors de la forme au repos que la fenêtre garde cachée pour l'aperçu. */
+const shownMasks = (scope: Element | null | undefined): readonly Element[] =>
+  Array.from(scope?.querySelectorAll('[data-protected-attachment]') ?? []).filter((el) => el.closest('[data-protected-rest]') === null);
+
 const closeViewer = async () => {
   await mounter.click(document.body.querySelector<HTMLButtonElement>('.media-viewer-close'));
   await mounter.settle();
@@ -175,6 +181,12 @@ for (const skin of SKINS) describe(`${skin} — un TEXTE protégé`, () => {
 
     expect(host.querySelector('[data-protected="revealed"]')?.textContent).toContain(SECRET);
     expect(document.body.querySelector('[role="dialog"]')).toBe(null);
+  });
+
+  test('flouté : le voile dit « Touchez pour afficher », le même mot que la puce de la vue unique (#8389)', async () => {
+    const host = await mountIn(skin, messageOf({ content: SECRET, isBlurred: true }));
+    const veil = host.querySelector<HTMLButtonElement>('button[data-protected="hidden"]');
+    expect(document.getElementById(veil?.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Touchez pour afficher');
   });
 
   test('à vue unique : un toucher l’affiche en clair et le consomme', async () => {
@@ -201,7 +213,7 @@ for (const skin of SKINS) describe(`${skin} — un TEXTE protégé`, () => {
   });
 });
 
-for (const skin of SKINS) describe(`${skin} — un MÉDIA flouté ouvre DIRECTEMENT le plein écran`, () => {
+for (const skin of SKINS) describe(`${skin} — un MÉDIA flouté se RÉVÈLE sur place (#8389)`, () => {
   const blurredPhoto = () =>
     messageOf({ messageType: 'image', isBlurred: true, attachments: [photo('a-1', { isBlurred: true })] });
 
@@ -211,29 +223,46 @@ for (const skin of SKINS) describe(`${skin} — un MÉDIA flouté ouvre DIRECTEM
     expect(host.querySelector('[data-protected="hidden"]')).not.toBe(null);
   });
 
-  test('un toucher ouvre la visionneuse sur ce média, en clair ; rien n’est dévoilé dans la rangée', async () => {
+  test('la case au repos dit ce que fait le toucher : « Touchez pour afficher », jamais le plein écran', async () => {
     const host = await mountIn(skin, blurredPhoto());
     const tile = host.querySelector<HTMLButtonElement>('button[data-protected-attachment="hidden"]');
-    expect(tile?.getAttribute('aria-label')).toContain('plein écran');
-    await mounter.click(tile);
+    expect(tile?.tagName).toBe('BUTTON');
+    const described = tile?.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(described)?.textContent).toBe('Touchez pour afficher');
+    expect(tile?.getAttribute('aria-label') ?? '').not.toContain('plein écran');
+  });
+
+  test('un toucher le révèle DANS la rangée, en clair ; aucune visionneuse ne s’ouvre', async () => {
+    const host = await mountIn(skin, blurredPhoto());
+    await mounter.click(host.querySelector('button[data-protected-attachment="hidden"]'));
+    await mounter.settle();
+
+    const revealed = host.querySelector('[data-protected="revealed"]');
+    expect(revealed?.querySelector('img')?.getAttribute('src')).toContain(PHOTO_URL);
+    expect(shownMasks(revealed)).toEqual([]);
+    expect(document.body.querySelector('[role="dialog"]')).toBe(null);
+  });
+
+  test('un SECOND toucher sur le média révélé l’ouvre en plein écran, en clair', async () => {
+    const host = await mountIn(skin, blurredPhoto());
+    await mounter.click(host.querySelector('button[data-protected-attachment="hidden"]'));
+    await mounter.click(host.querySelector<HTMLElement>('[data-protected="revealed"] button[data-media-tile]'));
 
     const viewer = await awaitViewer();
     expect(viewer?.querySelector('img')?.getAttribute('src')).toContain(PHOTO_URL);
     expect(viewer?.querySelector('[data-protected-attachment]')).toBe(null);
-    expect(host.querySelector('[data-protected="revealed"]')).toBe(null);
-    expect(host.innerHTML).not.toContain(PHOTO_URL);
   });
 
-  test('fermer la visionneuse rend le voile, et le média quitte le document', async () => {
+  test('fermer le plein écran rend la rangée révélée ; rien n’est consommé', async () => {
     const spy = consumeSpy();
     const host = await mountIn(skin, blurredPhoto(), { onConsume: spy.onConsume });
     await mounter.click(host.querySelector('button[data-protected-attachment="hidden"]'));
+    await mounter.click(host.querySelector<HTMLElement>('[data-protected="revealed"] button[data-media-tile]'));
     await awaitViewer();
     await closeViewer();
 
     expect(document.body.querySelector('[role="dialog"]')).toBe(null);
-    expect(document.body.innerHTML).not.toContain(PHOTO_URL);
-    expect(host.querySelector('button[data-protected-attachment="hidden"]')).not.toBe(null);
+    expect(host.querySelector('[data-protected="revealed"] img')?.getAttribute('src')).toContain(PHOTO_URL);
     expect(spy.calls).toEqual([]);
   });
 
@@ -241,10 +270,11 @@ for (const skin of SKINS) describe(`${skin} — un MÉDIA flouté ouvre DIRECTEM
     const host = await mountIn(skin, { ...blurredPhoto(), senderId: 'u-viewer' }, { viewerId: 'u-viewer' });
     expect(document.body.innerHTML).not.toContain(PHOTO_URL);
     await mounter.click(host.querySelector('button[data-protected-attachment="hidden"]'));
-    expect((await awaitViewer())?.querySelector('img')?.getAttribute('src')).toContain(PHOTO_URL);
+    expect(host.querySelector('[data-protected="revealed"] img')?.getAttribute('src')).toContain(PHOTO_URL);
+    expect(document.body.querySelector('[role="dialog"]')).toBe(null);
   });
 
-  test('texte ET grille floutés : chaque case ouvre la visionneuse sur ELLE', async () => {
+  test('texte ET grille floutés : toucher une case révèle TOUT le message ; la case suivante s’ouvre ensuite sur ELLE', async () => {
     const message = messageOf({
       content: SECRET,
       isBlurred: true,
@@ -256,10 +286,46 @@ for (const skin of SKINS) describe(`${skin} — un MÉDIA flouté ouvre DIRECTEM
     expect(tiles.length).toBe(2);
 
     await mounter.click(tiles[1]!);
+    const revealed = host.querySelector('[data-protected="revealed"]');
+    expect(revealed?.textContent).toContain(SECRET);
+    expect(revealed?.querySelectorAll('img').length).toBe(2);
+    expect(document.body.querySelector('[role="dialog"]')).toBe(null);
+
+    await mounter.click(revealed?.querySelectorAll<HTMLElement>('button[data-media-tile]')[1] ?? null);
     const viewer = await awaitViewer();
     expect(viewer?.getAttribute('aria-label')).toBe('Média 2 sur 2');
-    expect(viewer?.innerHTML).toContain('a-2');
+    expect(viewer?.querySelector('[data-protected-attachment]')).toBe(null);
   });
+
+  test('un vocal flouté se révèle LECTEUR, jamais « Audio protégé »', async () => {
+    const voice: Attachment = { ...photo('v-1', { isBlurred: true }), mimeType: 'audio/mp4', fileUrl: 'https://cdn.test/voice.m4a', duration: 4000 };
+    const host = await mountIn(skin, messageOf({ messageType: 'audio', isBlurred: true, attachments: [voice] }));
+    expect(document.body.innerHTML).not.toContain('voice.m4a');
+
+    await mounter.click(host.querySelector('button[data-protected="hidden"]'));
+    const revealed = host.querySelector('[data-protected="revealed"]');
+    expect(revealed).not.toBe(null);
+    expect(shownMasks(revealed)).toEqual([]);
+  });
+});
+
+describe('bulles — le plein écran d’un flou révélé ne se referme pas avec la fenêtre (#8389)', () => {
+  test('la fenêtre de cinq secondes passe : la visionneuse reste ouverte, et la rangée revient révélée à sa fermeture', async () => {
+    const host = await mountIn(
+      'bulles',
+      messageOf({ messageType: 'image', isBlurred: true, attachments: [photo('a-1', { isBlurred: true })] }),
+    );
+    await mounter.click(host.querySelector('button[data-protected-attachment="hidden"]'));
+    await mounter.click(host.querySelector<HTMLElement>('[data-protected="revealed"] button[data-media-tile]'));
+    expect(await awaitViewer()).not.toBe(null);
+
+    await new Promise((resolve) => setTimeout(resolve, 5600));
+    await mounter.settle();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBe(null);
+
+    await closeViewer();
+    expect(host.querySelector('[data-protected="revealed"] img')?.getAttribute('src')).toContain(PHOTO_URL);
+  }, 15_000);
 });
 
 for (const skin of SKINS) describe(`${skin} — un MÉDIA à vue unique`, () => {

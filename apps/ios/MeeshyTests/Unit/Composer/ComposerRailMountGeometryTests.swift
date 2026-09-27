@@ -2,8 +2,9 @@ import XCTest
 import SwiftUI
 @testable import Meeshy
 
-/// #4061 + #4062 — **la preuve que le rail tombe DANS le couloir réservé, et
-/// non sur la scène.**
+/// #4061 + #4062, retournés par #8370 — **la preuve que le rail FLOTTE sur la
+/// scène plein écran** (la maquette du 2026-09-27 supersède le couloir ; le
+/// récit ci-dessous est celui de l'époque des couloirs).
 ///
 /// ## Pourquoi cette suite plutôt qu'une capture d'écran
 ///
@@ -115,34 +116,32 @@ final class ComposerRailMountGeometryTests: XCTestCase {
         return nil
     }
 
-    /// **Le témoin central.** Les deux rectangles ne doivent pas se croiser
-    /// d'un seul point.
-    func test_leRail_neRecouvreAucunPixelDeLaScene() throws {
+    /// **Le témoin central, retourné par la scène plein écran** (maquette
+    /// 2026-09-27, #8370) : le rail FLOTTE sur la scène — il la recouvre, posé
+    /// à `outerMargin` de son bord, au lieu de vivre dans un couloir à côté.
+    func test_leRail_flotteSurLaScene() throws {
         let root = render(width: 402)
         let scene = try XCTUnwrap(frame("scene", in: root), "scène introuvable dans l'arbre rendu")
         let rail = try XCTUnwrap(frame("rail", in: root), "rail introuvable dans l'arbre rendu")
 
-        XCTAssertFalse(scene.intersects(rail),
-                       "Le rail chevauche la scène — scène \(scene), rail \(rail).")
+        XCTAssertTrue(scene.contains(rail),
+                      "Le rail doit se poser SUR la scène — scène \(scene), rail \(rail).")
     }
 
-    /// Le rail est DANS le couloir : son bord *trailing* s'arrête avant le bord
-    /// *leading* de la scène, à la gouttière près.
-    func test_leRail_tientEntierementDansLeCouloir() throws {
+    /// La scène commence au bord de l'écran ; le rail, à la marge de bord.
+    func test_leRail_sePoseALaMargeDeBord_etLaSceneAuBord() throws {
         let root = render(width: 402)
         let scene = try XCTUnwrap(frame("scene", in: root))
         let rail = try XCTUnwrap(frame("rail", in: root))
 
         XCTAssertEqual(rail.minX, ComposerRailGeometry.outerMargin, accuracy: 0.5,
                        "Le rail doit commencer à la marge de bord.")
-        XCTAssertEqual(scene.minX, ComposerRailGeometry.lane, accuracy: 0.5,
-                       "La scène doit commencer après le couloir entier.")
-        XCTAssertLessThanOrEqual(rail.maxX, scene.minX,
-                                 "Le rail déborde dans la scène.")
+        XCTAssertEqual(scene.minX, 0, accuracy: 0.5,
+                       "La scène doit commencer au bord : plus aucun couloir.")
     }
 
     /// La scène occupe bien la largeur que la règle annonce — le lien entre
-    /// l'arithmétique de #4061 et le rendu réel.
+    /// l'arithmétique et le rendu réel.
     func test_laLargeurRendue_estCelleQueLaRegleAnnonce() throws {
         for utile in [375.0, 402.0, 430.0] as [CGFloat] {
             let root = render(width: utile)

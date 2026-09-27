@@ -25,6 +25,7 @@
 # le litteral de construction corrige. Les temoins comparent au SYMBOLE, pas a
 # une chaine ecrite.
 "__APP_VERSION__" = "\"0.0.0-test\""
+"__API_PROXY_TARGET__" = "\"https://proxy.test\""
 
 # LE CATALOGUE D'INTERFACE DE LA LANGUE DU DOCUMENT, chargé avant tout témoin
 # (#6206). En production, aucun écran ne se rend avant que la route ait chargé

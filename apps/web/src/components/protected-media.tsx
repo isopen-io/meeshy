@@ -23,19 +23,21 @@ export type ProtectedMediaContext = Omit<MediaViewerProps, 'items' | 'startIndex
 /**
  * LA GRILLE AU REPOS D'UN MESSAGE PROTÉGÉ — une case par pièce visuelle, et
  * chaque case est le SUBSTITUT de sa pièce (`MaskedAttachment`) : ni fichier,
- * ni URL, ni vignette dans le document. Toucher une case ouvre la visionneuse
- * sur ELLE. Les pièces passent par `veiledAttachment` : une charge qui ne
- * porterait pas encore la protection de son message (#7498) se rend quand même
- * masquée — c'est le message qui décide, jamais l'oubli d'une colonne.
+ * ni URL, ni vignette dans le document. Toucher une case RÉVÈLE le message sur
+ * place (#8389, directive porteur du 2026-09-27) — le plein écran n'arrive
+ * qu'au toucher suivant, sur le média révélé. Les pièces passent par
+ * `veiledAttachment` : une charge qui ne porterait pas encore la protection
+ * de son message (#7498) se rend quand même masquée — c'est le message qui
+ * décide, jamais l'oubli d'une colonne.
  */
 export function ProtectedMediaGrid({
   pieces,
   media,
-  onOpen,
+  onReveal,
 }: {
   readonly pieces: readonly Attachment[];
   readonly media: ProtectedMediaContext;
-  readonly onOpen: (index: number) => void;
+  readonly onReveal?: (() => void) | undefined;
 }) {
   return (
     <MediaGrid
@@ -43,10 +45,13 @@ export function ProtectedMediaGrid({
       frame={media.frame}
       languages={media.languages}
       fallbackLanguage={media.fallbackLanguage}
-      onOpen={onOpen}
+      maskedTap={onReveal === undefined ? 'none' : 'reveal'}
+      onOpen={onReveal ?? inert}
     />
   );
 }
+
+const inert = (): void => {};
 
 /**
  * LA VISIONNEUSE D'UN MESSAGE PROTÉGÉ — la MÊME que celle d'un message

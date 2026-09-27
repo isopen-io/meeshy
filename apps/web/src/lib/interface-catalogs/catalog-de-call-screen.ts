@@ -9,6 +9,18 @@ const deCallScreen = {
   'call.screen.stop': 'Bildschirmfreigabe beenden',
   'call.screen.sharing': 'Du teilst deinen Bildschirm',
   'call.screen.peerSharing': '{name} teilt den Bildschirm',
+  'call.more': 'Weitere Aktionen',
+  'call.section.mine': 'Mein Bild',
+  'call.section.call': 'Anruf',
+  'call.flip': 'Umdrehen',
+  'call.screen.short': 'Bildschirm',
+  'call.record.short': 'Aufnehmen',
+  'call.messages': 'Nachrichten',
+  'call.messages.open': 'Nachrichten öffnen',
+  'call.flip.label': 'Kamera umdrehen',
+  'call.fullscreen.enter': 'Vollbild',
+  'call.fullscreen.exit': 'Vollbild beenden',
+  'call.screen.of': 'Bildschirm von {name}',
 } as const;
 
 export default deCallScreen;

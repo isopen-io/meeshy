@@ -416,10 +416,7 @@ struct RootView: View {
         // commentaires et des réactions. Armé par `FeedView` et désarmé à
         // sa disparition, il ratait tout ce qui arrivait ailleurs dans
         // l'app. `arm()` est idempotent — jamais désarmé.
-        DependencyContainer.shared.feedSocketHandler.arm()
-
-        // Start SyncEngine socket relay
-        await ConversationSyncEngine.shared.startSocketRelay()
+        await RealtimeRelays.arm()
 
         // Deferred cleanup
         Task.detached(priority: .background) {
@@ -1062,7 +1059,7 @@ struct RootView: View {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,

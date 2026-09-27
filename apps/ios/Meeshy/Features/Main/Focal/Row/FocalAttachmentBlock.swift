@@ -189,12 +189,11 @@ nonisolated enum FocalMediaProtection {
 /// lui-même). Reconstruits NATIVEMENT ici (même approche que
 /// `Focal/Row/FocalSystemRows.swift`) : mêmes clés i18n
 /// (`bubble.media.viewOnce`/`.masked`/`.tapToView`/`.a11y.*`, un seul
-/// domicile — jamais dupliquées), même geste : depuis #8009, un TOUCHER ouvre
-/// le plein écran sur la pièce (`ProtectedContentTap`), sans dévoilement dans la
-/// rangée — l'appui long qui la dévoilait sur place a disparu, et avec lui le
-/// contrôleur de révélation que chaque cellule instanciait. La décision
-/// (« flouter ou pas ») est PURE (`FocalMediaProtection`, ci-dessus), testable
-/// sans rendu.
+/// domicile — jamais dupliquées), même geste (`ProtectedContentTap`) : une
+/// pièce FLOUTÉE se révèle sur place dans sa case (#8389) et s'ouvre en plein
+/// écran au toucher suivant ; une pièce à VUE UNIQUE ouvre son plein écran
+/// directement (#8009). La décision (« flouter ou pas ») est PURE
+/// (`FocalMediaProtection`, ci-dessus), testable sans rendu.
 ///
 /// **La PASTILLE des réactions est entrée dans le périmètre le 2026-09-16**
 /// (#6793, directive porteur : « Les reactions des medias doivent etre remonté
@@ -226,8 +225,10 @@ struct FocalGridCell: View {
     /// d'appel : succès → révélation).
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
+    @State private var isRevealed = false
+
     private var protectionState: FocalMediaProtectionState {
-        FocalMediaProtection.state(for: attachment, isRevealed: false)
+        FocalMediaProtection.state(for: attachment, isRevealed: isRevealed)
     }
 
     var body: some View {
@@ -242,11 +243,7 @@ struct FocalGridCell: View {
         .clipShape(RoundedRectangle(cornerRadius: FocalMetrics.Media.radius))
         .clipped()
         .contentShape(Rectangle())
-        .onTapGesture {
-            // #8009 — protégée ou non, le toucher ouvre le plein écran sur
-            // CETTE pièce : aucun dévoilement préalable dans la rangée.
-            onTap?(attachment)
-        }
+        .onTapGesture(perform: handleTap)
         .overlay { protectionOverlay }
         .overlay(alignment: .bottomTrailing) {
             if case .none = protectionState {
@@ -259,6 +256,23 @@ struct FocalGridCell: View {
         }
         .overlay(alignment: .topTrailing) { viewOnceBadge }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
+    }
+
+    /// Une pièce floutée se révèle SUR PLACE (#8389) ; révélée, à vue unique
+    /// ou claire, le toucher ouvre son plein écran sur CETTE pièce.
+    private func handleTap() {
+        guard case .none = protectionState else { return revealOrOpen() }
+        onTap?(attachment)
+    }
+
+    private func revealOrOpen() {
+        HapticFeedback.medium()
+        switch ProtectedContentTap.resolve(cell: attachment) {
+        case .revealInPlace:
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isRevealed = true }
+        default:
+            onTap?(attachment)
+        }
     }
 
     /// **Ce que la pièce a récolté** (#6793) — même coin et même dessin que la
@@ -363,12 +377,9 @@ struct FocalGridCell: View {
             .accessibilityLabel(isViewOnce
                 ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
                 : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
-            .accessibilityHint(ProtectedContentTap.openFullscreenHint)
+            .accessibilityHint(ProtectedContentTap.resolve(cell: attachment).accessibilityHint ?? "")
             .accessibilityAddTraits(.isButton)
-            .onTapGesture {
-                HapticFeedback.medium()
-                onTap?(attachment)
-            }
+            .onTapGesture(perform: revealOrOpen)
         }
     }
 

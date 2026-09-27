@@ -63,7 +63,7 @@ export function backgroundCss(value: unknown, fallback: string): string {
 
 export function backgroundFraming(scene: CanvasScene): BackgroundFraming {
   const declared = scene.objects
-    .filter((object) => object.kind === 'media' && object.plane === 'bg')
+    .filter((object) => object.kind === 'media' && (object.plane === 'bg' || object.payload.isBackground === true))
     .map((object) => (isRecord(object.payload.transform) ? object.payload.transform.videoFitMode : undefined))
     .find((mode): mode is string => typeof mode === 'string');
   return declared === 'fit' ? 'fit' : 'fill';

@@ -495,7 +495,7 @@ public final class MessageStore: ObservableObject {
         // render as a "message en double" the moment a later event re-snapshots.
         // Applied before the drop diagnostic so a collapsed mirror is never
         // mistaken for an unintended drop (the prior publish was deduped too).
-        let published = Self.collapsingDuplicateServerIds(next)
+        let published = Self.collapsingDuplicateServerIds(next).filter { !ExpiredEphemeralRow.isGone($0) }
 
         #if DEBUG
         // BUG1 diagnostics — detect any publish that DROPS currently-displayed
@@ -561,6 +561,17 @@ public final class MessageStore: ObservableObject {
             }
         }
         messagesDidChange.send()
+    }
+
+    /// **Retire les éphémères morts DEPUIS la dernière publication** (#8382).
+    ///
+    /// `publishUnchecked` ne pose la question qu'à une écriture : un éphémère
+    /// qui échoit à l'écran n'en provoque aucune. L'hôte appelle ce point à la
+    /// fin de la combustion ; sans mort, rien n'est publié.
+    func dropGoneEphemerals() {
+        let kept = messages.filter { !ExpiredEphemeralRow.isGone($0) }
+        guard kept.count != messages.count else { return }
+        publishUnchecked(records: kept, mergeInMemory: false)
     }
 
     /// `true` quand publier `records` rendrait EXACTEMENT le tableau déjà

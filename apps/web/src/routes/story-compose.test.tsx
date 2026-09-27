@@ -416,13 +416,18 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
     expect((bench.posts[0]?.storyEffects as { v: number } | undefined)?.v).toBe(3);
   });
 
-  test('le chevron offre les trois formats et PUBLIE au format choisi', async () => {
+  test('le chevron offre les trois formats et CHOISIT sans publier — seul Publier envoie', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Finalement un post');
     act(() => kindToggle(el)!.click());
     expect(['STORY', 'POST', 'REEL'].map((kind) => kindChoice(kind as PublicationKind) !== null)).toEqual([true, true, true]);
     act(() => kindChoice('POST')!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+    expect(kindChoice('POST')).toBeNull();
+    expect(publishButton(el)?.textContent).toBe('Publier le post');
+    act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(bench.posts).toHaveLength(1);
     expect(bench.posts[0]?.type).toBe('POST');

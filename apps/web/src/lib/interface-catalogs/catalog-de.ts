@@ -6,6 +6,7 @@ import deMediaViewer from './catalog-de-media-viewer';
 import deActivation from './catalog-de-activation';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
+import deAccounts from './catalog-de-accounts';
 import deCall from './catalog-de-call';
 import deRowActions from './catalog-de-row-actions';
 import deCallShell from './catalog-de-call-shell';
@@ -13,7 +14,6 @@ import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
 import deCallFeedback from './catalog-de-call-feedback';
 import deCallsErase from './catalog-de-calls-erase';
-import deAddressBook from './catalog-de-address-book';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
 import deCallQuality from './catalog-de-call-quality';
@@ -21,10 +21,14 @@ import deCallCaptions from './catalog-de-call-captions';
 import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
+import deGallery from './catalog-de-gallery';
 import deMentions from './catalog-de-mentions';
+import deEphemeral from './catalog-de-ephemeral';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
+import deQuote from './catalog-de-quote';
+import deContactDiscovery from './catalog-de-contact-discovery';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -213,6 +217,7 @@ const de = {
   ...deVerifyEmail,
   ...deActivation,
   ...dePassword,
+  ...deAccounts,
   ...deCall,
   ...deRowActions,
   ...deCallShell,
@@ -220,7 +225,6 @@ const de = {
   ...deCallDecline,
   ...deCallFeedback,
   ...deCallsErase,
-  ...deAddressBook,
   ...deCallDevices,
   ...deCallScreen,
   ...deCallQuality,
@@ -458,9 +462,6 @@ const de = {
   'settings.privacy.read_receipts.info':
     'Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden.',
   'settings.privacy.typing_indicator': 'Schreibanzeige',
-  'settings.privacy.hide_from_search': 'Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben',
-  'settings.privacy.hide_from_search.info':
-    'Deine Kontakte finden dich nicht über deine Nummer oder E-Mail und werden nicht benachrichtigt, wenn du beitrittst.',
   'settings.section.appearance': 'Erscheinungsbild',
   'settings.theme': 'Design',
   'settings.theme.auto': 'Auto',
@@ -1117,7 +1118,7 @@ const de = {
   'message.withheld': 'Inhalt zurückgehalten',
   'message.withheld.a11y': 'Inhalt zurückgehalten: Diese Nachricht existiert und wird nicht angezeigt',
   'message.veiled': 'Ausgeblendeter Inhalt',
-  'message.veiled.hint': 'Tippen, um den Inhalt anzuzeigen',
+  'message.veiled.hint': 'Zum Anzeigen tippen',
   'message.veiled.error': 'Anzeigen derzeit nicht möglich',
   'message.ephemeral.a11y': 'Selbstlöschende Nachricht, verschwindet in {remaining}',
   'message.ephemeral.awaiting': 'Wartet auf den Empfang',
@@ -1157,9 +1158,13 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deEphemeral,
+  ...deGallery,
   ...deConversationCard,
   ...deStoriesMine,
   ...deContactCard,
+  ...deQuote,
+  ...deContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default de;

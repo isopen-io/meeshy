@@ -132,7 +132,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
       capturedAtMs: current.at,
       isFinal: result.isFinal,
     };
-    add({ id: spoken.id, speakerId: spoken.speakerId, speakerName: spoken.speakerName, original: said, translated: null, isFinal: result.isFinal, at: current.at, mine: true });
+    add({ id: spoken.id, speakerId: spoken.speakerId, speakerName: spoken.speakerName, original: said, translated: null, pair: null, isFinal: result.isFinal, at: current.at, mine: true });
     broadcast(transcriptEntryMessage(spoken));
     if (result.isFinal) ctx.emit(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, segmentEvent(spoken));
   };
@@ -183,7 +183,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     }
     const call = live();
     if (call === null || message.callId !== ctx.callId) return;
-    add({ id: message.id, speakerId: userId, speakerName: call.members[userId]?.name || message.speakerName, original: message.text, translated: null, isFinal: message.isFinal, at: message.at > 0 ? message.at : ctx.now(), mine: false });
+    add({ id: message.id, speakerId: userId, speakerName: call.members[userId]?.name || message.speakerName, original: message.text, translated: null, pair: null, isFinal: message.isFinal, at: message.at > 0 ? message.at : ctx.now(), mine: false });
   };
 
   const onTranslated = (payload: unknown): void => {

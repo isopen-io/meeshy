@@ -117,7 +117,7 @@ export function AdminUserBanSheet({
     });
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.ban.title')} onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.ban.title')} presentation="centered" onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
         <Field id="admin-ban-reason" label={translateAdmin(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
           {({ id, describedBy }) => (

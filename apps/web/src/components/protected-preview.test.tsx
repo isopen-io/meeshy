@@ -193,6 +193,18 @@ for (const skin of SKINS) describe(`${skin} — l’aperçu de l’appui long ga
     expect(document.body.innerHTML).not.toContain(PHOTO_URL);
   });
 
+  test('média flouté PENDANT sa fenêtre de lecture : l’aperçu reprend la tuile protégée, jamais l’image (#8389)', async () => {
+    const subject = message({ content: '', messageType: 'image', isBlurred: true, attachments: [photo({ isBlurred: true, width: 1200, height: 800 })] });
+    const { host } = await mountThread(skin, subject);
+    await mounter.click(host.querySelector<HTMLElement>('button[data-protected-attachment="hidden"]'));
+    expect(host.querySelector('[data-protected="revealed"] img')?.getAttribute('src')).toContain(PHOTO_URL);
+
+    const preview = await openMenu(host);
+    expect(preview?.querySelector('[data-protected-attachment="hidden"]')).not.toBe(null);
+    expect(preview?.innerHTML ?? '').not.toContain(PHOTO_URL);
+    expect(preview?.querySelector('[hidden]')).toBe(null);
+  });
+
   test('média flouté SANS dimensions : repli carré', async () => {
     const subject = message({ content: '', messageType: 'image', isBlurred: true, attachments: [photo({ isBlurred: true })] });
     const { host } = await mountThread(skin, subject);

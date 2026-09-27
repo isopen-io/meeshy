@@ -153,11 +153,14 @@ extension MeeshyComposerHost {
         Button {
             performSoclePreview()
         } label: {
+            // **Sur verre** (#8370) : le socle flotte sur la scène, et un
+            // pictogramme nu s'y perdrait sur une photo claire.
             Image(systemName: "eye")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
         }
         .accessibilityLabel(Text(String(
             localized: "composer.a11y.preview",
@@ -209,9 +212,17 @@ extension MeeshyComposerHost {
                 }
             }
             .font(.footnote.weight(.semibold))
-            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
+            .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+            // **Une pastille de verre** (#8370, maquette `iOS.dc.html`) : le
+            // socle flotte sur la scène, et le mot doit se lire sur n'importe
+            // quel média. Sans mot (palier d'accessibilité), la capsule de
+            // 44 pt redevient un disque. TEINTÉ du plateau : nu, le verre
+            // d'iOS 26 a viré au clair sous le libellé blanc (simulateur,
+            // 2026-09-27).
+            .padding(.horizontal, socleShowsLabels ? 14 : 0)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Capsule())
+            .adaptiveGlass(in: Capsule(), tint: tint.color.opacity(0.55))
         }
         // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom
@@ -463,7 +474,7 @@ extension MeeshyComposerHost {
             if socleShowsLabels {
                 // #7497 — la partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
-                if let titre = ComposerPublishMenuCopy.publishTitle(selectedFormat) {
+                if let titre = ComposerPublishMenuCopy.publishTitle(armedChoice.format) {
                     Text(titre)
                         .lineLimit(1)
                 } else {
@@ -579,28 +590,31 @@ extension MeeshyComposerHost {
     }
 
     /// **La flèche du socle — une capsule SCINDÉE `[↑ Publier la story | ⌄]`**
-    /// (#7497, directive porteur 2026-09-22). La partie principale publie au
-    /// format de la porte, celui qu'elle nomme ; le chevron ouvre « Publier
-    /// comme » pour en choisir un autre (et, pour un post à plusieurs scènes,
-    /// l'agencement). Sans autre format à offrir, la capsule reste entière. Les
-    /// deux passent par le MÊME habillage, qui porte le gate.
+    /// (#7497, directive porteur 2026-09-22). La partie principale publie ce
+    /// qu'elle nomme — le format de la porte tant que le chevron n'a rien armé ;
+    /// le chevron ouvre « Publier comme » pour CHOISIR un autre format (et, pour
+    /// un post à plusieurs scènes, l'agencement) SANS publier : seul l'appui sur
+    /// Publier envoie (maquette plein écran, 2026-09-27). Sans autre format à
+    /// offrir, la capsule reste entière. Les deux passent par le MÊME habillage,
+    /// qui porte le gate.
     var publishButton: some View {
         publishCapsule(
             HStack(spacing: 0) {
                 Button {
-                    performSoclePublish(ComposerPublishChoice(format: selectedFormat, layout: nil))
+                    performSoclePublish(armedChoice)
                 } label: {
                     publishCapsuleLabel
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(selectedFormat)
+                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(armedChoice.format)
                                     ?? String(localized: "composer.socle.publish", bundle: .main))
                 if let entries = publishMenuEntries {
                     Rectangle()
                         .fill(Color.white.opacity(0.35))
                         .frame(width: 1, height: 20)
                         .accessibilityHidden(true)
-                    ComposerPublishMenu(entries: entries, onPublish: { performSoclePublish($0) }) {
+                    ComposerPublishMenu(entries: entries, armed: armedChoice,
+                                        onChoose: { armedPublishChoice = $0 }) {
                         publishChevronLabel
                     }
                     .accessibilityLabel(ComposerPublishMenuCopy.title)
@@ -609,6 +623,14 @@ extension MeeshyComposerHost {
             }
             .accessibilityElement(children: .contain)
         )
+    }
+
+    /// **Ce que la partie principale publie** — la lecture de
+    /// `ComposerPublishMenuRule.armed`, jamais une condition écrite dans le corps.
+    var armedChoice: ComposerPublishChoice {
+        ComposerPublishMenuRule.armed(chosen: armedPublishChoice,
+                                      defaultFormat: selectedFormat,
+                                      entries: publishMenuEntries)
     }
 
     /// Le chevron — 44 pt de cible, comme la partie principale.

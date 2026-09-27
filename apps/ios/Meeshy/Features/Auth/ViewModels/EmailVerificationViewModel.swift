@@ -26,6 +26,11 @@ final class EmailVerificationViewModel: ObservableObject {
     /// saisi sur lui ou le lien ouvert sur lui.
     @Published var addressProvenElsewhere = false
 
+    /// L'hôte qui PORTE la saisie (la carte de l'inscription, #8288) apprend la
+    /// preuve sans observer l'écran : le code juste, ou l'adresse prouvée ailleurs.
+    var onVerified: (() -> Void)?
+    var onProvenElsewhere: (() -> Void)?
+
     /// Le jeton d'attente de CET appareil ; renouvelé à chaque nouvel envoi.
     @Published var pendingSessionToken: String?
 
@@ -44,6 +49,13 @@ final class EmailVerificationViewModel: ObservableObject {
     private let watchInterval: Duration
     /// Borne d'une veille : la durée d'un code de connexion.
     private let watchLimit: Duration
+    private let celebration: ArrivalCelebrating
+    /// L'origin de la session que la preuve ouvrira — `.registration` quand la
+    /// carte de l'inscription porte le code (#8288).
+    private let sessionOrigin: SessionOrigin
+    /// Faux quand l'hôte a déjà fêté la preuve (la carte de l'inscription joue son
+    /// propre feu d'artifice) : la session s'ouvre alors sur le préchargement seul.
+    private let celebratesArrival: Bool
 
     init(
         email: String,
@@ -54,8 +66,14 @@ final class EmailVerificationViewModel: ObservableObject {
         confirmer: EmailVerificationConfirming = AuthManager.shared,
         watcher: EmailVerificationWatching = AuthService.shared,
         watchInterval: Duration = .seconds(3),
-        watchLimit: Duration = .seconds(15 * 60)
+        watchLimit: Duration = .seconds(15 * 60),
+        celebration: ArrivalCelebrating? = nil,
+        sessionOrigin: SessionOrigin = .login,
+        celebratesArrival: Bool = true
     ) {
+        self.celebration = celebration ?? ArrivalCelebrationController.shared
+        self.sessionOrigin = sessionOrigin
+        self.celebratesArrival = celebratesArrival
         self.email = email
         self.password = password
         self.accountCreated = accountCreated
@@ -81,6 +99,7 @@ final class EmailVerificationViewModel: ObservableObject {
             switch try? await watcher.emailVerificationStatus(pendingSessionToken: token) {
             case .proven:
                 addressProvenElsewhere = true
+                onProvenElsewhere?()
                 return
             case .ended:
                 return
@@ -100,6 +119,7 @@ final class EmailVerificationViewModel: ObservableObject {
             provenSession = try await confirmer.verifyEmail(.code(code, email: email, password: password))
             password = nil
             verificationSuccess = true
+            onVerified?()
         } catch {
             self.error = EmailProofErrorText.codeMessage(for: error)
         }
@@ -112,8 +132,13 @@ final class EmailVerificationViewModel: ObservableObject {
     func openProvenSession() {
         guard let proven = provenSession else { return }
         provenSession = nil
-        confirmer.openSession(proven)
+        confirmer.openSession(proven.originating(from: sessionOrigin))
         sessionOpened = true
+        if celebratesArrival {
+            celebration.begin(userId: proven.user.id)
+        } else {
+            celebration.prepare(userId: proven.user.id)
+        }
     }
 
     func resendCode() async {

@@ -189,7 +189,7 @@ public extension APIMessageReplyTo {
             ? attachments?.quotedRepresentative
             : attachments?.first { $0.id == attachmentReplyTo?.attachmentId }
         let placeholder = isProtected ? protectedPlaceholder(for: representative) : nil
-        return ReplyReference(
+        var reference = ReplyReference(
             messageId: id,
             authorName: sender?.name ?? "?",
             previewText: placeholder ?? servedPreviewText(preferredLanguages: preferredLanguages, representative: representative),
@@ -204,6 +204,18 @@ public extension APIMessageReplyTo {
             attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
             attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) }
         )
+        // #8320 — la zone lecture : l'échéance d'un éphémère, et les pistes
+        // traduites d'un audio cité pour élire hors fenêtre la piste du
+        // vocal d'origine. Jamais les pistes d'un média protégé.
+        reference.quotedExpiresAt = expiresAt
+        if let representative, !reference.quotedMediaIsProtected, reference.attachmentFileUrl != nil,
+           AttachmentKind(mimeType: representative.mimeType ?? "") == .audio {
+            reference.quotedAudioTracks = ReplyReference.QuotedAudioTracks(
+                originalLanguage: originalLanguage,
+                translations: representative.translations
+            )
+        }
+        return reference
     }
 
     /// Le texte servi par le Prisme ; sans texte, une carte de visite se dit

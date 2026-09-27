@@ -336,6 +336,9 @@ export const usersByUserIdStatus = (userId: string): string => `/api/v1/admin/us
 /** POST /api/v1/admin/users/:userId/unlock */
 export const usersByUserIdUnlock = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/unlock`;
 
+/** POST /api/v1/admin/users/:userId/verification-requests */
+export const usersByUserIdVerificationRequests = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/verification-requests`;
+
 /** PATCH /api/v1/admin/users/:userId/verifications */
 export const usersByUserIdVerifications = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/verifications`;
 

@@ -461,20 +461,6 @@
     },
     {
       "method": "DELETE",
-      "path": "/api/v1/directory/contacts",
-      "module": "directoryContactsRoutes",
-      "mountPrefix": "/api/v1/directory",
-      "securityLevel": "inconnu",
-      "securityLevelCandidates": [
-        "S2",
-        "S3"
-      ],
-      "securityBasisKey": "authenticated-only",
-      "hierarchyGated": false,
-      "adminPrefixed": false
-    },
-    {
-      "method": "DELETE",
       "path": "/api/v1/friend-requests/:id",
       "module": "friendRequestRoutes",
       "mountPrefix": "/api/v1",
@@ -980,20 +966,6 @@
     {
       "method": "DELETE",
       "path": "/api/v1/users/:userId/block",
-      "module": "userRoutes",
-      "mountPrefix": "/api/v1",
-      "securityLevel": "inconnu",
-      "securityLevelCandidates": [
-        "S2",
-        "S3"
-      ],
-      "securityBasisKey": "authenticated-only",
-      "hierarchyGated": false,
-      "adminPrefixed": false
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v1/users/me/contacts",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -5929,6 +5901,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/users/:userId/verification-requests",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/users/:userId/verify-age",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -6960,6 +6946,20 @@
     {
       "method": "POST",
       "path": "/api/v1/conversations/:id/messages/:messageId/consume",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/messages/after-read/consume",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

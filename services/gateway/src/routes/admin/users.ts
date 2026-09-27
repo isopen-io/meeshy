@@ -41,6 +41,7 @@ import { registerUserProfileReadRoutes } from './user-profile-reads';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
 import { registerUserProfileImageRoutes } from './user-profile-images';
+import { authVerificationSender, registerUserVerificationRequestRoutes } from './user-verification-requests';
 import { evaluerLoiDesChamps } from './user-field-law';
 import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
@@ -151,6 +152,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Photo et bannière posées par l'administration (#8217) : téléversées, ou
   // choisies parmi les images DÉJÀ publiques du membre.
   registerUserProfileImageRoutes(fastify, { userAuditService });
+  // Renvoi d'une vérification d'e-mail ou de téléphone par l'administration (#8289).
+  registerUserVerificationRequestRoutes(fastify, { userAuditService, sender: authVerificationSender(fastify) });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)

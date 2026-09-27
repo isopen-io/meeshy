@@ -90,9 +90,6 @@ function makePrisma(options: {
       count: jest.fn<any>().mockResolvedValue(count),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }),
     },
-    contactJoinNotice: {
-      deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-    },
   } as any;
 }
 
@@ -689,18 +686,5 @@ describe('ContactDirectoryService.list — blocage et présence', () => {
 
     expect(prisma.user.findMany).not.toHaveBeenCalled();
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
-  });
-});
-
-describe('ContactDirectoryService.clear', () => {
-  it('removes every entry of the owner and reports the count', async () => {
-    const prisma = makePrisma();
-    const service = new ContactDirectoryService(prisma);
-
-    const removed = await service.clear(OWNER_ID);
-
-    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: OWNER_ID } });
-    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: OWNER_ID } });
-    expect(removed).toBe(3);
   });
 });

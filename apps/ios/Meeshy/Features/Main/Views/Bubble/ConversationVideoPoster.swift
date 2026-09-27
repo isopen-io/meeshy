@@ -54,10 +54,12 @@ struct ConversationVideoPoster: View {
             Circle()
                 .fill(Color(hex: accentHex).opacity(0.85))
                 .frame(width: inner, height: inner)
+            // Doctrine 86i : le glyphe vit dans un cercle de dimension fixe — il
+            // se dimensionne par ce cercle, pas par une police qui scalerait.
             Image(systemName: "play.fill")
-                // Doctrine 86i : glyphe play dans un cercle de dimension fixe →
-                // taille figée, proportionnée au cercle (ne doit pas déborder).
-                .font(.system(size: playButtonDiameter * 0.375, weight: .bold))
+                .resizable()
+                .scaledToFit()
+                .frame(width: playButtonDiameter * 0.3, height: playButtonDiameter * 0.3)
                 .foregroundColor(.white)
                 .offset(x: playButtonDiameter / 24)
         }

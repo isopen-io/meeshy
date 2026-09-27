@@ -142,7 +142,7 @@ extension ConversationViewModel {
             // ment sur rien et fait re-résoudre `protection()` avec un `now`
             // frais, qui rendra `.imminent` au lieu de `.running`.
             restampMessagesEnteringLastMinute(deadlines, now: now)
-            ephemeralExpiry.refresh(deadlines: deadlines)
+            refreshEphemeralExpirySchedule()
             return
         }
 
@@ -162,9 +162,21 @@ extension ConversationViewModel {
             return
         }
 
-        for id in fresh {
+        // #8352 — un mort DÉJÀ gravé (flamme-œil consommée, `message:expired`
+        // reçu) que le fil recharge part SANS rejouer sa combustion : elle a
+        // déjà été vue, et le serveur peut resservir la ligne à chaque resync.
+        let alreadyDead = fresh.filter { EphemeralReceiptLedger.shared.destruction(of: $0) != nil }
+        if !alreadyDead.isEmpty {
+            messages.removeAll { alreadyDead.contains($0.id) }
+            messageStore.dropGoneEphemerals()
+        }
+        let burning = fresh.subtracting(alreadyDead)
+        guard !burning.isEmpty else { return }
+
+        for id in burning {
             guard let index = messageIndex(for: id) else { continue }
             messages[index].isBurning = true
+            burningEphemeralIds[id] = true
         }
 
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
@@ -172,14 +184,31 @@ extension ConversationViewModel {
             let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard let self else { return }
-            for id in fresh { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
+            for id in burning { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
             // Le repli des voisins est ANIMÉ : c'est la seconde moitié de
             // l'effet — la combustion montre la destruction, le repli montre
             // que la place est rendue.
             withAnimation(.easeInOut(duration: 0.25)) {
-                self.messages.removeAll { fresh.contains($0.id) }
+                self.messages.removeAll { burning.contains($0.id) }
             }
+            // #8382 — le fil rend `MessageStore`, pas `messages` : sans cette
+            // republication, Focal et Script gardaient la ligne à 0:00 jusqu'à
+            // la prochaine écriture en base.
+            self.messageStore.dropGoneEphemerals()
+            for id in burning { self.burningEphemeralIds.removeValue(forKey: id) }
             self.refreshEphemeralExpirySchedule()
+        }
+    }
+
+    /// Repose la combustion en cours sur des messages relus du magasin : une
+    /// écriture GRDB pendant la combustion ne la remet pas à zéro (#8382).
+    func applyingEphemeralBurns(_ incoming: [Message]) -> [Message] {
+        guard !burningEphemeralIds.isEmpty else { return incoming }
+        return incoming.map { message in
+            guard burningEphemeralIds[message.id] == true, !message.isBurning else { return message }
+            var burning = message
+            burning.isBurning = true
+            return burning
         }
     }
 
@@ -200,6 +229,23 @@ extension ConversationViewModel {
 
     /// Réarme l'unique réveil du fil. Appelé à chaque changement de `messages`.
     func refreshEphemeralExpirySchedule() {
-        ephemeralExpiry.refresh(deadlines: ephemeralDeadlines)
+        ephemeralExpiry.refresh(deadlines: scheduledEphemeralDeadlines)
+    }
+
+    /// **Ce que l'ordonnanceur voit : les échéances ET les échus** (#8352).
+    ///
+    /// Un éphémère DÉJÀ échu — mort gravée au registre, ou échéance passée
+    /// pendant que l'app dormait — n'a plus d'échéance future : rechargé au
+    /// fil (base, réseau), il n'était dû pour personne, et seules les Bulles
+    /// le masquaient. Il entre au plan comme dû (`.distantPast`), donc retiré
+    /// de la liste que les quatre modes lisent — sauf s'il brûle déjà, pour ne
+    /// jamais rallumer une combustion en cours.
+    var scheduledEphemeralDeadlines: [String: Date] {
+        var table = ephemeralDeadlines
+        for id in elapsedEphemeralIds {
+            guard let index = messageIndex(for: id), !messages[index].isBurning else { continue }
+            table[id] = .distantPast
+        }
+        return table
     }
 }

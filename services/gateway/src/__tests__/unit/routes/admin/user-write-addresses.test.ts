@@ -207,6 +207,49 @@ describe('PATCH /admin/users/:userId/security', () => {
     await app.close();
   });
 
+  /**
+   * ARMER un second facteur que le membre n'a jamais appairé l'ENFERME DEHORS
+   * (#8289) : la connexion lui demande alors un code TOTP, et
+   * `TwoFactorService.verify` refuse tout code faute de secret — le compte
+   * n'a plus d'autre porte que le désarmement par un administrateur.
+   */
+  it("refuse d'armer un second facteur jamais appairé — 409 TWO_FACTOR_NOT_ENROLLED, rien d'écrit", async () => {
+    service.getUserById.mockResolvedValue({ ...CIBLE, twoFactorSecret: null });
+    service.enable2FA.mockResolvedValue(CIBLE);
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/users/${CIBLE_ID}/security`,
+      payload: { twoFactorEnabled: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'TWO_FACTOR_NOT_ENROLLED' });
+    expect(service.enable2FA).not.toHaveBeenCalled();
+    expect(derniereTrace('ENABLE_2FA')).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("arme le second facteur d'un membre dont l'application est appairée", async () => {
+    service.getUserById.mockResolvedValue({ ...CIBLE, twoFactorSecret: 'JBSWY3DPEHPK3PXP' });
+    service.enable2FA.mockResolvedValue(CIBLE);
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/users/${CIBLE_ID}/security`,
+      payload: { twoFactorEnabled: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.enable2FA).toHaveBeenCalledTimes(1);
+    expect(derniereTrace('ENABLE_2FA')).toBeDefined();
+
+    await app.close();
+  });
+
   it('refuse un ADMIN qui vise un souverain — la hiérarchie précède la loi du champ', async () => {
     service.getUserById.mockResolvedValue({ ...CIBLE, role: 'BIGBOSS' });
     const app = await buildApp();

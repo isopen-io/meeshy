@@ -107,3 +107,20 @@ export async function patchAdminUserPreferences(
   if (!result.ok) return result;
   return { ok: true, data: decodeDocument(asRecord(result.data)?.preferences) };
 }
+
+/**
+ * LES CHIFFRES D'UN MEMBRE, UNE REQUÊTE (#8289) — la section « En chiffres » et
+ * la section Sécurité (son nombre de sessions) lisent la MÊME clé : une seule
+ * requête pour les deux, jamais deux fonctions de chargement qui divergeraient.
+ */
+export function adminUserStatsQueryOptions(deps: AdminDeps, userId: string) {
+  return {
+    queryKey: adminUserStatsQueryKey(userId),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminUserStats> => {
+      const resultat = await loadAdminUserStats({ ...deps, userId, ...(signal === undefined ? {} : { signal }) });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    retry: false,
+  };
+}

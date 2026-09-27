@@ -23,8 +23,12 @@ import Foundation
 /// destinataire.
 public struct MessageProtectionIntent: Equatable, Sendable {
 
-    /// Durée d'un éphémère, en SECONDES. `nil` ⇒ pas d'éphémère.
+    /// Durée d'un éphémère, en SECONDES. `nil` ⇒ pas d'éphémère À DURÉE.
     public let ephemeralDurationSeconds: Int?
+    /// Flamme-œil (#8303) : éphémère SANS durée, qui disparaît chez chaque
+    /// lecteur quand il l'a vu puis a quitté la conversation. Exclusive d'une
+    /// durée — elle l'emporte.
+    public let ephemeralAfterRead: Bool
     public let isBlurred: Bool
     public let isViewOnce: Bool
     /// Plafond d'ouvertures d'une vue unique. `nil` ⇒ le défaut du serveur.
@@ -32,11 +36,14 @@ public struct MessageProtectionIntent: Equatable, Sendable {
 
     public init(
         ephemeralDurationSeconds: Int? = nil,
+        ephemeralAfterRead: Bool = false,
         isBlurred: Bool = false,
         isViewOnce: Bool = false,
         maxViewOnceCount: Int? = nil
     ) {
-        self.ephemeralDurationSeconds = (ephemeralDurationSeconds ?? 0) > 0 ? ephemeralDurationSeconds : nil
+        self.ephemeralAfterRead = ephemeralAfterRead
+        self.ephemeralDurationSeconds = !ephemeralAfterRead && (ephemeralDurationSeconds ?? 0) > 0
+            ? ephemeralDurationSeconds : nil
         // Flou et vue unique sont EXCLUSIFS (directive porteur 2026-09-24,
         // #7667) : le composeur éteint l'un quand on allume l'autre, et ce
         // site-ci est le second verrou que traverse tout chemin d'envoi. La vue
@@ -46,12 +53,26 @@ public struct MessageProtectionIntent: Equatable, Sendable {
         self.maxViewOnceCount = maxViewOnceCount
     }
 
+    /// L'intention d'un CHOIX de sélecteur (#8303) — la seule forme que le
+    /// composeur manipule depuis la flamme-œil.
+    public init(ephemeral: EphemeralChoice?, isBlurred: Bool = false, isViewOnce: Bool = false) {
+        self.init(ephemeralDurationSeconds: ephemeral?.durationSeconds,
+                  ephemeralAfterRead: ephemeral == .afterRead,
+                  isBlurred: isBlurred, isViewOnce: isViewOnce)
+    }
+
+    /// Le choix d'éphémère que porte cette intention, relu par le composeur.
+    public var ephemeralChoice: EphemeralChoice? {
+        if ephemeralAfterRead { return .afterRead }
+        return ephemeralDurationSeconds.flatMap(EphemeralDuration.init(rawValue:)).map { .duration($0) }
+    }
+
     /// Rien d'armé. **Ce n'est pas une valeur par défaut** : un site d'envoi qui
     /// doit la nommer dit explicitement qu'il n'envoie rien de protégé.
     public static let none = MessageProtectionIntent()
 
     public var isEmpty: Bool {
-        ephemeralDurationSeconds == nil && !isBlurred && !isViewOnce
+        ephemeralDurationSeconds == nil && !ephemeralAfterRead && !isBlurred && !isViewOnce
     }
 
     /// Les bits de CYCLE DE VIE correspondants — jamais les autres axes.
@@ -60,6 +81,7 @@ public struct MessageProtectionIntent: Equatable, Sendable {
     public var lifecycleFlags: MessageEffectFlags {
         var flags: MessageEffectFlags = []
         if ephemeralDurationSeconds != nil { flags.insert(.ephemeral) }
+        if ephemeralAfterRead { flags.formUnion([.ephemeral, .ephemeralAfterRead]) }
         if isBlurred { flags.insert(.blurred) }
         if isViewOnce { flags.insert(.viewOnce) }
         return flags
@@ -82,4 +104,11 @@ public struct MessageProtectionIntent: Equatable, Sendable {
 
     /// Idem pour le flou.
     public var wireIsBlurred: Bool? { isBlurred ? true : nil }
+
+    /// Les bits de cycle de vie qu'AUCUNE colonne du corps ne porte (#8303) :
+    /// la flamme-œil n'a ni durée ni échéance, elle ne voyage que par
+    /// `effectFlags`, que la passerelle garde pour base de sa recomposition.
+    public var wireEffectFlags: MessageEffectFlags {
+        ephemeralAfterRead ? [.ephemeral, .ephemeralAfterRead] : []
+    }
 }

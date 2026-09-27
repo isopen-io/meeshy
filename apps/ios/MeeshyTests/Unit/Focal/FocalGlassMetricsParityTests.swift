@@ -18,6 +18,7 @@ final class FocalGlassMetricsParityTests: XCTestCase {
         let enterDurationMs: Double
         let flattenDurationMs: Double
         let expandDurationMs: Double
+        let expandCurve: [Double]
     }
 
     private func sharedMetrics() throws -> SharedMetrics {
@@ -44,5 +45,6 @@ final class FocalGlassMetricsParityTests: XCTestCase {
         XCTAssertEqual(FocalMetrics.Scene.enterDuration * 1000, shared.enterDurationMs, accuracy: 1e-6)
         XCTAssertEqual(FocalMetrics.Scene.flattenDuration * 1000, shared.flattenDurationMs, accuracy: 1e-6)
         XCTAssertEqual(FocalMetrics.Focus.expandDuration * 1000, shared.expandDurationMs, accuracy: 1e-6)
+        XCTAssertEqual(FocalMetrics.Focus.expandCurve, shared.expandCurve, "#8232 — la courbe du dépliage est celle du web")
     }
 }

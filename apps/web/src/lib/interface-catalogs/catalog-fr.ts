@@ -9,7 +9,9 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frGallery from './catalog-fr-gallery';
 import frMentions from './catalog-fr-mentions';
+import frEphemeral from './catalog-fr-ephemeral';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
@@ -19,6 +21,7 @@ import frMediaViewer from './catalog-fr-media-viewer';
 import frActivation from './catalog-fr-activation';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
+import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
@@ -26,7 +29,6 @@ import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
 import frCallFeedback from './catalog-fr-call-feedback';
 import frCallsErase from './catalog-fr-calls-erase';
-import frAddressBook from './catalog-fr-address-book';
 import frCallDevices from './catalog-fr-call-devices';
 import frCallScreen from './catalog-fr-call-screen';
 import frCallQuality from './catalog-fr-call-quality';
@@ -36,6 +38,8 @@ import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
 import frContactCard from './catalog-fr-contact-card';
+import frQuote from './catalog-fr-quote';
+import frContactDiscovery from './catalog-fr-contact-discovery';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -203,6 +207,7 @@ const fr = {
   ...frVerifyEmail,
   ...frActivation,
   ...frPassword,
+  ...frAccounts,
   ...frCall,
   ...frRowActions,
   ...frCallShell,
@@ -210,7 +215,6 @@ const fr = {
   ...frCallDecline,
   ...frCallFeedback,
   ...frCallsErase,
-  ...frAddressBook,
   ...frCallDevices,
   ...frCallScreen,
   ...frCallQuality,
@@ -456,9 +460,6 @@ const fr = {
   'settings.privacy.read_receipts.info':
     "Réciproque : si vous ne renvoyez pas d'accusé de lecture, vous ne verrez pas non plus si vos messages ont été lus.",
   'settings.privacy.typing_indicator': 'Indicateur de frappe',
-  'settings.privacy.hide_from_search': 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail',
-  'settings.privacy.hide_from_search.info':
-    'Vos contacts ne vous retrouveront pas par votre numéro ou votre e-mail, et ne seront pas prévenus de votre arrivée.',
   'settings.section.appearance': 'Apparence',
   'settings.theme': 'Thème',
   'settings.theme.auto': 'Auto',
@@ -1154,6 +1155,8 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frEphemeral,
+  ...frGallery,
   ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
@@ -1188,6 +1191,8 @@ const fr = {
   ...frStoriesMine,
   ...frFeedPost,
   ...frContactCard,
+  ...frQuote,
+  ...frContactDiscovery,
 } as const;
 
 export default fr;

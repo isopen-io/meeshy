@@ -162,6 +162,9 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               ...addressPayload(background.address),
               mediaType: background.mediaType,
               isBackground: true,
+              // Chaque média garde SON format (maquette plein écran, #8370) :
+              // le fond part AJUSTÉ, comme le composer iOS le pose déjà.
+              transform: { videoFitMode: 'fit' },
               ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
               ...(mutesVideo ? { muted: true, volume: 0 } : {}),
             },

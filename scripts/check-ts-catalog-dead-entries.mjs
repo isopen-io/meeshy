@@ -334,7 +334,23 @@ export const callersIn = (contents, nsNames) => {
 // appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
 // 335 → 334 (#8167, 2026-09-27) : Paramètres > Confidentialité efface le
 // carnet d'adresses par `directory.contacts` (`lib/api/address-book.ts`).
-const BASELINE_DEAD_ENTRIES = 334;
+// 334 → 335 (#8284, 2026-09-27) : décision porteur — le carnet s'efface à la
+// suppression du compte, jamais à la main. La rangée web et `DELETE
+// /directory/contacts` sont partis ; `directory.contacts` (GET · PUT · PATCH)
+// n'a plus d'appelant TS, il reste servi au catalogue Swift (synchronisation et
+// lecture du Répertoire iOS). Retour exact à la valeur d'avant #8167.
+// 335 → 333 (#8289, 2026-09-27) : la fiche éditable d'un membre appelle
+// `admin.usersByUserIdVerifications`, `admin.usersByUserIdSecurity` et la
+// route neuve `admin.usersByUserIdVerificationRequests`
+// (`lib/api/admin-user-verifications.ts`) — trois entrées vivantes pour une
+// entrée ajoutée.
+// 333 → 334 (#8302, 2026-09-27) : `conversations.byIdMessagesAfterReadConsume`,
+// la flamme-œil consommée, GÉNÉRÉE depuis `route-manifest.json`. Le web
+// l'appelle déjà par un chemin relatif (`lib/api/after-read.ts`) plutôt que par
+// le catalogue ; passer ce site au catalogue ramène cette valeur à 333.
+// 333 → 332 (#8342, 2026-09-27) : `lib/api/after-read.ts` appelle désormais
+// `conversations.byIdMessagesAfterReadConsume` par le catalogue.
+const BASELINE_DEAD_ENTRIES = 332;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -180,6 +180,10 @@ class ConversationViewModel: ObservableObject {
     /// (#7618) — lues par chaque mode via `MeeshyMessage.isViewOnceRevealed`.
     @Published var revealedViewOnceIds: [String: Bool] = [:]
 
+    /// Les éphémères EN COMBUSTION (#8382) — lus par les cellules du fil, qui
+    /// rendent `MessageStore` et non `messages`.
+    @Published var burningEphemeralIds: [String: Bool] = [:]
+
     struct BubbleLanguageSelection: Equatable {
         var activeDisplayLangCode: String?
         var secondaryLangCode: String?
@@ -286,15 +290,15 @@ class ConversationViewModel: ObservableObject {
     /// viewing/sending into a conversation they no longer belong to.
     @Published var accessRevoked: Bool = false
 
-    /// Selected ephemeral duration for next message
-    @Published var ephemeralDuration: EphemeralDuration?
+    /// L'éphémère armé pour les prochains messages : la flamme-œil ou une durée (#8303).
+    @Published var ephemeralChoice: EphemeralChoice? { didSet { persistArmedProtection() } }
 
     /// When true, next message will be sent with blur (recipient must tap to reveal)
-    @Published var isBlurEnabled: Bool = false
+    @Published var isBlurEnabled: Bool = false { didSet { persistArmedProtection() } }
 
     /// When true, next message will be sent as view-once (revealed once, then
     /// burned). Surfaced by the notification preview composer.
-    @Published var isViewOnceEnabled: Bool = false
+    @Published var isViewOnceEnabled: Bool = false { didSet { persistArmedProtection() } }
 
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
@@ -329,7 +333,7 @@ class ConversationViewModel: ObservableObject {
     /// Resolves to the test-injected coordinator under DEBUG when present,
     /// otherwise the shared singleton. Pure UX orchestration lives in the
     /// coordinator — the VM only feeds it.
-    private var audioCoordinator: ConversationAudioCoordinator {
+    var audioCoordinator: ConversationAudioCoordinator {
         #if DEBUG
         return _testAudioCoordinator ?? .shared
         #else
@@ -499,6 +503,13 @@ class ConversationViewModel: ObservableObject {
     let messageSocket: MessageSocketProviding
     let networkMonitor: NetworkMonitorProviding
     let offlineQueue: OfflineMessageQueueing
+    /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
+    var afterReadVisit = AfterReadVisit()
+    let afterReadConsumer: AfterReadConsumptionProviding
+    /// #8305 — ce que la conversation garde armé, entre deux envois et deux visites.
+    let protectionPreferences: ConversationProtectionPreferenceProviding
+    /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy à l'accusé de réception.
+    let receivedMediaAutoSaver: ReceivedMediaAutoSaving
     private let activeCallService: ActiveCallServiceProviding
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
@@ -582,8 +593,14 @@ class ConversationViewModel: ObservableObject {
         liveCallJoin: LiveCallJoinContext = .live,
         translationService: TranslationServiceProviding = TranslationService.shared,
         attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
-        messageEncryptor: DirectMessageEncrypting = SessionManager.shared
+        messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
+        afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
+        protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
+        receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared
     ) {
+        self.receivedMediaAutoSaver = receivedMediaAutoSaver
+        self.afterReadConsumer = afterReadConsumer
+        self.protectionPreferences = protectionPreferences
         self.activeCallService = activeCallService
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
@@ -659,6 +676,7 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        restoreArmedProtection()
     }
 
     // MARK: - MessageStore Observation (Task 1.3)
@@ -874,7 +892,7 @@ class ConversationViewModel: ObservableObject {
     /// widget (`AudioTrackLanguageResolver` : bascule manuelle du drapeau
     /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
     /// l'audio entendu corresponde au texte et aux segments affichés.
-    private func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
+    func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
         let tracks = translatedAudioTracks(for: attachment, messageId: message.id)
         let lang = AudioTrackLanguageResolver.resolve(
             manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
@@ -988,6 +1006,7 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        afterReadVisit.note(displayed: (messageIds ?? []) + visibleIds, among: messages)
         let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
         if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
         sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
@@ -1009,6 +1028,7 @@ class ConversationViewModel: ObservableObject {
     /// aucun `MessageStatusEntry.readAt` individuel n'est gelé pour un
     /// message que le lecteur n'a pas vu bulle par bulle.
     func markCaughtUpFromSummaryOrRiver() {
+        afterReadVisit.noteAll(among: messages)
         guard !hasNewerMessages, let newest = newestServerMessageId() else { return }
         lastCaughtUpMessageId = newest
         sendReadReceipt(messageIds: nil, caughtUpId: newest)
@@ -1109,6 +1129,7 @@ class ConversationViewModel: ObservableObject {
     /// equally permissive error path.
     func markAsReceived() {
         commandHandler.markAsReceived()
+        receivedMediaAutoSaver.consider(messages)
     }
 
     // MARK: - Préférences de langue (ardoise de cache)

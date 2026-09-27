@@ -1,5 +1,6 @@
-import { Fragment, Suspense, lazy, useCallback, useContext, useMemo, useState } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { maskedAttachment as servedMasked } from '@meeshy/shared/utils/attachment-protection';
 import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
 
@@ -8,6 +9,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { coqueCourante } from '@/lib/native-shell';
 import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
@@ -30,7 +32,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
-import { revealedAttachment, useAttachmentMasked } from './view-once-opened';
+import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
  * LES WIDGETS DE MÉDIA DU FIL (#5805, redécoupé #6221 « la grille de
@@ -416,6 +418,17 @@ function VoiceAttachment({
  * }`) — `isMine` ferme le rapport pour sa propre pièce, jamais l'ouverture
  * elle-même.
  */
+/**
+ * LA COQUE N'A QU'UNE FENÊTRE (#8402) — `target="_blank"` y est ignoré, et
+ * `Bridge.launchIntent` laisse passer `blob:` sans le confier au système : la
+ * WebView naviguerait SUR le fichier en cours d'envoi, à la place de l'app.
+ * La rangée redevient un lien dès que l'envoi rend l'URL de la passerelle.
+ */
+const inShell = (): boolean => {
+  const platform = coqueCourante()?.getPlatform?.();
+  return platform !== undefined && platform !== 'web';
+};
+
 function FileAttachmentRow({
   attachment,
   isMine,
@@ -427,12 +440,11 @@ function FileAttachmentRow({
 }) {
   const lang = currentInterfaceLanguage();
   const name = attachment.originalName;
+  const opensInPlace = inShell() && attachment.fileUrl.startsWith('blob:');
 
   return (
     <a
-      href={attachmentSrc(attachment.fileUrl)}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...(opensInPlace ? {} : { href: attachmentSrc(attachment.fileUrl), target: '_blank', rel: 'noopener noreferrer' })}
       aria-label={translate(lang, 'message-detail.attachment.open', { name })}
       data-attachment-file={attachment.id}
       className="flex items-center gap-2 py-1"
@@ -492,13 +504,25 @@ export function Attachments({
   const thread = useContext(ThreadMediaContext);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const maskedAttachment = useAttachmentMasked();
-  /* LA PIÈCE MASQUÉE QU'ON VIENT DE TOUCHER S'OUVRE EN CLAIR (#8008) — elle
-     seule : ses voisines masquées gardent leur substitut dans la visionneuse
-     (`ViewerMaskedPage`), faute d'avoir été touchées. */
+  /* LA VISIONNEUSE MONTRE EN CLAIR CE QUE LA RANGÉE MONTRE EN CLAIR — la pièce
+     qu'on vient de toucher (#8008) et celles qu'une révélation a levées
+     (#8389, le flou révélé sur place). Les autres pièces masquées gardent leur
+     substitut dans la visionneuse (`ViewerMaskedPage`), faute d'avoir été
+     touchées ; la visionneuse juge sur la pièce SERVIE. */
+  const liftedIds = new Set(visual.filter((attachment) => servedMasked(attachment) && !maskedAttachment(attachment)).map((a) => a.id));
   const viewerItems =
     openIndex === null
       ? visual
-      : visual.map((attachment, index) => (index === openIndex && maskedAttachment(attachment) ? revealedAttachment(attachment) : attachment));
+      : visual.map((attachment, index) =>
+          servedMasked(attachment) && (index === openIndex || liftedIds.has(attachment.id)) ? revealedAttachment(attachment) : attachment,
+        );
+  const veil = useContext(VeilRevealContext);
+  const viewing = openIndex !== null;
+  useEffect(() => {
+    if (veil === null || !viewing) return;
+    veil.onViewer(true);
+    return () => veil.onViewer(false);
+  }, [veil, viewing]);
 
   return (
     <>
@@ -547,6 +571,7 @@ export function Attachments({
           <ThreadMediaViewer
             opened={message}
             openedVisual={visual}
+            liftedIds={liftedIds}
             startIndex={openIndex}
             viewerId={thread.viewerId}
             onReplyToMedia={thread.onReplyToMedia}

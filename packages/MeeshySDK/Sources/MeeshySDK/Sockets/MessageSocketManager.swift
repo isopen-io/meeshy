@@ -1039,6 +1039,9 @@ public struct CallOfferData: Decodable, Sendable {
     /// Lets the iOS UI show all participants during the ringing phase
     /// rather than waiting for `call:participant-joined` events.
     public let participants: [CallParticipantInfo]?
+    /// `"direct"` | `"group"` (#3585) — absent d'une passerelle ancienne.
+    public let conversationType: String?
+    public let conversationTitle: String?
 
     public struct CallInitiatorInfo: Decodable, Sendable {
         public let userId: String
@@ -1113,21 +1116,6 @@ public struct CallMissedData: Decodable, Sendable {
 /// answers a call, so the rest can dismiss CallKit + ringing UI.
 public struct CallAlreadyAnsweredData: Decodable, Sendable {
     public let callId: String
-}
-
-public struct CallParticipantData: Decodable, Sendable {
-    public let callId: String
-    public let participantId: String?
-    public let userId: String?
-    public let mode: String?
-    public let iceServers: [SocketIceServer]?
-}
-
-public struct CallMediaToggleData: Decodable, Sendable {
-    public let callId: String
-    public let participantId: String?
-    public let mediaType: String
-    public let enabled: Bool
 }
 
 public struct CallErrorData: Decodable, Sendable {

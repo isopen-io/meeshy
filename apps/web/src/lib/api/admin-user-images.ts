@@ -106,7 +106,7 @@ export type AdminImageUploadOutcome =
   | { readonly status: 'offline' }
   | { readonly status: 'cancelled' }
   | { readonly status: 'unreadable' }
-  | { readonly status: 'refused'; readonly error: string; readonly code?: string };
+  | { readonly status: 'refused'; readonly error: string; readonly code?: string; readonly httpStatus?: number };
 
 export async function performAdminImageUpload(params: {
   readonly userId: string;
@@ -129,6 +129,8 @@ export async function performAdminImageUpload(params: {
     ...(params.reason === undefined ? {} : { reason: params.reason }),
     ...(signal === undefined ? {} : { signal }),
   });
-  if (!pose.ok) return { status: 'refused', error: pose.error, ...(pose.code === undefined ? {} : { code: pose.code }) };
+  if (!pose.ok) {
+    return { status: 'refused', error: pose.error, httpStatus: pose.status, ...(pose.code === undefined ? {} : { code: pose.code }) };
+  }
   return { status: 'saved', membre: pose.data };
 }

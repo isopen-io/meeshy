@@ -15,6 +15,8 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
+    /// #8089 — la célébration de l'arrivée, au-dessus de la racine connectée.
+    @StateObject private var arrivalCelebration = ArrivalCelebrationController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     /// Le splash et sa loi de vie (#6744) : il tombe dès que la session et la
     /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
@@ -63,6 +65,10 @@ struct MeeshyApp: App {
         // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
         // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
+
+        // #8365 — publier, inviter par e-mail ou créer un lien sans adresse
+        // prouvée ouvre la validation, puis la requête repart (`APIClient`).
+        EmailVerificationGate.current = EmailVerificationGateController.shared
 
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que
@@ -131,7 +137,7 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
+                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
@@ -140,6 +146,17 @@ struct MeeshyApp: App {
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)
+                    .accessibilityHidden(arrivalCelebration.isShowing)
+
+                    // #8089 — l'adresse prouvée vient d'ouvrir la session : la
+                    // fête passe AVANT l'onboarding, qui l'attend
+                    // (`OnboardingHost`), pendant que la racine, montée
+                    // dessous, et `ArrivalPrefetcher` remplissent les caches.
+                    if authManager.isAuthenticated && arrivalCelebration.isShowing {
+                        ArrivalCelebrationView(onSkip: { arrivalCelebration.dismiss() })
+                            .transition(.opacity)
+                            .zIndex(3)
+                    }
 
                     // #4363 / #6744 — il s'efface d'abord (`fullScreenGate`
                     // coupe touches et VoiceOver), puis quitte l'arbre SANS
@@ -160,6 +177,7 @@ struct MeeshyApp: App {
                     }
                     #endif
                 }
+                .meeshyAnimation(.easeInOut(duration: 0.35), value: arrivalCelebration.isShowing)
                 // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
                 // avant la fin de `checkExistingSession`, qui échouerait un
                 // utilisateur connecté dans un flux invité. `isDeliberate`

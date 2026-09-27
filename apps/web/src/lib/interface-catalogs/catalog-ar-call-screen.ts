@@ -9,6 +9,18 @@ const arCallScreen = {
   'call.screen.stop': 'إيقاف مشاركة الشاشة',
   'call.screen.sharing': 'أنت تشارك شاشتك',
   'call.screen.peerSharing': '{name} يشارك شاشته',
+  'call.more': 'مزيد من الإجراءات',
+  'call.section.mine': 'صورتي',
+  'call.section.call': 'المكالمة',
+  'call.flip': 'قلب',
+  'call.screen.short': 'الشاشة',
+  'call.record.short': 'تسجيل',
+  'call.messages': 'الرسائل',
+  'call.messages.open': 'فتح الرسائل',
+  'call.flip.label': 'قلب الكاميرا',
+  'call.fullscreen.enter': 'ملء الشاشة',
+  'call.fullscreen.exit': 'الخروج من ملء الشاشة',
+  'call.screen.of': 'شاشة {name}',
 } as const;
 
 export default arCallScreen;

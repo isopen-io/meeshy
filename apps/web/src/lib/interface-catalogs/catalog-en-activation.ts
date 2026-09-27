@@ -30,6 +30,10 @@ const enActivation = {
   'activation.complete': 'Your account is verified. Thank you!',
   'activation.later': 'Later',
   'activation.close': 'Close',
+  'activation.gate.title': 'Verify your email address',
+  'activation.gate.publish': 'To publish, verify your address. Your post is kept and will go out as soon as the code is confirmed.',
+  'activation.gate.invite': 'To invite by email, verify your address. Your invitation will go out as soon as the code is confirmed.',
+  'activation.gate.link': 'To create a link, verify your address. Your link will be created as soon as the code is confirmed.',
 } as const;
 
 export default enActivation;

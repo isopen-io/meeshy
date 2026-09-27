@@ -81,3 +81,43 @@
 .glass-accent {
   --glass-tone: var(--accent);
 }
+
+/* LE VERRE D'APPEL (#8391) — la matière de tout ce qui FLOTTE sur l'écran
+   d'appel : pilule de commandes, rails, puce « Nom · durée », boutons isolés,
+   étiquettes de nom, bandeau des sous-titres.
+
+   L'écran d'appel est TOUJOURS sombre (`call-screen.tsx`, comme iOS) : son
+   verre ne suit pas le schéma. Son ton est `--ios-indigo-950`, un jeton de la
+   palette, le même dans les deux schémas, et son encre est le blanc. Le pire
+   cas n'est donc pas le canevas du schéma (D-51) mais le BLANC pur : sous une
+   commande qui flotte passe n'importe quelle vidéo, un mur clair, un écran
+   partagé. Les deux densités tiennent AA contre ce pire cas, mesurées par
+   `scripts/lib/glass-contrast.mjs` (entrées « appel » de l'inventaire) :
+
+   - `glass-call` — 72 %, la densité régulière ;
+   - `glass-call-prominent` — 86 %, la TEINTE PLUS SOMBRE : ce qu'on LIT (le
+     bandeau des sous-titres, noms de couleur compris) et les commandes posées
+     au-dessus d'un écran partagé à la une, clair par nature.
+
+   Un seul verre par groupe : les boutons À L'INTÉRIEUR d'une pilule ou d'un
+   rail sont transparents, jamais de verre sur du verre. Le liseré clair, le
+   reflet interne du haut et l'ombre douce sont la forme du verre iOS ; le
+   `saturate` rend sa couleur à la vidéo floutée. */
+.glass-call,
+.glass-call-prominent {
+  background-color: color-mix(in srgb, var(--ios-indigo-950) var(--glass-density), transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 8px 24px rgb(0 0 0 / 0.28);
+  color: white;
+}
+
+.glass-call {
+  --glass-density: 72%;
+}
+
+.glass-call-prominent {
+  --glass-density: 86%;
+}

@@ -6,6 +6,7 @@ import arMediaViewer from './catalog-ar-media-viewer';
 import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
+import arAccounts from './catalog-ar-accounts';
 import arCall from './catalog-ar-call';
 import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
@@ -13,7 +14,6 @@ import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
 import arCallFeedback from './catalog-ar-call-feedback';
 import arCallsErase from './catalog-ar-calls-erase';
-import arAddressBook from './catalog-ar-address-book';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arCallQuality from './catalog-ar-call-quality';
@@ -21,10 +21,14 @@ import arCallCaptions from './catalog-ar-call-captions';
 import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
+import arGallery from './catalog-ar-gallery';
 import arMentions from './catalog-ar-mentions';
+import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
+import arQuote from './catalog-ar-quote';
+import arContactDiscovery from './catalog-ar-contact-discovery';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -213,6 +217,7 @@ const ar = {
   ...arVerifyEmail,
   ...arActivation,
   ...arPassword,
+  ...arAccounts,
   ...arCall,
   ...arRowActions,
   ...arCallShell,
@@ -220,7 +225,6 @@ const ar = {
   ...arCallDecline,
   ...arCallFeedback,
   ...arCallsErase,
-  ...arAddressBook,
   ...arCallDevices,
   ...arCallScreen,
   ...arCallQuality,
@@ -456,9 +460,6 @@ const ar = {
   'settings.privacy.read_receipts': 'إيصالات القراءة',
   'settings.privacy.read_receipts.info': 'الأمر متبادل: إن لم تُرسل إشعارات القراءة، فلن ترى أيضًا ما إذا قُرئت رسائلك.',
   'settings.privacy.typing_indicator': 'مؤشر الكتابة',
-  'settings.privacy.hide_from_search': 'لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني',
-  'settings.privacy.hide_from_search.info':
-    'لن يجدك جهات اتصالك عبر رقمك أو بريدك الإلكتروني، ولن يتم إعلامهم بانضمامك.',
   'settings.section.appearance': 'المظهر',
   'settings.theme': 'السمة',
   'settings.theme.auto': 'تلقائي',
@@ -1114,7 +1115,7 @@ const ar = {
   'message.withheld': 'محتوى محجوب',
   'message.withheld.a11y': 'محتوى محجوب: هذه الرسالة موجودة ولا تُعرض',
   'message.veiled': 'محتوى مخفي',
-  'message.veiled.hint': 'اضغط لإظهار المحتوى',
+  'message.veiled.hint': 'المس للعرض',
   'message.veiled.error': 'يتعذّر الإظهار في الوقت الحالي',
   'message.ephemeral.a11y': 'رسالة مؤقتة، تختفي خلال {remaining}',
   'message.ephemeral.awaiting': 'في انتظار الاستلام',
@@ -1154,9 +1155,13 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arEphemeral,
+  ...arGallery,
   ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,
+  ...arQuote,
+  ...arContactDiscovery,
 } satisfies InterfaceCatalog;
 
 export default ar;

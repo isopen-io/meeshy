@@ -260,7 +260,9 @@ function StoryStudio({
   /** Le GESTE que la partie principale publie — le format de l'entrée, puis
    * le dernier que le chevron a choisi AVEC sa disposition (`PublishChoice`,
    * #7684) : une intention armée hors ligne, ou un échec, repart comme
-   * l'auteur l'a DIT. Aucune disposition tant qu'il n'en a choisi aucune. */
+   * l'auteur l'a DIT. Aucune disposition tant qu'il n'en a choisi aucune.
+   * Le chevron CHOISIT, il ne publie jamais : seul Publier envoie
+   * (maquette plein écran, porteur 2026-09-27). */
   const [choice, setChoice] = useState<PublishChoice>({ kind: initialKind, layout: null });
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
@@ -745,18 +747,26 @@ function StoryStudio({
       }
     >
       {!online ? (
-        <p role="status" className="shrink-0 px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        <p role="status" className="glass absolute inset-x-0 z-20 px-4 py-1 text-caption" style={{ top: 'calc(var(--safe-top, 0px) + 56px)', color: 'var(--color-ios-ink)' }}>
           {translate(lang, 'story.studio.offline')}
         </p>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 gap-2 px-2">
+      {/* PLEIN ÉCRAN (maquette 2026-09-27, #8370) : la scène occupe l'écran,
+          les rails, la barre haute et le socle FLOTTENT dessus en verre —
+          plus aucun couloir ne lui prend de place. La scène reste 9:16 (le
+          lecteur la cadre ainsi) et se centre dans l'écran entier. */}
+      <div className="absolute inset-0">
         {/* COULOIR GAUCHE — ce qu'on POSE sur la scène, puis ce qui y est déjà
             posé (`meeshy-composer-modele.md` § 6, `apps/ios/CLAUDE.md` § 1).
             VERROUILLÉ pendant l'envoi (#7707, revue-correction) : le plan
             publié est figé au premier clic sur Publier — poser un objet après
             coup ne rejoindrait jamais la séquence en cours. */}
-        <div className="flex w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto pt-2 pb-2">
+        <div
+          data-story-studio-rail="leading"
+          className="glass absolute start-2 top-1/2 z-10 flex w-14 -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto rounded-3xl py-2"
+          style={{ maxHeight: '60%' }}
+        >
           <StudioDoorButton
             door="visual"
             label={translate(lang, 'story.studio.background.add')}
@@ -816,7 +826,7 @@ function StoryStudio({
           </div>
         </div>
 
-        <div className="grid min-w-0 flex-1 place-items-center" style={{ containerType: 'size' }}>
+        <div className="absolute inset-0 grid place-items-center" style={{ containerType: 'size' }}>
           {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707,
               revue-correction) — le plan publié lit le brouillon tel qu'il
               était au premier clic sur Publier : déplacer une poignée ou
@@ -834,7 +844,6 @@ function StoryStudio({
             style={{
               width: 'min(100cqw, 100cqh * 9 / 16)',
               height: 'min(100cqh, 100cqw * 16 / 9)',
-              borderRadius: 22,
               containerType: 'inline-size',
               backgroundColor: backgroundCss(STORY_PLAIN_BACKGROUND, 'var(--color-ios-card)'),
             }}
@@ -904,7 +913,10 @@ function StoryStudio({
             trait (#7684, `ComposerTrailingRail.swift:40-45,75-88` : « les
             contrôleurs modifient UN objet ; celle-ci ajoute une PAGE »).
             Absent au plafond (`STUDIO_PAGE_MAX`), jamais grisé (loi 4). */}
-        <div className="flex w-14 shrink-0 flex-col items-center gap-2 pt-2">
+        <div
+          data-story-studio-rail="trailing"
+          className="glass absolute end-2 top-1/2 z-10 flex w-14 -translate-y-1/2 flex-col items-center gap-2 rounded-3xl py-2"
+        >
           {draft.pages.length < STUDIO_PAGE_MAX ? (
             <>
               <StudioChip
@@ -947,10 +959,11 @@ function StoryStudio({
           hauteur pour que la scène garde sa place. VERROUILLÉE pendant l'envoi
           (#7707) : un panneau déjà ouvert avant Publier ne doit pas rester une
           voie d'édition sur un plan déjà figé. */}
+      <div data-story-studio-bottom className="glass absolute inset-x-0 bottom-0 z-20">
       {editorOpen ? (
         <div
           data-story-editor-panel
-          className="shrink-0 overflow-y-auto border-t px-4 py-2"
+          className="overflow-y-auto border-t px-4 py-2"
           style={{ maxHeight: 200, borderColor: 'var(--color-edge)' }}
           inert={publishing}
         >
@@ -971,7 +984,7 @@ function StoryStudio({
         </div>
       ) : null}
 
-      <footer className="flex shrink-0 flex-col gap-1 px-4 pt-2 pb-safe">
+      <footer className="flex flex-col gap-1 px-4 pt-2 pb-safe">
         <StudioPageAssets
           lang={lang}
           page={page}
@@ -1008,10 +1021,11 @@ function StoryStudio({
             audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
             layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
             onPrimary={() => void publish()}
-            onChoose={(chosen) => void publish(chosen)}
+            onChoose={setChoice}
           />
         </div>
       </footer>
+      </div>
 
       {audienceOpen ? (
         <Suspense fallback={null}>

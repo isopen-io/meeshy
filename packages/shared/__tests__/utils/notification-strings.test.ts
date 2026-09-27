@@ -443,3 +443,19 @@ describe('contact_joined — « X a rejoint Meeshy » (#8105)', () => {
     }
   });
 });
+
+describe('contact_recently_active — « X était sur Meeshy récemment » (#8285)', () => {
+  it('le titre naît du nom de l’acteur, dans la langue du destinataire', () => {
+    expect(buildNotificationDisplay('fr', { type: 'contact_recently_active', actorName: 'Maman' }).title).toBe('Maman était sur Meeshy récemment');
+    expect(buildNotificationDisplay('en', { type: 'contact_recently_active', actorName: 'Mum' }).title).toBe('Mum was on Meeshy recently');
+  });
+
+  it('les huit langues portent le titre et une invitation à écrire, jamais la clé', () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      for (const key of ['contact.recentlyActiveAction', 'contact.recentlyActiveBody'] as const) {
+        expect(notificationString(lang, key).length).toBeGreaterThan(0);
+        expect(notificationString(lang, key)).not.toContain('contact.');
+      }
+    }
+  });
+});

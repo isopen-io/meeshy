@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
+import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -131,10 +132,23 @@ const chargerInvitation = () =>
   }));
 const ActivationInviteHost = lazy(chargerInvitation);
 
+/**
+ * ...ET LA GARDE DE L'E-MAIL (#8365), sixième exception : publier, inviter par
+ * e-mail ou créer un lien sans adresse prouvée ouvre la validation, quelle que
+ * soit la route — donc ici. `useEmailGatePresenter` seul est statique ; la
+ * demande en cours va chercher l'hôte, qui relit l'adresse et envoie le code.
+ */
+const chargerGardeEmail = () =>
+  Promise.all([import('./email-gate-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.EmailGateHost,
+  }));
+const EmailGateHost = lazy(chargerGardeEmail);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
+  const gardeEmail = useEmailGatePresenter();
   const routeKey = useRoute().key;
   const menusArmes = showsFloatingMenus(routeKey);
 
@@ -186,6 +200,11 @@ export default function Shell({ children }: { children: ReactNode }) {
       {invitationArmee ? (
         <Suspense fallback={null}>
           <ActivationInviteHost />
+        </Suspense>
+      ) : null}
+      {gardeEmail !== null ? (
+        <Suspense fallback={null}>
+          <EmailGateHost reason={gardeEmail} />
         </Suspense>
       ) : null}
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui

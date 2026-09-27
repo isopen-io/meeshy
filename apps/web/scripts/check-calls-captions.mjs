@@ -11,7 +11,8 @@
  * (`fixtures-call-peer.ts`, une vraie `RTCPeerConnection` dans la page) :
  *
  *  1. un appel se connecte ; le pair ouvre ses sous-titres
- *     (`call:transcription-active`) : le bouton CC l'annonce (« votre
+ *     (`call:transcription-active`) : le bouton CC — rangé derrière le (…) de
+ *     la pilule (#8391) — l'annonce (« votre
  *     interlocuteur les lit déjà »), fait 44 × 44, et la voix du lecteur est
  *     transcrite AVANT qu'il ouvre ses propres sous-titres (la parité iOS :
  *     on transcrit dès qu'un pair lit) ;
@@ -138,6 +139,20 @@ const tapSize = async (locator) => {
   return { ok: box !== null && box.width >= TAP_FLOOR && box.height >= TAP_FLOOR, size: box && [Math.round(box.width), Math.round(box.height)] };
 };
 
+/**
+ * Les actions vivent derrière le (…) de la pilule (#8391), et en vidéo les
+ * commandes s'effacent après 4 s sans geste — jamais les sous-titres : un
+ * toucher sur la scène les rappelle, puis le (…) déplie les actions.
+ */
+const openActions = async (page) => {
+  const { width, height } = page.viewportSize();
+  await page.mouse.move(width / 2, height / 3);
+  await page.mouse.move(width / 2 + 8, height / 3 + 8);
+  await appears(page, '[data-call-chrome="shown"]');
+  const more = page.locator('[data-call-more]');
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+};
+
 const startConnectedCall = async (page) => {
   await page.goto(`${BASE}/`, { waitUntil: 'load' });
   await page.waitForSelector('[data-row] a');
@@ -181,6 +196,7 @@ try {
     try {
       // ------------------------------------------------ 1. le pair ouvre ses sous-titres
       check(await startConnectedCall(page), `${label} : l'appel se connecte au pair`);
+      await openActions(page);
       check(await appears(page, CC), `${label} : le bouton des sous-titres est sur l'écran d'appel connecté`);
       const cc = page.locator(CC);
       const ccSize = await tapSize(cc);
@@ -200,17 +216,21 @@ try {
 
       // ------------------------------------------------ 2. le pair parle, trois modes
       await peer(page, 'speak', { id: 'n-1', text: PEER_SAID, translatedText: PEER_TRANSLATED });
+      await openActions(page);
       await cc.click();
       check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : un toucher ouvre les sous-titres TRADUITS`);
       check(await until(async () => (await lineTexts(page)).some((line) => line.includes(PEER_TRANSLATED))), `${label} : la parole du pair s'affiche TRADUITE (${JSON.stringify(await lineTexts(page))})`);
       check((await page.$('[data-call-caption-lines][aria-live="polite"]')) !== null, `${label} : les sous-titres sont une région aria-live POLIE`);
       check((await page.$eval('[data-call-caption="peer"] [dir="auto"]', (el) => el.getAttribute('dir')).catch(() => null)) === 'auto', `${label} : le texte d'une ligne porte dir="auto" (RTL)`);
       await capture(page, `traduits-${width}x${height}`);
+      await openActions(page);
       await cc.click();
       check(await appears(page, '[data-call-captions-panel="original"]'), `${label} : un second toucher passe en langue d'ORIGINE`);
       check(await until(async () => (await lineTexts(page)).some((line) => line.includes(PEER_SAID))), `${label} : le mode original rend ce qui a été dit (${JSON.stringify(await lineTexts(page))})`);
+      await openActions(page);
       await cc.click();
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : un troisième toucher les masque`);
+      await openActions(page);
       await cc.click();
       check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : un quatrième les rouvre, traduits`);
       const actives = (await peerTranscripts(page, 'call:transcription-active')).filter((payload) => payload?.callId === callId).map((payload) => payload.active);
@@ -248,6 +268,7 @@ try {
 
       if (withSpeech) {
         // ------------------------------------------------ 5. le raccroché
+        await openActions(page);
         await page.getByRole('button', { name: 'Raccrocher' }).click();
         check(await appears(page, '[data-call-screen="ended"]'), `${label} : raccrocher termine l'appel`);
         check(await until(async () => (await peerChannel(page)).some((message) => message?.type === 'bye')), `${label} : « bye » part sur le canal de transcription`);

@@ -156,7 +156,10 @@ struct CallPresentationLayer: ViewModifier {
                 set: { if !$0 { callManager?.displayMode = .pip } }
             )) {
                 if let callManager {
-                    CallView(callManager: callManager)
+                    // #8276 — la grille d'un appel de groupe vit DANS
+                    // `CallView`, entre son en-tête et sa pilule : elle suit la
+                    // disposition réelle, jamais des marges fixes.
+                    CallView(callManager: callManager, mesh: .shared)
                 }
             }
             // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre

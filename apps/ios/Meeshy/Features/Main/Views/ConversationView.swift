@@ -325,7 +325,7 @@ struct ConversationView: View {
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
-            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue,
+            ephemeralDurationRawValue: viewModel.ephemeralChoice?.storageValue,
             attachments: (refs?.isEmpty ?? true) ? nil : refs
         )
         DraftStore.shared.save(draft, for: viewModel.conversationId)
@@ -931,7 +931,7 @@ struct ConversationView: View {
                     onSaveMedia: {
                         guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                         HapticFeedback.light()
-                        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                        mediaSaveCoordinator.save(MediaSaveRequest(
                             kind: attachment.kind,
                             origin: .transmitted,
                             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
@@ -1143,8 +1143,8 @@ struct ConversationView: View {
                         viewModel.isBlurEnabled = true
                     }
                     if let raw = draft.ephemeralDurationRawValue,
-                       let duration = EphemeralDuration(rawValue: raw) {
-                        viewModel.ephemeralDuration = duration
+                       let choice = EphemeralChoice(storageValue: raw) {
+                        viewModel.ephemeralChoice = choice
                     }
                     // Pièces jointes du brouillon (copiées en durable au
                     // background) : restaure les survivantes dans le tray —
@@ -1177,7 +1177,7 @@ struct ConversationView: View {
             .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.ephemeralChoice?.storageValue) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
@@ -1603,21 +1603,7 @@ struct ConversationView: View {
                 onFocalShareFile: { url in
                     focalShareFileItem = FocalShareFileItem(url: url)
                 },
-                onMediaTap: { attachment in
-                    // #8009 — le relâcher d'un appui long n'ouvre rien : son menu est déjà là.
-                    guard !overlayState.showOverlayMenu else { return }
-                    // Préchauffe ce que le plein écran AFFICHE (variante élue, poster net).
-                    GalleryPrewarm.warm(attachment)
-                    // #7499 — une vue unique s'OUVRE au toucher et se consomme
-                    // à la FERMETURE. On arme ici, la galerie consomme en se
-                    // refermant (`ConversationView+MediaGallery`). C'est le
-                    // seul endroit qui voie les deux : la bulle sait qu'on
-                    // ouvre, elle ne sait pas quand on sort.
-                    if attachment.isViewOnce {
-                        scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
-                    }
-                    scrollState.galleryStartAttachment = attachment
-                },
+                onMediaTap: openMediaFullscreen,
                 onConsumeViewOnce: { messageId, completion in
                     // #7618 — la puce d'une vue unique OUVRE : plein écran pour
                     // un média, lecture sur place pour un texte. On arme, on ne
@@ -1763,6 +1749,7 @@ struct ConversationView: View {
                     onConsumeViewOnce: { messageId, completion in
                         completion(openViewOnce(messageId: messageId))
                     },
+                    onMediaTap: openMediaFullscreen,
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le
@@ -2542,7 +2529,7 @@ struct ConversationView: View {
                     // que pour un message à exactement UN attachment.
                     guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                     HapticFeedback.light()
-                    mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                    mediaSaveCoordinator.save(MediaSaveRequest(
                         kind: attachment.kind,
                         origin: .transmitted,
                         remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
@@ -2715,7 +2702,7 @@ struct ConversationView: View {
             Button {
                 guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                 HapticFeedback.light()
-                mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                mediaSaveCoordinator.save(MediaSaveRequest(
                     kind: attachment.kind,
                     origin: .transmitted,
                     remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,

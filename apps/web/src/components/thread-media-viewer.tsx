@@ -30,9 +30,12 @@ import { revealedAttachment } from './view-once-opened';
  * Les quatre actions (Enregistrer, Réagir, Répondre, Créer avec ce média) sont
  * décidées page par page par `mediaPageOffers`, sur la pièce ORIGINALE.
  */
+const NO_LIFTED_IDS: ReadonlySet<string> = new Set();
+
 export default function ThreadMediaViewer({
   opened,
   openedVisual,
+  liftedIds = NO_LIFTED_IDS,
   startIndex,
   viewerId,
   languages,
@@ -45,6 +48,12 @@ export default function ThreadMediaViewer({
 }: {
   readonly opened: Message;
   readonly openedVisual: readonly Attachment[];
+  /**
+   * LES PIÈCES DE LA BULLE QU'UNE RÉVÉLATION A LEVÉES (#8389) — un flou révélé
+   * sur place montre toutes ses pièces en clair ; la visionneuse les montre
+   * de même. Les actions restent décidées sur la pièce ORIGINALE.
+   */
+  readonly liftedIds?: ReadonlySet<string>;
   readonly startIndex: number;
   readonly viewerId: string;
   readonly languages: readonly string[];
@@ -66,9 +75,12 @@ export default function ThreadMediaViewer({
   const items = useMemo(
     () =>
       entries.map((entry) =>
-        entry.attachment.id === openedId && maskedAttachment(entry.attachment) ? revealedAttachment(entry.attachment) : entry.attachment,
+        (entry.attachment.id === openedId || (entry.message.id === opened.id && liftedIds.has(entry.attachment.id))) &&
+        maskedAttachment(entry.attachment)
+          ? revealedAttachment(entry.attachment)
+          : entry.attachment,
       ),
-    [entries, openedId],
+    [entries, openedId, opened.id, liftedIds],
   );
   const capabilities = useMemo<MediaViewerCapabilities>(
     () => ({ save: hasFileDeliveryDoor(browserFileDeliveryHost()), react: true, reply: true, compose: true }),

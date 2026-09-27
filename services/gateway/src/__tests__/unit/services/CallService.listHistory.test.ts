@@ -396,7 +396,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, cursor: 'call-cursor-id', filter: 'all', viewer: null });
-      const callToFindMany = callSessionFindMany.mock.calls[0][0];
+      const callToFindMany = callSessionFindMany.mock.calls.at(-1)[0];
       expect(callToFindMany.cursor).toEqual({ id: 'call-cursor-id' });
       expect(callToFindMany.skip).toBe(1);
     });
@@ -408,7 +408,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       // The base terminal-status window (ended/missed/rejected/failed) must
       // survive — the missed filter narrows further via `where.OR` below, it
       // must never collapse the query down to `status: missed` alone (that
@@ -423,7 +423,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       expect(where.OR).toContainEqual({ status: CallStatus.missed });
     });
 
@@ -439,7 +439,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       expect(where.OR).toContainEqual({
         answeredAt: { not: null },
         participants: { none: { participant: { userId: USER_ID } } },
@@ -451,7 +451,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       expect(where.initiatorId).toBeUndefined();
       expect(where.OR).toBeUndefined();
     });
