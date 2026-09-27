@@ -259,6 +259,7 @@ struct FocalGridCell: View {
         }
         .overlay(alignment: .topTrailing) { viewOnceBadge }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
+        .protectedGridCellBounds(attachment.id)
     }
 
     /// **Ce que la pièce a récolté** (#6793) — même coin et même dessin que la

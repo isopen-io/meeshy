@@ -511,7 +511,6 @@ struct BubbleStandardLayout: View {
                 ZStack {
                     contentStack(shouldBlur: shouldBlur)
 
-                    // Fog condensation effect (appears when blur returns)
                     if blurController.fogOpacity > 0 {
                         fogOverlay
                     }
@@ -526,6 +525,7 @@ struct BubbleStandardLayout: View {
                         )
                     }
                 }
+                .modifier(ProtectedGridCellTapLayer(cells: shouldBlur ? content.veiledGridCells : [], open: openProtectedMedia))
                 // Les effets du message se posent sur LA BULLE, jamais sur la
                 // rangée. Ils ont vécu montés sur `BubbleStandardLayout(...)`
                 // depuis `ThemedMessageBubble` — c'est-à-dire sur le `HStack`

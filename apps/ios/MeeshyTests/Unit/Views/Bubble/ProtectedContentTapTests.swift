@@ -141,6 +141,12 @@ final class ProtectedContentTapTests: XCTestCase {
         let cell = try body(of: "fileprivate struct BubbleGridCell: View",
                             in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
         XCTAssertTrue(cell.contains(".protectedGridCellBounds(attachment.id)"), "la case doit publier son cadre")
+        let focal = try String(contentsOf: Self.iosRoot.appendingPathComponent(
+            "Meeshy/Features/Main/Focal/Row/FocalRow.swift"), encoding: .utf8)
+        XCTAssertTrue(focal.contains("cells: content.veiledGridCells"), "Focal suit la même règle que Bulles")
+        let focalCell = try body(of: "struct FocalGridCell: View",
+                                 in: "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        XCTAssertTrue(focalCell.contains(".protectedGridCellBounds(attachment.id)"))
     }
 
     func test_resolve_blurredAttachmentCell_inUnblurredMessage_opensFullscreen() {
