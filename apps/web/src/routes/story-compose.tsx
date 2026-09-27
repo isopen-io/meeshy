@@ -635,7 +635,7 @@ function StoryStudio({
    *
    * L'aperçu élit sa piste avec `electBackgroundTrack`, exactement comme le
    * lecteur de story et celui des Réels, et posait sa `src` TELLE QUELLE. Une
-   * piste EMPRUNTÉE est servie par `GET /api/v1/static/…`, une route
+   * piste EMPRUNTÉE est servie par `GET static.byFilename`, une route
    * AUTHENTIFIÉE : la balise part sans en-tête et rend `401`. La
    * bibliothèque n'est pas encore branchée à cet écran (`background-sound.ts`
    * : « `library` reste HORS PÉRIMÈTRE »), donc rien ne l'atteint AUJOURD'HUI

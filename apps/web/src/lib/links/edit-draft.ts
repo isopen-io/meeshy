@@ -4,7 +4,7 @@ import { EXPIRATION_AT, MAX_USES_CEILING, type MyShareLink, type ShareLinkExpira
 
 /**
  * **L'ÉDITION D'UN LIEN D'INVITATION** (#7797) — le brouillon de la page du
- * créateur, et le corps de `PATCH /api/v1/links/:linkId` qu'il produit.
+ * créateur, et le corps de `PATCH links.byLinkId` qu'il produit.
  *
  * **Le brouillon part de ce que le lien EST** (`editDraftOf`), et **seul ce
  * qui a CHANGÉ part** (`validateEditDraft`) : renvoyer tout le lien écraserait

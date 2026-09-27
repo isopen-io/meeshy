@@ -1,4 +1,5 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
+import * as notificationsEndpoints from '@meeshy/shared/api/endpoints/notifications';
 
 import { categoryQuery, type NotificationCategory } from '@/lib/notifications/categories';
 import { decodeNotifications, type NotificationRecord } from '@/lib/notifications/record';
@@ -97,7 +98,7 @@ export async function loadNotificationsPage(
   });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/notifications?${query.toString()}`,
+    path: `${notificationsEndpoints.root}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -122,7 +123,7 @@ export async function loadNotificationCounts(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/notifications/counts',
+    path: notificationsEndpoints.counts,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -135,7 +136,7 @@ export async function postNotificationRead(deps: NotificationsDeps, id: string):
     const { fixtureMarkNotificationRead } = await import('./fixtures-notifications');
     return fixtureMarkNotificationRead(id);
   }
-  return deps.transport.request({ method: 'POST', path: `/api/v1/notifications/${encodeURIComponent(id)}/read` });
+  return deps.transport.request({ method: 'POST', path: notificationsEndpoints.byIdRead(id) });
 }
 
 export async function postAllNotificationsRead(deps: NotificationsDeps): Promise<ApiResult<unknown>> {
@@ -143,7 +144,7 @@ export async function postAllNotificationsRead(deps: NotificationsDeps): Promise
     const { fixtureMarkAllNotificationsRead } = await import('./fixtures-notifications');
     return fixtureMarkAllNotificationsRead();
   }
-  return deps.transport.request({ method: 'POST', path: '/api/v1/notifications/read-all' });
+  return deps.transport.request({ method: 'POST', path: notificationsEndpoints.readAll });
 }
 
 export async function removeNotification(deps: NotificationsDeps, id: string): Promise<ApiResult<unknown>> {
@@ -151,7 +152,7 @@ export async function removeNotification(deps: NotificationsDeps, id: string): P
     const { fixtureDeleteNotification } = await import('./fixtures-notifications');
     return fixtureDeleteNotification(id);
   }
-  return deps.transport.request({ method: 'DELETE', path: `/api/v1/notifications/${encodeURIComponent(id)}` });
+  return deps.transport.request({ method: 'DELETE', path: notificationsEndpoints.byId(id) });
 }
 
 /** Aplatit les pages, dédoublonnées par id — la première occurrence gagne (une

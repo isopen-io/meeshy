@@ -1,9 +1,11 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * **QUI A VU MA STORY** (#7116) — `GET /api/v1/posts/:postId/interactions`
+ * **QUI A VU MA STORY** (#7116) — `GET posts.byPostIdInteractions`
  * (`services/gateway/src/routes/posts/interactions.ts:669-701`,
  * `preValidation: [requiredAuth]`, auteur SEUL — `getPostInteractions`,
  * `PostService.ts:2181-2226`, jette `FORBIDDEN` pour tout autre lecteur).
@@ -55,7 +57,7 @@ export async function fetchStoryViewers(
   }
   const result = await params.transport.request<{ readonly viewers: readonly PostViewerRow[] }>({
     method: 'GET',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/interactions`,
+    path: postsEndpoints.byPostIdInteractions(params.postId),
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;

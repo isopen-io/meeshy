@@ -1,3 +1,6 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS } from './feed-pages';
@@ -8,7 +11,7 @@ import type { ApiResult, HttpTransport } from './http';
  * (`conversations.ts:33-41`) : `source` résolue ICI, jamais dans le hook ni
  * dans l'écran, et les fixtures passent par le MÊME chemin.
  *
- * `GET /api/v1/social/posts?scope=stories&projection=tray` (#6249 — successeur
+ * `GET social.posts?scope=stories&projection=tray` (#6249 — successeur
  * de l'alias déprécié `GET /posts/feed/stories?projection=tray`,
  * `services/gateway/src/routes/posts/feed.ts:801-813`, authentification
  * REQUISE — 401 `UNAUTHORIZED` sans session). La lecture — `chargerStories`,
@@ -123,7 +126,7 @@ export async function loadStoryTray(
   }
   return params.transport.request<readonly StoryTrayPost[]>({
     method: 'GET',
-    path: '/api/v1/social/posts?scope=stories&projection=tray&limit=50',
+    path: `${socialEndpoints.posts}?scope=stories&projection=tray&limit=50`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
@@ -176,7 +179,7 @@ export async function loadStatusMoods(
   }
   return params.transport.request<readonly StatusMoodPost[]>({
     method: 'GET',
-    path: '/api/v1/social/posts?scope=statuses&limit=50',
+    path: `${socialEndpoints.posts}?scope=statuses&limit=50`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -191,7 +194,7 @@ export function statusMoodsQueryOptions(deps: StoriesDeps) {
 
 /**
  * **LE CORPUS COMPLET DU LECTEUR** (#5817) — LE MÊME ENDPOINT que
- * `loadStoryTray` (#6249, `GET /api/v1/social/posts?scope=stories`), SANS
+ * `loadStoryTray` (#6249, `GET social.posts?scope=stories`), SANS
  * `?projection=tray` : `chargerStories`
  * (`services/gateway/src/routes/posts/feed.ts:801-813`) sert alors
  * `storyPostInclude` (`postIncludes.ts:382-385`) — contenu, langue
@@ -255,7 +258,7 @@ export async function loadStoryFeed(
   }
   return params.transport.request<readonly StoryFeedPost[]>({
     method: 'GET',
-    path: '/api/v1/social/posts?scope=stories&limit=50',
+    path: `${socialEndpoints.posts}?scope=stories&limit=50`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
@@ -308,7 +311,7 @@ export async function loadStoryPost(
   }
   return params.transport.request<StoryFeedPost>({
     method: 'GET',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}`,
+    path: postsEndpoints.byPostId(params.postId),
     timeoutMs: STORY_POST_FALLBACK_TIMEOUT_MS,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
@@ -331,7 +334,7 @@ export function storyPostQueryOptions(deps: StoriesDeps & { readonly postId: str
 }
 
 /**
- * **MARQUER UNE STORY VUE** (#5817, migré #6249) — `POST /api/v1/social/events`
+ * **MARQUER UNE STORY VUE** (#5817, migré #6249) — `POST social.events`
  * (`services/gateway/src/routes/social/events.ts:670-696`, successeur de
  * l'alias déprécié `POST /posts/:postId/view`), corps
  * `{ events: [{ type: 'view', postId, durationMs? }] }` (`SocialEventSchema`,
@@ -351,7 +354,7 @@ export async function markStoryViewed(
   }
   const result = await params.transport.request<{ readonly recorded: number; readonly rejected: number }>({
     method: 'POST',
-    path: '/api/v1/social/events',
+    path: socialEndpoints.events,
     body: { events: [{ type: 'view', postId: params.postId, ...(params.durationMs === undefined ? {} : { durationMs: params.durationMs }) }] },
   });
   if (!result.ok) return result;

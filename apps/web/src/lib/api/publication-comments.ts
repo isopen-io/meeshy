@@ -8,6 +8,7 @@ import type {
   CommentUpdatedEventData,
   PostComment as SharedPostComment,
 } from '@meeshy/shared/types/post';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
@@ -29,7 +30,7 @@ import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translati
  *
  * Routes RÉELLES, lues avant d'être appelées :
  *
- *  - `GET /api/v1/posts/:postId/comments?limit=&cursor=`
+ *  - `GET posts.byPostIdComments?limit=&cursor=`
  *    (`services/gateway/src/routes/posts/comments.ts:66`, `requiredAuth`).
  *    Sert les commentaires de PREMIER NIVEAU seuls (`parentId: null`,
  *    `PostCommentService.ts:402-447`), `createdAt desc, id desc`, curseur
@@ -39,7 +40,7 @@ import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translati
  *    Hors audience ⇒ 404 `POST_NOT_FOUND`, indistinct de « n'existe pas »
  *    (D-6, et le commentaire de la route le dit : « distinguer révélerait
  *    l'existence du post »).
- *  - `POST /api/v1/posts/:postId/comments`
+ *  - `POST posts.byPostIdComments`
  *    (`:179`, `requiredAuth` + `registeredUser` obligatoire ⇒ 401 anonyme).
  *    Corps `CreateCommentSchema` (`routes/posts/types.ts:428`) :
  *    `content` (≤ 2000, peut être vide SI un média est joint — ce port
@@ -122,7 +123,7 @@ export async function loadCommentsPage(
   });
   const result = await params.transport.request<readonly PostComment[]>({
     method: 'GET',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/comments?${query.toString()}`,
+    path: `${postsEndpoints.byPostIdComments(params.postId)}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -405,7 +406,7 @@ function sendComment(
   }
   return deps.transport.request<PostComment>({
     method: 'POST',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/comments`,
+    path: postsEndpoints.byPostIdComments(params.postId),
     body: params.body,
     headers: { 'X-Client-Mutation-Id': params.clientMutationId },
   });
