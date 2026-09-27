@@ -6,6 +6,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { setAttachmentReactionEmitter, type AttachmentReactionRequest } from '@/lib/api/attachment-reaction-emit';
 import { mediaHubPath, mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
 import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
+import { takeStudioSeed } from '@/lib/stories/studio-seed';
+import { href } from '@/routes/route-table';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { MessagesPage } from '@/lib/api/messages-pages';
@@ -299,6 +302,38 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
     expect(sent[0]).toMatchObject({ action: 'add', attachmentId: 'a-m2', messageId: 'm2' });
     expect(hubPieceOf(client, 'm2')?.currentUserReactions).toEqual([sent[0]!.emoji]);
     expect(hubPieceOf(client, 'm1')?.currentUserReactions).toBeUndefined();
+  });
+
+  test('Créer avec ce média dépose la pièce dans le studio et y mène', async () => {
+    const realFetch = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      asked.push(String(input));
+      return new Response(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }), { status: 200, headers: { 'content-type': 'image/jpeg' } });
+    }) as typeof fetch;
+    act(() => {
+      sessionStore.getState().establish({
+        user: { id: 'u-moi', username: 'moi', displayName: 'Moi' },
+        token: 'jeton-de-test',
+        sessionToken: 'session-de-test',
+        expiresIn: 3600,
+      });
+    });
+    try {
+      await openFirst([photoMessage('m2'), photoMessage('m1')]);
+      await until(() => $('[data-viewer-action="compose"]') !== null);
+      click($('[data-viewer-action="compose"]'));
+      await until(() => $('[data-media-viewer]') === null);
+      expect(asked.some((url) => url.endsWith('/uploads/m2.jpg'))).toBe(true);
+      expect(takeStudioSeed()?.name).toBe('m2.jpg');
+      expect(window.location.pathname).toBe(href('storyCompose'));
+    } finally {
+      globalThis.fetch = realFetch;
+      act(() => {
+        sessionStore.getState().clearSession();
+      });
+      window.history.replaceState(null, '', '/');
+    }
   });
 
   test('une pièce floutée, même ouverte en clair, n’offre aucune action', async () => {
