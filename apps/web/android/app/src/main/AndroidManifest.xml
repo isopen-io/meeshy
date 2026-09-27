@@ -153,6 +153,12 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- #8336 — la galerie (@capacitor-community/media, hors androidGalleryMode)
+         écrit dans Android/media/<appId>/Meeshy : dossier propre à l'app,
+         indexé par MediaStore, sans AUCUNE permission de stockage à aucun
+         niveau d'API. READ_MEDIA_* / *_EXTERNAL_STORAGE sont INTERDITES par
+         scripts/check-android-manifest.mjs (FORBIDDEN_PERMISSIONS). -->
+
     <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
          passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance
          IMAGE_CAPTURE que si resolveActivity trouve une application photo.
