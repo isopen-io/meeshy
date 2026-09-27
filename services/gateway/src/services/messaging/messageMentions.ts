@@ -356,7 +356,7 @@ async function loadMessageProtection(
       where: { id: messageId },
       select: {
         messageType: true, isEncrypted: true, isViewOnce: true,
-        isBlurred: true, effectFlags: true, expiresAt: true, createdAt: true,
+        isBlurred: true, effectFlags: true, expiresAt: true, ephemeralDuration: true,
       },
     });
     if (!row) return PROTECTION_ON_UNKNOWN;

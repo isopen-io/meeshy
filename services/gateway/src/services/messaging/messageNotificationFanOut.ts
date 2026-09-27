@@ -40,6 +40,8 @@ export interface FanOutMessage {
   readonly isBlurred?: boolean | null;
   readonly effectFlags?: number | null;
   readonly expiresAt?: Date | null;
+  /** La durée DÉCLARÉE (secondes) — le suffixe de la bannière (#8344). */
+  readonly ephemeralDuration?: number | null;
   readonly createdAt?: Date | null;
   readonly encryptedContent?: string | null;
 }
@@ -350,7 +352,7 @@ export async function notifyMessageRecipients(params: {
       isBlurred: message.isBlurred,
       effectFlags: message.effectFlags,
       expiresAt: message.expiresAt ?? null,
-      createdAt: message.createdAt ?? null,
+      ephemeralDuration: message.ephemeralDuration ?? null,
     });
     const notificationPreview = protectedOverride?.preview ?? processedContent;
     const notificationLocKey = protectedOverride?.locKey;
