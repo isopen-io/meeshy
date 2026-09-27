@@ -60,6 +60,7 @@ import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundar
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
+import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { ThreadMessageSheets } from './thread-sheets';
 import { ThreadModes } from './thread-modes';
 
@@ -438,6 +439,16 @@ export default function ThreadScreen() {
    * ne fait plus que CÂBLER le JSX sur ce qu'il rend (§5 étape 0 : le budget
    * de taille interdit d'ajouter une seconde machine ici).
    */
+  /**
+   * LA VISIONNEUSE DU FIL (#6303) — une tuile touchée dans le fil ouvre la
+   * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
+   * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
+   */
+  const threadMedia = useMemo(
+    () => ({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia }),
+    [viewer.id, compose.setReplyToMedia],
+  );
+
   const messageMenu = useMessageMenu({
     conversationId,
     messages,
@@ -605,6 +616,7 @@ export default function ThreadScreen() {
        `components/thread-header.tsx` — son dernier bord fixe en haut), jamais
        par cette racine, qui doit rester exactement haute de `100dvh` pour que
        le contenu puisse transiter sous la bande. */
+    <ThreadMediaContext.Provider value={threadMedia}>
     <div
       ref={chrome.host}
       className="relative h-dvh overflow-hidden"
@@ -877,5 +889,6 @@ export default function ThreadScreen() {
         viewerId={viewer.id ?? ''}
       />
     </div>
+    </ThreadMediaContext.Provider>
   );
 }

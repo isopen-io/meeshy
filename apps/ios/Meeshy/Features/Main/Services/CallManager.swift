@@ -191,6 +191,8 @@ final class CallManager: ObservableObject {
     @Published private(set) var isRemoteAudioEnabled: Bool = true
     /// #8063 — partage d'écran, local et distant (`CallManager+ScreenShare.swift`).
     private(set) lazy var screenShare: CallScreenShareController = makeScreenShareController()
+    /// #8064 — l'enregistrement consenti de l'appel (`CallManager+Recording.swift`).
+    private(set) lazy var recording: CallRecordingController = makeRecordingController()
     /// `true` when the remote peer is actively screen-capturing this call
     /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
     /// banner in CallView. Resets to `false` on call end to prevent leaking state
@@ -939,10 +941,12 @@ final class CallManager: ObservableObject {
             applySpeakerRoute()
             Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(self.isSpeaker))")
         case .override:
-            // Software override (our own `overrideOutputAudioPort`); no action needed.
-            break
+            reconcileSpeakerWithCurrentOutput()
         default:
-            // Category change, wake-from-sleep, etc. — re-apply to stay consistent.
+            if currentOutputKind()?.isExternalOutput == true {
+                isSpeaker = false
+                break
+            }
             applySpeakerRoute()
         }
     }
@@ -4173,6 +4177,7 @@ final class CallManager: ObservableObject {
         isRemoteAudioEnabled = true
         isRemoteScreenCapturing = false
         screenShare.callEnded()
+        recording.callEnded()
         videoSurvivalController.reset()
         isVideoSuspended = false
         isVideoSuspendedByCaptureInterruption = false
@@ -4204,6 +4209,7 @@ final class CallManager: ObservableObject {
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)
         lastKnownStats = nil
+        CallQualityStatsFeed.shared.reset()
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)
@@ -4718,7 +4724,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                let message = event.message
+                let message = CallRefusalMessage.localized(forCode: event.code) ?? event.message
                     ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
                 Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
                 // Call-scoping guard: RATE_LIMIT_EXCEEDED/TARGET_NOT_FOUND/etc. below
@@ -5667,6 +5673,7 @@ extension CallManager: WebRTCServiceDelegate {
             // controller's degraded-streak timer prematurely. Gate all reporting
             // on callState == .connected.
             guard case .connected = self.callState else { return }
+            self.publishQualitySample(stats: stats, packetLossPercent: packetLossPercent)
             self.liveVideoQualityLevel = level
             self.isLinkQualityDegraded = self.degradedLinkTracker.record(level: level)
             MessageSocketManager.shared.emitCallQualityReport(
@@ -5711,17 +5718,6 @@ extension CallManager: WebRTCServiceDelegate {
             // tick; the controller's time-based hysteresis decides if a sustained
             // poor link warrants dropping to audio-only (and later recovering).
             self.videoSurvivalController.handle(level: level, userWantsVideo: self.isVideoEnabled)
-        }
-    }
-
-    /// Map the 5-tier client quality ladder onto the gateway's 4-tier
-    /// `ConnectionQualityLevel` (critical collapses into poor).
-    nonisolated static func connectionQualityLabel(for level: VideoQualityLevel) -> String {
-        switch level {
-        case .excellent: return "excellent"
-        case .good: return "good"
-        case .fair: return "fair"
-        case .poor, .critical: return "poor"
         }
     }
 

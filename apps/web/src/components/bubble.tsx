@@ -197,7 +197,7 @@ export function Bubble({
   if (systemRow !== null) {
     return (
       <div data-message={message.id} style={{ marginBottom: tail ? 6 : 2 }}>
-        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" callTarget={callNoticeTarget(message)} />
+        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" callTarget={callNoticeTarget(message)} languages={languages} />
       </div>
     );
   }
@@ -342,6 +342,7 @@ export function Bubble({
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
           isMine={isMine}
+          message={message}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}

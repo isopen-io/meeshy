@@ -54,7 +54,8 @@ const verifier = async (
 ) => {
   const findFirst = jest.fn(async () => ligne) as jest.Mock<any>;
   const updateMany = jest.fn(async () => ({ count: consume })) as jest.Mock<any>;
-  const prisma = { user: { findFirst, updateMany }, emailVerificationWatch: { updateMany: watchUpdateMany } };
+  const findMany = jest.fn(async () => []) as jest.Mock<any>;
+  const prisma = { user: { findFirst, findMany, updateMany }, emailVerificationWatch: { updateMany: watchUpdateMany } };
   const service = new AuthService(prisma as never, 'secret');
   const resultat = await service.verifyEmail({ email: 'Marie@Example.com', ...preuve });
   const ecrit = (updateMany.mock.calls[0] as [{ where: Row; data: Row }] | undefined)?.[0];

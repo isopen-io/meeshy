@@ -11,12 +11,33 @@ import SwiftUI
 extension View {
     func longMessageFocus(_ expansion: LongMessageExpansion, accentHex: String) -> some View {
         environment(\.longMessageExpansion, expansion)
-            .background {
+            .backgroundPreferenceValue(LongMessageBubbleBoundsKey.self) { bubble in
                 if expansion.isExpanded {
-                    FocalGlassBlock(accentHex: accentHex)
-                        .padding(.horizontal, FocalScrollPerspective.focusCardHorizontalInset)
+                    GeometryReader { proxy in
+                        let frame = LongMessageExpansionLaw.glassFrame(
+                            bubble: bubble.map { proxy[$0] },
+                            row: CGRect(origin: .zero, size: proxy.size)
+                        )
+                        FocalGlassBlock(accentHex: accentHex)
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
+                    }
                 }
             }
+    }
+}
+
+/// Le cadre de la BULLE, remonté par son fond (`BubbleBackground`) jusqu'à
+/// `longMessageFocus` : le verre du déplié l'épouse au lieu de couvrir la
+/// rangée entière (#8161). Une préférence traverse le `clipShape` de la
+/// bulle, qu'un fond posé sous elle ne pourrait pas déborder ; sans bulle
+/// (Rivière, rangée plate), la valeur reste `nil` et le verre retombe sur
+/// la rangée.
+struct LongMessageBubbleBoundsKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }
 

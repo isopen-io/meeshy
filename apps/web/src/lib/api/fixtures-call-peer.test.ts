@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { decodeMediaToggled, decodeParticipantJoined, decodeSignal } from '@/lib/calls/call-decode';
+import { decodeChannelMessage, decodeTranscriptionActive, decodeTranslatedSegment } from '@/lib/calls/call-captions';
+import { peerAlert } from '@/lib/calls/call-peer-alerts';
 
 import { CALL_PEER_USER_ID, createFixtureCallPeer } from './fixtures-call-peer';
 
@@ -21,6 +23,7 @@ function fakeConnection() {
     localDescription: null as { sdp: string } | null,
     onicecandidate: null as unknown,
     onnegotiationneeded: null as unknown,
+    ondatachannel: null as ((event: { channel: unknown }) => void) | null,
     setRemoteDescription: async (description: unknown) => void (connection.remoteDescription = description),
     setLocalDescription: async () => void (connection.localDescription = { sdp: 'answer-sdp' }),
     addIceCandidate: async () => undefined,
@@ -41,7 +44,7 @@ function peer() {
     createScreenTrack: () => screenTrack as unknown as MediaStreamTrack,
     schedule: (fn) => void pending.push(fn),
   });
-  return { created, fired, pending, video, screenTrack };
+  return { created, fired, pending, video, screenTrack, pc: () => connection };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -93,5 +96,58 @@ describe('le pair des gates d’appel', () => {
     await flush();
     expect(h.video.sender.replaced.at(-1)).toBeNull();
     expect(decodeMediaToggled(h.fired.at(-1)?.[1])).toMatchObject({ mediaType: 'screen', enabled: false });
+  });
+
+  test('retient les rapports de qualité et de fin d’appel du client, et compte ses paquets audio (#8047)', async () => {
+    const h = peer();
+    h.created.emitted(CLIENT_EVENTS.CALL_QUALITY_REPORT, { callId: 'call-1', stats: { level: 'poor' } });
+    h.created.emitted(CLIENT_EVENTS.CALL_ANALYTICS, { callId: 'call-1', codec: 'VP8' });
+    h.created.emitted(CLIENT_EVENTS.CALL_HEARTBEAT, { callId: 'call-1' });
+    expect(h.created.probe.reports.map((report) => report.event)).toEqual([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
+    expect(await h.created.probe.audioPackets()).toBe(0);
+  });
+
+  test('lève les alertes de la passerelle à son sujet, sous la forme que décode le moteur (#8047)', () => {
+    const h = peer();
+    h.created.initiated('call-1');
+    const resolve = (userId: string | null) => userId;
+    h.created.probe.alertQuality();
+    const [qualityEvent, qualityPayload] = h.fired.at(-1) ?? [];
+    expect(peerAlert(String(qualityEvent), qualityPayload, resolve)).toMatchObject({ callId: 'call-1', userId: CALL_PEER_USER_ID, patch: { weakNetwork: true } });
+    h.created.probe.capture(true);
+    const [captureEvent, capturePayload] = h.fired.at(-1) ?? [];
+    expect(peerAlert(String(captureEvent), capturePayload, resolve)).toMatchObject({ userId: CALL_PEER_USER_ID, patch: { capturing: true } });
+  });
+
+  test('parle SOUS-TITRÉ et dit qu’il transcrit, sous la forme que décode le moteur (#8048)', () => {
+    const h = peer();
+    expect(h.created.probe.callId()).toBeNull();
+    h.created.initiated('call-1');
+    expect(h.created.probe.callId()).toBe('call-1');
+    h.created.probe.speak({ id: 'n-1', text: 'Hello, can you hear me?', translatedText: 'Bonjour, tu m’entends ?' });
+    const segment = decodeTranslatedSegment(h.fired.at(-1)?.[1]);
+    expect(segment).toMatchObject({ callId: 'call-1', caption: { id: 'n-1', speakerId: CALL_PEER_USER_ID, original: 'Hello, can you hear me?', translated: 'Bonjour, tu m’entends ?', isFinal: true } });
+    h.created.probe.transcribing(true);
+    expect(h.fired.at(-1)?.[0]).toBe(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE);
+    expect(decodeTranscriptionActive(h.fired.at(-1)?.[1])).toEqual({ callId: 'call-1', speakerId: CALL_PEER_USER_ID, active: true });
+  });
+
+  test('retient ce que le client transcrit : les segments au socket, les entrées au canal `transcription` (#8048)', async () => {
+    const h = peer();
+    h.created.initiated('call-1');
+    h.created.emitted(CLIENT_EVENTS.CALL_SIGNAL, { callId: 'call-1', signal: { type: 'offer', sdp: 'o', from: 'u-me', to: CALL_PEER_USER_ID } });
+    await flush();
+    h.created.emitted(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, { callId: 'call-1', segment: { text: 'Bonjour' } });
+    h.created.emitted(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: 'call-1', active: true });
+    expect(h.created.probe.transcripts.map((entry) => entry.event)).toEqual([CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]);
+    const channel = { label: 'transcription', onmessage: null as ((event: { data: unknown }) => void) | null };
+    const other = { label: 'autre', onmessage: null as ((event: { data: unknown }) => void) | null };
+    const pc = h.pc();
+    pc.ondatachannel?.({ channel: other });
+    pc.ondatachannel?.({ channel });
+    expect(other.onmessage).toBeNull();
+    channel.onmessage?.({ data: JSON.stringify({ type: 'transcript-entry', entry: { id: 'w', callId: 'call-1', speakerId: 'u-me', speakerDisplayName: 'Moi', text: 'Bonjour', language: 'fr', capturedAtMs: 1, isFinal: true, confidence: 0.9 } }) });
+    channel.onmessage?.({ data: 'pas du json' });
+    expect(h.created.probe.channelMessages.map((message) => decodeChannelMessage(message))).toMatchObject([{ kind: 'entry', id: 'w', text: 'Bonjour' }, null]);
   });
 });

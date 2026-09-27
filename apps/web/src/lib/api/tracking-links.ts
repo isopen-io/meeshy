@@ -1,3 +1,4 @@
+import * as trackingLinksEndpoints from '@meeshy/shared/api/endpoints/tracking-links';
 import * as z from 'zod/mini';
 
 import type { ClickContext } from '@/lib/links/click-context';
@@ -11,10 +12,10 @@ import { unreadableFailure } from './link-failure';
  * **LE PORT DES LIENS SUIVIS** (#6714) — les deux routes PUBLIQUES que la page
  * legacy `/l/:token` appelait (`authOptional` côté passerelle) :
  *
- * - `POST /api/v1/tracking-links/:token/click` (`routes/tracking-links/tracking.ts`)
+ * - `POST trackingLinks.byTokenClick` (`routes/tracking-links/tracking.ts`)
  *   compte le clic et rend `originalUrl` ; 404 lien inconnu, 410
  *   `LINK_INACTIVE` / `LINK_EXPIRED` ;
- * - `GET /api/v1/tracking-links/:token/resolve` (`creation.ts`) rend la nature
+ * - `GET trackingLinks.byTokenResolve` (`creation.ts`) rend la nature
  *   du lien (`tracking` ou, en repli, une invitation `conversation`) et son
  *   état `isActive`, expiration comprise.
  *
@@ -39,14 +40,12 @@ const ServedResolution = z.object({
   isActive: z.boolean(),
 });
 
-const tokenPath = (token: string, leaf: 'click' | 'resolve'): string => `/api/v1/tracking-links/${encodeURIComponent(token)}/${leaf}`;
-
 export async function recordTrackingClick(deps: TrackingLinksDeps, token: string, context: ClickContext): Promise<ApiResult<TrackingClick>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureTrackingClick } = await import('./fixtures-email-links');
     return fixtureTrackingClick(token);
   }
-  const result = await deps.transport.request<unknown>({ method: 'POST', path: tokenPath(token, 'click'), body: context });
+  const result = await deps.transport.request<unknown>({ method: 'POST', path: trackingLinksEndpoints.byTokenClick(token), body: context });
   if (!result.ok) return result;
   const parsed = ServedClick.safeParse(result.data);
   return { ok: true, data: { originalUrl: parsed.success ? (parsed.data.originalUrl ?? null) : null } };
@@ -57,7 +56,7 @@ export async function resolveTrackingLink(deps: TrackingLinksDeps, token: string
     const { fixtureTrackingResolution } = await import('./fixtures-email-links');
     return fixtureTrackingResolution(token);
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: tokenPath(token, 'resolve') });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: trackingLinksEndpoints.byTokenResolve(token) });
   if (!result.ok) return result;
   const parsed = ServedResolution.safeParse(result.data);
   if (!parsed.success) return unreadableFailure('Lien suivi');

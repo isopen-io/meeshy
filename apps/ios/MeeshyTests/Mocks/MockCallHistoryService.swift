@@ -13,11 +13,19 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
     /// stateful stub — used by the `loadCalls()` stale-filter race test.
     var historyResultByFilter: [CallHistoryFilter: Result<CallHistoryPage, Error>] = [:]
 
+    /// Per-cursor override, consulted first — the page that follows a given
+    /// call id (#8066 pagination).
+    var historyResultByCursor: [String: Result<CallHistoryPage, Error>] = [:]
+
+    var hideResult: Result<Void, Error> = .success(())
+    var clearAllResult: Result<Int, Error> = .success(0)
+
     /// Test seam: a `history(filter:)` call matching a gated filter suspends
     /// until the test calls `releaseGate(for:)`. Lets a test force a specific
     /// out-of-order completion between two concurrent `history(...)` calls
     /// for different filters, deterministically (no `Task.sleep` timing).
     private var gates: [CallHistoryFilter: AsyncTestGate] = [:]
+    private var eraseGate: AsyncTestGate?
 
     // MARK: - Call Tracking
 
@@ -32,6 +40,12 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
     /// gate opens).
     private(set) var invokedFilters: [CallHistoryFilter] = []
 
+    private(set) var requestedCursors: [String?] = []
+    private(set) var hiddenCallIds: [String] = []
+    private(set) var clearAllCallCount = 0
+    /// Erase calls that have started (before any gate wait).
+    private(set) var eraseInvocations = 0
+
     // MARK: - Gate Control
 
     func gate(filter: CallHistoryFilter) {
@@ -41,6 +55,17 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
     func releaseGate(for filter: CallHistoryFilter) async {
         await gates[filter]?.open()
         gates[filter] = nil
+    }
+
+    /// Suspends `hide` / `clearAll` until `releaseErase()` — lets a test read
+    /// the optimistic state while the request is still in flight.
+    func gateErase() {
+        eraseGate = AsyncTestGate()
+    }
+
+    func releaseErase() async {
+        await eraseGate?.open()
+        eraseGate = nil
     }
 
     // MARK: - Protocol Conformance
@@ -54,10 +79,32 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
         lastLimit = limit
         lastCursor = cursor
         lastFilter = filter
+        requestedCursors.append(cursor)
+        if let cursor, let perCursor = historyResultByCursor[cursor] {
+            return try perCursor.get()
+        }
         if let perFilter = historyResultByFilter[filter] {
             return try perFilter.get()
         }
         return try historyResult.get()
+    }
+
+    func hide(callId: String) async throws {
+        eraseInvocations += 1
+        if let eraseGate {
+            await eraseGate.wait()
+        }
+        hiddenCallIds.append(callId)
+        try hideResult.get()
+    }
+
+    func clearAll() async throws -> Int {
+        eraseInvocations += 1
+        if let eraseGate {
+            await eraseGate.wait()
+        }
+        clearAllCallCount += 1
+        return try clearAllResult.get()
     }
 
     // MARK: - Reset
@@ -65,7 +112,15 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
     func reset() {
         historyResult = .success(CallHistoryPage(records: [], nextCursor: nil, hasMore: false))
         historyResultByFilter = [:]
+        historyResultByCursor = [:]
+        hideResult = .success(())
+        clearAllResult = .success(0)
         gates = [:]
+        eraseGate = nil
+        requestedCursors = []
+        hiddenCallIds = []
+        clearAllCallCount = 0
+        eraseInvocations = 0
         invokedFilters = []
         historyCallCount = 0
         lastLimit = nil

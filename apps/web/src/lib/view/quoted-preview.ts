@@ -1,4 +1,5 @@
 import { served } from '@/lib/api/prism';
+import { contactCardLabelOf } from '@/lib/contact-card/label';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -37,7 +38,7 @@ import { attachmentDurationLabel } from './media-transport';
  * la piste audio d'une bannière.
  */
 
-export type QuotedMediaKind = 'image' | 'video' | 'audio' | 'file';
+export type QuotedMediaKind = 'image' | 'video' | 'audio' | 'file' | 'contact';
 
 /**
  * LE GENRE → SON LIBELLÉ COURT, miroir `AttachmentKind.shortLabel`
@@ -52,6 +53,7 @@ export const QUOTED_KIND_KEY = {
   video: 'attachment.kind.video',
   audio: 'attachment.kind.audio',
   file: 'attachment.kind.file',
+  contact: 'contactCard.shared',
 } as const satisfies Readonly<Record<QuotedMediaKind, InterfaceCatalogKey>>;
 
 export { quotedIsProtected };
@@ -179,12 +181,15 @@ const mediaOf = (params: {
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedMedia => {
   const { attachment, single, messageIsProtected, interfaceLanguage } = params;
-  const kind = kindOf(attachment);
+  /* UNE CARTE DE VISITE SE DIT PAR SON CONTACT (#8122), jamais « Fichier » ni
+     `contact_<UUID>_….vcf` — `contactCardLabelOf` est le site unique. */
+  const contactLabel = contactCardLabelOf(attachment, interfaceLanguage);
+  const kind: QuotedMediaKind = contactLabel !== null ? 'contact' : kindOf(attachment);
   const mayTravel = !messageIsProtected && !quotedIsProtected(attachment);
   const framed = mayTravel && single && (kind === 'image' || kind === 'video');
   return {
     kind,
-    label: translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
+    label: contactLabel ?? translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
     thumbnailSrc: mayTravel ? thumbnailOf(attachment, kind) : null,
     placeholderSrc: (mayTravel ? thumbHashPlaceholder(attachment.thumbHash) : undefined) ?? null,
     durationLabel: mayTravel ? attachmentDurationLabel(attachment.duration) : null,

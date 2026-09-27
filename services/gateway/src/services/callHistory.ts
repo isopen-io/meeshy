@@ -28,6 +28,15 @@ export interface CallHistoryPeer {
   isOnline: boolean;
 }
 
+/** Someone who joined a GROUP call — no presence, no contact field (#8066). */
+export interface CallHistoryParticipant {
+  participantId: string;
+  userId: string | null;
+  username: string | null;
+  displayName: string;
+  avatar: string | null;
+}
+
 export interface CallHistoryItem {
   callId: string;
   conversationId: string;
@@ -48,6 +57,8 @@ export interface CallHistoryItem {
   bytesReceived: number | null;
   /** The other party for a P2P/direct call; null for group calls. */
   peer: CallHistoryPeer | null;
+  /** Who joined a group call, reader excluded, in join order; empty for a direct call. */
+  participants: CallHistoryParticipant[];
 }
 
 /** The minimal `CallSession` projection the builder consumes. */
@@ -126,7 +137,8 @@ export function buildCallHistoryItem(
   userId: string,
   peer: CallHistoryPeer | null,
   /** Does `userId` have their own `CallParticipant` row for this call? Irrelevant (and safe to pass `false`) when `userId` is the initiator. */
-  userParticipated: boolean
+  userParticipated: boolean,
+  participants: readonly CallHistoryParticipant[] = []
 ): CallHistoryItem {
   return {
     callId: row.id,
@@ -146,5 +158,6 @@ export function buildCallHistoryItem(
     bytesSent: clampNonNegativeInt(row.bytesSent),
     bytesReceived: clampNonNegativeInt(row.bytesReceived),
     peer,
+    participants: [...participants],
   };
 }

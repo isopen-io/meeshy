@@ -81,7 +81,7 @@ struct RootStoryDoorsLayer: ViewModifier {
     /// Le corps de `.task` de la racine — connexion socket, abonnements,
     /// chargements parallèles. Il reste ÉCRIT dans `RootView`, qui possède
     /// tout ce qu'il touche.
-    let onStart: () async -> Void
+    let onStart: @MainActor () async -> Void
 
     func body(content: Content) -> some View {
         content
@@ -289,6 +289,9 @@ struct RootChromeLayer: ViewModifier {
             // restent modales, donc PAR-DESSUS. Garde :
             // `OnboardingAboveGlobalChromeGuardTests`.
             .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
+            // l'onboarding (`OnboardingPresenceSignal`).
+            .activationInviteHost()
     }
 }
 
@@ -329,6 +332,12 @@ struct RootSheetsLayer: ViewModifier {
                         }, onOpenReel: { reel, reels in
                             ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
+                    },
+                    onCall: { request in
+                        router.deepLinkProfileUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            CallBackDialer.shared.dialFromProfile(request)
+                        }
                     }
                 )
                 .presentationDetents([.large, .medium])

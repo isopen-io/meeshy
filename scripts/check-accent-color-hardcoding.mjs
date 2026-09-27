@@ -164,8 +164,21 @@
 // `accentHex` (même vocabulaire que #6793, #7945, #8099). La vignette
 // `attachment.thumbnailColor` n'est qu'un DÉPLACEMENT depuis
 // `ConversationInfoSheet` (compte inchangé). Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8067) — variables inconnues 439 → 440. UN appel neuf :
+// `UserProfileSheet+DetailsTab.callButton`, les boutons « Appel vocal » /
+// « Appel vidéo » de la fiche profil, peints à l'accent du PROFIL
+// (`resolvedAccent`) comme l'en-tête de la même fiche
+// (`UserProfileSheet+Header`, déjà compté). Ce n'est pas une conversation :
+// `accentColor` n'y aurait aucun sens. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8231) — variables inconnues 440 → 438. Plus aucune vidéo ne
+// se lit dans le fil : `BubbleGridVideoThumbnailView` et son badge play
+// (`contactColor`) disparaissent, remplacés par UN poster partagé
+// (`ConversationVideoPoster`, un seul appel à `accentHex`) pour la grille,
+// le carrousel et Focal. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 439;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 438;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

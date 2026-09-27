@@ -1558,7 +1558,7 @@ struct StoryCommentThread: View {
     /// chargées (endpoint replies paginé à 20) — affiche « Voir plus de
     /// réponses » en bas du fil déplié.
     var hasMoreReplies: Bool = false
-    var onLoadMoreReplies: (() async -> Void)? = nil
+    var onLoadMoreReplies: (@MainActor () async -> Void)? = nil
 
     var body: some View {
         makeRow(comment, userLang)
@@ -1656,14 +1656,14 @@ struct StoryCommentsOverlayView: View {
     /// Chasse paginée fournie par le parent quand la cible n'est pas dans les
     /// pages chargées (les pages qui arrivent re-déclenchent le scroll via
     /// l'onChange sur le count).
-    var huntTargetComment: (() async -> Void)? = nil
+    var huntTargetComment: (@MainActor () async -> Void)? = nil
     /// Page suivante des réponses d'un fil (commentId) — câblé sur
     /// `loadMoreStoryCommentReplies` côté StoryViewerView.
-    var loadMoreStoryCommentReplies: ((String) async -> Void)? = nil
+    var loadMoreStoryCommentReplies: (@MainActor (String) async -> Void)? = nil
     /// Ciblage d'une RÉPONSE : déplie le fil du parent (parentId) puis chasse
     /// les pages de réponses jusqu'à la cible (replyId). Retourne `true` si la
     /// réponse est chargée à l'issue de la chasse.
-    var revealTargetReply: ((_ parentId: String, _ replyId: String) async -> Bool)? = nil
+    var revealTargetReply: (@MainActor (_ parentId: String, _ replyId: String) async -> Bool)? = nil
     /// Latch — un seul ciblage par montage de l'overlay, ensuite la liste
     /// reprend le comportement historique (suivre le dernier commentaire).
     @State private var hasScrolledToTargetStoryComment = false
@@ -1693,7 +1693,7 @@ struct StoryCommentsOverlayView: View {
     let safeBottom: CGFloat
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
-    let toggleStoryCommentThread: (String) async -> Void
+    let toggleStoryCommentThread: @MainActor (String) async -> Void
 
     private var topLevelComments: [FeedComment] {
         storyComments.filter { $0.parentId == nil }
@@ -1869,7 +1869,7 @@ struct StoryCommentsOverlayView: View {
                             onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } },
                             hasMoreReplies: storyCommentExpandedThreads.contains(comment.id)
                                 && (storyCommentRepliesHasMore[comment.id] ?? false),
-                            onLoadMoreReplies: loadMoreStoryCommentReplies.map { load -> (() async -> Void) in
+                            onLoadMoreReplies: loadMoreStoryCommentReplies.map { load -> (@MainActor () async -> Void) in
                                 { await load(comment.id) }
                             }
                         )

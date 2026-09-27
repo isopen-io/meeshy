@@ -45,6 +45,7 @@ export function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
 export function makePrisma(methods: Partial<{
   findMany: jest.Mock;
   findUnique: jest.Mock;
+  findFirst: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
   count: jest.Mock;
@@ -54,6 +55,8 @@ export function makePrisma(methods: Partial<{
     user: {
       findMany: methods.findMany ?? jest.fn(),
       findUnique: methods.findUnique ?? jest.fn(),
+      // Le contrôle d'unicité d'adresse (#8215) — aucune autre ligne par défaut.
+      findFirst: methods.findFirst ?? jest.fn().mockResolvedValue(null),
       create: methods.create ?? jest.fn(),
       update: methods.update ?? jest.fn(),
       count: methods.count ?? jest.fn(),
@@ -72,7 +75,7 @@ export function makePrisma(methods: Partial<{
     message: {
       create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
     },
-    // `updateEmail` révoque les jetons de réinitialisation encore valides dans
+    // Un changement d'adresse révoque les jetons de réinitialisation encore valides dans
     // la MÊME transaction (#6661) — `$transaction` rejoue le callback avec ce
     // même double, comme `PostService.mediaByteReclamation.test.ts`.
     passwordResetToken: {

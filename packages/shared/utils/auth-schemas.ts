@@ -94,6 +94,8 @@ export const AuthSchemas = {
     // #8058 — le parrainage voyage avec l'inscription (même valeur que `POST /affiliate/register`).
     affiliateToken: z.string().min(1).optional(),
     affiliateSessionKey: z.string().min(1).optional(),
+    // #8214 — « ce n'est pas moi » : revendiquer une adresse détenue par un autre compte.
+    claimEmail: z.boolean().optional(),
   }),
   // La disjonction d'identité (`displayName`, ou `firstName` + `lastName`) a
   // été RETIRÉE par #6424, en même temps que l'`anyOf` de sa jumelle Ajv : le

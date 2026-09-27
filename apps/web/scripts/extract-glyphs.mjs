@@ -382,7 +382,7 @@ emit({
  * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
  * premier tap sur le micro ou le "+".
  */
-const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x'];
+const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x', 'user-circle'];
 
 /* AVERTISSEMENT (#7280) — `glyphs-feed.ts` porte un `mapPin` AJOUTÉ À LA MAIN
    (#6901), que ce script ne connaît pas : le relancer le SUPPRIME. Avant de
@@ -675,6 +675,9 @@ const SETTINGS = [
   /* LES MESSAGES FAVORIS (#7286) — la PREMIERE rangee « Outils », miroir du
      `star.fill` d'iOS (`SettingsView.swift`, teinte `warning`). */
   'star-fill',
+  /* EFFACER MON CARNET D'ADRESSES (#8167) — la rangee de la confidentialite,
+     miroir du `trash` d'iOS (`PhonebookListView.eraseFooter`). */
+  'trash',
 ];
 
 emit({
@@ -781,7 +784,7 @@ emit({
   role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
 });
 
-const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank'];
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank', 'trash', 'x-circle'];
 
 emit({
   ids: CALLS,

@@ -128,7 +128,7 @@ function declaredOverride(env: ApiEnv): string | undefined {
  * PRODUCTION il n'y a aucun proxy — `nginx.conf` n'a pas de `location /api` —
  * donc `''` désigne le serveur de FICHIERS STATIQUES, qui répond **405** à un
  * POST. Mesuré le 2026-09-09 : plus personne ne pouvait se connecter depuis
- * `staging.meeshy.me`, la console ne montrant que `/api/v1/auth/login … 405`.
+ * `staging.meeshy.me`, la console ne montrant que `auth.login … 405`.
  *
  * Le doc-comment d'origine assumait « servi par la même origine que la
  * passerelle en déploiement » — hypothèse jamais réalisée : ni `nginx.conf`,

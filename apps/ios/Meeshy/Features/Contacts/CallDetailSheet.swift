@@ -29,6 +29,9 @@ struct CallDetailSheet: View {
                     redialButtons
                 }
                 details
+                if !record.participants.isEmpty {
+                    participantsSection
+                }
             }
             .padding(20)
             // iPad/Mac width cap — mirrors FloatingCallPillView's established
@@ -147,6 +150,44 @@ struct CallDetailSheet: View {
             }
         }
         .padding(.vertical, 4)
+        .background(theme.backgroundSecondary)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+    }
+
+    // MARK: - Participants (#8066)
+
+    /// Who joined a group call, reader excluded — a name and a face, never a
+    /// presence (the gateway serves none on this list).
+    private var participantsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(String(localized: "calls.detail.participants", defaultValue: "Participants", bundle: .main))
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(theme.textMuted)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.top, MeeshySpacing.md)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(record.participants) { participant in
+                HStack(spacing: 12) {
+                    MeeshyAvatar(
+                        name: participant.displayName,
+                        context: .userListItem,
+                        accentColor: DynamicColorGenerator.colorForName(participant.displayName),
+                        avatarURL: participant.avatar
+                    )
+                    .accessibilityHidden(true)
+                    Text(participant.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.backgroundSecondary)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }

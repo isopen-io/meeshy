@@ -1,3 +1,5 @@
+import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
+
 import { httpTransport } from './client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
@@ -126,6 +128,13 @@ export type RegisterBody = {
   /** La clé de session d'affiliation (`sessionKey` de `/affiliate/register`),
    * seulement quand elle est connue. */
   readonly affiliateSessionKey?: string;
+  /**
+   * « CE N'EST PAS MOI » (#8214 × #8216) — l'adresse est détenue par un autre
+   * compte ; celui-ci la REVENDIQUE. La passerelle crée le compte sans
+   * session et envoie un code à l'adresse : seule sa preuve la lui donne.
+   * OMISE sinon, jamais `false`.
+   */
+  readonly claimEmail?: true;
 };
 
 /** La branche « compte créé » (`register.ts:383-388`) — l'inscription CRÉE une
@@ -248,7 +257,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
 
     const result = await transport.request<LoginResponseData>({
       method: 'POST',
-      path: '/api/v1/auth/login',
+      path: authEndpoints.login,
       body,
     });
     if (!result.ok) return result;
@@ -280,7 +289,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
       ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
       ...(request.returnUrl !== undefined ? { returnUrl: request.returnUrl } : {}),
     };
-    return transport.request<MagicLinkRequestData>({ method: 'POST', path: '/api/v1/auth/magic-link/request', body });
+    return transport.request<MagicLinkRequestData>({ method: 'POST', path: authEndpoints.magicLinkRequest, body });
   }
 
   /**
@@ -296,7 +305,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
 
     const result = await transport.request<LoginResponseData>({
       method: 'POST',
-      path: '/api/v1/auth/magic-link/validate',
+      path: authEndpoints.magicLinkValidate,
       body: { token },
     });
     if (!result.ok) return result;
@@ -308,7 +317,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   /** `POST /auth/forgot-password` (T3c) — AUCUNE écriture de magasin :
    * demander un lien de réinitialisation n'authentifie personne non plus. */
   async function forgotPassword(email: string): Promise<ApiResult<ForgotPasswordData>> {
-    return transport.request<ForgotPasswordData>({ method: 'POST', path: '/api/v1/auth/forgot-password', body: { email } });
+    return transport.request<ForgotPasswordData>({ method: 'POST', path: authEndpoints.forgotPassword, body: { email } });
   }
 
   /**
@@ -321,7 +330,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   async function register(body: RegisterBody): Promise<ApiResult<RegisterResponseData>> {
     const result = await transport.request<RegisterResponseData>({
       method: 'POST',
-      path: '/api/v1/auth/register',
+      path: authEndpoints.register,
       body,
     });
     if (!result.ok) return result;
@@ -347,7 +356,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     // n'y est plus accepté depuis #4471, retenu côté serveur depuis `login()`.
     const result = await transport.request<TwoFactorCompleteData>({
       method: 'POST',
-      path: '/api/v1/auth/login/2fa',
+      path: authEndpoints.loginN2Fa,
       body: { twoFactorToken: pending.twoFactorToken, code },
     });
     if (!result.ok) return result;
@@ -367,7 +376,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
     const result = await transport.request<VerifyEmailData>({
       method: 'POST',
-      path: '/api/v1/auth/verify-email',
+      path: authEndpoints.verifyEmail,
       body: verifyEmailBody(request),
     });
     if (!result.ok || !verificationOpensSession(result.data)) return result;
@@ -386,7 +395,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   async function verificationStatus(pendingSessionToken: string): Promise<ApiResult<VerificationStatusData>> {
     return transport.request<VerificationStatusData>({
       method: 'POST',
-      path: '/api/v1/auth/verification/status',
+      path: authEndpoints.verificationStatus,
       body: { pendingSessionToken },
     });
   }
@@ -394,7 +403,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   /** `POST /auth/resend-verification` (T-verify) — même garde de non-révélation
    * que `forgotPassword` : la passerelle répond 200 que le compte existe ou non. */
   async function resendVerification(email: string): Promise<ApiResult<ResendVerificationData>> {
-    return transport.request<ResendVerificationData>({ method: 'POST', path: '/api/v1/auth/resend-verification', body: { email } });
+    return transport.request<ResendVerificationData>({ method: 'POST', path: authEndpoints.resendVerification, body: { email } });
   }
 
   /** `GET /auth/reset-password/verify-token` (T-reset) — le jeton voyage en
@@ -402,7 +411,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   async function verifyResetToken(token: string): Promise<ApiResult<VerifyResetTokenData>> {
     return transport.request<VerifyResetTokenData>({
       method: 'GET',
-      path: `/api/v1/auth/reset-password/verify-token?token=${encodeURIComponent(token)}`,
+      path: `${authEndpoints.resetPasswordVerifyToken}?token=${encodeURIComponent(token)}`,
     });
   }
 
@@ -421,7 +430,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
       confirmPassword: request.confirmPassword,
       ...(request.twoFactorCode !== undefined ? { twoFactorCode: request.twoFactorCode } : {}),
     };
-    return transport.request<ResetPasswordData>({ method: 'POST', path: '/api/v1/auth/reset-password', body });
+    return transport.request<ResetPasswordData>({ method: 'POST', path: authEndpoints.resetPassword, body });
   }
 
   async function logout(): Promise<ApiResult<{ message: string }>> {
@@ -443,7 +452,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     // COÛTE rien — un « déconnecté localement, session serveur survivante »
     // se répare tout seul au prochain appel authentifié qui échoue en 401 ;
     // l'inverse serait une session fantôme.
-    return transport.request<{ message: string }>({ method: 'POST', path: '/api/v1/auth/logout', headers });
+    return transport.request<{ message: string }>({ method: 'POST', path: authEndpoints.logout, headers });
   }
 
   return {

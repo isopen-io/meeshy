@@ -27,6 +27,7 @@ const ICONS: Readonly<Record<PreviewIcon, GlyphShape | GlyphName>> = {
   video: LENS_PREVIEW_GLYPHS.filmStrip,
   photo: 'image',
   file: 'file',
+  contact: 'user',
   location: LENS_PREVIEW_GLYPHS.mapPin,
   attachments: LENS_PREVIEW_GLYPHS.paperclip,
   effect: LENS_PREVIEW_GLYPHS.sparkle,

@@ -30,6 +30,7 @@ const detail = (overrides: Partial<CallDetail> = {}): CallDetail => ({
   startedAt: '2026-09-26T09:00:00.000Z',
   durationSec: 185,
   bytes: 46_400_000,
+  participants: [],
   live: false,
   ...overrides,
 });
@@ -117,6 +118,16 @@ describe('la fiche d’un appel', () => {
   test('le numéro du pair n’y paraît jamais (D-129)', () => {
     const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />);
     expect(html).not.toMatch(/tel:|\+\d{6,}|Téléphone/);
+  });
+
+  test('un appel de groupe nomme ses participants dans la fiche (#8066) ; un appel à deux, non', () => {
+    const group = renderToStaticMarkup(
+      <CallDetailCard language="fr" detail={detail({ name: 'Équipe', isGroup: true, participants: ['Ada', 'Bruno', 'Chloé'] })} now={NOW} onCall={noop} />,
+    );
+    expect(group).toContain('data-call-detail-row="participants"');
+    expect(group).toContain('Participants');
+    expect(group).toContain('Ada, Bruno, Chloé');
+    expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-row="participants"');
   });
 
   test('un appel manqué se lit sans la couleur', () => {

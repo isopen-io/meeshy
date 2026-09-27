@@ -145,6 +145,9 @@ extension ConversationViewModel {
             attachmentType: representative?.type.rawValue,
             attachmentId: representative?.id,
             attachmentThumbnailUrl: mediaMayTravel ? Self.quotedThumbnailUrl(of: representative) : nil,
+            // #8230 — le poster d'une vidéo sans vignette et le plein écran
+            // d'une pièce hors fenêtre en dépendent ; jamais pour un secret.
+            attachmentFileUrl: mediaMayTravel ? representative.flatMap { $0.fileUrl.isEmpty ? nil : $0.fileUrl } : nil,
             // Le message cité est en mémoire : sa protection est CONNUE, pas
             // déclarée par le fil. Sans ce report, la bulle optimiste d'une
             // réponse à un média à vue unique en montrait la vignette le temps
@@ -162,6 +165,13 @@ extension ConversationViewModel {
             return preferredTranslation(for: quoted.id)?.translatedContent ?? quoted.content
         }
         if let first = representative {
+            // #8122 — une carte de visite se dit par son contact, comme
+            // l'écho serveur (`APIMessageReplyTo`) : pas de saut à l'accusé.
+            if let contact = ContactCardFile.mediaLabel(
+                mimeType: first.mimeType, fileName: first.originalName.isEmpty ? first.fileName : first.originalName
+            ) {
+                return contact
+            }
             return MediaKindLabel.summary(MediaKindLabel.kind(for: first.type))
         }
         return ""

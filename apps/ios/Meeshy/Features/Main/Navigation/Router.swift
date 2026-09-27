@@ -380,6 +380,15 @@ final class Router: ObservableObject {
     /// DÉCISION, elle n'exprime pas un choix utilisateur mémorisable.
     @Published var pendingForcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode?
 
+    /// L'ouverture de `conversationId` vise-t-elle un message (#8133) ? Lu par
+    /// le site qui construit `ConversationView` : un saut atterrit sur le FIL,
+    /// jamais sur le Résumé vivant. Un surlignage non scopé vaut pour toute
+    /// conversation, comme dans `consumePendingHighlightMessage`.
+    func landsOnMessage(in conversationId: String) -> Bool {
+        guard let messageId = pendingHighlightMessageId, !messageId.isEmpty else { return false }
+        return pendingHighlightConversationId.map { $0 == conversationId } ?? true
+    }
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
         pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
@@ -518,7 +527,7 @@ final class Router: ObservableObject {
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
 
-            case .referral, .external:
+            case .referral, .call, .external:
                 break
             }
         }

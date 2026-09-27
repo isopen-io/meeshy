@@ -44,6 +44,40 @@ public struct CallHistoryPeer: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Group Participant
+
+/// Someone who joined a GROUP call, reader excluded (#8066). Mirrors the
+/// gateway's `CallHistoryParticipant`: a name and a face, never a presence nor
+/// a contact field.
+public struct CallHistoryParticipant: Codable, Sendable, Equatable, Identifiable {
+    public let participantId: String
+    public let userId: String?
+    public let username: String?
+    public let displayName: String
+    public let avatar: String?
+
+    public var id: String { participantId }
+
+    public init(participantId: String, userId: String? = nil, username: String? = nil, displayName: String, avatar: String? = nil) {
+        self.participantId = participantId
+        self.userId = userId
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+    }
+}
+
+/// The first names a journal row shows, and how many others it counts.
+public struct CallParticipantSummary: Sendable, Equatable {
+    public let names: [String]
+    public let more: Int
+
+    public init(names: [String], more: Int) {
+        self.names = names
+        self.more = more
+    }
+}
+
 // MARK: - Call Record (mirrors gateway CallHistoryItem)
 
 /// One entry in the call journal. Mirrors the gateway's `CallHistoryItem` REST
@@ -67,8 +101,18 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
     public let bytesSent: Int?
     public let bytesReceived: Int?
     public let peer: CallHistoryPeer?
+    /// Who joined a group call, reader excluded, in join order; empty for a
+    /// direct call and for a record cached before #8066.
+    public let participants: [CallHistoryParticipant]
 
     public var id: String { callId }
+
+    private enum CodingKeys: String, CodingKey {
+        case callId, conversationId, conversationType, conversationTitle, conversationAvatar
+        case mode, status, endReason, direction, isVideo
+        case startedAt, answeredAt, endedAt, durationSec, bytesSent, bytesReceived
+        case peer, participants
+    }
 
     public init(
         callId: String,
@@ -87,7 +131,8 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
         durationSec: Int,
         bytesSent: Int? = nil,
         bytesReceived: Int? = nil,
-        peer: CallHistoryPeer? = nil
+        peer: CallHistoryPeer? = nil,
+        participants: [CallHistoryParticipant] = []
     ) {
         self.callId = callId
         self.conversationId = conversationId
@@ -106,6 +151,29 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
         self.bytesSent = bytesSent
         self.bytesReceived = bytesReceived
         self.peer = peer
+        self.participants = participants
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        callId = try container.decode(String.self, forKey: .callId)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        conversationType = try container.decode(String.self, forKey: .conversationType)
+        conversationTitle = try container.decodeIfPresent(String.self, forKey: .conversationTitle)
+        conversationAvatar = try container.decodeIfPresent(String.self, forKey: .conversationAvatar)
+        mode = try container.decode(String.self, forKey: .mode)
+        status = try container.decode(String.self, forKey: .status)
+        endReason = try container.decodeIfPresent(String.self, forKey: .endReason)
+        direction = try container.decode(String.self, forKey: .direction)
+        isVideo = try container.decode(Bool.self, forKey: .isVideo)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        answeredAt = try container.decodeIfPresent(Date.self, forKey: .answeredAt)
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+        durationSec = try container.decode(Int.self, forKey: .durationSec)
+        bytesSent = try container.decodeIfPresent(Int.self, forKey: .bytesSent)
+        bytesReceived = try container.decodeIfPresent(Int.self, forKey: .bytesReceived)
+        peer = try container.decodeIfPresent(CallHistoryPeer.self, forKey: .peer)
+        participants = (try? container.decodeIfPresent([CallHistoryParticipant].self, forKey: .participants)) ?? []
     }
 }
 
@@ -126,6 +194,28 @@ public extension APICallRecord {
     }
 
     var avatarURL: String? { peer?.avatar ?? conversationAvatar }
+
+    /// The first `limit` participant names of a group call and how many others.
+    func participantSummary(limit: Int) -> CallParticipantSummary {
+        let names = participants.map(\.displayName)
+        return CallParticipantSummary(names: Array(names.prefix(limit)), more: max(0, names.count - limit))
+    }
+
+    /// Journal search (#8066): the displayed name (fallback included), the
+    /// peer's username and a group call's participants, folding accents and
+    /// case — the web's `searchCallRecords`. A blank query matches everything.
+    func matches(query: String, fallback: String) -> Bool {
+        let needle = Self.foldedForSearch(query)
+        guard !needle.isEmpty else { return true }
+        let fields: [String?] = [displayName(fallback: fallback), peer?.username]
+            + participants.flatMap { [$0.displayName, $0.username] }
+        return fields.compactMap { $0 }.contains { Self.foldedForSearch($0).contains(needle) }
+    }
+
+    private static func foldedForSearch(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     /// `"M:SS"` (or `"H:MM:SS"` past an hour). Empty for zero-duration calls.
     var durationLabel: String {

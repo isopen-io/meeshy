@@ -317,4 +317,27 @@ struct APIMessageReplyToPrismTests {
         #expect(api.toMessage(currentUserId: "u-me", preferredLanguages: ["fr"]).replyTo?.previewText == "Bonjour")
         #expect(api.toMessage(currentUserId: "u-me").replyTo?.previewText == "Hello")
     }
+
+    // MARK: - #8122 — une carte de visite citée se dit par son contact
+
+    @Test("une carte de visite citée sans texte se dit « 👤 nom », jamais par son fichier")
+    func quotedContactCardSaysTheContactName() throws {
+        let card = """
+        {"id":"a2","mimeType":"text/vcard","fileSize":255,
+         "originalName":"contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf"}
+        """
+        let reference = try Self.decodeReplyTo(Self.quoted(content: "", attachments: "[\(card)]"))
+            .toReplyReference(currentUserId: "u-me", preferredLanguages: ["fr"])
+        #expect(reference.previewText == "👤 Zoé Sanscompte")
+    }
+
+    @Test("le texte d'un message cité l'emporte sur la carte de visite qu'il porte")
+    func quotedContactCardWithTextKeepsTheText() throws {
+        let card = """
+        {"id":"a2","mimeType":"text/vcard","originalName":"Zoé.vcf"}
+        """
+        let reference = try Self.decodeReplyTo(Self.quoted(content: "Voici Zoé", attachments: "[\(card)]"))
+            .toReplyReference(currentUserId: "u-me", preferredLanguages: ["en"])
+        #expect(reference.previewText == "Voici Zoé")
+    }
 }

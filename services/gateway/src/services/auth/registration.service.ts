@@ -62,6 +62,7 @@ import { registrationLanguages } from './registration-languages';
 import { derivedNames, displayNameDepuisEmail, generateUsername } from './registration-identity';
 import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-block';
 import { RegistrationRefusal } from './registration-refusal';
+import { claimPlaceholderEmail, maskedEmailOwner, retireEarlierClaims } from './email-claim';
 import { hashEmailCode, verificationTtlMinutes } from './email-code';
 
 const logger = enhancedLogger.child({ module: 'RegistrationService' });
@@ -103,6 +104,13 @@ export type RegisterData = {
   readonly phoneTransferToken?: string;
   /** Posé quand le jeton de transfert a été validé — le conflit de numéro ne se pose plus. */
   readonly skipPhoneConflictCheck?: boolean;
+  /**
+   * « Ce n'est pas moi » (#8214) : l'adresse est détenue par un autre compte,
+   * et la personne la revendique. Le compte naît INACTIF, sans l'adresse, et ne
+   * la reçoit qu'à la preuve (`./email-claim`). Sans objet — donc ignoré — quand
+   * l'adresse n'est détenue par personne.
+   */
+  readonly claimEmail?: boolean;
 };
 
 /**
@@ -114,6 +122,11 @@ export type RegisterData = {
  */
 export type RegisterResult = {
   readonly user?: SocketIOUser;
+  /**
+   * L'adresse REVENDIQUÉE (#8214) : le compte créé est inactif, `user.email`
+   * est son adresse d'attente, et la réponse doit nommer celle-ci.
+   */
+  readonly claimedEmail?: string;
   readonly phoneOwnershipConflict?: boolean;
   readonly phoneOwnerInfo?: {
     readonly maskedDisplayName: string;
@@ -151,6 +164,8 @@ export type RegistrationDeps = {
         passwordUrl: string;
         hasPassword: boolean;
       };
+      /** #8227 — une revendication : l'e-mail dit que le code retire l'adresse à un compte existant. */
+      claim?: boolean;
     }): Promise<{ success: boolean; error?: string; provider?: string; messageId?: string }>;
   };
   readonly frontendUrl: string;
@@ -353,13 +368,37 @@ export async function registerAccount(
         { email: { equals: normalizedEmail, mode: 'insensitive' } },
       ],
     },
-    select: { username: true, email: true },
+    select: { username: true, email: true, displayName: true, avatar: true },
   });
+  const detenteur =
+    existant && existant.email.toLowerCase() === normalizedEmail.toLowerCase() ? existant : null;
 
-  if (existant) {
-    if (existant.email.toLowerCase() === normalizedEmail.toLowerCase()) {
-      throw new RegistrationRefusal('EMAIL_TAKEN', 'Email déjà utilisé');
-    }
+  // #8214 — l'adresse prise se REFUSE toujours en 409 (l'app iOS publiée le
+  // comprend), mais le refus montre le détenteur, masqué, pour que le client
+  // demande « Est-ce vous ? ». Revendiquée, elle ne se refuse plus : le compte
+  // naîtra inactif et sans elle.
+  if (detenteur && !data.claimEmail) {
+    throw new RegistrationRefusal('EMAIL_TAKEN', 'Email déjà utilisé', {
+      emailOwner: maskedEmailOwner(detenteur),
+    });
+  }
+  const revendication = detenteur ? normalizedEmail : null;
+
+  // Une seule paire vit par adresse revendiquée : la nouvelle éteint les
+  // précédentes et libère leur pseudo AVANT qu'on vérifie le sien — redemander
+  // le code, c'est revendiquer à nouveau, souvent sous le même pseudo.
+  if (revendication) await retireEarlierClaims(deps.prisma, revendication);
+
+  // La lecture ci-dessus a rendu le DÉTENTEUR de l'adresse : sur une
+  // revendication, le pseudo demandé reste à vérifier à part.
+  const pseudoPris = revendication
+    ? await deps.prisma.user.findFirst({
+        where: { username: { equals: normalizedUsername, mode: 'insensitive' } },
+        select: { username: true },
+      })
+    : existant;
+
+  if (pseudoPris) {
     // Le pseudo GÉNÉRÉ a déjà été vérifié libre ; cette branche ne se
     // rencontre donc que pour un pseudo DEMANDÉ — ou dans la course entre la
     // génération et cette lecture, où un refus reste la bonne réponse.
@@ -429,7 +468,11 @@ export async function registerAccount(
         firstName,
         lastName,
       }),
-      email: normalizedEmail,
+      // Revendiquée, l'adresse reste au détenteur jusqu'à la preuve : le compte
+      // naît sous une adresse d'attente à lui, INACTIF — aucune porte ne
+      // cherche un compte inactif, numéro compris (#8214).
+      email: revendication ? claimPlaceholderEmail() : normalizedEmail,
+      ...(revendication ? { claimedEmail: revendication, isActive: false } : {}),
       phoneNumber: telephone.phoneNumber,
       phoneCountryCode: telephone.phoneCountryCode,
       // Un numéro donné à l'inscription vaut vérifié (il ouvre la
@@ -450,7 +493,7 @@ export async function registerAccount(
         phoneNumber: telephone.phoneNumber,
         email: normalizedEmail,
       }),
-      isOnline: true,
+      isOnline: revendication === null,
       lastActiveAt: new Date(),
       // L'acte de CRÉATION vaut acceptation des conditions : les trois clients
       // l'écrivent sous le bouton. La version dit à QUOI la date se rapporte.
@@ -522,12 +565,17 @@ export async function registerAccount(
         passwordUrl: passwordSettingsUrl(deps.frontendUrl),
         hasPassword: hashedPassword !== null,
       },
+      ...(revendication ? { claim: true } : {}),
     });
 
     if (!resultat.success) {
       logger.error("échec de l'envoi de l'e-mail de vérification", { error: resultat.error });
     }
   }, 'registration-verification-email');
+
+  // Un compte revendiquant ne rejoint aucun salon avant la preuve : c'est elle
+  // qui l'y fait entrer (`./email-claim`), s'il la fait jamais (#8214).
+  if (revendication) return { user: deps.toSocketIOUser(user), claimedEmail: revendication };
 
   // La CRÉATION du participant reste SYNCHRONE — le nouveau compte doit voir la
   // conversation « meeshy » dès sa première liste. Seules l'annonce d'arrivée

@@ -150,7 +150,9 @@ const MAX_LINES = 1000;
  * Puis 3064 → 3049 (#8074, 2026-09-26) : les délais de sonnerie, les grâces et
  * le plafond de participants sont partis vers `@meeshy/shared/types/call-rules`,
  * le jeu unique que la passerelle et les clients lisent. Le même lot rabaisse
- * `services/PushNotificationService.ts` de 1041 à 1035 (le TTL d'appel).
+ * `services/PushNotificationService.ts` de 1041 à 1035 (le TTL d'appel). Puis
+ * 1035 → 1032 (#8171) : le bloc `android.notification` est parti vers
+ * `android-push-config.ts`, jumeau de `web-push-config.ts`.
  *
  * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
  * du lecteur que cinq lectures recopiaient est parti vers
@@ -163,6 +165,16 @@ const MAX_LINES = 1000;
  * `services/MentionService.ts` : SORTI (1235 → 687, #7852, 2026-09-25). Les
  * suggestions d'autocomplete sont parties vers `services/mentions/`, avec la
  * portée qu'elles partagent désormais avec la validation à l'envoi.
+ *
+ * `services/EmailService.ts` : SORTI (1032 → 984, #8238, 2026-09-27). La
+ * feuille de style commune est partie vers `services/email/base-styles.ts`
+ * avant que la garde des destinataires (`services/email/recipient-policy.ts`)
+ * n'entre dans `sendEmail`.
+ *
+ * `services/AuthService.ts` : SORTI (1324 → 945, #8238, 2026-09-27). La
+ * vérification du numéro par SMS est partie vers `services/auth/phone-verification.ts`
+ * avant que la loi du délai de grâce (`services/auth/account-activation.ts`)
+ * n'entre dans la porte du mot de passe.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 3761,
@@ -173,12 +185,10 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/CallService.ts': 3049,
   'services/PostService.ts': 2628,
   'socketio/handlers/MessageHandler.ts': 2269,
-  'services/EmailService.ts': 1032,
   'server.ts': 1406,
   'services/PostFeedService.ts': 1199,
-  'services/AuthService.ts': 1324,
   'services/messaging/MessageProcessor.ts': 1110,
-  'services/PushNotificationService.ts': 1035,
+  'services/PushNotificationService.ts': 1032,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
   'services/AudioTranslateService.ts': 1017,
 };

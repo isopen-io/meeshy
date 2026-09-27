@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { createCaptions } from './call-captions-controller';
 import { createCallStore, type CallStoreApi } from './call-store';
 import { callLayout } from './call-view';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from './call-transport';
-import { createCallEngine, OUTGOING_RING_TIMEOUT_MS, type CallEngineDeps, type StartCallRequest } from './engine';
+import type { QualityTick } from './call-quality-loop';
+import { createCallEngine, OUTGOING_RING_TIMEOUT_MS, QUALITY_INTERVAL_MS, type CallEngineDeps, type StartCallRequest } from './engine';
 import type { LinkState, PeerLink, PeerLinkDeps } from './peer-link';
 
 /**
@@ -39,7 +41,7 @@ const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly random?: number } = {}) {
+function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -49,6 +51,8 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
   const tones: string[] = [];
   const displays: FakeTrack[] = [];
   const cameras: FakeTrack[] = [];
+  const repeats: Array<{ readonly fn: () => void; readonly ms: number; stopped: boolean }> = [];
+  const networkListeners: Array<() => void> = [];
   let clock = 1_000;
   let nextTimer = 1;
   const acks: Record<string, unknown> = { [CLIENT_EVENTS.CALL_INITIATE]: { success: true, data: { callId: 'call-1', mode: 'p2p', iceServers: [{ urls: 'stun:stun.example' }] } }, [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession: { participants: [] }, iceServers: [] } }, ...options.acks };
@@ -110,11 +114,22 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
       return id;
     },
     cancel: (handle) => void timers.delete(handle as number),
-    repeat: () => -1,
-    stopRepeat: () => undefined,
+    repeat: (fn, ms) => repeats.push({ fn, ms, stopped: false }) - 1,
+    stopRepeat: (handle) => {
+      const entry = repeats[handle as number];
+      if (entry !== undefined) entry.stopped = true;
+    },
+    createQualityLoop: () => ({ tick: async () => options.quality?.() ?? null }),
+    watchNetwork: (onChange) => {
+      networkListeners.push(onChange);
+      return () => void networkListeners.splice(networkListeners.indexOf(onChange), 1);
+    },
+    platform: () => 'web',
+    deviceModel: () => 'Chrome · Linux',
     tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
     ringLabel: () => 'Appel entrant',
     random: () => options.random ?? 0.99,
+    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', viewerName: () => 'Moi', newId: () => 'w-1' }),
   };
   const engine = createCallEngine(deps);
 
@@ -130,8 +145,13 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
   const call = () => store.getState().call;
   const names = (list: ReadonlyArray<readonly [string, unknown]>) => list.map(([event]) => event);
   const linkState = (link: FakeLink, state: LinkState) => link.deps.onState(state);
+  const sampleQuality = async (): Promise<void> => {
+    for (const entry of repeats.filter((candidate) => candidate.ms === QUALITY_INTERVAL_MS && !candidate.stopped)) entry.fn();
+    await flush();
+  };
+  const networkChanged = (): void => networkListeners.forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, advance, call, names, linkState, binding };
+  return { engine, store, emitted, requested, links, tones, displays, cameras, advance, call, names, linkState, binding, sampleQuality, networkChanged };
 }
 
 const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };
@@ -397,12 +417,30 @@ describe('en appel', () => {
     expect(h.requested.at(-1)?.[0]).toBe(CLIENT_EVENTS.CALL_JOIN);
   });
 
-  test('les sous-titres traduits gardent les trois derniers segments', async () => {
+  test('les sous-titres traduits entrent au journal de l’appel, dans l’ordre de capture (#8048)', async () => {
     const h = await connected();
-    for (const n of [1, 2, 3, 4]) {
-      h.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, { callId: 'call-1', segment: { id: `s${n}`, speakerId: PEER, text: `line ${n}`, translatedText: `phrase ${n}`, startMs: n, endMs: n + 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr' } });
+    for (const n of [3, 1, 2]) {
+      h.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, { callId: 'call-1', segment: { id: `s${n}`, speakerId: PEER, text: `line ${n}`, translatedText: `phrase ${n}`, startMs: n, endMs: n + 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr', capturedAtMs: n } });
     }
-    expect(h.call()?.captions.map((caption) => caption.text)).toEqual(['phrase 2', 'phrase 3', 'phrase 4']);
+    expect(h.call()?.captions.map((caption) => caption.translated)).toEqual(['phrase 1', 'phrase 2', 'phrase 3']);
+    h.engine.handle(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: 'call-1', speakerId: PEER, active: true });
+    expect(h.call()?.captionPeers).toEqual([PEER]);
+  });
+
+  test('le canal de données d’un lien est remis aux sous-titres ; un « bye » du pair raccroche aussitôt (#8048)', async () => {
+    const h = await connected();
+    const channel = { readyState: 'open', send: () => undefined, onmessage: null as ((event: { data: string }) => void) | null, onclose: null };
+    h.links[0]?.deps.onChannel?.(channel as unknown as RTCDataChannel);
+    channel.onmessage?.({ data: '{"type":"bye","reason":"completed"}' });
+    expect(h.call()?.phase).toEqual({ kind: 'ended', reason: 'remote', detail: null });
+  });
+
+  test('raccrocher prévient le pair en bande avant de fermer les liens (#8048)', async () => {
+    const h = await connected();
+    const sent: string[] = [];
+    h.links[0]?.deps.onChannel?.({ readyState: 'open', send: (raw: string) => void sent.push(raw), onmessage: null, onclose: null } as unknown as RTCDataChannel);
+    h.engine.hangup();
+    expect(sent.map((raw) => JSON.parse(raw) as unknown)).toContainEqual({ type: 'bye', reason: 'completed' });
   });
 
   test('éteindre la caméra repasse l’appel en vocal, sans le couper, et le pair l’apprend (D3)', async () => {
@@ -620,6 +658,130 @@ describe('partage d’écran (#8063)', () => {
     link.deps.onRemoteStream(stream([track('audio'), track('video')]));
     expect(h.call()?.members[PEER]?.cameraOn).toBe(false);
     expect(callLayout(h.call() as NonNullable<ReturnType<typeof h.call>>)).toBe('screen');
+  });
+});
+
+describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', () => {
+  const total = (overrides: Partial<QualityTick['total']> = {}): QualityTick['total'] => ({ level: 'good', packetLoss: 1, rtt: 120, jitter: 8, audioKbps: 32, videoKbps: 480, bytesSent: 10_000, bytesReceived: 20_000, ...overrides });
+  const connected = async (ticks: ReadonlyArray<QualityTick | null> = []) => {
+    let index = 0;
+    const h = harness({ quality: () => ticks[Math.min(index++, ticks.length - 1)] ?? null });
+    await h.engine.start(DIRECT);
+    h.advance(3_000);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.advance(1_500);
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    return h;
+  };
+
+  test('chaque relevé publie le niveau, le détail et le stade de survie ; le rapport part vers la passerelle, au plus toutes les 5 s', async () => {
+    const h = await connected([{ total: total({ level: 'poor', packetLoss: 9, rtt: 480 }), stage: 'frozen', codec: 'VP8' }]);
+    await h.sampleQuality();
+    expect(h.call()?.quality).toEqual({ level: 'poor', packetLoss: 9, rtt: 480, jitter: 8, audioKbps: 32, videoKbps: 480, survival: 'frozen' });
+    const reports = () => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_QUALITY_REPORT);
+    expect(reports()[0]?.[1]).toMatchObject({ callId: 'call-1', stats: { level: 'poor', packetLoss: 9, rtt: 480, bitrate: { audio: 32, video: 480 }, bytesSent: 10_000 } });
+    expect(typeof (reports()[0]?.[1] as { stats: { timestamp: unknown } }).stats.timestamp).toBe('string');
+    h.advance(2_000);
+    await h.sampleQuality();
+    expect(reports()).toHaveLength(1);
+    h.advance(3_000);
+    await h.sampleQuality();
+    expect(reports()).toHaveLength(2);
+  });
+
+  test('un relevé mauvais, même hors fenêtre de rapport, fait demander la note d’après-appel (#8072)', async () => {
+    const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8' } as const;
+    const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8' }, good]);
+    await h.sampleQuality();
+    h.advance(2_000);
+    await h.sampleQuality();
+    h.advance(2_000);
+    await h.sampleQuality();
+    h.advance(30_000);
+    h.engine.hangup();
+    expect(h.store.getState().feedback?.callId).toBe('call-1');
+  });
+
+  test('la boucle s’arrête avec l’appel : plus aucun relevé après le raccroché', async () => {
+    const h = await connected([{ total: total(), stage: 'sending', codec: 'opus' }]);
+    h.engine.hangup();
+    const before = h.emitted.length;
+    await h.sampleQuality();
+    expect(h.emitted.length).toBe(before);
+  });
+
+  test('`call:quality-alert` allume l’alerte du pair, qui s’éteint seule après 15 s sans nouvel avis', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_QUALITY_ALERT, { callId: 'call-1', participantId: 'p-2', metric: 'packetLoss', value: 8, threshold: 5 });
+    expect(h.call()?.members[PEER]?.weakNetwork).toBe(true);
+    h.advance(10_000);
+    h.engine.handle(SERVER_EVENTS.CALL_QUALITY_ALERT, { callId: 'call-1', userId: PEER, metric: 'rtt', value: 400, threshold: 300 });
+    h.advance(10_000);
+    expect(h.call()?.members[PEER]?.weakNetwork).toBe(true);
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.weakNetwork).toBe(false);
+  });
+
+  test('`call:screen-capture-alert` : le pair capture l’écran, puis arrête ; l’alerte d’un autre appel est ignorée', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'autre', userId: PEER, isCapturing: true });
+    expect(h.call()?.members[PEER]?.capturing).toBe(false);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', participantId: 'p-2', isCapturing: true });
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: false });
+    expect(h.call()?.members[PEER]?.capturing).toBe(false);
+  });
+
+  test('au raccroché, `call:analytics` part UNE fois, avec le codec lu, les reprises, les transitions réseau et la qualité', async () => {
+    const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8' }]);
+    await h.sampleQuality();
+    h.advance(2_000);
+    await h.sampleQuality();
+    h.linkState(h.links[0] as FakeLink, 'reconnecting');
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    h.networkChanged();
+    h.advance(60_000);
+    h.engine.hangup();
+    const analytics = h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS);
+    expect(analytics).toHaveLength(1);
+    expect(analytics[0]?.[1]).toMatchObject({
+      callId: 'call-1',
+      setupTimeMs: 4_500,
+      negotiationTimeMs: 1_500,
+      durationSeconds: 62,
+      reconnectionCount: 1,
+      networkTransitions: 1,
+      averageRtt: 280,
+      averagePacketLoss: 5,
+      maxPacketLoss: 10,
+      codec: 'VP8',
+      transcriptionUsed: false,
+      qualityDistribution: { excellent: 0.5, good: 0, fair: 0, poor: 0.5 },
+      platform: 'web',
+      deviceModel: 'Chrome · Linux',
+      isVideo: false,
+      endReason: 'local',
+    });
+  });
+
+  test('des sous-titres AFFICHÉS comptent dans le rapport ; reçus mais masqués, non', async () => {
+    const segment = { callId: 'call-1', segment: { id: 's1', speakerId: PEER, text: 'hello', translatedText: 'bonjour', startMs: 0, endMs: 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr' } };
+    const hidden = await connected();
+    hidden.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, segment);
+    hidden.engine.hangup();
+    expect(hidden.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ transcriptionUsed: false });
+    const shown = await connected();
+    shown.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, segment);
+    shown.engine.toggleCaptions();
+    shown.engine.hangup();
+    expect(shown.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ transcriptionUsed: true });
+  });
+
+  test('un appel sans réponse rapporte un établissement à -1', async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    h.advance(OUTGOING_RING_TIMEOUT_MS);
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ setupTimeMs: -1, negotiationTimeMs: -1, durationSeconds: 0, endReason: 'missed' });
   });
 });
 

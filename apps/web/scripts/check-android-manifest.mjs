@@ -99,7 +99,21 @@ export const auditManifestPermissions = ({ manifest, required = REQUIRED_PERMISS
     .filter(({ count }) => count !== 1);
 };
 
-const PLUGIN_MESSAGING_SERVICE = 'com.capacitorjs.plugins.pushnotifications.MessagingService';
+/**
+ * Permissions que la coque ne demande PAS, et dont l'arrivée est un choix à
+ * rouvrir, jamais un effet de bord. `READ_CONTACTS` (#8242) : la tuile
+ * « Contact » passe par `ACTION_PICK` (`MeeshyContactsPlugin.java`), qui ne
+ * donne accès qu'à la fiche choisie — la déclarer ouvrirait le carnet entier.
+ */
+export const FORBIDDEN_PERMISSIONS = ['android.permission.READ_CONTACTS'];
+
+/** Les permissions de `forbidden` déclarées de façon effective. */
+export const auditForbiddenPermissions = ({ manifest, forbidden = FORBIDDEN_PERMISSIONS }) => {
+  const declared = new Set(effectiveDeclarations(manifest));
+  return forbidden.filter((permission) => declared.has(permission));
+};
+
+const PLUGIN_MESSAGING_SERVICE ='com.capacitorjs.plugins.pushnotifications.MessagingService';
 const COMPONENT_ELEMENT = /<(service|receiver)(?=[\s/>])([^>]*?)(\/>|>([\s\S]*?)<\/\1>)/g;
 
 const componentsOf = (manifest) =>
@@ -166,6 +180,16 @@ function main() {
 
   if (violations.length > 0) {
     throw new Error(formatViolations({ manifestPath: MANIFEST_PATH, violations }));
+  }
+
+  const forbidden = auditForbiddenPermissions({ manifest });
+  if (forbidden.length > 0) {
+    throw new Error(
+      [
+        `check-android-manifest: permission(s) que la coque ne demande pas, déclarée(s) dans ${MANIFEST_PATH} :`,
+        ...forbidden.map((permission) => `  • ${permission}`),
+      ].join('\n'),
+    );
   }
 
   const componentViolations = auditCallComponents({ manifest });

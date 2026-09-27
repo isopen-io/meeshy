@@ -47,6 +47,51 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
     }
 }
 
+// MARK: - Le lien de connexion d'une adresse déjà utilisée (#8216)
+
+/// Demander le code et le lien de connexion d'une adresse — la porte « e-mail
+/// seul » que `MagicLinkView` emprunte (`AuthService.requestEmailCode`), jamais
+/// une seconde machine. Le protocole n'existe que pour que la suite atteigne
+/// l'envoi sans passerelle.
+@MainActor
+protocol SignInLinkRequesting: AnyObject {
+    func requestEmailCode(email: String) async throws -> EmailCodeDispatch
+}
+
+@MainActor
+final class AuthServiceSignInLinkRequester: SignInLinkRequesting {
+    nonisolated deinit {}
+
+    static let shared = AuthServiceSignInLinkRequester()
+
+    private init() {}
+
+    func requestEmailCode(email: String) async throws -> EmailCodeDispatch {
+        try await AuthService.shared.requestEmailCode(email: email)
+    }
+}
+
+/// L'adresse que l'inscription remet à la connexion quand elle y bascule
+/// (#8216) : l'accueil referme l'inscription AVANT que `LoginView` n'existe,
+/// l'adresse l'y attend donc ici, en mémoire vive, et ne sert qu'une fois.
+@MainActor
+final class LoginEmailHandoff {
+    nonisolated deinit {}
+
+    static let shared = LoginEmailHandoff()
+
+    private var held: String?
+
+    init() {}
+
+    func hold(_ email: String?) { held = email }
+
+    func take() -> String? {
+        defer { held = nil }
+        return held
+    }
+}
+
 // MARK: - Les champs qui peuvent porter un refus
 
 /// Les quatre saisies de l'écran, et rien d'autre : un refus qui ne vise aucune
@@ -121,18 +166,35 @@ final class SignupViewModel: ObservableObject {
     /// actif (#8055) : l'écran présente alors la saisie du code au lieu d'entrer
     /// dans l'app. Le mot de passe est déjà sur le compte — il ne repart pas.
     @Published var pendingVerification: PendingEmailVerification?
+    /// Le code et le lien de connexion PARTIS vers l'adresse déjà utilisée
+    /// (#8216) : l'écran présente alors l'attente de `MagicLinkView`.
+    @Published var signInLink: SentEmailCode?
+    @Published private(set) var isRequestingSignInLink = false
+    /// Pourquoi le lien n'est pas parti — dit SOUS le geste qui l'a demandé,
+    /// jamais au bandeau du bas de l'écran.
+    @Published private(set) var signInLinkError: String?
+    /// L'adresse, telle que tapée, que la passerelle a refusée comme DÉJÀ
+    /// UTILISÉE : le refus et ses gestes ne valent que pour elle.
+    private var rejectedEmail: String?
+    /// Le détenteur MASQUÉ de l'adresse refusée (#8214) : l'écran demande
+    /// « Est-ce vous ? ». `nil` sur une passerelle qui ne le sert pas encore —
+    /// l'écran retombe alors sur la récupération seule.
+    @Published private(set) var emailOwner: APIRejection.EmailOwner?
 
     private let registrar: any SignupRegistering
     /// Le code du lien d'invitation ouvert avant l'inscription (#8075).
     private let referrals: PendingReferralStoreProviding
+    private let linkRequester: any SignInLinkRequesting
 
     init(
         registrar: any SignupRegistering = AuthManagerSignupRegistrar.shared,
         locale: Locale = .current,
-        referrals: PendingReferralStoreProviding = PendingReferralStore.shared
+        referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
+        linkRequester: any SignInLinkRequesting = AuthServiceSignInLinkRequester.shared
     ) {
         self.registrar = registrar
         self.referrals = referrals
+        self.linkRequester = linkRequester
         self.form = SignupForm(locale: locale)
     }
 
@@ -145,7 +207,58 @@ final class SignupViewModel: ObservableObject {
     /// Le refus du serveur d'abord ; à défaut, ce que la saisie viole DÉJÀ —
     /// la borne du pseudo se dit PENDANT la frappe (#8082), pas après un aller-retour.
     func error(for field: SignupField) -> String? {
-        fieldErrors[field] ?? liveError(for: field)
+        if field == .email, emailAlreadyRegistered {
+            return showsEmailTakenActions ? Self.emailTakenMessage : nil
+        }
+        return fieldErrors[field] ?? liveError(for: field)
+    }
+
+    /// L'adresse refusée comme DÉJÀ UTILISÉE est toujours celle du champ
+    /// (#8216) : l'écran offre alors le lien de connexion et le mot de passe
+    /// oublié. Corrigée, elle n'est plus celle d'un compte connu.
+    var showsEmailTakenActions: Bool {
+        emailAlreadyRegistered && rejectedEmail == form.email
+    }
+
+    /// L'adresse que la connexion reçoit quand l'inscription y bascule — une
+    /// adresse COMPLÈTE seulement : un début de saisie préremplirait un champ
+    /// qu'il faudrait vider.
+    var loginEmail: String? {
+        form.isEmailValid ? form.email.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+    }
+
+    // MARK: - « Ce n'est pas moi » (#8214 × #8216)
+
+    /// Renvoie la MÊME inscription en REVENDIQUANT l'adresse : la passerelle
+    /// crée le compte sans session et envoie un code à l'adresse — sa preuve
+    /// seule la donne au nouveau compte. `true` quand le compte attend son
+    /// code (`pendingVerification` porte alors l'écran du code).
+    @discardableResult
+    func claimEmail() async -> Bool {
+        guard showsEmailTakenActions else { return false }
+        return await submit(claimingEmail: true)
+    }
+
+    // MARK: - Lien de connexion (#8216)
+
+    /// « Recevoir un lien de connexion » : UN geste envoie le code et le lien
+    /// à l'adresse refusée, normalisée comme l'inscription l'aurait envoyée.
+    /// `true` quand ils sont partis — `signInLink` porte alors l'attente.
+    @discardableResult
+    func requestSignInLink() async -> Bool {
+        guard showsEmailTakenActions, !isRequestingSignInLink else { return false }
+        let email = form.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        isRequestingSignInLink = true
+        signInLinkError = nil
+        defer { isRequestingSignInLink = false }
+        do {
+            let dispatch = try await linkRequester.requestEmailCode(email: email)
+            signInLink = SentEmailCode(email: email, dispatch: dispatch)
+            return true
+        } catch {
+            signInLinkError = EmailProofErrorText.sendMessage(for: error)
+            return false
+        }
     }
 
     private func liveError(for field: SignupField) -> String? {
@@ -183,7 +296,7 @@ final class SignupViewModel: ObservableObject {
     /// IMMÉDIATEMENT, sans pause d'aucune sorte : dans l'app si la session est
     /// appliquée, vers la saisie du code si `pendingVerification` est posé.
     @discardableResult
-    func submit() async -> Bool {
+    func submit(claimingEmail: Bool = false) async -> Bool {
         guard form.canSubmit, !isSubmitting else { return false }
 
         isSubmitting = true
@@ -194,6 +307,9 @@ final class SignupViewModel: ObservableObject {
         // peut-être plus.
         usernameSuggestions = []
         emailAlreadyRegistered = false
+        rejectedEmail = nil
+        emailOwner = nil
+        signInLinkError = nil
         pendingVerification = nil
         defer { isSubmitting = false }
 
@@ -202,7 +318,8 @@ final class SignupViewModel: ObservableObject {
             // passerelle rattache le compte au parrain, et un code invalide ne
             // bloque jamais la création. Le compte existe dès qu'elle répond —
             // session ouverte ou code à saisir — donc le code a servi.
-            let request = form.registerRequest().referred(byCode: referrals.recall())
+            let referred = form.registerRequest().referred(byCode: referrals.recall())
+            let request = claimingEmail ? referred.claimingEmail() : referred
             let outcome = try await registrar.register(request)
             referrals.forget()
             if case .verificationRequired(let pending) = outcome {
@@ -242,6 +359,8 @@ final class SignupViewModel: ObservableObject {
 
     private func applyRejection(_ rejection: APIRejection) {
         emailAlreadyRegistered = rejection.code == Self.emailTakenCode
+        rejectedEmail = emailAlreadyRegistered ? form.email : nil
+        emailOwner = emailAlreadyRegistered ? rejection.emailOwner : nil
 
         var placed: [SignupField: String] = [:]
         for name in rejection.affectedFields {
@@ -382,6 +501,15 @@ final class SignupViewModel: ObservableObject {
     static let phoneOwnershipConflictMessage = String(
         localized: "auth.signup.error.phoneOwned",
         defaultValue: "Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer.",
+        bundle: .main
+    )
+
+    /// Ce que dit le champ d'une adresse DÉJÀ UTILISÉE (#8216) — jamais le
+    /// texte du serveur, et le mot « compte » plutôt que « adresse prise » :
+    /// l'utilisateur apprend qu'il A un compte, pas qu'il s'est trompé.
+    static let emailTakenMessage = String(
+        localized: "auth.signup.email.taken",
+        defaultValue: "Un compte existe déjà avec cette adresse.",
         bundle: .main
     )
 

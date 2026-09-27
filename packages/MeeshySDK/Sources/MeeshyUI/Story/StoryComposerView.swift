@@ -263,7 +263,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Callbacks (public API preserved)
 
-    public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void
+    public var onPublishSlide: @MainActor (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void
     /// Retourne `true` quand le hand-off est ACCEPTÉ, c'est-à-dire quand
     /// l'hôte ferme réellement le composer. Un `false` (édition hors-ligne,
     /// surface qui ne publie pas) laisse le composer ouvert ET son bouton
@@ -347,7 +347,7 @@ public struct StoryComposerView: View {
         chromeOwner: ComposerChromeOwner = .atelier,
         publishTrigger: ComposerPublishTrigger? = nil,
         publishTargetType: PostType = .story,
-        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishSlide: @escaping @MainActor (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void,
@@ -381,7 +381,7 @@ public struct StoryComposerView: View {
         chromeOwner: ComposerChromeOwner = .atelier,
         publishTrigger: ComposerPublishTrigger? = nil,
         publishTargetType: PostType = .story,
-        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishSlide: @escaping @MainActor (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void,

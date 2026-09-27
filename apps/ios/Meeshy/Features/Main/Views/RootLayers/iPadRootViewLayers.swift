@@ -60,7 +60,7 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
     let onRevealFeed: () -> Void
     let onAppear: () -> Void
     let onDisappear: () -> Void
-    let onStart: () async -> Void
+    let onStart: @MainActor () async -> Void
 
     func body(content: Content) -> some View {
         content
@@ -152,6 +152,12 @@ struct iPadSheetsLayer: ViewModifier {
                             router.deepLinkProfileUser = nil
                             router.push(.postDetail(post.id, post))
                         }))
+                    },
+                    onCall: { request in
+                        router.deepLinkProfileUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            CallBackDialer.shared.dialFromProfile(request)
+                        }
                     }
                 )
                 .presentationDetents([.large, .medium])
@@ -333,5 +339,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // d'appel, qu'un `.overlay` posé plus tôt laisserait flotter sur la
             // carte. Garde : `OnboardingAboveGlobalChromeGuardTests`.
             .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
+            // l'onboarding (`OnboardingPresenceSignal`).
+            .activationInviteHost()
     }
 }

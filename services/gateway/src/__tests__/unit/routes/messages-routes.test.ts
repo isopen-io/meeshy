@@ -1698,11 +1698,12 @@ describe('GET /conversations/:id/pinned-messages', () => {
     expect(mockSendNotFound).toHaveBeenCalled();
   });
 
-  it('403 when no access', async () => {
+  it('404 « Conversation not found » when no access — as for an unknown conversation (#8116)', async () => {
     mockCanAccessConversation.mockResolvedValue(false);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('returns pinned messages with sender mapping', async () => {

@@ -7,6 +7,7 @@ import {
   type PublicContactAccount,
   type ResolveContactsRequest,
 } from '@meeshy/shared/types/contact-card';
+import * as contactsEndpoints from '@meeshy/shared/api/endpoints/contacts';
 
 import { unwrap } from '@/lib/api/client';
 import type { DataSource } from '@/lib/api/config';
@@ -14,7 +15,7 @@ import type { ApiResult, HttpTransport } from '@/lib/api/http';
 
 /**
  * **LE PORT DE LA CARTE DE VISITE PARTAGÉE** (#8101) —
- * `POST /api/v1/contacts/resolve` (`services/gateway/src/routes/contacts/resolve.ts`).
+ * `POST contacts.resolve` (`services/gateway/src/routes/contacts/resolve.ts`).
  *
  * Une vCard reçue porte des numéros et des e-mails ; la passerelle dit si l'un
  * d'eux est un compte Meeshy et rend au plus trois profils PUBLICS, avec la
@@ -68,7 +69,7 @@ export async function resolveContactAccounts(
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: [] };
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/contacts/resolve',
+    path: contactsEndpoints.resolve,
     body: { phones: deps.request.phones, emails: deps.request.emails },
     ...(deps.signal !== undefined ? { signal: deps.signal } : {}),
   });

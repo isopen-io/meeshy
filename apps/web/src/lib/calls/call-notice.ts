@@ -1,4 +1,5 @@
-import type { Message } from '@/lib/api/types';
+import type { Attachment, Message } from '@/lib/api/types';
+import { kindOf } from '@/lib/view/message';
 import { metadataOf } from '@/lib/view/message-metadata';
 
 import type { CallMedia } from './call-store';
@@ -15,9 +16,22 @@ export type CallNoticeTarget = {
   readonly callId: string | null;
   readonly media: CallMedia;
   readonly live: boolean;
+  /** Un appel TERMINÉ, identifié et qui a duré : sa transcription gravée peut se relire (#8048). */
+  readonly transcript: boolean;
+  /** L'enregistrement consenti par tous et rattaché à la bulle d'un appel TERMINÉ (#8064) : il se réécoute ici. */
+  readonly recording: CallNoticeRecording | null;
 };
 
-export function callNoticeTarget(message: Pick<Message, 'conversationId' | 'metadata'>): CallNoticeTarget | null {
+export type CallNoticeRecording = { readonly attachment: Attachment; readonly language: string };
+
+type CallNoticeSource = Pick<Message, 'conversationId' | 'metadata'> & Partial<Pick<Message, 'attachments' | 'originalLanguage'>>;
+
+const recordingOf = (message: CallNoticeSource): CallNoticeRecording | null => {
+  const attachment = (message.attachments ?? []).find((candidate) => kindOf(candidate) === 'audio');
+  return attachment === undefined ? null : { attachment, language: message.originalLanguage ?? 'fr' };
+};
+
+export function callNoticeTarget(message: CallNoticeSource): CallNoticeTarget | null {
   const metadata = metadataOf(message);
   if (metadata === null || (metadata.kind !== 'call' && metadata.kind !== 'call-live')) return null;
   const callId = typeof metadata.callId === 'string' && metadata.callId !== '' ? metadata.callId : null;
@@ -26,6 +40,8 @@ export function callNoticeTarget(message: Pick<Message, 'conversationId' | 'meta
     callId,
     media: metadata.callType === 'video' ? 'video' : 'audio',
     live: metadata.kind === 'call-live',
+    transcript: metadata.kind === 'call' && callId !== null && typeof metadata.durationSeconds === 'number' && metadata.durationSeconds > 0,
+    recording: metadata.kind === 'call' ? recordingOf(message) : null,
   };
 }
 

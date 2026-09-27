@@ -543,7 +543,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// `ConversationViewModel.loadOlderMessages()` so pagination chains cache
     /// then network — bypassing this hook leaves the store stuck on whatever
     /// GRDB already holds.
-    var onLoadOlder: (() async -> Void)?
+    var onLoadOlder: (@MainActor () async -> Void)?
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?

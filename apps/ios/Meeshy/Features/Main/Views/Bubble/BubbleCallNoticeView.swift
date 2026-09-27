@@ -82,27 +82,32 @@ struct BubbleCallNoticeView: View, Equatable {
             // d'appel sont désormais atteignables (`PrimaryAction.callDetail`).
             // VoiceOver n'a ni double tap ni appui long : les DEUX
             // destinations lui sont offertes explicitement ci-dessous.
-            card
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    HapticFeedback.medium()
-                    onCallBack?(summary)
+            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 6) {
+                card
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        HapticFeedback.medium()
+                        onCallBack?(summary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityLabel)
+                    .accessibilityHint(Text(presentation.isLive
+                        ? String(localized: "bubble.call.join.a11y.hint.doubleTap",
+                                 defaultValue: "Touchez deux fois pour rejoindre l'appel", bundle: .main)
+                        : String(localized: "bubble.call.callback.hint.doubleTap",
+                                 defaultValue: "Touchez deux fois pour rappeler", bundle: .main)))
+                    .accessibilityAction(named: Text(presentation.isLive
+                        ? String(localized: "bubble.call.join.action", defaultValue: "Rejoindre l'appel", bundle: .main)
+                        : String(localized: "bubble.call.callback.action", defaultValue: "Rappeler", bundle: .main))) {
+                        onCallBack?(summary)
+                    }
+                    .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
+                        onLongPress?()
+                    }
+                if let recording = notice.recording {
+                    CallRecordingPlayback(recording: recording, accentHex: accentHex)
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(accessibilityLabel)
-                .accessibilityHint(Text(presentation.isLive
-                    ? String(localized: "bubble.call.join.a11y.hint.doubleTap",
-                             defaultValue: "Touchez deux fois pour rejoindre l'appel", bundle: .main)
-                    : String(localized: "bubble.call.callback.hint.doubleTap",
-                             defaultValue: "Touchez deux fois pour rappeler", bundle: .main)))
-                .accessibilityAction(named: Text(presentation.isLive
-                    ? String(localized: "bubble.call.join.action", defaultValue: "Rejoindre l'appel", bundle: .main)
-                    : String(localized: "bubble.call.callback.action", defaultValue: "Rappeler", bundle: .main))) {
-                    onCallBack?(summary)
-                }
-                .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
-                    onLongPress?()
-                }
+            }
             if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)

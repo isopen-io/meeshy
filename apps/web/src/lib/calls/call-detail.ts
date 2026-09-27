@@ -37,6 +37,8 @@ export type CallDetail = {
   readonly durationSec: number;
   readonly bytes: number | null;
   readonly isGroup: boolean;
+  /** Les autres participants d'un appel de groupe (#8066) ; vide pour un appel à deux. */
+  readonly participants: readonly string[];
   readonly live: boolean;
 };
 
@@ -52,6 +54,7 @@ export function callDetailFromRecord(record: CallRecord, unknown: string): CallD
     durationSec: record.durationSec,
     bytes: record.bytes,
     isGroup: record.conversationType !== 'direct',
+    participants: record.participants.map((participant) => participant.displayName),
     live: false,
   };
 }
@@ -72,6 +75,7 @@ export function callDetailFromSession(
   const others = session.participants.filter((member) => member.userId !== context.viewerId);
   const known = context.identity !== undefined && context.identity.title !== '' ? context.identity : null;
   const first = others[0];
+  const isGroup = known?.isGroup ?? others.length > 1;
   return {
     callId: session.callId,
     conversationId: session.conversationId,
@@ -82,7 +86,8 @@ export function callDetailFromSession(
     startedAt: session.startedAt,
     durationSec: session.durationSec,
     bytes: null,
-    isGroup: known?.isGroup ?? others.length > 1,
+    isGroup,
+    participants: isGroup ? others.map((member) => member.name).filter((name) => name !== '') : [],
     live: session.live,
   };
 }

@@ -66,7 +66,21 @@ describe("Politique de confidentialité — le carnet d'adresses (#8130)", () =>
     expect(text).toContain('Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail');
   });
 
+  /* #8167 — l'effacement se fait depuis l'app, sans écrire au support : la
+     carte nomme les deux chemins tels que l'app les affiche, et dit ce qui
+     part avec le carnet et ce qui n'arrive plus ensuite. */
+  test('la carte « Effacement » cite les chemins in-app, iOS et web', () => {
+    expect(text).toContain("Effacer mon carnet d'adresses");
+    expect(text).toMatch(/Répertoire/);
+    expect(text).toMatch(/Paramètres > Confidentialité/);
+  });
+
+  test('elle dit que les annonces tirées du carnet partent avec lui, et qu’aucun renvoi n’est silencieux', () => {
+    expect(text).toMatch(/annonc/i);
+    expect(text).toMatch(/de nouveau/i);
+  });
+
   test('la date de mise à jour suit la modification', () => {
-    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 26 septembre 2026');
+    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 27 septembre 2026');
   });
 });

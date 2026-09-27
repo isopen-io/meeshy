@@ -25,7 +25,7 @@ public struct MeeshyForgotPasswordView: View {
     @StateObject private var theme = ThemeManager.shared
 
     @State private var mode: RecoveryMode = .email
-    @State private var email = ""
+    @State private var email: String
     @State private var emailSent = false
     /// Le (i) DÉPLIÉ — un seul à la fois, comme à la connexion par e-mail.
     @State private var expandedHint: Hint?
@@ -72,7 +72,12 @@ public struct MeeshyForgotPasswordView: View {
         case nothingReceived
     }
 
-    public init() {}
+    /// - Parameter prefilledEmail: l'adresse déjà tapée par l'hôte (#8216) —
+    ///   l'inscription d'une adresse déjà utilisée, ou la connexion. La
+    ///   retaper est un geste de trop.
+    public init(prefilledEmail: String = "") {
+        _email = State(initialValue: prefilledEmail)
+    }
 
     public var body: some View {
         NavigationStack {

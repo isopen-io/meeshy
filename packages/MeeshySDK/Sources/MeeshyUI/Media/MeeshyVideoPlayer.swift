@@ -50,9 +50,17 @@ public struct MeeshyVideoPlayer: View {
         public nonisolated static let airplay     = ControlSet(rawValue: 1 << 11)
         public nonisolated static let pip         = ControlSet(rawValue: 1 << 12)
         public nonisolated static let loop        = ControlSet(rawValue: 1 << 13)
+        /// Les sauts ±10 s du renderer `.inline`, jusqu'ici posés sans
+        /// condition de part et d'autre de lecture/pause : les rendre
+        /// retirables est ce qui permet un jeu à trois contrôles (#8231).
+        public nonisolated static let skip        = ControlSet(rawValue: 1 << 14)
 
         public nonisolated static let none: ControlSet              = []
-        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .pip, .airplay, .speed]
+        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .skip, .scrubber, .duration, .expand, .pip, .airplay, .speed]
+        /// Son · lecture/pause · plein écran — rien d'autre (#8231, lecture
+        /// dans le fil d'une conversation). Ni saut, ni barre, ni temps, ni
+        /// vitesse, ni PiP : tout cela vit au plein écran, à un toucher.
+        public nonisolated static let inlineMinimal: ControlSet     = [.mute, .playPause, .expand]
         public nonisolated static let fullscreenDefault: ControlSet = [
             .playPause, .scrubber, .duration, .save, .share, .close,
             .speed, .author, .mute, .airplay, .pip, .loop
@@ -144,7 +152,7 @@ public struct MeeshyVideoPlayer: View {
     /// résident) ; `resolve` prend le relais quand il manque.
     public struct Poster: Sendable {
         public let initial: UIImage?
-        public let resolve: (@Sendable () async -> UIImage?)?
+        public let resolve: (@Sendable @concurrent () async -> UIImage?)?
         public init(initial: UIImage? = nil, resolve: (@Sendable () async -> UIImage?)? = nil) {
             self.initial = initial
             self.resolve = resolve
@@ -177,6 +185,11 @@ public struct MeeshyVideoPlayer: View {
     /// Paramètre opaque : l'app le réduit pour les petites cellules (grille
     /// multi-média) et garde le défaut 64pt pour les surfaces pleine largeur.
     public let playButtonDiameter: CGFloat
+    /// Paramètre opaque du renderer `.inline` : quand `true`, toucher la vidéo
+    /// HORS de ses contrôles — le poster avant la lecture, la surface pendant —
+    /// appelle `onExpand` au lieu de montrer/masquer les contrôles. Défaut
+    /// `false` : toutes les surfaces existantes gardent leur geste.
+    public let surfaceTapExpands: Bool
     public let author: VideoAuthor?
     public let caption: String?
     public let fileName: String?
@@ -211,6 +224,7 @@ public struct MeeshyVideoPlayer: View {
         autoplayOnAppear: Bool = false,
         autoplayMuted: Bool = false,
         playButtonDiameter: CGFloat = 64,
+        surfaceTapExpands: Bool = false,
         author: VideoAuthor? = nil,
         caption: String? = nil,
         fileName: String? = nil,
@@ -233,6 +247,7 @@ public struct MeeshyVideoPlayer: View {
         self.autoplayOnAppear = autoplayOnAppear
         self.autoplayMuted = autoplayMuted
         self.playButtonDiameter = playButtonDiameter
+        self.surfaceTapExpands = surfaceTapExpands
         self.author = author
         self.caption = caption
         self.fileName = fileName

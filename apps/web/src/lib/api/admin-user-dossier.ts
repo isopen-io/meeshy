@@ -1,3 +1,5 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText, pageServie } from './admin';
 import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
@@ -58,8 +60,6 @@ async function lire<T>(
   return { ok: true, data: decode(result) };
 }
 
-const cheminMembre = (userId: string, suite: string) => `/api/v1/admin/users/${encodeURIComponent(userId)}/${suite}`;
-
 const pagine = (offset: number) =>
   new URLSearchParams({ offset: String(offset), limit: String(ADMIN_DOSSIER_PAGE_SIZE) }).toString();
 
@@ -117,7 +117,7 @@ export function decodeAdminActivity(raw: unknown): AdminActivity {
 export const adminUserActivityQueryKey = (userId: string) => ['admin', 'user', userId, 'activity'] as const;
 
 export function loadAdminUserActivity(params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal }) {
-  return lire(params, cheminMembre(params.userId, 'activity'), (r) => decodeAdminActivity(r.data));
+  return lire(params, adminEndpoints.usersByUserIdActivity(params.userId), (r) => decodeAdminActivity(r.data));
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ export function decodeAdminCommunities(resultat: { readonly data: unknown; reado
 export const adminUserCommunitiesQueryKey = (userId: string, offset: number) => ['admin', 'user', userId, 'communities', offset] as const;
 
 export function loadAdminUserCommunities(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'communities')}?${pagine(params.offset)}`, (r) => decodeAdminCommunities(r, params.offset));
+  return lire(params, `${adminEndpoints.usersByUserIdCommunities(params.userId)}?${pagine(params.offset)}`, (r) => decodeAdminCommunities(r, params.offset));
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +219,7 @@ export function decodeAdminVoiceProfile(raw: unknown): AdminVoiceProfile {
 export const adminUserVoiceQueryKey = (userId: string) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'voice'] as const;
 
 export function loadAdminUserVoice(params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal }) {
-  return lire(params, cheminMembre(params.userId, 'voice-profile'), (r) => decodeAdminVoiceProfile(r.data));
+  return lire(params, adminEndpoints.usersByUserIdVoiceProfile(params.userId), (r) => decodeAdminVoiceProfile(r.data));
 }
 
 // ---------------------------------------------------------------------------
@@ -286,14 +286,14 @@ export const adminUserSessionsQueryKey = (userId: string, offset: number) => [AD
 export const adminUserSecurityQueryKey = (userId: string, offset: number) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'security', offset] as const;
 
 export function loadAdminUserSessions(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'sessions')}?${pagine(params.offset)}`, (r) => {
+  return lire(params, `${adminEndpoints.usersByUserIdSessions(params.userId)}?${pagine(params.offset)}`, (r) => {
     const servie = pageServie(r);
     return page(servie.lignes.map(decodeSession).filter(garder), servie.meta, params.offset);
   });
 }
 
 export function loadAdminUserSecurityEvents(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'security-events')}?${pagine(params.offset)}`, (r) => {
+  return lire(params, `${adminEndpoints.usersByUserIdSecurityEvents(params.userId)}?${pagine(params.offset)}`, (r) => {
     const servie = pageServie(r);
     return page(servie.lignes.map(decodeSecurityEvent).filter(garder), servie.meta, params.offset);
   });
@@ -349,14 +349,14 @@ export const adminUserReportsReceivedQueryKey = (userId: string, offset: number)
   [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'reported-messages', offset] as const;
 
 export function loadAdminUserReportsFiled(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'reports')}?${pagine(params.offset)}`, (r) => {
+  return lire(params, `${adminEndpoints.usersByUserIdReports(params.userId)}?${pagine(params.offset)}`, (r) => {
     const servie = pageServie(r);
     return page(servie.lignes.map(decodeReportFiled).filter(garder), servie.meta, params.offset);
   });
 }
 
 export function loadAdminUserReportsReceived(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'reported-messages')}?${pagine(params.offset)}`, (r) => {
+  return lire(params, `${adminEndpoints.usersByUserIdReportedMessages(params.userId)}?${pagine(params.offset)}`, (r) => {
     const servie = pageServie(r);
     return page(servie.lignes.map(decodeReportReceived).filter(garder), servie.meta, params.offset);
   });

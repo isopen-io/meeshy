@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeCallRecord, loadCallHistory } from './calls';
+import { callHistoryQueryKey, decodeCallRecord, loadCallHistory } from './calls';
 import { createHttpTransport } from './http';
 
 /**
@@ -64,6 +64,7 @@ describe('un appel décodé est une PROJECTION', () => {
       durationSec: 185,
       bytes: 238000,
       peer: { userId: '64f0c0ffee0000000000abcd', username: 'ada', displayName: 'Ada Lovelace', avatar: 'https://cdn.test/ada.jpg' },
+      participants: [],
     });
   });
 
@@ -75,6 +76,29 @@ describe('un appel décodé est une PROJECTION', () => {
     const record = decodeCallRecord(wireRecord({ peer: null, conversationType: 'group', conversationTitle: 'Équipe' }));
     expect(record?.peer).toBeNull();
     expect(record?.conversationTitle).toBe('Équipe');
+  });
+
+  test('un appel de groupe nomme ses participants (#8066) — sans présence ni contact, une entrée illisible écartée', () => {
+    const record = decodeCallRecord(
+      wireRecord({
+        peer: null,
+        conversationType: 'group',
+        participants: [
+          { participantId: 'p-ada', userId: 'u-ada', username: 'ada', displayName: 'Ada', avatar: 'a.jpg', isOnline: true, phoneNumber: '+33600000000' },
+          { participantId: 'p-guest', userId: null, username: null, displayName: 'Invité', avatar: null },
+          { participantId: 'p-bad', displayName: 42 },
+        ],
+      }),
+    );
+    expect(record?.participants).toEqual([
+      { participantId: 'p-ada', username: 'ada', displayName: 'Ada', avatar: 'a.jpg' },
+      { participantId: 'p-guest', username: null, displayName: 'Invité', avatar: null },
+    ]);
+  });
+
+  test('une charge sans participants (passerelle antérieure) se lit liste vide', () => {
+    expect(decodeCallRecord(wireRecord({ participants: undefined }))?.participants).toEqual([]);
+    expect(decodeCallRecord(wireRecord({ participants: 'x' }))?.participants).toEqual([]);
   });
 
   test('une date illisible écarte la ligne ; une durée négative se lit zéro', () => {
@@ -108,5 +132,25 @@ describe('la page du journal', () => {
     const gateway = gatewayReplying({ status: 500, body: { success: false, error: 'INTERNAL_ERROR' } });
     const result = await loadCallHistory({ ...gateway.deps, filter: 'all', cursor: null });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('filtre par type et recherche serveur (#8203)', () => {
+  test('le type et la recherche partent dans la requête, la recherche débarrassée de ses blancs', async () => {
+    const gateway = gatewayReplying({ status: 200, body: { success: true, data: [], pagination: { hasMore: false } } });
+    await loadCallHistory({ ...gateway.deps, filter: 'all', cursor: null, refine: { type: 'video', q: '  Éloi ' } });
+    expect(gateway.calls[0]?.url).toBe('https://gate.test/api/v1/calls/history?limit=30&filter=all&type=video&q=%C3%89loi');
+  });
+
+  test('sans type ni recherche, la requête reste celle du journal entier', async () => {
+    const gateway = gatewayReplying({ status: 200, body: { success: true, data: [], pagination: { hasMore: false } } });
+    await loadCallHistory({ ...gateway.deps, filter: 'missed', cursor: null, refine: { type: 'all', q: '   ' } });
+    expect(gateway.calls[0]?.url).toBe('https://gate.test/api/v1/calls/history?limit=30&filter=missed');
+  });
+
+  test('le journal entier garde sa clé de cache ; une recherche ou un type en a une à part', () => {
+    expect(callHistoryQueryKey('all')).toEqual(['calls', 'history', 'all']);
+    expect(callHistoryQueryKey('all', { type: 'all', q: ' ' })).toEqual(['calls', 'history', 'all']);
+    expect(callHistoryQueryKey('missed', { type: 'video', q: 'Ada ' })).toEqual(['calls', 'history', 'missed', { type: 'video', q: 'Ada' }]);
   });
 });

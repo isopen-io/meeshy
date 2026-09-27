@@ -1,6 +1,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach } from 'bun:test';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
 
 import { createHttpTransport } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
@@ -176,7 +178,7 @@ export function harness(options: {
   let aborts = 0;
   const postsFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (!url.endsWith('/api/v1/posts') || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
+    if (!url.endsWith(postsEndpoints.root) || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
     posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
     if (options.postsHold?.() === true) await new Promise<void>((resolve) => heldPosts.push(resolve));
     const status = options.postsStatus?.() ?? 201;
@@ -187,7 +189,7 @@ export function harness(options: {
     if (options.uploadsFail?.() === true) throw new TypeError('Failed to fetch');
     if (init?.method === 'POST') {
       creations += 1;
-      return new Response(null, { status: 201, headers: { Location: `/api/v1/uploads/up-${creations}` } });
+      return new Response(null, { status: 201, headers: { Location: uploadsEndpoints.byWildcard(`up-${creations}`) } });
     }
     if (options.uploadsHold?.() === true) {
       return new Promise<Response>((_resolve, reject) => {

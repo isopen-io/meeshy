@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { DECLINE_REPLY_KEYS, declineWithReply, type DeclineReplyDeps } from '@/lib/calls/decline-reply';
+import { DECLINE_REPLY_KEYS, DECLINE_REPLY_MAX_LENGTH, declineWithReply, type DeclineReplyDeps } from '@/lib/calls/decline-reply';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -99,7 +99,7 @@ export function CallDeclineSheet({
             value={draft}
             onInput={(event) => setDraft(event.currentTarget.value)}
             placeholder={translate(language, 'callDecline.custom.placeholder')}
-            maxLength={500}
+            maxLength={DECLINE_REPLY_MAX_LENGTH}
             enterKeyHint="send"
             className="min-h-11 w-full rounded-card px-3 text-body"
             style={{ background: ROW, color: '#fff' }}

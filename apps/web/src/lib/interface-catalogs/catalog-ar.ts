@@ -2,6 +2,8 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
 import arMediaHub from './catalog-ar-media-hub';
+import arMediaViewer from './catalog-ar-media-viewer';
+import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
@@ -10,8 +12,13 @@ import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
 import arCallFeedback from './catalog-ar-call-feedback';
+import arCallsErase from './catalog-ar-calls-erase';
+import arAddressBook from './catalog-ar-address-book';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
+import arCallQuality from './catalog-ar-call-quality';
+import arCallCaptions from './catalog-ar-call-captions';
+import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
@@ -202,7 +209,9 @@ const ar = {
   'feed.newPosts.other': 'منشورات جديدة {count}',
   ...arIdentity,
   ...arMediaHub,
+  ...arMediaViewer,
   ...arVerifyEmail,
+  ...arActivation,
   ...arPassword,
   ...arCall,
   ...arRowActions,
@@ -210,8 +219,13 @@ const ar = {
   ...arCallJoin,
   ...arCallDecline,
   ...arCallFeedback,
+  ...arCallsErase,
+  ...arAddressBook,
   ...arCallDevices,
   ...arCallScreen,
+  ...arCallQuality,
+  ...arCallCaptions,
+  ...arCallRecording,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',

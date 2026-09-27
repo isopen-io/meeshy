@@ -2,7 +2,16 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CallHistoryPage, CallRecord } from '@/lib/api/calls';
 
-import { callDisplayNameOf, callDurationLabel, callFilterFromSearch, seededCallHistory } from './view';
+import {
+  callDisplayNameOf,
+  callDurationLabel,
+  callFilterFromSearch,
+  callParticipantNames,
+  callTypeFromSearch,
+  refinedCallHistory,
+  searchCallRecords,
+  seededCallHistory,
+} from './view';
 
 /**
  * LES RÈGLES PURES DU JOURNAL D'APPELS (#6362) — miroir des accesseurs de
@@ -21,6 +30,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   durationSec: 185,
   bytes: null,
   peer: { userId: 'u-amina', username: 'amina', displayName: 'Amina Diallo', avatar: null },
+  participants: [],
   ...overrides,
 });
 
@@ -70,5 +80,87 @@ describe('« Manqués » se peint depuis « Tous » déjà en cache', () => {
   test('aucun manqué dans une liste COMPLÈTE : le vide est juste ; dans une liste tronquée, il mentirait', () => {
     expect(seededCallHistory(cached([{ records: [record()], nextCursor: null }]), 'missed')?.pages[0]?.records).toEqual([]);
     expect(seededCallHistory(cached([{ records: [record()], nextCursor: 'a1' }]), 'missed')).toBeUndefined();
+  });
+});
+
+describe('chercher dans le journal (#8066)', () => {
+  const journal = [
+    record({ callId: 'a1' }),
+    record({ callId: 'b2', peer: { userId: 'u-eloi', username: 'eloi_b', displayName: 'Éloi Bâ', avatar: null } }),
+    record({ callId: 'g3', peer: null, conversationType: 'group', conversationTitle: 'Équipe produit' }),
+    record({ callId: 'x4', peer: null, conversationTitle: null }),
+  ];
+  const found = (query: string) => searchCallRecords(journal, query, 'Inconnu').map((r) => r.callId);
+
+  test('une recherche vide ou blanche rend le journal tel quel', () => {
+    expect(found('')).toEqual(['a1', 'b2', 'g3', 'x4']);
+    expect(found('   ')).toEqual(['a1', 'b2', 'g3', 'x4']);
+  });
+
+  test('sans accents ni casse : « eloi » trouve « Éloi », « EQUIPE » trouve « Équipe »', () => {
+    expect(found('eloi')).toEqual(['b2']);
+    expect(found('EQUIPE')).toEqual(['g3']);
+  });
+
+  test('l’identifiant du pair compte aussi, pas seulement le nom affiché', () => {
+    expect(found('eloi_b')).toEqual(['b2']);
+  });
+
+  test('le NOM AFFICHÉ se cherche, repli compris', () => {
+    expect(found('inconnu')).toEqual(['x4']);
+    expect(found('zzz')).toEqual([]);
+  });
+});
+
+describe('les participants d’un appel de groupe (#8066)', () => {
+  const people = ['Ada', 'Bruno', 'Chloé', 'Dia'].map((displayName, index) => ({
+    participantId: `p${index}`,
+    username: displayName.toLowerCase(),
+    displayName,
+    avatar: null,
+  }));
+  const group = record({ callId: 'g1', peer: null, conversationType: 'group', conversationTitle: 'Équipe', participants: people });
+
+  test('la ligne en nomme quelques-uns et compte les autres', () => {
+    expect(callParticipantNames(group, 2)).toEqual({ names: ['Ada', 'Bruno'], more: 2 });
+    expect(callParticipantNames(group, 5)).toEqual({ names: ['Ada', 'Bruno', 'Chloé', 'Dia'], more: 0 });
+  });
+
+  test('un appel direct ne nomme personne de plus que son pair', () => {
+    expect(callParticipantNames(record(), 2)).toEqual({ names: [], more: 0 });
+  });
+
+  test('chercher un participant trouve l’appel de groupe où il était', () => {
+    expect(searchCallRecords([record(), group], 'chloe', 'Inconnu').map((r) => r.callId)).toEqual(['g1']);
+    expect(searchCallRecords([record(), group], 'BRUNO', 'Inconnu').map((r) => r.callId)).toEqual(['g1']);
+  });
+});
+
+describe('le journal raffiné se peint depuis le cache (#8203)', () => {
+  const base = cached([
+    { records: [record({ callId: 'v1', isVideo: true }), record({ callId: 'a1' }), record({ callId: 'v2', isVideo: true, peer: null, conversationTitle: 'Équipe' })], nextCursor: 'n' },
+  ]);
+  const ids = (data: ReturnType<typeof refinedCallHistory>) => data?.pages.flatMap((page) => page.records.map((r) => r.callId));
+
+  test('« vidéo » garde les appels vidéo du cache, sans curseur à suivre', () => {
+    const data = refinedCallHistory(base, { type: 'video', q: '' }, 'Inconnu');
+    expect(ids(data)).toEqual(['v1', 'v2']);
+    expect(data?.pages.at(-1)?.nextCursor).toBeNull();
+  });
+
+  test('la recherche se combine au type', () => {
+    expect(ids(refinedCallHistory(base, { type: 'video', q: 'equipe' }, 'Inconnu'))).toEqual(['v2']);
+  });
+
+  test('sans cache, rien à peindre ; sans raffinement, rien à emprunter', () => {
+    expect(refinedCallHistory(undefined, { type: 'video', q: '' }, 'Inconnu')).toBeUndefined();
+    expect(refinedCallHistory(base, { type: 'all', q: ' ' }, 'Inconnu')).toBeUndefined();
+  });
+
+  test('le type se lit dans l’adresse, « tous » par défaut', () => {
+    expect(callTypeFromSearch('video')).toBe('video');
+    expect(callTypeFromSearch('audio')).toBe('audio');
+    expect(callTypeFromSearch('x')).toBe('all');
+    expect(callTypeFromSearch(null)).toBe('all');
   });
 });

@@ -24,6 +24,21 @@ public struct APIRejection: Error, Sendable, Equatable {
         }
     }
 
+    /// Le détenteur MASQUÉ d'une adresse déjà prise (`EMAIL_TAKEN`, #8214) —
+    /// masqué comme `phoneOwnerInfo` : l'écran peut demander « Est-ce vous ? »
+    /// sans rien révéler de plus.
+    public struct EmailOwner: Sendable, Equatable, Decodable {
+        public let maskedDisplayName: String
+        public let maskedUsername: String
+        public let avatar: String?
+
+        public init(maskedDisplayName: String, maskedUsername: String, avatar: String? = nil) {
+            self.maskedDisplayName = maskedDisplayName
+            self.maskedUsername = maskedUsername
+            self.avatar = avatar
+        }
+    }
+
     public let statusCode: Int
     /// Le code machine (`VALIDATION_ERROR`, `EMAIL_TAKEN`, `PHONE_INVALID`,
     /// `USERNAME_TAKEN`…). `nil` quand la route n'en a pas posé.
@@ -37,6 +52,9 @@ public struct APIRejection: Error, Sendable, Equatable {
     public let suggestions: [String]
     /// Le détail par champ d'un `VALIDATION_ERROR`.
     public let violations: [Violation]
+    /// Le détenteur masqué d'un `EMAIL_TAKEN` — `nil` sur une passerelle qui
+    /// ne le sert pas encore, et pour tout autre code.
+    public let emailOwner: EmailOwner?
 
     public init(
         statusCode: Int,
@@ -44,7 +62,8 @@ public struct APIRejection: Error, Sendable, Equatable {
         field: String? = nil,
         message: String,
         suggestions: [String] = [],
-        violations: [Violation] = []
+        violations: [Violation] = [],
+        emailOwner: EmailOwner? = nil
     ) {
         self.statusCode = statusCode
         self.code = code
@@ -52,6 +71,7 @@ public struct APIRejection: Error, Sendable, Equatable {
         self.message = message
         self.suggestions = suggestions
         self.violations = violations
+        self.emailOwner = emailOwner
     }
 
     /// La phrase à poser SOUS `field`, en préférant la violation qui le nomme.
@@ -93,6 +113,25 @@ struct APIRejectionEnvelope: Decodable {
     let field: String?
     let suggestions: [String]?
     let violations: [APIRejection.Violation]?
+    let emailOwner: APIRejection.EmailOwner?
+
+    private enum CodingKeys: String, CodingKey {
+        case error, message, code, field, suggestions, violations, emailOwner
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        field = try container.decodeIfPresent(String.self, forKey: .field)
+        suggestions = try container.decodeIfPresent([String].self, forKey: .suggestions)
+        violations = try container.decodeIfPresent([APIRejection.Violation].self, forKey: .violations)
+        // Un détenteur mal formé ne doit pas emporter tout le refus : le
+        // transport lit l'enveloppe en `try?`, et `EMAIL_TAKEN` redeviendrait
+        // une erreur serveur générique.
+        emailOwner = try? container.decodeIfPresent(APIRejection.EmailOwner.self, forKey: .emailOwner)
+    }
 
     func rejection(statusCode: Int, fallbackMessage: String) -> APIRejection {
         APIRejection(
@@ -101,7 +140,8 @@ struct APIRejectionEnvelope: Decodable {
             field: field,
             message: message ?? error ?? fallbackMessage,
             suggestions: suggestions ?? [],
-            violations: violations ?? []
+            violations: violations ?? [],
+            emailOwner: emailOwner
         )
     }
 }

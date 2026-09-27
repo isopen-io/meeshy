@@ -7,6 +7,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { coqueCourante } from '@/lib/native-shell';
 import {
   EMOJI_ONLY_FONT_SIZES,
   mapsUrlOf,
@@ -157,7 +158,7 @@ export function LocationCard({
   const label = place.name ?? translate(language, 'message.location.shared');
   return (
     <a
-      href={mapsUrlOf(place)}
+      href={mapsUrlOf(place, { platform: coqueCourante()?.getPlatform?.() })}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={translate(language, 'message.location.a11y', { place: label })}

@@ -192,16 +192,29 @@ public extension APIMessageReplyTo {
         return ReplyReference(
             messageId: id,
             authorName: sender?.name ?? "?",
-            previewText: placeholder ?? prismPreviewText(preferredLanguages: preferredLanguages),
+            previewText: placeholder ?? servedPreviewText(preferredLanguages: preferredLanguages, representative: representative),
             isMe: currentUserId.map { (sender?.resolvedUserId ?? senderId) == $0 } ?? false,
             authorAvatarUrl: sender?.resolvedAvatar,
             attachmentType: representative?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
                 ?? attachmentReplyTo?.declaredKind,
             attachmentId: attachmentReplyTo?.attachmentId,
             attachmentThumbnailUrl: representative?.thumbnailUrl,
+            // Retenue par l'init dès que la citation est déclarée protégée.
+            attachmentFileUrl: representative?.fileUrl,
             attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
             attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) }
         )
+    }
+
+    /// Le texte servi par le Prisme ; sans texte, une carte de visite se dit
+    /// par son contact (« 👤 Zoé »), jamais par son nom de fichier (#8122).
+    private func servedPreviewText(preferredLanguages: [String], representative: APIMessageAttachment?) -> String {
+        let text = prismPreviewText(preferredLanguages: preferredLanguages)
+        guard text.isEmpty, let representative else { return text }
+        return ContactCardFile.mediaLabel(
+            mimeType: representative.mimeType ?? "",
+            fileName: representative.originalName ?? representative.fileName ?? ""
+        ) ?? text
     }
 
     private func prismPreviewText(preferredLanguages: [String]) -> String {

@@ -334,6 +334,29 @@ export const updateUserProfileSchema = z.object({
 }).strict();
 
 /**
+ * UNE RÉFÉRENCE D'IMAGE DE PROFIL — ce qu'une photo ou une bannière peut
+ * désigner (#8217) :
+ *
+ * - une adresse `http(s)://` ;
+ * - un chemin d'API (`/api/…`) ;
+ * - le chemin de stockage RELATIF qu'un téléversement rend
+ *   (`2026/09/<id>/avatar_….png`, `UploadProcessor.getAttachmentPath`) — que
+ *   le web pose tel quel après `POST /attachments/upload`, et qu'on refusait
+ *   en 400 « Invalid image format » à chaque changement de photo.
+ *
+ * Jamais une donnée `data:` (le base64 n'est pas une adresse), ni un autre
+ * schéma, ni un chemin protocole-relatif (`//hôte/…`), ni une remontée de
+ * dossier.
+ */
+const STORAGE_PATH = /^[A-Za-z0-9][A-Za-z0-9._~\-/]*$/;
+
+export function isProfileImageReference(value: string): boolean {
+  if (value.startsWith('http://') || value.startsWith('https://')) return true;
+  if (value.startsWith('/api/')) return true;
+  return STORAGE_PATH.test(value) && !value.split('/').includes('..');
+}
+
+/**
  * Schéma de validation pour l'upload d'avatar
  */
 export const updateAvatarSchema = z.object({
@@ -343,8 +366,8 @@ export const updateAvatarSchema = z.object({
       'Avatar must be a file URL, not a base64 data URI'
     )
     .refine(
-      (val) => val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/api/'),
-      'Avatar must be an HTTP(S) URL or API path'
+      isProfileImageReference,
+      'Avatar must be an HTTP(S) URL, an API path or an uploaded file path'
     )
 }).strict();
 
@@ -353,12 +376,8 @@ export const updateAvatarSchema = z.object({
  */
 export const updateBannerSchema = z.object({
   banner: z.string().refine(
-    (data) => {
-      return data.startsWith('http://') ||
-             data.startsWith('https://') ||
-             data.startsWith('/api/');
-    },
-    'Format bannière invalide. Doit être une URL HTTP(S) ou un chemin API'
+    isProfileImageReference,
+    'Format bannière invalide. Doit être une URL HTTP(S), un chemin API ou un fichier téléversé'
   )
 }).strict();
 

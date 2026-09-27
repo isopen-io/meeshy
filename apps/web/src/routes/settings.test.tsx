@@ -11,6 +11,7 @@ import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import {
   AboutSection,
   AccountSection,
+  AddressBookRow,
   AppearanceSection,
   DataSection,
   LogoutButton,
@@ -52,6 +53,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   showReadReceipts: true,
   showTypingIndicator: true,
   hideProfileFromSearch: false,
+  acceptCallsFromNonContacts: true,
   ...overrides,
 });
 
@@ -181,6 +183,25 @@ describe('la confidentialité — cinq bascules que la passerelle obéit', () =>
     }
   });
 
+  /* #8073 — la passerelle refuse de faire sonner un non-contact quand le
+     réglage est coupé : la bascule a un effet, elle se montre. */
+  test('les appels hors contacts se basculent, écrivent LEUR clé et disent ce qu’ils coûtent', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ acceptCallsFromNonContacts: false })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, 'Appels hors contacts');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('acceptCallsFromNonContacts');
+    expect(host.textContent).toContain('seuls vos amis peuvent vous faire sonner');
+  });
+
   test('hors ligne, aucune bascule n’est actionnable', () => {
     const host = dom(<PrivacySection language="fr" view={ready()} disabled onToggle={noop} onRetry={noop} />);
     expect(NAMES.every((name) => switchNamed(host, name)?.hasAttribute('disabled'))).toBe(true);
@@ -205,6 +226,43 @@ describe('la confidentialité — cinq bascules que la passerelle obéit', () =>
     const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
     expect(host.querySelectorAll('a')).toHaveLength(0);
     expect(host.textContent).not.toContain("Plus d'options");
+  });
+});
+
+/* #8167 — le carnet synchronisé depuis un téléphone s'efface d'ici, sans
+   écrire au support. La rangée dit à quoi il sert, et son état. */
+describe('effacer mon carnet d’adresses', () => {
+  const ERASE = 'Effacer mon carnet d’adresses';
+  const buttonNamed = (host: HTMLElement, name: string) =>
+    [...host.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === name || button.textContent?.includes(name));
+
+  test('la rangée s’offre, et dit à quoi sert le carnet', () => {
+    const host = dom(<AddressBookRow language="fr" state="kept" disabled={false} onErase={noop} />);
+    const button = buttonNamed(host, ERASE);
+    expect(button).toBeDefined();
+    expect(button?.hasAttribute('disabled')).toBe(false);
+    expect(host.textContent).toContain('ne servent qu’à vous prévenir quand un ami rejoint Meeshy');
+    expect(button?.getAttribute('aria-describedby')).toBeTruthy();
+  });
+
+  test('effacé : la rangée le dit et ne se rejoue pas', () => {
+    const host = dom(<AddressBookRow language="fr" state="erased" disabled={false} onErase={noop} />);
+    expect(host.textContent).toContain('Carnet d’adresses effacé');
+    expect([...host.querySelectorAll('button')].every((button) => button.hasAttribute('disabled'))).toBe(true);
+  });
+
+  test('hors ligne, le geste n’est pas actionnable', () => {
+    const host = dom(<AddressBookRow language="fr" state="kept" disabled onErase={noop} />);
+    expect(buttonNamed(host, ERASE)?.hasAttribute('disabled')).toBe(true);
+  });
+
+  test('se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<AddressBookRow language={language} state="kept" disabled={false} onErase={noop} />);
+      expect(host.textContent).not.toContain('settings.');
+      expect(host.textContent).not.toContain(ERASE);
+    }
   });
 });
 

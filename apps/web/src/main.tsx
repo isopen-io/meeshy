@@ -217,6 +217,9 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     void import('@/lib/calls/call-answer-intent').then(({ listenCallAnswerIntentsInBrowser }) =>
       listenCallAnswerIntentsInBrowser(),
     );
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
+      listenCallBackIntentsInBrowser(),
+    );
     /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,
      * W4). `sw-push.js` (script classique) ne lit ni `localStorage` ni aucun
@@ -235,7 +238,7 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 /**
  * ET LA COQUE APPREND QU'UNE VERSION EST PUBLIÉE (#6937). Sans service worker,
- * c'est la passerelle qui le lui dit (`GET /api/v1/app/shell-version`), au
+ * c'est la passerelle qui le lui dit (`GET app.shellVersion`), au
  * démarrage et à chaque retour au premier plan ; la bannière ouvre alors la
  * fiche du magasin au lieu de recharger. Même horloge que l'inscription du
  * worker ci-dessus : après la première peinture, sur le `load`.

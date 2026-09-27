@@ -34,6 +34,9 @@ import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/s
 import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { handleMediaToggle as handleMediaToggleBody, mapMediaToggleError, registerMediaToggleListeners } from './call-media-toggle';
+import { announceRecordingArrival, registerCallRecordingEvents } from './call-recording-events';
+import { CallRecordingService } from '../services/calls/callRecording';
+import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
 import {
   resolveNotificationLangs,
   resolveDeviceCountries,
@@ -63,6 +66,8 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { buildIncomingCallPushes } from '../services/call-incoming-push';
+import { ringableCallees } from '../services/calls/callRingPolicy';
+import { sendMissedCallNotifications } from './call-missed-notifications';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -123,6 +128,7 @@ export type DisconnectParticipation = {
 export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
+  private readonly callRecording: CallRecordingService;
   private pushService: PushNotificationService | null = null;
   private zmqClient: ZmqTranslationClient | null = null;
   /** Periodic sweep handle for `bufferedOffers` TTL eviction. */
@@ -297,6 +303,7 @@ export class CallEventsHandler {
 
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
+    this.callRecording = new CallRecordingService({ repository: prismaCallRecordingRepository(prisma), roster: callRosterFrom(this.callService), now: () => new Date() });
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
     // call ended via a path that skipped clearBufferedOffer (error branches,
     // GC teardown). Complements the inline sweep in bufferOffer which only
@@ -2111,7 +2118,10 @@ export class CallEventsHandler {
           }
         });
 
-        const memberUserIds = conversationParticipants.map(p => p.userId!).filter(Boolean);
+        const memberUserIds = await ringableCallees(this.prisma, {
+          callerUserId: userId,
+          calleeUserIds: conversationParticipants.flatMap(p => (p.userId ? [p.userId] : [])),
+        });
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,
           memberUserIds
@@ -2447,6 +2457,7 @@ export class CallEventsHandler {
             iceServers: remoteIceServers
           });
         }
+        announceRecordingArrival({ io, authority: this.callRecording }, callSession.id, userId).catch((error: unknown) => logger.error('call-recording arrival failed', { error }));
 
         // §4.6 — replay a buffered offer to the joining participant. If the
         // caller's offer arrived before this socket was in the room (PushKit
@@ -4113,6 +4124,7 @@ export class CallEventsHandler {
     // `call-client-reports.ts` (#7632) ; leur doctrine commune — le
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
+    registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter }, socket, getUserId);
 
     /**
      * Handle disconnect - auto-leave any active calls
@@ -4263,60 +4275,10 @@ export class CallEventsHandler {
     this.missedCallNotifiedAt.set(callId, Date.now());
 
     try {
-      // Récupérer les informations de l'appel
-      const callSession = await this.prisma.callSession.findUnique({
-        where: { id: callId },
-        include: {
-          initiator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          conversation: {
-            select: {
-              id: true,
-              identifier: true
-            }
-          }
-        }
-      });
-
-      if (!callSession) {
-        logger.warn('⚠️ Call session not found for missed call notifications', { callId });
-        return;
-      }
-
-      // Récupérer les participants qui n'ont pas rejoint l'appel
-      const unrespondedParticipants = await this.callService.getUnrespondedParticipants(callId);
-
-      if (unrespondedParticipants.length === 0) {
-        logger.info('📢 No unresponded participants for missed call notifications', { callId });
-        return;
-      }
-
-      // Créer une notification pour chaque participant qui n'a pas répondu
-      // Audit P2-GW-2 — derive callType from metadata.type (set by
-      // initiateCall) instead of hardcoding 'video'. Misclassified
-      // notifications confuse users about what they actually missed.
-      const inferredCallType: 'audio' | 'video' =
-        ((callSession.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio');
-      for (const participantId of unrespondedParticipants) {
-        await this.notificationService.createMissedCallNotification({
-          recipientUserId: participantId,
-          callerId: callSession.initiatorId,
-          conversationId: callSession.conversationId,
-          callSessionId: callSession.id,
-          callType: inferredCallType,
-        });
-      }
-
-      logger.info('📢 Missed call notifications created', {
-        callId,
-        recipientCount: unrespondedParticipants.length
-      });
+      await sendMissedCallNotifications(
+        { prisma: this.prisma, callService: this.callService, notificationService: this.notificationService },
+        callId
+      );
     } catch (error) {
       logger.error('❌ Error creating missed call notifications:', error);
     }

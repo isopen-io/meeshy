@@ -2,6 +2,8 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enMediaHub from './catalog-en-media-hub';
+import enMediaViewer from './catalog-en-media-viewer';
+import enActivation from './catalog-en-activation';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
@@ -10,8 +12,13 @@ import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
 import enCallDecline from './catalog-en-call-decline';
 import enCallFeedback from './catalog-en-call-feedback';
+import enCallsErase from './catalog-en-calls-erase';
+import enAddressBook from './catalog-en-address-book';
 import enCallDevices from './catalog-en-call-devices';
 import enCallScreen from './catalog-en-call-screen';
+import enCallQuality from './catalog-en-call-quality';
+import enCallCaptions from './catalog-en-call-captions';
+import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -202,7 +209,9 @@ const en = {
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
   ...enMediaHub,
+  ...enMediaViewer,
   ...enVerifyEmail,
+  ...enActivation,
   ...enPassword,
   ...enCall,
   ...enRowActions,
@@ -210,8 +219,13 @@ const en = {
   ...enCallJoin,
   ...enCallDecline,
   ...enCallFeedback,
+  ...enCallsErase,
+  ...enAddressBook,
   ...enCallDevices,
   ...enCallScreen,
+  ...enCallQuality,
+  ...enCallCaptions,
+  ...enCallRecording,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',

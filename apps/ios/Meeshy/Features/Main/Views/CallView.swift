@@ -72,6 +72,7 @@ struct CallView: View {
     // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
     // l'avatar des cercles d'appel et le fond pleine page.
     @State private var remoteProfile: MeeshyUser?
+    @State private var showQualityDetail = false
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).
@@ -113,6 +114,7 @@ struct CallView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea()
+        .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
 
     /// La surface d'appel elle-même — séparée de `body` pour que son
@@ -783,6 +785,8 @@ struct CallView: View {
 
             CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
                 .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
+            CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
+                .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
             // Live captions toggle — floating vertical control on the trailing
             // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
@@ -944,6 +948,7 @@ struct CallView: View {
             .accessibilityLabel(String(localized: "call.duration.a11y.label"))
             .accessibilityValue(callManager.spokenDuration)
             .accessibilityAddTraits(.updatesFrequently)
+            .callQualityDetailTrigger(isPresented: $showQualityDetail)
 
             // Status indicators
             HStack(spacing: 12) {
@@ -1013,6 +1018,7 @@ struct CallView: View {
                 .accessibilityLabel(String(localized: "call.duration.a11y.label"))
                 .accessibilityValue(callManager.spokenDuration)
                 .accessibilityAddTraits(.updatesFrequently)
+                .callQualityDetailTrigger(isPresented: $showQualityDetail)
             }
 
             Spacer()
@@ -1153,6 +1159,7 @@ struct CallView: View {
                     .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
                     .accessibilityValue(callManager.spokenDuration)
                     .accessibilityAddTraits(.updatesFrequently)
+                    .callQualityDetailTrigger(isPresented: $showQualityDetail)
                 }
                 .padding(.horizontal, 16)
                 // Même encart que le chevron minimize : les deux rangées
@@ -1672,6 +1679,7 @@ struct CallView: View {
                 ) {
                     callManager.toggleSpeaker()
                 }
+                CallAudioRouteControls()
             }
 
             // Effects (Plus button) — label is state-aware so VoiceOver users
@@ -1713,6 +1721,11 @@ struct CallView: View {
                 }
                 .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
             }
+            if callManager.mayRequestRecording || callManager.recording.phase.isActive {
+                callControlButton(icon: callManager.recording.phase.isActive ? "stop.circle.fill" : "record.circle", color: MeeshyColors.error, bgColor: MeeshyColors.error, isActive: callManager.recording.phase.isActive, toggleValue: callManager.recording.phase.isActive, caption: CallRecordingCopy.caption, label: CallRecordingCopy.label(isActive: callManager.recording.phase.isActive), hint: CallRecordingCopy.hint, isToggle: true) {
+                    _ = callManager.recording.phase.isActive ? callManager.recording.stop() : callManager.recording.request()
+                }
+            }
 
             // PiP système — réduire en fenêtre vidéo flottante. Visible seulement
             // si éligible (appel vidéo + track distant + caméra distante allumée +
@@ -1748,52 +1761,13 @@ struct CallView: View {
         }
     }
 
-    /// §7.1/§7.3 — front/back flip on iPhone; a named device picker on Mac/iPad
-    /// when multiple cameras (incl. Continuity/USB) are available. Hidden when
-    /// video is off, or on Mac with a single camera (flip would be a no-op).
     @ViewBuilder
     private var cameraControl: some View {
-        // Le flip avant/arrière iPhone vit désormais sur le cadre de la
-        // self-preview (pipFrameButton) ; la barre ne garde que le picker
-        // multi-caméras Mac/iPad (Continuity/USB), qui n'a pas d'équivalent
-        // sur le cadre.
         if callManager.isVideoEnabled,
            callManager.availableCameras.count > 1,
            isOnMac || callManager.availableCameras.contains(where: { $0.isExternal }) {
-            cameraPickerMenu
+            CallCameraPickerControl(cameras: callManager.availableCameras, selectedCameraId: callManager.selectedCameraId) { callManager.selectCamera(id: $0) }
         }
-    }
-
-    /// §7.1 — named camera picker (Continuity / USB / built-in) for Mac/iPad.
-    private var cameraPickerMenu: some View {
-        Menu {
-            ForEach(callManager.availableCameras) { cam in
-                Button {
-                    callManager.selectCamera(id: cam.id)
-                } label: {
-                    Label(
-                        cam.displayName,
-                        systemImage: callManager.selectedCameraId == cam.id ? "checkmark" : "camera"
-                    )
-                }
-            }
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: "camera.badge.ellipsis")
-                    // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 56) → figé.
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
-                    .callControlGlass(diameter: 56, isActive: false, tint: .white)
-                Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
-                    .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(width: 68)
-        }
-        .pressable()
-        .accessibilityLabel(String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main))
     }
 
     // MARK: - UI Components
@@ -2168,31 +2142,6 @@ struct CallView: View {
 
 private extension Logger {
     nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
-}
-
-// MARK: - Liquid Glass (product styling over the SDK Compatibility wrappers)
-
-/// These are thin, app-side *styling* helpers: they encode Meeshy's product
-/// choices (circle diameter, active→tint, red hang-up) and delegate the version
-/// gating to the SDK `Compatibility/` layer (`adaptiveGlass` /
-/// `adaptiveGlassProminent` / `AdaptiveGlassContainer`), which owns the real
-/// `#available(iOS 26.0, *)` and the pre-iOS-26 fallback. No `#available` lives
-/// in the app — same rule as every other adaptive wrapper.
-private extension View {
-    /// Regular Liquid Glass circle for a neutral/secondary control. Active state
-    /// tints the glass; inactive renders plain glass (clear / material fallback).
-    func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {
-        self
-            .frame(width: diameter, height: diameter)
-            .adaptiveGlass(in: Circle(), tint: isActive ? tint.opacity(0.55) : nil, interactive: true)
-    }
-
-    /// Prominent red Liquid Glass circle for the hang-up button.
-    func endCallGlass(diameter: CGFloat) -> some View {
-        self
-            .frame(width: diameter, height: diameter)
-            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
-    }
 }
 
 // Not `private`: FloatingCallPillView reuses both modifiers so its mute/speaker

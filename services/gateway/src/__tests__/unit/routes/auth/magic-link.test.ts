@@ -417,6 +417,31 @@ describe('POST /refresh — user not found', () => {
   });
 });
 
+describe('POST /refresh — délai de grâce de l’adresse passé (#8238)', () => {
+  it('refuse le renouvellement : 401 `ACCOUNT_ACTIVATION_REQUIRED`, aucun jeton', async () => {
+    const bloque = { ...mockUser, activation: { phase: 'blocked', deadline: '2026-10-26T00:00:00.000Z', missing: ['email', 'phone'] } };
+    const authService = makeAuthService({ getUserById: jest.fn<any>().mockResolvedValue(bloque) });
+    const app = await buildApp({ authService });
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'valid-jwt-token' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+    expect(authService.generateToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('pendant le délai (`invite`) le renouvellement a lieu', async () => {
+    const invite = { ...mockUser, activation: { phase: 'invite', deadline: '2026-10-26T00:00:00.000Z', missing: ['email'] } };
+    const authService = makeAuthService({ getUserById: jest.fn<any>().mockResolvedValue(invite) });
+    const app = await buildApp({ authService });
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'valid-jwt-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(authService.generateToken).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('POST /refresh — invalid token no userId', () => {
   it('returns 401 when decoded token has no userId', async () => {
     const jwt = await import('jsonwebtoken');

@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as appEndpoints from '@meeshy/shared/api/endpoints/app';
 
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 
@@ -10,7 +11,7 @@ import { appUpdateStore, type StoreUpdate } from './pending-store';
  * Le web l'apprend par son service worker (#6936) ; la coque Capacitor n'en a
  * pas (`check-shell-dist.mjs`) et embarque ses actifs, donc une version neuve
  * n'y arrive que par le magasin. La SOURCE est nommée : `GET
- * /api/v1/app/shell-version` (`services/gateway/src/routes/app.ts`), qui sert
+ * app.shellVersion` (`services/gateway/src/routes/app.ts`), qui sert
  * `SHELL_LATEST_VERSION` et la fiche du magasin de la plateforme demandée.
  * Une version vide, illisible, pas plus récente que celle installée, une fiche
  * qui n'est pas `https:` ou une panne réseau ne fabriquent AUCUNE annonce.
@@ -63,7 +64,7 @@ export async function checkShellUpdate({
 }): Promise<void> {
   const result = await transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/app/shell-version?platform=${platform}`,
+    path: `${appEndpoints.shellVersion}?platform=${platform}`,
   });
   if (!result.ok) return;
   const update = storeUpdateFrom(result.data, installed);

@@ -1,5 +1,8 @@
 import type { CallSession } from './call-sessions';
-import type { CallHistoryFilter, CallHistoryPage, CallRecord } from './calls';
+import type { CallTranscript } from '@/lib/calls/call-transcript';
+import { refineCallRecords } from '@/lib/calls/view';
+
+import type { CallHistoryFilter, CallHistoryPage, CallHistoryRefine, CallRecord } from './calls';
 
 /**
  * **LE JOURNAL D'APPELS DU LECTEUR DE RECETTE** (#6362) — servi par le MÊME
@@ -39,6 +42,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 0,
     bytes: null,
     peer: peer('u-amina', 'amina', 'Amina Diallo'),
+    participants: [],
   },
   {
     callId: 'call-kwame-video',
@@ -52,6 +56,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 754,
     bytes: 48_620_000,
     peer: peer('u-kwame', 'kwame', 'Kwame Mensah'),
+    participants: [],
   },
   {
     callId: 'call-annonces-groupe',
@@ -65,6 +70,11 @@ const records = (): readonly CallRecord[] => [
     durationSec: 3725,
     bytes: 18_400_000,
     peer: null,
+    participants: [
+      { participantId: 'p-kwame-annonces', username: 'kwame', displayName: 'Kwame Mensah', avatar: null },
+      { participantId: 'p-fatou-annonces', username: 'fatou', displayName: 'Fatou Bâ', avatar: null },
+      { participantId: 'p-amina-annonces', username: 'amina', displayName: 'Amina Diallo', avatar: null },
+    ],
   },
   {
     callId: 'call-amina-recu',
@@ -78,6 +88,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 185,
     bytes: 2_310_000,
     peer: peer('u-amina', 'amina', 'Amina Diallo'),
+    participants: [],
   },
   {
     callId: 'call-fatou-manque',
@@ -91,12 +102,14 @@ const records = (): readonly CallRecord[] => [
     durationSec: 0,
     bytes: null,
     peer: peer('u-fatou', 'fatou', 'Fatou Bâ'),
+    participants: [],
   },
 ];
 
-export function fixtureCallHistory(filter: CallHistoryFilter): CallHistoryPage {
-  const all = records();
-  return { records: filter === 'missed' ? all.filter((record) => record.direction === 'missed') : all, nextCursor: null };
+export function fixtureCallHistory(filter: CallHistoryFilter, refine: CallHistoryRefine | null = null): CallHistoryPage {
+  const byFilter = records().filter((record) => filter === 'all' || record.direction === 'missed');
+  const refined = refine === null ? byFilter : refineCallRecords(byFilter, refine, 'Inconnu');
+  return { records: refined, nextCursor: null };
 }
 
 /**
@@ -139,6 +152,29 @@ export const FIXTURE_PHONE = '+221770000001';
 
 export function fixturePhoneLookup(phone: string): { readonly id: string; readonly username: string; readonly displayName: string; readonly avatar: null } | null {
   return phone.replace(/\D/g, '') === FIXTURE_PHONE.replace(/\D/g, '') ? { id: 'u-amina', username: 'amina.diallo', displayName: 'Amina Diallo', avatar: null } : null;
+}
+
+/**
+ * LA TRANSCRIPTION GRAVÉE D'UN APPEL (#8048) — celle de `call-1`, la bulle
+ * d'appel vidéo de Kwame dans `c-states`. Trois lignes et pas une : Kwame
+ * traduit en français (le Prisme du lecteur la sert), le lecteur lui-même (sa
+ * parole reste la sienne), et Kwame traduit SEULEMENT en espagnol — l'original
+ * anglais doit alors s'afficher, jamais la première traduction venue.
+ */
+export const FIXTURE_TRANSCRIPT_CALL_ID = 'call-1';
+
+export function fixtureCallTranscript(callId: string): CallTranscript | null {
+  if (callId !== FIXTURE_TRANSCRIPT_CALL_ID) return { callId, startedAtMs: null, segments: [] };
+  const startedAtMs = Date.parse('2026-09-26T09:00:00.000Z');
+  return {
+    callId,
+    startedAtMs,
+    segments: [
+      { id: 't-1', speakerId: 'u-kwame', speakerDisplayName: 'Kwame Mensah', text: 'Hi, can you hear me?', language: 'en', capturedAtMs: startedAtMs + 4_000, translations: [{ targetLanguage: 'fr', translatedText: 'Salut, tu m’entends ?' }, { targetLanguage: 'es', translatedText: 'Hola, ¿me oyes?' }] },
+      { id: 't-2', speakerId: 'u-viewer', speakerDisplayName: null, text: 'Oui, très bien.', language: 'fr', capturedAtMs: startedAtMs + 9_000, translations: [{ targetLanguage: 'en', translatedText: 'Yes, very well.' }] },
+      { id: 't-3', speakerId: 'u-kwame', speakerDisplayName: 'Kwame Mensah', text: 'Great, let’s go over the plan.', language: 'en', capturedAtMs: startedAtMs + 75_000, translations: [{ targetLanguage: 'es', translatedText: 'Genial, repasemos el plan.' }] },
+    ],
+  };
 }
 
 /** Un appel du journal (terminé) ou l'appel vivant, par son identifiant — `null` sinon, comme un 404. */

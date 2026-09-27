@@ -667,6 +667,143 @@
       "text": "Alice : 📷 Au bord du lac"
     },
     {
+      "id": "contact-card-legacy-file-name",
+      "matrix": "Carte de visite",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "text/vcard",
+            "originalName": "contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf",
+            "fileSize": 255
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          },
+          {
+            "kind": "label",
+            "text": "Zoé Sanscompte"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Contact partagé · Zoé Sanscompte"
+    },
+    {
+      "id": "contact-card-octet-stream",
+      "matrix": "Carte de visite",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "application/octet-stream",
+            "originalName": "Marc Dupont.vcf",
+            "fileSize": 512
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          },
+          {
+            "kind": "label",
+            "text": "Marc Dupont"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Contact partagé · Marc Dupont"
+    },
+    {
+      "id": "contact-card-without-name",
+      "matrix": "Carte de visite",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "text/x-vcard",
+            "originalName": "",
+            "fileSize": 255
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Contact partagé"
+    },
+    {
       "id": "file",
       "matrix": "Fichier",
       "input": {

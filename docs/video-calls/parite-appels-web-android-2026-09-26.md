@@ -24,15 +24,15 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | A2 | Appel vidéo 1:1 depuis l'en-tête (menu audio / vidéo) | ✅ | ✅ | ❌ | ❌ | 2 | idem |
 | A3 | Appeler depuis la liste des conversations (menu contextuel) | ✅ | ❌ | ❌ | ❌ | 3 | iOS `ConversationListView+Overlays.swift:118` |
 | A4 | Rappeler depuis le journal (audio ou vidéo) | ✅ | — | ❌ (#6382) | ❌ | 3 | iOS `CallsTab.swift:192` · web `routes/calls-parts.tsx` |
-| A5 | Rappeler depuis la bulle d'appel terminé | 🟡 via fiche | ✅ | ❌ | ❌ | 3 | legacy `CallSystemMessage.tsx` |
-| A6 | Rappeler depuis la notification d'appel manqué | 🟡 ouvre le fil | ❌ | ❌ | ❌ | 3 | iOS `NotificationActionHandler.swift:362` |
+| A5 | Rappeler depuis la bulle d'appel terminé | ✅ | ✅ | ✅ | ✅ | 3 | iOS `ConversationViewModel.callBack(for:)` · web `components/system-notice.tsx` (`CallNoticeAction`) · legacy `CallSystemMessage.tsx` |
+| A6 | Rappeler depuis la notification d'appel manqué | ✅ (#8067) | ❌ | ✅ action « Rappeler » (#8067) | 🟡 ouvre le fil (pas de bouton d'action sans code natif) | 3 | iOS `NotificationActionHandler.swift` → `CallBackDialer` → `CallStarter` · web `public/sw-push.js` (`rappeler`) + `lib/calls/call-back-intent.ts` · gateway `notifications/callBackPushFields.ts` |
 | A7 | Appeler un contact sans conversation connue (`CallStarter`) | ✅ | ❌ | ❌ | ❌ | 3 | iOS `Contacts/CallStarter.swift` |
 | A8 | Pavé : trouver par numéro puis appeler | ✅ | ❌ | ❌ (#6454) | ❌ | 3 | iOS `KeypadTab.swift` |
 | A9 | Garde « déjà en appel » | ✅ | ✅ | ❌ | ❌ | 1 | iOS `CallManager.swift:1110` · legacy `use-video-call.ts` |
 | A10 | Permissions micro / caméra avant l'appel (caméra refusée ⇒ audio) | ✅ | ✅ | ❌ | ❌ | 2 | iOS `MediaPermissionCoordinator.swift` · legacy `use-video-call.ts` |
 | A11 | Réessayer après un échec transitoire | ✅ | ✅ | ❌ | ❌ | 2 | iOS `CallView.swift:1602` · legacy `call-retry-policy.ts` |
 | A12 | Lien profond `/call/:callId` | — | 🟡 | ❌ | ❌ | 3 | legacy `app/call/[callId]/page.tsx` |
-| A13 | Siri / Récents iOS / raccourcis | 🟡 stub | — | — | — | — | iOS `MeeshyAppIntents.swift` (#7735) |
+| A13 | Siri / Récents iOS / raccourcis | ✅ non vérifié sur appareil (#7735, #8067) | — | — | — | — | iOS `CallBackRequest.swift` (`INStartCallIntent`) · `DeepLinkRouter.swift` (`meeshy://call`) · `MeeshyAppIntents.swift` |
 
 ### B. Signalisation et moteur WebRTC
 
@@ -47,7 +47,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | B7 | `call:check-active` à chaque connexion (reprise) | ✅ | ✅ | ❌ | ❌ | 1 | |
 | B8 | `presence:app-state` (sonnerie socket ou poussée) | ✅ | ❌ | ❌ | ❌ | 0 | serveur `CallEventsHandler.ts` |
 | B9 | `call:end` / `call:leave` avec ack et fin en attente | ✅ | 🟡 sans ack | ❌ | ❌ | 1 | iOS `CallManager.swift:5328` |
-| B10 | Canal de données (sous-titres, ping, « bye ») | ✅ | 🟡 réception | ❌ | ❌ | 6 | iOS `P2PWebRTCClient.swift:1133` · legacy `call-transcript-channel.ts` |
+| B10 | Canal de données (sous-titres, ping, « bye ») | ✅ | 🟡 réception | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `P2PWebRTCClient.swift:1133` · legacy `call-transcript-channel.ts` · web `peer-link.ts` (canal `transcription` ouvert par l'offrant avant l'offre) + `call-captions-controller.ts` (`transcript-entry`, `ping` 15 s, `bye`) (#8048, `check-calls-captions.mjs`) |
 | B11 | Simulcast | ❌ | 🟡 jamais appelé | ❌ | ❌ | — | |
 
 ### C. Appel entrant
@@ -66,7 +66,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | C10 | **Sonnerie application fermée** (poussée d'appel entrant) | ✅ PushKit + CallKit | ❌ | ❌ | ❌ | 0 + 7 | serveur n'envoie `call` qu'en `voip`/`apns` (`CallEventsHandler.ts:~2206`) |
 | C11 | Notification d'appel plein écran avec Répondre / Refuser | ✅ CallKit | ❌ | ❌ service worker | ❌ | 0 + 7 | web `public/sw-push.js` sans type `call` · coque sans `USE_FULL_SCREEN_INTENT` |
 | C12 | Notification d'appel manqué | ✅ | 🟡 cloche | 🟡 cloche seulement | 🟡 | 3 | web `lib/notifications/categories.ts:109` |
-| C13 | Refuser avec un message | ❌ | ❌ | ❌ | ❌ | — | |
+| C13 | Refuser avec un message (4 réponses rapides en 7 langues + texte libre, envoyé par le chemin d'envoi ordinaire, traduit pour l'appelant) | ✅ écran entrant de l'app (#8065) — 🟡 écran CallKit : aucune action personnalisée possible | ❌ | ✅ (#8065) | ✅ même interface | 3 | iOS `CallDeclineSheet.swift` + `CallManager+DeclineReply.swift` + `CallDeclineMessenger.swift` · web `components/call-decline-sheet.tsx` + `lib/calls/decline-reply.ts` · décision web D-137 |
 
 ### D. Pendant l'appel
 
@@ -76,7 +76,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | D2 | Couper le micro (+ `call:toggle-audio`, « le pair a coupé ») | ✅ | ✅ | ❌ | ❌ | 2 | |
 | D3 | Caméra on/off, passage audio → vidéo en cours d'appel | ✅ | ✅ | ❌ | ❌ | 2 | iOS `CallManager.swift:2635` · legacy `use-webrtc-p2p.ts` |
 | D4 | Caméra avant / arrière | ✅ | ✅ | ❌ | ❌ | 2 | |
-| D5 | Choix d'une caméra, d'un micro, d'une sortie audio | 🟡 caméra | ❌ | ✅ | ✅ | 4 | web : `enumerateDevices` + `setSinkId` (`call-devices-sheet.tsx`, #8046) |
+| D5 | Choix d'une caméra, d'un micro, d'une sortie audio | 🟡 caméra + sortie (`AVRoutePickerView` : AirPlay / Bluetooth / haut-parleur) + micro (`setPreferredInput`), non mesuré sur appareil (#8071) | ❌ | ✅ | ✅ | 4 | iOS `CallDeviceControls.swift` · `CallAudioRouteService.swift` · web : `enumerateDevices` + `setSinkId` (`call-devices-sheet.tsx`, #8046) |
 | D6 | Haut-parleur / écouteur / Bluetooth | ✅ | 🟡 faux (coupe la vidéo) | ✅ `setSinkId` | ✅ routes natives | 4 + 7 | coque : plugin natif de routage audio |
 | D7 | Durée, nom, compteur de participants | ✅ | ✅ | ❌ | ❌ | 2 | legacy `CallInfoOverlay.tsx` |
 | D8 | Inverser vignette locale / distante, vignette déplaçable | ✅ | ✅ | ❌ | ❌ | 2 | legacy `LocalVideoTile.tsx`, `use-draggable.ts` |
@@ -88,7 +88,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | D14 | Partage d'écran | ❌ | 🟡 drapeau seul | ❌ | ❌ | 8 | décision produit |
 | D15 | Capteur de proximité, écran maintenu allumé | ✅ | ❌ | ❌ | ❌ | 7 | coque : plugin natif ; web : Wake Lock |
 | D16 | Audio en arrière-plan, `call:backgrounded` / `foregrounded` | ✅ | ❌ | ❌ | ❌ | 1 + 7 | coque : service au premier plan micro / caméra |
-| D17 | Détection de capture d'écran (émise / alerte reçue) | ✅ / ✅ | ❌ / ✅ | ❌ | ❌ | 5 | coque : `DETECT_SCREEN_RECORDING` |
+| D17 | Détection de capture d'écran (émise / alerte reçue) | ✅ / ✅ | ❌ / ✅ | — / ✅ | ❌ / ✅ | 5 | web : alerte reçue affichée en `role="alert"` (`call-quality.tsx`, #8047) ; un navigateur ne sait pas qu'on capture son écran — rien à émettre · coque : émettre exige `DETECT_SCREEN_RECORDING` natif, non fait |
 | D18 | Libellés d'accessibilité, VoiceOver / lecteur d'écran | ✅ | 🟡 | ❌ | ❌ | 2 | |
 | D19 | Haptique aux transitions | ✅ | 🟡 vibration | ❌ | ❌ | 7 | |
 
@@ -103,7 +103,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | E5 | `call:reconnecting` / `call:reconnected` | ✅ | ✅ | ❌ | ❌ | 1 | |
 | E6 | Chien de garde de connexion (45 s) | ✅ | ✅ | ❌ | ❌ | 1 | legacy `VideoCallInterface.tsx` |
 | E7 | Reprise après rechargement / plantage (`GET /calls/active`) | ✅ | ✅ | ❌ | ❌ | 3 | |
-| E8 | Survie vidéo (gel à 2 fps sur mauvais lien, audio prioritaire) | ✅ | ✅ | ❌ | ❌ | 5 | iOS `VideoSurvivalController.swift` · legacy `adaptive-degradation.ts` |
+| E8 | Survie vidéo (gel à 2 fps sur mauvais lien, audio prioritaire) | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `VideoSurvivalController.swift` · legacy `adaptive-degradation.ts` · web `call-survival.ts` : gel puis suspension, reprise après 10 s (#8047, `check-calls-quality.mjs`) |
 | E9 | Adaptation thermique | ✅ | — | — | ❌ | — | |
 | E10 | Survie au redémarrage du gateway | 🟡 (#3578) | 🟡 | ❌ | ❌ | 9 | |
 | E11 | Frontière d'erreur de l'écran d'appel | — | ✅ | ❌ | ❌ | 2 | legacy `CallErrorBoundary.tsx` |
@@ -112,23 +112,23 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 
 | # | Fonction | iOS | Legacy | Web | Coque | Lot | Sources |
 |---|---|---|---|---|---|---|---|
-| F1 | Boucle `getStats` et niveau de qualité | ✅ 5 s | ✅ 2 s | ❌ | ❌ | 5 | legacy `use-call-quality.ts` |
-| F2 | Paliers d'encodage vidéo par pair | ✅ | ✅ | ❌ | ❌ | 5 | legacy `use-per-peer-video-tier.ts` |
-| F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe | ✅ | ❌ | ❌ | 5 | iOS `CallSignalGlyph.swift` · legacy `CallQualityOverlay.tsx` |
-| F4 | `call:quality-report` émis, `call:quality-alert` affiché | ✅ | ✅ | ❌ | ❌ | 5 | |
-| F5 | `call:analytics` en fin d'appel (codec, effets, sous-titres réels) | ✅ | 🟡 champs codés en dur | ❌ | ❌ | 5 | |
-| F6 | Note post-appel | ❌ | ❌ | ❌ | ❌ | — | |
+| F1 | Boucle `getStats` et niveau de qualité | ✅ 5 s | ✅ 2 s | ✅ 2 s | 🟡 même code (WebView), non mesuré sur appareil | 5 | legacy `use-call-quality.ts` · web `call-quality-loop.ts` (chaque lien, pire lien pour le niveau, #8047) |
+| F2 | Paliers d'encodage vidéo par pair | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | legacy `use-per-peer-video-tier.ts` · web `call-quality.ts` (`setParameters`, #8047) |
+| F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe + feuille « Qualité » (perte, latence, gigue, débits audio/vidéo reçus, paliers du web), non mesuré sur appareil (#8071) | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `CallSignalGlyph.swift` · `CallQualitySheet.swift` · `CallQualityStatsFeed.swift` · legacy `CallQualityOverlay.tsx` · web `call-quality.tsx` (#8047) |
+| F4 | `call:quality-report` émis, `call:quality-alert` affiché | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web : rapport horodaté ISO toutes les 5 s au plus, alerte du pair éteinte après 15 s (#8047) |
+| F5 | `call:analytics` en fin d'appel (codec, effets, sous-titres réels) | ✅ | 🟡 champs codés en dur | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web `call-analytics.ts` : codec lu dans `getStats`, sous-titres comptés quand affichés (#8047) |
+| F6 | Note post-appel (1 à 5 + motifs, échantillonnée) | 🟡 carte + émission, non vérifiée au simulateur | ❌ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | règle commune D-139 (≥ 10 s, 1 sur 5, toujours après une souffrance, au plus 1 par jour) · passerelle `call-client-reports.ts` → `CallParticipant.feedback`, agrégat `callAnalyticsAggregate.ts` (`GET /admin/analytics/calls › feedback`) · web `call-feedback.ts` + `call-feedback-cooldown.ts` + `call-feedback-card.tsx` · iOS `CallFeedbackPolicy.swift` + `CallFeedbackViewModel.swift` + `CallFeedbackCard.swift`, SDK `MessageSocketManager+CallFeedback.swift` (#8072) |
 
 ### G. Sous-titres, transcription, traduction
 
 | # | Fonction | iOS | Legacy | Web | Coque | Lot | Sources |
 |---|---|---|---|---|---|---|---|
-| G1 | Sous-titres traduits en direct (`call:translated-segment`) | ✅ | ✅ | ❌ | ❌ | 6 | iOS `CallTranscriptionService.swift` · legacy `use-call-captions.ts` |
-| G2 | Modes off / original / traduit | ✅ | 🟡 traduit seul | ❌ | ❌ | 6 | iOS `CaptionsMode.swift` |
-| G3 | **Le web transcrit son propre micro** (`call:transcription-segment`) | ✅ sur l'appareil | ❌ | ❌ | ❌ | 6 | web : Web Speech API ; coque : reconnaissance Android |
-| G4 | Journal de transcription en direct | ✅ | ✅ | ❌ | ❌ | 6 | legacy `CallTranscriptPanel.tsx` |
-| G5 | `call:transcription-active` (invitation à écouter) | ✅ | ✅ | ❌ | ❌ | 6 | |
-| G6 | Transcription après l'appel (`GET /calls/:id/transcript`) | ✅ | ❌ | ❌ | ❌ | 6 | iOS `BubbleCallNoticeView.swift:400` |
+| G1 | Sous-titres traduits en direct (`call:translated-segment`) | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `CallTranscriptionService.swift` · legacy `use-call-captions.ts` · web `call-captions.ts` + `call-captions-panel.tsx` (`aria-live` polie, `dir="auto"`) (#8048) |
+| G2 | Modes off / original / traduit | ✅ | 🟡 traduit seul | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `CaptionsMode.swift` · web `nextCaptionsMode` : off → traduit → original → off, le cycle d'iOS (#8048) |
+| G3 | **Le web transcrit son propre micro** (`call:transcription-segment`) | ✅ sur l'appareil | ❌ | ✅ où le navigateur a la Web Speech API (Chrome, Edge, Safari) ; ailleurs l'écran le dit et le web reçoit | ❌ la WebView n'a pas `SpeechRecognition` : reçoit, n'émet pas (reconnaissance Android native à brancher) | 6 | web `call-speech.ts` (détectée, jamais supposée) : finals au socket et au canal, brouillons au canal seul, langue = rang 1 du Prisme (#8048) |
+| G4 | Journal de transcription en direct | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | legacy `CallTranscriptPanel.tsx` · web `call-captions-panel.tsx` (200 lignes gardées, fusion par énoncé) (#8048) |
+| G5 | `call:transcription-active` (invitation à écouter) | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | web : émis à chaque bascule on/off ; reçu, le bouton CC l'annonce et la voix du lecteur est transcrite (politique de capture d'iOS) (#8048) |
+| G6 | Transcription après l'appel (`GET /calls/:id/transcript`) | ✅ | ❌ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 6 | iOS `BubbleCallNoticeView.swift:400` · web `call-transcript.ts` + `call-transcript-panel.tsx`, dépliée dans la bulle d'appel du fil, servie par le Prisme du lecteur (#8048) |
 
 ### H. Appels dans le fil, la liste et le journal
 
@@ -138,9 +138,9 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | H2 | Bulle « appel en cours » avec Rejoindre | ✅ | ✅ | 🟡 sans bouton | 🟡 | 3 | iOS `LiveCallJoiner.swift` |
 | H3 | Bandeau / pastille « Rejoindre » dans l'en-tête du fil | ✅ | ✅ sondage 15 s | ❌ | ❌ | 3 | legacy `use-call-banner.ts`, `OngoingCallBanner.tsx` |
 | H4 | Ligne de liste « appel en cours » + Rejoindre | ✅ (#7616) | ❌ | 🟡 sans bouton | 🟡 | 3 | web `lens-preview-line.tsx:23` |
-| H5 | Journal des appels (Tous / Manqués, cache d'abord, pages) | 🟡 1re page seule | ❌ | ✅ | ✅ | — | web `routes/calls.tsx` |
+| H5 | Journal des appels (Tous / Manqués, cache d'abord, pages, recherche par nom, participants d'un appel de groupe) | ✅ (#8066) | ❌ | ✅ (#8066) | ✅ | — | web `routes/calls.tsx` · iOS `CallsTab.swift`, `CallsViewModel.swift` · passerelle `callHistoryParticipants.ts` |
 | H6 | Fiche détail d'un appel | ✅ | ❌ | ❌ (#6383) | ❌ | 3 | iOS `CallDetailSheet.swift` |
-| H7 | Supprimer / vider le journal | ❌ | ❌ | ❌ | ❌ | — | aucune route serveur |
+| H7 | Supprimer / vider le journal (pour soi seul, optimiste, confirmation pour tout effacer) | ✅ (#8066) | ❌ | ✅ (#8066) | ✅ | — | `DELETE /api/v1/calls/history[/:callId]` · web `call-history-actions.ts` · iOS `CallsViewModel.hide`/`clearAll` |
 
 ### I. Appels de groupe
 
@@ -186,17 +186,17 @@ Ajouté le 2026-09-26 à la demande du porteur : les fonctions absentes ou parti
 | Fonction | État iOS | Issue |
 |---|---|---|
 | Partage d'écran | ❌ | #8063 |
-| Enregistrement d'un appel avec consentement | ❌ | #8064 |
+| Enregistrement d'un appel avec consentement | 🟡 consentement, indicateur, bulle et réécoute écrits et testés (non vérifiés sur appareil) ; ne capte que la voix LOCALE — le SDK WebRTC public n'expose pas son module audio (web et coque Android : toutes les voix, `apps/web/decisions.md` D-140) | #8064 |
 | Refuser avec un message rapide | ❌ | #8065 |
 | Journal complet : pagination, recherche, suppression, participants d'un groupe | 🟡 1re page seule | #8066 |
-| « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | 🟡 ouvre le fil | #8067, #7735 (Récents) |
+| « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | ✅ écrit et testé, non vérifié sur appareil | #8067, #7735 (Récents) |
 | Appels de groupe | ❌ 1 pair | #3585 (iOS), #3721 (web et coque) |
 | Ajouter une personne à un appel en cours | ❌ | #8068 |
 | SFU et simulcast au-delà de quatre | ❌ | #8069 |
 | Chiffrement de bout en bout par trame | 🟡 DTLS seul | #8070 |
 | Choix du micro et de la sortie, détail de qualité | 🟡 caméra, glyphe | #8071 |
 | Note après l'appel | ❌ | #8072 |
-| Réglage « Appels hors contacts » | 🟡 grisé | #8073 |
+| Réglage « Appels hors contacts » | ✅ actif ; la passerelle refuse la sonnerie aux non-amis (direct et groupe), web et iOS nomment le refus | #8073 |
 | Règles communes : délais, plafond, texte de poussée, relance ICE | 🟡 | #8074 |
 | Reprendre l'appel après relance | 🟡 | #3586, #3578 |
 | Effets de voix (retirés d'iOS le 2026-07-05) | ❌ | #8050 (`décision-produit`) |

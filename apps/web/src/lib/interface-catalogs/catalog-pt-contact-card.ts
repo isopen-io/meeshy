@@ -16,6 +16,7 @@ const ptContactCard = {
   'contactCard.state.requestSent': 'Pedido enviado',
   'contactCard.state.requestReceived': 'Enviou-lhe um pedido',
   'contactCard.sheet.title': 'Cartão de contato',
+  'contactCard.shared': 'Contato compartilhado',
   'contactCard.close': 'Fechar',
   'contactCard.copy': 'Copiar: {field}',
   'contactCard.copied': 'Copiado para a área de transferência',

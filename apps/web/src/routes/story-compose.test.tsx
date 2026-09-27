@@ -7,6 +7,7 @@ import { sessionStore } from '@/lib/api/session';
 import { storyReturn } from '@/lib/onboarding/story-return';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { buttonNamed } from '@/test-support/act-mount';
 import StoryComposeScreen from './story-compose';
 import {
@@ -757,5 +758,19 @@ describe('StoryComposeScreen — ouvert par l’accueil post-inscription (#7729)
     expect(storyReturn.take('post-1')).toBe(true);
     dispose();
     goTo(before);
+  });
+});
+
+describe('StoryComposeScreen — « Créer avec ce média » (#6303)', () => {
+  test('la pièce déposée par la visionneuse devient le fond de la page, montée comme un fichier choisi', async () => {
+    offerStudioSeed(image());
+    const el = mount(harness({}).deps);
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    expect(el.querySelector('[data-scene-player] img')?.getAttribute('src')?.startsWith('blob:')).toBe(true);
+  });
+
+  test('sans dépôt, le studio s’ouvre vide', () => {
+    const el = mount(harness({}).deps);
+    expect(el.querySelector('[data-scene-player]')).toBeNull();
   });
 });

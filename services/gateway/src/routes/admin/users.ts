@@ -36,9 +36,12 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserPasswordProposalRoutes } from './user-password-proposals';
 import { registerUserProfileReadRoutes } from './user-profile-reads';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
+import { registerUserProfileImageRoutes } from './user-profile-images';
+import { evaluerLoiDesChamps } from './user-field-law';
 import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -49,6 +52,7 @@ import { EmailService } from '../../services/EmailService';
 import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
 import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
+import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -131,6 +135,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
+  // #8051 — les quatre niveaux de mot de passe proposés AVANT `reset-password`
+  // ci-dessous, sous les mêmes gardes : voir `user-password-proposals.ts`.
+  registerUserPasswordProposalRoutes(fastify);
 
   // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
   // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
@@ -140,6 +147,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // préférences lues / écrites sous les gardes des écritures de compte.
   registerUserMemberStatsRoutes(fastify);
   registerUserMemberPreferencesRoutes(fastify, { userAuditService });
+
+  // Photo et bannière posées par l'administration (#8217) : téléversées, ou
+  // choisies parmi les images DÉJÀ publiques du membre.
+  registerUserProfileImageRoutes(fastify, { userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
@@ -286,16 +297,28 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      // Attester l'adresse (#8217) est le geste de `PATCH …/verifications` posé
+      // à la naissance du compte : il passe par la loi du MÊME champ.
+      if (validatedData.emailVerified === true) {
+        const refus = evaluerLoiDesChamps({ role: adminRole, champs: ['emailVerified'] });
+        if (refus) {
+          sendForbidden(reply, refus.message, { message: refus.message });
+          return;
+        }
+      }
+
       // Creer l'utilisateur
       const newUser = await userManagementService.createUser(
         validatedData as CreateUserDTO
       );
 
-      // Log d'audit
+      // Log d'audit — jamais la VALEUR du mot de passe (#8217) : la trace
+      // recopiait le corps validé, secret en clair compris, dans
+      // `AdminAuditLog.changes`. Elle dit qu'il a été posé, rien de plus.
       await userAuditService.logCreateUser(
         authContext.registeredUser!.id,
         newUser.id,
-        validatedData as unknown as Record<string, unknown>,
+        { ...validatedData, password: '[set]' },
         request.ip,
         request.headers['user-agent']
       );
@@ -309,6 +332,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         sendBadRequest(reply, 'Invalid input data');
         return;
       }
+      if (replyIdentifierTaken(reply, error)) return;
 
       logError(fastify.log, 'Error creating user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to create user' });

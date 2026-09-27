@@ -5,7 +5,6 @@ import { SocketIOUser } from '@meeshy/shared/types';
 import { normalizePhoneNumber } from '../utils/normalize';
 import { RequestContext } from './GeoIPService';
 import { EmailService } from './EmailService';
-import { smsService } from './SmsService';
 import {
   createSession,
   generateSessionToken,
@@ -56,6 +55,8 @@ import {
 } from './auth/account-from-email';
 import { verifyEmailProof, type EmailProof, type EmailProofResult } from './auth/email-proof.service';
 import { emailCodeLink, mintEmailCodePair, verificationTtlMinutes } from './auth/email-code';
+import { isPhoneVerified, sendPhoneVerificationCode, verifyPhoneCode } from './auth/phone-verification';
+import { isActivationBlocked, resolveAccountActivation } from './auth/account-activation';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -107,6 +108,8 @@ export type AuthServiceOptions = {
    * Absent ⇒ le singleton `getCacheStore()`, résolu à l'appel.
    */
   readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
+  /** L'horloge du délai de grâce (#8238) — injectée par les témoins. Absente ⇒ l'horloge murale. */
+  readonly now?: () => Date;
 };
 
 export class AuthService {
@@ -116,12 +119,14 @@ export class AuthService {
   private frontendUrl: string;
   private readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
   private readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
+  private readonly now: () => Date;
 
   constructor(prisma: PrismaClient, jwtSecret: string, options: AuthServiceOptions = {}) {
     this.prisma = prisma;
     this.jwtSecret = jwtSecret;
     this.resolveSocketManager = options.resolveSocketManager;
     this.accountThrottle = options.accountThrottle;
+    this.now = options.now ?? (() => new Date());
     this.emailService = new EmailService();
     this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
 
@@ -136,13 +141,6 @@ export class AuthService {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
     return { raw: rawToken, hash: hashedToken };
-  }
-
-  /**
-   * Hash a token for comparison
-   */
-  private hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   /**
@@ -239,19 +237,18 @@ export class AuthService {
       logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
 
       /**
-       * SANS NUMÉRO, UN COMPTE N'EST ACTIF QU'UNE FOIS SON ADRESSE PROUVÉE
-       * (#8055, règle porteur 2026-09-26).
+       * LE DÉLAI DE GRÂCE DE L'ADRESSE (#8238, qui remplace le blocage
+       * immédiat de #8055) : un compte sans numéro dont l'adresse n'est pas
+       * prouvée se connecte pendant 28 jours, puis n'ouvre plus de session
+       * avant le code. Loi : `./auth/account-activation`.
        *
        * Lu APRÈS le mot de passe et le verrou : seul qui connaît le mot de
        * passe apprend que le compte attend son code — un essai faux reste un
        * `null` ordinaire, compté. Lu AVANT le second facteur et toute écriture
-       * de présence : un compte inactif ne passe pas « en ligne ». Un numéro
-       * donné à l'inscription active le compte ; l'adresse se vérifie alors
-       * plus tard. Les comptes HISTORIQUES non vérifiés sans numéro passent
-       * désormais eux aussi par le code — c'est la règle voulue.
+       * de présence : un compte bloqué ne passe pas « en ligne ».
        */
-      if (!user.emailVerifiedAt && !user.phoneNumber) {
-        logger.info(`[AUTH_SERVICE] compte non actif (adresse à prouver, aucun numéro): ${user.username}`);
+      if (isActivationBlocked(user, this.now())) {
+        logger.info(`[AUTH_SERVICE] délai de grâce passé (adresse à prouver, aucun numéro): ${user.username}`);
         throw new ActivationRequiresEmailProofError(user.email);
       }
 
@@ -299,16 +296,9 @@ export class AuthService {
         }
       });
 
-      // Un compte actif par son NUMÉRO dont l'adresse reste à prouver (#8055) :
-      // la session s'ouvre, et le code de vérification est renvoyé.
-      if (!user.emailVerifiedAt) {
-        logger.info(`[AUTH_SERVICE] ⚠️ Email non vérifié pour user.email=${user.email}`);
-        try {
-          await this.resendVerificationEmail(user.email);
-        } catch (emailError) {
-          logger.error('[AUTH_SERVICE] ⚠️ Échec du renvoi de l\'email de vérification:', emailError);
-        }
-      }
+      // Plus aucun code renvoyé à la connexion (#8238) : pendant le délai de
+      // grâce rien n'est demandé (`quiet`), puis les clients invitent
+      // (`invite`) et l'envoi se fait à la demande de la personne.
 
       // Convertir en SocketIOUser (with emailVerifiedAt included)
       const socketIOUser = this.userToSocketIOUser(user);
@@ -777,137 +767,19 @@ export class AuthService {
     return generateNumericCode();
   }
 
-  /**
-   * Send phone verification code via SMS
-   * NOTE: This is a placeholder - integrate Twilio/Vonage for production
-   */
+  /** Envoyer le code SMS de vérification du numéro — `./auth/phone-verification`. */
   async sendPhoneVerificationCode(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
-
-      // Find user by phone number
-      const user = await this.prisma.user.findFirst({
-        where: {
-          phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
-          isActive: true
-        }
-      });
-
-      if (!user) {
-        // Don't reveal if phone exists - but we need a user for verification
-        logger.warn(`[AUTH_SERVICE] ⚠️ Numéro non trouvé cleanPhone=${cleanPhone}`);
-        return { success: false, error: 'Numéro de téléphone non associé à un compte.' };
-      }
-
-      // Already verified?
-      if (user.phoneVerifiedAt) {
-        return { success: false, error: 'Ce numéro est déjà vérifié.' };
-      }
-
-      // Generate 6-digit code
-      const code = this.generatePhoneCode();
-      const hashedCode = this.hashToken(code);
-      const codeExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-      // Update user with code
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          phoneVerificationCode: hashedCode,
-          phoneVerificationExpiry: codeExpiry
-        }
-      });
-
-      // Send SMS via multi-provider SmsService
-      const smsResult = await smsService.sendVerificationCode(user.phoneNumber || cleanPhone, code);
-
-      if (!smsResult.success) {
-        logger.error('[AUTH_SERVICE] ❌ Échec envoi SMS', smsResult.error);
-      logger.info(`Utilisateur trouvé userId=${user.id}`);
-        return { success: false, error: 'Erreur lors de l\'envoi du SMS.' };
-      }
-
-      logger.info(`[AUTH_SERVICE] ✅ SMS envoyé via ${smsResult.provider} - messageId: ${smsResult.messageId}`);
-      return { success: true };
-
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] ❌ Erreur envoi code SMS', error);
-      return { success: false, error: 'Erreur lors de l\'envoi du code.' };
-    }
+    return sendPhoneVerificationCode(this.prisma, phoneNumber);
   }
 
-  /**
-   * Verify phone with SMS code
-   */
+  /** Vérifier le numéro par son code SMS — `./auth/phone-verification`. */
   async verifyPhone(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string; verifiedUserId?: string }> {
-    try {
-      const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
-      const hashedCode = this.hashToken(code);
-
-      // Find user with matching phone and code
-      const user = await this.prisma.user.findFirst({
-        where: {
-          phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
-          phoneVerificationCode: hashedCode,
-          phoneVerificationExpiry: { gt: new Date() }
-        }
-      });
-
-      if (!user) {
-        // Check if code expired
-        const expiredUser = await this.prisma.user.findFirst({
-          where: {
-            phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
-            phoneVerificationCode: hashedCode
-          }
-        });
-
-        if (expiredUser) {
-          return { success: false, error: 'Le code a expiré. Veuillez en demander un nouveau.' };
-        }
-        return { success: false, error: 'Code invalide.' };
-      }
-
-      // Already verified?
-      if (user.phoneVerifiedAt) {
-        return { success: true }; // Already verified
-      }
-
-      // Update user as phone verified
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          phoneVerifiedAt: new Date(),
-          phoneVerificationCode: null,
-          phoneVerificationExpiry: null
-        }
-      });
-
-      logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié pour user.phoneNumber=${user.phoneNumber}`);
-      // `verifiedUserId` n'est posé que sur une vérification NEUVE : c'est elle, et
-      // elle seule, qui peut annoncer une arrivée aux carnets (#8105).
-      return { success: true, verifiedUserId: user.id };
-
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] ❌ Erreur vérification téléphone', error);
-      return { success: false, error: 'Erreur lors de la vérification.' };
-    }
+    return verifyPhoneCode(this.prisma, phoneNumber, code);
   }
 
-  /**
-   * Check if user phone is verified
-   */
+  /** Le numéro du compte est-il vérifié ? — `./auth/phone-verification`. */
   async isPhoneVerified(userId: string): Promise<boolean> {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { phoneVerifiedAt: true }
-      });
-      return !!user?.phoneVerifiedAt;
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] Error checking phone verification', error);
-      return false;
-    }
+    return isPhoneVerified(this.prisma, userId);
   }
 
   /**
@@ -1004,7 +876,10 @@ export class AuthService {
       lastLoginDevice: user.lastLoginDevice,
       // Profile metadata
       timezone: user.timezone,
-      profileCompletionRate: user.profileCompletionRate
+      profileCompletionRate: user.profileCompletionRate,
+      // #8238 — le délai de grâce de l'adresse, calculé ici et nulle part
+      // ailleurs pour les portes qui passent par ce projecteur.
+      ...(user.createdAt instanceof Date ? { activation: resolveAccountActivation(user, this.now()) } : {})
     };
   }
 

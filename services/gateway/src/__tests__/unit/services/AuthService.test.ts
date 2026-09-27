@@ -1560,7 +1560,7 @@ describe('AuthService - 2FA during authenticate', () => {
     expect(result?.session.location).toBe('Paris');
   });
 
-  it('should resend verification email when email not verified on login', async () => {
+  it('no longer resends the verification email on login — the grace period asks nothing (#8238)', async () => {
     const unverifiedUser = {
       ...mockUser,
       twoFactorEnabledAt: null,
@@ -1568,8 +1568,7 @@ describe('AuthService - 2FA during authenticate', () => {
     };
 
     mockPrisma.user.findFirst
-      .mockResolvedValueOnce(unverifiedUser) // initial login lookup
-      .mockResolvedValueOnce(unverifiedUser); // resendVerificationEmail lookup
+      .mockResolvedValueOnce(unverifiedUser); // initial login lookup — nothing else is read
 
     mockBcryptCompare.mockResolvedValue(true);
     mockPrisma.user.update.mockResolvedValue(unverifiedUser);
@@ -1577,8 +1576,8 @@ describe('AuthService - 2FA during authenticate', () => {
     const result = await authService.authenticate({ username: 'testuser', password: 'pass' });
 
     expect(result).not.toBeNull();
-    // resendVerificationEmail should be called; verify it updated user with new token
-    expect(mockPrisma.user.update).toHaveBeenCalledTimes(2);
+    // only the presence write: no verification pair is minted at login
+    expect(mockPrisma.user.update).toHaveBeenCalledTimes(1);
   });
 
   it('should continue login even when resendVerificationEmail throws', async () => {
@@ -2281,8 +2280,7 @@ describe('AuthService - renvoi de vérification pendant la CONNEXION', () => {
     const unverifiedUser = { ...mockUser, twoFactorEnabledAt: null, emailVerifiedAt: null };
 
     mockPrisma.user.findFirst
-      .mockResolvedValueOnce(unverifiedUser) // authenticate lookup
-      .mockResolvedValueOnce(unverifiedUser); // resendVerificationEmail lookup
+      .mockResolvedValueOnce(unverifiedUser); // authenticate lookup
 
     mockBcryptCompare.mockResolvedValue(true);
     mockPrisma.user.update.mockResolvedValue(unverifiedUser);
@@ -2290,7 +2288,7 @@ describe('AuthService - renvoi de vérification pendant la CONNEXION', () => {
     const result = await authServiceForResend.authenticate({ username: 'testuser', password: 'pass' });
 
     expect(result).not.toBeNull();
-    // resendVerificationEmail was called and succeeded
-    expect(mockSendEmailVerification).toHaveBeenCalled();
+    // #8238 — no email at login during the grace period
+    expect(mockSendEmailVerification).not.toHaveBeenCalled();
   });
 });

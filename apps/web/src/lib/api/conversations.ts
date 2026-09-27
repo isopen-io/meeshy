@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { unwrap } from './client';
 import type { ConversationsInfiniteData, ConversationsPage, ConversationsPageParam } from './conversations-pages';
@@ -15,11 +16,11 @@ import type { Conversation } from './types';
  * `source` résolue ICI, jamais dans le hook ni dans l'écran — les fixtures
  * sont servies par le MÊME chemin (critère b de l'issue).
  *
- * `GET /api/v1/conversations?limit=30[&before=<id>]`
+ * `GET conversations.root?limit=30[&before=<id>]`
  * (`services/gateway/src/routes/conversations/core-list.ts:62-136`,
  * `optionalAuth`) — voir `loadConversationsPage`.
  *
- * `GET /api/v1/conversations/:id` (`core-detail.ts`, `optionalAuth`) —
+ * `GET conversations.byId` (`core-detail.ts`, `optionalAuth`) —
  * 404 `'Conversation not found'` (SANS code, `code` reste `undefined`) pour un
  * identifiant inexistant ET pour une conversation dont le lecteur n'est pas
  * membre (#8099, anti-énumération) ; 401 sans session.
@@ -78,7 +79,7 @@ export async function loadConversationsPage(
   });
   const result = await params.transport.request<readonly Conversation[]>({
     method: 'GET',
-    path: `/api/v1/conversations?${query.toString()}`,
+    path: `${conversationsEndpoints.root}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -109,7 +110,7 @@ export async function loadConversation(
   }
   return params.transport.request<Conversation>({
     method: 'GET',
-    path: `/api/v1/conversations/${params.id}`,
+    path: conversationsEndpoints.byId(params.id),
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -237,7 +238,7 @@ export function refreshConversations(queryClient: QueryClient, deps: Conversatio
 }
 
 /**
- * `createDirectConversation` (#5652, bloc D) — `POST /api/v1/conversations`
+ * `createDirectConversation` (#5652, bloc D) — `POST conversations.root`
  * (`services/gateway/src/routes/conversations/core-lifecycle.ts:77-91`,
  * `requiredAuth`), § 3.5 de la spécification. IDEMPOTENT côté serveur : un
  * direct déjà existant entre les deux comptes est RENDU, jamais recréé — ce
@@ -256,14 +257,14 @@ export function createDirectConversation(deps: ConversationsDeps, participantId:
   }
   return deps.transport.request<Conversation>({
     method: 'POST',
-    path: '/api/v1/conversations',
+    path: conversationsEndpoints.root,
     body: { type: 'direct', participantIds: [participantId] },
   });
 }
 
 /**
  * **CRÉER UN GROUPE** (#6706) — la MÊME porte que le direct
- * (`POST /api/v1/conversations`, `core-lifecycle.ts:77`), et c'est le champ
+ * (`POST conversations.root`, `core-lifecycle.ts:77`), et c'est le champ
  * `type` qui sépare tout le reste.
  *
  * **Ce que `group` change, mesuré côté passerelle** : aucune déduplication (un
@@ -295,7 +296,7 @@ export function createGroupConversation(
   }
   return deps.transport.request<Conversation>({
     method: 'POST',
-    path: '/api/v1/conversations',
+    path: conversationsEndpoints.root,
     body: {
       type: 'group',
       title: body.title,

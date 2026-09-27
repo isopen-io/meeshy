@@ -905,12 +905,12 @@ struct StoryCardView: View {
     let goToNext: () -> Void
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
-    let toggleStoryCommentThread: (String) async -> Void
+    let toggleStoryCommentThread: @MainActor (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let dismissViewer: () -> Void
-    let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
+    let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
 
     /// Builds the Instagram-style floating comments overlay. Conditional on

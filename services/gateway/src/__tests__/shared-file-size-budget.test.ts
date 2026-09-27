@@ -153,7 +153,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync, statSync } from 'fs';
+import { readdirSync, readFileSync, statSync } from 'fs';
 import { basename, join, relative, sep } from 'path';
 
 import {
@@ -189,7 +189,15 @@ const cheminRelatif = (chemin: string): string => relative(RACINE, chemin).split
  * gardent exigent que chaque entrée porte la marque de génération dans son
  * en-tête, et qu'aucun autre fichier retenu ne la porte.
  */
-const ARTEFACTS_GENERES: readonly string[] = ['api/endpoints.ts'];
+const ARTEFACTS_GENERES: readonly string[] = [
+  'api/endpoints.ts',
+  // #7716 — un module par groupe du catalogue, écrit par le même générateur
+  // (`scripts/generate-api-endpoints.ts`) : le RÉPERTOIRE est déclaré, ses
+  // fichiers suivent le manifeste, et chacun doit porter la marque ci-dessous.
+  ...readdirSync(join(RACINE, 'api', 'endpoints'))
+    .filter((nom) => nom.endsWith('.ts'))
+    .map((nom) => `api/endpoints/${nom}`),
+];
 
 /**
  * La marque qu'un rendu pose en tête de ce qu'il écrit

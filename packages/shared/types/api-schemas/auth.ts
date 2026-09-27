@@ -308,8 +308,30 @@ export const registerRequestSchema = {
     affiliateSessionKey: {
       type: 'string',
       description: 'OPTIONAL. Session key returned by POST /affiliate/track-visit, linking the prior visit to this signup.'
+    },
+    // #8214 — « ce n'est pas moi » devant une adresse détenue par un autre
+    // compte (le 409 EMAIL_TAKEN porte son identité masquée, `emailOwnerSchema`).
+    claimEmail: {
+      type: 'boolean',
+      description: 'OPTIONAL (#8214). The email address belongs to another account and the caller claims it ("this is not me"). The account is created INACTIVE and WITHOUT the address — never a session, even with a phone number — and the response is `verification-required` for that address. Presenting the code or the link to POST /auth/verify-email transfers the address, in one transaction: the previous holder receives a non-routable address and keeps its username, phone, password and content. Ignored when nobody holds the address.'
     }
   }
+} as const;
+
+/**
+ * L'identité MASQUÉE du compte qui détient une adresse (#8214) — portée par le
+ * `409 EMAIL_TAKEN` de `POST /auth/register` pour demander « Est-ce vous ? ».
+ * Même masquage que `phoneOwnerInfo` ; jamais l'adresse, jamais l'identifiant.
+ */
+export const emailOwnerSchema = {
+  type: 'object',
+  description: 'Masked identity of the account holding the email address (EMAIL_TAKEN only), to ask "is this you?" — same masking as phoneOwnerInfo. Never the address nor the account id.',
+  properties: {
+    maskedDisplayName: { type: 'string', example: 'M**e D**t' },
+    maskedUsername: { type: 'string', example: 'm******e' },
+    avatar: { type: 'string', description: 'Avatar URL of the holder, when it has one' }
+  },
+  required: ['maskedDisplayName', 'maskedUsername']
 } as const;
 
 /**

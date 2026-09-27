@@ -214,7 +214,7 @@ final class StarredMessagesStoreTests: XCTestCase {
         )
     }
 
-    private static let noConversation: @Sendable (String) async -> MeeshyConversation? = { _ in nil }
+    private static let noConversation: @Sendable @concurrent (String) async -> MeeshyConversation? = { _ in nil }
 
     @MainActor
     func test_follow_starredFromAnotherDevice_composesTheSnapshotFromGRDB() async throws {

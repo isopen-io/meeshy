@@ -67,7 +67,7 @@ final class OnboardingViewModel: ObservableObject {
     private let applyUser: (MeeshyUser) -> Void
     private let settled: any OnboardingSettledStoring
     private let auth: any AuthServiceProviding
-    private let pause: (Duration) async -> Void
+    private let pause: @MainActor (Duration) async -> Void
     private let contacts: any ContactSyncProviding
     private let directory: any ContactDirectoryServiceProviding
 
@@ -105,7 +105,7 @@ final class OnboardingViewModel: ObservableObject {
         applyUser: ((MeeshyUser) -> Void)? = nil,
         settled: any OnboardingSettledStoring = UserDefaultsOnboardingSettledStore(),
         auth: any AuthServiceProviding = AuthService.shared,
-        pause: ((Duration) async -> Void)? = nil,
+        pause: (@MainActor (Duration) async -> Void)? = nil,
         contacts: any ContactSyncProviding = ContactSyncService.shared,
         directory: any ContactDirectoryServiceProviding = ContactDirectoryService.shared
     ) {

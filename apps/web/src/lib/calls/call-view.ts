@@ -1,3 +1,5 @@
+import type { CallErrorCode } from '@meeshy/shared/types/video-call';
+
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 
 import { type ActiveCall, type CallEndReason, type CallMember } from './call-store';
@@ -9,7 +11,7 @@ import { type ActiveCall, type CallEndReason, type CallMember } from './call-sto
  */
 
 /** Les libellés d'appel SANS paramètre — ceux qu'un état choisit. */
-export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named' | 'call.screen.peerSharing'>;
+export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named' | 'call.screen.peerSharing' | 'call.quality.indicator' | 'call.alert.weakNetwork' | 'call.alert.capturing'>;
 
 export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   local: 'call.ended.local',
@@ -23,6 +25,14 @@ export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   removed: 'call.ended.removed',
 };
 
+/**
+ * Les refus de PRINCIPE de la passerelle (#8073) : un code typé qui a son
+ * propre motif, et qu'un nouvel essai rencontrerait à l'identique.
+ */
+const REFUSAL_KEYS: ReadonlyMap<string, PlainCallKey> = new Map<CallErrorCode, PlainCallKey>([['CALLEE_REFUSES_NON_CONTACTS', 'call.ended.refusedNonContacts']]);
+
+const refusalKeyOf = (detail: string | null): PlainCallKey | null => (detail === null ? null : (REFUSAL_KEYS.get(detail) ?? null));
+
 /** Le libellé sous le nom — `nil` une fois connecté : c'est la durée qui parle. */
 export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId' | 'direction'>): PlainCallKey | null {
   switch (call.phase.kind) {
@@ -35,7 +45,7 @@ export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId
     case 'reconnecting':
       return 'call.reconnecting';
     case 'ended':
-      return END_REASON_KEY[call.phase.reason];
+      return refusalKeyOf(call.phase.detail) ?? END_REASON_KEY[call.phase.reason];
     case 'connected':
       return null;
   }
@@ -43,7 +53,7 @@ export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId
 
 /** « Réessayer » d'iOS : après un échec passager ou une absence de réponse, jamais après un raccroché. */
 export function canRetry(call: Pick<ActiveCall, 'phase' | 'direction'>): boolean {
-  if (call.phase.kind !== 'ended' || call.direction !== 'outgoing') return false;
+  if (call.phase.kind !== 'ended' || call.direction !== 'outgoing' || refusalKeyOf(call.phase.detail) !== null) return false;
   const reason = call.phase.reason;
   return reason === 'failed' || reason === 'connectionLost' || reason === 'missed' || reason === 'busy';
 }
@@ -83,13 +93,15 @@ export function canShareScreen(mediaDevices: unknown): boolean {
   return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
 }
 
-export type StatusPill = 'mic-muted' | 'screen-sharing' | 'peer-muted' | 'poor-network';
+export type StatusPill = 'mic-muted' | 'screen-sharing' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
   'screen-sharing': 'call.screen.sharing',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
+  'video-frozen': 'call.video.frozen',
+  'video-suspended': 'call.video.suspended',
 };
 
 /** Les pastilles de `CallView.swift` que le web sait dire. */
@@ -100,7 +112,9 @@ export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' 
     ...(call.micMuted ? (['mic-muted'] as const) : []),
     ...(call.screenSharing ? (['screen-sharing'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
-    ...(call.quality === 'poor' ? (['poor-network'] as const) : []),
+    ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
+    ...(call.quality?.survival === 'frozen' ? (['video-frozen'] as const) : []),
+    ...(call.quality?.survival === 'suspended' ? (['video-suspended'] as const) : []),
   ];
 }
 

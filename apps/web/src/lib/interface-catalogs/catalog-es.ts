@@ -2,6 +2,8 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
 import esMediaHub from './catalog-es-media-hub';
+import esMediaViewer from './catalog-es-media-viewer';
+import esActivation from './catalog-es-activation';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
@@ -10,8 +12,13 @@ import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
 import esCallFeedback from './catalog-es-call-feedback';
+import esCallsErase from './catalog-es-calls-erase';
+import esAddressBook from './catalog-es-address-book';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
+import esCallQuality from './catalog-es-call-quality';
+import esCallCaptions from './catalog-es-call-captions';
+import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
@@ -202,7 +209,9 @@ const es = {
   'feed.newPosts.other': '{count} publicaciones nuevas',
   ...esIdentity,
   ...esMediaHub,
+  ...esMediaViewer,
   ...esVerifyEmail,
+  ...esActivation,
   ...esPassword,
   ...esCall,
   ...esRowActions,
@@ -210,8 +219,13 @@ const es = {
   ...esCallJoin,
   ...esCallDecline,
   ...esCallFeedback,
+  ...esCallsErase,
+  ...esAddressBook,
   ...esCallDevices,
   ...esCallScreen,
+  ...esCallQuality,
+  ...esCallCaptions,
+  ...esCallRecording,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',

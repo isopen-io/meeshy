@@ -298,12 +298,42 @@ struct FocalQuotedReplyView: View, Equatable {
     /// ZONE 2 — la miniature du média cité. **Sous l'auteur depuis #5103**,
     /// comme dans la bulle : la directive déplace la géographie commune aux
     /// trois peaux, elle ne l'abandonne pas (#4946).
+    ///
+    /// **Et la zone a TROIS faces depuis #8230**, sous un seul geste : la
+    /// vignette, le poster d'une vidéo dont la vignette serveur a raté, et
+    /// l'aperçu d'un vocal — qui n'avait jusque-là AUCUNE zone média
+    /// atteignable au doigt dans cette peau (la ligne d'aperçu à glyphe n'y
+    /// est montée que pour l'humeur et la story).
     @ViewBuilder
     private var quotedThumbnail: some View {
-        // ZONE 2 — miniature du média cité (image/vidéo/story), bouton
-        // play par-dessus la vidéo. Tap : le média EN PLEIN ÉCRAN, pas le
-        // saut. Le repli `jumpToOriginal` ne sert qu'à la story, dont le
-        // viewer EST le plein écran demandé : aucune capacité n'y diverge.
+        // ZONE 2 — la face du média cité, bouton play par-dessus la vidéo.
+        // Tap : le média EN PLEIN ÉCRAN, pas le saut. Le repli
+        // `jumpToOriginal` ne sert qu'à la story, dont le viewer EST le plein
+        // écran demandé : aucune capacité n'y diverge.
+        if thumbnailURL != nil || quotedMessageMediaFace != nil {
+            quotedMediaFace
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if hasTappableMedia {
+                        onQuotedMediaTap?(reference)
+                    } else {
+                        jumpToOriginal()
+                    }
+                }
+                .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+        }
+    }
+
+    /// La face d'un média cité par un MESSAGE quand aucune vignette ne voyage
+    /// — poster ou vocal (#8230). La règle partagée des deux peaux tranche la
+    /// protection d'abord ; une story garde sa vignette, jamais une face.
+    private var quotedMessageMediaFace: QuotedReplyPresentation.MediaFace? {
+        guard thumbnailURL == nil, !reply.isStory else { return nil }
+        return QuotedReplyPresentation.mediaFace(for: reference)
+    }
+
+    @ViewBuilder
+    private var quotedMediaFace: some View {
         if let thumbnailURL {
             CachedAsyncImage(
                 url: thumbnailURL.absoluteString,
@@ -318,35 +348,41 @@ struct FocalQuotedReplyView: View, Equatable {
             .aspectRatio(contentMode: .fill)
             .frame(width: thumbnailSize.width, height: thumbnailSize.height)
             .clipShape(RoundedRectangle(cornerRadius: thumbnailRadius))
-            .overlay {
-                // Le GENRE résolu, jamais la chaîne brute. `attachmentType`
-                // porte le MIME (« video/mp4 ») sur le chemin de rendu réel
-                // — `MessagePersistenceActor` y grave `mimeType`, et le
-                // cache le rend tel quel : une comparaison à « video » n'y
-                // est vraie que sur la bulle OPTIMISTE, qui pose le
-                // rawValue court. Le bouton play disparaissait donc dès que
-                // le serveur accusait, pour ne plus jamais revenir.
-                // `hasTimebasedTrack` couvre en outre l'audio cité, dont la
-                // demande produit réclame l'icône de lecture au même titre.
-                if attachmentKind?.hasTimebasedTrack == true {
-                    // Même glyphe que la zone média sans miniature : UN
-                    // seul vocabulaire visuel pour « ceci se joue ».
-                    Image(systemName: "play.circle.fill")
-                        .font(MeeshyFont.relative(16, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(radius: 2)
-                        .accessibilityHidden(true)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if hasTappableMedia {
-                    onQuotedMediaTap?(reference)
-                } else {
-                    jumpToOriginal()
-                }
-            }
-            .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+            .overlay { timebasedPlayBadge }
+        } else if quotedMessageMediaFace == .videoPoster, let attachment = reference.quotedAttachment {
+            // Une vidéo SANS vignette serveur : son poster s'extrait de la
+            // première frame du fichier cité, comme celui de la bulle vidéo.
+            QuotedVideoPoster(
+                attachment: attachment,
+                size: thumbnailSize,
+                cornerRadius: thumbnailRadius,
+                placeholder: railColor.opacity(0.18)
+            )
+            .overlay { timebasedPlayBadge }
+        } else if quotedMessageMediaFace == .audio {
+            QuotedAudioPreview(seed: reference.messageId, tint: previewColor, showsPlayGlyph: hasTappableMedia && onQuotedMediaTap != nil)
+        }
+    }
+
+    /// Le bouton play posé sur la miniature d'une piste temporelle.
+    ///
+    /// Le GENRE résolu, jamais la chaîne brute. `attachmentType` porte le MIME
+    /// (« video/mp4 ») sur le chemin de rendu réel — `MessagePersistenceActor`
+    /// y grave `mimeType`, et le cache le rend tel quel : une comparaison à
+    /// « video » n'y est vraie que sur la bulle OPTIMISTE, qui pose le rawValue
+    /// court. Le bouton play disparaissait donc dès que le serveur accusait,
+    /// pour ne plus jamais revenir. `hasTimebasedTrack` couvre en outre l'audio
+    /// cité, dont la demande produit réclame l'icône de lecture au même titre.
+    @ViewBuilder
+    private var timebasedPlayBadge: some View {
+        if attachmentKind?.hasTimebasedTrack == true {
+            // Même glyphe que la zone média sans miniature : UN seul
+            // vocabulaire visuel pour « ceci se joue ».
+            Image(systemName: "play.circle.fill")
+                .font(MeeshyFont.relative(16, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(radius: 2)
+                .accessibilityHidden(true)
         }
     }
 

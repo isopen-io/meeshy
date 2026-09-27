@@ -15,6 +15,8 @@ import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
 import frMediaHub from './catalog-fr-media-hub';
+import frMediaViewer from './catalog-fr-media-viewer';
+import frActivation from './catalog-fr-activation';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
@@ -23,8 +25,13 @@ import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
 import frCallFeedback from './catalog-fr-call-feedback';
+import frCallsErase from './catalog-fr-calls-erase';
+import frAddressBook from './catalog-fr-address-book';
 import frCallDevices from './catalog-fr-call-devices';
 import frCallScreen from './catalog-fr-call-screen';
+import frCallQuality from './catalog-fr-call-quality';
+import frCallCaptions from './catalog-fr-call-captions';
+import frCallRecording from './catalog-fr-call-recording';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
@@ -192,7 +199,9 @@ const fr = {
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
   ...frMediaHub,
+  ...frMediaViewer,
   ...frVerifyEmail,
+  ...frActivation,
   ...frPassword,
   ...frCall,
   ...frRowActions,
@@ -200,8 +209,13 @@ const fr = {
   ...frCallJoin,
   ...frCallDecline,
   ...frCallFeedback,
+  ...frCallsErase,
+  ...frAddressBook,
   ...frCallDevices,
   ...frCallScreen,
+  ...frCallQuality,
+  ...frCallCaptions,
+  ...frCallRecording,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',

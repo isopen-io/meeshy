@@ -2,6 +2,8 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
 import itMediaHub from './catalog-it-media-hub';
+import itMediaViewer from './catalog-it-media-viewer';
+import itActivation from './catalog-it-activation';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
@@ -10,8 +12,13 @@ import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
 import itCallDecline from './catalog-it-call-decline';
 import itCallFeedback from './catalog-it-call-feedback';
+import itCallsErase from './catalog-it-calls-erase';
+import itAddressBook from './catalog-it-address-book';
 import itCallDevices from './catalog-it-call-devices';
 import itCallScreen from './catalog-it-call-screen';
+import itCallQuality from './catalog-it-call-quality';
+import itCallCaptions from './catalog-it-call-captions';
+import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
@@ -202,7 +209,9 @@ const it = {
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   ...itIdentity,
   ...itMediaHub,
+  ...itMediaViewer,
   ...itVerifyEmail,
+  ...itActivation,
   ...itPassword,
   ...itCall,
   ...itRowActions,
@@ -210,8 +219,13 @@ const it = {
   ...itCallJoin,
   ...itCallDecline,
   ...itCallFeedback,
+  ...itCallsErase,
+  ...itAddressBook,
   ...itCallDevices,
   ...itCallScreen,
+  ...itCallQuality,
+  ...itCallCaptions,
+  ...itCallRecording,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',

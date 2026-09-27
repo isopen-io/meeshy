@@ -19,6 +19,7 @@ import {
   type ProfileActionDeps,
   type ProfileEditOutcome,
 } from '@/lib/api/profile-actions';
+import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type SessionUser } from '@/lib/api/session';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -66,7 +67,6 @@ import {
  * des conversations est relue à la confirmation.
  */
 
-const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
 
 const actionDeps = (): ProfileActionDeps => ({
   ...apiDeps,
@@ -266,7 +266,7 @@ export default function ProfileScreen() {
             inputs.current = { ...inputs.current, [kind]: element };
           }}
           type="file"
-          accept={IMAGE_ACCEPT}
+          accept={PROFILE_IMAGE_ACCEPT}
           data-profile-file={kind}
           tabIndex={-1}
           aria-hidden="true"

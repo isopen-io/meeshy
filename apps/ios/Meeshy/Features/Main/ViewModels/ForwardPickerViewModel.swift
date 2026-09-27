@@ -79,7 +79,7 @@ final class ForwardPickerViewModel: ObservableObject {
     /// Le défaut porte la discrimination `CacheResult` là où elle se lit : une
     /// page `.expired` ou `.empty` ne rend RIEN, elle ne rend pas « du vide
     /// frais ».
-    private let cachedConversations: @Sendable () async -> [Conversation]
+    private let cachedConversations: @Sendable @concurrent () async -> [Conversation]
 
     init(
         conversationService: ConversationServiceProviding = ConversationService.shared,

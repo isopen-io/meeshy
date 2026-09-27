@@ -5,6 +5,8 @@ import { Avatar } from '@/components/avatar';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import { attachmentSrc } from '@/lib/api/media-url';
+import type { ProfileImageKind } from '@/lib/api/profile';
 import { adminMoment } from '@/lib/admin/format';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
@@ -17,6 +19,7 @@ import { ActionButton } from '@/routes/link-page-parts';
 
 import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
+import { AdminUserImageSheet } from './admin-user-image-sheet';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
 import { AdminUserGallery } from './admin-user-gallery';
 import { AdminUserPreferencesTab, AdminUserStatsSection } from './admin-user-member';
@@ -74,6 +77,7 @@ export default function AdminUserScreen() {
   const [edition, setEdition] = useState(false);
   const [motDePasse, setMotDePasse] = useState(false);
   const [bannissement, setBannissement] = useState(false);
+  const [image, setImage] = useState<ProfileImageKind | null>(null);
   const annonceur = useLiveAnnouncer();
   const client = useQueryClient();
 
@@ -153,6 +157,14 @@ export default function AdminUserScreen() {
 
               <div className="grid gap-2">
                 <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
+                {/* LA PHOTO ET LA BANNIÈRE (#8217) — téléversées, ou choisies
+                    parmi les images que le membre a déjà publiées en public. */}
+                <ActionButton tone="secondary" data={{ 'data-admin-image-open': 'avatar' }} onClick={() => setImage('avatar')}>
+                  {translateAdmin(language, 'admin.images.avatarOpen')}
+                </ActionButton>
+                <ActionButton tone="secondary" data={{ 'data-admin-image-open': 'banner' }} onClick={() => setImage('banner')}>
+                  {translateAdmin(language, 'admin.images.bannerOpen')}
+                </ActionButton>
                 {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
                     qui se retrouve déconnectée partout. La couleur le dit avant que
                     la feuille ne l'écrive. */}
@@ -195,6 +207,21 @@ export default function AdminUserScreen() {
           onSaved={(aJour) => client.setQueryData(adminUserDetailQueryKey(userId), aJour)}
         />
       ) : null}
+
+      {image === null ? null : (
+        <AdminUserImageSheet
+          membre={membre}
+          kind={image}
+          language={language}
+          onClose={() => setImage(null)}
+          onAnnounce={annonceur.announce}
+          onSaved={(aJour) => {
+            client.setQueryData(adminUserDetailQueryKey(userId), aJour);
+            void client.invalidateQueries({ queryKey: ['admin', 'user', userId, 'media'] });
+            void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+          }}
+        />
+      )}
 
       {motDePasse ? (
         <AdminUserPasswordSheet
@@ -312,34 +339,57 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
   const photo = participantAvatarOf(membre);
 
   return (
-    <div className="flex items-center gap-3">
-      <span
-        aria-hidden="true"
-        className="grid size-2 shrink-0 place-items-center rounded-full"
-        style={{ backgroundColor: membre.isOnline ? 'var(--color-success, #34D399)' : 'transparent' }}
-      />
-      <Avatar
-        initials={initialsOf(membre.displayName)}
-        color="var(--color-ios-brand)"
-        size={44}
-        name={membre.displayName}
-        {...(photo === undefined ? {} : { src: photo })}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-title font-semibold" style={{ color: INK }}>
-          {membre.displayName}
-        </p>
-        {membre.bio === '' ? null : (
-          <p className="truncate text-caption" style={{ color: INK2 }}>
-            {membre.bio}
-          </p>
+    <div className="grid gap-3">
+      {/* LA BANNIÈRE DU MEMBRE (#8217) — servie par le détail, montrée
+          nulle part hors du carrousel : un profil dont on pose la bannière
+          doit la MONTRER là où l'on vient de la poser. */}
+      <div
+        data-admin-user-banner={membre.banner}
+        className="relative w-full overflow-hidden rounded-card"
+        style={{ height: 96 }}
+      >
+        {membre.banner === '' ? (
+          <span
+            aria-hidden="true"
+            className="block size-full"
+            style={{
+              background:
+                'linear-gradient(135deg, color-mix(in srgb, var(--color-ios-brand) 30%, transparent), color-mix(in srgb, var(--ios-indigo-300) 20%, transparent))',
+            }}
+          />
+        ) : (
+          <img src={attachmentSrc(membre.banner)} alt={translateAdmin(language, 'admin.gallery.banner')} className="block size-full object-cover" />
         )}
       </div>
-      {etat === null ? null : (
-        <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translateAdmin(language, etat)}
-        </span>
-      )}
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="grid size-2 shrink-0 place-items-center rounded-full"
+          style={{ backgroundColor: membre.isOnline ? 'var(--color-success, #34D399)' : 'transparent' }}
+        />
+        <Avatar
+          initials={initialsOf(membre.displayName)}
+          color="var(--color-ios-brand)"
+          size={44}
+          name={membre.displayName}
+          {...(photo === undefined ? {} : { src: photo })}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-title font-semibold" style={{ color: INK }}>
+            {membre.displayName}
+          </p>
+          {membre.bio === '' ? null : (
+            <p className="truncate text-caption" style={{ color: INK2 }}>
+              {membre.bio}
+            </p>
+          )}
+        </div>
+        {etat === null ? null : (
+          <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
+            {translateAdmin(language, etat)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -35,6 +35,7 @@ public extension ReplyReference {
             attachmentType: attachmentType,
             attachmentId: attachmentId,
             attachmentThumbnailUrl: attachmentThumbnailUrl,
+            attachmentFileUrl: attachmentFileUrl,
             attachmentIsProtected: attachmentIsProtected,
             isStoryReply: isStoryReply,
             storyPublishedAt: storyPublishedAt,

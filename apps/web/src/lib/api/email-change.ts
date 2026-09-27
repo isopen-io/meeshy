@@ -1,3 +1,4 @@
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 import * as z from 'zod/mini';
 
 import type { DataSource } from './config';
@@ -33,7 +34,7 @@ export async function verifyEmailChange(deps: EmailChangeDeps, token: string): P
   }
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/users/me/contact-changes/email/verify',
+    path: usersEndpoints.meContactChangesByChannelVerify('email'),
     body: { code: token },
   });
   if (!result.ok) return result;

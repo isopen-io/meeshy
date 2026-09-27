@@ -103,8 +103,11 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdDisable2Fa(userId: String)
     case usersByUserIdEnable2Fa(userId: String)
     case usersByUserIdMedia(userId: String)
+    case usersByUserIdPasswordProposals(userId: String)
     case usersByUserIdPreferences(userId: String)
     case usersByUserIdPreferencesByCategory(userId: String, category: String)
+    case usersByUserIdProfileImageCandidates(userId: String)
+    case usersByUserIdProfileImagesByKind(userId: String, kind: String)
     case usersByUserIdReportedMessages(userId: String)
     case usersByUserIdReports(userId: String)
     case usersByUserIdResetPassword(userId: String)
@@ -217,8 +220,11 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdDisable2Fa(let userId): return "/api/v1/admin/users/\(userId)/disable-2fa"
         case .usersByUserIdEnable2Fa(let userId): return "/api/v1/admin/users/\(userId)/enable-2fa"
         case .usersByUserIdMedia(let userId): return "/api/v1/admin/users/\(userId)/media"
+        case .usersByUserIdPasswordProposals(let userId): return "/api/v1/admin/users/\(userId)/password-proposals"
         case .usersByUserIdPreferences(let userId): return "/api/v1/admin/users/\(userId)/preferences"
         case .usersByUserIdPreferencesByCategory(let userId, let category): return "/api/v1/admin/users/\(userId)/preferences/\(category)"
+        case .usersByUserIdProfileImageCandidates(let userId): return "/api/v1/admin/users/\(userId)/profile-image-candidates"
+        case .usersByUserIdProfileImagesByKind(let userId, let kind): return "/api/v1/admin/users/\(userId)/profile-images/\(kind)"
         case .usersByUserIdReportedMessages(let userId): return "/api/v1/admin/users/\(userId)/reported-messages"
         case .usersByUserIdReports(let userId): return "/api/v1/admin/users/\(userId)/reports"
         case .usersByUserIdResetPassword(let userId): return "/api/v1/admin/users/\(userId)/reset-password"

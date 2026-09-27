@@ -30,7 +30,9 @@ const ringingCall = (callId: string, phase: CallPhase = { kind: 'incoming' }): A
   localStream: null,
   remoteStreams: {},
   captions: [],
-  captionsOn: false,
+  captionsMode: 'off',
+  captionPeers: [],
+  transcription: 'idle',
   quality: null,
 });
 

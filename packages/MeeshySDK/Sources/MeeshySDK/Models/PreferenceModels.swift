@@ -167,7 +167,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public var showTypingIndicator: Bool
     public var allowContactRequests: Bool
     public var allowGroupInvites: Bool
-    public var allowCallsFromNonContacts: Bool
+    public var acceptCallsFromNonContacts: Bool
     public var saveMediaToGallery: Bool
     public var allowAnalytics: Bool
     public var shareUsageData: Bool
@@ -182,7 +182,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public static let defaults = PrivacyPreferences(
         showOnlineStatus: true, showLastSeen: true, showReadReceipts: true,
         showTypingIndicator: true, allowContactRequests: true, allowGroupInvites: true,
-        allowCallsFromNonContacts: false, saveMediaToGallery: false, allowAnalytics: false,
+        acceptCallsFromNonContacts: true, saveMediaToGallery: false, allowAnalytics: false,
         shareUsageData: false, blockScreenshots: false, hideProfileFromSearch: false,
         encryptionPreference: .optional, autoEncryptNewConversations: false,
         showEncryptionStatus: true, warnOnUnencrypted: false, extras: [:]
@@ -191,7 +191,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public init(
         showOnlineStatus: Bool = true, showLastSeen: Bool = true, showReadReceipts: Bool = true,
         showTypingIndicator: Bool = true, allowContactRequests: Bool = true, allowGroupInvites: Bool = true,
-        allowCallsFromNonContacts: Bool = false, saveMediaToGallery: Bool = false, allowAnalytics: Bool = false,
+        acceptCallsFromNonContacts: Bool = true, saveMediaToGallery: Bool = false, allowAnalytics: Bool = false,
         shareUsageData: Bool = false, blockScreenshots: Bool = false, hideProfileFromSearch: Bool = false,
         encryptionPreference: EncryptionPreference = .optional, autoEncryptNewConversations: Bool = false,
         showEncryptionStatus: Bool = true, warnOnUnencrypted: Bool = false, extras: [String: CodableValue] = [:]
@@ -199,7 +199,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         self.showOnlineStatus = showOnlineStatus; self.showLastSeen = showLastSeen
         self.showReadReceipts = showReadReceipts; self.showTypingIndicator = showTypingIndicator
         self.allowContactRequests = allowContactRequests; self.allowGroupInvites = allowGroupInvites
-        self.allowCallsFromNonContacts = allowCallsFromNonContacts; self.saveMediaToGallery = saveMediaToGallery
+        self.acceptCallsFromNonContacts = acceptCallsFromNonContacts; self.saveMediaToGallery = saveMediaToGallery
         self.allowAnalytics = allowAnalytics; self.shareUsageData = shareUsageData
         self.blockScreenshots = blockScreenshots; self.hideProfileFromSearch = hideProfileFromSearch
         self.encryptionPreference = encryptionPreference; self.autoEncryptNewConversations = autoEncryptNewConversations
@@ -209,7 +209,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case showOnlineStatus, showLastSeen, showReadReceipts, showTypingIndicator
-        case allowContactRequests, allowGroupInvites, allowCallsFromNonContacts
+        case allowContactRequests, allowGroupInvites, acceptCallsFromNonContacts
         case saveMediaToGallery, allowAnalytics, shareUsageData
         case blockScreenshots, hideProfileFromSearch
         case encryptionPreference, autoEncryptNewConversations, showEncryptionStatus, warnOnUnencrypted
@@ -224,7 +224,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
         showTypingIndicator = try c.decodeIfPresent(Bool.self, forKey: .showTypingIndicator) ?? Self.defaults.showTypingIndicator
         allowContactRequests = try c.decodeIfPresent(Bool.self, forKey: .allowContactRequests) ?? Self.defaults.allowContactRequests
         allowGroupInvites = try c.decodeIfPresent(Bool.self, forKey: .allowGroupInvites) ?? Self.defaults.allowGroupInvites
-        allowCallsFromNonContacts = try c.decodeIfPresent(Bool.self, forKey: .allowCallsFromNonContacts) ?? Self.defaults.allowCallsFromNonContacts
+        acceptCallsFromNonContacts = try c.decodeIfPresent(Bool.self, forKey: .acceptCallsFromNonContacts) ?? Self.defaults.acceptCallsFromNonContacts
         saveMediaToGallery = try c.decodeIfPresent(Bool.self, forKey: .saveMediaToGallery) ?? Self.defaults.saveMediaToGallery
         allowAnalytics = try c.decodeIfPresent(Bool.self, forKey: .allowAnalytics) ?? Self.defaults.allowAnalytics
         shareUsageData = try c.decodeIfPresent(Bool.self, forKey: .shareUsageData) ?? Self.defaults.shareUsageData

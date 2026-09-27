@@ -9,6 +9,7 @@
  */
 
 import {
+  CONTACT_CARD_EXTENSION,
   CONTACT_CARD_MIME_TYPE,
   CONTACT_RESOLVE_MAX_IDENTIFIERS,
   type ParsedVCard,
@@ -100,7 +101,20 @@ export function isContactCardAttachment(attachment: {
   return normalizeContactCardMimeType(attachment.mimeType ?? '', attachment.fileName) === CONTACT_CARD_MIME_TYPE;
 }
 
-const indexOutsideQuotes = (text: string, target: string): number => {
+const TEMPORARY_CONTACT_PREFIX = /^contact_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+
+/**
+ * Le nom HUMAIN d'une carte de visite lu dans son nom de fichier (#8142, #8148) :
+ * sans extension ni le préfixe `contact_<UUID>_` que les anciens envois
+ * portent encore. `null` quand il ne reste aucun nom. Miroir de
+ * `ContactCardFile.displayName(fromFileName:)` (SDK Swift).
+ */
+export function contactCardNameFromFileName(fileName: string | null | undefined): string | null {
+  const name = (fileName ?? '').trim().replace(CONTACT_CARD_FILE, '').replace(TEMPORARY_CONTACT_PREFIX, '').trim();
+  return name === '' ? null : name;
+}
+
+const indexOutsideQuotes =(text: string, target: string): number => {
   let inQuotes = false;
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
@@ -322,4 +336,117 @@ export function buildResolveContactsRequest(card: ParsedVCard): ResolveContactsR
       CONTACT_RESOLVE_MAX_IDENTIFIERS,
     ),
   };
+}
+
+const TYPE_BY_LABEL: Readonly<Partial<Record<string, string>>> = {
+  mobile: 'CELL',
+  home: 'HOME',
+  work: 'WORK',
+  main: 'MAIN',
+  fax: 'FAX',
+  pager: 'PAGER',
+  other: 'OTHER',
+};
+
+/** Le libellé Apple d'une clé que `TYPE` ne sait pas dire sans ambiguïté. */
+const APPLE_LABEL_BY_KEY: Readonly<Partial<Record<string, string>>> = {
+  iphone: '_$!<iPhone>!$_',
+};
+
+const MAX_LINE_OCTETS = 75;
+
+const escapeText = (value: string): string =>
+  value
+    .replace(/\\/g, '\\\\')
+    .replace(/\r\n|\r|\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+
+/** Plie à 75 octets (RFC 2425 § 5.8.1) : chaque suite commence par une espace. */
+const fold = (line: string): string => {
+  const encoder = new TextEncoder();
+  const folded = [...line].reduce<{ readonly done: readonly string[]; readonly current: string; readonly octets: number }>(
+    (acc, char) => {
+      const size = encoder.encode(char).length;
+      const limit = acc.done.length === 0 ? MAX_LINE_OCTETS : MAX_LINE_OCTETS - 1;
+      return acc.octets + size > limit
+        ? { done: [...acc.done, acc.current], current: char, octets: size }
+        : { ...acc, current: acc.current + char, octets: acc.octets + size };
+    },
+    { done: [], current: '', octets: 0 },
+  );
+  return [...folded.done, folded.current].join('\r\n ');
+};
+
+type LabeledField = {
+  readonly name: string;
+  readonly entries: readonly VCardLabeledValue[];
+  readonly valueOf: (value: string) => string;
+  readonly extraTypes: readonly string[];
+};
+
+/**
+ * Les lignes d'un champ étiqueté : un libellé CONNU devient un `TYPE` (relu
+ * par `labelFromTypes`) ; `iphone` et un libellé LIBRE de l'auteur passent par
+ * un groupe `itemN.` et son `X-ABLabel`, comme les écrit un iPhone.
+ */
+const labeledLines = (fields: readonly LabeledField[]): readonly string[] =>
+  fields
+    .flatMap((field) => field.entries.map((entry) => ({ field, entry })))
+    .reduce<{ readonly lines: readonly string[]; readonly groups: number }>(
+      (acc, { field, entry }) => {
+        const type = entry.label === null ? undefined : TYPE_BY_LABEL[entry.label];
+        const types = [...field.extraTypes, ...(type === undefined ? [] : [type])];
+        const head = `${field.name}${types.length === 0 ? '' : `;TYPE=${types.join(',')}`}:${field.valueOf(entry.value)}`;
+        if (entry.label === null || type !== undefined) return { ...acc, lines: [...acc.lines, head] };
+        const group = `item${acc.groups + 1}`;
+        const label = APPLE_LABEL_BY_KEY[entry.label] ?? escapeText(entry.label);
+        return { lines: [...acc.lines, `${group}.${head}`, `${group}.X-ABLabel:${label}`], groups: acc.groups + 1 };
+      },
+      { lines: [], groups: 0 },
+    ).lines;
+
+const textLine = (key: string, value: string | undefined): string[] =>
+  value === undefined || value === '' ? [] : [`${key}:${escapeText(value)}`];
+
+/**
+ * Écrit une carte en vCard 3.0 (RFC 2426) — le miroir de `VCardWriter`
+ * (SDK Swift) : CRLF, échappements `\n \, \; \\`, lignes pliées à 75 octets.
+ * `parseVCard` relit la carte d'origine. Seuls les champs que la carte
+ * porte sont écrits : rien n'est inventé, rien ne part à côté (#8242).
+ */
+export function serializeVCard(card: ParsedVCard): string {
+  const name = [card.familyName ?? '', card.givenName ?? '', '', '', ''].map(escapeText).join(';');
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `N:${name}`,
+    `FN:${escapeText(card.formattedName)}`,
+    ...textLine('ORG', card.organization),
+    ...textLine('TITLE', card.title),
+    ...labeledLines([
+      { name: 'TEL', entries: card.phones, valueOf: escapeText, extraTypes: [] },
+      { name: 'EMAIL', entries: card.emails, valueOf: escapeText, extraTypes: ['INTERNET'] },
+      { name: 'ADR', entries: card.addresses, valueOf: (value) => `;;${escapeText(value)};;;;`, extraTypes: [] },
+    ]),
+    ...card.urls.flatMap((url) => textLine('URL', url)),
+    ...(card.birthday === undefined || card.birthday === '' ? [] : [`BDAY:${card.birthday}`]),
+    ...textLine('NOTE', card.note),
+    'END:VCARD',
+  ];
+  return `${lines.map(fold).join('\r\n')}\r\n`;
+}
+
+const FORBIDDEN_FILE_NAME_CHARACTERS = /[/\\:?%*|"<>\n\r\t]/g;
+const MAX_FILE_NAME_LENGTH = 60;
+
+/**
+ * Le nom du fichier d'une carte envoyée : le nom du contact et rien d'autre
+ * (#8142), caractères interdits remplacés, borné à 60, `contact` à défaut.
+ * Miroir de `ContactCardExporter.fileName(for:)` (iOS).
+ */
+export function contactCardFileName(displayName: string): string {
+  const cleaned = displayName.replace(FORBIDDEN_FILE_NAME_CHARACTERS, ' ').trim();
+  const base = cleaned === '' ? 'contact' : [...cleaned].slice(0, MAX_FILE_NAME_LENGTH).join('');
+  return `${base}${CONTACT_CARD_EXTENSION}`;
 }

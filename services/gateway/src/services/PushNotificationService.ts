@@ -18,6 +18,7 @@ import { CALL_PUSH_TTL_MS } from '@meeshy/shared/types/call-rules';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
 import { webPushFor } from './web-push-config';
+import { androidNotificationConfig } from './android-push-config';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -643,11 +644,7 @@ export class PushNotificationService {
             }
           : {
               priority: 'high',
-              notification: {
-                ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
-                channelId: 'meeshy_notifications',
-                ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
-              },
+              notification: androidNotificationConfig(payload),
             };
       } else if (tokenRecord.platform === 'web') {
         Object.assign(message, webPushFor(payload, { isCallPush, dataOnly, callTtlMs: CALL_PUSH_TTL_MS }));

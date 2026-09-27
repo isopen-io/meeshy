@@ -11,6 +11,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { boundApnsPayload } from './boundApnsPayload';
 import { ephemeralPushFields } from './ephemeralPushFields';
+import { callBackPushFields } from './callBackPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { AttachmentTranslationTrack } from '@meeshy/shared/types/attachment-audio';
 import type {
@@ -63,6 +64,7 @@ import {
   type MessageLiveness,
   type PreviewPrismBasis,
   type NotificationBannerMedia,
+  type NotificationAttachmentSummary,
   type NotificationActorProfile,
   EMPTY_PRISM_SOURCE,
   UNKNOWN_BANNER_SOURCE,
@@ -1175,6 +1177,7 @@ export class NotificationService {
                 // l'échéance, qui est par destinataire. `effectFlags` dit à la
                 // NSE que la bulle est éphémère sans qu'elle ait à le déduire.
                 ...ephemeralPushFields(params.context),
+                ...(await callBackPushFields({ type: params.type, metadata: params.metadata, language: recipientLang })),
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis
                 // encryptedContent et attache le média d'attachmentUrl — les
@@ -1443,10 +1446,7 @@ export class NotificationService {
     /** Résumé léger de TOUS les attachments, dans l'ordre d'envoi. Le 1er est
      *  affiché en média inline, les suivants sont agrégés en badges `+N` par
      *  type dans le corps de la notification. */
-    attachments?: ReadonlyArray<{
-      type: 'image' | 'video' | 'audio' | 'document';
-      filename?: string | null;
-    }>;
+    attachments?: ReadonlyArray<NotificationAttachmentSummary>;
     /** URL accessible publiquement pour le 1er attachment (image/audio/video).
      *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
      *  natif (waveform pour audio, preview pour image, thumbnail pour video). */

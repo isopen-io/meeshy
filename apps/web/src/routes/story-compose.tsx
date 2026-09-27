@@ -68,6 +68,7 @@ import {
   withoutVisual,
   type StudioDraft,
 } from '@/lib/stories/studio';
+import { takeStudioSeed } from '@/lib/stories/studio-seed';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan, uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
@@ -374,6 +375,15 @@ function StoryStudio({
     startUpload(pageId, door, file);
   }
 
+  /* « CRÉER AVEC CE MÉDIA » (#6303) — la visionneuse du fil a déposé la pièce
+     avant de naviguer : elle devient le FOND de la page courante par la MÊME
+     porte qu'un fichier choisi (montée, cadrage, publication ordinaires). */
+  useEffect(() => {
+    const seed = takeStudioSeed();
+    if (seed !== null) place('visual', seed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Une montée qu'on ABANDONNE — la page ou le média qu'elle servait est
    * retiré : elle ne coûte plus de bande passante, et son accusé ne revient
    * sur rien. */
@@ -625,7 +635,7 @@ function StoryStudio({
    *
    * L'aperçu élit sa piste avec `electBackgroundTrack`, exactement comme le
    * lecteur de story et celui des Réels, et posait sa `src` TELLE QUELLE. Une
-   * piste EMPRUNTÉE est servie par `GET /api/v1/static/…`, une route
+   * piste EMPRUNTÉE est servie par `GET static.byFilename`, une route
    * AUTHENTIFIÉE : la balise part sans en-tête et rend `401`. La
    * bibliothèque n'est pas encore branchée à cet écran (`background-sound.ts`
    * : « `library` reste HORS PÉRIMÈTRE »), donc rien ne l'atteint AUJOURD'HUI

@@ -140,7 +140,7 @@ public struct NotificationListView: View {
     public var onDismiss: (() -> Void)?
     /// Exécute un geste de rangée (`NotificationQuickAction`) et dit s'il a
     /// abouti. `nil` : aucune rangée ne propose de geste.
-    public var onQuickAction: ((NotificationQuickAction) async -> Bool)?
+    public var onQuickAction: (@MainActor (NotificationQuickAction) async -> Bool)?
 
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Les personnes à qui « Se connecter » est parti depuis cet écran —
@@ -152,7 +152,7 @@ public struct NotificationListView: View {
     public init(
         onNotificationTap: ((APINotification) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
-        onQuickAction: ((NotificationQuickAction) async -> Bool)? = nil
+        onQuickAction: (@MainActor (NotificationQuickAction) async -> Bool)? = nil
     ) {
         self.onNotificationTap = onNotificationTap
         self.onDismiss = onDismiss

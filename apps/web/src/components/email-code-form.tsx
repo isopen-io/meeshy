@@ -31,6 +31,10 @@ import { Field } from './field';
  * AVEC le code, jamais avec un lien, et s'oublie dès que la session s'ouvre.
  * Un code refusé le garde : l'essai suivant doit pouvoir le porter.
  *
+ * **Un hôte DÉJÀ connecté** (la modal « Validez votre compte », #8239) passe
+ * `onSignedIn` : la session rendue remplace la sienne, et l'hôte reste là où
+ * il est au lieu de mener à l'accueil.
+ *
  * **L'adresse confirmée AILLEURS** (#8083, « si et seulement si ») : avec le
  * jeton d'attente de CET appareil, le formulaire lit l'état de l'adresse
  * (`verification-watch.ts`) et, `proven`, le DIT — le lien ouvert sur un autre
@@ -91,6 +95,7 @@ export function EmailCodeForm({
   email,
   next,
   onVerified,
+  onSignedIn,
   verifyEmail = auth.verifyEmail,
   verificationStatus = auth.verificationStatus,
   pendingSessionToken = null,
@@ -101,6 +106,8 @@ export function EmailCodeForm({
   readonly next: string | null;
   /** Vérifié SANS session (passerelle antérieure) — l'hôte décide de la suite. */
   readonly onVerified: () => void;
+  /** La session ouverte par le code — `goToLanding(next)` si absent. */
+  readonly onSignedIn?: () => void;
   readonly verifyEmail?: EmailCodeFormDeps['verifyEmail'];
   readonly verificationStatus?: EmailCodeFormDeps['verificationStatus'];
   /** Le jeton d'attente de CET appareil (#8083) — `null` : rien à surveiller. */
@@ -127,6 +134,11 @@ export function EmailCodeForm({
     const result = await verifyEmail({ email, code, ...(password !== undefined ? { password } : {}) });
     setVerifying(false);
     const outcome = resolveVerifyEmailOutcome(result);
+    if (outcome.kind === 'signed-in' && onSignedIn !== undefined) {
+      forgetPendingVerification();
+      onSignedIn();
+      return;
+    }
     if (outcome.kind === 'signed-in') {
       goToLanding(next);
       return;

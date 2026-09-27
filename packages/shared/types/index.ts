@@ -68,6 +68,7 @@ export * from './attachment.js';
 // Export des types unifiés Phase 6 - Video Calls
 export * from './video-call.js';
 export * from './call-rules.js';
+export * from './call-recording.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
@@ -128,6 +129,7 @@ export * from './security.js';
 
 // Export des types Magic Link (authentification sans mot de passe)
 export * from './magic-link.js';
+export * from './account-activation.js';
 
 // Export des types Signal Protocol database (pre-key bundles, conversation keys)
 export * from './signal-database.js';

@@ -16,6 +16,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
+import type { MediaViewerPage } from '@/lib/view/media-viewer-actions';
 import {
   CARDED_STAGE,
   DISMISS_THRESHOLD,
@@ -54,6 +55,14 @@ import { ViewerScenePage } from './viewer-scene-page';
  * l'est de toute façon tant que la vidéo n'a pas chargé ses métadonnées.
  */
 const MediaTransport = lazy(() => import('./media-transport').then((module) => ({ default: module.MediaTransport })));
+
+/**
+ * LES ACTIONS DE LA PAGE (#6303) — Enregistrer, Réagir, Répondre, Créer avec
+ * ce média — sont un chunk À LA DEMANDE (`viewer-media-actions.tsx`, budget
+ * `viewer_media_actions`) : une page qui n'offre rien (pièce protégée, hôte
+ * sans action) ne le télécharge jamais, et la visionneuse garde son poids.
+ */
+const ViewerMediaActions = lazy(() => import('./viewer-media-actions'));
 
 /**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
@@ -126,6 +135,20 @@ export type MediaViewerProps = {
   /** L'AUTEUR DE CHAQUE PAGE (#6303) — le rapport d'ouverture se ferme sur SA
    * propre pièce, page par page ; prime sur `isMine` quand il est posé. */
   readonly isMineAt?: (index: number) => boolean;
+  /**
+   * L'EXTENSION VERS LE PASSÉ (#6303) — la pellicule ouverte depuis le FIL est
+   * dans l'ordre du fil (le plus ancien d'abord) : ses pages plus anciennes
+   * arrivent par le DÉBUT. Appelée quand la page courante est à moins de
+   * `NEAR_END_PAGES` du début ; la page regardée ne bouge pas (épinglage par
+   * identité, voir `pinned`).
+   */
+  readonly onNearStart?: () => void;
+  /**
+   * CE QUE LA PAGE OFFRE (#6303) — `null` ⇒ aucune action. L'hôte décide page
+   * par page (`mediaPageOffers`, sur la pièce ORIGINALE) ; la visionneuse ne
+   * fait que rendre.
+   */
+  readonly actionsAt?: (index: number) => MediaViewerPage | null;
   /**
    * OÙ SE POSE LA COUCHE (#8103) — `document.body` par défaut. Ouverte depuis
    * une feuille (`<dialog>` en `showModal()`), elle doit vivre DANS ce
@@ -503,9 +526,20 @@ export default function MediaViewer({
   carrierAt,
   onNearEnd,
   isMineAt,
+  onNearStart,
+  actionsAt,
   container,
 }: MediaViewerProps) {
-  const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
+  /* LA PAGE SE SUIT PAR SON IDENTITÉ (#6303), miroir `GalleryPagePinning`
+     (`+SourceGrowth.swift`) : la liste peut GRANDIR par le début (pages plus
+     anciennes) pendant qu'on regarde — une position figée glisserait alors sur
+     une autre photo. Une pièce retirée retombe sur sa dernière position. */
+  const [pinned, setPinned] = useState(() => {
+    const at = clampIndex(startIndex, items.length);
+    return { id: items[at]?.id, index: at };
+  });
+  const pinnedAt = pinned.id === undefined ? -1 : items.findIndex((attachment) => attachment.id === pinned.id);
+  const index = pinnedAt >= 0 ? pinnedAt : clampIndex(pinned.index, items.length);
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -551,8 +585,15 @@ export default function MediaViewer({
     if (items.length - 1 - index < NEAR_END_PAGES) onNearEndRef.current?.();
   }, [index, items.length]);
 
+  const onNearStartRef = useRef(onNearStart);
+  onNearStartRef.current = onNearStart;
+  useEffect(() => {
+    if (index < NEAR_END_PAGES) onNearStartRef.current?.();
+  }, [index, items.length]);
+
   const goTo = (next: number): void => {
-    setIndex(clampIndex(next, items.length));
+    const at = clampIndex(next, items.length);
+    setPinned({ id: items[at]?.id, index: at });
     setPresentation(CARDED_STAGE);
   };
 
@@ -635,6 +676,8 @@ export default function MediaViewer({
   };
 
   const isFull = presentation.kind === 'full';
+  const page = actionsAt?.(index) ?? null;
+  const columnOffers = page !== null && (page.offers.react || page.offers.reply || page.offers.compose);
 
   if (current === undefined) return null;
 
@@ -646,6 +689,7 @@ export default function MediaViewer({
       aria-label={`${scenes !== undefined ? 'Scène' : 'Média'} ${index + 1} sur ${items.length}`}
       data-media-viewer
       data-viewer-index={index}
+      data-viewer-attachment={current.id}
       {...(scenes !== undefined ? { 'data-scene-fullscreen': '' } : {})}
       className="media-viewer-layer fixed inset-0 flex flex-col bg-black"
       onKeyDown={onKeyDown}
@@ -675,6 +719,11 @@ export default function MediaViewer({
         >
           <Glyph name="x" size={16} />
         </button>
+        {page !== null && page.offers.save ? (
+          <Suspense fallback={null}>
+            <ViewerMediaActions key={`save:${current.id}`} slot="save" page={page} language={language} onClose={onClose} />
+          </Suspense>
+        ) : null}
       </div>
 
       {/* Le cadre — pages */}
@@ -705,7 +754,7 @@ export default function MediaViewer({
           const sceneEntry = scenes?.get(attachment.id);
           return (
             <div
-              key={`${i}:${attachment.id}`}
+              key={attachment.id === '' ? String(i) : attachment.id}
               data-viewer-page
               data-full-pixels={fullPixels}
               className="media-viewer-page absolute inset-0"
@@ -762,6 +811,22 @@ export default function MediaViewer({
             </div>
           );
         })}
+        {page !== null && columnOffers ? (
+          /* LA COLONNE D'ACTIONS (#6303, `MediaStageActionColumn`) — posée à
+             droite du cadre, AU-DESSUS des pages ; elle suit le plein cadre
+             comme les couloirs (#7040 : cachée aux yeux ⇒ cachée au doigt). */
+          <div
+            className="absolute right-2 bottom-2"
+            style={{ zIndex: 10, opacity: isFull ? 0 : 1, pointerEvents: isFull ? 'none' : 'auto' }}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+          >
+            <Suspense fallback={null}>
+              <ViewerMediaActions key={`column:${current.id}`} slot="column" page={page} language={language} onClose={onClose} />
+            </Suspense>
+          </div>
+        ) : null}
       </div>
 
       {/* Couloir bas — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}

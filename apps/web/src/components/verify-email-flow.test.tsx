@@ -417,13 +417,19 @@ describe('VerifyEmailFlow — ce que l’écran DIT de l’e-mail reçu (#8034)'
     holdPendingVerification({ email: 'neuf@meeshy.example', password: 'secret-1', accountCreated: true });
     const el = mount('neuf@meeshy.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
     expect(lead(el)).toContain('Nous avons créé votre compte et envoyé un code et un lien à neuf@meeshy.example.');
+    expect(lead(el)).not.toContain('indésirables');
   });
 
-  test('compte qui attendait sa vérification', () => {
+  test('compte existant à activer (#8186) : dit pourquoi, où regarder, et quoi faire si rien n’arrive', () => {
     const { clock, now } = fakeClock();
-    holdPendingVerification({ email: 'neuf@meeshy.example', password: 'secret-1', accountCreated: false });
-    const el = mount('neuf@meeshy.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
-    expect(lead(el)).toContain('Votre compte attend sa vérification : nous avons renvoyé un code et un lien à neuf@meeshy.example.');
+    holdPendingVerification({ email: 'grace@icloud.example', password: 'secret-1', accountCreated: false });
+    const el = mount('grace@icloud.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
+    expect(lead(el)).toContain(
+      'Votre mot de passe est bon, mais votre compte doit d’abord être activé en prouvant que cette adresse est la vôtre. Nous venons d’envoyer un code et un lien à grace@icloud.example.',
+    );
+    expect(lead(el)).toContain('Ouvrez votre boîte mail, et pensez à regarder dans les indésirables.');
+    expect(lead(el)).toContain('Vous n’avez pas reçu le code ?');
+    expect(el.querySelector('strong')?.textContent).toBe('grace@icloud.example');
   });
 
   test('arrivée sans connexion préalable : la phrase ordinaire', () => {

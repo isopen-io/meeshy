@@ -253,9 +253,9 @@ describe('callRoutes', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('route registration', () => {
-    it('registers all 9 routes', () => {
+    it('registers all 12 routes', () => {
       const { routes } = setup();
-      expect(routes).toHaveLength(9);
+      expect(routes).toHaveLength(12);
     });
 
     it('registers GET /calls/:callId/transcript', () => {
@@ -1742,7 +1742,7 @@ describe('callRoutes', () => {
       expect(reply._body).toMatchObject({ success: true, data: null });
     });
 
-    it('returns 403 when user is not a member', async () => {
+    it('returns the 404 of an unknown conversation when user is not a member (#8116)', async () => {
       const { routes, reply } = setup({
         participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
         callSession: { findFirst: jest.fn<any>() },
@@ -1754,8 +1754,8 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(reply.status).toHaveBeenCalledWith(404);
+      expect(reply._body?.error).toBe('Conversation not found');
       expect(mockGetActiveCallForConversation).not.toHaveBeenCalled();
     });
 

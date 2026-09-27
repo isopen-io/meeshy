@@ -41,14 +41,14 @@ final class MessageListViewController: UIViewController {
     var collectionView: UICollectionView!
     var dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>!
     let store: MessageStore
-    private let currentUserId: String
+    let currentUserId: String
     private var accentColor: String
     private let isDirect: Bool
     // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
     // `private` est de portée FICHIER en Swift, même raison que
     // `cancellables`/`lastTypingRosterFingerprint` (#4944).
     var isDark: Bool
-    private let router: Router
+    let router: Router
     private let storyViewModel: StoryViewModel
     private let statusViewModel: StatusViewModel
     private let conversationListViewModel: ConversationListViewModel?  // #7006 — remis aux cellules, jamais lu ici ; nil hors liste montée.
@@ -141,7 +141,7 @@ final class MessageListViewController: UIViewController {
     /// (see `ConversationViewModel.loadOlderMessages`). Going through the
     /// store directly would bypass the network fallback and silently
     /// stall pagination once the local GRDB window is exhausted.
-    var onLoadOlder: (() async -> Void)?
+    var onLoadOlder: (@MainActor () async -> Void)?
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
@@ -298,7 +298,7 @@ final class MessageListViewController: UIViewController {
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
-    var expandedLongMessageLocalId: String? // #8147 — un seul message long déplié
+    var longMessageExpansionState = LongMessageExpansionState() // #8147 / #8157
     /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView).
     var onFocalTapLocation: ((SharedPlace) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
@@ -2657,80 +2657,12 @@ final class MessageListViewController: UIViewController {
     /// snapshot items are keyed on `localId`; reply chips pass the server
     /// id; this method bridges the two without forcing every call site
     /// to remember which kind it has.
-    private func resolveLocalId(_ id: String) -> String {
+    func resolveLocalId(_ id: String) -> String {
         // Most call sites pass a localId already (e.g. the typing → message
         // glue, the scroll-to-bottom action). Look it up via the
         // server-side map only when we don't already match an item key —
         // saves a dict probe on the hot scroll-to-bottom path.
         serverIdToLocalId[id] ?? id
-    }
-
-    /// ZONE 1 de la LOI DES ZONES (2026-08-24) — tap sur l'AVATAR de l'auteur
-    /// cité (le NOM ne l'ouvre plus). Résout le message cité dans le store
-    /// local pour ouvrir le profil RÉEL (username/avatar) ; repli sur une
-    /// fiche nom-seul (la sheet profil résout par username) quand le cité
-    /// n'est plus dans la fenêtre locale.
-    ///
-    /// L'avatar de la RÉFÉRENCE est le dernier recours des deux branches : il
-    /// voyage avec la citation depuis le 2026-08-24, là où la relecture du
-    /// store dépend, elle, de la position de défilement. Sans lui, la fiche
-    /// ouverte depuis un message sorti de la fenêtre chargée s'affichait sans
-    /// visage — le geste ouvrait bien la porte, mais la pièce était vide.
-    private func openQuotedAuthorProfile(_ reference: ReplyReference) {
-        let localId = resolveLocalId(reference.messageId)
-        if let quoted = store.domainMessage(for: localId, currentUserId: currentUserId) {
-            router.deepLinkProfileUser = ProfileSheetUser(
-                userId: quoted.senderId,
-                username: quoted.senderUsername ?? quoted.senderName ?? reference.authorName,
-                displayName: quoted.senderName ?? reference.authorName,
-                avatarURL: quoted.senderAvatarURL ?? reference.authorAvatarUrl,
-                accentColor: reference.authorColor
-            )
-            return
-        }
-        router.deepLinkProfileUser = ProfileSheetUser(
-            userId: nil,
-            username: reference.authorName,
-            displayName: reference.authorName,
-            avatarURL: reference.authorAvatarUrl,
-            accentColor: reference.authorColor
-        )
-    }
-
-    /// Tap sur la zone MÉDIA d'une citation — la pièce est élue par
-    /// `ReplyReference.citedAttachment(among:)`, site UNIQUE partagé avec son
-    /// ICÔNE (#6164) : image/vidéo → plein écran (`onMediaTap`), audio →
-    /// lecture (`playAudio`, même file) ; document et cité hors fenêtre locale
-    /// → saut à l'original (la carte document y offre téléchargement/partage).
-    private func openQuotedMedia(_ reference: ReplyReference) {
-        let localId = resolveLocalId(reference.messageId)
-        guard let quoted = store.domainMessage(for: localId, currentUserId: currentUserId),
-              let attachment = reference.citedAttachment(among: quoted.attachments)
-        else {
-            scrollToMessage(localId: localId)
-            return
-        }
-        // Miroir explicite de `BubbleGridCell.handleTap`
-        // (`BubbleStandardLayout+Media.swift`), qui refuse d'ouvrir un
-        // attachement protégé tant qu'il n'a pas été révélé. Ce verrou
-        // manquait ici, et la LOI DES ZONES vient d'ÉLARGIR la porte : une
-        // icône de lecture explicite invite là où un `waveform` inerte ne le
-        // faisait pas, et la peau BULLE — celle de tout le monde — vient
-        // d'acquérir la zone. Élargir une porte sans son verrou serait une
-        // régression d'exposition. Le repli est le saut à l'original, où le
-        // média garde son propre geste de révélation.
-        guard !(attachment.isViewOnce || attachment.isBlurred) else {
-            scrollToMessage(localId: localId)
-            return
-        }
-        switch attachment.type {
-        case .image, .video:
-            onMediaTap?(attachment)
-        case .audio:
-            conversationViewModel?.playAudio(attachmentId: attachment.id)
-        case .file, .location:
-            scrollToMessage(localId: localId)
-        }
     }
 
     func scrollToMessage(localId: String) {

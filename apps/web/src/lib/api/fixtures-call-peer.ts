@@ -36,8 +36,26 @@ export type FixtureCallPeerProbe = {
   readonly toggles: ReadonlyArray<{ readonly event: string; readonly enabled: boolean }>;
   /** Images vidéo décodées par le pair : > 0 quand l'écran partagé lui ARRIVE. */
   readonly videoFrames: () => Promise<number>;
+  /** Paquets audio reçus par le pair : ils AUGMENTENT tant que l'audio n'est pas coupé (#8047). */
+  readonly audioPackets: () => Promise<number>;
+  /** `call:quality-report` et `call:analytics` émis par le client, dans l'ordre (#8047). */
+  readonly reports: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** La passerelle signale que le lien du pair reste dégradé (`call:quality-alert`). */
+  readonly alertQuality: () => void;
+  /** La passerelle relaie une capture d'écran du pair (`call:screen-capture-alert`). */
+  readonly capture: (isCapturing: boolean) => void;
   readonly share: () => void;
   readonly stopShare: () => void;
+  /** L'appel que le pair a rejoint — celui que chaque charge du client doit nommer (#8048). */
+  readonly callId: () => string | null;
+  /** Le pair PARLE : la passerelle relaie son segment final, traduit dans la langue du lecteur (#8048). */
+  readonly speak: (line: { readonly id: string; readonly text: string; readonly translatedText?: string; readonly isFinal?: boolean }) => void;
+  /** Le pair ouvre ou ferme ses sous-titres (`call:transcription-active` diffusé, #8048). */
+  readonly transcribing: (active: boolean) => void;
+  /** `call:transcription-segment` et `call:transcription-active` émis par le client, dans l'ordre (#8048). */
+  readonly transcripts: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** Chaque message BRUT reçu sur le canal de données `transcription` ouvert par le client (#8048). */
+  readonly channelMessages: readonly unknown[];
 };
 
 export type FixtureCallPeer = {
@@ -55,6 +73,9 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   let epoch = 0;
   let screen: MediaStreamTrack | null = null;
   const toggles: Array<{ readonly event: string; readonly enabled: boolean }> = [];
+  const reports: Array<{ readonly event: string; readonly payload: unknown }> = [];
+  const transcripts: Array<{ readonly event: string; readonly payload: unknown }> = [];
+  const channelMessages: unknown[] = [];
 
   const signal = (payload: SignalOut): void => {
     if (callId === null || viewerId === null) return;
@@ -68,6 +89,10 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
       const candidate = event.candidate;
       if (candidate === null || candidate.candidate === '') return;
       signal({ type: 'ice-candidate', candidate: candidate.candidate, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex });
+    };
+    created.ondatachannel = (event) => {
+      if (event.channel.label !== 'transcription') return;
+      event.channel.onmessage = (message) => void channelMessages.push(message.data);
     };
     created.onnegotiationneeded = () => {
       if (created.signalingState !== 'stable' || created.remoteDescription === null) return;
@@ -110,6 +135,21 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   };
 
   const TOGGLES: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, CLIENT_EVENTS.CALL_TOGGLE_VIDEO, CLIENT_EVENTS.CALL_TOGGLE_AUDIO]);
+  const REPORTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
+  const TRANSCRIPTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]);
+  let spoken = 0;
+
+  const inbound = async (kind: 'audio' | 'video', field: 'framesDecoded' | 'packetsReceived'): Promise<number> => {
+    const report = await pc?.getStats();
+    let total = 0;
+    report?.forEach((entry: Record<string, unknown>) => {
+      const value = entry[field];
+      if (entry.type === 'inbound-rtp' && entry.kind === kind && typeof value === 'number') total += value;
+    });
+    return total;
+  };
+
+  const about = (): { readonly callId: string; readonly participantId: string; readonly userId: string } | null => (callId === null ? null : { callId, participantId: CALL_PEER_PARTICIPANT_ID, userId: CALL_PEER_USER_ID });
 
   return {
     initiated: (id) => {
@@ -128,16 +168,21 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
         return;
       }
       if (TOGGLES.has(event) && isRecord(payload) && typeof payload.enabled === 'boolean') toggles.push({ event, enabled: payload.enabled });
+      if (REPORTS.has(event)) reports.push({ event, payload });
+      if (TRANSCRIPTS.has(event)) transcripts.push({ event, payload });
     },
     probe: {
       toggles,
-      videoFrames: async () => {
-        const report = await pc?.getStats();
-        let frames = 0;
-        report?.forEach((entry: Record<string, unknown>) => {
-          if (entry.type === 'inbound-rtp' && entry.kind === 'video' && typeof entry.framesDecoded === 'number') frames += entry.framesDecoded;
-        });
-        return frames;
+      videoFrames: () => inbound('video', 'framesDecoded'),
+      audioPackets: () => inbound('audio', 'packetsReceived'),
+      reports,
+      alertQuality: () => {
+        const peer = about();
+        if (peer !== null) deps.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, { ...peer, metric: 'packetLoss', value: 9, threshold: 5 });
+      },
+      capture: (isCapturing) => {
+        const peer = about();
+        if (peer !== null) deps.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { ...peer, isCapturing });
       },
       share: () => {
         const transceiver = videoSender();
@@ -152,6 +197,34 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
         screen = null;
         void transceiver?.sender.replaceTrack(null).then(() => announce(false));
       },
+      callId: () => callId,
+      speak: (line) => {
+        if (callId === null) return;
+        const startMs = spoken * 3_000;
+        spoken += 1;
+        deps.fire(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, {
+          callId,
+          segment: {
+            id: line.id,
+            text: line.text,
+            ...(line.translatedText === undefined ? {} : { translatedText: line.translatedText }),
+            speakerId: CALL_PEER_USER_ID,
+            speakerDisplayName: CALL_PEER_NAME,
+            startMs,
+            endMs: startMs + 2_000,
+            isFinal: line.isFinal ?? true,
+            sourceLanguage: 'en',
+            targetLanguage: 'fr',
+            confidence: 0.92,
+            capturedAtMs: Date.now(),
+          },
+        });
+      },
+      transcribing: (active) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId, speakerId: CALL_PEER_USER_ID, active });
+      },
+      transcripts,
+      channelMessages,
     },
   };
 }

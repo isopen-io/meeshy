@@ -7,7 +7,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS, type CallsGlyphName } from '@/components/glyphs-calls';
 import { CALL_HISTORY_FILTERS, type CallDirection, type CallHistoryFilter, type CallRecord } from '@/lib/api/calls';
 import { callActions } from '@/lib/calls/call-actions';
-import { callAvatarOf, callDisplayNameOf, callDurationLabel } from '@/lib/calls/view';
+import { callAvatarOf, callDisplayNameOf, callDurationLabel, callParticipantNames } from '@/lib/calls/view';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
@@ -57,7 +57,10 @@ function CallGlyph({ name, size }: { readonly name: CallsGlyphName; readonly siz
   return <GlyphSvg glyph={CALLS_GLYPHS[name]} size={size} />;
 }
 
-export function CallsHeader({ language }: { readonly language: InterfaceLanguage }) {
+/** « Modifier » / « OK » (#8066) — absent quand il n'y a rien à modifier. */
+export type CallsEditToggle = { readonly editing: boolean; readonly onToggle: () => void };
+
+export function CallsHeader({ language, edit }: { readonly language: InterfaceLanguage; readonly edit?: CallsEditToggle }) {
   return (
     <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: CALLS_HEADER_HEIGHT }}>
       <Link
@@ -74,6 +77,18 @@ export function CallsHeader({ language }: { readonly language: InterfaceLanguage
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: INK }}>
         {translate(language, 'root.menu.calls')}
       </h1>
+      {edit === undefined ? null : (
+        <button
+          type="button"
+          data-calls-edit
+          aria-pressed={edit.editing}
+          onClick={edit.onToggle}
+          className="grid shrink-0 place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}
+        >
+          {translate(language, edit.editing ? 'calls.editDone' : 'calls.edit')}
+        </button>
+      )}
       {/* LE PAVÉ (#6454) — le troisième onglet de `ContactsHubView` d'iOS,
           servi en écran frère : un disque au bout de l'en-tête, comme les
           actions de chrome des autres écrans. */}
@@ -97,14 +112,22 @@ export function CallsHeader({ language }: { readonly language: InterfaceLanguage
  * sinon. La capsule pleine est l'indigo 600 et non le 500 d'iOS : un texte blanc
  * sur l'indigo 500 descend à 4,47:1, sous AA.
  */
+export type CallsSearch = { readonly value: string; readonly onChange: (value: string) => void };
+/** « Vidéo seulement » (#8203) — un interrupteur à côté des capsules, pas une troisième capsule : il se combine à « Manqués ». */
+export type CallsVideoToggle = { readonly pressed: boolean; readonly onToggle: () => void };
+
 export function CallFilterRail({
   language,
   selected,
   onSelect,
+  search,
+  video,
 }: {
   readonly language: InterfaceLanguage;
   readonly selected: CallHistoryFilter;
   readonly onSelect: (filter: CallHistoryFilter) => void;
+  readonly search?: CallsSearch;
+  readonly video?: CallsVideoToggle;
 }) {
   return (
     <div
@@ -138,7 +161,69 @@ export function CallFilterRail({
           </button>
         );
       })}
+      {video === undefined ? null : (
+        <button
+          type="button"
+          data-call-type-video
+          aria-pressed={video.pressed}
+          aria-label={translate(language, 'calls.filter.videoOnly')}
+          onClick={video.onToggle}
+          className={`grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 ${video.pressed ? '' : BRAND_INK}`}
+          style={{ outlineColor: BRAND }}
+        >
+          <span
+            className="grid place-items-center rounded-full"
+            style={
+              video.pressed
+                ? { width: 30, height: 30, color: 'white', backgroundColor: 'var(--ios-indigo-600)' }
+                : { width: 30, height: 30, boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-600) 35%, transparent)' }
+            }
+          >
+            <CallGlyph name="videoCamera" size={15} />
+          </span>
+        </button>
+      )}
+      {search === undefined ? null : <CallsSearchField language={language} search={search} />}
     </div>
+  );
+}
+
+/**
+ * LA RECHERCHE (#8066) — le `.searchable` d'iOS, posé au bout du rail plutôt
+ * que sur une rangée de plus : le couloir des disques flottants
+ * (`CALLS_TOP_RESERVE`) reste mesuré au même endroit.
+ */
+function CallsSearchField({ language, search }: { readonly language: InterfaceLanguage; readonly search: CallsSearch }) {
+  return (
+    <span
+      className="flex min-w-0 flex-1 items-center gap-1.5 rounded-chip pl-2.5"
+      style={{ height: 32, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: INK_2 }}
+    >
+      <Glyph name="magnifyingGlass" size={14} />
+      <input
+        type="search"
+        data-calls-search
+        value={search.value}
+        onInput={(event) => search.onChange(event.currentTarget.value)}
+        aria-label={translate(language, 'calls.search')}
+        placeholder={translate(language, 'calls.search')}
+        enterKeyHint="search"
+        className="min-w-0 flex-1 bg-transparent text-caption outline-none"
+        style={{ color: INK }}
+      />
+      {search.value === '' ? null : (
+        <button
+          type="button"
+          data-calls-search-clear
+          aria-label={translate(language, 'calls.search.clear')}
+          onClick={() => search.onChange('')}
+          className="grid size-8 shrink-0 place-items-center rounded-full focus-visible:outline-2"
+          style={{ outlineColor: BRAND }}
+        >
+          <CallGlyph name="xCircle" size={16} />
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -147,6 +232,15 @@ const DIRECTION_LABEL = {
   outgoing: 'calls.direction.outgoing',
   missed: 'calls.direction.missed',
 } as const;
+
+const ROW_PARTICIPANTS = 2;
+
+/** « Ada, Bruno +2 » (#8066) — `null` pour un appel sans participant nommé. */
+function participantsLine(language: InterfaceLanguage, record: CallRecord): string | null {
+  const { names, more } = callParticipantNames(record, ROW_PARTICIPANTS);
+  if (names.length === 0) return null;
+  return more === 0 ? names.join(', ') : translate(language, 'calls.participants.more', { names: names.join(', '), count: String(more) });
+}
 
 const DIRECTION_A11Y = {
   incoming: 'calls.a11y.incoming',
@@ -164,18 +258,23 @@ export const CallRow = memo(function CallRow({
   language,
   record,
   now,
+  onHide,
 }: {
   readonly language: InterfaceLanguage;
   readonly record: CallRecord;
   readonly now: Date;
+  /** Posé en MODE ÉDITION (#8066) : le bouton de bout de ligne efface au lieu de rappeler. */
+  readonly onHide?: (callId: string) => void;
 }) {
   const name = callDisplayNameOf(record, translate(language, 'calls.unknown'));
   const avatar = callAvatarOf(record);
   const missed = record.direction === 'missed';
   const time = shortRelativeTime(new Date(record.startedAt), now, language);
   const duration = callDurationLabel(record.durationSec);
+  const participants = participantsLine(language, record);
   const label = [
     name,
+    ...(participants === null ? [] : [translate(language, 'calls.participants.a11y', { names: record.participants.map((participant) => participant.displayName).join(', ') })]),
     translate(language, DIRECTION_A11Y[record.direction]),
     translate(language, record.isVideo ? 'calls.type.video' : 'calls.type.audio'),
     time,
@@ -197,6 +296,11 @@ export const CallRow = memo(function CallRow({
           <span data-call-name className="truncate text-body font-semibold" style={{ color: missed ? MISSED_INK : INK }}>
             {name}
           </span>
+          {participants === null ? null : (
+            <span data-call-participants className="truncate text-caption" style={{ color: INK_2 }}>
+              {participants}
+            </span>
+          )}
           <span data-call-meta className="flex min-w-0 items-center gap-1.5 text-caption font-medium" style={{ color: INK_2 }}>
             <span className="flex shrink-0 items-center gap-1" style={{ color: missed ? MISSED_INK : INK_2 }}>
               <CallGlyph name={DIRECTION_GLYPHS[record.direction]} size={12} />
@@ -222,6 +326,7 @@ export const CallRow = memo(function CallRow({
           </span>
         </span>
       </Link>
+      {onHide === undefined ? (
       <button
         type="button"
         data-call-back={record.isVideo ? 'video' : 'audio'}
@@ -240,6 +345,18 @@ export const CallRow = memo(function CallRow({
       >
         {record.isVideo ? <CallGlyph name="videoCamera" size={20} /> : <Glyph name="phone" size={20} />}
       </button>
+      ) : (
+        <button
+          type="button"
+          data-call-hide
+          aria-label={translate(language, 'calls.hide.named', { name })}
+          onClick={() => onHide(record.callId)}
+          className="mr-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ color: MISSED_INK, outlineColor: MISSED_INK }}
+        >
+          <CallGlyph name="trash" size={20} />
+        </button>
+      )}
     </li>
   );
 });
@@ -257,6 +374,80 @@ export function CallsEmpty({ language, filter }: { readonly language: InterfaceL
       <p className="text-caption" style={{ color: INK_2 }}>
         {translate(language, missed ? 'calls.empty.missed.subtitle' : 'calls.empty.subtitle')}
       </p>
+    </li>
+  );
+}
+
+/**
+ * « TOUT EFFACER » (#8066) — en deux temps, parce que le geste ne se défait
+ * pas : la première pression demande, la seconde efface. La confirmation dit
+ * ce qu'elle ne fait PAS : l'appel reste au journal des autres participants.
+ */
+export function CallsClearAll({
+  language,
+  confirming,
+  onAsk,
+  onConfirm,
+  onCancel,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly confirming: boolean;
+  readonly onAsk: () => void;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+}) {
+  const action = 'grid place-items-center rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2';
+  if (!confirming) {
+    return (
+      <li className="flex justify-end px-4 py-1.5" style={{ borderBottom: EDGE }}>
+        <button type="button" data-calls-clear="ask" onClick={onAsk} className={action} style={{ minHeight: 44, color: MISSED_INK, outlineColor: MISSED_INK }}>
+          {translate(language, 'calls.clearAll')}
+        </button>
+      </li>
+    );
+  }
+  return (
+    <li
+      role="alertdialog"
+      aria-labelledby="calls-clear-question"
+      className="grid gap-2 px-5 py-3"
+      style={{ borderBottom: EDGE }}
+    >
+      <p id="calls-clear-question" className="text-body" style={{ color: INK }}>
+        {translate(language, 'calls.clearAll.confirm')}
+      </p>
+      <span className="flex justify-end gap-2">
+        <button type="button" data-calls-clear="cancel" onClick={onCancel} className={action} style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}>
+          {translate(language, 'calls.clearAll.cancel')}
+        </button>
+        <button
+          type="button"
+          data-calls-clear="confirm"
+          onClick={onConfirm}
+          className={`${action} text-white`}
+          style={{ minHeight: 44, backgroundColor: MISSED_INK, outlineColor: MISSED_INK }}
+        >
+          {translate(language, 'calls.clearAll.confirmAction')}
+        </button>
+      </span>
+    </li>
+  );
+}
+
+/** Un effacement refusé : la ligne est revenue, l'annonce dit pourquoi. */
+export function CallsEraseFailed({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <li role="alert" data-calls-erase-failed className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: EDGE, color: MISSED_INK }}>
+      <Glyph name="warningCircle" size={18} />
+      <span className="text-caption font-semibold">{translate(language, 'calls.erase.failed')}</span>
+    </li>
+  );
+}
+
+export function CallsSearchEmpty({ language, query }: { readonly language: InterfaceLanguage; readonly query: string }) {
+  return (
+    <li role="status" data-calls-search-empty className="grid justify-items-center px-6 py-10 text-center text-body" style={{ color: INK_2 }}>
+      {translate(language, 'calls.search.empty', { query: query.trim() })}
     </li>
   );
 }

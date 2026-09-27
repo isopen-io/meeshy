@@ -2,6 +2,8 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deMediaHub from './catalog-de-media-hub';
+import deMediaViewer from './catalog-de-media-viewer';
+import deActivation from './catalog-de-activation';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
@@ -10,8 +12,13 @@ import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
 import deCallFeedback from './catalog-de-call-feedback';
+import deCallsErase from './catalog-de-calls-erase';
+import deAddressBook from './catalog-de-address-book';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
+import deCallQuality from './catalog-de-call-quality';
+import deCallCaptions from './catalog-de-call-captions';
+import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -202,7 +209,9 @@ const de = {
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
   ...deMediaHub,
+  ...deMediaViewer,
   ...deVerifyEmail,
+  ...deActivation,
   ...dePassword,
   ...deCall,
   ...deRowActions,
@@ -210,8 +219,13 @@ const de = {
   ...deCallJoin,
   ...deCallDecline,
   ...deCallFeedback,
+  ...deCallsErase,
+  ...deAddressBook,
   ...deCallDevices,
   ...deCallScreen,
+  ...deCallQuality,
+  ...deCallCaptions,
+  ...deCallRecording,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',

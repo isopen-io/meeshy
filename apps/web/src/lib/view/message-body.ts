@@ -186,10 +186,21 @@ export function placeOf(message: Pick<Message, 'metadata'> & HoistedFields): Sha
   };
 }
 
-/** Pas de tuile de carte ce lot (§ 9 Q6 de la spécification) — un lien nommé, ouvert dans Plans sur iOS. */
-export function mapsUrlOf(place: SharedPlace): string {
+const geoLabel = (name: string): string => encodeURIComponent(name).replace(/\(/g, '%28').replace(/\)/g, '%29');
+
+/**
+ * Pas de tuile de carte ce lot (§ 9 Q6 de la spécification) — un lien nommé,
+ * ouvert dans Plans sur iOS. Sous la coque ANDROID (#8262), une adresse
+ * `https` part au NAVIGATEUR (`Bridge.launchIntent`) : l'URI `geo:` y est la
+ * seule qui ouvre l'app de cartes du téléphone, comme le faisait l'app native.
+ */
+export function mapsUrlOf(place: SharedPlace, options: { readonly platform?: string | undefined } = {}): string {
+  const ll = `${place.latitude.toFixed(5)},${place.longitude.toFixed(5)}`;
+  if (options.platform === 'android') {
+    return `geo:${ll}?q=${ll}${place.name !== null ? `(${geoLabel(place.name)})` : ''}`;
+  }
   const query = place.name !== null ? `&q=${encodeURIComponent(place.name)}` : '';
-  return `https://maps.apple.com/?ll=${place.latitude.toFixed(5)},${place.longitude.toFixed(5)}${query}`;
+  return `https://maps.apple.com/?ll=${ll}${query}`;
 }
 
 export type StoryCitation = {

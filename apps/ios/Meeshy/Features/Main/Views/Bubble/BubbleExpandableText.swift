@@ -9,14 +9,18 @@ import MeeshyUI
 ///
 /// Voyage par l'environnement jusqu'à la bulle, dont la chaîne
 /// `ThemedMessageBubble` → `BubbleStandardLayout` n'a pas à le connaître ;
-/// la rangée plate le reçoit par son `FocalRowInput`. Égalité sur l'état
-/// seul : la fermeture est reconstruite à chaque configuration.
+/// la rangée plate le reçoit par son `FocalRowInput`. Égalité sur le
+/// MESSAGE et l'état, jamais sur la fermeture, reconstruite à chaque
+/// configuration : sans le message, une cellule réutilisée gardait la
+/// fermeture de son occupant précédent — deux messages repliés sont
+/// « égaux » — et « Lire la suite » dépliait l'autre (#8161).
 struct LongMessageExpansion: Equatable {
+    let messageId: String
     let isExpanded: Bool
     let toggle: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.isExpanded == rhs.isExpanded
+        lhs.messageId == rhs.messageId && lhs.isExpanded == rhs.isExpanded
     }
 }
 
