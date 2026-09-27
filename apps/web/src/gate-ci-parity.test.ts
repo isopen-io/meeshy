@@ -41,13 +41,19 @@ import { describe, expect, test } from 'bun:test';
 const V3 = dirname(fileURLToPath(import.meta.url)) + '/..';
 const CI = join(V3, '..', '..', '.github', 'workflows', 'ci.yml');
 
-/** Les maillons `scripts/*.mjs` que `bun run gate` enchaîne. */
+/**
+ * Les maillons `scripts/*.mjs` DE L'APPLICATION que `bun run gate` enchaîne.
+ * Un maillon de la RACINE (`../../scripts/check-web-api-literals.mjs`) n'en
+ * est pas un : `maillonsDeLaCI` ne retient que les fichiers de
+ * `apps/web/scripts/`, et le comparer à cette liste le déclarerait orphelin
+ * alors que `ci.yml` le lance depuis la racine.
+ */
 function maillonsDuComposite(): Set<string> {
   const pkg = JSON.parse(readFileSync(join(V3, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   };
   const gate = pkg.scripts.gate ?? '';
-  return new Set([...gate.matchAll(/scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!));
+  return new Set([...gate.matchAll(/(?<!\.\.\/)scripts\/([a-z0-9-]+\.mjs)/g)].map((m) => m[1]!));
 }
 
 /**
