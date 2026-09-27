@@ -21,6 +21,7 @@ import ptCallCaptions from './catalog-pt-call-captions';
 import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
+import ptGallery from './catalog-pt-gallery';
 import ptMentions from './catalog-pt-mentions';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
@@ -1161,6 +1162,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptGallery,
   ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,

@@ -21,6 +21,7 @@ import esCallCaptions from './catalog-es-call-captions';
 import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
+import esGallery from './catalog-es-gallery';
 import esMentions from './catalog-es-mentions';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
@@ -1157,6 +1158,7 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esGallery,
   ...esConversationCard,
   ...esStoriesMine,
   ...esContactCard,
