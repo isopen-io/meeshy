@@ -349,11 +349,14 @@ fileprivate struct BubbleGridCell: View {
     /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
     /// vidéo n'est qu'un poster.
     var body: some View {
-        if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
-            videoBody
-        } else {
-            standardBody
+        Group {
+            if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
+                videoBody
+            } else {
+                standardBody
+            }
         }
+        .protectedGridCellBounds(attachment.id)
     }
 
     /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
