@@ -317,7 +317,7 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // à un administrateur, GÉNÉRÉE depuis `route-manifest.json` ; seul le web
 // d'administration l'appelle, comme ses voisines `AdminEndpoint`. Valeur
 // MESURÉE le 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 279;
+const BASELINE_DEAD_ENTRIES = 278;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
