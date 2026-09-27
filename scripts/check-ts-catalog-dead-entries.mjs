@@ -348,7 +348,7 @@ export const callersIn = (contents, nsNames) => {
 // la flamme-œil consommée, GÉNÉRÉE depuis `route-manifest.json`. Le web
 // l'appelle déjà par un chemin relatif (`lib/api/after-read.ts`) plutôt que par
 // le catalogue ; passer ce site au catalogue ramène cette valeur à 333.
-const BASELINE_DEAD_ENTRIES = 334;
+const BASELINE_DEAD_ENTRIES = 333;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
