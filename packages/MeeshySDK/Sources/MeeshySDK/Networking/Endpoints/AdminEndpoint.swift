@@ -120,6 +120,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdStats(userId: String)
     case usersByUserIdStatus(userId: String)
     case usersByUserIdUnlock(userId: String)
+    case usersByUserIdVerificationRequests(userId: String)
     case usersByUserIdVerifications(userId: String)
     case usersByUserIdVerifyAge(userId: String)
     case usersByUserIdVerifyEmail(userId: String)
@@ -237,6 +238,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdStats(let userId): return "/api/v1/admin/users/\(userId)/stats"
         case .usersByUserIdStatus(let userId): return "/api/v1/admin/users/\(userId)/status"
         case .usersByUserIdUnlock(let userId): return "/api/v1/admin/users/\(userId)/unlock"
+        case .usersByUserIdVerificationRequests(let userId): return "/api/v1/admin/users/\(userId)/verification-requests"
         case .usersByUserIdVerifications(let userId): return "/api/v1/admin/users/\(userId)/verifications"
         case .usersByUserIdVerifyAge(let userId): return "/api/v1/admin/users/\(userId)/verify-age"
         case .usersByUserIdVerifyEmail(let userId): return "/api/v1/admin/users/\(userId)/verify-email"

@@ -54,7 +54,10 @@ export function AdminUserGallery({
   });
 
   const diapos = gallerySlidesOf({ avatar: membre.avatar, banner: membre.banner, medias: medias.data?.medias ?? [] });
-  const titre = translateAdmin(language, 'admin.gallery.title');
+  /* « Médias », pas « Images » (#8289) : la photo et la bannière ont désormais
+     leur section éditable en tête de fiche ; ce carrousel est la revue de ce
+     que le membre a PUBLIÉ ou envoyé, photo et bannière comprises. */
+  const titre = translateAdmin(language, 'admin.tab.media');
 
   if (medias.isPending && diapos.length === 0) {
     return (
@@ -95,7 +98,7 @@ export function AdminUserGallery({
         }}
       >
         <figure
-          className="relative m-0 grid aspect-video place-items-center overflow-hidden rounded-card"
+          className="relative m-0 grid aspect-video max-h-80 w-full place-items-center overflow-hidden rounded-card"
           style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }}
           aria-roledescription="slide"
           aria-label={translateAdmin(language, 'admin.gallery.position', { n: String(actuel + 1), total: String(diapos.length) })}

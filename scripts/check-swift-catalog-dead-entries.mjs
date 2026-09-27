@@ -324,7 +324,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'un membre posées par l'administration, GÉNÉRÉES depuis
 // `route-manifest.json` ; seul le web d'administration les appelle, comme
 // leurs voisines `AdminEndpoint`. Valeur MESURÉE le 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 280;
+// 280 → 281 (#8289) : `AdminEndpoint.usersByUserIdVerificationRequests` —
+// `POST /api/v1/admin/users/:userId/verification-requests`, le renvoi par
+// l'administration de la vérification d'un e-mail ou d'un téléphone, GÉNÉRÉE
+// depuis `route-manifest.json` ; seul le web d'administration l'appelle, comme
+// ses voisines `AdminEndpoint`. Valeur MESURÉE le 2026-09-27.
+const BASELINE_DEAD_ENTRIES = 281;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

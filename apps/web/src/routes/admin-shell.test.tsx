@@ -137,3 +137,50 @@ describe('le menu latéral d’administration', () => {
     expect(hote.querySelector('[data-admin-drawer]')).toBeNull();
   });
 });
+
+/**
+ * L'EN-TÊTE À GAUCHE, LE TITRE DANS LE CONTENU (#8289) — la page Comptes montre
+ * « ‹ Comptes » à gauche, son action principale (« Créer un compte ») en haut
+ * à droite de l'en-tête, et son titre dans le contenu, où il est le seul
+ * `<h1>` de la page.
+ */
+describe('l’en-tête « ‹ Comptes » et son action', () => {
+  test('le libellé suit le retour à gauche, l’action est à droite, et aucun titre n’est posé dans l’en-tête', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, { role: 'ADMIN', permissions: MATRICE });
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminScreenFrame
+          language="fr"
+          title="Comptes"
+          back="admin"
+          heading="content"
+          backLabel="Comptes"
+          actions={
+            <button type="button" data-action-entete>
+              Créer un compte
+            </button>
+          }
+        >
+          <h1 data-titre-contenu>Comptes</h1>
+        </AdminScreenFrame>
+      </QueryClientProvider>,
+    );
+    const entete = hote.querySelector('header');
+    const enfants = [...(entete?.children ?? [])];
+
+    expect(entete?.querySelector('h1')).toBeNull();
+    expect(entete?.querySelector('[data-admin-back-label]')?.textContent).toBe('Comptes');
+    const retour = enfants.findIndex((e) => e.matches('[data-admin-back]'));
+    const action = enfants.findIndex((e) => e.querySelector('[data-action-entete]') !== null);
+    expect(retour).toBeGreaterThanOrEqual(0);
+    expect(action).toBeGreaterThan(retour);
+    expect(hote.querySelectorAll('h1')).toHaveLength(1);
+    expect(hote.querySelector('main [data-titre-contenu]')).not.toBeNull();
+  });
+
+  test('par défaut, l’en-tête garde son titre — les autres écrans ne bougent pas', async () => {
+    const hote = await cadre('ADMIN');
+    expect(hote.querySelector('header h1')?.textContent).toBe('Comptes');
+    expect(hote.querySelector('[data-admin-back-label]')).toBeNull();
+  });
+});

@@ -134,11 +134,24 @@ function useAdminMenu() {
   return { sections, space: adminSpaceOf(cle), active: activeAdminSectionId(cle) };
 }
 
+/**
+ * OÙ VIT LE TITRE DE L'ÉCRAN (#8289).
+ *
+ * `'header'` (défaut) — dans l'en-tête, centré sur un téléphone.
+ * `'content'` — l'écran pose lui-même son `<h1>` dans le contenu ; l'en-tête
+ * ne garde que « ‹ libellé » à gauche et l'ACTION de l'écran à droite
+ * (« Créer un compte »), comme une barre de navigation iOS.
+ */
+export type AdminHeading = 'header' | 'content';
+
 export function AdminHeader({
   language,
   title,
   back,
   onMenu,
+  heading = 'header',
+  backLabel,
+  actions,
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
@@ -148,7 +161,13 @@ export function AdminHeader({
    */
   readonly back: Back;
   readonly onMenu?: () => void;
+  readonly heading?: AdminHeading;
+  /** Le libellé posé à droite du chevron de retour quand le titre vit dans le contenu. */
+  readonly backLabel?: string;
+  /** L'action principale de l'écran, en haut à droite de l'en-tête. */
+  readonly actions?: ReactNode;
 }) {
+  const titreDansLeContenu = heading === 'content';
   return (
     <header
       className="flex shrink-0 items-center gap-1 px-2 md:px-6"
@@ -180,10 +199,22 @@ export function AdminHeader({
           <Glyph name="caretLeft" size={16} />
         </ChromeActionDisc>
       </Link>
-      <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold md:text-left md:text-title" style={{ color: INK }}>
-        {title}
-      </h1>
-      <span aria-hidden="true" className="block shrink-0 md:hidden" style={{ width: 44 }} />
+      {titreDansLeContenu ? (
+        <span data-admin-back-label className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: BRAND }}>
+          {backLabel ?? title}
+        </span>
+      ) : (
+        <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold md:text-left md:text-title" style={{ color: INK }}>
+          {title}
+        </h1>
+      )}
+      {actions === undefined ? (
+        titreDansLeContenu ? null : <span aria-hidden="true" className="block shrink-0 md:hidden" style={{ width: 44 }} />
+      ) : (
+        <div className="flex shrink-0 items-center gap-2" data-admin-header-actions>
+          {actions}
+        </div>
+      )}
     </header>
   );
 }
@@ -268,11 +299,18 @@ export function AdminScreenFrame({
   title,
   back,
   fills = false,
+  heading = 'header',
+  backLabel,
+  actions,
   children,
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
   readonly back: Back;
+  /** Voir `AdminHeading` — `'content'` : l'écran pose son `<h1>` lui-même. */
+  readonly heading?: AdminHeading;
+  readonly backLabel?: string;
+  readonly actions?: ReactNode;
   /**
    * L'ÉCRAN PORTE-T-IL SON PROPRE DÉFILEMENT ? (#6862, lot C)
    *
@@ -335,7 +373,15 @@ export function AdminScreenFrame({
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <AdminHeader language={language} title={title} back={back} onMenu={() => setDrawer(true)} />
+        <AdminHeader
+          language={language}
+          title={title}
+          back={back}
+          onMenu={() => setDrawer(true)}
+          heading={heading}
+          {...(backLabel === undefined ? {} : { backLabel })}
+          {...(actions === undefined ? {} : { actions })}
+        />
         {fills ? (
           <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe md:px-8">
             <div className="flex min-h-0 w-full flex-1 flex-col pt-4">{children}</div>
