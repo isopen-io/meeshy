@@ -50,6 +50,7 @@ import { EmailService } from '../../services/EmailService';
 import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
 import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
+import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -313,6 +314,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         sendBadRequest(reply, 'Invalid input data');
         return;
       }
+      if (replyIdentifierTaken(reply, error)) return;
 
       logError(fastify.log, 'Error creating user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to create user' });
