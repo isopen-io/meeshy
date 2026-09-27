@@ -570,20 +570,6 @@ export class ContactDirectoryService {
       });
   }
 
-  /**
-   * Efface l'intégralité du répertoire de l'utilisateur (droit au retrait, #8167).
-   *
-   * Les `ContactJoinNotice` dont il est le DESTINATAIRE partent avec lui : chacune
-   * dit qu'une personne de son carnet a été annoncée, donc qui y figurait. Celles
-   * où il est l'ARRIVANT appartiennent aux carnets des autres et restent.
-   */
-  async clear(ownerId: string): Promise<number> {
-    const deletion = await this.prisma.userContact.deleteMany({ where: { ownerId } });
-    const notices = await this.prisma.contactJoinNotice.deleteMany({ where: { recipientId: ownerId } });
-    logger.info('Répertoire effacé', { ownerId, removed: deletion.count, notices: notices.count });
-    return deletion.count;
-  }
-
   private resolveMatch(
     contact: NormalizedContact,
     indexes: {
@@ -608,4 +594,66 @@ export class ContactDirectoryService {
     }
     return null;
   }
+}
+
+export type AddressBookErasure = {
+  readonly contactsDeleted: number;
+  readonly joinNoticesDeleted: number;
+  readonly arrivalAnnouncementsDeleted: number;
+};
+
+type AnnouncementRow = { id: string; actor: unknown; metadata: unknown };
+
+const announcesJoiner = (joinerId: string) => (notification: AnnouncementRow): boolean => {
+  const actor = notification.actor as { id?: unknown } | null;
+  const metadata = notification.metadata as { joinerIds?: unknown } | null;
+  const joinerIds = Array.isArray(metadata?.joinerIds) ? metadata.joinerIds : [];
+  return actor?.id === joinerId || joinerIds.includes(joinerId);
+};
+
+/**
+ * Efface tout ce que le carnet d'adresses d'un compte SUPPRIMÉ a laissé côté
+ * serveur (#8284 — décision porteur : l'effacement du carnet se fait à la
+ * suppression du compte, jamais à la main).
+ *
+ *  - ses fiches `UserContact` ;
+ *  - les `ContactJoinNotice` qui lui sont adressées (elles disent qui figurait
+ *    dans son carnet) ;
+ *  - les `ContactJoinNotice` qui annoncent SON arrivée à d'autres, et les
+ *    notifications `contact_joined` qui en sont nées (`actor.id` ou
+ *    `metadata.joinerIds`) : elles désignent un compte qui n'existe plus. Une
+ *    annonce GROUPÉE (« Marie et 2 autres ») qui le nomme part entière.
+ *
+ * Les destinataires des annonces se lisent par les `ContactJoinNotice` AVANT de
+ * les effacer : c'est ce qui borne la recherche aux seules boîtes concernées.
+ * Idempotent : une seconde passe ne trouve plus aucune ligne.
+ */
+export async function eraseAddressBookOf(
+  prisma: Pick<PrismaClient, 'userContact' | 'contactJoinNotice' | 'notification'>,
+  userId: string
+): Promise<AddressBookErasure> {
+  const told = await prisma.contactJoinNotice.findMany({ where: { joinerId: userId }, select: { recipientId: true } });
+  const recipientIds = [...new Set(told.map((notice) => notice.recipientId))];
+  const announcements = recipientIds.length === 0
+    ? []
+    : await prisma.notification.findMany({
+        where: { userId: { in: recipientIds }, type: 'contact_joined' },
+        select: { id: true, actor: true, metadata: true },
+      });
+  const withdrawn = announcements.filter(announcesJoiner(userId)).map((notification) => notification.id);
+  const arrivalAnnouncements = withdrawn.length === 0
+    ? { count: 0 }
+    : await prisma.notification.deleteMany({ where: { id: { in: withdrawn } } });
+
+  const [contacts, received, arrivals] = await Promise.all([
+    prisma.userContact.deleteMany({ where: { ownerId: userId } }),
+    prisma.contactJoinNotice.deleteMany({ where: { recipientId: userId } }),
+    prisma.contactJoinNotice.deleteMany({ where: { joinerId: userId } }),
+  ]);
+
+  return {
+    contactsDeleted: contacts.count,
+    joinNoticesDeleted: received.count + arrivals.count,
+    arrivalAnnouncementsDeleted: arrivalAnnouncements.count,
+  };
 }

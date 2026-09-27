@@ -18,8 +18,8 @@ import { synchroniser } from '../directory/contacts-sync';
  *
  * `POST /users/me/contacts/sync` synchronise (upsert idempotent par contact),
  * `GET /users/me/contacts` sert l'annuaire paginé avec le profil Meeshy
- * rapproché — c'est lui qui alimente le bouton « Lui écrire ». `DELETE` efface
- * l'intégralité du répertoire (droit au retrait).
+ * rapproché — c'est lui qui alimente le bouton « Lui écrire ». Aucune route ne
+ * l'efface à la main : il part avec le compte (`eraseAddressBookOf`, #8284).
  */
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -191,46 +191,6 @@ export async function getContactsDirectory(fastify: FastifyInstance) {
     } catch (error) {
       logError(fastify.log, '[CONTACTS-DIRECTORY] Error listing directory', error);
       return sendInternalError(reply, 'Failed to load contacts');
-    }
-  });
-}
-
-export async function clearContactsDirectory(fastify: FastifyInstance) {
-  fastify.delete('/users/me/contacts', {
-    onRequest: [fastify.authenticate],
-    schema: {
-      description: 'Erase the user\'s persisted address book.',
-      tags: ['users'],
-      summary: 'Erase the saved address book',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: { removedCount: { type: 'number' } }
-            }
-          }
-        },
-        401: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as AuthenticatedRequest).authContext;
-      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required');
-      }
-
-      const service = new ContactDirectoryService(fastify.prisma);
-      const removedCount = await service.clear(authContext.userId);
-
-      return sendSuccess(reply, { removedCount });
-    } catch (error) {
-      logError(fastify.log, '[CONTACTS-DIRECTORY] Error clearing directory', error);
-      return sendInternalError(reply, 'Failed to clear contacts');
     }
   });
 }
