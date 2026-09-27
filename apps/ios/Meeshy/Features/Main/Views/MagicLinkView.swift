@@ -4,6 +4,17 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+// MARK: - Sent Email Code
+
+/// Un code et un lien DÉJÀ partis vers `email` (#8216) — l'inscription d'une
+/// adresse déjà utilisée les demande en un geste, puis ouvre CET écran sur son
+/// attente plutôt que sur une saisie à refaire.
+struct SentEmailCode: Identifiable, Equatable {
+    let email: String
+    let dispatch: EmailCodeDispatch
+    var id: String { email }
+}
+
 // MARK: - Magic Link View
 
 struct MagicLinkView: View {
@@ -14,9 +25,12 @@ struct MagicLinkView: View {
     /// l'hôte pose une fois cet écran REFERMÉ — l'ouvrir pendant qu'il est
     /// présenté démonte la connexion qui le présente, et il resterait figé.
     var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
+    /// L'envoi que l'hôte a DÉJÀ fait (#8216) : l'écran s'ouvre sur l'attente.
+    private let alreadySent: SentEmailCode?
 
-    @State private var email = ""
-    @State private var step: Step = .emailInput
+    @State private var email: String
+    @State private var step: Step
+    @State private var hasAdoptedSend = false
     @State private var errorMessage: String?
     @State private var isLoading = false
     @State private var countdownRemaining = 0
@@ -30,6 +44,22 @@ struct MagicLinkView: View {
     @State private var codeEntry: EmailVerificationViewModel?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
+
+    /// - Parameters:
+    ///   - prefilledEmail: l'adresse déjà tapée ailleurs (#8216) — la retaper
+    ///     est un geste de trop, et une occasion de se tromper d'adresse.
+    ///   - alreadySent: un envoi déjà fait par l'hôte — l'écran s'ouvre sur
+    ///     son attente, compte à rebours et saisie du code compris.
+    init(
+        onVerified: ((@escaping ProvenSessionOpener) -> Void)? = nil,
+        prefilledEmail: String = "",
+        alreadySent: SentEmailCode? = nil
+    ) {
+        self.onVerified = onVerified
+        self.alreadySent = alreadySent
+        _email = State(initialValue: alreadySent?.email ?? prefilledEmail)
+        _step = State(initialValue: alreadySent == nil ? .emailInput : .waiting)
+    }
 
     private enum Step {
         case emailInput
@@ -99,6 +129,7 @@ struct MagicLinkView: View {
                 // plus dépendre de la façon dont on le présente.
                 .iPadFormWidth()
             }
+            .onAppear(perform: adoptAlreadySent)
             .onDisappear {
                 countdownTask?.cancel()
                 countdownTask = nil
@@ -396,21 +427,10 @@ struct MagicLinkView: View {
         Task {
             do {
                 let dispatch = try await AuthService.shared.requestEmailCode(email: email)
-                let expiresInSeconds = dispatch.expiresInSeconds ?? 300
-
-                if codeEntry?.email != email {
-                    codeEntry = EmailVerificationViewModel(email: email)
-                }
-                // #8083 — le jeton d'attente de CET envoi : l'écran saura dire
-                // que l'adresse a été confirmée sur un autre appareil.
-                codeEntry?.pendingSessionToken = dispatch.pendingSessionToken
                 withAnimation(MeeshyAnimation.springDefault) {
-                    step = .waiting
                     isLoading = false
-                    expandedHint = nil
+                    enterWaiting(dispatch)
                 }
-
-                startCountdown(expiresInSeconds)
                 Self.logger.info("Magic link sent to \(email, privacy: .private)")
             } catch {
                 errorMessage = EmailProofErrorText.sendMessage(for: error)
@@ -418,6 +438,26 @@ struct MagicLinkView: View {
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// L'attente d'UN envoi — le sien ou celui de l'hôte (#8216) : la saisie
+    /// du code pour CETTE adresse, son jeton d'attente, le compte à rebours.
+    private func enterWaiting(_ dispatch: EmailCodeDispatch) {
+        if codeEntry?.email != email {
+            codeEntry = EmailVerificationViewModel(email: email)
+        }
+        // #8083 — le jeton d'attente de CET envoi : l'écran saura dire
+        // que l'adresse a été confirmée sur un autre appareil.
+        codeEntry?.pendingSessionToken = dispatch.pendingSessionToken
+        step = .waiting
+        expandedHint = nil
+        startCountdown(dispatch.expiresInSeconds ?? 300)
+    }
+
+    private func adoptAlreadySent() {
+        guard let alreadySent, !hasAdoptedSend else { return }
+        hasAdoptedSend = true
+        enterWaiting(alreadySent.dispatch)
     }
 
     private func startCountdown(_ seconds: Int) {

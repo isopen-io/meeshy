@@ -16,7 +16,8 @@ import MeeshyUI
 /// pas de `debounce`, pas de délai d'auto-focus. Le bouton s'active dès que les
 /// trois champs requis sont valides, localement.
 struct SignupView: View {
-    // Aucun `@EnvironmentObject` : l'écran ne lit pas `AuthManager`. Il passe
+    // Aucun `@EnvironmentObject` : l'écran ne lit pas `AuthManager` (il n'en
+    // INJECTE un qu'à la feuille du lien de connexion, qui le déclare). Il passe
     // par `SignupRegistering`, ce qui est précisément ce qui rend sa suite
     // exécutable — et un objet d'environnement non lu impose quand même sa
     // présence à tous les hôtes (SwiftUI le résout au montage).
@@ -26,9 +27,9 @@ struct SignupView: View {
 
     /// Appelé dès que la session est appliquée — sans pause.
     var onComplete: (() -> Void)?
-    /// Ramène à la connexion, depuis le pied de page ou depuis un refus
-    /// « adresse déjà utilisée ».
-    var onSwitchToLogin: (() -> Void)?
+    /// Ramène à la connexion depuis le pied de page, avec l'adresse déjà tapée
+    /// quand elle est complète (#8216) — l'hôte la préremplit.
+    var onSwitchToLogin: ((_ email: String?) -> Void)?
     /// Compte créé SANS numéro, puis code vérifié (#8055, #8059) : reçoit de
     /// quoi ouvrir la session, une fois la feuille du code REFERMÉE. L'hôte
     /// referme alors l'inscription et ouvre la session dans SON `onDismiss` —
@@ -48,6 +49,7 @@ struct SignupView: View {
     @State private var isPasswordRevealed = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
+    @State private var isShowingForgotPassword = false
     @State private var provenSessionOpener: ProvenSessionOpener?
 
     var body: some View {
@@ -113,6 +115,17 @@ struct SignupView: View {
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
         .sheet(isPresented: $isShowingPrivacy) { PrivacyPolicyView() }
+        .sheet(isPresented: $isShowingForgotPassword) {
+            MeeshyForgotPasswordView(prefilledEmail: viewModel.loginEmail ?? "")
+        }
+        // #8216 — le code et le lien sont PARTIS : l'attente de la connexion
+        // par e-mail, la même machine, ouverte sur son écran d'attente. Le
+        // code vérifié ouvre la session comme celui d'une inscription sans
+        // numéro : une fois la feuille refermée.
+        .sheet(item: $viewModel.signInLink, onDismiss: handOffProvenSession) { sent in
+            MagicLinkView(onVerified: { provenSessionOpener = $0 }, alreadySent: sent)
+                .environmentObject(AuthManager.shared)
+        }
         // #8055 — sans numéro, le compte attend son code : même écran que la
         // connexion (#8035). Le mot de passe est déjà sur le compte, il ne
         // repart pas ; la vérification ouvre la session et `MeeshyApp` bascule.
@@ -325,18 +338,137 @@ struct SignupView: View {
                 .foregroundColor(theme.textPrimary)
             }
 
-            if viewModel.emailAlreadyRegistered {
-                Button {
-                    HapticFeedback.light()
-                    onSwitchToLogin?()
-                } label: {
-                    Text(String(localized: "auth.signup.email.signIn", defaultValue: "Se connecter", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
-                        .frame(minHeight: 44)
-                }
-                .accessibilityHint(String(localized: "auth.signup.email.signIn.hint", defaultValue: "Ouvre l'écran de connexion", bundle: .main))
+            if viewModel.showsEmailTakenActions {
+                emailTakenActions
             }
+        }
+    }
+
+    /// L'ADRESSE EST DÉJÀ UTILISÉE — ce qu'on peut faire, en UN geste (#8216).
+    ///
+    /// L'écran n'offrait que « Se connecter », qui ouvrait la connexion avec
+    /// l'adresse VIDE : retaper, puis demander le lien — quatre gestes, et une
+    /// occasion de se tromper d'adresse et de créer un second compte.
+    /// « Recevoir un lien de connexion » envoie le code et le lien à l'adresse
+    /// saisie, puis présente l'attente de `MagicLinkView` ; « Mot de passe
+    /// oublié ? » reste à côté, adresse préremplie. Miroir web :
+    /// `EmailTakenActions` (`apps/web/src/components/email-taken-actions.tsx`).
+    ///
+    /// Quand la passerelle sert le détenteur MASQUÉ (#8214), l'écran demande
+    /// d'abord « Est-ce vous ? » : « C'est moi » récupère le compte par le
+    /// lien, « Ce n'est pas moi » renvoie la même inscription en revendiquant
+    /// l'adresse — le code envoyé décidera.
+    @ViewBuilder
+    private var emailTakenActions: some View {
+        if let owner = viewModel.emailOwner {
+            emailOwnerCard(owner)
+        } else {
+            recoveryActions(sendLabel: String(localized: "auth.signup.email.sendSignInLink", defaultValue: "Recevoir un lien de connexion", bundle: .main))
+        }
+    }
+
+    private func recoveryActions(sendLabel: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: MeeshySpacing.lg) { sendSignInLinkButton(sendLabel); forgotPasswordButton }
+                VStack(alignment: .leading, spacing: 0) { sendSignInLinkButton(sendLabel); forgotPasswordButton }
+            }
+            if let error = viewModel.signInLinkError {
+                Text(error)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundColor(MeeshyColors.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func emailOwnerCard(_ owner: APIRejection.EmailOwner) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(String(localized: "auth.signup.email.isItYou", defaultValue: "Est-ce vous ?", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+
+            HStack(spacing: MeeshySpacing.md) {
+                MeeshyAvatar(
+                    name: owner.maskedDisplayName,
+                    context: .userListItem,
+                    accentColor: DynamicColorGenerator.colorForName(owner.maskedUsername),
+                    avatarURL: owner.avatar
+                )
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: owner.maskedDisplayName)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    Text(verbatim: "@\(owner.maskedUsername)")
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundColor(theme.textSecondary)
+                }
+                .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+
+            recoveryActions(sendLabel: String(localized: "auth.signup.email.itsMe", defaultValue: "C’est moi — récupérer mon compte", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
+                Task { await viewModel.claimEmail() }
+            } label: {
+                Text(String(localized: "auth.signup.email.notMe", defaultValue: "Ce n’est pas moi", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(minHeight: 44)
+            }
+            .disabled(viewModel.isSubmitting)
+            .accessibilityHint(Self.claimNote)
+            .accessibilityIdentifier("auth.signup.email.notMe")
+
+            Text(Self.claimNote)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundColor(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(MeeshySpacing.md)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.inputBackground))
+    }
+
+    private static var claimNote: String {
+        String(localized: "auth.signup.email.notMe.note", defaultValue: "Le code envoyé à cette adresse sera demandé pour l’obtenir.", bundle: .main)
+    }
+
+    private func sendSignInLinkButton(_ label: String) -> some View {
+        Button {
+            HapticFeedback.light()
+            Task { await viewModel.requestSignInLink() }
+        } label: {
+            HStack(spacing: MeeshySpacing.xs) {
+                if viewModel.isRequestingSignInLink {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "wand.and.stars")
+                        .accessibilityHidden(true)
+                }
+                Text(label)
+            }
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+            .foregroundColor(MeeshyColors.indigo500)
+            .frame(minHeight: 44)
+        }
+        .disabled(viewModel.isRequestingSignInLink)
+        .accessibilityHint(String(localized: "auth.signup.email.sendSignInLink.hint", defaultValue: "Envoie un code et un lien de connexion à cette adresse", bundle: .main))
+        .accessibilityIdentifier("auth.signup.email.sendSignInLink")
+    }
+
+    private var forgotPasswordButton: some View {
+        Button {
+            HapticFeedback.light()
+            isShowingForgotPassword = true
+        } label: {
+            Text(String(localized: "auth.signup.email.forgotPassword", defaultValue: "Mot de passe oublié ?", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .frame(minHeight: 44)
         }
     }
 
@@ -653,7 +785,7 @@ struct SignupView: View {
     private var switchToLoginRow: some View {
         Button {
             HapticFeedback.light()
-            onSwitchToLogin?()
+            onSwitchToLogin?(viewModel.loginEmail)
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "auth.signup.haveAccount", defaultValue: "Déjà un compte ?", bundle: .main))

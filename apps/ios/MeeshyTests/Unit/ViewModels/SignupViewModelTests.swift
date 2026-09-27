@@ -211,9 +211,10 @@ final class SignupViewModelTests: XCTestCase {
         let created = await sut.submit()
 
         XCTAssertFalse(created)
-        XCTAssertEqual(sut.error(for: .email), "Cette adresse est déjà utilisée")
+        // #8216 — le champ dit qu'un COMPTE existe, jamais le texte serveur.
+        XCTAssertEqual(sut.error(for: .email), SignupViewModel.emailTakenMessage)
         XCTAssertTrue(sut.emailAlreadyRegistered,
-                      "l'écran doit pouvoir offrir « Se connecter » sous le champ")
+                      "l'écran doit pouvoir offrir le lien de connexion sous le champ")
         XCTAssertNil(sut.bannerError, "un refus qui vise un champ ne va PAS au bandeau")
     }
 
@@ -660,5 +661,160 @@ final class SignupViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRuleMessage)
         XCTAssertNil(sut.bannerError)
+    }
+
+    // MARK: - Adresse déjà utilisée : le lien de connexion en un geste (#8216)
+
+    private func makeTakenSUT() async -> (sut: SignupViewModel, requester: MockSignInLinkRequester) {
+        let registrar = MockSignupRegistrar()
+        let requester = MockSignInLinkRequester()
+        let sut = SignupViewModel(
+            registrar: registrar,
+            locale: Locale(identifier: "fr_FR"),
+            referrals: MockPendingReferralStore(),
+            linkRequester: requester
+        )
+        fillValidForm(sut)
+        sut.form.email = "  Awa@Example.com "
+        registrar.registerResult = .failure(
+            rejection(status: 409, code: "EMAIL_TAKEN", field: "email", message: "Email already used")
+        )
+        _ = await sut.submit()
+        return (sut, requester)
+    }
+
+    func test_emailTaken_fieldSaysAnAccountAlreadyExists() async {
+        let (sut, _) = await makeTakenSUT()
+
+        XCTAssertTrue(sut.showsEmailTakenActions)
+        XCTAssertEqual(sut.error(for: .email), SignupViewModel.emailTakenMessage)
+    }
+
+    func test_requestSignInLink_afterEmailTaken_sendsTheLinkToTheTypedAddress() async {
+        let (sut, requester) = await makeTakenSUT()
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertTrue(sent)
+        XCTAssertEqual(requester.requestCallCount, 1)
+        XCTAssertEqual(requester.lastRequestedEmail, "awa@example.com")
+        XCTAssertEqual(sut.signInLink?.email, "awa@example.com")
+        XCTAssertEqual(sut.signInLink?.dispatch.pendingSessionToken, "attente-8216")
+    }
+
+    func test_requestSignInLink_emailEditedSinceTheRefusal_sendsNothing() async {
+        let (sut, requester) = await makeTakenSUT()
+        sut.form.email = "autre@example.com"
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertFalse(sent)
+        XCTAssertFalse(sut.showsEmailTakenActions)
+        XCTAssertNil(sut.error(for: .email), "le refus ne vaut que pour l'adresse refusée")
+        XCTAssertEqual(requester.requestCallCount, 0)
+        XCTAssertNil(sut.signInLink)
+    }
+
+    func test_requestSignInLink_withoutEmailTaken_sendsNothing() async {
+        let requester = MockSignInLinkRequester()
+        let sut = SignupViewModel(
+            registrar: MockSignupRegistrar(),
+            locale: Locale(identifier: "fr_FR"),
+            referrals: MockPendingReferralStore(),
+            linkRequester: requester
+        )
+        fillValidForm(sut)
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertFalse(sent)
+        XCTAssertEqual(requester.requestCallCount, 0)
+    }
+
+    func test_requestSignInLink_offline_saysSoUnderTheActionsAndPresentsNothing() async {
+        let (sut, requester) = await makeTakenSUT()
+        requester.requestResult = .failure(URLError(.notConnectedToInternet))
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertFalse(sent)
+        XCTAssertNil(sut.signInLink)
+        XCTAssertEqual(sut.signInLinkError, EmailProofErrorText.sendMessage(for: URLError(.notConnectedToInternet)))
+        XCTAssertFalse(sut.isRequestingSignInLink)
+    }
+
+    func test_loginEmail_validAddress_travelsTrimmed() {
+        let (sut, _) = makeSUT()
+        sut.form.email = " awa@example.com "
+        XCTAssertEqual(sut.loginEmail, "awa@example.com")
+    }
+
+    func test_loginEmail_incompleteAddress_doesNotTravel() {
+        let (sut, _) = makeSUT()
+        sut.form.email = "awa@"
+        XCTAssertNil(sut.loginEmail)
+    }
+
+    // MARK: - « Est-ce vous ? » (#8214 × #8216)
+
+    private func makeOwnedSUT() async -> (sut: SignupViewModel, registrar: MockSignupRegistrar) {
+        let registrar = MockSignupRegistrar()
+        let sut = SignupViewModel(
+            registrar: registrar,
+            locale: Locale(identifier: "fr_FR"),
+            referrals: MockPendingReferralStore(),
+            linkRequester: MockSignInLinkRequester()
+        )
+        fillValidForm(sut)
+        registrar.registerResult = .failure(MeeshyError.rejected(APIRejection(
+            statusCode: 409, code: "EMAIL_TAKEN", field: "email", message: "x",
+            emailOwner: .init(maskedDisplayName: "A** N*****", maskedUsername: "a**a", avatar: nil)
+        )))
+        _ = await sut.submit()
+        return (sut, registrar)
+    }
+
+    func test_emailTaken_withOwner_exposesTheMaskedOwner() async {
+        let (sut, _) = await makeOwnedSUT()
+        XCTAssertEqual(sut.emailOwner?.maskedDisplayName, "A** N*****")
+        XCTAssertEqual(sut.emailOwner?.maskedUsername, "a**a")
+        XCTAssertTrue(sut.showsEmailTakenActions)
+    }
+
+    func test_emailTaken_withoutOwner_fallsBackToRecoveryOnly() async {
+        let (sut, _) = await makeTakenSUT()
+        XCTAssertNil(sut.emailOwner)
+        XCTAssertTrue(sut.showsEmailTakenActions)
+    }
+
+    func test_claimEmail_resendsTheSameRegistrationWithClaimEmail_andAwaitsTheCode() async {
+        let (sut, registrar) = await makeOwnedSUT()
+        let first = registrar.lastRegisterRequest
+        let pending = PendingEmailVerification(email: "awa@example.com", accountCreated: true, pendingSessionToken: nil)
+        registrar.registerResult = .success(.verificationRequired(pending))
+
+        let claimed = await sut.claimEmail()
+
+        XCTAssertTrue(claimed)
+        XCTAssertEqual(registrar.registerCallCount, 2)
+        XCTAssertEqual(registrar.lastRegisterRequest?.claimEmail, true)
+        XCTAssertEqual(registrar.lastRegisterRequest?.email, first?.email)
+        XCTAssertEqual(registrar.lastRegisterRequest?.username, first?.username)
+        XCTAssertEqual(sut.pendingVerification, pending)
+    }
+
+    func test_claimEmail_withoutEmailTaken_sendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        let claimed = await sut.claimEmail()
+        XCTAssertFalse(claimed)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_loginEmailHandoff_isTakenOnce() {
+        let handoff = LoginEmailHandoff()
+        handoff.hold("awa@example.com")
+        XCTAssertEqual(handoff.take(), "awa@example.com")
+        XCTAssertNil(handoff.take())
     }
 }
