@@ -25,6 +25,7 @@ const record = (callId: string, direction: CallRecord['direction']): CallRecord 
   durationSec: 0,
   bytes: null,
   peer: null,
+  participants: [],
 });
 
 const data = (records: readonly CallRecord[], nextCursor: string | null = null): CallHistoryData => ({

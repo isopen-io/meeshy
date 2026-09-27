@@ -14,6 +14,9 @@ const deCallsErase = {
   'calls.search': 'Nach Namen suchen',
   'calls.search.clear': 'Suche löschen',
   'calls.search.empty': 'Kein Anruf passt zu „{query}“',
+  'calls.participants.more': '{names} +{count}',
+  'calls.participants.a11y': 'mit {names}',
+  'callJoin.detail.participants': 'Teilnehmende',
 } as const;
 
 export default deCallsErase;

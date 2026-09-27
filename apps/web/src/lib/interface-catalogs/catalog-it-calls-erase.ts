@@ -14,6 +14,9 @@ const itCallsErase = {
   'calls.search': 'Cerca un nome',
   'calls.search.clear': 'Cancella la ricerca',
   'calls.search.empty': 'Nessuna chiamata corrisponde a «{query}»',
+  'calls.participants.more': '{names} +{count}',
+  'calls.participants.a11y': 'con {names}',
+  'callJoin.detail.participants': 'Partecipanti',
 } as const;
 
 export default itCallsErase;

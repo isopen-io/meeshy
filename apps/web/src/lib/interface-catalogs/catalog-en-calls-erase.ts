@@ -14,6 +14,9 @@ const enCallsErase = {
   'calls.search': 'Search a name',
   'calls.search.clear': 'Clear search',
   'calls.search.empty': 'No call matches “{query}”',
+  'calls.participants.more': '{names} +{count}',
+  'calls.participants.a11y': 'with {names}',
+  'callJoin.detail.participants': 'Participants',
 } as const;
 
 export default enCallsErase;

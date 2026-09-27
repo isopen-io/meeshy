@@ -7,7 +7,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS, type CallsGlyphName } from '@/components/glyphs-calls';
 import { CALL_HISTORY_FILTERS, type CallDirection, type CallHistoryFilter, type CallRecord } from '@/lib/api/calls';
 import { callActions } from '@/lib/calls/call-actions';
-import { callAvatarOf, callDisplayNameOf, callDurationLabel } from '@/lib/calls/view';
+import { callAvatarOf, callDisplayNameOf, callDurationLabel, callParticipantNames } from '@/lib/calls/view';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
@@ -207,6 +207,15 @@ const DIRECTION_LABEL = {
   missed: 'calls.direction.missed',
 } as const;
 
+const ROW_PARTICIPANTS = 2;
+
+/** « Ada, Bruno +2 » (#8066) — `null` pour un appel sans participant nommé. */
+function participantsLine(language: InterfaceLanguage, record: CallRecord): string | null {
+  const { names, more } = callParticipantNames(record, ROW_PARTICIPANTS);
+  if (names.length === 0) return null;
+  return more === 0 ? names.join(', ') : translate(language, 'calls.participants.more', { names: names.join(', '), count: String(more) });
+}
+
 const DIRECTION_A11Y = {
   incoming: 'calls.a11y.incoming',
   outgoing: 'calls.a11y.outgoing',
@@ -236,8 +245,10 @@ export const CallRow = memo(function CallRow({
   const missed = record.direction === 'missed';
   const time = shortRelativeTime(new Date(record.startedAt), now, language);
   const duration = callDurationLabel(record.durationSec);
+  const participants = participantsLine(language, record);
   const label = [
     name,
+    ...(participants === null ? [] : [translate(language, 'calls.participants.a11y', { names: record.participants.map((participant) => participant.displayName).join(', ') })]),
     translate(language, DIRECTION_A11Y[record.direction]),
     translate(language, record.isVideo ? 'calls.type.video' : 'calls.type.audio'),
     time,
@@ -259,6 +270,11 @@ export const CallRow = memo(function CallRow({
           <span data-call-name className="truncate text-body font-semibold" style={{ color: missed ? MISSED_INK : INK }}>
             {name}
           </span>
+          {participants === null ? null : (
+            <span data-call-participants className="truncate text-caption" style={{ color: INK_2 }}>
+              {participants}
+            </span>
+          )}
           <span data-call-meta className="flex min-w-0 items-center gap-1.5 text-caption font-medium" style={{ color: INK_2 }}>
             <span className="flex shrink-0 items-center gap-1" style={{ color: missed ? MISSED_INK : INK_2 }}>
               <CallGlyph name={DIRECTION_GLYPHS[record.direction]} size={12} />

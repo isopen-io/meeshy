@@ -105,6 +105,19 @@ function DetailRow({ glyph, label, value, field }: { readonly glyph: ReactNode; 
   );
 }
 
+function ParticipantsRow({ label, names }: { readonly label: string; readonly names: readonly string[] }) {
+  return (
+    <div data-call-detail-row="participants" className="grid gap-1 px-4 py-2.5" style={{ borderBottom: EDGE }}>
+      <dt className="text-body" style={{ color: INK_2 }}>
+        {label}
+      </dt>
+      <dd className="break-words text-body font-medium" style={{ color: INK }}>
+        {names.join(', ')}
+      </dd>
+    </div>
+  );
+}
+
 const glyphOf = (name: CallsGlyphName) => <GlyphSvg glyph={CALLS_GLYPHS[name]} size={16} />;
 
 export function CallDetailCard({
@@ -142,6 +155,7 @@ export function CallDetailCard({
         <RedialButton language={language} media="video" name={detail.name} onCall={onCall} />
       </div>
       <dl className="overflow-hidden rounded-card" style={CARD}>
+        {detail.participants.length === 0 ? null : <ParticipantsRow label={translate(language, 'callJoin.detail.participants')} names={detail.participants} />}
         <DetailRow
           field="type"
           glyph={detail.media === 'video' ? glyphOf('videoCamera') : <Glyph name="phone" size={16} />}

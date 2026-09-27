@@ -40,6 +40,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 0,
     bytes: null,
     peer: peer('u-amina', 'amina', 'Amina Diallo'),
+    participants: [],
   },
   {
     callId: 'call-kwame-video',
@@ -53,6 +54,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 754,
     bytes: 48_620_000,
     peer: peer('u-kwame', 'kwame', 'Kwame Mensah'),
+    participants: [],
   },
   {
     callId: 'call-annonces-groupe',
@@ -66,6 +68,11 @@ const records = (): readonly CallRecord[] => [
     durationSec: 3725,
     bytes: 18_400_000,
     peer: null,
+    participants: [
+      { participantId: 'p-kwame-annonces', username: 'kwame', displayName: 'Kwame Mensah', avatar: null },
+      { participantId: 'p-fatou-annonces', username: 'fatou', displayName: 'Fatou Bâ', avatar: null },
+      { participantId: 'p-amina-annonces', username: 'amina', displayName: 'Amina Diallo', avatar: null },
+    ],
   },
   {
     callId: 'call-amina-recu',
@@ -79,6 +86,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 185,
     bytes: 2_310_000,
     peer: peer('u-amina', 'amina', 'Amina Diallo'),
+    participants: [],
   },
   {
     callId: 'call-fatou-manque',
@@ -92,6 +100,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 0,
     bytes: null,
     peer: peer('u-fatou', 'fatou', 'Fatou Bâ'),
+    participants: [],
   },
 ];
 

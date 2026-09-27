@@ -40,6 +40,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   durationSec: 185,
   bytes: null,
   peer: { userId: 'u-amina', username: 'amina', displayName: 'Amina Diallo', avatar: null },
+  participants: [],
   ...overrides,
 });
 
@@ -193,6 +194,14 @@ describe('effacer et chercher (#8066)', () => {
     const filled = renderToStaticMarkup(<CallFilterRail language="fr" selected="all" onSelect={noop} search={{ value: 'ami', onChange: noop }} />);
     expect(filled).toContain('value="ami"');
     expect(filled).toContain('aria-label="Effacer la recherche"');
+  });
+
+  test('une ligne d’appel de groupe nomme ses participants, à l’écran et au lecteur d’écran', () => {
+    const people = ['Ada', 'Bruno', 'Chloé', 'Dia'].map((displayName, index) => ({ participantId: `p${index}`, username: null, displayName, avatar: null }));
+    const html = row({ peer: null, conversationType: 'group', conversationTitle: 'Équipe', participants: people });
+    expect(html).toMatch(/data-call-participants[^>]*>Ada, Bruno \+2</);
+    expect(html).toContain('avec Ada, Bruno, Chloé, Dia');
+    expect(row()).not.toContain('data-call-participants');
   });
 
   test('une recherche sans résultat nomme ce qu’on a cherché', () => {

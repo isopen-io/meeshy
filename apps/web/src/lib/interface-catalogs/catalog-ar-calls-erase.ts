@@ -14,6 +14,9 @@ const arCallsErase = {
   'calls.search': 'ابحث عن اسم',
   'calls.search.clear': 'مسح البحث',
   'calls.search.empty': 'لا توجد مكالمة تطابق «{query}»',
+  'calls.participants.more': '{names} +{count}',
+  'calls.participants.a11y': 'مع {names}',
+  'callJoin.detail.participants': 'المشاركون',
 } as const;
 
 export default arCallsErase;
