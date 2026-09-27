@@ -92,15 +92,41 @@ public struct MeeshyVideoThumbnail: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         }
-        // Priority 3 : color placeholder while loading or as final fallback
+        // Priority 3 : thumbHash (ou dégradé) pendant l'extraction, repli final
         else {
-            placeholder
+            pendingPoster
                 .overlay {
                     if isLoading {
                         ProgressView()
                             .tint(.white.opacity(0.6))
                     }
                 }
+        }
+    }
+
+    /// Ce qui tient la place d'une première image encore en extraction.
+    enum PendingLayer: Equatable {
+        case thumbHash
+        case gradient
+    }
+
+    /// Le thumbHash décode en moins d'une milliseconde et donne déjà la
+    /// silhouette de l'image : tant qu'il existe, c'est lui qui patiente — le
+    /// dégradé n'est que le repli d'une pièce qui n'en porte pas (#8231).
+    nonisolated static func pendingLayer(thumbHash: String?) -> PendingLayer {
+        guard let thumbHash, !thumbHash.isEmpty else { return .gradient }
+        return .thumbHash
+    }
+
+    @ViewBuilder
+    private var pendingPoster: some View {
+        if let hash = attachment?.thumbHash, Self.pendingLayer(thumbHash: hash) == .thumbHash {
+            ProgressiveCachedImage(thumbHash: hash, thumbnailUrl: nil, fullUrl: nil) {
+                placeholder
+            }
+            .aspectRatio(contentMode: .fill)
+        } else {
+            placeholder
         }
     }
 
