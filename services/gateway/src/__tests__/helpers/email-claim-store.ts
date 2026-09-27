@@ -18,7 +18,18 @@ import { matchesMongoWhere, type MongoDocument } from './mongo-where';
 
 type Row = MongoDocument & { id: string };
 
-const clone = <T>(value: T): T => structuredClone(value);
+/**
+ * Copie profonde qui garde les `Date` de CE royaume — `structuredClone` en rend
+ * d'un autre sous Jest, et `toBeInstanceOf(Date)` les refuse.
+ */
+const clone = <T>(value: T): T => {
+  if (value instanceof Date) return new Date(value.getTime()) as T;
+  if (Array.isArray(value)) return value.map((v) => clone(v)) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clone(v)])) as T;
+  }
+  return value;
+};
 
 /**
  * `{ equals, mode: 'insensitive' }` — la forme par laquelle le dépôt cherche une

@@ -28,6 +28,10 @@ jest.mock('../../../utils/password-hash', () => ({
 import { registerAccount, type RegistrationDeps } from '../../../services/auth/registration.service';
 import { verifyEmailProof } from '../../../services/auth/email-proof.service';
 import { isRegistrationRefusal } from '../../../services/auth/registration-refusal';
+import {
+  pendingSessionTokenForAccount,
+  readEmailVerificationWatch,
+} from '../../../services/auth/email-verification-watch';
 import { emailClaimStore, type EmailClaimStore } from '../../helpers/email-claim-store';
 
 const sha256 = (v: string) => crypto.createHash('sha256').update(v).digest('hex');
@@ -133,7 +137,8 @@ describe('« ce n’est pas moi » — la revendication crée un compte INACTIF,
     const { resultat } = await revendiquer(store);
 
     const nouveau = store.state.users.find((u) => u.username === 'marie_vraie');
-    expect(nouveau).toMatchObject({ isActive: false, claimedEmail: ADRESSE, emailVerifiedAt: null });
+    expect(nouveau).toMatchObject({ isActive: false, claimedEmail: ADRESSE });
+    expect(nouveau?.emailVerifiedAt ?? null).toBeNull();
     expect(String(nouveau?.email)).toMatch(/@claiming\.meeshy\.invalid$/);
     expect(resultat).toMatchObject({ claimedEmail: ADRESSE });
   });
@@ -176,8 +181,23 @@ describe('« ce n’est pas moi » — la revendication crée un compte INACTIF,
     const { resultat } = await revendiquer(store);
 
     const nouveau = store.state.users[0];
-    expect(nouveau).toMatchObject({ email: ADRESSE, isActive: true });
+    expect(nouveau?.email).toBe(ADRESSE);
+    expect(nouveau?.isActive).not.toBe(false);
+    expect(nouveau).not.toHaveProperty('claimedEmail');
     expect(resultat).not.toHaveProperty('claimedEmail');
+  });
+
+  it('revendiquer à NOUVEAU avec le même pseudo réussit — c’est ainsi qu’on redemande le code', async () => {
+    const store = emailClaimStore([detenteur()]);
+    await revendiquer(store);
+    const seconde = await revendiquer(store);
+
+    expect(seconde.resultat).toMatchObject({ claimedEmail: ADRESSE });
+    const vivants = store.state.users.filter((u) => u.username === 'marie_vraie');
+    expect(vivants).toHaveLength(1);
+
+    const resultat = await verifyEmailProof(store.prisma as never, { email: ADRESSE, code: seconde.codes[0] });
+    expect(resultat).toMatchObject({ success: true, userId: vivants[0]?.id });
   });
 
   it('une NOUVELLE revendication de la même adresse éteint les clés des précédentes', async () => {
@@ -271,6 +291,33 @@ describe('la preuve — le transfert, en UNE transaction', () => {
   });
 });
 
+describe('l’attente de l’appareil qui revendique', () => {
+  it('se lie au compte REVENDIQUANT — jamais au détenteur — et passe « prouvée » au transfert', async () => {
+    const store = emailClaimStore([detenteur()]);
+    const { codes } = await revendiquer(store);
+    const nouveau = store.state.users.find((u) => u.username === 'marie_vraie');
+
+    const { pendingSessionToken } = await pendingSessionTokenForAccount(store.prisma as never, nouveau?.id ?? '');
+    expect(store.state.watches).toEqual([expect.objectContaining({ userId: nouveau?.id })]);
+    expect(await readEmailVerificationWatch(store.prisma as never, pendingSessionToken ?? '')).toEqual({ kind: 'pending' });
+
+    await verifyEmailProof(store.prisma as never, { email: ADRESSE, code: codes[0] });
+
+    expect(await readEmailVerificationWatch(store.prisma as never, pendingSessionToken ?? '')).toEqual({ kind: 'proven' });
+  });
+
+  it('une preuve du DÉTENTEUR ne la marque pas', async () => {
+    const store = emailClaimStore([detenteur()]);
+    await revendiquer(store);
+    const nouveau = store.state.users.find((u) => u.username === 'marie_vraie');
+    const { pendingSessionToken } = await pendingSessionTokenForAccount(store.prisma as never, nouveau?.id ?? '');
+
+    await verifyEmailProof(store.prisma as never, { email: ADRESSE, code: '111111' });
+
+    expect(await readEmailVerificationWatch(store.prisma as never, pendingSessionToken ?? '')).toEqual({ kind: 'pending' });
+  });
+});
+
 describe('une revendication NON prouvée n’a aucun effet', () => {
   it('un code faux : rien ne bouge', async () => {
     const store = emailClaimStore([detenteur()]);
@@ -332,10 +379,11 @@ describe('la course', () => {
   it('deux revendications vivantes prouvées ensemble : la première gagne, la seconde n’enlève RIEN à la gagnante', async () => {
     const store = emailClaimStore([detenteur()]);
     const premiere = await revendiquer(store);
+    const idPremiere = store.state.users.find((u) => u.username === 'marie_vraie')?.id;
     const seconde = await revendiquer(store, { username: 'marie_bis' });
     // La seconde a éteint la première ; on la ranime À LA MAIN pour jouer la
     // course de CRÉATION, où les deux clés vivent en même temps.
-    const ligne1 = store.state.users.find((u) => u.username === 'marie_vraie');
+    const ligne1 = store.byId(idPremiere ?? '');
     if (ligne1) {
       ligne1.emailVerificationCode = sha256(premiere.codes[0] ?? '');
       ligne1.emailVerificationExpiry = new Date(Date.now() + 60_000);
@@ -348,7 +396,7 @@ describe('la course', () => {
 
     expect(a.success).toBe(true);
     expect(b.success).toBe(false);
-    expect(store.byEmail(ADRESSE)).toEqual([expect.objectContaining({ username: 'marie_vraie' })]);
+    expect(store.byEmail(ADRESSE)).toEqual([expect.objectContaining({ id: idPremiere })]);
     expect(store.state.users.find((u) => u.username === 'marie_bis')?.isActive).toBe(false);
   });
 });

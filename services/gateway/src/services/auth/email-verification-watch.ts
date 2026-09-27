@@ -71,6 +71,14 @@ export async function issueEmailVerificationWatch(
     select: { id: true, emailVerificationExpiry: true },
   })) as WatchedAccount | null;
 
+  return createWatch(prisma, account, now);
+}
+
+async function createWatch(
+  prisma: EmailVerificationWatchStore,
+  account: WatchedAccount | null,
+  now: Date,
+): Promise<string> {
   const codeExpiry = account?.emailVerificationExpiry ?? null;
   const expiresAt =
     codeExpiry && codeExpiry.getTime() > now.getTime()
@@ -82,6 +90,29 @@ export async function issueEmailVerificationWatch(
     data: { tokenHash: sha256(rawToken), userId: account?.id ?? null, expiresAt, provenAt: null },
   });
   return rawToken;
+}
+
+/**
+ * L'attente d'un compte NOMMÉ par son identifiant (#8214) — celui d'une
+ * revendication, dont l'adresse d'attente n'est pas celle que la réponse nomme,
+ * et qu'aucune recherche par adresse ne retrouverait (elle rendrait le
+ * DÉTENTEUR). Même jeton, même expiration, même repli `{}` en cas de panne.
+ */
+export async function pendingSessionTokenForAccount(
+  prisma: Pick<PrismaClient, 'user'> & EmailVerificationWatchStore,
+  userId: string,
+): Promise<{ pendingSessionToken?: string }> {
+  try {
+    const now = new Date();
+    const account = (await prisma.user.findFirst({
+      where: { id: userId },
+      select: { id: true, emailVerificationExpiry: true },
+    })) as WatchedAccount | null;
+    return { pendingSessionToken: await createWatch(prisma, account, now) };
+  } catch (error) {
+    logger.error("émission de l'attente impossible — réponse sans jeton", error as Error);
+    return {};
+  }
 }
 
 /**

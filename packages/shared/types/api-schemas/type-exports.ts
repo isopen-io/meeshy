@@ -103,6 +103,17 @@ export type VerificationStatusData = {
 export type RegisterVerificationRequiredData = LoginVerificationRequiredData;
 
 /**
+ * `409 EMAIL_TAKEN` de `POST /auth/register` (#8214) : l'identité MASQUÉE du
+ * détenteur de l'adresse (`emailOwnerSchema`). Répondre « ce n'est pas moi »,
+ * c'est renvoyer l'inscription avec `claimEmail: true`.
+ */
+export type RegisterEmailOwner = {
+  readonly maskedDisplayName: string;
+  readonly maskedUsername: string;
+  readonly avatar?: string;
+};
+
+/**
  * `POST /auth/verify-email` (#8033) : la preuve de possession de l'adresse
  * ouvre la session — ou, pour un compte à second facteur, rend le défi.
  */

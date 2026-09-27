@@ -4,6 +4,7 @@ import {
   userSchema,
   registerRequestSchema,
   verificationRequiredProperties,
+  emailOwnerSchema,
   validationErrorResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types';
@@ -25,7 +26,7 @@ import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../..
 import { candidatsDePseudo } from '../../utils/username-candidates';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
-import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
+import { pendingSessionTokenFor, pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -168,7 +169,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   // POST /register - Main registration endpoint
   fastify.post('/register', {
     schema: {
-      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation.',
+      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation. When the address already belongs to another account, the 409 EMAIL_TAKEN carries its masked identity (`emailOwner`); resubmitting with `claimEmail: true` creates the account inactive, without the address, until the code or the link is presented to POST /auth/verify-email (#8214).',
       tags: ['auth'],
       summary: 'User registration',
       body: registerRequestSchema,
@@ -261,7 +262,9 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
               type: 'array',
               items: { type: 'string' },
               description: 'Free usernames to offer instead (USERNAME_TAKEN only)'
-            }
+            },
+            // #8214 — déclaré, sinon fast-json-stringify le retire en silence.
+            emailOwner: emailOwnerSchema
           }
         },
         429: {
@@ -387,6 +390,19 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         return sendBadRequest(reply, 'Erreur lors de la création du compte');
       }
 
+      // #8214 — « CE N'EST PAS MOI » : le compte existe, INACTIF, sans
+      // l'adresse, qui reste à son détenteur jusqu'à la preuve. Jamais de
+      // session — numéro ou non —, aucune annonce d'arrivée ; la réponse nomme
+      // l'adresse REVENDIQUÉE (jamais l'adresse d'attente du compte), et
+      // l'attente de cet appareil se lie au compte revendiquant, que la
+      // recherche par adresse ne retrouverait pas.
+      if (result.claimedEmail) {
+        completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+        await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
+        const attente = await pendingSessionTokenForAccount(context.prisma, user.id);
+        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: result.claimedEmail, ...attente });
+      }
+
       // Execute phone transfer if validated
       if (phoneTransferValidated && inscriptionFinale.phoneTransferToken) {
         logger.info('Executing phone transfer for new user');
@@ -494,7 +510,8 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
           code: error.code,
           details: {
             field: error.field,
-            ...(error.suggestions ? { suggestions: [...error.suggestions] } : {})
+            ...(error.suggestions ? { suggestions: [...error.suggestions] } : {}),
+            ...(error.emailOwner ? { emailOwner: { ...error.emailOwner } } : {})
           }
         });
       }
