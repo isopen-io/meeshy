@@ -175,6 +175,10 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
+        await withBudget("media.autosavePushed") {
+            // #8358 — ce que les pushs ont synchronisé app suspendue rejoint l'album.
+            await PushedMediaAutoSaveQueue.shared.drain()
+        }
         await withBudget("conversationStore.flushOutbox") {
             await ConversationStore.shared.flushOutbox()
         }
