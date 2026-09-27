@@ -10,7 +10,7 @@ import { sessionStore } from './session';
  * (§ 7.3 de la spécification) puisse appeler `login()`/`logout()` depuis la
  * console sans en écrire un. `request` y expose le transport PARTAGÉ — c'est
  * ce qui permet de prouver « la session est tenue » après un rechargement
- * (`await meeshy.request({ method: 'GET', path: '/api/v1/me' })`,
+ * (`await meeshy.request({ method: 'GET', path })`, `path` = l'entrée `me.root` du catalogue,
  * `services/gateway/src/routes/me/index.ts:42`) sans écrire d'écran non plus.
  *
  * MORT EN PRODUCTION. `main.tsx` ne l'importe que sous
