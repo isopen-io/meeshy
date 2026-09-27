@@ -24,6 +24,15 @@ import MeeshyUI
 /// des rails : la scène ne laissait que 14 pt de chaque côté, très en dessous
 /// des 44 pt d'une cible.
 ///
+/// ## ⚠️ PLEIN ÉCRAN (maquette 2026-09-27, #8370) — les rails FLOTTENT
+///
+/// La maquette plein écran supersède l'encastrement ci-dessus : la scène prend
+/// toute la largeur et les deux rails se posent PAR-DESSUS, à `outerMargin` du
+/// bord (`floatingInset`). `lane` reste ce qu'un rail recouvre ; il ne se
+/// retire plus de la scène. Les deux sections précédentes racontent la règle
+/// d'avant, conservée pour ce qu'elle expliquait de la loi 6 — c'est la
+/// directive du 2026-09-27 qui gagne.
+///
 /// ## Ce que ça rend, et ce que ça ne touche pas
 ///
 /// Sur un iPhone 16 Pro (402 pt de large) : la scène passe de 374 à **278 pt**,
@@ -57,9 +66,13 @@ nonisolated enum ComposerRailGeometry {
     /// Ce qu'UN rail réserve au total, bord compris.
     static var lane: CGFloat { outerMargin + railWidth + gutter }
 
+    /// PLEIN ÉCRAN (#8370) : les rails flottent sur la scène, qui ne cède plus
+    /// aucune largeur aux couloirs.
+    static let floatingInset: CGFloat = 0
+
     /// L'encastrement horizontal de la scène, par côté.
     static func sceneInset(railsShown: Bool) -> CGFloat {
-        railsShown ? lane : legacyInset
+        railsShown ? floatingInset : legacyInset
     }
 
     /// La largeur qui reste à la scène.

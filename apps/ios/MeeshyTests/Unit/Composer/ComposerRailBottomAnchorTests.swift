@@ -19,7 +19,12 @@ final class ComposerRailBottomAnchorTests: XCTestCase {
     /// L'encastrement réel du composer — lu de la règle, jamais recopié : un
     /// littéral ici rendrait la mesure fausse le jour où le couloir change,
     /// sans que rien ne rougisse.
-    private var couloir: CGFloat { ComposerRailGeometry.sceneInset(railsShown: true) }
+    ///
+    /// Depuis la scène plein écran (#8370), le montage n'encastre plus (0 pt) :
+    /// ces témoins éprouvent l'ARITHMÉTIQUE de `sceneBottomInset` sur un
+    /// encastrement non nul — celui d'un couloir —, le seul cas où retirer ou
+    /// non l'encastrement change la réponse.
+    private var couloir: CGFloat { ComposerRailGeometry.lane }
 
     /// **Le cas nominal, chiffré.** iPhone 16 Pro (402 pt), une zone de 700 pt
     /// de haut, une carte 9:16 : elle occupe 278 pt de large — la largeur que
