@@ -27,6 +27,8 @@ struct FocalProtectedContent<Content: View>: View {
     /// par `onMediaTap`, sans dévoilement préalable de la rangée.
     var tap: ProtectedContentTap = .revealText
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    /// Les cases qui ouvrent CHACUNE leur pièce sous le voile (#8340).
+    var cells: [MessageAttachment] = []
     @ViewBuilder let content: Content
 
     @StateObject private var reveal = BubbleBlurRevealController()
@@ -50,6 +52,7 @@ struct FocalProtectedContent<Content: View>: View {
                     revealAffordance
                 }
             }
+            .modifier(ProtectedGridCellTapLayer(cells: isMasked && onMediaTap != nil ? cells : [], open: { onMediaTap?($0) }))
     }
 
     /// Même contrat d'interaction — et MÊME composant — que la bulle : le
