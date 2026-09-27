@@ -19,6 +19,9 @@ import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
 import { signSessionToken } from './auth/session-jwt';
+import { proveEmailAddress } from './auth/email-address-proof';
+import { resolveAccountActivation } from './auth/account-activation';
+import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
 import { mintPendingTwoFactorChallenge } from './auth/pending-two-factor';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
@@ -109,13 +112,22 @@ export interface IssueLoginTokenOptions {
 
 const DIGEST_TOKEN_TTL_MINUTES = 24 * 60; // 24h — proactive email, opened with delay
 
+export type MagicLinkServiceOptions = {
+  /** L'horloge de la preuve d'adresse et du délai de grâce (#8238) — injectée par les témoins. */
+  readonly now?: () => Date;
+};
+
 export class MagicLinkService {
+  private readonly now: () => Date;
+
   constructor(
     private prisma: PrismaClient,
     private cache: CacheStore,
     private emailService: EmailService,
-    private geoIPService: GeoIPService
+    private geoIPService: GeoIPService,
+    options: MagicLinkServiceOptions = {}
   ) {
+    this.now = options.now ?? (() => new Date());
     // Initialize session service with prisma
     initSessionService(prisma);
   }
@@ -340,6 +352,7 @@ export class MagicLinkService {
               createdAt: true,
               updatedAt: true,
               emailVerifiedAt: true,
+              emailReleasedAt: true,
               phoneVerifiedAt: true,
               twoFactorEnabledAt: true,
               ...AUTO_TRANSLATE_PREFERENCE_SELECT
@@ -398,6 +411,21 @@ export class MagicLinkService {
         where: { id: magicLinkToken.id },
         data: { usedAt: new Date() }
       });
+
+      // 7 bis. Le lien a été ouvert depuis la boîte : l'adresse est PROUVÉE
+      // (#8238, absorbe #8236) — lien interactif ET lien du résumé, avant le
+      // second facteur, et même passé le délai de grâce. Site unique :
+      // `./auth/email-address-proof`.
+      const provenAt = this.now();
+      const { newlyProven } = await proveEmailAddress(
+        {
+          prisma: this.prisma,
+          cache: this.cache,
+          announce: (userId) => scheduleContactJoinedAnnouncement(this.prisma, userId),
+        },
+        { userId: user.id, now: provenAt, known: { emailVerifiedAt: user.emailVerifiedAt } }
+      );
+      const emailVerifiedAt = newlyProven ? provenAt : user.emailVerifiedAt;
 
       // 8. Le second facteur, quand le compte en porte un (#4534)
       //
@@ -527,9 +555,10 @@ export class MagicLinkService {
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        emailVerifiedAt: user.emailVerifiedAt,
+        emailVerifiedAt,
         phoneVerifiedAt: user.phoneVerifiedAt,
-        twoFactorEnabledAt: user.twoFactorEnabledAt ?? null
+        twoFactorEnabledAt: user.twoFactorEnabledAt ?? null,
+        activation: resolveAccountActivation({ ...user, emailVerifiedAt }, this.now())
       };
 
       return {

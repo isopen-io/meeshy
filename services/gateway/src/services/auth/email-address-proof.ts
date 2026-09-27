@@ -72,13 +72,17 @@ export async function settleEmailAddressProof(
  */
 export async function proveEmailAddress(
   deps: EmailAddressProofDeps,
-  input: { readonly userId: string; readonly now: Date },
+  input: {
+    readonly userId: string;
+    readonly now: Date;
+    /** La ligne que la porte vient de lire — évite une relecture. */
+    readonly known?: { readonly emailVerifiedAt: Date | null };
+  },
 ): Promise<{ readonly newlyProven: boolean }> {
   try {
-    const row = await deps.prisma.user.findUnique({
-      where: { id: input.userId },
-      select: { emailVerifiedAt: true },
-    });
+    const row =
+      input.known ??
+      (await deps.prisma.user.findUnique({ where: { id: input.userId }, select: { emailVerifiedAt: true } }));
     if (!row || row.emailVerifiedAt) return { newlyProven: false };
 
     const written = await deps.prisma.user.updateMany({
@@ -86,7 +90,7 @@ export async function proveEmailAddress(
       data: emailProofFields(row, input.now),
     });
     const newlyProven = written.count > 0;
-    await settleEmailAddressProof(deps, { ...input, newlyProven });
+    await settleEmailAddressProof(deps, { userId: input.userId, now: input.now, newlyProven });
     if (newlyProven) logger.info('adresse prouvée par une action venue d’un e-mail', { userId: input.userId });
     return { newlyProven };
   } catch (error) {

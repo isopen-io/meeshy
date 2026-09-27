@@ -45,7 +45,7 @@ import { normalizeEmail } from '../../utils/normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveSecondFactor, type SecondFactorState } from '../MagicLinkService';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
-import { markEmailVerificationWatchesProven } from './email-verification-watch';
+import { emailProofFields, settleEmailAddressProof } from './email-address-proof';
 import { proveEmailClaim, type EmailClaimStore } from './email-claim';
 
 const logger = enhancedLogger.child({ module: 'EmailProof' });
@@ -155,7 +155,7 @@ export async function verifyEmailProof(
         emailVerificationCode: ligne.emailVerificationCode,
       },
       data: {
-        ...(ligne.emailVerifiedAt ? {} : { emailVerifiedAt: maintenant }),
+        ...emailProofFields(ligne, maintenant),
         ...(parCode ? { emailVerificationCode: null } : { emailVerificationToken: null }),
         ...(password ? { password, lastPasswordChange: maintenant } : {}),
       },
@@ -163,7 +163,8 @@ export async function verifyEmailProof(
 
     if (consomme.count === 0) return invalide;
 
-    await markEmailVerificationWatchesProven(prisma, { userId: ligne.id, now: maintenant });
+    // L'arrivée (#8105) est annoncée par la route, qui connaît `afterResponse`.
+    await settleEmailAddressProof({ prisma }, { userId: ligne.id, now: maintenant, newlyProven: false });
 
     logger.info(`adresse prouvée (${parCode ? 'code' : 'lien'})`);
     return {
