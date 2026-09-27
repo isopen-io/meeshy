@@ -28,8 +28,8 @@ import MeeshyUI
 // MARK: - Visual Media Grid (extension on BubbleStandardLayout)
 extension BubbleStandardLayout {
 
-    /// **Le média caché d'un message flouté s'ouvre en plein écran** (#8009),
-    /// depuis le voile de la bulle, en appelant l'hôte DIRECTEMENT.
+    /// **Une pièce à vue unique s'ouvre en plein écran depuis sa case**
+    /// (#8009, #8310), en appelant l'hôte DIRECTEMENT.
     ///
     /// Le détour par la liaison `fullscreenAttachment` (posée, puis relayée par
     /// `adaptiveOnChange`) ne présentait rien quand l'écriture partait du voile :
@@ -356,7 +356,6 @@ fileprivate struct BubbleGridCell: View {
                 standardBody
             }
         }
-        .protectedGridCellBounds(attachment.id)
     }
 
     /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
@@ -522,6 +521,7 @@ fileprivate struct BubbleGridCell: View {
         if attachmentIsProtected && !isRevealed {
             AttachmentBlurOverlayView(
                 isViewOnce: attachment.isViewOnce,
+                hint: ProtectedContentTap.resolve(cell: attachment).accessibilityHint,
                 onReveal: handleReveal
             )
         }
@@ -590,18 +590,27 @@ fileprivate struct BubbleGridCell: View {
         }
     }
 
-    /// **Un toucher sur une pièce cachée ouvre DIRECTEMENT son plein écran**
-    /// (#8009), sans dévoilement dans la bulle — ni appui long, ni vignette
-    /// dévoilée cinq secondes avant un second toucher.
+    /// **Un toucher sur une pièce cachée** suit `ProtectedContentTap` :
     ///
-    /// On OUVRE, on ne consomme pas (#7499) : la consommation d'une vue unique
-    /// part à la FERMETURE du plein écran, depuis l'hôte qui possède la galerie
-    /// (`onMediaTap` l'arme). Le plein écran s'ouvre sur CETTE pièce, même dans
-    /// une grille qui déborde : le carrousel en ligne dévoilerait les autres.
+    /// - floutée : révélée SUR PLACE dans sa case (#8389) ; le toucher suivant
+    ///   passe par `handleTap` et ouvre son plein écran, comme tout média ;
+    /// - à vue unique : son plein écran s'ouvre DIRECTEMENT (#8009). On OUVRE,
+    ///   on ne consomme pas (#7499) : la consommation part à la FERMETURE du
+    ///   plein écran, depuis l'hôte qui possède la galerie (`onMediaTap`
+    ///   l'arme), sur CETTE pièce, jamais par le carrousel en ligne.
     private func handleReveal() {
-        guard case .openFullscreen(let media) = ProtectedContentTap.resolve(cell: attachment) else { return }
-        HapticFeedback.medium()
-        onOpenProtected(media)
+        switch ProtectedContentTap.resolve(cell: attachment) {
+        case .openFullscreen(let media):
+            HapticFeedback.medium()
+            onOpenProtected(media)
+        case .revealInPlace:
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                _ = revealedAttachmentIds.insert(attachment.id)
+            }
+        default:
+            break
+        }
     }
 }
 
@@ -660,6 +669,7 @@ fileprivate struct BubbleGridImageView: View {
 
 private struct AttachmentBlurOverlayView: View {
     let isViewOnce: Bool
+    let hint: String?
     let onReveal: () -> Void
 
     var body: some View {
@@ -684,7 +694,7 @@ private struct AttachmentBlurOverlayView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
-        .accessibilityHint(ProtectedContentTap.openFullscreenHint)
+        .accessibilityHint(hint ?? "")
         .accessibilityAddTraits(.isButton)
         .onTapGesture { onReveal() }
     }

@@ -288,6 +288,7 @@ nonisolated enum RiverConversationMapping {
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
                 isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
                 protectedTap: protectedTap(of: message),
+                tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
                 contactCards: RiverContactCards(items: contactCards(of: message)),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
@@ -463,14 +464,18 @@ nonisolated enum RiverConversationMapping {
         return resolved.firstLinkURL == nil ? nil : resolved
     }
 
-    /// #8310 — le toucher du voile d'un message flouté, par la règle UNIQUE
-    /// (`ProtectedContentTap.veiledMessage`). La vue unique garde son propre
-    /// chemin (la puce) ; un message sans flou n'a pas de voile.
+    /// #8389 — le toucher du voile le lève SUR PLACE, flou comme vue unique
+    /// texte ; un message sans voile n'a rien à lever.
     @MainActor static func protectedTap(of message: MeeshyMessage) -> ProtectedContentTap {
-        guard message.effects.flags.contains(.blurred), !message.holdsViewOnce else {
-            return message.protection().requiresVeil ? .revealText : .none
-        }
-        return .veiledMessage(media: message.attachments)
+        message.protection().requiresVeil ? .revealInPlace : .none
+    }
+
+    /// #8310 / #8389 — le toucher SUIVANT la révélation d'un message flouté
+    /// ouvre sa première image, par la règle UNIQUE
+    /// (`ProtectedContentTap.afterReveal`). La vue unique garde sa puce.
+    @MainActor static func tapAfterReveal(of message: MeeshyMessage) -> ProtectedContentTap {
+        guard message.effects.flags.contains(.blurred), !message.holdsViewOnce else { return .none }
+        return .afterReveal(media: message.attachments)
     }
 
     @MainActor static func contactCards(of message: MeeshyMessage) -> [MessageAttachment] {

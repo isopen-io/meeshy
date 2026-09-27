@@ -310,7 +310,7 @@ struct FocalRow: View {
                     isDark: input.isDark,
                     messageId: content.messageId,
                     onConsumeViewOnce: actions.onConsumeViewOnce,
-                    tap: content.protectedTap(), onMediaTap: actions.onMediaTap, cells: content.veiledGridCells
+                    tap: content.protectedTap()
                 ) {
                     contentSections
                 }

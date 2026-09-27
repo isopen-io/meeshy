@@ -140,7 +140,7 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertNil(preview?.media, "un média protégé n'a ni aperçu ni ouverture, dans la Rivière comme ailleurs")
     }
 
-    // MARK: - #8310 — toucher un média flouté ouvre le plein écran en Rivière
+    // MARK: - #8389 — toucher un message flouté le révèle sur place en Rivière
 
     private func contents(of messages: [MeeshyMessage]) -> [RiverBubbleContent] {
         let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
@@ -153,23 +153,28 @@ final class RiverConversationMappingTests: XCTestCase {
                                 fileUrl: "https://staging.meeshy.me/p.jpg", isBlurred: true)
     }
 
-    func test_contents_blurredPhotoMessage_tapOpensThePhotoFullscreen() {
+    func test_contents_blurredPhotoMessage_firstTapRevealsInPlace_nextTapOpensThePhoto() {
         var blurred = message("m1", sender: "bob", minutes: 0)
         blurred.attachments = [photo("p1", messageId: "m1"), photo("p2", messageId: "m1")]
         blurred.effects.flags.insert(.blurred)
         let content = contents(of: [blurred]).first
-        XCTAssertEqual(content?.protectedTap, .openFullscreen(photo("p1", messageId: "m1")),
-                       "la Rivière ne rend pas le média : le voile doit l'ouvrir, sinon rien ne s'ouvre")
+        XCTAssertEqual(content?.protectedTap, .revealInPlace, "le premier toucher lève le voile, jamais le plein écran")
+        XCTAssertEqual(content?.tapAfterReveal, .openFullscreen(photo("p1", messageId: "m1")),
+                       "la Rivière ne rend pas le média : le toucher suivant l'ouvre")
     }
 
     func test_contents_blurredTextMessage_tapRevealsInPlace() {
         var blurred = message("m1", sender: "bob", minutes: 0)
         blurred.effects.flags.insert(.blurred)
-        XCTAssertEqual(contents(of: [blurred]).first?.protectedTap, .revealText)
+        let content = contents(of: [blurred]).first
+        XCTAssertEqual(content?.protectedTap, .revealInPlace)
+        XCTAssertEqual(content?.tapAfterReveal, ProtectedContentTap.none)
     }
 
     func test_contents_unprotectedMessage_tapIsNone() {
-        XCTAssertEqual(contents(of: [message("m1", sender: "bob", minutes: 0)]).first?.protectedTap, ProtectedContentTap.none)
+        let content = contents(of: [message("m1", sender: "bob", minutes: 0)]).first
+        XCTAssertEqual(content?.protectedTap, ProtectedContentTap.none)
+        XCTAssertEqual(content?.tapAfterReveal, ProtectedContentTap.none)
     }
 
     func test_initialCursor_isTheMostRecentBubble_orTheReadersShoreWhenEmpty() {
