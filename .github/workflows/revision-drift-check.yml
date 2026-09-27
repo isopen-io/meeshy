@@ -124,7 +124,15 @@ jobs:
             exit 1
           fi
 
-          DRIFT=$(git rev-list --count "${COMMIT}..${REF_EFFECTIVE}")
+          # Le comptage porte le MÊME filtre que la sélection de la référence
+          # ci-dessus (#8264). Sans `-- $PATHS`, `$DRIFT` compte TOUS les commits
+          # de l'intervalle — web, iOS, Android, documentation — alors que le
+          # résumé et le message d'erreur l'annoncent comme des commits « derrière
+          # son contexte de build ». Le seuil de 15, pensé pour des commits
+          # susceptibles de changer l'image, était donc consommé par des livraisons
+          # qui ne pouvaient en changer aucune : la moitié du correctif de #5907,
+          # qui avait filtré la RÉFÉRENCE pour cette raison précise, manquait ici.
+          DRIFT=$(git rev-list --count "${COMMIT}..${REF_EFFECTIVE}" -- $PATHS)
           {
             echo "### ${{ matrix.target.name }}"
             echo ""
