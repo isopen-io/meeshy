@@ -37,7 +37,7 @@ describe('CallEffectsPanel', () => {
     const root = createRoot(host);
     act(() =>
       root.render(
-        <CallEffectsPanel language="fr" colorAvailable={options.color ?? true} blurAvailable={options.blur ?? false} onClose={() => void closed.push('close')} apply={(patch) => void applied.push(patch)} />,
+        <CallEffectsPanel id="call-effects-panel" closeGlyph={null} language="fr" colorAvailable={options.color ?? true} blurAvailable={options.blur ?? false} onClose={() => void closed.push('close')} apply={(patch) => void applied.push(patch)} />,
       ),
     );
     const find = (selector: string) => host.querySelector(selector);

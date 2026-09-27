@@ -169,9 +169,9 @@
       "pattern": "^assets/engine-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 10,
-        "status": "CIBLE -- MESUREE PAR #8044, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 8,15 Ko -- le moteur d appel (`lib/calls/engine.ts` : signalisation, pairs WebRTC `peer-link.ts`, sons synthetises `call-tones.ts`, acquisition des medias `call-media.ts`, decodeurs `call-decode.ts`). Charge A LA DEMANDE (`lib/calls/call-actions.ts`, motif D-54) au premier geste d appel ou au premier evenement `call:*` recu : un utilisateur qui n appelle jamais ne le telecharge jamais. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge, meme discipline que les chunks voisins."
+        "value": 12,
+        "status": "REMESUREE PAR #8442/#8434",
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 10,66 Ko -- le moteur recoit les effets de ma video (#8442) : le port `lib/calls/camera-effects.ts` (la camera passe par lui avant de partir, `refreshEffects` remplace la piste sur chaque lien) et la reapplication du micro coupe a la naissance de la piste (#8434, `mediaSettings`). Le TRAITEMENT des images n'y est pas (`call_video_effects`, charge au premier effet de couleur) ; les regles legeres vivent dans le chunk partage `call_video_effects_rules`. L'etat de session est sorti dans `engine-session.ts` (meme chunk, source sous le budget de 1 200 lignes). Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 8,15 Ko -- le moteur d appel (`lib/calls/engine.ts` : signalisation, pairs WebRTC `peer-link.ts`, sons synthetises `call-tones.ts`, acquisition des medias `call-media.ts`, decodeurs `call-decode.ts`). Charge A LA DEMANDE (`lib/calls/call-actions.ts`, motif D-54) au premier geste d appel ou au premier evenement `call:*` recu : un utilisateur qui n appelle jamais ne le telecharge jamais. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
     "call_quality": {
@@ -181,6 +181,23 @@
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #8047, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,73 Ko -- la boucle de qualite d un appel (`lib/calls/call-quality-loop.ts` : getStats sur chaque lien, `call-quality.ts` : niveaux et paliers d encodage par pair, `call-survival.ts` : gel puis suspension de la video). Chargee A LA DEMANDE par `engine-defaults.ts` au premier releve d un appel CONNECTE : elle ne pese ni sur qui n appelle pas, ni sur la sonnerie. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,25 mesures ; 10,54 si la boucle y restait). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+      }
+    },
+    "call_video_effects": {
+      "pattern": "^assets/video-effects-pipeline-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #8442, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 0,99 Ko -- le traitement des images envoyees (`lib/calls/video-effects-pipeline.ts` : MediaStreamTrackProcessor -> OffscreenCanvas filtre -> generateur, ou canevas filme). Charge A LA DEMANDE par `camera-effects.ts` au premier effet de COULEUR : ni le flou natif ni qui n'en pose aucun ne le telecharge. Aucune bibliotheque de segmentation : le flou d'arriere-plan est celui de la camera (`backgroundBlur`). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+      }
+    },
+    "call_video_effects_rules": {
+      "pattern": "^assets/video-effects-[A-Za-z0-9_-]{8}\\.js$",
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #8442, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 0,88 Ko -- les regles et l'etat des effets de ma video (`lib/calls/video-effects.ts` : prereglages, filtre, detection, store). Chunk PARTAGE par le moteur, l'ecran d'appel et le panneau : Rollup le sort seul, ce qui garde chacun des trois sous son plafond. Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
     "call_captions": {
@@ -227,6 +244,15 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,09 Ko -- le panneau des sous-titres de l ecran d appel (`components/call-captions-panel.tsx` : deux lignes en `aria-live` polite, mode, etat de la transcription, journal deplie). Charge A LA DEMANDE par `call-screen.tsx` des que le mode n est plus `off` : il ne pese pas sur `call_overlay` (6,87 mesures, plafond 7). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
+    "call_effects_panel": {
+      "pattern": "^assets/call-effects-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8442, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 1,28 Ko -- le panneau des effets de ma video (`components/call-effects-panel.tsx` : cinq prereglages en radios, luminosite, interrupteur de flou). Charge A LA DEMANDE par `call-screen.tsx` au premier « Effets » ; il n'importe rien de `call_overlay` (son identifiant et le glyphe de Fermer lui sont remis en proprietes). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
     "call_transcript_panel": {
       "pattern": "^assets/call-transcript-panel-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
@@ -240,9 +266,9 @@
       "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 12,
-        "status": "REMESUREE PAR #8391/#8392/#8393",
-        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 10,80 Ko pour la vue d appel « C adapte » -- la pilule de verre et son (…) (`call-control-pill.tsx`), les deux rails du duo et les rangees du groupe (`call-control-actions.tsx`, qui porte desormais `RecordButton` ; `call-screen-tools.tsx` a ete retire), l en-tete et la puce de qualite de verre (`call-screen-header.tsx`, `call-quality.tsx`), la scene (`call-stage.tsx`), la mise a la une automatique du partage d ecran et le bouton Grille (`call-grid.tsx`, `lib/calls/call-spotlight.ts`), la couleur par personne (`lib/calls/call-speaker-color.ts`), le masquage des commandes apres 4 s (`lib/calls/use-call-chrome.ts`, `lib/calls/call-controls.ts`) et cinq glyphes (`glyphs-call-view.ts`). Tout est sur le chemin nominal d un appel en cours : le sortir en chunk a part couterait une requete a chaque ecran d appel. Le bandeau des sous-titres reste HORS de ce chunk (`call-captions-panel`, charge au premier passage en mode traduit) et n en importe rien : la couleur d un locuteur lui est REMISE en propriete. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9), DEUX builds du MEME arbre : 7,10 Ko avec le bouton « Enregistrer l'appel » (#8064, `RecordButton` dans `components/call-screen-tools.tsx`), 6,94 Ko sans lui -- le bouton pese 0,16 Ko, le reste de la croissance depuis la mesure de #8045 (5,93) vient des lots #8046/#8047/#8063 deja fusionnes. Le bouton est dans l'en-tete de l'ecran d'appel ; le sortir en chunk a part couterait une requete a chaque ecran d'appel pour 0,16 Ko. Tout le reste de l'enregistrement est hors de ce chunk (`call_recording_layer`, `call_recording_runtime`, `interface_catalogs_call_recording`). Arrondi au Ko SUPERIEUR (8) + 1 Ko de marge, meme discipline que la valeur precedente (5,93 -> 7). HISTORIQUE : mesure initiale #8045 le 2026-09-26, 5,93 Ko -- l ecran d appel, la pastille flottante, le bandeau d appel en attente et leurs glyphes (`components/call-overlay.tsx`, `call-screen.tsx`, `call-media-elements.tsx`, `glyphs-call-screen.ts`), monte A LA DEMANDE par `components/call-layer.tsx` seulement quand un appel, un appel en attente ou un avis existe."
+        "value": 14,
+        "status": "REMESUREE PAR #8442/#8441/#8436/#8432",
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 12,68 Ko -- la vue d appel gagne le bouton « Effets » du rail de mon image et la lecture de ce que la camera sait faire (#8442, `useEffectsSupport`), le zoom de ma camera -- capsule « − 1× + », pincement et molette (#8441, `components/call-self-zoom.tsx`, `lib/calls/camera-zoom.ts`) --, le bouton « Conversation » de l en-tete (#8436) et l enumeration des cameras qui retire « Retourner » la ou il n aurait aucun effet (#8432). Le PANNEAU des effets n'y est pas (`call_effects_panel`, charge au premier « Effets », qui n'importe rien de ce chunk). Arrondi au Ko SUPERIEUR (13) + 1 Ko de marge. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 10,80 Ko pour la vue d appel « C adapte » -- la pilule de verre et son (…) (`call-control-pill.tsx`), les deux rails du duo et les rangees du groupe (`call-control-actions.tsx`, qui porte desormais `RecordButton` ; `call-screen-tools.tsx` a ete retire), l en-tete et la puce de qualite de verre (`call-screen-header.tsx`, `call-quality.tsx`), la scene (`call-stage.tsx`), la mise a la une automatique du partage d ecran et le bouton Grille (`call-grid.tsx`, `lib/calls/call-spotlight.ts`), la couleur par personne (`lib/calls/call-speaker-color.ts`), le masquage des commandes apres 4 s (`lib/calls/use-call-chrome.ts`, `lib/calls/call-controls.ts`) et cinq glyphes (`glyphs-call-view.ts`). Tout est sur le chemin nominal d un appel en cours : le sortir en chunk a part couterait une requete a chaque ecran d appel. Le bandeau des sous-titres reste HORS de ce chunk (`call-captions-panel`, charge au premier passage en mode traduit) et n en importe rien : la couleur d un locuteur lui est REMISE en propriete. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9), DEUX builds du MEME arbre : 7,10 Ko avec le bouton « Enregistrer l'appel » (#8064, `RecordButton` dans `components/call-screen-tools.tsx`), 6,94 Ko sans lui -- le bouton pese 0,16 Ko, le reste de la croissance depuis la mesure de #8045 (5,93) vient des lots #8046/#8047/#8063 deja fusionnes. Le bouton est dans l'en-tete de l'ecran d'appel ; le sortir en chunk a part couterait une requete a chaque ecran d'appel pour 0,16 Ko. Tout le reste de l'enregistrement est hors de ce chunk (`call_recording_layer`, `call_recording_runtime`, `interface_catalogs_call_recording`). Arrondi au Ko SUPERIEUR (8) + 1 Ko de marge, meme discipline que la valeur precedente (5,93 -> 7). HISTORIQUE : mesure initiale #8045 le 2026-09-26, 5,93 Ko -- l ecran d appel, la pastille flottante, le bandeau d appel en attente et leurs glyphes (`components/call-overlay.tsx`, `call-screen.tsx`, `call-media-elements.tsx`, `glyphs-call-screen.ts`), monte A LA DEMANDE par `components/call-layer.tsx` seulement quand un appel, un appel en attente ou un avis existe."
       }
     },
     "call_feedback": {

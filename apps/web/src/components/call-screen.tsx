@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { CallRails } from '@/components/call-control-actions';
+import { CALL_EFFECTS_PANEL_ID, CallRails } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { Portrait } from '@/components/call-grid';
 import { CallPeerAlerts } from '@/components/call-quality';
@@ -8,6 +8,7 @@ import { CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
+import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, controlsArrangement, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
@@ -370,7 +371,14 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
               {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} effects={effects} /> : null}
               {effectsShown ? (
                 <Suspense fallback={null}>
-                  <CallEffectsPanel language={language} colorAvailable={support.color} blurAvailable={support.blur} onClose={closeEffects} />
+                  <CallEffectsPanel
+                    id={CALL_EFFECTS_PANEL_ID}
+                    closeGlyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />}
+                    language={language}
+                    colorAvailable={support.color}
+                    blurAvailable={support.blur}
+                    onClose={closeEffects}
+                  />
                 </Suspense>
               ) : null}
               <CallControlPill

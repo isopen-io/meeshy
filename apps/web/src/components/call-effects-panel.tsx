@@ -1,10 +1,6 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
-import { CALL_EFFECTS_PANEL_ID } from '@/components/call-control-actions';
-import { CallButton } from '@/components/call-glass-button';
-import { GlyphSvg } from '@/components/glyph';
-import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import { setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { translate } from '@/lib/i18n-catalog';
@@ -20,10 +16,15 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * transparents : jamais de verre sur du verre. Chaque geste part aussitôt sur
  * la piste envoyée — pas de bouton « Appliquer ». Échap ferme le panneau sans
  * réduire l'appel. Chunk à part (`budgets.json` › `call_effects_panel`), chargé
- * au premier « Effets ».
+ * au premier « Effets » — il n'importe RIEN du chunk de l'écran d'appel
+ * (`call_overlay`, `dynamic_only`) : son identifiant et le glyphe de Fermer lui
+ * sont REMIS en propriétés, comme la couleur d'un locuteur au bandeau des
+ * sous-titres.
  */
 
 type PanelProps = {
+  readonly id: string;
+  readonly closeGlyph: ReactNode;
   readonly language: InterfaceLanguage;
   readonly colorAvailable: boolean;
   readonly blurAvailable: boolean;
@@ -38,7 +39,7 @@ const applyNow = (patch: Partial<VideoEffects>): void => {
 
 const CHIP = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
 
-export function CallEffectsPanel({ language, colorAvailable, blurAvailable, onClose, apply = applyNow }: PanelProps) {
+export function CallEffectsPanel({ id, closeGlyph, language, colorAvailable, blurAvailable, onClose, apply = applyNow }: PanelProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -53,7 +54,7 @@ export function CallEffectsPanel({ language, colorAvailable, blurAvailable, onCl
   return (
     <div
       ref={panel}
-      id={CALL_EFFECTS_PANEL_ID}
+      id={id}
       role="dialog"
       aria-labelledby="call-effects-title"
       onKeyDown={onKeyDown}
@@ -64,7 +65,16 @@ export function CallEffectsPanel({ language, colorAvailable, blurAvailable, onCl
         <h2 id="call-effects-title" className="text-body font-semibold">
           {translate(language, 'call.effects')}
         </h2>
-        <CallButton label={translate(language, 'call.effects.close')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />} onPress={onClose} size={44} data={{ 'data-call-effects-close': '' }} />
+        <button
+          type="button"
+          aria-label={translate(language, 'call.effects.close')}
+          title={translate(language, 'call.effects.close')}
+          onClick={onClose}
+          className="grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none"
+          data-call-effects-close=""
+        >
+          {closeGlyph}
+        </button>
       </div>
       {colorAvailable ? (
         <>
