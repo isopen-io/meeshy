@@ -114,10 +114,9 @@ struct ComposerTrailingRail: View {
             }
             .frame(width: ComposerRailGeometry.railWidth)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2, style: .continuous)
-                    .fill(plateauTint.opacity(0.55))
-            )
+            // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370).
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2, style: .continuous),
+                           tint: plateauTint.opacity(0.55))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerTrailingRailCopy.railLabel))
         }

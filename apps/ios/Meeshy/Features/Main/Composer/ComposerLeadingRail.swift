@@ -243,10 +243,9 @@ struct ComposerLeadingRail: View {
             .frame(width: axis == .vertical ? ComposerRailGeometry.railWidth : nil,
                    height: axis == .horizontal ? ComposerRailGeometry.railWidth : nil)
             .padding(axis == .vertical ? .vertical : .horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2, style: .continuous)
-                    .fill(plateauTint.opacity(0.55))
-            )
+            // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370).
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2, style: .continuous),
+                           tint: plateauTint.opacity(0.55))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerRailCopy.railLabel))
         }

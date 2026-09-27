@@ -534,15 +534,16 @@ struct ComposerSceneSurface: View {
 
     /// **Le volet de description, borné à la CARTE** (#4993).
     ///
-    /// Les marges reprennent les deux couloirs (`sceneInset`) plus l'air qui
-    /// l'écarte du bord : sans elles, le volet s'étalerait sur toute la largeur
-    /// paddée et croiserait les deux rails, qui vivent précisément dans ces
-    /// couloirs et à cette hauteur.
+    /// Les marges valent la place d'un rail de chaque côté (`lane`) : sans
+    /// elles, le volet s'étalerait sur toute la largeur et croiserait les deux
+    /// rails, qui flottent sur la scène à cette hauteur. Elles se lisaient des
+    /// couloirs (`sceneInset`), qui valent zéro depuis la scène plein écran
+    /// (#8370) — le volet recouvrait alors le bas des deux rails (#8388).
     @ViewBuilder
     private var descriptionOverlay: some View {
         if let descriptionPanel {
             descriptionPanel
-                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true) + 10)
+                .padding(.horizontal, ComposerRailGeometry.lane)
                 .padding(.bottom, 10)
         }
     }
