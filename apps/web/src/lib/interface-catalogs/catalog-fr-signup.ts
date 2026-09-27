@@ -17,6 +17,16 @@ const frSignup = {
   'signup.emailTaken.itsMe': 'C’est moi — récupérer mon compte',
   'signup.emailTaken.notMe': 'Ce n’est pas moi',
   'signup.emailTaken.notMeNote': 'Le code envoyé à cette adresse sera demandé pour l’obtenir.',
+  'signup.phone.skip': 'Continuer avec l’e-mail seulement',
+  'signup.card.title': 'Votre compte',
+  'signup.card.validateNow': 'Valider mon compte maintenant',
+  'signup.card.validateNow.busy': 'Création du compte…',
+  'signup.card.code.lead': 'Entrez le code à 6 chiffres envoyé à {email}, ou ouvrez le lien reçu.',
+  'signup.card.verified': 'Compte validé !',
+  'signup.card.verified.lead': 'Tout est prêt : vos proches vous lisent dans votre langue.',
+  'signup.submit': 'S’inscrire',
+  'signup.submit.busy': 'Inscription…',
+  'signup.talk': 'Parler aux autres',
 } as const;
 
 export default frSignup;

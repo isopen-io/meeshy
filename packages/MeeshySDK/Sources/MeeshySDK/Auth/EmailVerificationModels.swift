@@ -40,6 +40,20 @@ public enum RegistrationOutcome: Equatable, Sendable {
     case verificationRequired(PendingEmailVerification)
 }
 
+/// Ce que l'inscription a produit, la session TENUE plutôt que posée (#8288).
+///
+/// La carte de l'inscription crée le compte et y fait paraître le code : poser la
+/// session tout de suite basculerait la racine de l'app et démonterait l'écran
+/// qui attend ce code. L'écran la pose lui-même — code juste, lien ouvert, ou
+/// « S'inscrire » sans code pendant le délai de grâce (#8238).
+public enum RegistrationHold: Sendable {
+    /// Le compte est créé et sa session attend d'être posée ; le jeton d'attente
+    /// (#8083) apprend à l'écran que le lien a été ouvert ailleurs.
+    case session(EmailProvenSession, pendingSessionToken: String?)
+    /// Aucune session : le compte n'entre que par son code (revendication #8214).
+    case verificationRequired(PendingEmailVerification)
+}
+
 public extension LoginResponseData {
     static let verificationRequiredStatus = "verification-required"
 

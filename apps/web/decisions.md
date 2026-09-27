@@ -4365,3 +4365,17 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 **Côté serveur : rien.** Une session par compte existe déjà (`UserSession`, `POST /auth/logout` sur les en-têtes du compte quitté).
 
 **Suivi assumé.** Le cache de requêtes est unique et purgé à chaque bascule : revenir à un compte recharge ses écrans depuis le réseau (dimension 2 — un cache partitionné par compte relève d'une issue à part). Miroir iOS : `apps/ios/decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md`. Kotlin natif : rien (gel).
+
+## D-143 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
+
+**Contexte.** Directive porteur 2026-09-27 : réagencer l'inscription « en 3–4 phases rapides, plus moderne, sexy, dynamique », web ET iOS, sans seconde machine. D-72 avait posé deux barreaux (le contact, puis l'identité) ; l'écran du code (`/auth/verify-email`) restait une page à part.
+
+**Décision.**
+- **Quatre phases, une loi pure** (`lib/view/signup-phases.ts`, miroir iOS `SignupPhases.swift`) : `phone` → `email` (un numéro PLAUSIBLE, ou « Continuer avec l'e-mail seulement ») → `card` (une adresse cohérente) → `code` → `verified`. Monotone, comme D-72 : rien de ce qui est paru ne se referme.
+- **Le téléphone d'abord, en verre liquide qui ondule à la frappe** : l'effet est celui de la barre du composeur universel iOS (`typeWave`, 1,015 × 0,97, ressort vif), rejoué en TRANSFORM seul (`lib/view/typing-wave.ts`) — composité, jamais une propriété de mise en page ; rien sous « Réduire les animations ».
+- **La carte d'identité en verre** porte le nom affiché et le @pseudo pré-dérivés (`DerivedIdentity`), leurs refus (pseudo pris et suggestions, « Est-ce vous ? » #8216), le mot de passe facultatif, et « Valider mon compte maintenant ». Ce geste CRÉE le compte (la même `auth.register`) et fait paraître le code DANS la carte : `EmailCodeForm`, la machine du code de `/auth/verify-email`.
+- **Le lien ouvert ailleurs se reflète dans la carte** par le jeton d'attente (#8083), que `POST /auth/register` sert désormais avec la session. Un compte déjà connecté ici tient alors l'adresse pour prouvée ; un compte SANS session (revendication #8214) n'entre que par son code — « si et seulement si » reste entier.
+- **Le code juste lance le feu d'artifice de l'arrivée** (`arrival-fireworks.tsx`, chargé à la demande), et « S'inscrire » devient « Parler aux autres », qui mène à l'onboarding. « S'inscrire » est actif dès la carte : l'inscription sans code est permise pendant le délai de grâce (#8238) — un compte créé entre alors dans l'onboarding (ou l'invitation `next`), plus sur l'écran du code.
+- **L'alerte « sans numéro » (#8040) se tait quand on a CHOISI l'e-mail seul** : le lien discret de la phase 1 était déjà la question.
+
+**Conséquences.** `signup-rungs.ts` est retiré ; `routes/signup.tsx` se découpe en `signup-phone-glass.tsx`, `signup-identity-card.tsx` et `signup-extras.tsx`. Le code d'une carte vit hors du `<form>` de l'inscription (un formulaire ne s'imbrique pas) ; le bouton principal lui appartient par `form="signup-form"`. Dix clés `signup.*` rejoignent les sept catalogues (`budgets.json`, plafond 144).
