@@ -153,7 +153,9 @@ const preferFocal = (context) =>
     }
   }, FOCAL_CONVERSATIONS);
 
-const QUOTE_TEXT = 'main li [data-reading-mode] button[aria-label^="Aller au message"] .line-clamp-2';
+/* VISÉE PAR SON MARQUEUR (#8320) : depuis que le libellé de la citation lit le
+   catalogue d'interface, il suit la langue du LECTEUR — même piège que #7141. */
+const QUOTE_TEXT = 'main li [data-reading-mode] button[data-quote-jump] .line-clamp-2';
 
 /**
  * LA BARRE AA (#5625, remplace l'ancien plancher d'invisibilité à 2,5). Le
@@ -428,7 +430,7 @@ const noRowCarriesContinuousPerspective = (page) =>
    * rien : ni `onClick`, ni prop de rappel).
    */
   const quoteButton = page
-    .locator('main li [data-reading-mode] button[aria-label^="Aller au message"]')
+    .locator('main li [data-reading-mode] button[data-quote-jump]')
     .first();
   expect((await quoteButton.count()) > 0, 'un message avec citation est rendu');
   await quoteButton.click();

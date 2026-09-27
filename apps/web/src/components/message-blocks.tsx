@@ -729,6 +729,7 @@ export function Quote({
         <button
           type="button"
           onClick={onJump}
+          data-quote-jump
           className={`w-full min-w-0 pt-2 text-left text-title ${lowerZone ? '' : 'pb-2'}`}
           {...(media === null ? {} : { 'data-quote-media': media.kind })}
           aria-label={label}
