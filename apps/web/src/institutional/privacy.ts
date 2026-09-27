@@ -167,7 +167,7 @@ export const PAGE_PRIVACY: ContentPage = {
             },
             {
               title: 'Effacement',
-              body: "Vous effacez votre carnet à tout moment depuis l'app : « Effacer mon carnet d'adresses », au bas de l'écran Répertoire sur iPhone, ou dans Paramètres > Confidentialité sur le web. Vos contacts sont supprimés de nos serveurs, avec la trace des amis dont l'arrivée vous a été annoncée, et rien n'est renvoyé tant que vous ne synchronisez pas de nouveau vous-même. Le carnet est aussi effacé avec toutes vos données lors de la suppression de votre compte.",
+              body: "« Effacer mon carnet d'adresses » : au bas du Répertoire sur iPhone, dans Paramètres > Confidentialité sur le web. Il part de nos serveurs avec la trace des arrivées annoncées, et rien n'est renvoyé avant que vous synchronisiez de nouveau. Il est aussi effacé à la suppression de votre compte.",
             },
           ],
         },
