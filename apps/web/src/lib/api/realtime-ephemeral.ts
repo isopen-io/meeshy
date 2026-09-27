@@ -6,6 +6,7 @@ import type {
   SocketIOMessage,
 } from '@meeshy/shared/types/socketio-events/message';
 
+import { isAfterReadMessage } from '@/lib/view/after-read';
 import { DESTRUCTION_MS, announceDestruction } from '@/lib/view/ephemeral-destruction';
 import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/lib/view/ephemeral-reception';
 
@@ -90,7 +91,8 @@ export function applyMessageExpired(
      les destinataires passés (#7578) : ici, la rangée reste, « déjà ouverte »,
      et perd seulement ce qu'elle pouvait encore porter. */
   const cached = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
-  if (cached?.isViewOnce === true && !hasEphemeralDuration(cached.ephemeralDuration)) {
+  /* Une vue unique FLAMME-ŒIL (#8304) est un éphémère : elle part. */
+  if (cached?.isViewOnce === true && !hasEphemeralDuration(cached.ephemeralDuration) && !isAfterReadMessage(cached)) {
     patchThreadMessages(queryClient, data.conversationId, (messages) => sealViewOnceIn(messages, data.messageId));
     return;
   }
