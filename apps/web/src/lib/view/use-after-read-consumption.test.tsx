@@ -86,9 +86,11 @@ function setup(options: { readonly online: boolean }) {
   const threadIds = () =>
     (queryClient.getQueryData(messagesQueryKey('c-a')) as { pages: { messages: Message[] }[] }).pages.flatMap((p) => p.messages.map((m) => m.id));
   let note: ((id: string) => void) | null = null;
+  let noteRow: ((id: string) => void) | null = null;
   function Harness({ conversationId }: { readonly conversationId: string }) {
-    const { noteSeenUpTo } = useAfterReadConsumption({ conversationId, messages: THREAD, viewerId: 'u-me', queryClient, queue });
+    const { noteSeenUpTo, noteSeen } = useAfterReadConsumption({ conversationId, messages: THREAD, viewerId: 'u-me', queryClient, queue });
     note = noteSeenUpTo;
+    noteRow = noteSeen;
     return null;
   }
   const container = document.createElement('div');
@@ -105,6 +107,7 @@ function setup(options: { readonly online: boolean }) {
       online = true;
     },
     seeUpTo: (id: string) => note?.(id),
+    seeRow: (id: string) => noteRow?.(id),
     rerender: (conversationId: string) => act(() => root.render(<Harness conversationId={conversationId} />)),
     unmount: () => {
       act(() => root.unmount());
@@ -188,5 +191,18 @@ describe('la flamme-œil VUE puis QUITTÉE disparaît — chez le lecteur seulem
     expect(s.threadIds()).toEqual(['ordinaire', 'flamme-mienne', 'flamme-apres']);
     act(() => root.unmount());
     container.remove();
+  });
+});
+
+describe('noteSeen — une rangée vue par elle-même (#8343)', () => {
+  test('une flamme-œil REÇUE vue au milieu du fil part à la sortie, jamais la sienne ni un message ordinaire', async () => {
+    const s = setup({ online: true });
+    s.seeRow('flamme-apres');
+    s.seeRow('flamme-mienne');
+    s.seeRow('ordinaire');
+    s.unmount();
+    await settle();
+    expect(s.sent).toEqual([{ conversationId: 'c-a', ids: ['flamme-apres'] }]);
+    expect(s.threadIds()).toEqual(['flamme-recue', 'ordinaire', 'flamme-mienne']);
   });
 });
