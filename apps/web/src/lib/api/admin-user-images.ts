@@ -1,3 +1,5 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { uploadProfileImage, type ProfileImageUploadDeps } from '@/lib/profile/image-upload';
 
 import { type AdminDeps, asCount, asRecord, pageServie, type PageServie } from './admin';
@@ -7,7 +9,7 @@ import type { ProfileImageKind } from './profile';
 
 /**
  * **LA PHOTO ET LA BANNIÈRE D'UN MEMBRE, POSÉES PAR L'ADMINISTRATION** (#8217)
- * — `PUT /api/v1/admin/users/:userId/profile-images/:kind`, sous
+ * — `PUT admin.usersByUserIdProfileImagesByKind`, sous
  * `canUpdateUsers` + `requireHierarchy`, et sa liste de candidates
  * `GET …/profile-image-candidates`.
  *
@@ -70,7 +72,7 @@ export async function loadAdminProfileImageCandidates(
   const query = new URLSearchParams({ offset: String(params.offset), limit: String(ADMIN_IMAGE_CANDIDATES_PAGE_SIZE) });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/profile-image-candidates?${query.toString()}`,
+    path: `${adminEndpoints.usersByUserIdProfileImageCandidates(params.userId)}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -89,7 +91,7 @@ export async function setAdminUserImage(
   const motif = params.reason?.trim() ?? '';
   const result = await params.transport.request<unknown>({
     method: 'PUT',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/profile-images/${params.kind}`,
+    path: adminEndpoints.usersByUserIdProfileImagesByKind(params.userId, params.kind),
     body: motif === '' ? params.choice : { ...params.choice, reason: motif },
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });

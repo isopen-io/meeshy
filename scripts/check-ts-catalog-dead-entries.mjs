@@ -17,24 +17,22 @@
 //
 // MÉTHODOLOGIE
 //
-// 1. `API_ENDPOINTS` est un objet à DEUX niveaux : `{ namespace: { entrée:
-//    '/chemin' | (param) => `/chemin/${param}` } }`. Le fichier porte aussi
-//    `API_PATH_TEMPLATES` (un tableau) et `API_PATH_METHODS` (un objet dont
-//    les clés sont des chemins littéraux, pas des identifiants) — ce script
-//    borne son analyse aux lignes de `export const API_ENDPOINTS = {` jusqu'à
-//    son `}` fermant de premier niveau, pour ne jamais confondre les trois.
-// 2. Un NAMESPACE est une ligne à 2 espaces d'indentation `nom: {` ; une
-//    ENTRÉE est une ligne à 4 espaces `nom: ...,` sous le namespace courant.
-//    Vérifié sur le fichier réel (2026-09-06) : les 444 entrées sont toutes
-//    sur une seule ligne — aucune valeur (chaîne ou fonction fléchée) ne
-//    s'étend sur plusieurs lignes — donc un parseur ligne à ligne suffit sans
-//    compter les accolades.
-// 3. Un APPELANT est une occurrence de `API_ENDPOINTS.namespace.entrée` (le
-//    seul style observé dans tout le dépôt — vérifié par grep avant d'écrire
-//    ce garde, aucune déstructuration `const { ns } = API_ENDPOINTS`) dans
-//    l'arbre CLIENT (`apps/web`, `packages/shared` hors le fichier qui
-//    déclare le catalogue), HORS répertoires `__tests__` et fichiers
-//    `*.test.ts(x)` / `*.spec.ts(x)`.
+// 1. Depuis #7716, chaque NAMESPACE du catalogue est un module généré
+//    (`packages/shared/api/endpoints/<groupe>.ts`, nom de fichier = namespace
+//    en kebab-case) et chaque ENTRÉE y est un `export const clé = …` — ou
+//    `export { clé_ as clé }` quand la clé est un mot réservé (`me.export`).
+//    `endpoints.ts` ne fait plus que les réunir dans `API_ENDPOINTS`, à côté
+//    d'`API_PATH_TEMPLATES` et d'`API_PATH_METHODS` : les entrées se lisent
+//    dans les modules, jamais dans l'index.
+// 2. Un module généré porte une entrée par déclaration, sur une ligne ; les
+//    commentaires qui citent un chemin ne commencent pas par `export` et ne
+//    sont donc jamais pris pour des entrées.
+// 3. Un APPELANT est une occurrence de `API_ENDPOINTS.namespace.entrée`, ou —
+//    la forme du web depuis #7716 — `alias.entrée` dans un fichier qui importe
+//    le module du groupe en espace de noms (`import * as alias from
+//    '…/api/endpoints/<groupe>'`), dans l'arbre CLIENT (`apps/web`,
+//    `packages/shared` hors les fichiers qui déclarent le catalogue), HORS
+//    répertoires `__tests__` et fichiers `*.test.ts(x)` / `*.spec.ts(x)`.
 // 4. Le compte de dette est le nombre d'entrées SANS AUCUNE occurrence ainsi
 //    définie. Cliquet à DEUX SENS, comme `check-type-debt.sh` et son jumeau
 //    Swift : régression si le compte DÉPASSE la référence, amélioration NON
@@ -102,15 +100,13 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const CATALOG_FILE = 'packages/shared/api/endpoints.ts';
+const GROUPS_DIR = 'packages/shared/api/endpoints';
 
 const SEARCH_ROOTS = ['apps/web', 'packages/shared'];
 
 const EXCLUDED_DIR_NAMES = new Set(['__tests__', 'node_modules', '.next', 'dist', 'test-results']);
 const TEST_FILE_RE = /\.(test|spec)\.tsx?$/;
 
-const NAMESPACE_RE = /^ {2}([A-Za-z0-9_]+): \{$/;
-const NAMESPACE_CLOSE_RE = /^ {2}\},?$/;
-const ENTRY_RE = /^ {4}([A-Za-z0-9_]+):/;
 
 const listSourceFiles = (absRoot, relRoot) => {
   const out = [];
@@ -137,37 +133,41 @@ const listSourceFiles = (absRoot, relRoot) => {
   return out;
 };
 
-// Isole le bloc `export const API_ENDPOINTS = { ... };` (ou `} as const;`) —
-// jamais `API_PATH_TEMPLATES` ni `API_PATH_METHODS`, qui vivent plus loin dans
-// le même fichier avec une forme différente (tableau, clés = chemins).
-export const extractCatalogBlock = (source) => {
-  const lines = source.split('\n');
-  const startIndex = lines.findIndex((l) => l.startsWith('export const API_ENDPOINTS ='));
-  if (startIndex === -1) return null;
-  const endIndex = lines.findIndex((l, i) => i > startIndex && /^\}/.test(l));
-  if (endIndex === -1) return null;
-  return lines.slice(startIndex + 1, endIndex);
-};
+// Depuis #7716, chaque namespace est un MODULE généré
+// (`packages/shared/api/endpoints/<groupe>.ts`) : une entrée par
+// `export const clé =`, et `export { clé_ as clé };` pour une clé qui est un
+// mot réservé (`me.export`). L'index `endpoints.ts` ne fait que les réunir
+// dans `API_ENDPOINTS` — ce n'est plus là que les entrées se lisent.
+const EXPORT_CONST_RE = /^export const ([A-Za-z_$][\w$]*) =/gm;
+const EXPORT_ALIAS_RE = /^export \{ [A-Za-z_$][\w$]* as ([A-Za-z_$][\w$]*) \};$/gm;
 
-export const parseCatalogBlock = (blockLines) => {
-  const namespaces = [];
-  let current = null;
-  for (const line of blockLines) {
-    const nsMatch = line.match(NAMESPACE_RE);
-    if (nsMatch) {
-      current = { name: nsMatch[1], entries: [] };
-      namespaces.push(current);
-      continue;
-    }
-    if (NAMESPACE_CLOSE_RE.test(line)) {
-      current = null;
-      continue;
-    }
-    if (!current) continue;
-    const entryMatch = line.match(ENTRY_RE);
-    if (entryMatch) current.entries.push(entryMatch[1]);
-  }
-  return namespaces;
+export const parseGroupModule = (source) => [
+  ...[...source.matchAll(EXPORT_CONST_RE)].map((m) => m[1]),
+  ...[...source.matchAll(EXPORT_ALIAS_RE)].map((m) => m[1]),
+];
+
+/** `api-legacy-attachments.ts` → `apiLegacyAttachments` (inverse de `groupFileName`, build-catalog.ts). */
+export const namespaceOfGroupFile = (fileName) =>
+  fileName.replace(/\.ts$/, '').replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+// Un APPELANT a deux formes : `API_ENDPOINTS.ns.clé` (l'objet réuni), et —
+// la forme du web depuis #7716 — un import du module de groupe en espace de
+// noms (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`)
+// suivi de `adminEndpoints.clé`. L'alias est lu dans l'import de CHAQUE
+// fichier : aucun nom n'est imposé à l'appelant.
+const GROUP_IMPORT_RE = /import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"][^'"]*api\/endpoints\/([a-z0-9-]+)(?:\.js)?['"]/g;
+const escapeRe = (text) => text.replace(/[$]/g, '\\$&');
+
+export const callersIn = (contents, nsNames) => {
+  const viaIndex = [...contents.matchAll(new RegExp(`API_ENDPOINTS\\.(${nsNames.join('|')})\\.([A-Za-z_$][\\w$]*)`, 'g'))].map(
+    (m) => `${m[1]}.${m[2]}`,
+  );
+  const viaGroups = [...contents.matchAll(GROUP_IMPORT_RE)].flatMap(([, alias, file]) =>
+    [...contents.matchAll(new RegExp(`(?<![\\w$.])${escapeRe(alias)}\\.([A-Za-z_$][\\w$]*)`, 'g'))].map(
+      (m) => `${namespaceOfGroupFile(file)}.${m[1]}`,
+    ),
+  );
+  return [...viaIndex, ...viaGroups];
 };
 
 // La référence est ancrée sur CE script (voir méthodologie ci-dessus), pas sur
@@ -389,27 +389,28 @@ export const parseCatalogBlock = (blockLines) => {
 // (`apps/web/src/lib/api/admin-user-images.ts`) écrit les adresses en
 // littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27
 // (CI de dev rouge sur 7943044432, relevé fusionné sans le cliquet).
-const BASELINE_DEAD_ENTRIES = 478;
+// 478 → 443 (#7716, lot admin) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 443 → 436 (#7716, lot appels) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 436 → 407 (#7716, lot authentification et compte) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+const BASELINE_DEAD_ENTRIES = 407;
 
 export const readWorld = (root) => {
-  const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
-  const block = extractCatalogBlock(source);
-  if (!block) throw new Error(`${CATALOG_FILE} : bloc "export const API_ENDPOINTS = {" introuvable — le fichier a changé de forme.`);
-  const namespaces = parseCatalogBlock(block);
+  const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
+  if (groupFiles.length === 0) throw new Error(`${GROUPS_DIR} : aucun module de groupe — le catalogue a changé de forme.`);
+  const namespaces = groupFiles.map((name) => ({
+    name: namespaceOfGroupFile(name),
+    entries: parseGroupModule(readFileSync(join(root, GROUPS_DIR, name), 'utf8')),
+  }));
 
-  const searchFiles = SEARCH_ROOTS.flatMap((r) => listSourceFiles(join(root, r), r));
+  const searchFiles = SEARCH_ROOTS.flatMap((r) => listSourceFiles(join(root, r), r)).filter(
+    (relPath) => relPath !== CATALOG_FILE && !relPath.startsWith(`${GROUPS_DIR}/`), // hors fichiers de déclaration
+  );
 
   const nsNames = namespaces.map((n) => n.name);
-  const callSiteRe = new RegExp(`API_ENDPOINTS\\.(${nsNames.join('|')})\\.([A-Za-z_][A-Za-z0-9_]*)`, 'g');
-
-  const usedPairs = new Set();
-  for (const relPath of searchFiles) {
-    if (relPath === CATALOG_FILE) continue; // hors fichier de déclaration
-    const contents = readFileSync(join(root, relPath), 'utf8');
-    for (const match of contents.matchAll(callSiteRe)) {
-      usedPairs.add(`${match[1]}.${match[2]}`);
-    }
-  }
+  const usedPairs = new Set(searchFiles.flatMap((relPath) => callersIn(readFileSync(join(root, relPath), 'utf8'), nsNames)));
 
   return { namespaces, usedPairs };
 };
@@ -467,31 +468,47 @@ const selfTest = () => {
     return 1;
   }
 
-  // Le fragment ci-dessous imite la forme réelle : API_ENDPOINTS à deux
-  // niveaux, suivi d'un API_PATH_METHODS voisin dont les clés sont des
-  // chemins littéraux — un parseur qui déborderait du bloc compterait
-  // '/some/path' comme un namespace.
-  const fragment = [
-    "export const API_ENDPOINTS = {",
-    "  admin: {",
-    "    dashboard: '/api/v1/admin/dashboard',",
-    "    byId: (id: string) => `/api/v1/admin/${id}`,",
-    "  },",
-    "  auth: {",
-    "    login: '/api/v1/auth/login',",
-    "  },",
-    "} as const;",
-    "",
-    "export const API_PATH_METHODS = {",
-    "  '/api/v1/admin/dashboard': ['GET'],",
-    "};",
+  // Le module ci-dessous imite la forme GÉNÉRÉE d'un groupe : une constante
+  // par entrée, une fonction pour une entrée paramétrée, et l'alias d'une clé
+  // qui est un mot réservé. Les commentaires portent des chemins : un parseur
+  // qui les lirait compterait des entrées fantômes.
+  const groupModule = [
+    '/** GET /api/v1/admin/dashboard */',
+    "export const dashboard = '/api/v1/admin/dashboard';",
+    '',
+    '/** GET /api/v1/admin/:id */',
+    'export const byId = (id: string): string => `/api/v1/admin/${encodeURIComponent(id)}`;',
+    '',
+    '/** GET /api/v1/admin/export */',
+    "const export_ = '/api/v1/admin/export';",
+    'export { export_ as export };',
   ].join('\n');
-  const block = extractCatalogBlock(fragment);
-  const namespaces = block ? parseCatalogBlock(block) : null;
-  const flat = namespaces ? namespaces.flatMap((n) => n.entries.map((e) => `${n.name}.${e}`)) : [];
-  const expected = ['admin.dashboard', 'admin.byId', 'auth.login'];
-  if (!namespaces || flat.length !== 3 || !expected.every((e) => flat.includes(e))) {
-    console.error(`AVEUGLE : le parseur doit lire exactement ${JSON.stringify(expected)}, obtenu ${JSON.stringify(flat)}.`);
+  const entries = parseGroupModule(groupModule);
+  const expected = ['dashboard', 'byId', 'export'];
+  if (entries.length !== 3 || !expected.every((e) => entries.includes(e))) {
+    console.error(`AVEUGLE : le parseur doit lire exactement ${JSON.stringify(expected)}, obtenu ${JSON.stringify(entries)}.`);
+    return 1;
+  }
+  if (namespaceOfGroupFile('api-legacy-attachments.ts') !== 'apiLegacyAttachments' || namespaceOfGroupFile('me.ts') !== 'me') {
+    console.error('AVEUGLE : le nom de fichier d’un groupe doit redonner son namespace (kebab → camel).');
+    return 1;
+  }
+
+  // Les deux formes d'appel sont reconnues, l'alias est celui que CHAQUE
+  // fichier choisit, et un membre homonyme d'un autre objet (`other.adminEndpoints.x`)
+  // n'est pas un appel.
+  const caller = [
+    "import * as adminApi from '@meeshy/shared/api/endpoints/admin';",
+    "import * as legacy from '../api/endpoints/api-legacy-attachments.js';",
+    'const a = adminApi.byId(id);',
+    'const b = legacy.fileByWildcard(path);',
+    'const c = API_ENDPOINTS.auth.login;',
+    'const d = other.adminApi.dashboard;',
+  ].join('\n');
+  const calls = callersIn(caller, ['admin', 'auth', 'apiLegacyAttachments']).sort();
+  const expectedCalls = ['admin.byId', 'apiLegacyAttachments.fileByWildcard', 'auth.login'];
+  if (JSON.stringify(calls) !== JSON.stringify(expectedCalls)) {
+    console.error(`AVEUGLE : appelants attendus ${JSON.stringify(expectedCalls)}, obtenu ${JSON.stringify(calls)}.`);
     return 1;
   }
 
@@ -512,7 +529,7 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 8/8 vérifications passées (comptage, cliquet à deux sens, bornage API_ENDPOINTS≠API_PATH_METHODS, exceptions #5427).');
+  console.log('self-test : 9/9 vérifications passées (comptage, cliquet à deux sens, lecture des modules de groupe, deux formes d’appelant, exceptions #5427).');
   return 0;
 };
 

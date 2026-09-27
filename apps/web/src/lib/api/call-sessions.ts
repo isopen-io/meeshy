@@ -1,4 +1,6 @@
 import * as z from 'zod/mini';
+import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import type { CallsDeps } from './calls';
 import type { ApiResult } from './http';
@@ -8,14 +10,14 @@ import type { ApiResult } from './http';
  * `services/gateway/src/routes/calls-consultation.ts` au MÊME schéma
  * (`callSessionSchema`, `packages/shared/types/api-schemas/call-session.ts`) :
  *
- * - `GET /api/v1/calls/active` — l'appel dont le lecteur est encore membre :
+ * - `GET calls.active` — l'appel dont le lecteur est encore membre :
  *   la bannière « Reprendre l'appel » et la reprise après rechargement (#3586,
  *   E7), miroir `ActiveCallService` d'iOS. `404 NO_ACTIVE_CALL` est une
  *   RÉPONSE (« aucun »), jamais une panne ;
- * - `GET /api/v1/calls/:callId` — le lien profond `/call/:callId` (A12) ;
+ * - `GET calls.byCallId` — le lien profond `/call/:callId` (A12) ;
  *   introuvable et interdit se confondent volontairement : la fiche dit
  *   « appel introuvable » sans révéler qu'il existe ;
- * - `GET /api/v1/conversations/:id/active-call` — la pastille « Rejoindre » de
+ * - `GET conversations.byConversationIdActiveCall` — la pastille « Rejoindre » de
  *   l'en-tête du fil (H3), le sondage du legacy (`use-call-banner.ts`).
  *
  * **Une session décodée est une PROJECTION.** `userMinimalSchema` porte
@@ -112,7 +114,7 @@ export async function loadActiveCall(deps: Deps, signal?: AbortSignal): Promise<
     const { fixtureActiveCall } = await import('./fixtures-calls');
     return { ok: true, data: fixtureActiveCall() };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: '/api/v1/calls/active', ...withSignal(signal) });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: callsEndpoints.active, ...withSignal(signal) });
   if (!result.ok) return result.status === 404 ? { ok: true, data: null } : result;
   const session = decodeCallSession(result.data);
   return { ok: true, data: session !== null && session.live ? session : null };
@@ -123,7 +125,7 @@ export async function loadCallSession(deps: Deps, callId: string, signal?: Abort
     const { fixtureCallSession } = await import('./fixtures-calls');
     return { ok: true, data: fixtureCallSession(callId) };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: `/api/v1/calls/${encodeURIComponent(callId)}`, ...withSignal(signal) });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: callsEndpoints.byCallId(callId), ...withSignal(signal) });
   if (!result.ok) return result.status === 400 || result.status === 403 || result.status === 404 ? { ok: true, data: null } : result;
   return { ok: true, data: decodeCallSession(result.data) };
 }
@@ -136,7 +138,7 @@ export async function loadConversationActiveCallId(deps: Deps, conversationId: s
   }
   const result = await deps.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/conversations/${encodeURIComponent(conversationId)}/active-call`,
+    path: conversationsEndpoints.byConversationIdActiveCall(conversationId),
     ...withSignal(signal),
   });
   if (!result.ok) return result;

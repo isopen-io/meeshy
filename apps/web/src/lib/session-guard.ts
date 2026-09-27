@@ -70,7 +70,7 @@ export type RouteKey =
   | 'feed'
   /**
    * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
-   * `POST /api/v1/posts` (type `STATUS`) porte `requiredAuth`
+   * `POST posts.root` (type `STATUS`) porte `requiredAuth`
    * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
    * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
    * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
@@ -82,8 +82,8 @@ export type RouteKey =
   | 'statusCompose'
   /**
    * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
-   * `POST /api/v1/posts` exige une session (`fastify.authenticate`), et
-   * `POST /api/v1/uploads` aussi. Non déclarée ici, elle serait PUBLIQUE par
+   * `POST posts.root` exige une session (`fastify.authenticate`), et
+   * `POST uploads.root` aussi. Non déclarée ici, elle serait PUBLIQUE par
    * défaut (voir `routeKey` plus bas) : un visiteur sans compte composerait
    * une publication entière — texte, médias montés — avant de se faire
    * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
@@ -91,9 +91,9 @@ export type RouteKey =
   | 'postCompose'
   /**
    * CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — PRIVÉES, les deux
-   * dernières portes `/…/new` : `POST /api/v1/links` exige un compte
+   * dernières portes `/…/new` : `POST links.root` exige un compte
    * (`routes/links/creation.ts:24-33`, `requireAuth: true`,
-   * `allowAnonymous: false`) et `POST /api/v1/communities` aussi
+   * `allowAnonymous: false`) et `POST communities.root` aussi
    * (`routes/communities/core.ts:387-388`, `fastify.authenticate`). Non
    * déclarées, elles étaient PUBLIQUES par défaut : un visiteur sans compte
    * remplissait nom, description et options avant le refus. Le témoin de la

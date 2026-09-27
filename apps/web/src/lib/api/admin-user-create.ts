@@ -1,10 +1,12 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps } from './admin';
 import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
 
 /**
  * **CRÉER UN COMPTE DEPUIS L'ADMINISTRATION** (#8217) —
- * `POST /api/v1/admin/users`, sous `canCreateUsers` ; le rôle demandé passe
+ * `POST admin.users`, sous `canCreateUsers` ; le rôle demandé passe
  * en plus par `canManageUser` (on ne crée pas plus haut que soi).
  *
  * La passerelle tient les règles, ce port les transporte :
@@ -53,7 +55,7 @@ export async function createAdminUser(
 
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/admin/users',
+    path: adminEndpoints.users,
     body: {
       username: input.username.trim(),
       firstName: input.firstName.trim(),

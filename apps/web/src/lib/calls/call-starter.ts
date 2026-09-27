@@ -6,7 +6,7 @@ import type { StartCallRequest } from './engine';
 /**
  * **APPELER UNE PERSONNE** (A7, A8, #6454) — miroir de `CallStarter.swift` :
  * le pavé et le profil n'ont pas de conversation sous la main, ils ont une
- * PERSONNE. Le direct s'ouvre d'abord (`POST /api/v1/conversations`, idempotent
+ * PERSONNE. Le direct s'ouvre d'abord (`POST conversations.root`, idempotent
  * côté passerelle : un direct existant est RENDU), puis l'appel part dedans.
  *
  * `prime` s'appelle AVANT l'aller-retour : un contexte audio ne démarre que

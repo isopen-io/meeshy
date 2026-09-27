@@ -1,3 +1,5 @@
+import * as affiliateEndpoints from '@meeshy/shared/api/endpoints/affiliate';
+
 import { httpTransport } from './client';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -45,7 +47,7 @@ const defaultDeps: AffiliateDeps = { transport: httpTransport };
 export function validateReferralCode(code: string, deps: AffiliateDeps = defaultDeps): Promise<ApiResult<ReferralValidation>> {
   return deps.transport.request<ReferralValidation>({
     method: 'GET',
-    path: `/api/v1/affiliate/validate/${encodeURIComponent(code)}`,
+    path: affiliateEndpoints.validateByToken(code),
   });
 }
 

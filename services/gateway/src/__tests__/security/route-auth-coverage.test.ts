@@ -135,6 +135,7 @@ jest.mock('../../services/ZmqSingleton', () => {
   return { ZMQSingleton: { getInstance: jest.fn().mockResolvedValue(new EE()) } };
 });
 
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { buildAssembledApp, type CollectedRoute } from '../../route-manifest';
 
 // Le montage jetable (stub Prisma profond + assemblage du VRAI serveur Fastify
@@ -516,7 +517,7 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
   // extracteur balayer 1 300 fichiers pour n'y trouver AUCUN appel — vert, et
   // muet. L'extracteur lit donc la forme `path:` ; l'échantillon fixe plus bas
   // prouve qu'il la reconnaît.
-  it('ne laisse aucun appel LITTÉRAL du web viser une route absente', () => {
+  it('ne laisse aucun appel du web — LITTÉRAL ou entrée du CATALOGUE — viser une route absente', () => {
     const racineWeb = path.resolve(__dirname, '../../../../../apps/web/src');
     if (!fs.existsSync(racineWeb)) {
       throw new Error(`apps/web/src introuvable (${racineWeb}) — cette garde ne peut pas se prononcer, et se taire serait pire que rougir.`);
@@ -567,21 +568,55 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     // pendant deux tours.
     const fantômes = new Map<string, { url: string; site: string }>();
 
+    // Un appel COMMENTÉ n'est pas un appel : un doc-comment qui cite une
+    // requête documente une intention — le compter ferait rougir la garde
+    // sur du texte.
+    const estCommenté = (source: string, index: number) => {
+      const avant = source.slice(source.lastIndexOf('\n', index) + 1, index).trimStart();
+      return avant.startsWith('//') || avant.startsWith('*');
+    };
+
+    // LA FORME D'APPEL A CHANGÉ UNE SECONDE FOIS (#7716, 2026-09-27). Le web
+    // n'écrit plus ses adresses : il importe le module de GROUPE du catalogue
+    // généré (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`)
+    // et appelle `adminEndpoints.clé(…)`. Chaque référence est RÉSOLUE par le
+    // VRAI catalogue (jeton `x` pour chaque paramètre), puis confrontée au
+    // serveur assemblé comme un littéral : une entrée absente du catalogue, ou
+    // un catalogue périmé sur une route retirée, rougit ici.
+    const importDeGroupe =
+      /import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]@meeshy\/shared\/api\/endpoints\/([a-z0-9-]+)['"]/g;
+    const versNamespace = (fichier: string) => fichier.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+    const référencesDuCatalogue = (source: string) =>
+      [...source.matchAll(importDeGroupe)].flatMap(([, alias, fichier]) =>
+        [...source.matchAll(new RegExp(`(?<![\\w$.])${alias.replace(/\$/g, '\\$')}\\.([A-Za-z_$][\\w$]*)`, 'g'))]
+          .filter((m) => !estCommenté(source, m.index!))
+          .map((m) => ({ namespace: versNamespace(fichier), clé: m[1] }))
+      );
+    const résoudre = ({ namespace, clé }: { namespace: string; clé: string }): string | null => {
+      const entrée = (API_ENDPOINTS as unknown as Record<string, Record<string, unknown> | undefined>)[namespace]?.[clé];
+      if (typeof entrée === 'string') return entrée;
+      if (typeof entrée !== 'function') return null;
+      const appel = entrée as (...paramètres: string[]) => string;
+      return appel(...Array.from({ length: appel.length }, () => 'x'));
+    };
+    let importsDeGroupe = 0;
+    let fichiersQuiCitentLeCatalogue = 0;
+
     for (const fichier of fichiers) {
       const source = fs.readFileSync(fichier, 'utf8');
+      const site = path.relative(racineWeb, fichier);
+      if (source.includes('@meeshy/shared/api/endpoints')) fichiersQuiCitentLeCatalogue += 1;
+      if ([...source.matchAll(importDeGroupe)].length > 0) importsDeGroupe += 1;
+      for (const référence of référencesDuCatalogue(source)) {
+        const résolue = résoudre(référence);
+        const url = résolue === null ? `${référence.namespace}.${référence.clé} (absente du catalogue)` : versUrlServeur(résolue);
+        if (résolue === null || !estServie(url)) fantômes.set(`${url}\u0000${site}`, { url, site });
+      }
       for (const m of source.matchAll(motif)) {
-        // Un appel COMMENTÉ n'est pas un appel : un doc-comment qui cite une
-        // requête documente une intention — le compter ferait rougir la garde
-        // sur du texte.
-        const débutLigne = source.lastIndexOf('\n', m.index!) + 1;
-        const avant = source.slice(débutLigne, m.index!).trimStart();
-        if (avant.startsWith('//') || avant.startsWith('*')) continue;
+        if (estCommenté(source, m.index!)) continue;
 
         const url = versUrlServeur(m[2]);
-        if (!estServie(url)) {
-          const site = path.relative(racineWeb, fichier);
-          fantômes.set(`${url}\u0000${site}`, { url, site });
-        }
+        if (!estServie(url)) fantômes.set(`${url}\u0000${site}`, { url, site });
       }
     }
 
@@ -623,6 +658,29 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
       '/api/v1/echantillon/double',
       '/api/v1/echantillon/accent-grave',
     ]);
+
+    // 3. La lecture du CATALOGUE reconnaît-elle la forme d'appel du web, et
+    //    RÉSOUT-elle vers une route que le serveur juge ? Même principe : un
+    //    échantillon fixe, qui porte une entrée INEXISTANTE — elle doit sortir
+    //    fantôme, sinon la garde ne sait plus rougir sur le catalogue.
+    const ÉCHANTILLON_CATALOGUE = [
+      "import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';",
+      'const a = adminEndpoints.dashboard;',
+      'const b = adminEndpoints.usersByUserIdResetPassword(userId);',
+      'const c = adminEndpoints.routeQuiNExistePas;',
+      ' * adminEndpoints.commentee — documentaire, jamais un appel',
+    ].join('\n');
+    const lues = référencesDuCatalogue(ÉCHANTILLON_CATALOGUE);
+    expect(lues.map(({ clé }) => clé)).toEqual(['dashboard', 'usersByUserIdResetPassword', 'routeQuiNExistePas']);
+    expect(lues.map((référence) => {
+      const résolue = résoudre(référence);
+      return résolue === null ? null : estServie(versUrlServeur(résolue));
+    })).toEqual([true, true, null]);
+
+    // 4. Aucun fichier ne cite le catalogue sous une AUTRE forme que l'import
+    //    de groupe : un `import { x } from …/endpoints/admin` échapperait à
+    //    l'extraction, et la garde deviendrait muette sans rien perdre en volume.
+    expect(importsDeGroupe).toBe(fichiersQuiCitentLeCatalogue);
 
     // Exception UNIQUE, datée et suivie. L'onglet santé de l'administration
     // lit trois sondes qui n'existent pas — un défaut RÉEL, trouvé par cette
