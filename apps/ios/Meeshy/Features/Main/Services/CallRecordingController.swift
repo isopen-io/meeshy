@@ -49,6 +49,8 @@ protocol CallRecordingUploading: AnyObject {
 }
 
 final class CallRecordingTusUploader: CallRecordingUploading {
+    nonisolated deinit {}
+
     func upload(fileURL: URL) async throws -> String {
         guard let baseURL = URL(string: MeeshyConfig.shared.serverOrigin),
               let credential = APIClient.shared.requestCredential else {
@@ -79,7 +81,7 @@ final class CallRecordingController: ObservableObject {
     private let uploader: any CallRecordingUploading
     private let remote: any CallRecordingRemoteServiceProviding
     private let viewerId: () -> String?
-    private let wait: (UInt64) async -> Void
+    private let wait: @MainActor (UInt64) async -> Void
     private let fileDirectory: URL
     private var activeCapture: (callId: String, recordingId: String)?
     private var subscription: AnyCancellable?
@@ -99,7 +101,7 @@ final class CallRecordingController: ObservableObject {
         uploader: (any CallRecordingUploading)? = nil,
         remote: (any CallRecordingRemoteServiceProviding)? = nil,
         viewerId: (() -> String?)? = nil,
-        wait: ((UInt64) async -> Void)? = nil,
+        wait: (@MainActor (UInt64) async -> Void)? = nil,
         fileDirectory: URL? = nil,
         events: AnyPublisher<CallRecordingSocketEvent, Never>? = nil
     ) {
