@@ -85,9 +85,9 @@ export function SignupPhoneGlass({
           <span className="text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
             {country.dialCode}
           </span>
-          <Glyph name="caretDown" size={14} style={{ color: 'var(--color-ios-ink-3)' }} />
+          <Glyph name="caretDown" size={14} style={{ color: 'var(--color-ios-ink)' }} />
         </button>
-        <span aria-hidden="true" className="h-6 w-px" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)' }} />
+        <span aria-hidden="true" className="h-6 w-px" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 20%, transparent)' }} />
         <input
           ref={inputRef}
           id="signup-phone"

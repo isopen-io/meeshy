@@ -161,7 +161,8 @@ extension BubbleStandardLayout {
             shareURL: $shareURL,
             showShareSheet: $showShareSheet,
             onConsumeViewOnce: onConsumeViewOnce,
-            onReactToAttachment: onReactToAttachment
+            onReactToAttachment: onReactToAttachment,
+            onOpenProtected: openProtectedMedia
         )
     }
 
@@ -307,6 +308,12 @@ fileprivate struct BubbleGridCell: View {
     /// BUG2 A' — émis quand l'utilisateur pose un emoji sur CETTE image
     /// (`attachmentId`, `emoji`). nil = pas de réaction par-image (ex : image solo).
     let onReactToAttachment: ((String, String) -> Void)?
+
+    /// #8310 — le plein écran d'une pièce cachée, ouvert par l'HÔTE en direct
+    /// (`openProtectedMedia`), comme depuis le voile de la bulle. La cellule
+    /// écrivait la liaison `fullscreenAttachment`, le détour que #8009 a mesuré
+    /// mort : le toucher sur une case protégée n'ouvrait rien.
+    let onOpenProtected: (MessageAttachment) -> Void
 
     @State private var showReactionPicker = false
 
@@ -591,7 +598,7 @@ fileprivate struct BubbleGridCell: View {
     private func handleReveal() {
         guard case .openFullscreen(let media) = ProtectedContentTap.resolve(cell: attachment) else { return }
         HapticFeedback.medium()
-        fullscreenAttachment = media
+        onOpenProtected(media)
     }
 }
 

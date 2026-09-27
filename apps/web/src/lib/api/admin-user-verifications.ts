@@ -74,3 +74,50 @@ export async function requestAdminUserVerification(
   if (!result.ok) return result;
   return { ok: true, data: { channel: params.channel } };
 }
+
+/** Ce qu'« Activer le compte » doit savoir du membre pour choisir ses gestes. */
+export type AdminActivationSubject = Pick<AdminUserDetail, 'id' | 'isActive' | 'emailVerifiedAt' | 'email' | 'phoneNumber'>;
+
+/**
+ * Le compte peut-il être en phase `blocked` (#8238) ? Seul un compte SANS
+ * adresse prouvée ET sans numéro l'atteint (`account-activation.ts`) : un
+ * numéro n'est jamais bloquant.
+ */
+export const adminActivationNeedsProof = (m: AdminActivationSubject): boolean =>
+  m.emailVerifiedAt === null && m.email !== '' && m.phoneNumber === '';
+
+/** « Activer le compte » a-t-il quelque chose à faire ? */
+export const adminAccountNeedsActivation = (m: AdminActivationSubject): boolean => !m.isActive || adminActivationNeedsProof(m);
+
+/**
+ * **ACTIVER LE COMPTE EN UN GESTE** (#8289) — le rend actif ET le sort de la
+ * phase `blocked` de #8238, comme « Marquer l'adresse vérifiée » : c'est la
+ * preuve de l'adresse qui lève le blocage. Deux écritures sous leurs propres
+ * lois et leurs propres traces d'audit, dans cet ordre ; la première refusée
+ * arrête tout.
+ */
+export async function activateAdminUser(
+  params: AdminDeps & { readonly membre: AdminActivationSubject; readonly signal?: AbortSignal },
+): Promise<ApiResult<AdminUserDetail>> {
+  const { membre } = params;
+  const reactivation = membre.isActive
+    ? null
+    : await params.transport.request<unknown>({
+        method: 'PATCH',
+        path: adminEndpoints.usersByUserId(membre.id),
+        body: { isActive: true },
+        ...withSignal(params.signal),
+      });
+  if (reactivation !== null && !reactivation.ok) return reactivation;
+  if (!adminActivationNeedsProof(membre)) {
+    return reactivation === null ? { ok: false, status: 0, error: 'Rien à activer' } : membreRendu(reactivation);
+  }
+  return setAdminUserVerification({
+    source: params.source,
+    transport: params.transport,
+    userId: membre.id,
+    channel: 'email',
+    verified: true,
+    ...withSignal(params.signal),
+  });
+}

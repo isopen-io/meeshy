@@ -7,6 +7,7 @@ import { decodeAttachment } from './decode';
 
 import { deleteLastMessage, editLastMessage } from './list-preview';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
+import { belongsTo, quotes, tombstone } from './quote-tombstone';
 import type { Attachment, Message } from './types';
 import { purgeViewOnceIn } from './view-once-seal';
 
@@ -56,7 +57,6 @@ const isStaleEdit = (known: Message, incomingEditedAt: unknown): boolean => {
   return incomingMs < knownMs - EDIT_ORDERING_TOLERANCE_MS;
 };
 
-const belongsTo = (message: Message, conversationId: string): boolean => message.conversationId === conversationId;
 
 /** Les traductions de l'ANCIEN texte sont périmées ; seule une carte servie AVEC l'édition peut la suivre. */
 const servedTranslations = (data: SocketIOMessage): Message['translations'] =>
@@ -83,30 +83,9 @@ const editedRow = (known: Message, data: SocketIOMessage): Message => ({
 const editedQuote = (quote: Message, data: SocketIOMessage): Message =>
   quotedIsProtected(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
 
-const tombstone = (message: Message, deletedAt: string): Message => {
-  const { attachments: _attachments, ...rest } = message;
-  return { ...rest, content: '', translations: [], deletedAt: deletedAt as unknown as Date };
-};
 
-const quotes = (message: Message, quotedId: string): boolean =>
-  message.replyTo !== undefined && message.replyTo !== null && message.replyTo.id === quotedId;
 
-/**
- * Les citations (`replyTo`) d'un message DÉTRUIT deviennent des pierres
- * tombales dans le fil de sa conversation — sa suppression (#7926) comme son
- * expiration (#7960) : plus rien de lui ne se lit dans les réponses.
- */
-export function tombstoneQuotesOf(
-  queryClient: QueryClient,
-  params: { readonly conversationId: string; readonly messageId: string; readonly deletedAt: string },
-): void {
-  const citing = (m: Message): boolean => quotes(m, params.messageId) && belongsTo(m, params.conversationId);
-  patchThreadMessages(queryClient, params.conversationId, (messages) =>
-    messages.some(citing)
-      ? messages.map((m) => (citing(m) ? { ...m, replyTo: tombstone(m.replyTo as Message, params.deletedAt) } : m))
-      : messages,
-  );
-}
+export { tombstoneQuotesOf } from './quote-tombstone';
 
 export function applyMessageEdited(queryClient: QueryClient, data: SocketIOMessage): void {
   const known = findCachedThreadMessage(queryClient, data.conversationId, data.id);

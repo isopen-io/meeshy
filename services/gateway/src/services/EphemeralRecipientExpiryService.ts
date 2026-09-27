@@ -72,7 +72,8 @@ export interface EphemeralRecipientExpiryOptions {
  */
 export const EPHEMERAL_RECIPIENT_EXPIRY_SWEEP_INTERVAL_MS = 60 * 1000;
 
-interface DueEntry {
+/** Une échéance de destinataire à annoncer — ce que `expireNow` accepte. */
+export interface EphemeralExpiryEntry {
   id: string;
   messageId: string;
   conversationId: string;
@@ -122,7 +123,7 @@ export class EphemeralRecipientExpiryService {
   ): Promise<{ expired: number }> {
     const now = this.now();
 
-    let due: DueEntry[];
+    let due: EphemeralExpiryEntry[];
     try {
       due = (await this.prisma.messageStatusEntry.findMany({
         where: {
@@ -142,7 +143,7 @@ export class EphemeralRecipientExpiryService {
         },
         orderBy: { ephemeralExpiresAt: 'asc' },
         take: this.batchSize,
-      })) as DueEntry[];
+      })) as EphemeralExpiryEntry[];
     } catch (err) {
       log.warn('ephemeral expiry query failed', { err });
       return { expired: 0 };
@@ -169,13 +170,34 @@ export class EphemeralRecipientExpiryService {
   }
 
   /**
+   * Flamme-œil (#8302) : la consommation pose `D(u) = maintenant` et n'attend
+   * pas la passe à la minute — « vu puis quitté » doit disparaître à l'instant
+   * de chez le lecteur. Même revendication write-once que le balayage, donc
+   * idempotente : une entrée déjà annoncée ne se rejoue pas. Une entrée dont
+   * l'échéance n'est pas échue est refusée — ce chemin ne devance personne.
+   */
+  async expireNow(
+    entries: readonly EphemeralExpiryEntry[],
+    announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  ): Promise<{ expired: number }> {
+    const now = this.now();
+    let expired = 0;
+    for (const entry of entries) {
+      const due =
+        entry.ephemeralExpiresAt instanceof Date && entry.ephemeralExpiresAt.getTime() <= now.getTime();
+      if (due && (await this._expireForRecipient(entry, now, announcer))) expired += 1;
+    }
+    return { expired };
+  }
+
+  /**
    * L'ordre porte la convergence : on RÉCLAME d'abord, on annonce ensuite. Une
    * annonce suivie d'un marquage en échec rejouerait `message:expired` à chaque
    * passe ; un marquage suivi d'une annonce en échec coûte un écran en retard
    * que le prochain `GET .../messages` répare (il sert `expiresAt` par lecteur).
    */
   private async _expireForRecipient(
-    entry: DueEntry,
+    entry: EphemeralExpiryEntry,
     now: Date,
     announcer: RetractedNotificationAnnouncer | undefined,
   ): Promise<boolean> {

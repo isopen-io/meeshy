@@ -56,6 +56,7 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
+import { useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
@@ -510,13 +511,23 @@ export default function ThreadScreen() {
    * encore locaux — un id que le serveur ne connaît pas).
    */
   const lastConfirmedMessageId = threadData.messages[threadData.messages.length - 1]?.id;
+  /* LA FLAMME-ŒIL (#8304) — la MÊME frontière de lecture dit ce qui a été
+     VU ; la sortie du fil retire et consomme (`useAfterReadConsumption`). */
+  const afterRead = useAfterReadConsumption({
+    conversationId,
+    messages: threadData.messages,
+    viewerId: viewer.id ?? undefined,
+    queryClient,
+  });
+  const noteAfterReadSeen = afterRead.noteSeenUpTo;
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
+    noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({
       conversationId: markedConversationId,
       caughtUpToMessageId,
       deps: { ...apiDeps, store: conversationStore, queryClient },
     });
-  }, [queryClient]);
+  }, [queryClient, noteAfterReadSeen]);
   /* (W14 #7372) Le suivi de lecture se suspend de lui-même sous une couche
      modale — visionneuse plein écran comprise, que cet écran ne monte pas :
      le registre `lib/view/modal-layers.ts` le sait, l'écran n'a rien à
@@ -852,6 +863,7 @@ export default function ThreadScreen() {
             onSend={compose.onSend}
             onTextChange={typing.onTextChange}
             draft={compose.initialDraft}
+            stickyProtection={compose.stickyProtection}
             /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) —
                `Composer` ne connaît que la citation PRÉ-ADRESSÉE
                (`replyTo.author`/`excerpt`), jamais l'identifiant. */
