@@ -774,8 +774,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// l'acquittement, on est au bout d'UN message, et il en reste à partir.
     func test_leDésarmement_seFaitAuTapEtPasÀLAcquittement() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertTrue(send.contains("func consumeArmedProtection()"),
-                      "La saisie-et-désarmement doit être UNE fonction nommée, appelée par le tap.")
+        XCTAssertTrue(send.contains("func captureArmedProtection()"),
+                      "La saisie doit être UNE fonction nommée, appelée par le tap — elle ne désarme plus (#8305).")
 
         guard let finalize = send.range(of: "func finalizeSuccessfulSend") else {
             return XCTFail("Impossible de localiser la finalisation d'un envoi acquitté.")
@@ -870,7 +870,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
         let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
         XCTAssertEqual(
-            src.components(separatedBy: "viewModel.consumeArmedProtection()").count - 1, 1,
+            src.components(separatedBy: "viewModel.captureArmedProtection()").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
         let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
