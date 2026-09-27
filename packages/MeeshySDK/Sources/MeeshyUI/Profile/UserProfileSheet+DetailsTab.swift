@@ -138,6 +138,10 @@ extension UserProfileSheet {
     @ViewBuilder
     var actionButtons: some View {
         VStack(spacing: 10) {
+            if offersCall {
+                callButtons
+            }
+
             connectionContextBanner
 
             switch connectionStatus {
@@ -261,6 +265,38 @@ extension UserProfileSheet {
         .background(theme.surface(tint: resolvedAccent, intensity: 0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
+    }
+
+    var offersCall: Bool {
+        onCall != nil && !isCurrentUser && !isInteractionDisabled
+    }
+
+    private var callButtons: some View {
+        HStack(spacing: 10) {
+            callButton(
+                isVideo: false,
+                icon: "phone.fill",
+                label: String(localized: "profile.action.call.audio", defaultValue: "Appel vocal", bundle: .module)
+            )
+            callButton(
+                isVideo: true,
+                icon: "video.fill",
+                label: String(localized: "profile.action.call.video", defaultValue: "Appel vidéo", bundle: .module)
+            )
+        }
+    }
+
+    private func callButton(isVideo: Bool, icon: String, label: String) -> some View {
+        profileActionButton(icon: icon, label: label, color: Color(hex: resolvedAccent)) {
+            guard let request = ProfileCallRequest(
+                userId: displayUser.userId,
+                displayName: displayUser.resolvedDisplayName,
+                isVideo: isVideo,
+                sharedConversations: effectiveConversations
+            ) else { return }
+            onCall?(request)
+        }
+        .frame(minHeight: 44)
     }
 
     func profileActionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {

@@ -50,6 +50,7 @@ enum DeepLinkDestination: Equatable {
     /// passerelle grave) ou `/signup?ref=<code>` : un CODE à mémoriser jusqu'à
     /// l'inscription, pas un lieu de l'app.
     case referral(code: String)
+    case call(conversationId: String, isVideo: Bool)
     case external(URL)
 }
 
@@ -281,6 +282,8 @@ enum DeepLinkParser {
             return queryValue("contactId", in: url).map { .conversation(id: $0, draftText: queryValue("message", in: url)) }
         // Widgets « Non lus » / « Récentes » et App Shortcut (#7811).
         case "conversations" where customScheme: return id.flatMap(conversationListEntry)
+        case "call" where customScheme && components.count == 1:
+            return queryValue("contactId", in: url).map { .call(conversationId: $0, isVideo: queryValue("type", in: url) == "video") }
         default: break
         }
         // Post (`post`, `p`), story (`story`, `stories`, `s`), profil (`u`, `users`).
@@ -453,15 +456,20 @@ final class DeepLinkRouter: ObservableObject {
     /// Le code d'invitation mémorisé jusqu'à l'inscription (#8075).
     private let referrals: PendingReferralStoreProviding
     private let isAuthenticated: @MainActor () -> Bool
+    private let dialConversationCall: @MainActor (String, Bool) -> Void
 
     init(
         drafts: DraftStore = .shared,
         referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
-        isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated }
+        isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
+        dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
+            Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
+        }
     ) {
         self.drafts = drafts
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
+        self.dialConversationCall = dialConversationCall
     }
 
     // MARK: - Tracked link (`/l/<token>`) async resolution
@@ -565,7 +573,7 @@ final class DeepLinkRouter: ObservableObject {
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
         case .emailVerificationLink(let token, let email): return .emailVerificationLink(token: token, email: email)
-        case .trackedLink, .share, .referral, .external: return nil
+        case .trackedLink, .share, .referral, .call, .external: return nil
         }
     }
 
@@ -588,6 +596,10 @@ final class DeepLinkRouter: ObservableObject {
             return true
         case .referral(let code):
             return captureReferral(code)
+        case .call(let conversationId, let isVideo):
+            guard isAuthenticated() else { return false }
+            dialConversationCall(conversationId, isVideo)
+            return true
         case .share, .external:
             return false
         case let destination:

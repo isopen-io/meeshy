@@ -329,6 +329,12 @@ struct RootSheetsLayer: ViewModifier {
                         }, onOpenReel: { reel, reels in
                             ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
+                    },
+                    onCall: { request in
+                        router.deepLinkProfileUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            CallBackDialer.shared.dialFromProfile(request)
+                        }
                     }
                 )
                 .presentationDetents([.large, .medium])

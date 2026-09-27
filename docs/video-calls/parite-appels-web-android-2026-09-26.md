@@ -24,15 +24,15 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | A2 | Appel vidéo 1:1 depuis l'en-tête (menu audio / vidéo) | ✅ | ✅ | ❌ | ❌ | 2 | idem |
 | A3 | Appeler depuis la liste des conversations (menu contextuel) | ✅ | ❌ | ❌ | ❌ | 3 | iOS `ConversationListView+Overlays.swift:118` |
 | A4 | Rappeler depuis le journal (audio ou vidéo) | ✅ | — | ❌ (#6382) | ❌ | 3 | iOS `CallsTab.swift:192` · web `routes/calls-parts.tsx` |
-| A5 | Rappeler depuis la bulle d'appel terminé | 🟡 via fiche | ✅ | ❌ | ❌ | 3 | legacy `CallSystemMessage.tsx` |
-| A6 | Rappeler depuis la notification d'appel manqué | 🟡 ouvre le fil | ❌ | ❌ | ❌ | 3 | iOS `NotificationActionHandler.swift:362` |
+| A5 | Rappeler depuis la bulle d'appel terminé | ✅ | ✅ | ✅ | ✅ | 3 | iOS `ConversationViewModel.callBack(for:)` · web `components/system-notice.tsx` (`CallNoticeAction`) · legacy `CallSystemMessage.tsx` |
+| A6 | Rappeler depuis la notification d'appel manqué | ✅ (#8067) | ❌ | ✅ action « Rappeler » (#8067) | 🟡 ouvre le fil (pas de bouton d'action sans code natif) | 3 | iOS `NotificationActionHandler.swift` → `CallBackDialer` → `CallStarter` · web `public/sw-push.js` (`rappeler`) + `lib/calls/call-back-intent.ts` · gateway `notifications/callBackPushFields.ts` |
 | A7 | Appeler un contact sans conversation connue (`CallStarter`) | ✅ | ❌ | ❌ | ❌ | 3 | iOS `Contacts/CallStarter.swift` |
 | A8 | Pavé : trouver par numéro puis appeler | ✅ | ❌ | ❌ (#6454) | ❌ | 3 | iOS `KeypadTab.swift` |
 | A9 | Garde « déjà en appel » | ✅ | ✅ | ❌ | ❌ | 1 | iOS `CallManager.swift:1110` · legacy `use-video-call.ts` |
 | A10 | Permissions micro / caméra avant l'appel (caméra refusée ⇒ audio) | ✅ | ✅ | ❌ | ❌ | 2 | iOS `MediaPermissionCoordinator.swift` · legacy `use-video-call.ts` |
 | A11 | Réessayer après un échec transitoire | ✅ | ✅ | ❌ | ❌ | 2 | iOS `CallView.swift:1602` · legacy `call-retry-policy.ts` |
 | A12 | Lien profond `/call/:callId` | — | 🟡 | ❌ | ❌ | 3 | legacy `app/call/[callId]/page.tsx` |
-| A13 | Siri / Récents iOS / raccourcis | 🟡 stub | — | — | — | — | iOS `MeeshyAppIntents.swift` (#7735) |
+| A13 | Siri / Récents iOS / raccourcis | ✅ non vérifié sur appareil (#7735, #8067) | — | — | — | — | iOS `CallBackRequest.swift` (`INStartCallIntent`) · `DeepLinkRouter.swift` (`meeshy://call`) · `MeeshyAppIntents.swift` |
 
 ### B. Signalisation et moteur WebRTC
 
@@ -189,7 +189,7 @@ Ajouté le 2026-09-26 à la demande du porteur : les fonctions absentes ou parti
 | Enregistrement d'un appel avec consentement | ❌ | #8064 |
 | Refuser avec un message rapide | ❌ | #8065 |
 | Journal complet : pagination, recherche, suppression, participants d'un groupe | 🟡 1re page seule | #8066 |
-| « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | 🟡 ouvre le fil | #8067, #7735 (Récents) |
+| « Rappeler » compose l'appel (notification manquée, bulle, profil, Siri) | ✅ écrit et testé, non vérifié sur appareil | #8067, #7735 (Récents) |
 | Appels de groupe | ❌ 1 pair | #3585 (iOS), #3721 (web et coque) |
 | Ajouter une personne à un appel en cours | ❌ | #8068 |
 | SFU et simulcast au-delà de quatre | ❌ | #8069 |
