@@ -387,8 +387,8 @@ struct ThemedMessageBubble: View {
                 // les yeux du lecteur se consume, puis l'hôte retire la ligne.
                 .ephemeralBurn(isBurning: content.isBurning)
                 // #8303 — la flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
-                .afterReadWatermark(content.protection.isAfterRead, gutter: 40, tint: ComposerProtection.ephemeral.tint,
-                                    edge: content.isMe ? .trailing : .leading, overhang: 26)
+                .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
+                                    edge: content.isMe ? .trailing : .leading, overhang: 10)
                 .viewOnceRetouch(isActive: content.isViewOnceRevealed) { [messageId = content.messageId, onConsumeViewOnce] in
                     onConsumeViewOnce?(messageId) { _ in }
                 }
