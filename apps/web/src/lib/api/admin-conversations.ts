@@ -1,3 +1,5 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import { decodeMessage } from './decode';
 import type { ApiResult } from './http';
@@ -27,7 +29,7 @@ import type { Message } from './types';
  *
  * **Les DEUX seaux sont fermés** (revue-correction) : le cache de requêtes par
  * le préfixe ci-dessous, le service worker par `apiResponseMayBeCached`
- * (`lib/net/api-runtime-cache.ts`), qui retire tout `/api/v1/admin/` du
+ * (`lib/net/api-runtime-cache.ts`), qui retire tout le groupe `admin` du catalogue du
  * `runtimeCaching`. Fermer le premier seul laissait la charge partir entière
  * par le second, et ce fichier le disait déjà en toutes lettres.
  *
@@ -189,7 +191,7 @@ export async function loadAdminInstanceConversations(
 
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/conversations?${query.toString()}`,
+    path: `${adminEndpoints.conversations}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -338,7 +340,7 @@ export async function loadAdminSovereignThread(
 
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/conversations/${encodeURIComponent(params.conversationId)}/messages?${query.toString()}`,
+    path: `${adminEndpoints.conversationsByConversationIdMessages(params.conversationId)}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

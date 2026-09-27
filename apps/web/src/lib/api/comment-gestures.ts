@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { editedLanguage } from '@/lib/send/compose-language';
 
@@ -28,7 +29,7 @@ import {
  *
  * ROUTES RÉELLES, lues avant d'être appelées :
  *
- *  - `POST|DELETE /api/v1/posts/:postId/comments/:commentId/like`
+ *  - `POST|DELETE posts.byPostIdCommentsByCommentIdLike`
  *    (`services/gateway/src/routes/posts/comments.ts:679,774`, `requiredAuth`
  *    + `registeredUser`). Corps facultatif : `LikeSchema.emoji` a le DÉFAUT
  *    `'❤️'` (`routes/posts/types.ts:560`) et `UnlikeSchema` n'en a AUCUN
@@ -41,13 +42,13 @@ import {
  *    **Cette route ne passe PAS par `withMutationLog`** : aucun
  *    `X-Client-Mutation-Id` n'est posé, poser l'en-tête annoncerait une
  *    idempotence que la passerelle n'offre pas ici.
- *  - `PATCH /api/v1/posts/:postId/comments/:commentId` (`:524`) — corps
+ *  - `PATCH posts.byPostIdCommentsByCommentId` (`:524`) — corps
  *    `UpdateCommentSchema` (`types.ts:466`) : `content` ≤ 2000, `effectFlags`,
  *    `originalLanguage`, avec un `.refine` « Nothing to update ». Rend le
  *    commentaire SERVI (auteur + média + `postId`). 403 `FORBIDDEN` hors
  *    auteur, 400 `EMPTY_CONTENT` sur un texte blanc. Idempotent par
  *    `X-Client-Mutation-Id` (`replayCost: 'converges'`).
- *  - `DELETE /api/v1/posts/:postId/comments/:commentId` (`:853`) — rend
+ *  - `DELETE posts.byPostIdCommentsByCommentId` (`:853`) — rend
  *    `{ deleted: true }`, idempotent par `X-Client-Mutation-Id`. Ni le PATCH
  *    ni le DELETE ne gardent l'audience du POST, DÉLIBÉRÉMENT (le
  *    doc-comment de la route l'écrit : « le droit de retirer ce qu'on a
@@ -341,7 +342,7 @@ export async function performCommentLike(params: GestureParams & { readonly on: 
   try {
     const result = await sendCommentRequest(deps, {
       method: on ? 'POST' : 'DELETE',
-      path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`,
+      path: postsEndpoints.byPostIdCommentsByCommentIdLike(postId, commentId),
       idempotent: false,
       fixture: { liked: on, likeCount: countOf(target.likeCount) },
     }).catch(() => null);
@@ -415,7 +416,7 @@ export async function performCommentEdit(
   try {
     const result = await sendCommentRequest(deps, {
       method: 'PATCH',
-      path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+      path: postsEndpoints.byPostIdCommentsByCommentId(postId, commentId),
       idempotent: true,
       body: { content, ...(declared === undefined ? {} : { originalLanguage: declared }) },
       fixture: { ...site.comment, content },
@@ -467,7 +468,7 @@ export async function performCommentDelete(params: GestureParams): Promise<Comme
   try {
     const result = await sendCommentRequest(deps, {
       method: 'DELETE',
-      path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+      path: postsEndpoints.byPostIdCommentsByCommentId(postId, commentId),
       idempotent: true,
       fixture: { deleted: true },
     }).catch(() => null);

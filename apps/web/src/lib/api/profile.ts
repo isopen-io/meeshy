@@ -1,6 +1,8 @@
 import * as z from 'zod/mini';
 
 import { isSupportedLanguage } from '@meeshy/shared/utils/languages';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -10,15 +12,15 @@ import type { ApiResult, HttpTransport } from './http';
  * **LE PORT DU PROFIL** (#6289) — miroir `UserService` (iOS,
  * `packages/MeeshySDK/Sources/MeeshySDK/Services/UserService.swift`).
  *
- * - `GET /api/v1/me` — la SEULE lecture de soi (`services/gateway/src/routes/me/
+ * - `GET me.root` — la SEULE lecture de soi (`services/gateway/src/routes/me/
  *   get-me.ts`, #4178), `{ user }` servi par `formatUserResponse`.
- * - `GET /api/v1/users/me/stats` — `computeUserStats` (`routes/user-stats.ts:257`).
+ * - `GET users.meStats` — `computeUserStats` (`routes/user-stats.ts:257`).
  * - Les demandes reçues EN ATTENTE ne sont PLUS lues ici (#6363) : le profil
  *   compte le panier `received` de `friend-requests.ts` (`pendingRequestsOf`),
  *   le MÊME que l'onglet « Demandes » de la découverte et la pastille du
  *   barreau (#6321). Deux lectures parallèles auraient dit deux nombres, et
  *   une acceptation n'aurait fait baisser que l'un des deux.
- * - `PATCH /api/v1/users/me`, `/users/me/avatar`, `/users/me/banner`
+ * - `PATCH users.me`, `/users/me/avatar`, `/users/me/banner`
  *   (`routes/users/profile-updates.ts:42,286,392`).
  *
  * **LA FRONTIÈRE EST VALIDÉE PAR ZOD, dans les deux sens.** À l'entrée, la
@@ -224,7 +226,7 @@ export async function loadMyProfile(params: ProfileDeps & { readonly signal?: Ab
     const { fixtureMyProfile } = await import('./fixtures-profile');
     return { ok: true, data: fixtureMyProfile() };
   }
-  return profileResult(await params.transport.request<unknown>({ method: 'GET', path: '/api/v1/me', ...withSignal(params.signal) }));
+  return profileResult(await params.transport.request<unknown>({ method: 'GET', path: meEndpoints.root, ...withSignal(params.signal) }));
 }
 
 export async function loadMyStats(params: ProfileDeps & { readonly signal?: AbortSignal }): Promise<ApiResult<MyStats>> {
@@ -232,7 +234,7 @@ export async function loadMyStats(params: ProfileDeps & { readonly signal?: Abor
     const { fixtureMyStats } = await import('./fixtures-profile');
     return { ok: true, data: fixtureMyStats() };
   }
-  const result = await params.transport.request<unknown>({ method: 'GET', path: '/api/v1/users/me/stats', ...withSignal(params.signal) });
+  const result = await params.transport.request<unknown>({ method: 'GET', path: usersEndpoints.meStats, ...withSignal(params.signal) });
   if (!result.ok) return result;
   const stats = decodeMyStats(result.data);
   return stats === null ? { ok: false, status: 0, error: 'Statistiques illisibles' } : { ok: true, data: stats };
@@ -247,7 +249,7 @@ export async function patchMyProfile(deps: ProfileDeps, patch: ProfilePatch): Pr
     const { fixturePatchMyProfile } = await import('./fixtures-profile');
     return { ok: true, data: fixturePatchMyProfile(validated.patch) };
   }
-  return profileResult(await deps.transport.request<unknown>({ method: 'PATCH', path: '/api/v1/users/me', body: validated.patch }));
+  return profileResult(await deps.transport.request<unknown>({ method: 'PATCH', path: usersEndpoints.me, body: validated.patch }));
 }
 
 export async function patchMyImage(deps: ProfileDeps, kind: ProfileImageKind, url: string): Promise<ApiResult<MyProfile>> {
@@ -259,9 +261,14 @@ export async function patchMyImage(deps: ProfileDeps, kind: ProfileImageKind, ur
     return { ok: false, status: 0, error: 'Adresse d’image refusée', code: 'INVALID_IMAGE_URL', field: kind };
   }
   return profileResult(
-    await deps.transport.request<unknown>({ method: 'PATCH', path: `/api/v1/users/me/${kind}`, body: { [kind]: url } }),
+    await deps.transport.request<unknown>({ method: 'PATCH', path: MY_IMAGE_PATH[kind], body: { [kind]: url } }),
   );
 }
+
+const MY_IMAGE_PATH: Readonly<Record<ProfileImageKind, string>> = {
+  avatar: usersEndpoints.meAvatar,
+  banner: usersEndpoints.meBanner,
+};
 
 /**
  * **TRENTE MINUTES DE FRAÎCHEUR** (#6974) — mesuré : sans `staleTime`, le

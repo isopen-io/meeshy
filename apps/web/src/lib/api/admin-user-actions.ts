@@ -1,9 +1,11 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps } from './admin';
 import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
 
 /**
- * **ÉDITER UN MEMBRE** (#6819) — `PATCH /api/v1/admin/users/:userId`, sous
+ * **ÉDITER UN MEMBRE** (#6819) — `PATCH admin.usersByUserId`, sous
  * `canUpdateUsers` ET `requireHierarchy` : l'acteur doit SURCLASSER sa cible,
  * fail-closed en 403 même lorsque la cible est introuvable.
  *
@@ -101,7 +103,7 @@ export async function updateAdminUser(
 
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}`,
+    path: adminEndpoints.usersByUserId(params.userId),
     body: corps,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });

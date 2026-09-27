@@ -1,11 +1,12 @@
 import * as z from 'zod/mini';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * **LE PORT DES RÉGLAGES D'USAGE** (#5563) — `GET`/`PATCH /api/v1/me/preferences`,
+ * **LE PORT DES RÉGLAGES D'USAGE** (#5563) — `GET`/`PATCH me.preferences`,
  * les routes unifiées de #4181 (`services/gateway/src/routes/me/preferences/
  * unified-routes.ts`). Miroir `UserPreferencesManager` (iOS), limité à ce que
  * l'écran montre.
@@ -123,7 +124,7 @@ export async function loadAppPreferences(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/me/preferences?fields=${FIELDS_QUERY}`,
+    path: `${meEndpoints.preferences}?fields=${FIELDS_QUERY}`,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -138,7 +139,7 @@ export async function patchAppPreferences(deps: AppPreferencesDeps, patch: Prefe
   }
   const result = await deps.transport.request<unknown>({
     method: 'PATCH',
-    path: '/api/v1/me/preferences',
+    path: meEndpoints.preferences,
     body: preferencesPatchBody(patch),
   });
   if (!result.ok) return result;

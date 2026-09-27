@@ -1,5 +1,6 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
+import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -9,17 +10,17 @@ import type { ApiResult, HttpTransport } from './http';
  * **LE PORT DES LIENS DE PARTAGE** (#5652 bloc D, #6361) — miroir
  * `ShareLinkService` (`packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift`).
  *
- * - `GET /api/v1/links?offset=&limit=&include=summary` — les liens CRÉÉS PAR le
+ * - `GET links.root?offset=&limit=&include=summary` — les liens CRÉÉS PAR le
  *   lecteur (`services/gateway/src/routes/links/user.ts` : `where: { createdBy:
  *   userId }`), et sur la première page les agrégats RÉELS dans `meta.summary`
  *   (l'alias `/links/stats` est déprécié, il n'est jamais appelé).
- * - `PATCH /api/v1/links/:linkId` — la seule écriture canonique
+ * - `PATCH links.byLinkId` — la seule écriture canonique
  *   (`management.ts`) : `{ isActive }` pour (dés)activer — désactiver révoque
  *   aussi les invités déjà entrés — et les champs changés de la page du
  *   créateur (#7797).
- * - `DELETE /api/v1/links/:linkId` — « Supprimer » (#7797). La passerelle ne
+ * - `DELETE links.byLinkId` — « Supprimer » (#7797). La passerelle ne
  *   fait aujourd'hui que FERMER la ligne (`admin.ts`, #6411).
- * - `POST /api/v1/links` — la création (`creation.ts`), qui sert aussi la
+ * - `POST links.root` — la création (`creation.ts`), qui sert aussi la
  *   feuille de partage d'un fil (`components/share-link-sheet.tsx`).
  *
  * **Un lien d'un autre compte ne se sert jamais.** La liste est bornée par la
@@ -229,7 +230,7 @@ export async function loadMyShareLinks(
   if (params.offset === 0) query.set('include', 'summary');
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/links?${query.toString()}`,
+    path: `${linksEndpoints.root}?${query.toString()}`,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -286,7 +287,7 @@ export async function setShareLinkActive(deps: LinksDeps, linkId: string, isActi
   }
   const result = await deps.transport.request<unknown>({
     method: 'PATCH',
-    path: `/api/v1/links/${encodeURIComponent(linkId)}`,
+    path: linksEndpoints.byLinkId(linkId),
     body: { isActive },
   });
   if (!result.ok) return result;
@@ -322,7 +323,7 @@ export async function updateShareLink(deps: LinksDeps, linkId: string, patch: Sh
     const { fixtureUpdateShareLink } = await import('./fixtures-links');
     return fixtureUpdateShareLink(linkId, patch);
   }
-  const result = await deps.transport.request<unknown>({ method: 'PATCH', path: `/api/v1/links/${encodeURIComponent(linkId)}`, body: patch });
+  const result = await deps.transport.request<unknown>({ method: 'PATCH', path: linksEndpoints.byLinkId(linkId), body: patch });
   return result.ok ? { ok: true, data: { linkId } } : result;
 }
 
@@ -331,7 +332,7 @@ export async function deleteShareLink(deps: LinksDeps, linkId: string): Promise<
     const { fixtureDeleteShareLink } = await import('./fixtures-links');
     return fixtureDeleteShareLink(linkId);
   }
-  const result = await deps.transport.request<unknown>({ method: 'DELETE', path: `/api/v1/links/${encodeURIComponent(linkId)}` });
+  const result = await deps.transport.request<unknown>({ method: 'DELETE', path: linksEndpoints.byLinkId(linkId) });
   return result.ok ? { ok: true, data: { linkId } } : result;
 }
 
@@ -463,7 +464,7 @@ export async function createShareLinkFromDraft(deps: LinksDeps, draft: ShareLink
     const { fixtureCreateShareLink } = await import('./fixtures-links');
     return fixtureCreateShareLink(verdict.body, now);
   }
-  const result = await deps.transport.request<unknown>({ method: 'POST', path: '/api/v1/links', body: verdict.body });
+  const result = await deps.transport.request<unknown>({ method: 'POST', path: linksEndpoints.root, body: verdict.body });
   if (!result.ok) return result;
   const created = decodeCreated(result.data);
   return created === null ? { ok: false, status: 0, error: 'Lien illisible' } : { ok: true, data: created };

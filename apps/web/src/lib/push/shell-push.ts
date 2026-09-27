@@ -1,3 +1,6 @@
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
+
 import type { HttpTransport } from '@/lib/api/http';
 import type { SessionState } from '@/lib/api/session';
 import { DELIVERY_RECEIPT_TYPES } from '@/lib/notifications/delivery-receipt-types';
@@ -11,7 +14,7 @@ import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from 
  * par `@capacitor/push-notifications`. Un seul chemin d'ENVOI pour autant — la
  * passerelle sert déjà `platform: 'android'` (`PushNotificationService`,
  * bloc `android.notification`), et le jeton s'enregistre par le MÊME port
- * qu'iOS et que le navigateur (`POST /api/v1/users/register-device-token`).
+ * qu'iOS et que le navigateur (`POST users.registerDeviceToken`).
  *
  * Ce module ne REND rien : application en arrière-plan ou tuée, le bloc
  * `notification` de FCM est affiché par le SYSTÈME, dans le canal que la
@@ -126,7 +129,7 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
     void transport
       .request({
         method: 'POST',
-        path: '/api/v1/users/register-device-token',
+        path: usersEndpoints.registerDeviceToken,
         body: { token, platform: 'android', type: 'fcm', appVersion: env.appVersion },
       })
       .catch(() => undefined);
@@ -148,7 +151,7 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
     void transport
       .request({
         method: 'POST',
-        path: `/api/v1/conversations/${encodeURIComponent(delivered.conversationId)}/receipts`,
+        path: conversationsEndpoints.byConversationIdReceipts(delivered.conversationId),
         body: { type: 'delivered', messageIds: [delivered.messageId] },
       })
       .catch(() => undefined);

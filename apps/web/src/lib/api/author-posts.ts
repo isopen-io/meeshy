@@ -1,3 +1,5 @@
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
 import { AUTHOR_POSTS_QUERY_ROOT } from './card-caches';
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -14,7 +16,7 @@ import type { ApiResult, HttpTransport } from './http';
 
 /**
  * **LE PORT DES PUBLICATIONS D'UN AUTEUR** (#7083) —
- * `GET /api/v1/social/posts?scope=author&authorId=<id>`
+ * `GET social.posts?scope=author&authorId=<id>`
  * (`services/gateway/src/routes/posts/feed.ts:222-227` le schéma,
  * `:775-778` le dispatch, `services/PostFeedService.ts:866-900` la lecture).
  *
@@ -74,7 +76,7 @@ export async function loadAuthorPosts(
   if (params.cursor !== undefined) query.set('cursor', params.cursor);
   const result = await params.transport.request<readonly FeedPost[]>({
     method: 'GET',
-    path: `/api/v1/social/posts?${query.toString()}`,
+    path: `${socialEndpoints.posts}?${query.toString()}`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

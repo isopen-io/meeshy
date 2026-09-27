@@ -64,7 +64,7 @@ export async function runStudioPublish(params: {
 
 /**
  * **L'ENVOI RÉEL D'UN PLAN** (#7707) — construit la requête `POST
- * /api/v1/posts` de CHAQUE publication (`publishStory`, le port UNIQUE, qui
+ * posts.root` de CHAQUE publication (`publishStory`, le port UNIQUE, qui
  * rejoue la garde `MEDIA_NOT_CLAIMED` par requête) et la fait passer par
  * `runStudioPublish`. `originalLanguage` suit `publication.hasText` : chaque
  * story d'une séquence ne dit la langue que de SA page. L'audience est celle

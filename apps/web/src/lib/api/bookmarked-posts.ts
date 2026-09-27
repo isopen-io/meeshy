@@ -1,3 +1,5 @@
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import {
@@ -13,7 +15,7 @@ import type { ApiResult, HttpTransport } from './http';
 
 /**
  * **LE PORT DES PUBLICATIONS ENREGISTRÉES** (#7286) —
- * `GET /api/v1/social/posts?scope=bookmarks`
+ * `GET social.posts?scope=bookmarks`
  * (`services/gateway/src/routes/posts/feed.ts:236` le schéma, `:832` le
  * dispatch, `services/PostFeedService.ts#getBookmarks` la lecture).
  *
@@ -87,7 +89,7 @@ export async function loadBookmarkedPostsPage(
   if (params.cursor !== undefined) query.set('cursor', params.cursor);
   const result = await params.transport.request<readonly FeedPost[]>({
     method: 'GET',
-    path: `/api/v1/social/posts?${query.toString()}`,
+    path: `${socialEndpoints.posts}?${query.toString()}`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

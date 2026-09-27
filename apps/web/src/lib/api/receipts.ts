@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import { createOfflineQueue } from '@/lib/offline-queue';
@@ -21,7 +22,7 @@ import type { Conversation } from './types';
  * `pushReadReceipt` porte `caughtUpToMessageId`, la borne que l'ouverture
  * d'un fil, son défilement et son retour au premier plan avancent seuls.
  *
- * Même route, même schéma — `POST /api/v1/conversations/:conversationId/receipts`
+ * Même route, même schéma — `POST conversations.byConversationIdReceipts`
  * (`services/gateway/src/routes/conversations/receipts.ts:961`), corps validé
  * par `ReceiptWriteBodySchema` (`receipts-contracts.ts:72-76`) qui accepte
  * `caughtUpToMessageId` (`receipts.ts:699`, schéma JSON du plugin). La garde
@@ -37,7 +38,7 @@ export function pushReadReceipt(
 ): Promise<unknown> {
   return transport({
     method: 'POST',
-    path: `/api/v1/conversations/${conversationId}/receipts`,
+    path: conversationsEndpoints.byConversationIdReceipts(conversationId),
     body: { type: 'read', caughtUpToMessageId },
   });
 }
@@ -348,7 +349,7 @@ export async function fetchMessageReceiptsPeople(
   const query = new URLSearchParams({ detail: 'people', messageIds: params.messageId, limit: '100' });
   return params.transport.request<ReceiptsPeoplePayload>({
     method: 'GET',
-    path: `/api/v1/conversations/${params.conversationId}/receipts?${query.toString()}`,
+    path: `${conversationsEndpoints.byConversationIdReceipts(params.conversationId)}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }

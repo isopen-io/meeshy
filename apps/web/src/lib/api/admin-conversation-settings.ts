@@ -1,3 +1,5 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asRecord, asText } from './admin';
 import { MOTIF_LONGUEUR_MINIMALE } from './admin-conversations';
 import { type AdminConversation, decodeAdminConversation } from './admin-user-conversations';
@@ -87,7 +89,7 @@ function verifierMotif(reason: string): MotifVerifie {
   return { ok: true, motif };
 }
 
-const cheminConversation = (conversationId: string) => `/api/v1/admin/conversations/${encodeURIComponent(conversationId)}`;
+const cheminConversation = (conversationId: string) => adminEndpoints.conversationsByConversationId(conversationId);
 
 const cheminParticipant = (conversationId: string, userId: string) =>
   `${cheminConversation(conversationId)}/participants/${encodeURIComponent(userId)}`;

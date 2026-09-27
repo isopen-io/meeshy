@@ -56,7 +56,8 @@
 //
 // EXCEPTIONS CONNUES (#5427)
 //
-// Quatre entrées mesurées en instruisant #5373 sont des FAUX MORTS : la
+// Quatre entrées mesurées en instruisant #5373 étaient des FAUX MORTS (trois
+// depuis #7716 : `static.byFilename` a gagné un appelant par le catalogue) : la
 // route est réellement appelée en production, mais jamais via
 // `API_ENDPOINTS.ns.entrée` — la seule forme que ce script reconnaît comme
 // appelant. Un marqueur manuel, documenté par cas et vérifié par grep avant
@@ -72,13 +73,6 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `apps/web/lib/utils/link-parser.ts:116-117`,
   // `apps/web/components/chat/message-with-links.tsx`.
   'l.byToken',
-  // `GET /api/v1/static/:filename` — l'URL complète (`fileUrl`) est rendue
-  // par le serveur dans la charge utile et consommée directement (balise
-  // `<img>`/`<a>`, `fetch(attachment.fileUrl)`) — jamais reconstruite via
-  // `API_ENDPOINTS.static.byFilename`. Appelants réels (parmi d'autres) :
-  // `apps/web/components/markdown/MarkdownLightbox.tsx`,
-  // `apps/web/components/text/TextViewer.tsx`.
-  'static.byFilename',
   // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
   // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
   // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
@@ -389,7 +383,23 @@ export const callersIn = (contents, nsNames) => {
 // (`apps/web/src/lib/api/admin-user-images.ts`) écrit les adresses en
 // littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27
 // (CI de dev rouge sur 7943044432, relevé fusionné sans le cliquet).
-const BASELINE_DEAD_ENTRIES = 478;
+// 478 → 443 (#7716, lot admin) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 443 → 436 (#7716, lot appels) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 436 → 407 (#7716, lot authentification et compte) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 407 → 388 (#7716, lot profil et annuaire) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 388 → 371 (#7716, lot conversations et messages) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 371 → 364 (#7716, lot liens) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 364 → 344 (#7716, lot publications, stories et notifications) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+// 344 → 337 (#7716, lot médias et infrastructure) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+const BASELINE_DEAD_ENTRIES = 337;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

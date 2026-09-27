@@ -346,7 +346,7 @@ export const POST_NO_DIMENSIONS: FeedPost = {
 /**
  * `POST_WIRE_NULLS` — LA CHARGE TELLE QUE LA PASSERELLE LA SERT, `null`
  * compris (défaut BLOQUANT, revue-correction #5893). Relevé le 2026-09-13 sur
- * `gate.staging.meeshy.me` (`GET /api/v1/social/posts?scope=home`) : un
+ * `gate.staging.meeshy.me` (`GET social.posts?scope=home`) : un
  * auteur sans photo sert `avatar: null`, un média sans vignette sert
  * `thumbnailUrl`/`thumbHash`/`caption`/`width`/`height`/`duration` à `null` —
  * Prisma sérialise une colonne optionnelle, jamais une clé absente.

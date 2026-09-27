@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { PostVisibility } from '@meeshy/shared/types/post';
 import { isRepostVisibilityAllowed } from '@meeshy/shared/utils/repost-audience';
 import { repostTargetId } from '@meeshy/shared/utils/repost-target';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { markReposted, unmarkReposted } from '@/lib/feed/interactions';
 
@@ -14,7 +15,7 @@ import { outcomeOf } from './outcome';
 
 /**
  * LE PORT DU REPARTAGE (#6484) — miroir de `ReelsViewModel.repost` (iOS) et
- * de `RepostPublisher` : `POST /api/v1/posts/:id/repost`
+ * de `RepostPublisher` : `POST posts.byPostIdRepost`
  * (`services/gateway/src/routes/posts/interactions.ts:819-984`), un repost
  * SIMPLE (`isQuote: false`, sans `content`) que l'écran d'aujourd'hui n'offre
  * qu'ainsi — les Réels comme le rail iOS (commentaire `:85-88` :
@@ -88,7 +89,7 @@ function sendRepost(
   }
   return deps.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/posts/${encodeURIComponent(params.targetId)}/repost`,
+    path: postsEndpoints.byPostIdRepost(params.targetId),
     body: {
       ...(params.targetType === undefined ? {} : { targetType: params.targetType }),
       isQuote: false,

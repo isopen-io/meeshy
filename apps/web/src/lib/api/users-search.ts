@@ -1,10 +1,12 @@
+import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
+
 import { decodePerson, type PersonSummary } from './friend-requests';
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 
 /**
  * LE PORT DE LA RECHERCHE DE PERSONNES (#5652, bloc D ; #6363) — `GET
- * /api/v1/directory/people?q=<≥2>&limit=20`
+ * directory.people?q=<≥2>&limit=20`
  * (`services/gateway/src/routes/directory/people.ts:88-105`,
  * `fastify.authenticate`), § 3.4 de la spécification. Deux écrans le lisent :
  * « Nouvelle conversation » et l'onglet « Découvrir ».
@@ -37,7 +39,7 @@ export async function searchUsers(deps: ConversationsDeps, query: string): Promi
   }
   const result = await deps.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/directory/people?q=${encodeURIComponent(query)}&limit=20`,
+    path: `${directoryEndpoints.people}?q=${encodeURIComponent(query)}&limit=20`,
   });
   if (!result.ok) return result;
   const people = (Array.isArray(result.data) ? result.data : []).flatMap((raw) => {

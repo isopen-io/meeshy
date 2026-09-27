@@ -39,7 +39,15 @@ const TEST_FILE_RE = /\.test\.[^/]*$/;
 const SOURCE_RE = /\.tsx?$/;
 
 // 348 — mesuré le 2026-09-27 sur `origin/dev` (ba870370e3), avant la migration.
-const BASELINE = 348;
+// 348 → 303 (#7716, lot admin).
+// 303 → 287 (#7716, lot appels).
+// 287 → 235 (#7716, lot authentification et compte).
+// 235 → 191 (#7716, lot profil et annuaire).
+// 191 → 138 (#7716, lot conversations et messages).
+// 138 → 116 (#7716, lot liens).
+// 116 → 50 (#7716, lot publications, stories et notifications).
+// 50 → 0 (#7716, lot médias et infrastructure).
+const BASELINE = 0;
 
 export const isCountedFile = (name) => SOURCE_RE.test(name) && !TEST_FILE_RE.test(name);
 

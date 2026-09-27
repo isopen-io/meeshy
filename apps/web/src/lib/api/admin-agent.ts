@@ -1,3 +1,5 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText, pageServie } from './admin';
 import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
@@ -124,7 +126,7 @@ export async function loadAgentOverview(
 ): Promise<ApiResult<AgentOverview>> {
   const resultat = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/admin/agent/stats',
+    path: adminEndpoints.agentStats,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!resultat.ok) return resultat;
@@ -198,7 +200,7 @@ export async function loadAgentTracked(
 
   const resultat = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/agent/configs?${query.toString()}`,
+    path: `${adminEndpoints.agentConfigs}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!resultat.ok) return resultat;
@@ -227,7 +229,7 @@ export async function loadAgentLive(
 ): Promise<ApiResult<AgentLiveState>> {
   const resultat = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/agent/configs/${params.conversationId}/live`,
+    path: adminEndpoints.agentConfigsByConversationIdLive(params.conversationId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!resultat.ok) return resultat;
@@ -267,7 +269,7 @@ export async function relancerAgent(
 ): Promise<ApiResult<AgentTriggerOutcome>> {
   const resultat = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/admin/agent/configs/${params.conversationId}/trigger`,
+    path: adminEndpoints.agentConfigsByConversationIdTrigger(params.conversationId),
   });
   if (!resultat.ok) return resultat;
 
@@ -297,7 +299,7 @@ export async function stopperScanAgent(
 ): Promise<ApiResult<AgentStopOutcome>> {
   const resultat = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/admin/agent/configs/${params.conversationId}/stop`,
+    path: adminEndpoints.agentConfigsByConversationIdStop(params.conversationId),
   });
   if (!resultat.ok) return resultat;
 
@@ -363,7 +365,7 @@ export async function loadAgentScanLogs(
 
   const resultat = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/agent/scan-logs?${query.toString()}`,
+    path: `${adminEndpoints.agentScanLogs}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!resultat.ok) return resultat;
@@ -379,7 +381,7 @@ export async function loadAgentScanLog(
 ): Promise<ApiResult<AgentScanLogDetail>> {
   const resultat = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/agent/scan-logs/${params.logId}`,
+    path: adminEndpoints.agentScanLogsByLogId(params.logId),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!resultat.ok) return resultat;

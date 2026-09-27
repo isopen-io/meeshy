@@ -138,7 +138,7 @@ export type AppQueryClient = QueryClient & {
  * même charge par un autre chemin — `caches.open('api')`, la réponse HTTP
  * entière, sept jours sur le disque — et ce doc-comment l'AVOUAIT sans que rien
  * ne le ferme. C'est fait : `API_RESPONSE_CACHE_PATTERN`
- * (`lib/net/api-runtime-cache.ts`) sort tout `/api/v1/admin/` du
+ * (`lib/net/api-runtime-cache.ts`) sort tout le groupe `admin` du catalogue du
  * `runtimeCaching`. Deux seaux, deux gardes, la même règle — et une VALEUR
  * plutôt qu'un prédicat, parce que Workbox stringifie ce champ dans
  * `dist/sw.js` : un prédicat importé s'y serait perdu, comme il l'a fait.
