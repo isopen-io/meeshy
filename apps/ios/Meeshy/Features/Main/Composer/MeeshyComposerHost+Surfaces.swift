@@ -542,6 +542,10 @@ extension MeeshyComposerHost {
                 viewModel.openingEffect = effect
                 HapticFeedback.light()
             },
+            bandFitMode: sceneFitMode,
+            bandBackdrop: sceneBackdrop,
+            onPickBandFitMode: { applySceneFitMode($0) },
+            onPickBandBackdrop: { applySceneBackdrop($0) },
             // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE
             // le trait, et les contrôleurs qui règlent le pinceau. Les deux
             // flottent sur la scène, et ce sont ceux de l'ATELIER — pinceau

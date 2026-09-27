@@ -88,6 +88,17 @@ public enum StorySlideRenderer {
                let bgMedia = slide.effects.resolvedBackgroundMedia,
                let rawBgMediaImage = loadedImages[bgMedia.id] {
                 let bgMediaImage = filterBackground(rawBgMediaImage, effects: slide.effects)
+                // **Un fond AJUSTÉ se rend entier** (#8414) : ses bandes prennent
+                // le fond choisi au panneau Cadre (ou le média flouté), puis le
+                // média s'y pose sans être rogné — comme le canvas et le lecteur.
+                let ajuste = !StoryBackgroundFraming.rendersFilled(slide.effects.backgroundTransform?.videoFitMode)
+                if ajuste {
+                    drawBackdrop(StoryBackdrop.resolve(slide.effects.backgroundTransform?.backdrop),
+                                 of: bgMediaImage, in: rect, ctx: cgCtx)
+                }
+                let poser: (UIImage) -> Void = { image in
+                    if ajuste { drawAspectFit(image, in: rect) } else { drawAspectFill(image, in: rect, ctx: cgCtx) }
+                }
                 // Transform du fond (zoom/pan/rotation) — parité avec `SlideMiniPreview`
                 // (référence non-ambiguë : `.scaleEffect(scale)` + `.rotationEffect(rotation)`
                 // autour du centre, puis `.position(x·w, y·h)`) et le canvas. Sans ça un fond
@@ -108,10 +119,10 @@ public enum StorySlideRenderer {
                     cgCtx.rotate(by: CGFloat(bgMedia.rotation) * .pi / 180)
                     cgCtx.scaleBy(x: CGFloat(bgMedia.scale), y: CGFloat(bgMedia.scale))
                     cgCtx.translateBy(x: -cx, y: -cy)
-                    drawAspectFill(bgMediaImage, in: rect, ctx: cgCtx)
+                    poser(bgMediaImage)
                     cgCtx.restoreGState()
                 } else {
-                    drawAspectFill(bgMediaImage, in: rect, ctx: cgCtx)
+                    poser(bgMediaImage)
                 }
             }
 
@@ -359,6 +370,26 @@ public enum StorySlideRenderer {
     /// Dessine `image` en **aspect-fill** dans `rect` (recadré, jamais étiré),
     /// clippé à `rect` — équivalent raster de `contentsGravity = .resizeAspectFill`
     /// utilisé par `StoryBackgroundLayer` / `StoryMediaLayer` du reader.
+    /// Les bandes d'un fond ajusté : la teinte choisie, ou le média réduit à
+    /// quelques pixels puis étiré — un flou sans filtre, comme la bande du canvas.
+    private static func drawBackdrop(_ fond: StoryBackdrop, of image: UIImage,
+                                     in rect: CGRect, ctx: CGContext) {
+        if let hex = fond.solidHex {
+            (UIColor(hex: hex) ?? .black).setFill()
+            ctx.fill(rect)
+            return
+        }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let minuscule = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { _ in
+            image.draw(in: CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        ctx.saveGState()
+        ctx.interpolationQuality = .high
+        minuscule.draw(in: rect)
+        ctx.restoreGState()
+    }
+
     private static func drawAspectFill(_ image: UIImage, in rect: CGRect, ctx: CGContext) {
         let imgSize = image.size
         guard imgSize.width > 0, imgSize.height > 0, rect.width > 0, rect.height > 0 else {

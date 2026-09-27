@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 import QuartzCore
 import MeeshySDK
 
@@ -39,6 +40,23 @@ extension StoryBackgroundLayer {
         letterboxFillLayer?.removeFromSuperlayer()
         letterboxFillLayer = nil
         letterboxFillHashes = hashes
+
+        // **Un fond UNI choisi au panneau Cadre** (#8414) peint les bandes de
+        // sa teinte, pleine, sans attendre aucune matière : il ne dépend ni
+        // d'un hachage ni d'un bitmap. Le FLOU garde la loi d'avant.
+        if !isLetterboxFillSuppressed,
+           transform3D.videoFitMode == StoryBackgroundFraming.fit,
+           let teinte = StoryBackdrop.resolve(transform3D.backdrop).solidHex {
+            let fill = CALayer()
+            fill.frame = bounds
+            fill.backgroundColor = UIColor(Color(hex: teinte)).cgColor
+            fill.masksToBounds = true
+            Self.withDisabledCAActions {
+                insertSublayer(fill, at: 0)
+            }
+            letterboxFillLayer = fill
+            return
+        }
 
         let source = StoryLetterboxFill.source(
             hasStampedBitmap: letterboxSourceImage != nil, hashes: hashes)

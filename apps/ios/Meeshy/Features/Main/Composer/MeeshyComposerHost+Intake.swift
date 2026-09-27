@@ -333,8 +333,10 @@ extension MeeshyComposerHost {
             // qu'ouvrir les rendrait à sens unique. C'est le geste exact de
             // `ComposerOverflowEntry.pickBackground`, déplacé du menu au rail —
             // le même effet par un chemin qu'on trouve sans le chercher.
+            // Avec un média de fond, la même porte ouvre le CADRE (#8414).
             HapticFeedback.light()
-            requestedSceneBand = requestedSceneBand == .palette ? nil : .palette
+            let bande = ComposerSceneBand.forBackgroundDoor(hasBackgroundMedia: sceneHasBackgroundMedia)
+            requestedSceneBand = requestedSceneBand == bande ? nil : bande
         case .description:
             // La SEULE façon d'ouvrir la description sur la scène incrustée
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès

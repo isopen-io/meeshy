@@ -75,8 +75,14 @@ final class ComposerSceneBandTests: XCTestCase {
     /// > qui les en sort est une seconde question, que le critère ne posait
     /// > pas : **sur QUOI ce contrôle agit-il ?** Un critère de FORME ne peut
     /// > pas répondre à une question de PORTÉE.
+    ///
+    /// **Le CADRE y entre au #8414** (maquette plein écran, `iPad.dc.html`), et
+    /// il passe la question de PORTÉE : il agit sur la SCÈNE — son cadrage et
+    /// le fond de ses bandes —, jamais sur un objet posé. Il partage d'ailleurs
+    /// la porte de la palette : « Fond » ouvre l'une ou l'autre selon qu'un
+    /// média occupe le fond.
     func test_lesContextes_sontCeuxDeLaPlanche() {
-        XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)), ["palette"])
+        XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)), ["palette", "frame"])
     }
 
     // MARK: - Le `⋯` rouvre la palette là où la rangée d'outils a disparu

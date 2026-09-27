@@ -215,6 +215,12 @@ struct ComposerSceneSurface: View {
     /// le contenu du panneau « Fond » de l'atelier, en entier (#4403).
     var bandOpeningEffect: StoryTransitionEffect?
     var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
+    /// Le panneau Cadre (#8414) : le cadrage et le fond que le meuble lit sur
+    /// la slide, et les deux écritures qu'il en attend.
+    var bandFitMode: String = StoryBackgroundFraming.fill
+    var bandBackdrop: StoryBackdrop = .blur
+    var onPickBandFitMode: ((String) -> Void)?
+    var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
 
     /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
     /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
@@ -551,7 +557,7 @@ struct ComposerSceneSurface: View {
     @State private var floorHash: String?
 
     /// Ce qui change le RÉSULTAT au point de changer son hachage : la slide, son
-    /// fond, sa matière et les bitmaps chargés. Une position ou une échelle ne
+    /// fond, sa matière, son cadrage et les bitmaps chargés. Une position ou une échelle ne
     /// la touchent pas — le sol n'a pas à être recalculé à chaque image d'un
     /// geste, et un hachage de 32 pixels ne verrait pas la différence.
     private var floorKey: ComposerSceneFloorKey {
@@ -559,6 +565,8 @@ struct ComposerSceneSurface: View {
                               background: slide.effects.background,
                               media: slide.effects.mediaObjects?.map(\.id) ?? [],
                               texts: slide.effects.textObjects.map(\.id),
+                              framing: [slide.effects.backgroundTransform?.videoFitMode,
+                                        slide.effects.backgroundTransform?.backdrop],
                               imagesVersion: sceneImagesVersion)
     }
 
@@ -681,7 +689,12 @@ struct ComposerSceneSurface: View {
                                       colors: bandColors,
                                       onPickColor: onPickBandColor,
                                       openingEffect: bandOpeningEffect,
-                                      onPickOpening: onPickBandOpening)
+                                      onPickOpening: onPickBandOpening,
+                                      fitMode: bandFitMode,
+                                      backdrop: bandBackdrop,
+                                      plateauTint: plateauTint,
+                                      onPickFitMode: onPickBandFitMode,
+                                      onPickBackdrop: onPickBandBackdrop)
             case .nothing:
                 EmptyView()
             }
@@ -748,5 +761,7 @@ struct ComposerSceneFloorKey: Hashable {
     let background: String?
     let media: [String]
     let texts: [String]
+    /// Le cadrage et le fond du panneau Cadre (#8414) : ils changent le composite.
+    let framing: [String?]
     let imagesVersion: UInt64
 }
