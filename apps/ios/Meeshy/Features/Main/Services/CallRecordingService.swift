@@ -23,6 +23,13 @@ protocol CallRecordingServiceProviding: AnyObject {
     func start(fileURL: URL) throws
     /// Rend le fichier quand quelque chose a été capté, `nil` sinon.
     func stop() -> URL?
+    /// #8437 — rend le fichier PRÊT à déposer : une capture qui écrit en
+    /// asynchrone (ReplayKit) y termine son fichier et y mixe ses pistes.
+    func finish(_ fileURL: URL) async throws -> URL
+}
+
+extension CallRecordingServiceProviding {
+    func finish(_ fileURL: URL) async throws -> URL { fileURL }
 }
 
 final class CallRecordingService: CallRecordingServiceProviding {

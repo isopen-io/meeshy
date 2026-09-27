@@ -329,17 +329,7 @@ extension CallView {
         case .captions:
             captionsActionButton(captioned: captioned, diameter: diameter)
         case .recording:
-            CallPillButton(
-                symbol: callManager.recording.phase.isActive ? "stop.circle.fill" : "record.circle",
-                kind: callManager.recording.phase.isActive ? .destructive : .normal,
-                label: CallRecordingCopy.label(isActive: callManager.recording.phase.isActive),
-                caption: captioned ? CallRecordingCopy.caption : nil,
-                hint: CallRecordingCopy.hint,
-                toggleState: callManager.recording.phase.isActive,
-                diameter: diameter
-            ) {
-                _ = callManager.recording.phase.isActive ? callManager.recording.stop() : callManager.recording.request()
-            }
+            recordingActionButton(captioned: captioned, diameter: diameter)
         case .pictureInPicture:
             pictureInPictureActionButton(captioned: captioned, diameter: diameter)
         }

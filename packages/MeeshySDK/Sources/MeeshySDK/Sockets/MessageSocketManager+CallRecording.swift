@@ -10,6 +10,18 @@ import SocketIO
 // décide rien. Il émet les trois verbes (demander, répondre, arrêter), rend
 // leur accusé, et relaie les trois diffusions de la room de l'appel.
 
+/// #8437 — ce qu'on enregistre : l'audio seul, ou la vidéo avec son audio.
+/// Une valeur absente (passerelle antérieure) ou inconnue se lit `audio`.
+public enum CallRecordingKind: String, Sendable, Equatable, Decodable {
+    case audio
+    case video
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = CallRecordingKind(rawValue: raw) ?? .audio
+    }
+}
+
 /// `call:recording-requested` — quelqu'un veut enregistrer ; chaque
 /// participant de `requiredUserIds` doit répondre avant l'échéance.
 public struct CallRecordingRequestedEvent: Decodable, Sendable, Equatable {
@@ -17,12 +29,27 @@ public struct CallRecordingRequestedEvent: Decodable, Sendable, Equatable {
     public let recordingId: String
     public let requesterId: String
     public let requiredUserIds: [String]
+    public let kind: CallRecordingKind
 
-    public init(callId: String, recordingId: String, requesterId: String, requiredUserIds: [String]) {
+    public init(callId: String, recordingId: String, requesterId: String, requiredUserIds: [String], kind: CallRecordingKind = .audio) {
         self.callId = callId
         self.recordingId = recordingId
         self.requesterId = requesterId
         self.requiredUserIds = requiredUserIds
+        self.kind = kind
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case callId, recordingId, requesterId, requiredUserIds, kind
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        callId = try container.decode(String.self, forKey: .callId)
+        recordingId = try container.decode(String.self, forKey: .recordingId)
+        requesterId = try container.decode(String.self, forKey: .requesterId)
+        requiredUserIds = try container.decode([String].self, forKey: .requiredUserIds)
+        kind = try container.decodeIfPresent(CallRecordingKind.self, forKey: .kind) ?? .audio
     }
 }
 
@@ -31,11 +58,25 @@ public struct CallRecordingStartedEvent: Decodable, Sendable, Equatable {
     public let callId: String
     public let recordingId: String
     public let recorderId: String
+    public let kind: CallRecordingKind
 
-    public init(callId: String, recordingId: String, recorderId: String) {
+    public init(callId: String, recordingId: String, recorderId: String, kind: CallRecordingKind = .audio) {
         self.callId = callId
         self.recordingId = recordingId
         self.recorderId = recorderId
+        self.kind = kind
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case callId, recordingId, recorderId, kind
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        callId = try container.decode(String.self, forKey: .callId)
+        recordingId = try container.decode(String.self, forKey: .recordingId)
+        recorderId = try container.decode(String.self, forKey: .recorderId)
+        kind = try container.decodeIfPresent(CallRecordingKind.self, forKey: .kind) ?? .audio
     }
 }
 
@@ -85,7 +126,7 @@ public struct CallRecordingRefusal: Error, Sendable, Equatable {
 
 public protocol CallRecordingSocketProviding: AnyObject, Sendable {
     var callRecordingEvents: AnyPublisher<CallRecordingSocketEvent, Never> { get }
-    func requestCallRecording(callId: String) async throws -> String
+    func requestCallRecording(callId: String, kind: CallRecordingKind) async throws -> String
     func answerCallRecording(callId: String, recordingId: String, accepted: Bool) async throws
     func stopCallRecording(callId: String, recordingId: String) async throws
 }
@@ -120,8 +161,15 @@ extension MessageSocketManager: CallRecordingSocketProviding {
         }
     }
 
-    public func requestCallRecording(callId: String) async throws -> String {
-        try await emitCallRecording("call:recording-request", ["callId": callId])
+    public func requestCallRecording(callId: String, kind: CallRecordingKind) async throws -> String {
+        try await emitCallRecording("call:recording-request", Self.callRecordingRequestPayload(callId: callId, kind: kind))
+    }
+
+    /// La passerelle antérieure à #8437 valide la demande en schéma STRICT :
+    /// l'audio, qu'elle sait déjà faire, part sans `kind` pour qu'elle
+    /// l'accepte encore ; seule la vidéo nomme son type.
+    static func callRecordingRequestPayload(callId: String, kind: CallRecordingKind) -> [String: Any] {
+        kind == .audio ? ["callId": callId] : ["callId": callId, "kind": kind.rawValue]
     }
 
     public func answerCallRecording(callId: String, recordingId: String, accepted: Bool) async throws {

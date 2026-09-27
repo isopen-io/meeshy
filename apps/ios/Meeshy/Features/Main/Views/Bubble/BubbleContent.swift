@@ -233,8 +233,11 @@ nonisolated struct BubbleContent: Equatable {
                 && lhs.attachment.duration == rhs.attachment.duration
         }
 
+        /// #8437 — un appel enregistré en vidéo se rejoue en vidéo.
+        var isVideo: Bool { attachment.type == .video }
+
         static func from(_ attachments: [MeeshyMessageAttachment]) -> CallRecording? {
-            attachments.first { $0.type == .audio }.map(CallRecording.init(attachment:))
+            attachments.first { $0.type == .audio || $0.type == .video }.map(CallRecording.init(attachment:))
         }
     }
 
