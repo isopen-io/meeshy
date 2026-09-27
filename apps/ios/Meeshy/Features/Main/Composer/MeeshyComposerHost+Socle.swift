@@ -160,7 +160,7 @@ extension MeeshyComposerHost {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
-                .adaptiveGlass(in: Circle())
+                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
         }
         .accessibilityLabel(Text(String(
             localized: "composer.a11y.preview",
@@ -216,11 +216,13 @@ extension MeeshyComposerHost {
             // **Une pastille de verre** (#8370, maquette `iOS.dc.html`) : le
             // socle flotte sur la scène, et le mot doit se lire sur n'importe
             // quel média. Sans mot (palier d'accessibilité), la capsule de
-            // 44 pt redevient un disque.
+            // 44 pt redevient un disque. TEINTÉ du plateau : nu, le verre
+            // d'iOS 26 a viré au clair sous le libellé blanc (simulateur,
+            // 2026-09-27).
             .padding(.horizontal, socleShowsLabels ? 14 : 0)
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Capsule())
-            .adaptiveGlass(in: Capsule())
+            .adaptiveGlass(in: Capsule(), tint: tint.color.opacity(0.55))
         }
         // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom

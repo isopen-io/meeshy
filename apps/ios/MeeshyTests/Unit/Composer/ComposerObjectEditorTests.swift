@@ -425,10 +425,13 @@ final class ComposerObjectEditorTests: XCTestCase {
         // plateau. La teinte reste celle que mesurent les témoins de contraste,
         // et elle évite la barre pâle qu'un verre nu peint sur le plateau sombre
         // (directive porteur 2026-09-05, `ComposerMentionStripContrastTests`).
-        for (nom, source, largeur) in [
-            ("le couloir d'OUTILS", editeur, "ComposerObjectEditorRail.railWidth"),
-            ("le couloir d'HISTORIQUE", trailing, "ComposerRailGeometry.railWidth"),
-            ("le couloir des PORTES", leading, "ComposerRailGeometry.railWidth")
+        // Le rail des PORTES se couche aussi à l'horizontale (la rangée basse) :
+        // son air suit l'axe, et vaut `.vertical, 8` debout comme ses jumeaux.
+        for (nom, source, largeur, air) in [
+            ("le couloir d'OUTILS", editeur, "ComposerObjectEditorRail.railWidth", ".padding(.vertical,8)"),
+            ("le couloir d'HISTORIQUE", trailing, "ComposerRailGeometry.railWidth", ".padding(.vertical,8)"),
+            ("le couloir des PORTES", leading, "ComposerRailGeometry.railWidth",
+             ".padding(axis==.vertical?.vertical:.horizontal,8)")
         ] {
             let nu = AppSourceGuard.stripComments(source)
                 .replacingOccurrences(of: " ", with: "")
@@ -441,7 +444,7 @@ final class ComposerObjectEditorTests: XCTestCase {
                 nu.contains(".fill(plateauTint.opacity(0.55))"),
                 "\(nom) ne doit plus peindre un aplat opaque sous son verre")
             XCTAssertTrue(
-                nu.contains(".padding(.vertical,8)"),
+                nu.contains(air),
                 "\(nom) doit respirer comme son jumeau")
         }
     }

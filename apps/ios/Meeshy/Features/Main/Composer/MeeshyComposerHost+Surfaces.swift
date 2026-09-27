@@ -132,8 +132,14 @@ extension MeeshyComposerHost {
         // compose dans l'ATELIER, que ce flux monte à la place. Un composant
         // écrit, câblé et invisible parce qu'il est posé sur la surface que
         // l'écran n'affiche pas.
+        //
+        // Retiré de la place d'un rail de chaque côté (#8388) : les rails
+        // flottent sur la scène depuis #8370, et un volet pleine largeur
+        // recouvrait leurs dernières entrées.
         .storyComposerBelowCanvasAccessory {
-            if let volet = sceneDescriptionPanel { volet }
+            if let volet = sceneDescriptionPanel {
+                volet.padding(.horizontal, ComposerRailGeometry.lane)
+            }
         }
         // **#4361 — ce que le meuble occupe en bas, l'atelier le libère.** Le
         // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de

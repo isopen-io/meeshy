@@ -124,4 +124,23 @@ final class ComposerFloatingSocleTests: XCTestCase {
         XCTAssertEqual(sansSocle.maxY - avecSocle.maxY, Self.socleHeight, accuracy: 0.5,
                        "Sans socle, aucune hauteur ne doit rester réservée.")
     }
+
+    /// **Le verre du socle est TEINTÉ du plateau.** Nu, le Liquid Glass d'iOS 26
+    /// choisit seul sa luminance : mesuré au simulateur le 2026-09-27, la
+    /// pastille d'audience est devenue un verre CLAIR sous un libellé blanc,
+    /// illisible. La teinte du plateau le tient sombre, comme les rails, et
+    /// garde vraie la composition que mesurent les témoins de contraste
+    /// (`ComposerPlateauTests`) — la même raison que la directive porteur du
+    /// 2026-09-05 sur la bande de mentions.
+    func test_leVerreDuSocle_estTeinteDuPlateau() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(code.contains("varsocle:someView"), "Source du socle introuvable — la garde ne mesurerait rien.")
+        XCTAssertTrue(code.contains(".adaptiveGlass(in:Capsule(),tint:tint.color.opacity(0.55))"),
+                      "L'audience doit porter un verre teinté du plateau.")
+        XCTAssertTrue(code.contains(".adaptiveGlass(in:Circle(),tint:tint.color.opacity(0.55))"),
+                      "L'œil doit porter un verre teinté du plateau.")
+        XCTAssertFalse(code.contains(".adaptiveGlass(in:Capsule())"),
+                       "Un verre nu dans le socle choisit seul sa luminance, et le libellé blanc s'y perd.")
+    }
 }

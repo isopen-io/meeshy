@@ -192,6 +192,32 @@ final class ComposerRailGeometryTests: XCTestCase {
             "L'encastrement de la scène est revenu à un littéral : la raison qui le produit a disparu avec.")
     }
 
+    // MARK: - Le volet de description DÉGAGE les rails flottants (#8388)
+
+    /// **Il tirait sa marge des COULOIRS** (`sceneInset(railsShown: true) + 10`).
+    /// Depuis la scène plein écran (#8370), `sceneInset` vaut zéro : la marge est
+    /// tombée à 10 pt et le volet — « Touchez pour écrire » — s'est étalé
+    /// par-dessus les dernières entrées des deux rails, qui flottent désormais à
+    /// cette hauteur. La marge qui dégage un rail est ce qu'un rail RÉSERVE :
+    /// `lane`.
+    func test_leVoletDeLaScene_degageLesRails() throws {
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+        XCTAssertTrue(surface.contains("EmbeddedSceneCanvas"), "Ce n'est pas la surface de scène.")
+        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.lane)"),
+                      "Le volet de la scène doit se retirer de la largeur d'un rail de chaque côté.")
+        XCTAssertFalse(surface.contains("sceneInset(railsShown:true)+10"),
+                       "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
+    }
+
+    /// Le MÊME volet est monté sous le canvas de l'ATELIER (#4742), où les rails
+    /// flottent aussi : même marge, lue de la même règle.
+    func test_leVoletDeLAtelier_degageLesRails() throws {
+        let hote = compact(AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource()))
+        XCTAssertTrue(hote.contains("volet.padding(.horizontal,ComposerRailGeometry.lane)"),
+                      "Le volet de l'atelier doit se retirer de la largeur d'un rail de chaque côté.")
+    }
+
     // MARK: - Ce qu'une rangée requiert, et ce qui déborde (#4582)
 
     /// **Le débordement de la rangée d'outils est ARITHMÉTIQUE.**
