@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import {
-  sendSuccess,
   sendPaginatedSuccess,
   sendUnauthorized,
   sendInternalError
