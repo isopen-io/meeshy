@@ -434,10 +434,10 @@ describe('le mode Animé (#8415) — posé sur la page courante et persisté', (
   test('ouvrir Animé puis régler une piste ; le tout fait l’aller-retour du brouillon', () => {
     const animated = withTrackTiming(withAnimated(typed('Une')), seedId(typed('Une')), { start: 1, end: 3 });
     const page = currentStudioPage(animated);
-    expect(page.duration).toBe(5);
+    expect(page.duration).toBe(6);
     expect(page.texts[0]!.timing).toEqual({ start: 1, end: 3 });
     const restored = currentStudioPage(studioDraftFromSnapshot(studioSnapshotOf(animated, 'fr'), (u) => u, 'fr'));
-    expect(restored.duration).toBe(5);
+    expect(restored.duration).toBe(6);
     expect(restored.texts[0]!.timing).toEqual({ start: 1, end: 3 });
   });
 

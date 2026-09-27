@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react';
 
 import type { CanvasObject } from '@/lib/canvas/document';
 import { objectPose } from '@/lib/canvas/pose';
@@ -17,6 +17,15 @@ import type { SceneClockHandle } from './scene-clock';
  * UNE fois, au montage, et ne s'abonne à AUCUNE horloge — la scène statique
  * la plus fréquente ne paie aucun `rAF`.
  */
+/**
+ * **LE FANTÔME** (lot 6, maquette `Main.dc.html` : « objets hors de leur
+ * fenêtre en fantôme à l'arrêt, frise ouverte ») — l'opacité qu'un objet hors
+ * de sa fenêtre prend au lieu de disparaître. `null` (le défaut, et toute
+ * LECTURE) : il disparaît. Posé par `ScenePlayer.ghostOutsideWindow`, lu ici :
+ * les six couches en héritent sans qu'aucune ne le reçoive.
+ */
+export const SceneGhostContext = createContext<number | null>(null);
+
 export type SceneObjectFrameProps = {
   readonly object: CanvasObject;
   readonly kind: string;
@@ -37,6 +46,7 @@ export type SceneObjectFrameProps = {
 export function SceneObjectFrame({ object, kind, clock, children, className, layout = 'anchored' }: SceneObjectFrameProps) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const timed = hasTimeWindow(object);
+  const ghost = useContext(SceneGhostContext);
 
   const applyPose = (t: number) => {
     const el = ref.current;
@@ -47,8 +57,10 @@ export function SceneObjectFrame({ object, kind, clock, children, className, lay
       el.style.top = `${pose.y * 100}%`;
       el.style.transform = `translate(-50%, -50%) rotate(${pose.rotation}deg) scale(${pose.scale})`;
     }
-    el.style.opacity = String(pose.opacity);
-    el.hidden = !pose.visible;
+    const ghosted = !pose.visible && ghost !== null;
+    el.style.opacity = String(ghosted ? ghost : pose.opacity);
+    el.hidden = !pose.visible && !ghosted;
+    el.toggleAttribute('data-scene-ghost', ghosted);
   };
 
   useLayoutEffect(() => {
@@ -56,7 +68,7 @@ export function SceneObjectFrame({ object, kind, clock, children, className, lay
     if (!timed || clock === null) return;
     return clock.subscribe(applyPose);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [object, timed, clock, layout]);
+  }, [object, timed, clock, layout, ghost]);
 
   const positionClass = layout === 'fullBleed' ? 'absolute inset-0 size-full' : 'absolute';
 
