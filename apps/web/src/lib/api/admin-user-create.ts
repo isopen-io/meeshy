@@ -1,7 +1,8 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps } from './admin';
 import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **CRÉER UN COMPTE DEPUIS L'ADMINISTRATION** (#8217) —

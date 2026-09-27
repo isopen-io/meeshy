@@ -1,9 +1,10 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
+
 import type { AdminPermissions } from '@/lib/admin/sections';
 
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
-import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 /**
  * **LE PORT DE L'ADMINISTRATION** (#6432) — `services/gateway/src/routes/admin/*`.

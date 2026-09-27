@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import * as z from 'zod/mini';
+import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -10,7 +11,7 @@ import type { ApiResult, HttpTransport } from './http';
  * `APICallRecord` (iOS, `packages/MeeshySDK/Sources/MeeshySDK/Models/
  * CallModels.swift`).
  *
- * `GET /api/v1/calls/history?limit=&filter=all|missed&cursor=` — les appels
+ * `GET calls.history?limit=&filter=all|missed&cursor=` — les appels
  * TERMINÉS des conversations du lecteur sur trois mois glissants, du plus
  * récent au plus ancien (`services/gateway/src/routes/calls-consultation.ts`,
  * `CallService.listHistory`). La DIRECTION est dérivée par la passerelle
@@ -168,7 +169,7 @@ const nextCursorOf = (pagination: unknown): string | null => {
 const historyPath = (filter: CallHistoryFilter, cursor: string | null): string => {
   const query = new URLSearchParams({ limit: String(CALL_HISTORY_PAGE_SIZE), filter });
   if (cursor !== null) query.set('cursor', cursor);
-  return `/api/v1/calls/history?${query.toString()}`;
+  return `${callsEndpoints.history}?${query.toString()}`;
 };
 
 export async function loadCallHistory(

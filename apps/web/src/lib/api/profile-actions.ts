@@ -157,7 +157,7 @@ export type ImageUpdateDeps = ProfileActionDeps & {
 /**
  * **CHANGER SA PHOTO OU SA BANNIÈRE** — le chemin d'iOS
  * (`ProfileView.uploadAvatar`, `:925-943`) : recompresser, téléverser par
- * `POST /api/v1/attachments/upload` (`uploadProfileImage`, partagé avec
+ * `POST attachments.upload` (`uploadProfileImage`, partagé avec
  * l'administration — #8217), puis poser l'URL servie par `PATCH /users/me/avatar` ou
  * `/banner`. L'APERÇU local est tenu par l'écran, jamais par ce cache : une URL
  * `blob:` persistée survivrait au rechargement sans rien désigner.

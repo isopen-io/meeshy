@@ -1,8 +1,9 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import { decodeMessage } from './decode';
 import type { ApiResult } from './http';
 import type { Message } from './types';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **LA LECTURE SOUVERAINE DES CONVERSATIONS** (#6862) — les décodeurs des deux

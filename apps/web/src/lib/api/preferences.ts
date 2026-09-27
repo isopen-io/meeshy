@@ -1,3 +1,6 @@
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+import * as userPreferencesEndpoints from '@meeshy/shared/api/endpoints/user-preferences';
+
 import type { Transport } from '../net/transport';
 import type { Conversation } from './types';
 
@@ -67,7 +70,7 @@ export function customNameOf(conversation: Conversation): string | undefined {
 }
 
 /**
- * `PUT /api/v1/user-preferences/conversations/:conversationId` (§3.2,
+ * `PUT userPreferences.conversationsByConversationId` (§3.2,
  * `services/gateway/src/routes/conversation-preferences.ts:349-435`). Corps
  * PARTIEL — un seul champ par appel : composer les trois à chaque fois
  * écraserait, côté serveur, un changement concurrent sur un champ que
@@ -81,31 +84,31 @@ export function pushConversationFlags(
 ): Promise<unknown> {
   return transport({
     method: 'PUT',
-    path: `/api/v1/user-preferences/conversations/${conversationId}`,
+    path: userPreferencesEndpoints.conversationsByConversationId(conversationId),
     body: patch,
   });
 }
 
 /**
- * `POST /api/v1/conversations/:conversationId/receipts`, corps
+ * `POST conversations.byConversationIdReceipts`, corps
  * `{ type: 'read' }` (§3.3, `receipts.ts:689-701`) — le SUCCESSEUR de l'alias
  * déprécié, jamais l'alias lui-même.
  */
 export function pushRead(transport: Transport, conversationId: string): Promise<unknown> {
   return transport({
     method: 'POST',
-    path: `/api/v1/conversations/${conversationId}/receipts`,
+    path: conversationsEndpoints.byConversationIdReceipts(conversationId),
     body: { type: 'read' },
   });
 }
 
 /**
- * `POST /api/v1/conversations/:conversationId/mark-unread`, sans corps (§3.4,
+ * `POST conversations.byIdMarkUnread`, sans corps (§3.4,
  * `messages-read-status.ts:159-196`).
  */
 export function pushUnread(transport: Transport, conversationId: string): Promise<unknown> {
   return transport({
     method: 'POST',
-    path: `/api/v1/conversations/${conversationId}/mark-unread`,
+    path: conversationsEndpoints.byIdMarkUnread(conversationId),
   });
 }

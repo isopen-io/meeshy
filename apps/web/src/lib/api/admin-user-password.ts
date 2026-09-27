@@ -1,9 +1,9 @@
 import type { PasswordProposals } from '@meeshy/shared/types/admin-password-proposal';
 import * as z from 'zod/mini';
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps } from './admin';
 import type { ApiResult } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **RÉINITIALISER LE MOT DE PASSE D'UN MEMBRE** (#6819, #8051) —

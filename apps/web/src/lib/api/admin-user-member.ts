@@ -1,6 +1,7 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord } from './admin';
 import type { ApiResult } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **LES CHIFFRES ET LES PRÉFÉRENCES D'UN MEMBRE** (#7845).

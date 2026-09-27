@@ -1,6 +1,7 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **LES ANONYMES** (#7873) — les participants entrés par un lien sans compte.

@@ -1,6 +1,7 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **BANNIR, LEVER, LISTER** (#6819) — `POST admin.usersByUserIdBan`,

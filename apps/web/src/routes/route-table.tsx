@@ -126,7 +126,7 @@ export const ROUTES = {
      n'existe que pour le lecteur connecté, d'où `starredMessages` dans
      `PRIVATE_ROUTES`. Adresse NEUVE — le legacy ne sert aucun écran de
      favoris de messages (D-5) ; elle reprend le nom de la route du contrat
-     (`/api/v1/me/starred-messages`). */
+     (`me.starredMessages`). */
   starredMessages: { pattern: '/me/starred-messages', screen: () => import('@/routes/starred-messages') },
   /* LES STORIES (#6080) — le rail de la liste ouvre ces DEUX adresses, et
      c'est ce qui en fait des contrôles plutôt que des promesses. Jusqu'ici

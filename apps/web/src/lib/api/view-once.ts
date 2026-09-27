@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import type { ConversationsDeps } from './conversations';
 import { recordViewOnceConsumption } from './fixtures';
@@ -12,7 +13,7 @@ import type { Transport } from '../net/transport';
  * LE PORT SERVEUR DE LA CONSOMMATION D'UNE VUE UNIQUE (D-10, D-23, #5676).
  *
  * Route RÉELLE, lue et citée — aucune n'est inventée :
- *   `POST /api/v1/conversations/:id/messages/:messageId/consume`, SANS
+ *   `POST conversations.byIdMessagesByMessageIdConsume`, SANS
  *   corps, `preValidation: [requiredAuth]`
  *   (`services/gateway/src/routes/conversations/messages-view-once.ts:34-73`).
  *   200 `{ success: true, data: { messageId, viewOnceCount, maxViewOnceCount,
@@ -40,7 +41,7 @@ export function consumeViewOnce(
 ): Promise<unknown> {
   return transport({
     method: 'POST',
-    path: `/api/v1/conversations/${ids.conversationId}/messages/${ids.messageId}/consume`,
+    path: conversationsEndpoints.byIdMessagesByMessageIdConsume(ids.conversationId, ids.messageId),
   });
 }
 
