@@ -30,7 +30,8 @@
  *     est éteint ;
  *  8. le chevron de `[Publier … | ▾]` offre story, post et réel — le réel
  *     grisé AVEC sa raison ;
- *  9. publier en post par le chevron ramène au Flux ;
+ *  9. choisir post au chevron ARME le post sans publier (la capsule le nomme) ;
+ *     seul Publier envoie, et ramène au Flux (maquette plein écran, #8281) ;
  * 10. les Réels se lisent eux aussi dans une colonne 9:16 centrée, et leur
  *     bouton « Retour » s'ancre à la COLONNE, pas au bord de la fenêtre ;
  * 11. aucun défilement horizontal, aucune erreur de page.
@@ -260,8 +261,14 @@ for (const scheme of ['light', 'dark']) {
     );
     await capture(page, `post-compose-post.${scheme}`);
 
-    // ------------------ 9. publier en post par le chevron ramène au Flux
+    // --- 9. le chevron ARME le post sans publier ; seul Publier envoie et ramène au Flux
     await page.click('[data-publish-kind-choice="POST"]');
+    check(
+      (await page.evaluate(() => location.pathname)) === '/posts/new' &&
+        (await page.getAttribute('[data-story-publish]', 'data-publish-kind')) === 'POST',
+      `${label} : choisir post au chevron publie au lieu d'armer la capsule`,
+    );
+    await page.click('[data-story-publish]');
     check(
       await page
         .waitForFunction(() => location.pathname === '/feed', undefined, { timeout: 5000 })

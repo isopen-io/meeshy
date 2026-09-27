@@ -167,7 +167,7 @@ export const PAGE_PRIVACY: ContentPage = {
             },
             {
               title: 'Effacement',
-              body: "« Effacer mon carnet d'adresses » : au bas du Répertoire sur iPhone, dans Paramètres > Confidentialité sur le web. Il part de nos serveurs avec la trace des arrivées annoncées, et rien n'est renvoyé avant que vous synchronisiez de nouveau. Il est aussi effacé à la suppression de votre compte.",
+              body: "Supprimer votre compte efface aussi votre carnet synchronisé : à l'issue de la suppression de votre compte, il part de nos serveurs avec la trace des arrivées qui vous ont été annoncées, vos notifications, et les annonces de votre propre arrivée faites à vos contacts.",
             },
           ],
         },

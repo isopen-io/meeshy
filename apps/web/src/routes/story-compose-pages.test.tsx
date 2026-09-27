@@ -57,7 +57,7 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     return el;
   }
 
-  test('une SEULE page : aucun rail, et la ligne Post publie directement — aucun sous-menu (loi 4)', async () => {
+  test('une SEULE page : aucun rail, et la ligne Post se choisit sans sous-menu (loi 4) — Publier l’envoie', async () => {
     const bench = harness({});
     const el = mount(bench.deps, 'POST');
     typeText(el, 'Une seule page');
@@ -65,6 +65,9 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     act(() => kindToggle(el)!.click());
     expect(kindChoice('POST')?.hasAttribute('aria-haspopup')).toBe(false);
     act(() => kindChoice('POST')!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+    act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(layoutChoices()).toHaveLength(0);
     expect('layout' in (bench.posts[0]!.storyEffects as object)).toBe(false);
@@ -160,13 +163,18 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(kindChoice('POST')?.hasAttribute('aria-haspopup')).toBe(false);
   });
 
-  test('choisir une disposition PUBLIE en POST avec `canvas.layout` et les deux scènes', async () => {
+  test('choisir une disposition ARME le POST sans publier ; Publier l’envoie avec `canvas.layout` et les deux scènes', async () => {
     const bench = harness({});
     const el = await twoTypedPages(bench);
     act(() => kindToggle(el)!.click());
     act(() => kindChoice('POST')!.click());
     await flush(() => layoutChoice('hero') !== null);
     act(() => layoutChoice('hero')!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+    expect(layoutChoice('hero')).toBeNull();
+    expect(publishButton(el)?.textContent).toBe('Publier le post');
+    act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
 
     expect(bench.posts[0]?.type).toBe('POST');

@@ -4345,8 +4345,15 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Ce que les autres clients font.** La coque Android EST ce code. iOS applique le même protocole (`CallRecordingController`, `CallRecordingService`) mais ne capte que la voix LOCALE : le SDK WebRTC public n'expose pas son module audio, donc les voix distantes ne peuvent pas rejoindre le fichier sans un module audio personnalisé — limite écrite dans `CallRecordingService.swift`, suivi à ouvrir. Les deux réécoutent l'enregistrement depuis la bulle de l'appel.
 
+## D-141 — La flèche de Publier CHOISIT, seul Publier envoie ; le composer suit la maquette plein écran (2026-09-27, #8281)
 
-## D-141 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
+**Contexte.** La capsule scindée `PublishSplitButton` (`[Publier … | ^]`) publiait dès qu'on choisissait une entrée du menu : un geste destiné à RÉGLER l'envoi l'exécutait. Le porteur a validé le 2026-09-27 une maquette plein écran (`docs/product/composer-plein-ecran/`) qui fixe la règle inverse, identique sur web mobile, coque Android, navigateur, iOS et iPad.
+
+**Décision.** Le chevron arme un `PublishChoice` (format + disposition) que l'hôte retient (`story-compose.tsx`, `onChoose={setChoice}`) ; la partie principale se renomme d'après lui et seule elle publie. Le miroir iOS est `ComposerPublishMenuRule.armed`.
+
+**Conséquences.** Aucune publication ne part par surprise. La scène plein écran à contrôles flottants, le panneau Cadre et la frise « Animé » de la même maquette sont des lots suivants, chacun sous son issue.
+
+## D-142 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
 
 **Contexte.** Directive porteur 2026-09-27 : réagencer l'inscription « en 3–4 phases rapides, plus moderne, sexy, dynamique », web ET iOS, sans seconde machine. D-72 avait posé deux barreaux (le contact, puis l'identité) ; l'écran du code (`/auth/verify-email`) restait une page à part.
 

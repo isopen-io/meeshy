@@ -13,7 +13,6 @@ import enCallJoin from './catalog-en-call-join';
 import enCallDecline from './catalog-en-call-decline';
 import enCallFeedback from './catalog-en-call-feedback';
 import enCallsErase from './catalog-en-calls-erase';
-import enAddressBook from './catalog-en-address-book';
 import enCallDevices from './catalog-en-call-devices';
 import enCallScreen from './catalog-en-call-screen';
 import enCallQuality from './catalog-en-call-quality';
@@ -220,7 +219,6 @@ const en = {
   ...enCallDecline,
   ...enCallFeedback,
   ...enCallsErase,
-  ...enAddressBook,
   ...enCallDevices,
   ...enCallScreen,
   ...enCallQuality,

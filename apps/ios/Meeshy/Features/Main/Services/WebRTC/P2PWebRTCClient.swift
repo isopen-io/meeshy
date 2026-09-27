@@ -15,7 +15,7 @@ import os
 // preferred codec to H.264 when available. Hardware H.264 is ~3× more energy
 // efficient than software VP8/VP9 on iOS and matches what the Apple ecosystem
 // negotiates by default for FaceTime-style calls.
-private enum WebRTCSharedFactory {
+enum WebRTCSharedFactory {
     static let factory: RTCPeerConnectionFactory = {
         RTCInitializeSSL()
         let encoder = RTCDefaultVideoEncoderFactory()
@@ -1084,7 +1084,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 let numericKeys = [
                     "currentRoundTripTime", "availableOutgoingBitrate",
                     "packetsLost", "packetsReceived",
-                    "packetsSent", "bytesSent", "bytesReceived", "jitter"
+                    "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel"
                 ]
                 var parsed: [CallStats.RawEntry] = []
                 parsed.reserveCapacity(report.statistics.count)

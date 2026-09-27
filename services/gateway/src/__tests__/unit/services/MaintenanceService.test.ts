@@ -107,6 +107,17 @@ function makePrisma(overrides: {
     userVoiceModel: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    notification: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    userContact: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    contactJoinNotice: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     communityMember: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
@@ -684,7 +695,7 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 
-  it('purge les trois tables ISOLÉES (sessions, profil vocal, liens de partage) de chaque compte expiré, sans attendre un clic sur « supprimer maintenant » (#3632)', async () => {
+  it('purge les tables ISOLÉES (sessions, profil vocal, liens de partage, notifications, carnet — #8284) de chaque compte expiré, sans attendre un clic sur « supprimer maintenant » (#3632)', async () => {
     const prisma = makePrisma();
     prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
@@ -695,6 +706,10 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: 'user-a' } });
+    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: 'user-a' } });
+    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { joinerId: 'user-a' } });
   });
 
   it("un échec de la purge isolée ne fait pas compter l'expiration comme ratée — le lot continue", async () => {

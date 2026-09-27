@@ -40,6 +40,9 @@ final class CallManagerHost: ObservableObject {
             self?.objectWillChange.send()
         }
         manager = candidate
+        // #3585 — la pile de PRODUCTION porte aussi le maillage de groupe ; un
+        // hôte de test n'y branche rien.
+        if self === CallManagerHost.shared { GroupCallMeshBinding.shared.bind(candidate) }
         return candidate
     }
 
@@ -96,7 +99,11 @@ final class IncomingCallWakeGate {
         },
         isAwake: @escaping @MainActor () -> Bool = { CallManagerHost.shared.manager != nil },
         wake: @escaping @MainActor (CallOfferData) -> Void = { offer in
-            CallManagerHost.shared.require().handleCallOffer(offer)
+            let manager = CallManagerHost.shared.require()
+            // Le maillage, né avec la pile, n'a pas vu CET appel : il apprend
+            // ici qu'il est de groupe avant que la pile ne le sonne.
+            GroupCallMeshCoordinator.shared.handleIncomingCall(offer)
+            manager.handleCallOffer(offer)
         }
     ) {
         self.offers = offers
