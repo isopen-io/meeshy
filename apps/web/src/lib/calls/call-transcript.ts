@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 
 import type { CallsDeps } from '@/lib/api/calls';
 import type { ApiResult } from '@/lib/api/http';
@@ -6,7 +7,7 @@ import { served } from '@/lib/api/prism';
 
 /**
  * **LA TRANSCRIPTION D'APRÈS L'APPEL** (#8048, G6) — `GET
- * /api/v1/calls/:callId/transcript` (`calls-consultation.ts`), le journal que la
+ * calls.byCallIdTranscript` (`calls-consultation.ts`), le journal que la
  * passerelle a GRAVÉ pendant l'appel (segments finaux et leurs traductions),
  * relu dans la bulle d'appel du fil comme iOS le relit dans
  * `CallSummaryDetailSheet` (`BubbleCallNoticeView.swift`). Donnée SENSIBLE : la
@@ -96,7 +97,7 @@ export async function loadCallTranscript(deps: Pick<CallsDeps, 'source' | 'trans
     const { fixtureCallTranscript } = await import('@/lib/api/fixtures-calls');
     return { ok: true, data: fixtureCallTranscript(callId) };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: `/api/v1/calls/${encodeURIComponent(callId)}/transcript?limit=100`, ...(signal === undefined ? {} : { signal }) });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: `${callsEndpoints.byCallIdTranscript(callId)}?limit=100`, ...(signal === undefined ? {} : { signal }) });
   if (!result.ok) return result.status === 403 || result.status === 404 ? { ok: true, data: null } : result;
   return { ok: true, data: decodeCallTranscript(result.data) };
 }

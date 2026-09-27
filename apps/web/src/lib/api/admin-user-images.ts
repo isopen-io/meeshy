@@ -1,10 +1,11 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { uploadProfileImage, type ProfileImageUploadDeps } from '@/lib/profile/image-upload';
 
 import { type AdminDeps, asCount, asRecord, pageServie, type PageServie } from './admin';
 import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
 import type { ProfileImageKind } from './profile';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **LA PHOTO ET LA BANNIÈRE D'UN MEMBRE, POSÉES PAR L'ADMINISTRATION** (#8217)

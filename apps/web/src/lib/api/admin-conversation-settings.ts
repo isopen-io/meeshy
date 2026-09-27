@@ -1,8 +1,9 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asRecord, asText } from './admin';
 import { MOTIF_LONGUEUR_MINIMALE } from './admin-conversations';
 import { type AdminConversation, decodeAdminConversation } from './admin-user-conversations';
 import type { ApiResult } from './http';
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 /**
  * **CONFIGURER UNE CONVERSATION SANS EN ÊTRE MEMBRE** (#7845, #7999) — les trois

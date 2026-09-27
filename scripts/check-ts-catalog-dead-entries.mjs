@@ -391,7 +391,9 @@ export const callersIn = (contents, nsNames) => {
 // (CI de dev rouge sur 7943044432, relevé fusionné sans le cliquet).
 // 478 → 443 (#7716, lot admin) : le web appelle ces entrées par le module de
 // groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-const BASELINE_DEAD_ENTRIES = 443;
+// 443 → 436 (#7716, lot appels) : le web appelle ces entrées par le module de
+// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
+const BASELINE_DEAD_ENTRIES = 436;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

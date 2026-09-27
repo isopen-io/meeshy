@@ -1,4 +1,5 @@
 import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
+import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 
 import type { ConversationMember } from '@/lib/api/conversation-members';
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -29,7 +30,7 @@ export async function removeFromCall(
   if (deps.source === 'fixtures') return false;
   const result = await deps.transport.request<unknown>({
     method: 'DELETE',
-    path: `/api/v1/calls/${encodeURIComponent(target.callId)}/participants/${encodeURIComponent(target.userId)}`,
+    path: callsEndpoints.byCallIdParticipantsByParticipantId(target.callId, target.userId),
   });
   return result.ok;
 }

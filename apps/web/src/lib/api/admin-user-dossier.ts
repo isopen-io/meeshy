@@ -1,4 +1,5 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText, pageServie } from './admin';
 import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
