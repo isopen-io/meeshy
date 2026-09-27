@@ -8,7 +8,7 @@ import type { CallRecorderHandle, CallRecorderStart, CallRecorderTarget, CallRec
 import { callStore, type ActiveCall, type CallStoreApi } from './call-store';
 
 /**
- * **CE QUI CAPTE, CHEZ L'ENREGISTREUR SEUL** (#8064, D-139) — chunk chargé à
+ * **CE QUI CAPTE, CHEZ L'ENREGISTREUR SEUL** (#8064, D-140) — chunk chargé à
  * `call:recording-started` quand le spectateur est celui qui a demandé : la
  * passerelle a recueilli l'accord de tous. Il mélange SA voix et celle de
  * chaque pair (WebAudio), capture le mélange (`MediaRecorder`), puis, à

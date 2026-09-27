@@ -4318,7 +4318,7 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Les gardes.** `scripts/check-web-api-literals.mjs` INTERDIT toute ligne `/api/v1/` sous `src/` hors tests (chaîne Quality de `ci.yml` et gate composite). `route-auth-coverage.test.ts` (passerelle) résout chaque `alias.entrée` d'un import de groupe par le vrai catalogue et la confronte au serveur assemblé — une entrée inexistante sort fantôme, prouvé par un échantillon fixe. `check-ts-catalog-dead-entries.mjs` reconnaît l'import de groupe comme appelant : 478 → 337 entrées sans appelant.
 
-## D-139 — Un appel s'enregistre côté CLIENT, chez le demandeur, après l'accord de tous arbitré par la passerelle ; le fichier rejoint la bulle de l'appel et se réécoute avec le lecteur audio ordinaire (2026-09-27, #8064)
+## D-140 — Un appel s'enregistre côté CLIENT, chez le demandeur, après l'accord de tous arbitré par la passerelle ; le fichier rejoint la bulle de l'appel et se réécoute avec le lecteur audio ordinaire (2026-09-27, #8064)
 
 **Pourquoi pas côté serveur.** L'appel est un maillage P2P : aucun flux ne traverse la passerelle, et il n'existe pas encore de SFU (#8069). En faire passer un pour le seul enregistrement relaierait tous les médias d'un appel enregistré par le serveur — exactement ce qu'un appel P2P promet de ne pas faire. Le capteur est donc le navigateur (ou la coque Android) de celui qui a DEMANDÉ ; quand #8069 existera, le capteur pourra passer au serveur sans rien changer au consentement.
 

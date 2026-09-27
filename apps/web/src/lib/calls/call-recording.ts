@@ -11,7 +11,7 @@ import type { CallStoreApi } from './call-store';
 import type { CallTransport } from './call-transport';
 
 /**
- * **L'ENREGISTREMENT D'UN APPEL, CÔTÉ WEB** (#8064, D-139) — l'état que l'écran
+ * **L'ENREGISTREMENT D'UN APPEL, CÔTÉ WEB** (#8064, D-140) — l'état que l'écran
  * lit et les trois gestes (demander, répondre, arrêter). La passerelle est
  * l'autorité : l'enregistreur ne démarre qu'à `call:recording-started`, qui
  * n'est diffusé qu'une fois TOUS les autres participants d'accord. Le module
