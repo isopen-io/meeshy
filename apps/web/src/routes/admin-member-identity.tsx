@@ -40,19 +40,23 @@ export function AdminMemberIdentitySection({
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
-  const [draft, setDraft] = useState<IdentityDraft>(() => identityDraftOf(membre));
+  /* Seuls les champs TOUCHÉS vivent dans l'état : le reste se relit du membre
+     servi, si bien qu'un geste d'une AUTRE section (activer, valider) ne laisse
+     jamais ici une valeur périmée qui ferait croire à une modification. */
+  const [touches, setTouches] = useState<Partial<IdentityDraft>>({});
+  const draft: IdentityDraft = { ...identityDraftOf(membre), ...touches };
   const focus = useFieldFocus();
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const edit = identityEditOf(membre, draft);
 
   const poser = (partie: Partial<IdentityDraft>) => {
-    setDraft((precedent) => ({ ...precedent, ...partie }));
+    setTouches((precedent) => ({ ...precedent, ...partie }));
     ecriture.reset();
   };
 
   async function enregistrer() {
     const aJour = await ecriture.run(() => updateAdminUser({ ...deps, userId: membre.id, edit }));
-    if (aJour !== null) setDraft(identityDraftOf(aJour));
+    if (aJour !== null) setTouches({});
   }
 
   const pseudoPris = ecriture.failure?.code === 'USERNAME_TAKEN';

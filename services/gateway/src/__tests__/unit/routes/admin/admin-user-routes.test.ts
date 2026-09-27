@@ -97,7 +97,7 @@ const mockUser = {
   isActive: true,
   emailVerified: new Date(),
   phoneVerified: null,
-  twoFactorEnabled: null,
+  twoFactorSecret: 'JBSWY3DPEHPK3PXP', // appairé : armer le second facteur est admis (#8289)
   avatar: null,
   createdAt: new Date('2024-01-01'),
   lastActiveAt: null,
@@ -724,7 +724,7 @@ describe('POST /admin/users/:userId/enable-2fa', () => {
     await app.ready();
   });
   afterAll(() => app.close());
-  beforeEach(() => { resetMocks(); mockUMS.getUserById.mockResolvedValue({ ...mockUser, twoFactorSecret: 'JBSWY3DPEHPK3PXP' }); });
+  beforeEach(resetMocks);
 
   it('returns 200 on happy path', async () => {
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/enable-2fa' });

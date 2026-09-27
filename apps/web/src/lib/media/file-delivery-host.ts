@@ -50,7 +50,7 @@ function currentEnvironment(): FileDeliveryEnvironment {
 
 const BLOC_BASE64 = 0x8000;
 
-async function base64De(blob: Blob): Promise<string> {
+export async function base64De(blob: Blob): Promise<string> {
   const octets = new Uint8Array(await blob.arrayBuffer());
   const blocs = Array.from({ length: Math.ceil(octets.length / BLOC_BASE64) }, (_, i) =>
     String.fromCharCode(...octets.subarray(i * BLOC_BASE64, (i + 1) * BLOC_BASE64)),
