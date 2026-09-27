@@ -289,6 +289,9 @@ struct RootChromeLayer: ViewModifier {
             // restent modales, donc PAR-DESSUS. Garde :
             // `OnboardingAboveGlobalChromeGuardTests`.
             .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
+            // l'onboarding (`OnboardingPresenceSignal`).
+            .activationInviteHost()
     }
 }
 

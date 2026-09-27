@@ -32,6 +32,8 @@ import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
+import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
+import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -1032,6 +1034,10 @@ export class CallService {
         initiatorId
       });
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
+    }
+
+    if (conversation.type === 'direct') {
+      await assertDirectCalleeReachable(this.prisma, { conversationId, callerUserId: initiatorId });
     }
 
     // PHANTOM CLEANUP (2026-06-05) — every initiate force-ends ANY non-ended call
@@ -2504,44 +2510,7 @@ export class CallService {
    * Récupérer les participants d'un appel qui n'ont pas rejoint
    */
   async getUnrespondedParticipants(callId: string): Promise<string[]> {
-    const callSession = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: {
-        participants: true,
-        conversation: {
-          include: {
-            participants: {
-              where: {
-                isActive: true
-              },
-              select: {
-                id: true,
-                userId: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    if (!callSession) {
-      return [];
-    }
-
-    // Récupérer les IDs des participants qui ont déjà rejoint l'appel
-    const joinedParticipantIds = callSession.participants.map(p => p.participantId);
-
-    // Récupérer tous les membres de la conversation
-    const conversationParticipantIds = callSession.conversation.participants.map(m => m.userId).filter(Boolean) as string[];
-
-    // Exclure l'initiateur et ceux qui ont rejoint
-    const unrespondedUserIds = conversationParticipantIds.filter(
-      userId => userId !== callSession.initiatorId && !callSession.conversation.participants
-        .filter(p => joinedParticipantIds.includes(p.id))
-        .some(p => p.userId === userId)
-    );
-
-    return unrespondedUserIds;
+    return unrespondedParticipantUserIds(this.prisma, callId);
   }
 
   /**

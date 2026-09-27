@@ -102,9 +102,7 @@ const createMockPrisma = () => {
       // race path are unaffected.
       updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
     },
-    participant: {
-      findFirst: jest.fn() as MockFn
-    },
+    participant: { findFirst: jest.fn() as MockFn, findMany: jest.fn().mockResolvedValue([]) as MockFn },
     callSession: {
       create: jest.fn() as MockFn,
       findUnique: jest.fn() as MockFn,

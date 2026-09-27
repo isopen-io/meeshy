@@ -136,12 +136,6 @@ describe('les gardes du composite tournent en CI — sinon ils sont verts par om
     expect(orphelins).toEqual([]);
   });
 
-  /**
-   * LE SENS INVERSE COMPTE AUSSI, et pour une raison différente : un maillon
-   * retiré du composite mais laissé dans `ci.yml` est une étape MORTE qui coûte
-   * du temps de runner à chaque poussée, et que personne ne relira — elle ne
-   * rougit pas non plus.
-   */
   test('tout garde de la RACINE que lance le composite tourne aussi en CI', () => {
     const racine = maillonsRacineDuComposite();
     const ci = scriptsRacineDeLaCI();
@@ -149,6 +143,12 @@ describe('les gardes du composite tournent en CI — sinon ils sont verts par om
     expect([...racine].filter((m) => !ci.has(m)).sort()).toEqual([]);
   });
 
+  /**
+   * LE SENS INVERSE COMPTE AUSSI, et pour une raison différente : un maillon
+   * retiré du composite mais laissé dans `ci.yml` est une étape MORTE qui coûte
+   * du temps de runner à chaque poussée, et que personne ne relira — elle ne
+   * rougit pas non plus.
+   */
   test('aucune étape de ci.yml ne lance un garde absent du composite', () => {
     const composite = maillonsDuComposite();
     const ci = maillonsDeLaCI();

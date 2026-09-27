@@ -996,7 +996,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
-        let sanitized = sanitizeDataURIs(user)
+        let sanitized = user.droppingDataURIImages()
         do {
             let encoded = try JSONEncoder().encode(sanitized)
             guard let jsonString = String(data: encoded, encoding: .utf8) else {
@@ -1046,32 +1046,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private func clearPendingProfileFromKeychain(userId: String) {
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
-    }
-
-    private func sanitizeDataURIs(_ user: MeeshyUser) -> MeeshyUser {
-        let hasDataAvatar = user.avatar?.hasPrefix("data:") == true
-        let hasDataBanner = user.banner?.hasPrefix("data:") == true
-        guard hasDataAvatar || hasDataBanner else { return user }
-        return MeeshyUser(
-            id: user.id, username: user.username, email: user.email,
-            firstName: user.firstName, lastName: user.lastName,
-            displayName: user.displayName, bio: user.bio,
-            avatar: hasDataAvatar ? nil : user.avatar,
-            banner: hasDataBanner ? nil : user.banner,
-            role: user.role, systemLanguage: user.systemLanguage,
-            regionalLanguage: user.regionalLanguage,
-            isOnline: user.isOnline, lastActiveAt: user.lastActiveAt,
-            createdAt: user.createdAt, updatedAt: user.updatedAt,
-            blockedUserIds: user.blockedUserIds, isActive: user.isActive,
-            deactivatedAt: user.deactivatedAt, isAnonymous: user.isAnonymous,
-            isMeeshyer: user.isMeeshyer, phoneNumber: user.phoneNumber,
-            emailVerifiedAt: user.emailVerifiedAt, phoneVerifiedAt: user.phoneVerifiedAt,
-            customDestinationLanguage: user.customDestinationLanguage,
-            autoTranslateEnabled: user.autoTranslateEnabled,
-            timezone: user.timezone, registrationCountry: user.registrationCountry,
-            profileCompletionRate: user.profileCompletionRate,
-            signalIdentityKeyPublic: user.signalIdentityKeyPublic
-        )
     }
 
     private func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String) {

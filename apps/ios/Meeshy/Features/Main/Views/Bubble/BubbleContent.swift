@@ -161,6 +161,9 @@ nonisolated struct BubbleContent: Equatable {
             // (« image/jpeg ») laissaient la rangée plate sur son premier rendu.
             lhs.reference.attachmentType == rhs.reference.attachmentType
                 && lhs.reference.attachmentThumbnailUrl == rhs.reference.attachmentThumbnailUrl
+                // L'adresse du fichier cité décide qu'une vidéo sans vignette
+                // montre son poster (#8230) — elle arrive avec l'écho serveur.
+                && lhs.reference.attachmentFileUrl == rhs.reference.attachmentFileUrl
                 // La protection DECIDE si cette vignette est rendue et si la
                 // zone 2 est armee : elle influence le rendu autant que l'URL
                 // au-dessus. Absente d'ici, une citation figee sur une

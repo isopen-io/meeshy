@@ -1,32 +1,34 @@
 #!/usr/bin/env node
-// Cliquet des adresses d'API écrites en dur dans le web (#7716).
+// Interdiction des adresses d'API écrites en dur dans le web (#7716).
 //
-// LE DÉFAUT QU'IL FERME
+// LE DÉFAUT QU'ELLE FERME
 //
 // Un chemin d'API s'écrit à UN endroit : le catalogue GÉNÉRÉ depuis
 // `services/gateway/route-manifest.json` (`packages/shared/api/endpoints.ts`
-// et ses modules par groupe). `apps/web` écrivait les siens à la main,
-// requête par requête (`path: '/api/v1/…'`) : une route renommée côté
-// serveur ne faisait rougir ni le typage ni les tests du web, et le
-// catalogue restait sans client (#7716, voie (a) décidée le 2026-09-27).
+// et ses modules par groupe, `packages/shared/api/endpoints/<groupe>.ts`).
+// `apps/web` écrivait les siens à la main, requête par requête
+// (`path: '/api/v1/…'`) : une route renommée côté serveur ne faisait rougir ni
+// le typage ni les tests du web, et le catalogue restait sans client.
 //
-// CE QU'IL COMPTE
+// La migration (#7716, 2026-09-27) a fait passer le compte de 348 lignes à 0,
+// lot par lot, sous un cliquet à deux sens. Le compte étant nul, le cliquet
+// est devenu une INTERDICTION : une seule ligne rougit.
+//
+// CE QU'ELLE LIT
 //
 // Les LIGNES de `apps/web/src` (`.ts`, `.tsx`, hors `*.test.*`) qui
-// contiennent `/api/v1/`, à toute profondeur. Le relevé de l'issue
-// (`git grep -c "/api/v1/" -- 'apps/web/src/**/*.ts' … ':!*.test.*'`) en
-// rendait 347 : son motif exige un sous-dossier sous `src/`, et manquait
-// `src/main.tsx` — ce script compte aussi les fichiers de premier niveau.
-// Un commentaire compte : une adresse recopiée dans un doc-comment se
-// périme au premier renommage exactement comme celle d'un appel, et c'est
-// l'entrée du catalogue qu'il faut y citer.
+// contiennent `/api/v1/`, à toute profondeur. Un commentaire compte : une
+// adresse recopiée dans un doc-comment se périme au premier renommage
+// exactement comme celle d'un appel — on y cite l'entrée du catalogue
+// (`admin.usersByUserIdResetPassword`).
 //
-// Cliquet à DEUX sens, sur le modèle de `check-ts-catalog-dead-entries.mjs` :
-// il rougit si le compte MONTE, et exige d'abaisser `BASELINE` quand il
-// DESCEND. Quand la référence atteint 0, c'est une interdiction pure.
+// Ce qui la remplace, et que la passerelle vérifie : le web importe le module
+// du groupe en espace de noms (`import * as adminEndpoints from
+// '@meeshy/shared/api/endpoints/admin'`), et `route-auth-coverage.test.ts`
+// (gateway) résout chacune de ces références contre le serveur assemblé.
 //
-// --self-test : un monde synthétique prouve le comptage (commentaires
-// compris, tests exclus), puis le cliquet à deux sens.
+// --self-test : un monde synthétique prouve la lecture (commentaires compris,
+// tests exclus) puis le verdict.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -38,20 +40,10 @@ const NEEDLE = '/api/v1/';
 const TEST_FILE_RE = /\.test\.[^/]*$/;
 const SOURCE_RE = /\.tsx?$/;
 
-// 348 — mesuré le 2026-09-27 sur `origin/dev` (ba870370e3), avant la migration.
-// 348 → 303 (#7716, lot admin).
-// 303 → 287 (#7716, lot appels).
-// 287 → 235 (#7716, lot authentification et compte).
-// 235 → 191 (#7716, lot profil et annuaire).
-// 191 → 138 (#7716, lot conversations et messages).
-// 138 → 116 (#7716, lot liens).
-// 116 → 50 (#7716, lot publications, stories et notifications).
-// 50 → 0 (#7716, lot médias et infrastructure).
-const BASELINE = 0;
-
 export const isCountedFile = (name) => SOURCE_RE.test(name) && !TEST_FILE_RE.test(name);
 
-export const countLiteralLines = (source) => source.split('\n').filter((line) => line.includes(NEEDLE)).length;
+export const offendingLines = (source) =>
+  source.split('\n').flatMap((line, index) => (line.includes(NEEDLE) ? [index + 1] : []));
 
 const listFiles = (absDir, relDir) =>
   readdirSync(absDir).flatMap((name) => {
@@ -62,17 +54,9 @@ const listFiles = (absDir, relDir) =>
   });
 
 export const measure = (root) =>
-  listFiles(join(root, WEB_SRC), WEB_SRC)
-    .map((relPath) => ({ relPath, count: countLiteralLines(readFileSync(join(root, relPath), 'utf8')) }))
-    .filter(({ count }) => count > 0);
-
-const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
-
-export const evaluateRatchet = (count, baseline) => {
-  if (count > baseline) return RESULT.REGRESSION;
-  if (count < baseline) return RESULT.UNRECORDED_IMPROVEMENT;
-  return RESULT.OK;
-};
+  listFiles(join(root, WEB_SRC), WEB_SRC).flatMap((relPath) =>
+    offendingLines(readFileSync(join(root, relPath), 'utf8')).map((line) => `${relPath}:${line}`),
+  );
 
 const selfTest = () => {
   const failures = [];
@@ -82,24 +66,21 @@ const selfTest = () => {
 
   const source = [
     "path: '/api/v1/admin/users',",
-    ' * `POST /api/v1/auth/login` — documentaire, compte aussi',
-    "path: adminEndpoints.users,",
+    ' * `POST /api/v1/auth/login` — documentaire, rougit aussi',
+    'path: adminEndpoints.users,',
     "const a = '/api/v1/x'; const b = '/api/v1/y';",
   ].join('\n');
-  check(countLiteralLines(source) === 3, `comptage : 3 lignes attendues, obtenu ${countLiteralLines(source)}.`);
-  check(isCountedFile('admin.ts') && isCountedFile('page.tsx'), 'un .ts et un .tsx doivent être comptés.');
-  check(!isCountedFile('admin.test.ts') && !isCountedFile('page.test.tsx'), 'un fichier de test ne doit pas être compté.');
-  check(!isCountedFile('notes.md') && !isCountedFile('style.css'), 'seuls .ts/.tsx sont comptés.');
-  check(evaluateRatchet(2, 2) === RESULT.OK, 'un compte égal à la référence doit être OK.');
-  check(evaluateRatchet(3, 2) === RESULT.REGRESSION, 'une hausse doit être une régression.');
-  check(evaluateRatchet(1, 2) === RESULT.UNRECORDED_IMPROVEMENT, 'une baisse non enregistrée doit rougir.');
-  check(evaluateRatchet(0, 0) === RESULT.OK && evaluateRatchet(1, 0) === RESULT.REGRESSION, 'à référence 0, une seule ligne rougit.');
+  check(JSON.stringify(offendingLines(source)) === '[1,2,4]', `lignes 1, 2, 4 attendues, obtenu ${JSON.stringify(offendingLines(source))}.`);
+  check(offendingLines('path: adminEndpoints.users,\n').length === 0, 'une entrée du catalogue ne doit pas rougir.');
+  check(isCountedFile('admin.ts') && isCountedFile('page.tsx'), 'un .ts et un .tsx doivent être lus.');
+  check(!isCountedFile('admin.test.ts') && !isCountedFile('page.test.tsx'), 'un fichier de test ne doit pas être lu.');
+  check(!isCountedFile('notes.md') && !isCountedFile('style.css'), 'seuls .ts/.tsx sont lus.');
 
   if (failures.length > 0) {
     for (const failure of failures) console.error(`AVEUGLE : ${failure}`);
     return 1;
   }
-  console.log('self-test : 8/8 vérifications passées (comptage, commentaires, exclusion des tests, cliquet à deux sens).');
+  console.log('self-test : 5/5 vérifications passées (lecture, commentaires, entrée du catalogue, exclusion des tests).');
   return 0;
 };
 
@@ -107,31 +88,18 @@ const main = () => {
   if (process.argv.includes('--self-test')) return selfTest();
 
   const offenders = measure(REPO_ROOT);
-  const total = offenders.reduce((sum, { count }) => sum + count, 0);
-  const verdict = evaluateRatchet(total, BASELINE);
-
-  if (verdict === RESULT.REGRESSION) {
-    console.error(`\n  ${total} ligne(s) de ${WEB_SRC} écrivent une adresse ${NEEDLE}… en dur (référence : ${BASELINE}).\n`);
-    for (const { relPath, count } of offenders.sort((a, b) => b.count - a.count)) console.error(`    ${count}\t${relPath}`);
+  if (offenders.length > 0) {
+    console.error(`\n  ${offenders.length} ligne(s) de ${WEB_SRC} écrivent une adresse ${NEEDLE}… en dur :\n`);
+    for (const at of offenders) console.error(`    · ${at}`);
     console.error(
-      "\n  Un chemin d'API s'écrit dans le catalogue GÉNÉRÉ (`@meeshy/shared/api/endpoints/<groupe>`), jamais à la main :" +
-        "\n  importer le module du groupe (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`) et" +
-        "\n  appeler son entrée. Dans un commentaire, citer l'entrée du catalogue plutôt que l'adresse (#7716).\n",
+      "\n  Un chemin d'API s'écrit dans le catalogue GÉNÉRÉ, jamais à la main : importer le module du groupe" +
+        "\n  (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`) et appeler son entrée," +
+        "\n  qui encode ses paramètres. Dans un commentaire, citer l'entrée (`admin.usersByUserIdResetPassword`)." +
+        '\n  Une route absente du catalogue se monte côté passerelle puis se régénère (#7716).\n',
     );
     return 1;
   }
-  if (verdict === RESULT.UNRECORDED_IMPROVEMENT) {
-    console.error(
-      `\n  ${total} ligne(s) portent encore une adresse ${NEEDLE}… — moins que la référence (${BASELINE}).` +
-        `\n  Abaisser BASELINE à ${total} dans scripts/check-web-api-literals.mjs : un progrès non enregistré se reperd en silence.\n`,
-    );
-    return 1;
-  }
-  console.log(
-    total === 0
-      ? `  Aucune adresse ${NEEDLE}… écrite en dur dans ${WEB_SRC} : chaque chemin vient du catalogue généré.`
-      : `  ${total} ligne(s) de ${WEB_SRC} écrivent encore une adresse ${NEEDLE}… (référence ${BASELINE}, #7716).`,
-  );
+  console.log(`  Aucune adresse ${NEEDLE}… écrite en dur dans ${WEB_SRC} : chaque chemin vient du catalogue généré.`);
   return 0;
 };
 

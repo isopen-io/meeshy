@@ -196,7 +196,7 @@ Ajouté le 2026-09-26 à la demande du porteur : les fonctions absentes ou parti
 | Chiffrement de bout en bout par trame | 🟡 DTLS seul | #8070 |
 | Choix du micro et de la sortie, détail de qualité | 🟡 caméra, glyphe | #8071 |
 | Note après l'appel | ❌ | #8072 |
-| Réglage « Appels hors contacts » | 🟡 grisé | #8073 |
+| Réglage « Appels hors contacts » | ✅ actif ; la passerelle refuse la sonnerie aux non-amis (direct et groupe), web et iOS nomment le refus | #8073 |
 | Règles communes : délais, plafond, texte de poussée, relance ICE | 🟡 | #8074 |
 | Reprendre l'appel après relance | 🟡 | #3586, #3578 |
 | Effets de voix (retirés d'iOS le 2026-07-05) | ❌ | #8050 (`décision-produit`) |

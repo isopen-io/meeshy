@@ -16,6 +16,7 @@ import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
 import frMediaHub from './catalog-fr-media-hub';
 import frMediaViewer from './catalog-fr-media-viewer';
+import frActivation from './catalog-fr-activation';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
@@ -198,6 +199,7 @@ const fr = {
   ...frMediaHub,
   ...frMediaViewer,
   ...frVerifyEmail,
+  ...frActivation,
   ...frPassword,
   ...frCall,
   ...frRowActions,

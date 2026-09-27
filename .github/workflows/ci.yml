@@ -352,9 +352,9 @@ jobs:
         run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
 
       # #7716 — un chemin d'API s'écrit dans le catalogue GÉNÉRÉ, jamais à la
-      # main : `apps/web/src` ne doit plus porter d'adresse `/api/v1/…`
-      # littérale. Cliquet à deux sens tant que la migration n'est pas finie.
-      - name: web API literal ratchet
+      # main : `apps/web/src` ne porte plus aucune adresse `/api/v1/…`
+      # littérale (348 lignes → 0), et cette étape l'interdit.
+      - name: web API literal prohibition
         run: node scripts/check-web-api-literals.mjs --self-test && node scripts/check-web-api-literals.mjs
 
       # #3678 — la règle d'accent (CLAUDE.md § « Conversation Accent Color »)
