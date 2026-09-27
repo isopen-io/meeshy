@@ -1,5 +1,130 @@
 # @meeshy/gateway
 
+## 1.73.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le mot de passe « facile » tire des chiffres quelconques — environ 350 000 secrets au lieu de 30 000
+  - effacer son carnet d'adresses depuis l'app, sans resynchronisation silencieuse (#8167)
+  - le consentement à l'enregistrement d'un appel, son indicateur et sa réécoute depuis la bulle
+  - l'échéance d'activation se lit par WireDate
+  - la passerelle arbitre le consentement à l'enregistrement d'un appel et rattache le fichier à la bulle
+  - une revendication d'adresse dit ce qu'elle retire, s'éteint si elle n'est pas prouvée, et refuse un numéro transféré (#8227)
+  - l'étoile de la note d'appel prend MeeshyColors.warning au lieu d'une couleur en dur (#8072)
+  - une adresse non vérifiée ne reçoit que les e-mails qui la prouvent — garde centrale (#8238)
+  - le cliquet des entrées mortes du catalogue TS descend à 335
+  - la vidéo du fil se lit inline à trois contrôles, son toucher ouvre le plein écran (run test)
+  - le journal des appels se cherche par nom et se filtre « vidéo » côté serveur (#8203) (#8246)
+  - jeu inline minimal (son, lecture/pause, plein écran) et toucher de surface qui ouvre le plein écran
+  - le témoin du poster vidéo tourne sur le MainActor, où vit la conformité Equatable (run test)
+  - « Validez votre compte » de J7 à J28, à l'ouverture de l'app (run test)
+  - toute action venue d'un e-mail prouve l'adresse et active le compte (#8238, #8236)
+  - les sessions existantes suivent le délai de grâce — REST, refresh, socket (#8238)
+  - la connexion et l'inscription suivent le délai de grâce de l'adresse (#8238)
+  - la carte de note appelle son modèle par des fermetures, les témoins comparent une note non optionnelle (#8072)
+  - la vérification du numéro par SMS quitte AuthService (#8238)
+  - la loi du délai de grâce de l'adresse — quiet, invite, blocked, done (#8238)
+  - l'aplat d'attente du poster cité passe par une couleur résolue une fois — run test (#8230)
+  - la citation d'un audio ou d'une vidéo s'ouvre en plein écran, même hors fenêtre — run test (#8230)
+  - une citation de vidéo montre son poster, une citation de vocal son onde (#8230)
+  - la pièce citée se reconstruit depuis les faits de la citation, jamais pour un secret (#8230)
+  - la citation optimiste porte l'adresse du fichier cité sauf secret (#8230)
+  - la citation porte l'adresse du fichier cité, jamais pour un média protégé (#8230)
+  - le badge play du poster garde les cotes 64/44 que la loi de la Lentille relit (run test)
+  - le poster vidéo ne promet pas à VoiceOver un geste qu'il ne porte pas (run test)
+  - une vidéo du fil est un poster, le toucher ouvre le plein écran (run test)
+  - après un appel, on le note en un geste (#8072)
+  - le poster vidéo patiente sur son thumbHash pendant l'extraction de la première image
+  - le cliquet du catalogue TS compte les deux adresses d'images de membre posées par l'administrateur (Refs #8217)
+  - une adresse prise montre son détenteur masqué ; « ce n'est pas moi » + code la transfère (Closes #8214)
+  - créer un compte et poser photo et bannière depuis la console web
+  - adresse déjà utilisée — lien de connexion en un geste, « Est-ce vous ? », run test (#8216)
+  - les mots de passe proposés font 6, 8, 12 et 16 caractères — « facile » prend la forme lisible sans se deviner
+  - une session E2EE indisponible ne fait plus clignoter le retry rouge à l'envoi d'un message direct — run test (Closes #8221)
+  - l'administrateur pose photo et bannière d'un membre, et la création refuse un pseudonyme pris
+  - le mot de passe « simple » se tape sans se deviner — touches voisines, chiffres proches, pseudo parfois
+  - l'administration écrit une adresse normalisée et refuse un doublon à la casse près
+  - « Appels hors contacts » ouvert à tous par défaut ; les anciens false ne ferment plus rien (#8073)
+  - « Appels hors contacts » obéi par la passerelle, iOS et le web
+  - « Appels hors contacts » devient un réglage actif, et l'appelant refusé lit le motif dans sa langue (#8073)
+  - la passerelle refuse de faire sonner un non-contact quand « Appels hors contacts » est coupé (#8073)
+  - sortie audio et micro choisis depuis l'écran d'appel, feuille Qualité en direct
+  - refuser un appel avec un message rapide (#8065)
+  - le témoin du lien profond d'appel passe au routeur une fermeture @MainActor
+  - journal d'appels paginé, effaçable, cherchable, participants de groupe (#8066)
+  - le journal web nomme les participants d'un appel de groupe
+  - le cliquet des couleurs iOS enregistre les boutons d'appel de la fiche profil
+  - une notification corrigée remplace sa bannière Android, comme sur le web (#8201)
+  - le journal nomme les participants d'un appel de groupe (passerelle)
+  - « Rappeler » compose vraiment l'appel, sur iOS et le web
+  - iOS 16 et 17 se lancent et se connectent de nouveau — preuve sur 17.5 après fusion de dev (Closes #8182) — run test
+  - les types de fonction async stockés disent leur isolement — iOS 16 et 17 ne plantent plus au lancement ni à la connexion (#8182)
+  - les mots de passe proposés à l'administrateur partent en Cache-Control: no-store
+  - un compte à activer entend pourquoi et où chercher le code (#8186) run test
+  - rendre le dixieme essai de generateUniqueToken effectif
+  - le dépliage d'un message long tient dans une image, et le verre de Focal est vérifié sur iOS 17 — run test
+  - un message long déplié loin du bas se déroule sous son extrait, même le haut sous le chrome
+  - en Bulles, le verre du déplié épouse la bulle — et « Lire la suite » déplie le bon message
+  - l'effacement du journal d'appels nomme son refus 401 et son témoin n'imite plus ce qu'il teste
+  - les cliquets de catalogue enregistrent DELETE /calls/history/:callId
+  - deux suites de routes reviennent sous leur dette de taille héritée après #8116
+  - la bannière d'une carte de visite dit « 👤 <nom> », jamais son fichier
+  - effacer une ligne ou tout son journal d'appels, et y chercher un nom (#8066) (#8174)
+  - « Aller au message » depuis la liste atterrit sur le fil, pas sur le Résumé vivant — run test
+  - la pellicule de la visionneuse dessine « média indisponible » pour une vignette introuvable
+  - une carte de visite se dit « Contact partagé · nom » dans l'aperçu de la liste et « 👤 nom » en citation
+  - le segment Contacts de l'écran Médias rend des cartes de visite, pas des documents
+  - toute lecture d'une conversation répond à un non-membre comme à un identifiant inexistant
+  - la bannière Android d'une conversation remplace la précédente, comme sur le web (#8171)
+  - le cache des cartes de conversation se vide au logout et au changement de compte
+  - la passerelle propose quatre niveaux de mot de passe à l'administrateur (#8051)
+  - la politique tient sous son plafond, le catalogue remesuré (#8167) run test
+  - sous la coque Android, un lieu partagé ouvre l'app de cartes par geo: (#8262)
+  - un appel s'enregistre avec l'accord de tous et se réécoute depuis la bulle
+  - la tuile « Contact » du composeur envoie une carte text/vcard (#8242)
+  - de J7 à J28, « Validez votre compte » s'ouvre à l'ouverture de l'app
+  - la clé et la réécriture de l'index vivent hors du port de l'écran des médias
+  - la case « adresse vérifiée » de « Créer un compte » est cochée par défaut
+  - les médias et l'infrastructure réseau adressent la passerelle par le catalogue généré
+  - les publications, les stories et les notifications adressent la passerelle par le catalogue généré
+  - la visionneuse ouverte depuis l'écran des médias offre Enregistrer, Réagir et Créer avec ce média
+  - les liens de partage et de suivi adressent la passerelle par le catalogue généré
+  - la note d'après-appel au plus une fois par jour, son chunk borné (#8072)
+  - les conversations et les messages adressent la passerelle par le catalogue généré
+  - le profil, l'annuaire et les communautés adressent la passerelle par le catalogue généré
+  - l'authentification et le compte adressent la passerelle par le catalogue généré
+  - les appels adressent la passerelle par le catalogue généré
+  - l'administration adresse la passerelle par le catalogue généré
+  - « Est-ce vous ? » sur une adresse déjà prise — récupérer ou revendiquer (#8216)
+  - la coque ouvre Conditions et Confidentialité par leur adresse publique (#8213)
+  - une adresse déjà utilisée à l'inscription reçoit le lien de connexion en un geste (#8216)
+  - « Appels hors contacts » se bascule dans la confidentialité, et l'appelant refusé lit le motif (#8073)
+  - borner le refus avec message à 500 caractères, et consigner la décision (#8065)
+  - le décodeur des propositions de mot de passe passe à zod/mini — dev repasse sous le plafond de poids (#8051)
+  - un compte à activer entend pourquoi et où chercher le code (#8186)
+  - sous-titres traduits d'un appel dans les deux sens
+  - toucher un média dans le fil ouvre la visionneuse de TOUTE la conversation, avec Enregistrer, Réagir, Répondre et Créer avec ce média
+  - les lois de la visionneuse conversation-entière et de ses quatre actions
+  - une carte de visite citée ou listée dans les accusés se nomme par son contact
+  - le détail de qualité d'appel se charge au toucher (#8047)
+  - un relevé de qualité lent n'en chevauche pas un autre (#8047)
+  - la qualité d'un appel se voit — indicateur, détail, alertes du pair ; gate de dégradation simulée (#8047)
+  - le moteur d'appel mesure, adapte et rapporte la qualité ; alertes du pair (#8047)
+  - qualité d'un lien, paliers par pair, survie vidéo et rapport de fin d'appel — lois pures (#8047)
+  - la feuille de réinitialisation propose quatre niveaux de mot de passe et laisse l'administrateur le saisir
+  - serializeVCard et contactCardFileName, miroirs de VCardWriter et de l'export iOS (#8242)
+  - le catalogue d'API généré se scinde en un module par groupe et encode ses paramètres
+  - les codes d'erreur d'appel quittent video-call.ts pour tenir le budget ; témoins de sonnerie ouverts (#8073)
+  - les catalogues d'adresses connaissent POST /admin/users/:userId/password-proposals
+  - régénère le catalogue d'adresses et l'énumération iOS pour la route des propositions de mot de passe (#8051)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.28.0
+
 ## 1.72.0
 
 ### Minor Changes
