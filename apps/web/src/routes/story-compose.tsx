@@ -260,7 +260,9 @@ function StoryStudio({
   /** Le GESTE que la partie principale publie — le format de l'entrée, puis
    * le dernier que le chevron a choisi AVEC sa disposition (`PublishChoice`,
    * #7684) : une intention armée hors ligne, ou un échec, repart comme
-   * l'auteur l'a DIT. Aucune disposition tant qu'il n'en a choisi aucune. */
+   * l'auteur l'a DIT. Aucune disposition tant qu'il n'en a choisi aucune.
+   * Le chevron CHOISIT, il ne publie jamais : seul Publier envoie
+   * (maquette plein écran, porteur 2026-09-27). */
   const [choice, setChoice] = useState<PublishChoice>({ kind: initialKind, layout: null });
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
@@ -1008,7 +1010,7 @@ function StoryStudio({
             audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
             layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
             onPrimary={() => void publish()}
-            onChoose={(chosen) => void publish(chosen)}
+            onChoose={setChoice}
           />
         </div>
       </footer>

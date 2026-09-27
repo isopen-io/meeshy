@@ -4345,7 +4345,15 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Ce que les autres clients font.** La coque Android EST ce code. iOS applique le même protocole (`CallRecordingController`, `CallRecordingService`) mais ne capte que la voix LOCALE : le SDK WebRTC public n'expose pas son module audio, donc les voix distantes ne peuvent pas rejoindre le fichier sans un module audio personnalisé — limite écrite dans `CallRecordingService.swift`, suivi à ouvrir. Les deux réécoutent l'enregistrement depuis la bulle de l'appel.
 
-## D-141 — Plusieurs comptes sur l'appareil : un COFFRE liste les comptes et range les jetons des comptes gardés NON actifs ; la session active reste la seule dans `meeshy.session` (2026-09-27, #8286)
+## D-141 — La flèche de Publier CHOISIT, seul Publier envoie ; le composer suit la maquette plein écran (2026-09-27, #8281)
+
+**Contexte.** La capsule scindée `PublishSplitButton` (`[Publier … | ^]`) publiait dès qu'on choisissait une entrée du menu : un geste destiné à RÉGLER l'envoi l'exécutait. Le porteur a validé le 2026-09-27 une maquette plein écran (`docs/product/composer-plein-ecran/`) qui fixe la règle inverse, identique sur web mobile, coque Android, navigateur, iOS et iPad.
+
+**Décision.** Le chevron arme un `PublishChoice` (format + disposition) que l'hôte retient (`story-compose.tsx`, `onChoose={setChoice}`) ; la partie principale se renomme d'après lui et seule elle publie. Le miroir iOS est `ComposerPublishMenuRule.armed`.
+
+**Conséquences.** Aucune publication ne part par surprise. La scène plein écran à contrôles flottants, le panneau Cadre et la frise « Animé » de la même maquette sont des lots suivants, chacun sous son issue.
+
+## D-142 — Plusieurs comptes sur l'appareil : un COFFRE liste les comptes et range les jetons des comptes gardés NON actifs ; la session active reste la seule dans `meeshy.session` (2026-09-27, #8286)
 
 **Ce qui est tranché.**
 - **Deux gestes distincts dans les réglages.** « Changer de compte » garde les sessions et ouvre la liste des comptes de l'appareil (`routes/settings-accounts.tsx`) ; « Déconnexion » ferme la session du compte actuel (serveur compris) et efface ses données locales (`signOutOfThisDevice`, `lib/api/device-accounts.ts`) — le compte RESTE listé, et y revenir exige le mot de passe ou un lien magique.

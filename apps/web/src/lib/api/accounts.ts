@@ -3,7 +3,7 @@ import * as z from 'zod/mini';
 import type { SessionStorage, SessionStoreApi, SessionUser } from './session';
 
 /**
- * PLUSIEURS COMPTES SUR L'APPAREIL (#8286, D-141) — le COFFRE des comptes et
+ * PLUSIEURS COMPTES SUR L'APPAREIL (#8286, D-142) — le COFFRE des comptes et
  * la BASCULE, miroir de `SavedAccount` + `AuthManager+Accounts.swift`.
  *
  * Le coffre LISTE les comptes connus de l'appareil (avatar, nom, @pseudo) et

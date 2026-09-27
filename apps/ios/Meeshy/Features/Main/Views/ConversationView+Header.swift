@@ -64,6 +64,18 @@ extension ConversationView {
     // `readingModeAffordanceCluster` dans ConversationView.swift, même
     // débordement de pile au décodage de mangled name, 2026-08-17).
     var headerCallButtons: AnyView {
+        // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
+        // poignée de l'appel est la conversation, son nom le titre du groupe.
+        if conversation?.type == .group, let groupId = conversation?.id, !groupId.isEmpty {
+            return AnyView(HeaderCallButtonsView(
+                conversationId: groupId,
+                userId: groupId,
+                calleeName: conversation?.displayName ?? "",
+                accentColor: accentColor,
+                secondaryColor: secondaryColor,
+                isGroup: true
+            ))
+        }
         guard isDirect, let userId = conversation?.participantUserId else { return AnyView(EmptyView()) }
         // §7.6 — the start-call buttons are owned by a dedicated subview that
         // observes CallManager, so during an active call they swap to a
@@ -209,6 +221,9 @@ private struct HeaderCallButtonsView: View {
     let calleeName: String
     let accentColor: String
     let secondaryColor: String
+    /// #3585 — `userId` porte alors la conversation (poignée CallKit du groupe)
+    /// et `calleeName` son titre.
+    var isGroup = false
 
     @ObservedObject private var callManager = CallManager.shared
     /// Set when the SERVER (not this device's own `CallManager`) reports an
@@ -311,6 +326,9 @@ private struct HeaderCallButtonsView: View {
     /// flips true and this view naturally swaps to `returnToCallIndicator`.
     private func rejoinCallIndicator(_ activeCall: ActiveCallSession) -> some View {
         Button {
+            // Rejoindre un groupe en cours : les membres présents offrent à
+            // l'arrivant, et le premier qui offre devient le pair principal.
+            if isGroup { GroupCallMeshCoordinator.shared.markGroupConversation(conversationId, title: calleeName) }
             callManager.rejoinActiveCall(
                 callId: activeCall.id,
                 conversationId: conversationId,
@@ -365,12 +383,12 @@ private struct HeaderCallButtonsView: View {
     private var startCallButtons: some View {
         Menu {
             Button {
-                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false) }
+                startCall(isVideo: false)
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true) }
+                startCall(isVideo: true)
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
             }
@@ -378,8 +396,23 @@ private struct HeaderCallButtonsView: View {
             callGlyph("phone.fill")
                 .meeshyTapTarget()
         }
-        .accessibilityLabel(String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
-        .accessibilityHint(String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
+        .accessibilityLabel(isGroup
+            ? String(localized: "call.group.start.menu", defaultValue: "Appeler le groupe", bundle: .main)
+            : String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
+        .accessibilityHint(isGroup
+            ? String(localized: "call.group.start.menu.hint", defaultValue: "Appel vocal ou vidéo avec les membres du groupe, jusqu'à 6 personnes", bundle: .main)
+            : String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
+    }
+
+    private func startCall(isVideo: Bool) {
+        let conversationId = conversationId
+        let userId = userId
+        let calleeName = calleeName
+        guard isGroup else {
+            Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: isVideo) }
+            return
+        }
+        Task { await CallManager.shared.startGroupCall(conversationId: conversationId, title: calleeName, isVideo: isVideo) }
     }
 
     private func callGlyph(_ systemName: String) -> some View {

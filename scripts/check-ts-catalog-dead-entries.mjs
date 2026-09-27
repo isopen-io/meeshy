@@ -334,7 +334,12 @@ export const callersIn = (contents, nsNames) => {
 // appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
 // 335 → 334 (#8167, 2026-09-27) : Paramètres > Confidentialité efface le
 // carnet d'adresses par `directory.contacts` (`lib/api/address-book.ts`).
-const BASELINE_DEAD_ENTRIES = 334;
+// 334 → 335 (#8284, 2026-09-27) : décision porteur — le carnet s'efface à la
+// suppression du compte, jamais à la main. La rangée web et `DELETE
+// /directory/contacts` sont partis ; `directory.contacts` (GET · PUT · PATCH)
+// n'a plus d'appelant TS, il reste servi au catalogue Swift (synchronisation et
+// lecture du Répertoire iOS). Retour exact à la valeur d'avant #8167.
+const BASELINE_DEAD_ENTRIES = 335;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

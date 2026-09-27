@@ -29,7 +29,8 @@ nonisolated enum ComposerPublishMenuRule {
         /// Vide ⇒ un bouton simple ; sinon le sous-menu des agencements.
         let layouts: [MosaicLayoutMode]
 
-        /// Ce que chaque geste publie — un geste, une publication.
+        /// Ce que chaque geste CHOISIT — un geste, un choix ; seule la partie
+        /// principale de la capsule publie (maquette plein écran, 2026-09-27).
         var choices: [ComposerPublishChoice] {
             layouts.isEmpty
                 ? [ComposerPublishChoice(format: format, layout: nil)]
@@ -104,6 +105,24 @@ nonisolated enum ComposerPublishMenuRule {
         return menu
     }
 
+    /// **Ce que la partie principale publie** (maquette plein écran, directive
+    /// porteur 2026-09-27 : « en sélectionnant la flèche pour choisir ce qu'on
+    /// publie, ça ne publie pas ! C'est l'appui sur Publier qui envoie »).
+    ///
+    /// Le chevron ARME un choix ; la capsule le publie. Un choix que le menu
+    /// n'offre plus (slide retirée, format grisé) retombe sur le format de la
+    /// porte : on ne publie jamais ce que le menu ne montre pas.
+    static func armed(chosen: ComposerPublishChoice?,
+                      defaultFormat: ComposerFormat,
+                      entries: [Entry]?) -> ComposerPublishChoice {
+        let porte = ComposerPublishChoice(format: defaultFormat, layout: nil)
+        guard let chosen,
+              let entree = entries?.first(where: { $0.format == chosen.format }),
+              entree.isChoosable,
+              entree.choices.contains(chosen) else { return porte }
+        return chosen
+    }
+
     /// **La surface est celle d'OUVERTURE ; le canal suit le GESTE.**
     ///
     /// Sous l'atelier, un choix sans agencement presse la télécommande — c'est
@@ -162,11 +181,13 @@ nonisolated enum ComposerPublishMenuCopy {
 /// **Le chevron de la capsule Publier** (#7497). `Menu` natif : le système le rend en
 /// verre liquide sur iOS 26 et garde sa forme sur iOS 16 à 25 ; un `Menu` dans
 /// un `Menu` donne le sous-menu dépliable. VoiceOver et Dynamic Type suivent
-/// sans rien réécrire.
+/// sans rien réécrire. Il CHOISIT, il ne publie pas : l'hôte retient le choix
+/// et la partie principale l'envoie ; la coche marque ce qui est armé.
 struct ComposerPublishMenu<Etiquette: View>: View {
 
     let entries: [ComposerPublishMenuRule.Entry]
-    let onPublish: (ComposerPublishChoice) -> Void
+    let armed: ComposerPublishChoice
+    let onChoose: (ComposerPublishChoice) -> Void
     @ViewBuilder let label: () -> Etiquette
 
     var body: some View {
@@ -186,9 +207,13 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     private func entree(_ entry: ComposerPublishMenuRule.Entry) -> some View {
         if entry.layouts.isEmpty {
             Button {
-                onPublish(ComposerPublishChoice(format: entry.format, layout: nil))
+                onChoose(ComposerPublishChoice(format: entry.format, layout: nil))
             } label: {
-                Text(ComposerPublishMenuCopy.entryTitle(entry))
+                if armed.format == entry.format {
+                    Label(ComposerPublishMenuCopy.entryTitle(entry), systemImage: "checkmark")
+                } else {
+                    Text(ComposerPublishMenuCopy.entryTitle(entry))
+                }
             }
             .disabled(!entry.isChoosable)
         } else {
@@ -196,9 +221,11 @@ struct ComposerPublishMenu<Etiquette: View>: View {
                 Section(ComposerMosaicChoice.sectionTitle) {
                     ForEach(entry.layouts, id: \.self) { mode in
                         Button {
-                            onPublish(ComposerPublishChoice(format: entry.format, layout: mode))
+                            onChoose(ComposerPublishChoice(format: entry.format, layout: mode))
                         } label: {
-                            Label(ComposerMosaicChoice.label(mode), systemImage: ComposerMosaicChoice.symbol(mode))
+                            Label(ComposerMosaicChoice.label(mode),
+                                  systemImage: armed == ComposerPublishChoice(format: entry.format, layout: mode)
+                                      ? "checkmark" : ComposerMosaicChoice.symbol(mode))
                         }
                     }
                 }

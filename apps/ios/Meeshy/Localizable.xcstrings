@@ -80725,100 +80725,6 @@
         }
       }
     },
-    "contacts.phonebook.erase-error": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذّر مسح دفتر الهاتف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Telefonbuch konnte nicht gelöscht werden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't clear the phonebook"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo borrar la agenda telefónica"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d'effacer le répertoire"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossibile cancellare la rubrica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível apagar a agenda telefônica"
-          }
-        }
-      }
-    },
-    "contacts.phonebook.erased": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم مسح دفتر العناوين"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adressbuch gelöscht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Address book cleared"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agenda borrada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Répertoire effacé"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rubrica cancellata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agenda apagada"
-          }
-        }
-      }
-    },
     "contacts.phonebook.filter.all": {
       "extractionState": "manual",
       "localizations": {
@@ -204849,237 +204755,472 @@
         }
       }
     },
-    "contacts.phonebook.erase.action": {
+    "call.group.start.menu": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مسح دفتر عناويني"
+            "value": "الاتصال بالمجموعة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mein Adressbuch löschen"
+            "value": "Gruppe anrufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erase my address book"
+            "value": "Call the group"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Borrar mi agenda"
+            "value": "Llamar al grupo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Effacer mon carnet d'adresses"
+            "value": "Appeler le groupe"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cancella la mia rubrica"
+            "value": "Chiama il gruppo"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apagar minha agenda"
+            "value": "Ligar para o grupo"
           }
         }
       }
     },
-    "contacts.phonebook.erase.hint": {
+    "call.group.start.menu.hint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُستخدم جهات اتصالك فقط لإعلامك عندما ينضم صديق إلى Meeshy."
+            "value": "مكالمة صوتية أو مرئية مع أعضاء المجموعة، حتى 6 أشخاص"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Kontakte dienen nur dazu, dich zu benachrichtigen, wenn ein Freund Meeshy beitritt."
+            "value": "Sprach- oder Videoanruf mit den Gruppenmitgliedern, bis zu 6 Personen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your contacts are only used to let you know when a friend joins Meeshy."
+            "value": "Voice or video call with the group members, up to 6 people"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus contactos solo sirven para avisarte cuando un amigo se une a Meeshy."
+            "value": "Llamada de voz o videollamada con los miembros del grupo, hasta 6 personas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes contacts servent uniquement à te prévenir quand un ami rejoint Meeshy."
+            "value": "Appel vocal ou vidéo avec les membres du groupe, jusqu'à 6 personnes"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi contatti servono solo ad avvisarti quando un amico si unisce a Meeshy."
+            "value": "Chiamata vocale o video con i membri del gruppo, fino a 6 persone"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus contatos servem apenas para avisar você quando um amigo entra no Meeshy."
+            "value": "Chamada de voz ou vídeo com os membros do grupo, até 6 pessoas"
           }
         }
       }
     },
-    "contacts.phonebook.erase.confirm.title": {
+    "call.group.stage": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مسح دفتر عناوينك؟"
+            "value": "المشاركون في المكالمة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Adressbuch löschen?"
+            "value": "Anrufteilnehmer"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erase your address book?"
+            "value": "Call participants"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Borrar tu agenda?"
+            "value": "Participantes de la llamada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Effacer ton carnet d'adresses ?"
+            "value": "Participants à l'appel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cancellare la tua rubrica?"
+            "value": "Partecipanti alla chiamata"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apagar sua agenda?"
+            "value": "Participantes da chamada"
           }
         }
       }
     },
-    "contacts.phonebook.erase.confirm.message": {
+    "call.group.tile.you": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُحذف جهات اتصالك المتزامنة من خوادمنا، مع سجل الأصدقاء الذين أُعلن لك عن انضمامهم. لن يُرسل أي شيء مجددًا حتى تقوم بالمزامنة مرة أخرى."
+            "value": "أنت"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine synchronisierten Kontakte werden von unseren Servern gelöscht, zusammen mit dem Verlauf der Freunde, deren Beitritt dir angekündigt wurde. Nichts wird erneut gesendet, bis du wieder synchronisierst."
+            "value": "Du"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your synced contacts are deleted from our servers, along with the record of friends whose arrival was announced to you. Nothing is sent again until you sync once more."
+            "value": "You"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus contactos sincronizados se eliminan de nuestros servidores, junto con el registro de los amigos cuya llegada se te anunció. No se vuelve a enviar nada hasta que sincronices de nuevo."
+            "value": "Tú"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes contacts synchronisés sont supprimés de nos serveurs, avec la trace des amis dont l'arrivée t'a été annoncée. Rien n'est renvoyé tant que tu ne synchronises pas de nouveau."
+            "value": "Vous"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi contatti sincronizzati vengono eliminati dai nostri server, insieme alla traccia degli amici di cui ti è stato annunciato l'arrivo. Non viene inviato più nulla finché non sincronizzi di nuovo."
+            "value": "Tu"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus contatos sincronizados são excluídos dos nossos servidores, junto com o registro dos amigos cuja chegada foi anunciada a você. Nada é enviado de novo até que você sincronize outra vez."
+            "value": "Você"
           }
         }
       }
     },
-    "contacts.phonebook.erase.confirm.button": {
+    "call.group.tile.unknown": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مسح"
+            "value": "مشارك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Löschen"
+            "value": "Teilnehmer"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erase"
+            "value": "Participant"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Borrar"
+            "value": "Participante"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Effacer"
+            "value": "Participant"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cancella"
+            "value": "Partecipante"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apagar"
+            "value": "Participante"
+          }
+        }
+      }
+    },
+    "call.group.tile.speaking": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتحدث"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spricht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaking"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parle"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sta parlando"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falando"
+          }
+        }
+      }
+    },
+    "call.group.tile.micMuted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الميكروفون مكتوم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mikrofon stumm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone muted"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micrófono silenciado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micro coupé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microfono disattivato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microfone desativado"
+          }
+        }
+      }
+    },
+    "call.group.tile.cameraOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الكاميرا متوقفة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamera aus"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera off"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cámara apagada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caméra coupée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotocamera disattivata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Câmera desligada"
+          }
+        }
+      }
+    },
+    "call.group.tile.screenSharing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يشارك شاشته"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teilt den Bildschirm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing their screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparte su pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partage son écran"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Condivide lo schermo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartilhando a tela"
+          }
+        }
+      }
+    },
+    "call.group.tile.reconnecting": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ إعادة الاتصال…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung wird wiederhergestellt…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectando…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnexion…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riconnessione…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectando…"
           }
         }
       }

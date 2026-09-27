@@ -60,7 +60,7 @@ export const meContactChangesByChannelResend = (channel: string): string => `/ap
 /** POST /api/v1/users/me/contact-changes/:channel/verify */
 export const meContactChangesByChannelVerify = (channel: string): string => `/api/v1/users/me/contact-changes/${encodeURIComponent(channel)}/verify`;
 
-/** GET · DELETE /api/v1/users/me/contacts */
+/** GET /api/v1/users/me/contacts */
 export const meContacts = '/api/v1/users/me/contacts';
 
 /** POST /api/v1/users/me/contacts/match */

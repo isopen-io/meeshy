@@ -14,7 +14,6 @@ import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
 import ptCallFeedback from './catalog-pt-call-feedback';
 import ptCallsErase from './catalog-pt-calls-erase';
-import ptAddressBook from './catalog-pt-address-book';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptCallScreen from './catalog-pt-call-screen';
 import ptCallQuality from './catalog-pt-call-quality';
@@ -226,7 +225,6 @@ const pt = {
   ...ptCallDecline,
   ...ptCallFeedback,
   ...ptCallsErase,
-  ...ptAddressBook,
   ...ptCallDevices,
   ...ptCallScreen,
   ...ptCallQuality,

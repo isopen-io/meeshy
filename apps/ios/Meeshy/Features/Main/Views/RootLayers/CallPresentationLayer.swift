@@ -156,7 +156,12 @@ struct CallPresentationLayer: ViewModifier {
                 set: { if !$0 { callManager?.displayMode = .pip } }
             )) {
                 if let callManager {
+                    // #3585 — la grille d'un appel de groupe se pose SUR
+                    // `CallView` (hors budget), entre son chrome du haut et ses
+                    // contrôles du bas ; elle ne se peint qu'à partir de deux
+                    // membres distants.
                     CallView(callManager: callManager)
+                        .overlay { GroupCallStageView(mesh: .shared, callManager: callManager) }
                 }
             }
             // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre
