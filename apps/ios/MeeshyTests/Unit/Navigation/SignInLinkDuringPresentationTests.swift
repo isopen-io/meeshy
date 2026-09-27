@@ -57,7 +57,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     func test_verificationLink_whileCodeSheetPresented_dismissesFirstThenOpensSession() async {
         let (gate, auth, toasts) = makeSUT(presenting: true)
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertEqual(auth.openedSessions, [], "la session ne doit pas s'ouvrir sous la feuille")
         XCTAssertTrue(gate.dismissalRequested)
@@ -71,7 +71,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     func test_magicLink_whilePresentationShown_dismissesFirstThenOpensSession() async {
         let (gate, auth, toasts) = makeSUT(presenting: true)
 
-        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertEqual(auth.openedSessions, [])
         XCTAssertTrue(gate.dismissalRequested)
@@ -84,7 +84,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     func test_link_withoutPresentation_opensSessionAtOnce() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertEqual(auth.openedSessions, ["jwt-link"])
         XCTAssertFalse(gate.dismissalRequested)
@@ -95,7 +95,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         let (gate, auth, toasts) = makeSUT(presenting: true)
         auth.emailResult = .failure(MeeshyError.server(statusCode: 400, message: "Lien expiré"))
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
         gate.presentationEnded()
 
         XCTAssertFalse(gate.dismissalRequested)
@@ -107,7 +107,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         let (gate, auth, toasts) = makeSUT(presenting: true)
         auth.emailResult = .success(nil)
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertFalse(gate.dismissalRequested)
         XCTAssertEqual(auth.openedSessions, [])
@@ -121,7 +121,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         let (gate, auth, toasts) = makeSUT(presenting: false)
         auth.isAuthenticated = true
 
-        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertEqual(auth.events, ["logout", "verify", "open"])
     }
@@ -131,9 +131,55 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         auth.isAuthenticated = true
         auth.currentUser = MeeshyUser(id: "me", username: "me", email: "A@b.co")
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate)
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertEqual(auth.events, ["verify", "open"])
+    }
+
+    // MARK: - #8089 — la session ouverte par la preuve de l'adresse est célébrée
+
+    func test_verificationLink_opensTheSessionThenCelebrates() async {
+        let (gate, auth, toasts) = makeSUT(presenting: true)
+        let celebration = MockArrivalCelebration()
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)
+
+        XCTAssertEqual(celebration.celebratedUserIds, [], "rien ne se célèbre sous la feuille")
+
+        gate.presentationEnded()
+
+        XCTAssertEqual(celebration.celebratedUserIds, ["link-user"])
+    }
+
+    func test_magicLink_isASignIn_notACelebration() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        let celebration = MockArrivalCelebration()
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)
+
+        XCTAssertEqual(auth.openedSessions, ["jwt-link"])
+        XCTAssertEqual(celebration.celebratedUserIds, [])
+    }
+
+    func test_verificationLink_ofTheSignedInAccount_rotatesWithoutCelebrating() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.isAuthenticated = true
+        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "a@b.co")
+        let celebration = MockArrivalCelebration()
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)
+
+        XCTAssertEqual(celebration.celebratedUserIds, [])
+    }
+
+    func test_refusedLink_celebratesNothing() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.emailResult = .failure(MeeshyError.server(statusCode: 400, message: "Lien expiré"))
+        let celebration = MockArrivalCelebration()
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)
+
+        XCTAssertEqual(celebration.celebratedUserIds, [])
     }
 
     // MARK: - SessionOpeningGate

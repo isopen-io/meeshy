@@ -57,7 +57,8 @@ final class EmailVerificationViewModelTests: XCTestCase {
         accountCreated: Bool = false,
         pendingSessionToken: String? = nil,
         watcher: EmailVerificationWatching = MockEmailVerificationWatcher([]),
-        watchLimit: Duration = .seconds(5)
+        watchLimit: Duration = .seconds(5),
+        celebration: MockArrivalCelebration = MockArrivalCelebration()
     ) -> (sut: EmailVerificationViewModel, authService: MockAuthServiceSDK, confirmer: MockEmailVerificationConfirmer) {
         let authService = MockAuthServiceSDK()
         let confirmer = MockEmailVerificationConfirmer()
@@ -70,7 +71,8 @@ final class EmailVerificationViewModelTests: XCTestCase {
             confirmer: confirmer,
             watcher: watcher,
             watchInterval: .zero,
-            watchLimit: watchLimit
+            watchLimit: watchLimit,
+            celebration: celebration
         )
         return (sut, authService, confirmer)
     }
@@ -123,6 +125,27 @@ final class EmailVerificationViewModelTests: XCTestCase {
 
         XCTAssertEqual(confirmer.openedSessions, ["jwt-proven"])
         XCTAssertTrue(sut.sessionOpened)
+    }
+
+    /// #8089 — le code saisi ouvre la session : elle est célébrée, une fois.
+    func test_openProvenSession_afterVerification_celebratesTheArrivalOnce() async {
+        let celebration = MockArrivalCelebration()
+        let (sut, _, _) = makeSUT(celebration: celebration)
+        await sut.verifyCode("123456")
+
+        sut.openProvenSession()
+        sut.openProvenSession()
+
+        XCTAssertEqual(celebration.celebratedUserIds, ["proven-user"])
+    }
+
+    func test_openProvenSession_withoutVerification_celebratesNothing() {
+        let celebration = MockArrivalCelebration()
+        let (sut, _, _) = makeSUT(celebration: celebration)
+
+        sut.openProvenSession()
+
+        XCTAssertEqual(celebration.celebratedUserIds, [])
     }
 
     func test_openProvenSession_withoutVerification_opensNothing() {
