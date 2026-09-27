@@ -38,6 +38,9 @@ export const NotificationPreferenceSchema = z.object({
   commentReplyEnabled: z.boolean().default(true),
   commentLikeEnabled: z.boolean().default(true),
   friendContentEnabled: z.boolean().default(true),
+  // « Quand un contact revient sur Meeshy » (#8285) — la RÉCEPTION de
+  // `contact_recently_active`. Absent d'un document existant ⇒ reçu.
+  contactActivityEnabled: z.boolean().default(true),
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -109,6 +112,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   commentReplyEnabled: true,
   commentLikeEnabled: true,
   friendContentEnabled: true,
+  contactActivityEnabled: true,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',

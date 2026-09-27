@@ -56,6 +56,8 @@ export enum NotificationTypeEnum {
   FRIEND_ACCEPTED = 'friend_accepted',
   /** Un compte du carnet d'adresses du destinataire vient d'arriver sur Meeshy (#8105). */
   CONTACT_JOINED = 'contact_joined',
+  /** Un ami ou un contact du carnet est revenu sur Meeshy — au plus une fois par 3 h et par personne (#8285). */
+  CONTACT_RECENTLY_ACTIVE = 'contact_recently_active',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -588,6 +590,17 @@ export interface ContactJoinedNotificationMetadata extends BaseNotificationMetad
 }
 
 /**
+ * Metadata pour contact_recently_active (#8285) — « X était sur Meeshy
+ * récemment ». `userId` est la personne revenue : le toucher ouvre son profil.
+ * Aucune heure de connexion ne voyage — la notification dit « récemment »,
+ * jamais « à 14 h 02 ».
+ */
+export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+}
+
+/**
  * Metadata générique pour autres types
  */
 export interface GenericNotificationMetadata extends BaseNotificationMetadata {
@@ -615,6 +628,7 @@ export type NotificationMetadata =
   | FriendContentNotificationMetadata
   | LoginNewDeviceNotificationMetadata
   | ContactJoinedNotificationMetadata
+  | ContactRecentlyActiveNotificationMetadata
   | GenericNotificationMetadata;
 
 // =====================================================
