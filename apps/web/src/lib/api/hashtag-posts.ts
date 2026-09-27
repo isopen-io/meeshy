@@ -1,3 +1,5 @@
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
 import { HASHTAG_QUERY_ROOT } from './card-caches';
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -5,7 +7,7 @@ import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * **LE PORT D'UN HASHTAG** (#7032) — `GET /api/v1/social/posts?scope=hashtag&tag=<tag>`
+ * **LE PORT D'UN HASHTAG** (#7032) — `GET social.posts?scope=hashtag&tag=<tag>`
  * (`services/gateway/src/routes/posts/feed.ts:239,840`, noyau partagé
  * `chargerPostsParHashtag`, `routes/posts/hashtag.ts`).
  *
@@ -64,7 +66,7 @@ export async function loadHashtagPage(
   });
   const result = await params.transport.request<readonly FeedPost[]>({
     method: 'GET',
-    path: `/api/v1/social/posts?${query.toString()}`,
+    path: `${socialEndpoints.posts}?${query.toString()}`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

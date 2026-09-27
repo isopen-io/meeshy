@@ -1,3 +1,5 @@
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, flattenFeedPages, nextFeedCursor, type FeedPage, type FeedPageParam, type FeedPost } from './feed-pages';
@@ -9,7 +11,7 @@ export { REELS_QUERY_ROOT, reelsQueryKey } from './reels-query-key';
 /**
  * LE PORT DES RÉELS (#6457) — miroir de `PostService.getReels(seedReelId:)`
  * qu'appelle `ReelsViewModel.fetch(reset:)`, par la route UNIFIÉE :
- * `GET /api/v1/social/posts?scope=reels&limit=20[&seed=<reelId>][&cursor=<c>]`
+ * `GET social.posts?scope=reels&limit=20[&seed=<reelId>][&cursor=<c>]`
  * (`services/gateway/src/routes/posts/feed.ts`, `chargerReels`).
  * `/posts/feed/reels` en est l'ALIAS DÉPRÉCIÉ (en-têtes `Deprecation`/`Link`) :
  * un client neuf n'adopte pas une adresse que la passerelle annonce en retrait,
@@ -81,7 +83,7 @@ export async function loadReelsPage(
   });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/social/posts?${query.toString()}`,
+    path: `${socialEndpoints.posts}?${query.toString()}`,
     // `X-Canvas-Caps: 3` (#6903) : sans lui, la passerelle omet la scène
     // d'un réel composé (table O17, `storyEffectsV3.ts:776-791`) — un réel
     // à média arriverait SANS son `storyEffects`.
