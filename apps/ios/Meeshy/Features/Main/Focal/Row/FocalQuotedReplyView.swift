@@ -320,7 +320,7 @@ struct FocalQuotedReplyView: View, Equatable {
                         jumpToOriginal()
                     }
                 }
-                .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+                .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reference))
         }
     }
 
@@ -360,7 +360,8 @@ struct FocalQuotedReplyView: View, Equatable {
             )
             .overlay { timebasedPlayBadge }
         } else if quotedMessageMediaFace == .audio {
-            QuotedAudioPreview(seed: reference.messageId, tint: previewColor, showsPlayGlyph: hasTappableMedia && onQuotedMediaTap != nil)
+            QuotedAudioPreview(seed: reference.messageId, tint: previewColor, showsPlayGlyph: hasTappableMedia && onQuotedMediaTap != nil,
+                               playbackMessageId: reference.messageId)
         }
     }
 
@@ -413,7 +414,7 @@ struct FocalQuotedReplyView: View, Equatable {
                     .foregroundColor(previewColor)
                     .contentShape(Rectangle())
                     .onTapGesture { onQuotedMediaTap?(reference) }
-                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+                    .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reference))
             } else {
                 Image(systemName: kind.sfSymbolName)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))

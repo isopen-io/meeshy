@@ -27,6 +27,7 @@ import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
+import arQuote from './catalog-ar-quote';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -1161,6 +1162,7 @@ const ar = {
   ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,
+  ...arQuote,
 } satisfies InterfaceCatalog;
 
 export default ar;

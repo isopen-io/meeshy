@@ -46,11 +46,12 @@ extension MessageListViewController {
         )
     }
 
-    /// Tap sur la zone MÉDIA d'une citation — EN PLEIN ÉCRAN, quel que soit le
-    /// média (#8230) : image et vidéo ouvrent la galerie, un vocal ouvre le
-    /// plein écran audio (`ConversationView+AudioFullscreen`). Les deux passent
-    /// par `onMediaTap`, que l'hôte route selon le genre. L'audio lançait la
-    /// lecture DANS le fil (`playAudio`) : la directive demande le plein écran.
+    /// Tap sur la zone MÉDIA d'une citation. Image et vidéo s'ouvrent EN PLEIN
+    /// ÉCRAN (#8230) par `onMediaTap`. Un AUDIO se joue SUR PLACE (#8320,
+    /// directive porteur du 2026-09-27, qui supplante le plein écran audio de
+    /// #8230) : un toucher joue, un second met en pause, par le lecteur PARTAGÉ
+    /// (`ConversationViewModel.toggleQuotedAudio`). Rien à jouer (protégé,
+    /// expiré, sans adresse) → saut à l'original, comme la zone 3.
     ///
     /// La pièce est élue par `ReplyReference.citedAttachment(among:)`, site
     /// UNIQUE partagé avec son ICÔNE (#6164). Le message cité HORS de la
@@ -61,6 +62,12 @@ extension MessageListViewController {
     /// document y offre téléchargement/partage).
     func openQuotedMedia(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
+        if reference.quotedMediaKind == .audio {
+            if conversationViewModel?.toggleQuotedAudio(reference) != true {
+                scrollToMessage(localId: localId)
+            }
+            return
+        }
         let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
         let resolved = quoted.flatMap { reference.citedAttachment(among: $0.attachments) }
             ?? (quoted == nil ? reference.quotedAttachment : nil)
@@ -80,8 +87,10 @@ extension MessageListViewController {
             return
         }
         switch attachment.type {
-        case .image, .video, .audio:
+        case .image, .video:
             onMediaTap?(attachment)
+        case .audio:
+            scrollToMessage(localId: localId)
         case .file, .location:
             scrollToMessage(localId: localId)
         }

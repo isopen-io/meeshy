@@ -27,6 +27,7 @@ import esEphemeral from './catalog-es-ephemeral';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
+import esQuote from './catalog-es-quote';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1164,6 +1165,7 @@ const es = {
   ...esConversationCard,
   ...esStoriesMine,
   ...esContactCard,
+  ...esQuote,
 } satisfies InterfaceCatalog;
 
 export default es;
