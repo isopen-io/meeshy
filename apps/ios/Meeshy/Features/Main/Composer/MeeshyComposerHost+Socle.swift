@@ -153,11 +153,14 @@ extension MeeshyComposerHost {
         Button {
             performSoclePreview()
         } label: {
+            // **Sur verre** (#8370) : le socle flotte sur la scène, et un
+            // pictogramme nu s'y perdrait sur une photo claire.
             Image(systemName: "eye")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .adaptiveGlass(in: Circle())
         }
         .accessibilityLabel(Text(String(
             localized: "composer.a11y.preview",
@@ -209,9 +212,15 @@ extension MeeshyComposerHost {
                 }
             }
             .font(.footnote.weight(.semibold))
-            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
+            .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+            // **Une pastille de verre** (#8370, maquette `iOS.dc.html`) : le
+            // socle flotte sur la scène, et le mot doit se lire sur n'importe
+            // quel média. Sans mot (palier d'accessibilité), la capsule de
+            // 44 pt redevient un disque.
+            .padding(.horizontal, socleShowsLabels ? 14 : 0)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Capsule())
+            .adaptiveGlass(in: Capsule())
         }
         // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom
