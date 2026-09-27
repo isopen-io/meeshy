@@ -58,7 +58,6 @@ export function starredMessageVerdict(message: StarredMessageProtectionRow, now:
     isBlurred: message.isBlurred,
     effectFlags: message.effectFlags,
     expiresAt: message.expiresAt,
-    createdAt: message.createdAt,
   });
   return masked === null ? 'served' : 'placeholder';
 }

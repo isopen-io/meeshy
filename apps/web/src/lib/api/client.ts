@@ -1,3 +1,6 @@
+import { emailGate } from '../activation/email-gate';
+import { withEmailGate } from '../activation/email-gated-transport';
+
 import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
 import { sessionStore, type SessionState } from './session';
@@ -56,12 +59,24 @@ export function currentDeviceLocale(): string | null {
  * sont pas (le client TUS, `post-media-upload.ts`). */
 export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
 
-export const httpTransport: HttpTransport = createHttpTransport({
-  base: apiConfig.base,
-  credential: currentCredential,
-  deviceLocale: currentDeviceLocale,
-  onUnauthorized: () => sessionStore.getState().clearSession(),
-});
+/** L'adresse du compte TENU est connue non prouvée (#8365) — lu par la garde
+ * de l'e-mail pour ouvrir la validation AVANT d'envoyer une publication. */
+export function sessionEmailUnproven(session: SessionState): boolean {
+  return session.status === 'authenticated' && session.user.emailUnproven === true;
+}
+
+/** Enveloppé par la garde de l'e-mail (#8365) : un refus `EMAIL_NOT_VERIFIED`
+ * ouvre la validation et la requête repart au code validé
+ * (`lib/activation/email-gated-transport.ts`). */
+export const httpTransport: HttpTransport = withEmailGate(
+  createHttpTransport({
+    base: apiConfig.base,
+    credential: currentCredential,
+    deviceLocale: currentDeviceLocale,
+    onUnauthorized: () => sessionStore.getState().clearSession(),
+  }),
+  { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
+);
 
 /**
  * L'ADAPTATEUR UNIQUE ENTRE `ApiResult` ET TANSTACK QUERY (#5605,

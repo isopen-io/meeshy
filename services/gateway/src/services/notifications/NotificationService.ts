@@ -1994,7 +1994,6 @@ export class NotificationService {
       isBlurred: message?.isBlurred,
       effectFlags: message?.effectFlags,
       expiresAt: message?.expiresAt ?? null,
-      createdAt: message?.createdAt ?? null,
     }) !== null;
 
     const messagePreview = message?.content && !isProtected

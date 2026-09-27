@@ -58,13 +58,13 @@ final class LongMessageAnchorTests: XCTestCase {
     /// (verrou armé), le haut du long message au-dessus de l'écran et son
     /// « Lire la suite » visible — la configuration de la capture 21.
     ///
-    /// La fenêtre est rattachée à la `UIWindowScene` de l'app hôte (#8329),
-    /// comme `RenderedScreen` et `MessageListCellSizingTests` : une
-    /// `UIWindow(frame:)` nue n'est affichée par aucune scène, et le contenu
-    /// `UIHostingConfiguration` d'une cellule re-configurée n'y repropose pas
-    /// sa taille — la hauteur dépliée ne se pose jamais, alors qu'elle se pose
-    /// dans l'app (#8162 a retiré la passe de layout forcée qui la posait
-    /// quand même ici). L'appelant masque la fenêtre en fin de test.
+    /// La fenêtre est rattachée à la `UIWindowScene` de l'app hôte, comme
+    /// `RenderedScreen` et `MessageListCellSizingTests` : une `UIWindow(frame:)`
+    /// nue n'est affichée par aucune scène, et ce témoin doit mesurer le fil
+    /// tel que l'app le monte. Ce n'était PAS la cause du rouge de #8329 :
+    /// même rattaché et après 2 s d'attente, le message ne se dépliait pas —
+    /// la passe de layout que #8162 avait retirée manquait au CODE.
+    /// L'appelant masque la fenêtre en fin de test.
     private func makeScrolledThread() async throws -> (MessageListViewController, UICollectionView, UIWindow) {
         let vc = makeSUT(store: try await makeSeededStore())
         let scene = try XCTUnwrap(

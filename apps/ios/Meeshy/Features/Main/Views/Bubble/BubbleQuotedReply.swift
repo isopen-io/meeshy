@@ -411,7 +411,7 @@ struct BubbleQuotedReply: View, Equatable {
                 mediaFaceSurface(face)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: mediaGateTap)
-                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+                    .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reply))
             } else {
                 mediaFaceSurface(face)
             }
@@ -426,7 +426,8 @@ struct BubbleQuotedReply: View, Equatable {
         case .videoPoster:
             videoPosterSurface
         case .audio:
-            QuotedAudioPreview(seed: reply.messageId, tint: quotePreviewColor, showsPlayGlyph: mediaGateTap != nil)
+            QuotedAudioPreview(seed: reply.messageId, tint: quotePreviewColor, showsPlayGlyph: mediaGateTap != nil,
+                               playbackMessageId: reply.messageId)
         }
     }
 
@@ -538,7 +539,7 @@ struct BubbleQuotedReply: View, Equatable {
                     .foregroundColor(previewColor)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: mediaGateTap)
-                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+                    .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reply))
             } else {
                 Image(systemName: kind.sfSymbolName)
                     .font(.caption2.weight(.medium))

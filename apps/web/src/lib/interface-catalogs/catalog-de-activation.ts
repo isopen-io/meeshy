@@ -30,6 +30,10 @@ const deActivation = {
   'activation.complete': 'Dein Konto ist bestätigt. Danke!',
   'activation.later': 'Später',
   'activation.close': 'Schließen',
+  'activation.gate.title': 'Bestätige deine E-Mail-Adresse',
+  'activation.gate.publish': 'Um zu veröffentlichen, bestätige deine Adresse. Dein Beitrag bleibt erhalten und geht raus, sobald der Code bestätigt ist.',
+  'activation.gate.invite': 'Um per E-Mail einzuladen, bestätige deine Adresse. Deine Einladung geht raus, sobald der Code bestätigt ist.',
+  'activation.gate.link': 'Um einen Link zu erstellen, bestätige deine Adresse. Dein Link wird erstellt, sobald der Code bestätigt ist.',
 } as const;
 
 export default deActivation;

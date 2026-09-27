@@ -4394,6 +4394,13 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Conséquences.** `base64De` (`media/file-delivery-host.ts`) est exporté et partagé. Deux clés `settings.gallery.*` rejoignent les sept catalogues en tranche `catalog-<l>-gallery.ts`.
 
+**Suite (#8336, 2026-09-27) — le plugin est posé.** `@capacitor-community/media` 9.1.0 (MIT, peer `@capacitor/core >=8`, coque en 8.5.1) rejoint les dépendances ; `cap sync android` l'inscrit dans `capacitor.settings.gradle` / `capacitor.build.gradle`. Contrat relu dans `MediaPlugin.java` et tenu par les témoins :
+- **Hors `androidGalleryMode`** (défaut, non posé) : l'album est le dossier `Android/media/<appId>/Meeshy` (`getExternalMediaDirs()[0]`), propre à l'app et indexé par MediaStore, donc visible des galeries — et **aucune permission** n'est demandée, à aucun niveau d'API. Le « `WRITE_EXTERNAL_STORAGE` ≤ 28 » envisagé plus haut est donc SANS objet : `READ_MEDIA_IMAGES/VIDEO` et `READ/WRITE_EXTERNAL_STORAGE` rejoignent `FORBIDDEN_PERMISSIONS` (`scripts/check-android-manifest.mjs`). Pas de dialogue ⇒ aucun refus possible, aucune boucle. Revers assumé : désinstaller l'app efface ce dossier (comme WhatsApp).
+- `createAlbum` REJETTE « Album already exists » : le saver relit l'album au lieu d'échouer.
+- `savePhoto`/`saveVideo` ajoutent l'extension du type au `fileName` et **écrasent** un homonyme : le nom natif est une tige assainie (sans chemin ni extension) suffixée d'un identifiant unique.
+- Le `data:` base64 traverse le pont en mémoire : au-delà de `GALLERY_BRIDGE_MAX_BYTES` (32 Mio) la pièce n'est pas confiée au plugin (`unavailable`) ; « Enregistrer » retombe alors sur la voie actuelle.
+- La coque iOS (`CapApp-SPM`) n'a pas été resynchronisée : le saver ne sert que `android`.
+
 ## D-145 — La flamme-œil ne décompte rien et se consomme en QUITTANT le fil ; une protection armée reste armée dans la conversation (2026-09-27, #8304, #8306)
 
 **Contexte.** Directive porteur 2026-09-27, contrat serveur #8302 : un éphémère « flamme-œil » (`EPHEMERAL | EPHEMERAL_AFTER_READ`, sans `ephemeralDuration`) disparaît chez chaque lecteur quand il l'a VU puis a QUITTÉ la conversation ; l'éphémère gagne 15 s ; et une protection armée (éphémère, flou, vue unique) ne se désarme plus à l'envoi.
@@ -4404,4 +4411,4 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **VU = la frontière de lecture existante** (`useReadTracking` → `noteSeenUpTo`) ; **QUITTÉ = démontage, changement de conversation, onglet masqué, `pagehide`** (`use-after-read-consumption.ts`). Alors, pour les flammes-œil REÇUES vues seulement : retrait local immédiat (`removeAfterReadLocally`), puis consommation mise en FILE persistée par lecteur (`lib/api/after-read.ts`), vidée tout de suite, au retour du réseau et à l'ouverture d'un fil ; tant qu'elle attend, le fil cache le message. L'expéditeur ne perd rien avant `message:expired`.
 - **Protections collantes** (`protection-preference.ts`) : une préférence PAR (lecteur, conversation), écrite à chaque changement par `useComposerDraft`, prioritaire sur le brouillon à l'ouverture ; l'envoi ne remet plus à zéro que les effets DÉCORATIFS. Effacée à la déconnexion (`purgeAccountLocalData`).
 
-**Suivi assumé.** L'adresse de la route se compose par `byIdMessagesByMessageIdConsume(id, 'after-read')` tant que le manifeste n'a pas d'entrée dédiée. Kotlin natif : rien (gel).
+**Suites (#8342, #8343).** L'adresse vient désormais de l'entrée générée `byIdMessagesAfterReadConsume`. Une flamme-œil compte aussi comme vue quand SA rangée reste à l'écran 600 ms (`after-read-seen-probe.tsx`, IntersectionObserver à 60 %, onglet visible, aucune couche) : la frontière de lecture ne bougeait qu'en bas du fil. Kotlin natif : rien (gel).

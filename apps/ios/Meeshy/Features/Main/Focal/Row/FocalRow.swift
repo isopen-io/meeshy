@@ -115,38 +115,19 @@ struct FocalRow: View {
         }
     }
 
-    /// **LOI DES ZONES — la moitié VoiceOver.** Les zones 1 (avatar → profil) et
-    /// 2 (miniature / icône de lecture → plein écran) sont des gestes posés DANS
-    /// la citation. La ligne au-dessus fusionne la rangée en UN élément
-    /// (`children: .combine`) puis REMPLACE son libellé par celui du composeur
-    /// partagé : ni trait, ni indice, ni libellé d'enfant n'est prononcé, et
-    /// VoiceOver n'a ni tap localisé ni appui long pour atteindre ces gestes.
-    /// Sans action nommée, les deux capacités sont indisponibles au lecteur
-    /// d'écran — jumelle exacte de `quotedZoneAccessibilityActions` sur la peau
-    /// voisine, parce que la loi ne connaît pas les peaux.
-    ///
-    /// Les actions suivent l'ARMEMENT, jamais la présence à l'écran : une
-    /// action nommée sans effet serait un contrôle qui ment, et le rotor la
-    /// réciterait. Les deux clés sont celles que la citation emploie déjà.
-    ///
-    /// La citation d'un message VOCAL est hébergée par le widget audio et n'est
-    /// pas rendue ici — mais elle vit sous CETTE rangée, dont le libellé combiné
-    /// l'absorbe de la même façon. Les actions valent donc pour elle aussi,
-    /// `content.reply` étant renseigné dans les deux cas.
-    @ViewBuilder
+    /// **LOI DES ZONES — la moitié VoiceOver.** Site unique des deux rangées :
+    /// `QuotedZoneAccessibility` (#8320). La citation d'un message VOCAL est
+    /// hébergée par le widget audio et n'est pas rendue ici — mais elle vit
+    /// sous CETTE rangée, dont le libellé combiné l'absorbe : les actions
+    /// valent donc pour elle aussi, `content.reply` étant renseigné dans les
+    /// deux cas.
     private var quotedZoneAccessibilityActions: some View {
-        if let reference = content.reply?.reference {
-            if let onQuotedAuthorTap = actions.onQuotedAuthorTap, reference.offersAuthorGate {
-                Button(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main)) {
-                    onQuotedAuthorTap(reference)
-                }
-            }
-            if let onQuotedMediaTap = actions.onQuotedMediaTap, reference.offersMediaGate {
-                Button(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main)) {
-                    onQuotedMediaTap(reference)
-                }
-            }
-        }
+        QuotedZoneAccessibility.actions(
+            reference: content.reply?.reference,
+            onQuotedAuthorTap: actions.onQuotedAuthorTap,
+            onQuotedMediaTap: actions.onQuotedMediaTap,
+            onReplyTap: actions.onReplyTap
+        )
     }
 
     // MARK: - Rangées système (déléguées à WS-3)
@@ -329,7 +310,7 @@ struct FocalRow: View {
                     isDark: input.isDark,
                     messageId: content.messageId,
                     onConsumeViewOnce: actions.onConsumeViewOnce,
-                    tap: content.protectedTap(), onMediaTap: actions.onMediaTap
+                    tap: content.protectedTap(), onMediaTap: actions.onMediaTap, cells: content.veiledGridCells
                 ) {
                     contentSections
                 }

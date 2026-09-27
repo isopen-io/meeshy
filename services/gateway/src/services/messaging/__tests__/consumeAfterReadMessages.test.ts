@@ -188,4 +188,32 @@ describe('consumeAfterReadMessages', () => {
 
     expect(messages[0]?.expiresAt).toEqual(new Date(NOW.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS));
   });
+
+  it('flamme-œil ET vue unique : la consommation rapproche la BULLE (expiresAt), jamais la purge du contenu (viewOnceBurnAt) (#8345)', async () => {
+    const { prisma, messages } = buildPrisma({
+      messages: [message({ isViewOnce: true, effectFlags: AFTER_READ | MESSAGE_EFFECT_FLAGS.VIEW_ONCE, viewOnceBurnAt: RETENTION })],
+      entries: [{ id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER, ephemeralExpiresAt: new Date(NOW.getTime() - 5_000) }],
+      participants: activeParticipants,
+    });
+
+    const result = await consume(prisma, [FLAME]);
+
+    expect(result.consumed).toEqual([FLAME]);
+    expect(messages[0]?.expiresAt).toEqual(new Date(NOW.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS));
+    expect(messages[0]?.viewOnceBurnAt).toEqual(RETENTION);
+    expect(messages[0]?.deletedAt).toBeNull();
+  });
+
+  it("flamme-œil ET vue unique : une grâce de vue unique PLUS PROCHE n'est jamais repoussée par la flamme (#8345)", async () => {
+    const soon = new Date(NOW.getTime() + 60_000);
+    const { prisma, messages } = buildPrisma({
+      messages: [message({ isViewOnce: true, effectFlags: AFTER_READ | MESSAGE_EFFECT_FLAGS.VIEW_ONCE, expiresAt: soon })],
+      entries: [{ id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER, ephemeralExpiresAt: new Date(NOW.getTime() - 5_000) }],
+      participants: activeParticipants,
+    });
+
+    await consume(prisma, [FLAME]);
+
+    expect(messages[0]?.expiresAt).toEqual(soon);
+  });
 });

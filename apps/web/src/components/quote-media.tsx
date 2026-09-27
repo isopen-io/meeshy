@@ -5,6 +5,8 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { QUOTED_CARD_WIDTH } from '@/lib/reading-mode/metrics';
 import type { QuotedMedia } from '@/lib/view/quoted-preview';
+import type { QuotedAudio } from '@/lib/view/quoted-audio';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 
@@ -92,26 +94,41 @@ export function QuoteOpenZone({
 
 const WAVE_BARS = 16;
 
+/** La cible de lecture (dimension 5, « cibles >= 44 px »). */
+const QUOTE_AUDIO_TARGET_PX = 44;
+
 /**
  * L'APERÇU COMPACT D'UN VOCAL CITÉ (#8233, miroir `QuotedAudioPreview` iOS) —
- * une capsule : lecture, onde FIGÉE (déterministe par pièce, `waveformOf`, la
- * même que la bulle du vocal), durée. Le web n'a pas de lecteur audio plein
+ * une capsule : lecture, onde (déterministe par pièce, `waveformOf`, la même
+ * que la bulle du vocal), durée. Le web n'a pas de lecteur audio plein
  * écran : la capsule LIT le vocal depuis la citation, sur le coordinateur
- * partagé (un seul média joue à la fois). Son identifiant est préfixé : la
- * bulle du vocal, si elle est chargée, garde le sien, et chacune se met en
- * pause quand l'autre part.
+ * partagé (un seul média joue à la fois).
+ *
+ * #8320 (directive porteur du 2026-09-27) — la zone lecture joue SUR PLACE,
+ * un second toucher met en pause, et elle n'ouvre rien : le reste de la
+ * citation saute au message. Ce que #8320 y ajoute :
+ *  - la PISTE est celle que le Prisme audio élit pour le vocal d'origine
+ *    (`track`, `quotedAudioOf`), jamais l'original en dur ;
+ *  - l'onde se REMPLIT à mesure que la lecture avance ;
+ *  - l'identifiant porte le message CITANT : deux réponses qui citent le même
+ *    vocal sont deux lecteurs, et un `claim` du même id serait un no-op — les
+ *    deux joueraient ensemble ;
+ *  - la cible fait 44 px de haut, et son nom dit l'action : « Écouter le
+ *    message cité » / « Mettre en pause le message cité ».
  */
 export function QuoteAudioPreview({
   media,
-  src,
+  track,
+  citingId,
   isMine,
 }: {
   readonly media: QuotedMedia & { readonly openable: NonNullable<QuotedMedia['openable']> };
-  readonly src: string;
+  readonly track: QuotedAudio;
+  readonly citingId: string;
   readonly isMine: boolean;
 }) {
   const attachment = media.openable;
-  const { status, toggle, bind } = useMediaPlayback({ attachmentId: `quote:${attachment.id}` });
+  const { status, progress, toggle, bind } = useMediaPlayback({ attachmentId: `quote:${citingId}:${attachment.id}` });
   const waves = useMemo(() => waveformOf(attachment, WAVE_BARS), [attachment]);
   const isPlaying = status === 'playing';
   const language = currentInterfaceLanguage();
@@ -119,16 +136,29 @@ export function QuoteAudioPreview({
 
   return (
     <span className="mt-1.5 block">
-      <audio data-quote-audio ref={bind} preload="none" src={src} className="hidden" />
+      <audio
+        key={track.url}
+        data-quote-audio
+        data-quote-audio-track={track.language}
+        ref={bind}
+        preload="none"
+        src={attachmentSrc(track.url)}
+        className="hidden"
+      />
       <button
         type="button"
         data-quote-open="audio"
-        onClick={toggle}
-        aria-label={translate(language, isPlaying ? 'media.video.pause' : 'media.audio.play')}
+        data-quote-play={isPlaying ? 'playing' : 'idle'}
+        onClick={(event) => {
+          event.stopPropagation();
+          toggle();
+        }}
+        aria-label={translate(language, isPlaying ? 'quote.audio.pause' : 'quote.audio.listen')}
+        aria-pressed={isPlaying}
         className="flex items-center gap-1.5 rounded-full px-1.5"
         style={{
           width: QUOTED_CARD_WIDTH,
-          minHeight: 36,
+          minHeight: QUOTE_AUDIO_TARGET_PX,
           color: ink,
           backgroundColor: isMine ? 'color-mix(in srgb, white 16%, transparent)' : 'color-mix(in srgb, var(--accent) 14%, transparent)',
         }}
@@ -149,7 +179,8 @@ export function QuoteAudioPreview({
             <span
               key={index}
               className="flex-1 rounded-full"
-              style={{ height: `${Math.max(18, height * 4)}%`, backgroundColor: 'currentColor', opacity: 0.6 }}
+              data-quote-wave-played={index / waves.length < progress ? 'true' : undefined}
+              style={{ height: `${Math.max(18, height * 4)}%`, backgroundColor: 'currentColor', opacity: index / waves.length < progress ? 1 : 0.6 }}
             />
           ))}
         </span>

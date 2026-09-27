@@ -542,20 +542,28 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             to: "\n    static func nonMediaAccessibilityParts"
         )
         XCTAssertTrue(
-            block.contains("bubble.reply.author_hint") && block.contains("bubble.reply.open_media"),
-            "les deux actions réemploient les clés que la citation porte déjà — zéro clé neuve, zéro clé morte, " +
-            "cliquet français inchangé."
+            block.contains("QuotedZoneAccessibility.actions("),
+            "les actions nommées de la citation vivent en UN site partagé par les deux rangées (#8320) — " +
+            "une jumelle qu'on modifie deux fois finit par diverger."
+        )
+        let shared = try source("Meeshy/Features/Main/Views/Bubble/QuotedZoneAccessibility.swift")
+        XCTAssertTrue(
+            shared.contains("bubble.reply.author_hint") && shared.contains("bubble.reply.open_media")
+                && shared.contains("bubble.reply.listen_quoted") && shared.contains("bubble.reply.go_to_quoted"),
+            "les actions nomment les trois zones : l'auteur, le média (« Écouter le message cité » pour un " +
+            "audio, #8320), et le saut « Aller au message cité »."
         )
         XCTAssertTrue(
-            block.contains("onQuotedAuthorTap(reference)") && block.contains("onQuotedMediaTap(reference)"),
+            shared.contains("onQuotedAuthorTap(reference)") && shared.contains("onQuotedMediaTap(reference)")
+                && shared.contains("onReplyTap(reference.messageId)"),
             "chaque action doit DÉCLENCHER sa zone : une action nommée sans effet est un contrôle qui ment, et " +
             "le rotor la récite."
         )
         XCTAssertTrue(
-            block.contains("reference.offersAuthorGate") && block.contains("reference.offersMediaGate"),
+            shared.contains("reference.offersAuthorGate") && shared.contains("reference.offersMediaGate")
+                && shared.contains("reference.opensQuotedTarget"),
             "les actions suivent l'ARMEMENT (gestionnaire câblé ET zone offerte par la donnée), jamais la seule " +
-            "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story, ou de " +
-            "lire un média que le verrou refuse."
+            "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story."
         )
         // Exécution — ce que la DONNÉE offre, indépendamment de toute peau.
         XCTAssertTrue(makeProtectedReference(false).offersAuthorGate)
@@ -682,10 +690,20 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
         let body = try slice(
             of: code,
             from: "func openQuotedMedia(_ reference: ReplyReference)",
-            to: "switch attachment.type {"
+            to: "onMediaTap?(attachment)"
+        )
+        // #8283 — le verrou vit dans le site partagé avec la Rivière :
+        // l'hôte n'ouvre QUE ce que `QuotedMediaOpening` lui rend.
+        XCTAssertTrue(
+            body.contains("QuotedMediaOpening.attachment(for: reference"),
+            "l'hôte doit élire la pièce par la règle partagée, qui porte le verrou."
+        )
+        let rule = try anchored(
+            "Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift",
+            "static func attachment(for reference: ReplyReference", floor: 400
         )
         XCTAssertTrue(
-            body.contains("attachment.isViewOnce || attachment.isBlurred"),
+            rule.contains("attachment.isViewOnce || attachment.isBlurred") && rule.contains("!reference.quotedMediaIsProtected"),
             "un média cité à VUE UNIQUE ou FLOUTÉ ne doit pas s'ouvrir depuis la citation : le tap retombe sur " +
             "le saut à l'original, où le média garde son propre geste de révélation. Miroir de " +
             "`BubbleGridCell.handleTap` (`guard !attachmentIsProtected || isRevealed`)."

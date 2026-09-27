@@ -10,6 +10,7 @@ import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
+import { quotedAudioOf } from '@/lib/view/quoted-audio';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS, type GlyphName } from './glyphs';
@@ -611,9 +612,20 @@ export function Quote({
   isMine,
   languages,
   onJump,
+  citingId,
+  now,
 }: {
   quote: NonNullable<Message['replyTo']>;
   isMine: boolean;
+  /**
+   * LE MESSAGE QUI PORTE LA CITATION (#8320) — l'identité de la lecture d'un
+   * vocal cité auprès du coordinateur de média : deux réponses qui citent le
+   * même vocal sont deux lecteurs, et l'une doit se mettre en pause quand
+   * l'autre part.
+   */
+  citingId?: string;
+  /** L'HORLOGE de l'hôte (#8320) — un éphémère cité EXPIRÉ n'offre plus la lecture. */
+  now?: Date;
   /**
    * LE PRISME DU LECTEUR (#7556) — celui que la rangée hôte a déjà reçu. Sans
    * lui, `Quote` rendait `quote.content` BRUT : le même message cité
@@ -649,7 +661,10 @@ export function Quote({
      vocabulaire que `composeMessageLabel` (le bouton porte un `aria-label`,
      donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
      annoncée nulle part). */
-  const label = [`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`, ...preview.inventory].join(', ');
+  const label = [
+    translate(currentInterfaceLanguage(), 'quote.jumpTo', { name: quote.sender?.displayName ?? 'l’expéditeur' }),
+    ...preview.inventory,
+  ].join(', ');
 
   /* LES ZONES MÉDIA (#8233) — l'aperçu d'une image, d'une vidéo ou d'un vocal
      OUVRE la pièce ; le reste de la citation saute au message. Deux boutons
@@ -657,9 +672,13 @@ export function Quote({
      `openable`, ni `fileSrc` ne sortent du site unique pour elle. */
   const still = media !== null && media.kind === 'video' && media.thumbnailSrc === null ? media.fileSrc : null;
   const hasThumb = media !== null && media.frame === null && (media.thumbnailSrc !== null || still !== null);
+  /* LA ZONE LECTURE D'UN VOCAL (#8320) — sa PISTE suit le Prisme audio du
+     vocal d'origine (`quotedAudioOf` → `electAudio`), et un éphémère expiré
+     n'en a plus : le site unique rend `null` pour tout ce qui ne se joue pas. */
+  const played = media !== null && media.kind === 'audio' ? quotedAudioOf({ quoted: quote, readerLanguages: languages, now: now ?? new Date() }) : null;
   const audio =
-    media !== null && media.kind === 'audio' && media.openable !== null && media.fileSrc !== null
-      ? { media: { ...media, openable: media.openable }, src: media.fileSrc }
+    media !== null && media.kind === 'audio' && media.openable !== null && played !== null
+      ? { media: { ...media, openable: media.openable }, track: played }
       : null;
   const lowerZone = (media !== null && media.frame !== null) || audio !== null;
 
@@ -759,7 +778,7 @@ export function Quote({
         ) : null}
         {audio !== null ? (
           <span className="mb-2 block">
-            <QuoteAudioPreview media={audio.media} src={audio.src} isMine={isMine} />
+            <QuoteAudioPreview media={audio.media} track={audio.track} citingId={citingId ?? ''} isMine={isMine} />
           </span>
         ) : null}
       </span>

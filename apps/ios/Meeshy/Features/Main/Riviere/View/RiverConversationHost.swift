@@ -129,6 +129,22 @@ struct RiverConversationHost: View {
 
     @State private var memo = ContentsMemo()
 
+    /// #8283 — la zone média d'une citation ouvre le MÊME plein écran que
+    /// depuis Script : la pièce et son verrou sont ceux du Fil
+    /// (`QuotedMediaOpening`), l'ouverture celle du toucher d'un média
+    /// (`onMediaTap`). `false` ⇒ rien d'honnête à ouvrir (média protégé,
+    /// document, pièce introuvable), et la citation retombe sur son saut.
+    private var openQuotedMedia: ((ReplyReference) -> Bool)? {
+        guard let onMediaTap else { return nil }
+        let messages = messages
+        return { reference in
+            let quoted = messages.first { $0.id == reference.messageId }
+            guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else { return false }
+            onMediaTap(attachment)
+            return true
+        }
+    }
+
     /// `RiverConversationMapping.contents` construit un dictionnaire de TOUS
     /// les messages puis, par bulle, résout nom d'affichage, heure, texte,
     /// aperçu de réponse, avis système et `ProfileSheetUser`. C'était rejoué à
@@ -205,6 +221,7 @@ struct RiverConversationHost: View {
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
                 onConsumeViewOnce: onConsumeViewOnce,
+                onOpenQuotedMedia: openQuotedMedia,
                 onMediaTap: onMediaTap,
                 navigation: navigation
             )

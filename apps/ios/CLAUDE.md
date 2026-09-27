@@ -435,7 +435,10 @@ final class SomeViewModelTests: XCTestCase {
 > `[Publier … | ^]`, aucun sélecteur en haut) et **la flèche CHOISIT sans publier —
 > seul l'appui sur Publier envoie** (`ComposerPublishMenuRule.armed`), sur iOS,
 > iPad, web mobile et navigateur à l'identique. Chaque média garde son format
-> (panneau Cadre : Ajuster/Remplir + fond).
+> (panneau Cadre : Ajuster/Remplir + fond). **Lot 2 (#8370)** : les deux rails
+> FLOTTENT sur la scène, qui prend toute la largeur
+> (`ComposerRailGeometry.floatingInset = 0`) — le § 1 ci-dessous ne vaut plus
+> pour les rails.
 
 ### 1. Aucun contrôle ne se pose SUR la scène
 

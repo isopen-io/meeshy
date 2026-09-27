@@ -4,6 +4,7 @@ import type { Virtualizer } from '@tanstack/react-virtual';
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import type { PlacedMessage } from '@/lib/grouping';
+import type { ListPaginationState } from '@/lib/lens/pagination';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 
 /** La DURÉE de la mise en évidence d'un saut — nommée parce que deux
@@ -11,6 +12,22 @@ import { usesFlatRow } from '@/lib/reading-mode/decision';
  * `scripts/lib/check-summary.mjs`, qui la mesure au navigateur PAR CONDITION
  * (jamais au chronomètre, #6115). */
 export const HIGHLIGHT_MS = 1600;
+
+/**
+ * LE PLAFOND D'UNE RECHERCHE (#8320) — un saut vers un message hors de la
+ * fenêtre chargée charge les pages plus anciennes UNE à la fois ; jamais plus
+ * que ce nombre pour un seul saut, pour qu'une citation d'un message très
+ * ancien ne vide pas la batterie à charger tout le fil.
+ */
+export const MAX_SEEK_PAGES = 20;
+
+/** Le port de pagination du fil — `useThreadData().olderState` / `fetchOlder`. */
+export type OlderPages = {
+  readonly state: ListPaginationState;
+  readonly fetchOlder: () => void;
+};
+
+type Seek = { readonly id: string; readonly pages: number; readonly seenRows: number };
 
 export type ThreadJump = {
   readonly highlightedId: string | null;
@@ -29,8 +46,11 @@ export type ThreadJump = {
  * la fenêtre virtualisée ; la mise en évidence s'efface d'elle-même, jamais
  * un état qui s'accumule sans fin.
  *
- * UN IDENTIFIANT ABSENT de `placed` est aujourd'hui SANS EFFET (la fenêtre
- * chargée ne le contient pas). #7420 y ajoutera le chargement de la fenêtre
+ * UN IDENTIFIANT ABSENT de `placed` (#8320) : avec `older`, le saut charge
+ * les pages plus anciennes UNE à la fois — la suivante seulement quand la
+ * précédente est ARRIVÉE — jusqu'à trouver le message (puis saute et
+ * surligne), épuiser le fil, échouer, ou atteindre `MAX_SEEK_PAGES`. Sans
+ * `older`, il reste sans effet. #7420 remplacera la marche par la fenêtre
  * `?around=` (`messages-list.ts`, `allowsAround`) — ICI, jamais dans l'hôte.
  *
  * `virtualizer` n'est demandé que pour `scrollToIndex` (`Pick`) : c'est la
@@ -42,8 +62,14 @@ export function useThreadJump(params: {
   readonly virtualizer: Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>;
   readonly noteProgrammaticScroll: () => void;
   readonly mode: ConversationReadingMode;
+  readonly older?: OlderPages;
 }): ThreadJump {
   const { placed, virtualizer, noteProgrammaticScroll, mode } = params;
+  /* En REF, pas en dépendance : `jumpToMessage` est une prop du `memo` de
+     chaque rangée, et l'état de pagination change à chaque page. */
+  const olderRef = useRef(params.older);
+  olderRef.current = params.older;
+  const [seek, setSeek] = useState<Seek | null>(null);
 
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,10 +81,8 @@ export function useThreadJump(params: {
    * `virtualizer` aussi (instance TanStack), `placed` depuis le `useMemo` de
    * l'hôte — la chaîne tient de bout en bout.
    */
-  const jumpToMessage = useCallback(
-    (messageId: string) => {
-      const index = placed.findIndex((p) => p.message.id === messageId);
-      if (index === -1) return;
+  const land = useCallback(
+    (index: number, messageId: string) => {
       // ANNONCE le défilement PROGRAMMÉ avant de le déclencher — ni le
       // révélé ni l'armement de la scène ne doivent réagir à un saut de
       // citation (§1.5 de la spécification #5648, même famille de
@@ -69,8 +93,46 @@ export function useThreadJump(params: {
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
       highlightTimer.current = setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS);
     },
-    [placed, virtualizer, noteProgrammaticScroll],
+    [virtualizer, noteProgrammaticScroll],
   );
+
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      const index = placed.findIndex((p) => p.message.id === messageId);
+      if (index !== -1) {
+        setSeek(null);
+        land(index, messageId);
+        return;
+      }
+      const older = olderRef.current;
+      if (older === undefined || older.state !== 'idle') return;
+      setSeek({ id: messageId, pages: 1, seenRows: placed.length });
+      older.fetchOlder();
+    },
+    [placed, land],
+  );
+
+  const olderState = params.older?.state;
+  useEffect(() => {
+    if (seek === null) return;
+    const index = placed.findIndex((p) => p.message.id === seek.id);
+    if (index !== -1) {
+      setSeek(null);
+      land(index, seek.id);
+      return;
+    }
+    if (olderState === 'exhausted' || olderState === 'error' || olderState === undefined) {
+      setSeek(null);
+      return;
+    }
+    if (olderState !== 'idle' || placed.length <= seek.seenRows) return;
+    if (seek.pages >= MAX_SEEK_PAGES) {
+      setSeek(null);
+      return;
+    }
+    setSeek({ id: seek.id, pages: seek.pages + 1, seenRows: placed.length });
+    olderRef.current?.fetchOlder();
+  }, [seek, placed, olderState, land]);
   useEffect(
     () => () => {
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);

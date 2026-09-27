@@ -11,7 +11,10 @@
  *     `requestAnimationFrame` après la pose, jamais `img.complete` seul).
  *  3. La carte (`[data-scene-stage]`) est TOUJOURS 9:16 (±0,01) et CENTRÉE
  *     (±1 px) dans son plateau, aux DEUX gabarits (320 et 390 px de large) et
- *     dans les DEUX schémas.
+ *     dans les DEUX schémas. PLEIN ÉCRAN (maquette 2026-09-27, #8370) : ce
+ *     plateau est l'ÉCRAN ENTIER (±1 px), et la barre haute, le socle et les
+ *     deux rails FLOTTENT dessus (`position: absolute`) — aucun couloir ne
+ *     prend plus de place à la scène.
  *  4. Cinq cibles ≥ 44 px : les deux portes, Publier, Retirer (fond), le
  *     bouton son.
  *  5. LA SAISIE EST ALIGNÉE SUR CE QU'ELLE FAIT PEINDRE (défaut 1,
@@ -238,7 +241,23 @@ async function runScheme(colorScheme) {
         `${tag} : carte centrée en (${round(cxCarte)}, ${round(cyCarte)}) — plateau (${round(cxPlateau)}, ${round(cyPlateau)})`,
       );
       measures[`${viewport.width}.carte`] = [round(carte.x), round(carte.y), round(carte.width), round(carte.height)];
+      const ecran = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      check(
+        Math.abs(plateau.x) <= 1 && Math.abs(plateau.y) <= 1 &&
+          Math.abs(plateau.width - ecran.width) <= 1 && Math.abs(plateau.height - ecran.height) <= 1,
+        `${tag} : la scène doit occuper l'écran entier (${JSON.stringify({ plateau, ecran })})`,
+      );
     }
+    const flottants = await page.evaluate(() =>
+      ['[data-story-studio-top]', '[data-story-studio-bottom]', '[data-story-studio-rail="leading"]', '[data-story-studio-rail="trailing"]'].map((sel) => {
+        const el = document.querySelector(sel);
+        return { sel, position: el === null ? null : getComputedStyle(el).position };
+      }),
+    );
+    check(
+      flottants.every((f) => f.position === 'absolute'),
+      `${tag} : la barre haute, le socle et les rails flottent sur la scène — ${JSON.stringify(flottants)}`,
+    );
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */
     const tailles = await targetSizesOf(page, [

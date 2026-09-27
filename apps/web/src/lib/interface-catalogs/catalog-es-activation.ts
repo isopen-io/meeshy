@@ -30,6 +30,10 @@ const esActivation = {
   'activation.complete': 'Tu cuenta está validada. ¡Gracias!',
   'activation.later': 'Más tarde',
   'activation.close': 'Cerrar',
+  'activation.gate.title': 'Valida tu dirección de correo',
+  'activation.gate.publish': 'Para publicar, valida tu dirección. Tu publicación se conserva y saldrá en cuanto se valide el código.',
+  'activation.gate.invite': 'Para invitar por correo, valida tu dirección. Tu invitación saldrá en cuanto se valide el código.',
+  'activation.gate.link': 'Para crear un enlace, valida tu dirección. Tu enlace se creará en cuanto se valide el código.',
 } as const;
 
 export default esActivation;

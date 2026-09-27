@@ -104,8 +104,20 @@ export const auditManifestPermissions = ({ manifest, required = REQUIRED_PERMISS
  * rouvrir, jamais un effet de bord. `READ_CONTACTS` (#8242) : la tuile
  * « Contact » passe par `ACTION_PICK` (`MeeshyContactsPlugin.java`), qui ne
  * donne accès qu'à la fiche choisie — la déclarer ouvrirait le carnet entier.
+ * `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_EXTERNAL_STORAGE`,
+ * `WRITE_EXTERNAL_STORAGE` (#8336) : la galerie (`@capacitor-community/media`,
+ * `src/lib/gallery/gallery-saver.ts`) tourne HORS `androidGalleryMode` — elle
+ * écrit dans `Android/media/<appId>/Meeshy`, dossier propre à l'app, indexé
+ * par MediaStore, qui ne demande aucune permission à aucun niveau d'API. Les
+ * déclarer ouvrirait la photothèque entière pour une écriture qui s'en passe.
  */
-export const FORBIDDEN_PERMISSIONS = ['android.permission.READ_CONTACTS'];
+export const FORBIDDEN_PERMISSIONS = [
+  'android.permission.READ_CONTACTS',
+  'android.permission.READ_MEDIA_IMAGES',
+  'android.permission.READ_MEDIA_VIDEO',
+  'android.permission.READ_EXTERNAL_STORAGE',
+  'android.permission.WRITE_EXTERNAL_STORAGE',
+];
 
 /** Les permissions de `forbidden` déclarées de façon effective. */
 export const auditForbiddenPermissions = ({ manifest, forbidden = FORBIDDEN_PERMISSIONS }) => {

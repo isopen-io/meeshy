@@ -4,23 +4,36 @@ import { base64De } from '@/lib/media/file-delivery-host';
 import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 /**
- * **L'ÉCRITURE DANS LA GALERIE DE LA COQUE ANDROID** (#8308) — jumelle de
- * l'enregistrement Photos d'iOS, derrière une interface : le plugin natif
- * (`@capacitor-community/media`, nom de plugin `Media`) N'EST PAS une
- * dépendance de la coque à ce jour. Tant qu'il n'est pas enregistré, le saver
- * est NUL et rien ne se passe — aucun appel qui rejetterait au premier
- * message, aucune porte offerte qui ne mènerait nulle part (loi 4).
+ * **L'ÉCRITURE DANS LA GALERIE DE LA COQUE ANDROID** (#8308, #8336) — jumelle
+ * de l'enregistrement Photos d'iOS, derrière une interface. Le plugin natif est
+ * `@capacitor-community/media` 9.1.0 (nom de plugin `Media`), déclaré par la
+ * coque ; le saver reste NUL tant que la coque ne le déclare pas (navigateur,
+ * coque iOS, coque Android antérieure) — aucun appel qui rejetterait, aucune
+ * porte qui ne mènerait nulle part (loi 4).
  *
  * Le plugin est lu comme la coque le déclare (`PluginHeaders`, motif
  * `native-shell.ts`), jamais par `@capacitor/core` : le bundle web n'en a pas
- * l'usage. Sur Android, `savePhoto`/`saveVideo` exigent un `albumIdentifier` —
- * le chemin de l'album « Meeshy », lu par `getAlbums` et créé par
- * `createAlbum` s'il manque, une fois par session.
+ * l'usage. Contrat LU dans `MediaPlugin.java` (9.1.0), hors
+ * `androidGalleryMode` — le mode par défaut, qui ne demande AUCUNE permission :
+ *  - un album est un dossier de `getExternalMediaDirs()[0]`
+ *    (`Android/media/<appId>/Meeshy`), indexé par MediaStore, donc visible des
+ *    galeries ; `getAlbums` rend `{ albums: [{ name, identifier }] }`, où
+ *    l'identifiant est le chemin du dossier ;
+ *  - `createAlbum` REJETTE « Album already exists » si le dossier existe :
+ *    ce rejet n'est pas un échec, l'album est relu ;
+ *  - `savePhoto`/`saveVideo` AJOUTENT au `fileName` l'extension tirée du type
+ *    et ÉCRASENT un fichier du même nom : le nom natif est donc une tige
+ *    assainie, sans extension ni chemin, rendue unique.
  *
  * Le fichier voyage en `data:` base64 : les URL de pièces jointes exigent un
- * `Authorization` que le téléchargement natif du plugin n'enverrait pas.
+ * `Authorization` que le téléchargement natif du plugin n'enverrait pas. Le
+ * pont Capacitor porte ce texte en MÉMOIRE (JS puis Java) : au-delà de
+ * `GALLERY_BRIDGE_MAX_BYTES`, la pièce n'est pas confiée au plugin.
  */
 export const GALLERY_ALBUM = 'Meeshy';
+
+/** Au-delà, le `data:` base64 (×4/3, puis recopié par le pont) ferait courir un OOM à la WebView. */
+export const GALLERY_BRIDGE_MAX_BYTES = 32 * 1024 * 1024;
 
 export type GallerySaveOutcome = 'saved' | 'unavailable' | 'failed';
 
@@ -52,6 +65,19 @@ function albumsOf(result: unknown): readonly MediaAlbum[] {
   );
 }
 
+const FILE_STEM_MAX = 64;
+
+function fileStemOf(fileName: string): string {
+  const base = fileName.split(/[\\/]/).pop() ?? '';
+  const dot = base.lastIndexOf('.');
+  const stem = (dot > 0 ? base.slice(0, dot) : dot === 0 ? '' : base)
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{N}_-]+/gu, '_')
+    .replace(/^[_-]+|[_-]+$/g, '')
+    .slice(0, FILE_STEM_MAX);
+  return /[\p{L}\p{N}]/u.test(stem) ? stem : 'meeshy';
+}
+
 export function shellGallerySaver(shell: CoqueNative | undefined): GallerySaver {
   const getAlbums = appelNatifMethode(shell, MEDIA_PLUGIN, 'getAlbums');
   const createAlbum = appelNatifMethode(shell, MEDIA_PLUGIN, 'createAlbum');
@@ -60,20 +86,25 @@ export function shellGallerySaver(shell: CoqueNative | undefined): GallerySaver 
   if (getAlbums === null || createAlbum === null || savePhoto === null || saveVideo === null) return NULL_GALLERY_SAVER;
 
   let album: Promise<string | null> | null = null;
+  let written = 0;
   const findAlbum = async (): Promise<string | null> =>
     albumsOf(await getAlbums({})).find((candidate) => candidate.name === GALLERY_ALBUM)?.identifier ?? null;
   const resolveAlbum = async (): Promise<string | null> => {
     const existing = await findAlbum();
     if (existing !== null) return existing;
-    await createAlbum({ name: GALLERY_ALBUM });
+    await createAlbum({ name: GALLERY_ALBUM }).catch(() => undefined);
     return findAlbum();
+  };
+  const nativeFileName = (fileName: string): string => {
+    written += 1;
+    return `${fileStemOf(fileName)}-${Date.now().toString(36)}${written.toString(36)}`;
   };
 
   return {
     available: true,
     save: async ({ blob, fileName, mimeType }) => {
       const essence = galleryMediaEssence(mimeType);
-      if (essence === null) return 'unavailable';
+      if (essence === null || blob.size > GALLERY_BRIDGE_MAX_BYTES) return 'unavailable';
       const write = isImageMimeType(essence) ? savePhoto : saveVideo;
       try {
         album ??= resolveAlbum();
@@ -83,7 +114,7 @@ export function shellGallerySaver(shell: CoqueNative | undefined): GallerySaver 
           return 'failed';
         }
         const path = `data:${essence};base64,${await base64De(blob)}`;
-        await write({ path, albumIdentifier, fileName });
+        await write({ path, albumIdentifier, fileName: nativeFileName(fileName) });
         return 'saved';
       } catch {
         album = null;

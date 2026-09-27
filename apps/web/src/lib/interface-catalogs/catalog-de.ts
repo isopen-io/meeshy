@@ -27,6 +27,7 @@ import deEphemeral from './catalog-de-ephemeral';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
+import deQuote from './catalog-de-quote';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1164,6 +1165,7 @@ const de = {
   ...deConversationCard,
   ...deStoriesMine,
   ...deContactCard,
+  ...deQuote,
 } satisfies InterfaceCatalog;
 
 export default de;

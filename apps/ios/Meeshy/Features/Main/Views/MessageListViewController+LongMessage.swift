@@ -62,13 +62,24 @@ extension MessageListViewController {
         if visibleCell(forLocalId: localId) != nil, let edge = visualEdge(ofLocalId: localId, anchor: anchor) {
             beginAnchorHold(.init(localId: localId, anchor: anchor, edge: edge))
         }
-        // La cellule re-hébergée s'auto-dimensionne dans la passe de la mise à
-        // jour — pas d'invalidation du layout ici : elle périmerait le mémo de
-        // la pastille de jour (`MessageListStickyDayMemoGuardTests`). Le bord
-        // ancré est recalé DANS la passe où la hauteur change
-        // (`holdAnchoredEdge`, sur `contentSize`) : il ne bouge à aucune image.
+        // La cellule re-hébergée s'auto-dimensionne dans une passe de layout
+        // posée ICI, dans le même tour que la reconfiguration — pas
+        // d'invalidation du layout : elle périmerait le mémo de la pastille de
+        // jour (`MessageListStickyDayMemoGuardTests`). Le bord ancré est recalé
+        // dans cette passe (`holdAnchoredEdge`, sur `contentSize`, puis une
+        // fois encore après elle) : il ne bouge à aucune image.
+        //
+        // La passe est FORCÉE, sans animation (#8329). #8162 l'avait retirée
+        // avec l'enveloppe `UIView.animate` — c'est l'enveloppe qui doublait
+        // le coût, pas la passe, que le tour suivant aurait jouée de toute
+        // façon. Sans elle, rien ne redemande la taille de la cellule
+        // reconfigurée : mesuré en CI (`LongMessageAnchorTests`, fenêtre
+        // rattachée à la scène, 2 s d'attente), la hauteur restait celle de
+        // l'extrait — le message ne se dépliait pas.
         UIView.performWithoutAnimation {
             applyToDataSource(snapshot) {}
+            collectionView.layoutIfNeeded()
+            holdAnchoredEdge()
         }
         applyLongMessageExpansionPresentation(animated: !UIAccessibility.isReduceMotionEnabled)
     }

@@ -264,7 +264,6 @@ export function registerCoreRoutes(
           isEncrypted: attachment?.message?.isEncrypted,
           effectFlags: attachment?.message?.effectFlags,
           expiresAt: attachment?.message?.expiresAt,
-          createdAt: attachment?.message?.createdAt,
         }) !== null
         || maskedAttachment({
           isViewOnce: attachment?.isViewOnce,

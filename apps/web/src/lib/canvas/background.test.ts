@@ -34,6 +34,15 @@ describe('backgroundFraming — le fond REMPLIT, sauf cadrage « fit » déclar�
     expect(backgroundFraming(scene([object({ payload: { transform: { videoFitMode: 'fill' } } })]))).toBe('fill');
   });
 
+  // Miroir `CanvasV3Migration.swift` (« second passage ») : un fond média
+  // `content` + `isBackground` porte LUI-MÊME son cadrage — la forme que le
+  // composer web écrit depuis la scène plein écran (#8370).
+  test('fond `content` + `isBackground` qui porte `videoFitMode: "fit"` ⇒ fit', () => {
+    expect(
+      backgroundFraming(scene([object({ plane: 'content', payload: { isBackground: true, transform: { videoFitMode: 'fit' } } })])),
+    ).toBe('fit');
+  });
+
   test('un cadrage posé sur un objet qui n’est PAS un fond ne compte pas', () => {
     expect(backgroundFraming(scene([object({ plane: 'content', payload: { transform: { videoFitMode: 'fit' } } })]))).toBe('fill');
   });
