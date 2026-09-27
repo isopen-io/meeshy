@@ -302,7 +302,7 @@ function Controle({
         disabled={desactive}
         data-admin-preference-select={chemin}
         onChange={(event) => onChange(event.currentTarget.value)}
-        className="min-h-11 shrink-0 rounded-chip px-2 text-caption"
+        className="min-h-11 shrink-0 rounded-chip px-2 text-input"
         style={CARTE}
       >
         {liste.map((option) => (
@@ -364,7 +364,7 @@ function ChampLibre({
       onKeyDown={(event) => {
         if (event.key === 'Enter') valider();
       }}
-      className="min-h-11 w-32 shrink-0 rounded-chip px-2 text-caption tabular-nums"
+      className="min-h-11 w-32 shrink-0 rounded-chip px-2 text-input tabular-nums"
       style={CARTE}
     />
   );

@@ -120,6 +120,11 @@ nonisolated enum ComposerOrigin: Equatable {
     /// `mediaId` est optionnel, comme `attachmentId` ci-dessus : une story ou un
     /// post sans média sème sa seule description.
     case socialMedia(postId: String, mediaId: String?)
+    /// **La retouche d'une image du BROUILLON d'un message** (#8416) : elle
+    /// s'ouvre dans la même scène plein écran que toute composition, et
+    /// « Terminé » la rend au message (`MeeshyComposerHost.onReturnImage`) —
+    /// elle ne se publie jamais.
+    case conversationDraftImage
 }
 
 nonisolated extension ComposerFormat {
@@ -166,7 +171,8 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .repost(let postId, _):
             return postId
-        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia,
+             .conversationDraftImage:
             return nil
         }
     }
@@ -194,7 +200,8 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .draft(let id):
             return id
-        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia,
+             .conversationDraftImage:
             return nil
         }
     }
@@ -812,6 +819,20 @@ nonisolated extension ComposerProfile {
             return ComposerProfile(
                 initialFormat: .story,
                 offeredFormats: plusReel([.story, .post]),
+                showsSlides: true,
+                showsTimeline: true,
+                opensWith: .mediaSeeded,
+                allowsCapture: true,
+                routesToLegacy: nil
+            )
+
+        case .conversationDraftImage:
+            // Une image, et aucun format : elle repart dans le fil. Les
+            // diapositives suivent le FORMAT (loi éprouvée) ; c'est le mode
+            // retouche du meuble qui retire « nouvelle slide » (`onReturnImage`).
+            return ComposerProfile(
+                initialFormat: .story,
+                offeredFormats: [.story],
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .mediaSeeded,

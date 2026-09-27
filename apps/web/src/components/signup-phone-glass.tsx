@@ -102,7 +102,7 @@ export function SignupPhoneGlass({
           onFocus={onFocus}
           onBlur={onBlur}
           placeholder="Numéro de téléphone"
-          className="min-w-0 flex-1 bg-transparent py-3 ps-2 text-input outline-none"
+          className="w-0 min-w-0 flex-1 bg-transparent py-3 ps-2 text-input outline-none"
           style={{ color: 'var(--color-ios-ink)' }}
           aria-describedby="signup-phone-hint"
           aria-invalid={error !== undefined}
