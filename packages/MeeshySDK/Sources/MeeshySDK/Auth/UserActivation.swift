@@ -53,13 +53,7 @@ public struct UserActivation: Codable, Sendable, Equatable {
     /// Les jours restants avant le blocage, arrondis au jour supérieur et
     /// jamais négatifs — `nil` sans échéance lisible.
     public func daysLeft(now: Date = Date()) -> Int? {
-        guard let deadline, let at = Self.parse(deadline) else { return nil }
+        guard let deadline, let at = WireDate.date(from: deadline) else { return nil }
         return max(0, Int((at.timeIntervalSince(now) / 86_400).rounded(.up)))
-    }
-
-    private static func parse(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     }
 }
