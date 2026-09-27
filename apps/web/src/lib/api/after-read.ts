@@ -8,6 +8,7 @@ import type { Transport } from '../net/transport';
 import { expireLastMessage } from './list-preview';
 import { patchThreadMessages } from './messages';
 import { outcomeOf } from './outcome';
+import { tombstoneQuotesOf } from './quote-tombstone';
 
 /**
  * LA CONSOMMATION D'UNE FLAMME-ŒIL (#8304) — le contrat de #8302 :
@@ -145,16 +146,9 @@ export function removeAfterReadLocally(
   const now = input.now ?? new Date();
   for (const messageId of messageIds) {
     expireLastMessage(queryClient, conversationId, messageId, now);
+    tombstoneQuotesOf(queryClient, { conversationId, messageId, deletedAt: now.toISOString() });
     forgetEphemeral(messageId);
   }
-  /* Les citations se scellent par le module du temps réel, chargé en
-     `import()` : l'importer statiquement tirerait le chunk `realtime` sur le
-     chemin du fil (`budgets.json › on_demand_chunks.realtime.dynamic_only`). */
-  void import('./realtime-message-mutations').then(({ tombstoneQuotesOf }) => {
-    for (const messageId of messageIds) {
-      tombstoneQuotesOf(queryClient, { conversationId, messageId, deletedAt: now.toISOString() });
-    }
-  });
   patchThreadMessages(queryClient, conversationId, (messages) =>
     messages.some((m) => messageIds.includes(m.id)) ? messages.filter((m) => !messageIds.includes(m.id)) : messages,
   );
