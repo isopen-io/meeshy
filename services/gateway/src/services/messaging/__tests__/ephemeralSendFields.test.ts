@@ -98,6 +98,15 @@ describe('flamme-œil à l\'envoi (#8302)', () => {
     });
   });
 
+  it('flamme-œil ET vue unique : aucune purge avant le plafond de la flamme — les deux échéances partent du même plafond (#8345)', () => {
+    const retention = new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+    expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, isViewOnce: true, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: retention,
+      viewOnceBurnAt: retention,
+    });
+  });
+
   it('ignore une durée envoyée à côté : rien ne décompte à la réception d\'une flamme-œil', () => {
     expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, ephemeralDuration: 30, now: NOW })).toEqual({
       ephemeralDuration: null,
