@@ -53,27 +53,41 @@ final class StoryComposerFoldTests: XCTestCase {
     // MARK: - 2 · Effets offerts en commentaire
 
     @MainActor
-    func test_commentComposer_offersNeitherFlameNorViewOnce_butKeepsBlurAndEffects() {
-        let bar = UniversalComposerBar(mode: .comment)
-        XCTAssertTrue(bar.resolvedHideEphemeral, "Flamme (éphémère) : jamais sur un commentaire.")
-        XCTAssertTrue(bar.resolvedHideViewOnce, "Vue unique : jamais sur un commentaire.")
-        XCTAssertFalse(bar.hideBlur, "Le flou reste offert.")
-        XCTAssertTrue(bar.resolvedShowPermanentEffects, "Les effets d'un commentaire restent offerts.")
+    func test_commentComposer_offersNeitherFlameNorViewOnce_butKeepsEffects() {
+        let offersFlame = ComposerMode.comment.showEphemeral
+        let hidesViewOnce = UniversalComposerBar.hidesViewOnce(mode: .comment, hideViewOnce: false)
+        let offersCommentEffects = ComposerMode.comment.showPermanentEffects
+        XCTAssertFalse(offersFlame, "Flamme (éphémère) : jamais sur un commentaire.")
+        XCTAssertTrue(hidesViewOnce, "Vue unique : jamais sur un commentaire.")
+        XCTAssertTrue(offersCommentEffects, "Les effets d'un commentaire restent offerts.")
     }
 
     @MainActor
     func test_messageComposer_stillOffersViewOnce_exceptInEdition() {
-        XCTAssertFalse(UniversalComposerBar(mode: .message).resolvedHideViewOnce)
-        XCTAssertTrue(UniversalComposerBar(mode: .message, hideViewOnce: true).resolvedHideViewOnce)
-        XCTAssertFalse(UniversalComposerBar().resolvedHideViewOnce,
-                       "Sans mode (réponse à un média), la vue unique reste offerte (#7472).")
+        let message = UniversalComposerBar.hidesViewOnce(mode: .message, hideViewOnce: false)
+        let editing = UniversalComposerBar.hidesViewOnce(mode: .message, hideViewOnce: true)
+        let noMode = UniversalComposerBar.hidesViewOnce(mode: nil, hideViewOnce: false)
+        XCTAssertFalse(message)
+        XCTAssertTrue(editing)
+        XCTAssertFalse(noMode, "Sans mode (réponse à un média), la vue unique reste offerte (#7472).")
     }
 
+    @MainActor
     func test_viewOnce_isAMessageProtectionOnly() {
-        XCTAssertTrue(ComposerMode.message.showViewOnce)
-        for mode in [ComposerMode.post, .status, .story, .comment, .caption] {
-            XCTAssertFalse(mode.showViewOnce, "\(mode) ne porte pas de vue unique")
-        }
+        let offered = [ComposerMode.message, .post, .status, .story, .comment, .caption]
+            .filter { $0.showViewOnce }
+        XCTAssertEqual(offered, [.message])
+    }
+
+    func test_theStoryComposer_keepsTheBlurToggle() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let bar = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerBar.swift"), encoding: .utf8)
+        XCTAssertTrue(bar.contains("mode: .comment"))
+        XCTAssertTrue(bar.contains("isBlurEnabled: $commentBlurEnabled"), "Le flou reste offert au commentaire de story.")
+        XCTAssertFalse(bar.contains("hideBlur: true"))
     }
 
     // MARK: - 3 · Bouton ⌄ en rédaction

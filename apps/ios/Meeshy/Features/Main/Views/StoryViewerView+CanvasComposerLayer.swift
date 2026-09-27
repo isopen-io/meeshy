@@ -214,8 +214,7 @@ extension StoryCardView {
     private var composerFoldButton: some View {
         Button(action: foldComposer) {
             Image(systemName: StoryComposerFold.foldSymbol)
-                // Glyphe de chrome dans un cadre fixe → figé (doctrine 82i).
-                .font(.system(size: 14, weight: .bold))
+                .font(MeeshyFont.relative(14, weight: .bold))
                 .foregroundColor(.white.opacity(0.9))
                 .frame(width: 32, height: 32)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
@@ -231,8 +230,7 @@ extension StoryCardView {
     private var composerUnfoldButton: some View {
         Button(action: unfoldComposer) {
             Image(systemName: StoryComposerFold.unfoldSymbol)
-                // Glyphe de chrome dans un cadre fixe → figé (doctrine 82i).
-                .font(.system(size: 17, weight: .semibold))
+                .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 44, height: 44)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
