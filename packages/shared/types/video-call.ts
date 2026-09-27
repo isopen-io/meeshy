@@ -361,6 +361,19 @@ export interface CallInitiatedEvent {
    */
   readonly conversationTitle?: string | null;
   /**
+   * #8433 — présent sur la copie remise à une personne INVITÉE dans un appel
+   * déjà en cours : qui l'invite. Elle n'est pas forcément membre de la
+   * conversation, et c'est cet appel seul qu'elle peut rejoindre.
+   */
+  readonly invitedBy?: {
+    readonly userId: string;
+    readonly username: string;
+    readonly displayName?: string;
+    readonly avatar?: string;
+  };
+  /** #8433 — vrai dès que l'appel compte ou attend plus de deux personnes. Absent : lire `conversationType`. */
+  readonly isGroup?: boolean;
+  /**
    * Les identifiants TURN/STUN du DESTINATAIRE de cette copie de l'événement.
    *
    * **Déclaré au cycle 107 ; il voyageait sans contrat depuis toujours.** Les
