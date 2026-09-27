@@ -74,7 +74,24 @@ function render(node: ReactNode): HTMLDivElement {
   return container;
 }
 
+/**
+ * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288) — un numéro donné puis
+ * effacé la fait paraître SANS choisir « l'e-mail seulement » : l'alerte
+ * « sans numéro » (#8040) reste alors due, comme avant le réagencement.
+ */
+function revealEmail(el: HTMLElement) {
+  if (el.querySelector('#signup-email') !== null) return;
+  for (const value of ['612345678', '']) {
+    const phone = el.querySelector('#signup-phone') as HTMLInputElement;
+    act(() => {
+      phone.value = value;
+      phone.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+}
+
 function type(el: HTMLElement, selector: string, value: string) {
+  if (selector === '#signup-email') revealEmail(el);
   const input = el.querySelector(selector) as HTMLInputElement;
   act(() => {
     input.value = value;
@@ -218,7 +235,7 @@ describe('EMAIL_TAKEN avec son détenteur masqué', () => {
     expect(anchor(el, 'Mot de passe oublié ?')?.getAttribute('href')).toBe('/forgot-password?email=ada%40meeshy.example');
   });
 
-  test('« Ce n’est pas moi » renvoie la MÊME inscription avec claimEmail, puis l’écran du code', async () => {
+  test('« Ce n’est pas moi » renvoie la MÊME inscription avec claimEmail, puis le code DANS la carte (#8288)', async () => {
     const { el, sent } = await refusedWithOwner();
     expect(text(el)).toContain('Le code envoyé à cette adresse sera demandé pour l’obtenir.');
     await act(async () => {
@@ -226,8 +243,8 @@ describe('EMAIL_TAKEN avec son détenteur masqué', () => {
     });
     expect(sent.length).toBe(2);
     expect(sent[1]).toEqual({ ...sent[0], claimEmail: true } as RegisterBody);
-    expect(window.location.pathname).toBe('/auth/verify-email');
-    expect(new URLSearchParams(window.location.search).get('email')).toBe(EMAIL);
+    expect(window.location.pathname).toBe('/signup');
+    expect(el.querySelector('[data-signup-card] #verify-email-code')).not.toBeNull();
   });
 
   test('sans `emailOwner` (ancienne passerelle) : aucune carte « Est-ce vous ? », la récupération seule', async () => {

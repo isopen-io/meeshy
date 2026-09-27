@@ -43417,53 +43417,6 @@
         }
       }
     },
-    "auth.signup.identity.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هويتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Identität"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your identity"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu identidad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Votre identité"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La tua identità"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sua identidade"
-          }
-        }
-      }
-    },
     "auth.signup.identity.username": {
       "extractionState": "manual",
       "localizations": {
@@ -44504,43 +44457,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنشاء حسابي"
+            "value": "إنشاء حساب"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Konto erstellen"
+            "value": "Registrieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create my account"
+            "value": "Sign up"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crear mi cuenta"
+            "value": "Registrarse"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer mon compte"
+            "value": "S’inscrire"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea il mio account"
+            "value": "Iscriviti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criar minha conta"
+            "value": "Cadastrar-me"
           }
         }
       }
@@ -155843,43 +155796,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستعود إلى شاشة تسجيل الدخول. سيبقى هذا الحساب في القائمة، وسيُطلب منك كلمة المرور مرة أخرى."
+            "value": "انتقل من حساب إلى آخر دون تسجيل الخروج."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kehrst zum Anmeldebildschirm zurück. Dieses Konto bleibt in der Liste, und das Passwort wird erneut abgefragt."
+            "value": "Wechsle zwischen deinen Konten, ohne dich abzumelden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You will return to the sign-in screen. This account stays in the list, and its password will be asked again."
+            "value": "Move between your accounts without signing out."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volverás a la pantalla de inicio de sesión. Esta cuenta seguirá en la lista y se te pedirá su contraseña."
+            "value": "Pasa de una cuenta a otra sin cerrar sesión."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé."
+            "value": "Passez d’un compte à l’autre sans vous déconnecter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tornerai alla schermata di accesso. Questo account resta nell’elenco e la password verrà richiesta di nuovo."
+            "value": "Passa da un account all’altro senza disconnetterti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você voltará à tela de login. Esta conta continuará na lista e a senha será solicitada novamente."
+            "value": "Alterne entre suas contas sem sair."
           }
         }
       }
@@ -205221,6 +205174,523 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconectando…"
+          }
+        }
+      }
+    },
+    "accounts.keep_signed_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "البقاء متصلاً على هذا الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät angemeldet bleiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stay signed in on this device"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener la sesión en este dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rester connecté sur cet appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resta connesso su questo dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manter sessão neste dispositivo"
+          }
+        }
+      }
+    },
+    "accounts.row.current": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحساب الحالي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktuelles Konto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuenta actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compte actuel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account attuale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conta atual"
+          }
+        }
+      }
+    },
+    "accounts.row.signed_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angemeldet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión iniciada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connesso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado"
+          }
+        }
+      }
+    },
+    "accounts.add": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة حساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add an account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir una cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi un account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar uma conta"
+          }
+        }
+      }
+    },
+    "auth.signup.phone.skip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المتابعة بالبريد الإلكتروني فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur mit E-Mail fortfahren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue with email only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar solo con el correo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer avec l’e-mail seulement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continua solo con l’e-mail"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar só com o e-mail"
+          }
+        }
+      }
+    },
+    "auth.signup.card.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حسابك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta"
+          }
+        }
+      }
+    },
+    "auth.signup.card.validateNow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأكيد حسابي الآن"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto jetzt bestätigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verify my account now"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validar mi cuenta ahora"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valider mon compte maintenant"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convalida il mio account ora"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validar minha conta agora"
+          }
+        }
+      }
+    },
+    "auth.signup.card.code.lead": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل الرمز المكوّن من 6 أرقام المرسل إلى %@، أو افتح الرابط الذي وصلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib den 6-stelligen Code ein, der an %@ gesendet wurde, oder öffne den erhaltenen Link."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the 6-digit code sent to %@, or open the link you received."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce el código de 6 cifras enviado a %@ o abre el enlace recibido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrez le code à 6 chiffres envoyé à %@, ou ouvrez le lien reçu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci il codice a 6 cifre inviato a %@ o apri il link ricevuto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite o código de 6 dígitos enviado para %@ ou abra o link recebido."
+          }
+        }
+      }
+    },
+    "auth.signup.card.verified": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تأكيد الحساب!"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto bestätigt!"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account verified!"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¡Cuenta validada!"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compte validé !"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account convalidato!"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conta validada!"
+          }
+        }
+      }
+    },
+    "auth.signup.card.verified.lead": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل شيء جاهز: يقرأك الآخرون بلغتهم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles bereit: Deine Kontakte lesen dich in ihrer Sprache."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’re all set: people read you in your language."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo listo: tus contactos te leen en su idioma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout est prêt : vos proches vous lisent dans votre langue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutto pronto: i tuoi contatti ti leggono nella loro lingua."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tudo pronto: seus contatos leem você no idioma deles."
+          }
+        }
+      }
+    },
+    "auth.signup.talk": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدّث مع الآخرين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit anderen sprechen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Talk to people"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablar con los demás"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parler aux autres"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parla con gli altri"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falar com os outros"
           }
         }
       }

@@ -4353,3 +4353,29 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Conséquences.** Aucune publication ne part par surprise. La scène plein écran à contrôles flottants, le panneau Cadre et la frise « Animé » de la même maquette sont des lots suivants, chacun sous son issue.
 
+## D-142 — Plusieurs comptes sur l'appareil : un COFFRE liste les comptes et range les jetons des comptes gardés NON actifs ; la session active reste la seule dans `meeshy.session` (2026-09-27, #8286)
+
+**Ce qui est tranché.**
+- **Deux gestes distincts dans les réglages.** « Changer de compte » garde les sessions et ouvre la liste des comptes de l'appareil (`routes/settings-accounts.tsx`) ; « Déconnexion » ferme la session du compte actuel (serveur compris) et efface ses données locales (`signOutOfThisDevice`, `lib/api/device-accounts.ts`) — le compte RESTE listé, et y revenir exige le mot de passe ou un lien magique.
+- **Le coffre (`lib/api/accounts.ts`, clé `meeshy.accounts`) ne porte jamais les jetons du compte ACTIF.** Ils vivent dans `meeshy.session`, seul porteur de la session active. Quitter un compte gardé les RANGE dans le coffre, y revenir les REPREND (et les en retire). Conséquence voulue : une session qui meurt — déconnexion, 401 (`client.ts#onUnauthorized`), session d'un lien magique qui la remplace — ne laisse aucun jeton derrière elle, sans que le coffre ait à observer le magasin de session.
+- **« Rester connecté sur cet appareil »** n'est proposée qu'au compte SUPPLÉMENTAIRE, c'est-à-dire dès qu'un AUTRE compte garde sa session (`offersKeepSignedIn`) ; le premier compte est gardé sans question. Décochée : `rememberDevice: false` part au serveur, et quitter ce compte ferme sa session côté passerelle (`endServerSession`) au lieu de la ranger.
+- **Aucune fuite entre comptes après bascule**, sans code nouveau côté écrans : `establish` d'une autre identité purge déjà le cache de requêtes, `reactionStore` et le registre des médias absents (`query-client.ts`), rouvre le socket sur le nouveau jeton (`realtime.ts`), redéclare le jeton push au compte actif (`push/shell-push.ts` ; la passerelle désactive l'ancienne liaison du même jeton) et vide la file des accusés (`receipts.ts`). Brouillons, modes de lecture et dernières ouvertures sont déjà rangés par identité (`u_<id>`) : changer de compte les GARDE, la déconnexion les EFFACE (`purgeAccountLocalData`, `draftStore.forgetScope`).
+- **Décodage en `zod/mini`**, jamais un schéma de `@meeshy/shared` ; le coffre n'est importé que par les écrans qui le montrent (connexion, réglages) — la première peinture n'en paie rien.
+
+**Côté serveur : rien.** Une session par compte existe déjà (`UserSession`, `POST /auth/logout` sur les en-têtes du compte quitté).
+
+**Suivi assumé.** Le cache de requêtes est unique et purgé à chaque bascule : revenir à un compte recharge ses écrans depuis le réseau (dimension 2 — un cache partitionné par compte relève d'une issue à part). Miroir iOS : `apps/ios/decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md`. Kotlin natif : rien (gel).
+
+## D-143 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
+
+**Contexte.** Directive porteur 2026-09-27 : réagencer l'inscription « en 3–4 phases rapides, plus moderne, sexy, dynamique », web ET iOS, sans seconde machine. D-72 avait posé deux barreaux (le contact, puis l'identité) ; l'écran du code (`/auth/verify-email`) restait une page à part.
+
+**Décision.**
+- **Quatre phases, une loi pure** (`lib/view/signup-phases.ts`, miroir iOS `SignupPhases.swift`) : `phone` → `email` (un numéro PLAUSIBLE, ou « Continuer avec l'e-mail seulement ») → `card` (une adresse cohérente) → `code` → `verified`. Monotone, comme D-72 : rien de ce qui est paru ne se referme.
+- **Le téléphone d'abord, en verre liquide qui ondule à la frappe** : l'effet est celui de la barre du composeur universel iOS (`typeWave`, 1,015 × 0,97, ressort vif), rejoué en TRANSFORM seul (`lib/view/typing-wave.ts`) — composité, jamais une propriété de mise en page ; rien sous « Réduire les animations ».
+- **La carte d'identité en verre** porte le nom affiché et le @pseudo pré-dérivés (`DerivedIdentity`), leurs refus (pseudo pris et suggestions, « Est-ce vous ? » #8216), le mot de passe facultatif, et « Valider mon compte maintenant ». Ce geste CRÉE le compte (la même `auth.register`) et fait paraître le code DANS la carte : `EmailCodeForm`, la machine du code de `/auth/verify-email`.
+- **Le lien ouvert ailleurs se reflète dans la carte** par le jeton d'attente (#8083), que `POST /auth/register` sert désormais avec la session. Un compte déjà connecté ici tient alors l'adresse pour prouvée ; un compte SANS session (revendication #8214) n'entre que par son code — « si et seulement si » reste entier.
+- **Le code juste lance le feu d'artifice de l'arrivée** (`arrival-fireworks.tsx`, chargé à la demande), et « S'inscrire » devient « Parler aux autres », qui mène à l'onboarding. « S'inscrire » est actif dès la carte : l'inscription sans code est permise pendant le délai de grâce (#8238) — un compte créé entre alors dans l'onboarding (ou l'invitation `next`), plus sur l'écran du code.
+- **L'alerte « sans numéro » (#8040) se tait quand on a CHOISI l'e-mail seul** : le lien discret de la phase 1 était déjà la question.
+
+**Conséquences.** `signup-rungs.ts` est retiré ; `routes/signup.tsx` se découpe en `signup-phone-glass.tsx`, `signup-identity-card.tsx` et `signup-extras.tsx`. Le code d'une carte vit hors du `<form>` de l'inscription (un formulaire ne s'imbrique pas) ; le bouton principal lui appartient par `form="signup-form"`. Dix clés `signup.*` rejoignent les sept catalogues (`budgets.json`, plafond 144).

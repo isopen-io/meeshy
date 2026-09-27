@@ -6,6 +6,7 @@ import enMediaViewer from './catalog-en-media-viewer';
 import enActivation from './catalog-en-activation';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
+import enAccounts from './catalog-en-accounts';
 import enCall from './catalog-en-call';
 import enRowActions from './catalog-en-row-actions';
 import enCallShell from './catalog-en-call-shell';
@@ -212,6 +213,7 @@ const en = {
   ...enVerifyEmail,
   ...enActivation,
   ...enPassword,
+  ...enAccounts,
   ...enCall,
   ...enRowActions,
   ...enCallShell,

@@ -6,6 +6,7 @@ import ptMediaViewer from './catalog-pt-media-viewer';
 import ptActivation from './catalog-pt-activation';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
+import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
 import ptRowActions from './catalog-pt-row-actions';
 import ptCallShell from './catalog-pt-call-shell';
@@ -216,6 +217,7 @@ const pt = {
   ...ptVerifyEmail,
   ...ptActivation,
   ...ptPassword,
+  ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
   ...ptCallShell,

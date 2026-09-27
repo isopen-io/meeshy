@@ -48,6 +48,45 @@ final class RegistrationOutcomeTests: XCTestCase {
         XCTAssertEqual(outcome, .verificationRequired(PendingEmailVerification(email: "lena@example.com", accountCreated: false)))
     }
 
+    // MARK: - #8288 — la carte de l'inscription TIENT la session
+
+    /// « Valider mon compte maintenant » crée le compte et fait paraître le code
+    /// DANS l'écran d'inscription : poser la session tout de suite basculerait la
+    /// racine de l'app et démonterait l'écran qui attend le code.
+    func test_registerHoldingSession_sessionServed_holdsItWithoutApplying() async throws {
+        let served = try decode(#"{"success":true,"data":{"token":"jwt-new","sessionToken":"sess-new","pendingSessionToken":"attente-1","user":{"id":"u-new","username":"lena"}}}"#)
+        AuthManager.shared.authService = StubRegistrationAuthService(response: served)
+        let tokenBefore = AuthManager.shared.authToken
+
+        let hold = try await AuthManager.shared.registerHoldingSession(request: request(email: "lena@example.com"))
+
+        guard case .session(let proven, let pendingSessionToken) = hold else {
+            return XCTFail("une réponse avec session doit être TENUE, obtenu \(hold)")
+        }
+        XCTAssertEqual(proven.token, "jwt-new")
+        XCTAssertEqual(proven.user.id, "u-new")
+        XCTAssertEqual(proven.origin, .registration, "la session tenue vient d'une INSCRIPTION")
+        XCTAssertEqual(pendingSessionToken, "attente-1")
+        XCTAssertEqual(AuthManager.shared.authToken, tokenBefore, "rien n'est posé avant que l'écran ne le demande")
+    }
+
+    func test_registerHoldingSession_verificationRequired_returnsTheAwaitedAddress() async throws {
+        let served = try decode(#"{"success":true,"data":{"status":"verification-required","accountCreated":true,"email":"lena@example.com","pendingSessionToken":"attente-2"}}"#)
+        AuthManager.shared.authService = StubRegistrationAuthService(response: served)
+
+        let hold = try await AuthManager.shared.registerHoldingSession(request: request(email: "lena@example.com"))
+
+        guard case .verificationRequired(let pending) = hold else {
+            return XCTFail("une revendication attend son code, obtenu \(hold)")
+        }
+        XCTAssertEqual(pending, PendingEmailVerification(email: "lena@example.com", accountCreated: true, pendingSessionToken: "attente-2"))
+    }
+
+    func test_emailProvenSession_defaultsToALoginOrigin() {
+        let proven = EmailProvenSession(token: "t", sessionToken: nil, user: MeeshyUser(id: "u", username: "u", displayName: "U"))
+        XCTAssertEqual(proven.origin, .login)
+    }
+
     func test_register_verificationRequired_leavesNoErrorMessage() async throws {
         let served = try decode(#"{"success":true,"data":{"status":"verification-required","accountCreated":true,"email":"lena@example.com"}}"#)
         AuthManager.shared.authService = StubRegistrationAuthService(response: served)

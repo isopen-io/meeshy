@@ -16,6 +16,16 @@ const itSignup = {
   'signup.emailTaken.itsMe': 'Sono io — recupera il mio account',
   'signup.emailTaken.notMe': 'Non sono io',
   'signup.emailTaken.notMeNote': 'Per ottenerlo verrà richiesto il codice inviato a questo indirizzo.',
+  'signup.phone.skip': 'Continua solo con l’e-mail',
+  'signup.card.title': 'Il tuo account',
+  'signup.card.validateNow': 'Convalida il mio account ora',
+  'signup.card.validateNow.busy': 'Creazione dell’account…',
+  'signup.card.code.lead': 'Inserisci il codice a 6 cifre inviato a {email} o apri il link ricevuto.',
+  'signup.card.verified': 'Account convalidato!',
+  'signup.card.verified.lead': 'Tutto pronto: i tuoi contatti ti leggono nella loro lingua.',
+  'signup.submit': 'Iscriviti',
+  'signup.submit.busy': 'Iscrizione…',
+  'signup.talk': 'Parla con gli altri',
 };
 
 export default itSignup;

@@ -145,9 +145,9 @@ extension UniversalComposerBar {
                 )
                 .allowsHitTesting(false)
         )
-        .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
+        // La vague de frappe — une loi, deux hôtes (`TypingWave`, #8288).
+        .typingWave(typeWave, reduceMotion: reduceMotion)
         .scaleEffect(focusBounce ? 1.02 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.35), value: typeWave)
     }
 
     // MARK: - Recording Bar (full-width iMessage-style pill)
