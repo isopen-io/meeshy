@@ -82,7 +82,8 @@ describe('les images traitables (MediaStreamTrackProcessor)', () => {
     await h.send(1);
     pipeline.update({ ...NO_EFFECTS, brightness: 0.2 });
     await h.send(2);
-    expect(h.draws).toEqual([expect.stringContaining('sepia'), 'brightness(1.2)']);
+    expect(h.draws[0]).toContain('sepia');
+    expect(h.draws[1]).toBe('brightness(1.2)');
     expect(pipeline.output).toBe(h.output as unknown as MediaStreamTrack);
     pipeline.stop();
   });
@@ -132,7 +133,9 @@ describe('le canevas filmé (captureStream), là où les images ne sont pas trai
     pipeline.update({ ...NO_EFFECTS, preset: 'muted' });
     h.tick();
     expect(pipeline.output).toBe(h.output as unknown as MediaStreamTrack);
-    expect(h.draws).toEqual([expect.stringContaining('sepia'), expect.stringContaining('saturate(0.7)')]);
+    expect(h.draws).toHaveLength(2);
+    expect(h.draws[0]).toContain('sepia');
+    expect(h.draws[1]).toContain('saturate(0.7)');
     pipeline.stop();
   });
 

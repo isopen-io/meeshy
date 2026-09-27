@@ -39,6 +39,8 @@ export const callActions = {
   /** La pastille repliée en bulle déplaçable (#8046, `CallBubbleView.swift`). */
   collapse: (): void => run((engine) => engine.setDisplay('bubble')),
   toggleCaptions: (): void => run((engine) => engine.toggleCaptions()),
+  /** Un effet de ma vidéo a changé (#8442) : la piste envoyée le suit. */
+  refreshEffects: (): void => run((engine) => engine.refreshEffects()),
   answerWaiting: (): void => run((engine) => engine.answerWaiting()),
   declineWaiting: (): void => run((engine) => engine.declineWaiting()),
   retry: (): void => run((engine) => engine.retry()),
