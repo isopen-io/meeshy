@@ -109,7 +109,8 @@ describe('POST /admin/users/:userId/password-proposals (#8051)', () => {
     const body = response.json();
     expect(body.success).toBe(true);
     expect(Object.keys(body.data).sort()).toEqual([...PASSWORD_PROPOSAL_LEVELS].sort());
-    expect(body.data.simple).toMatch(/[2-9]{4}/);
+    expect(body.data.simple).toHaveLength(6);
+    expect(body.data.hard).toHaveLength(16);
     for (const level of PASSWORD_PROPOSAL_LEVELS) {
       expect(validatePasswordStrength(body.data[level]).isValid).toBe(true);
     }
