@@ -91,6 +91,7 @@ export async function linkCallRecording(
   const state = {
     ...toConsentState({
       ...recording,
+      kind: callRecordingKindOf(recording.kind),
       startedAt: recording.startedAt ?? null,
       stoppedAt: recording.stoppedAt ?? null,
       stopReason: recording.stopReason ?? null,
