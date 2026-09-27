@@ -1604,19 +1604,8 @@ struct ConversationView: View {
                     focalShareFileItem = FocalShareFileItem(url: url)
                 },
                 onMediaTap: { attachment in
-                    // #8009 — le relâcher d'un appui long n'ouvre rien : son menu est déjà là.
-                    guard !overlayState.showOverlayMenu else { return }
-                    // Préchauffe ce que le plein écran AFFICHE (variante élue, poster net).
-                    GalleryPrewarm.warm(attachment)
-                    // #7499 — une vue unique s'OUVRE au toucher et se consomme
-                    // à la FERMETURE. On arme ici, la galerie consomme en se
-                    // refermant (`ConversationView+MediaGallery`). C'est le
-                    // seul endroit qui voie les deux : la bulle sait qu'on
-                    // ouvre, elle ne sait pas quand on sort.
-                    if attachment.isViewOnce {
-                        scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
-                    }
-                    scrollState.galleryStartAttachment = attachment
+                    // Site partagé avec la citation de la Rivière (#8283).
+                    presentMediaFullscreen(attachment)
                 },
                 onConsumeViewOnce: { messageId, completion in
                     // #7618 — la puce d'une vue unique OUVRE : plein écran pour
@@ -1763,6 +1752,8 @@ struct ConversationView: View {
                     onConsumeViewOnce: { messageId, completion in
                         completion(openViewOnce(messageId: messageId))
                     },
+                    // #8283 — la citation d'un média s'ouvre dans le plein écran de Script.
+                    onOpenQuotedMedia: { reference in openQuotedMediaFromRiver(reference) },
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le

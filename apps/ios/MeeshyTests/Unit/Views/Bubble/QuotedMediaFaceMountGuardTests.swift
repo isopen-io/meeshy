@@ -43,6 +43,47 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         }
     }
 
+    /// #8283 — la Rivière monte les MÊMES atomes, par la MÊME règle, et ouvre
+    /// le MÊME plein écran : aucune jumelle de face ni d'élection de pièce.
+    func test_laRiviere_monteLesMemesFaces_etOuvreLeMemePleinEcran() throws {
+        let face = try source("Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift")
+        XCTAssertTrue(face.contains("QuotedReplyPresentation.mediaFace(for:"),
+                      "la face se lit par la règle partagée, qui tranche la protection d'abord")
+        XCTAssertTrue(face.contains("QuotedVideoPoster("))
+        XCTAssertTrue(face.contains("QuotedAudioPreview("))
+        XCTAssertTrue(face.contains("reference.quotedAttachment"),
+                      "le poster s'extrait de la pièce RECONSTRUITE, qui n'existe jamais pour un secret")
+
+        let mapping = try source("Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift")
+        XCTAssertTrue(mapping.contains("media: RiverQuotedMedia.resolve("),
+                      "la projection alimente la face — une vue montée sur ses défauts ne rougit nulle part")
+
+        let bubble = try source("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        XCTAssertTrue(bubble.contains("RiverQuotedMediaFace("))
+        let stream = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        XCTAssertTrue(stream.contains("onQuotedMediaTap: quotedMediaTap"))
+        let host = try source("Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift")
+        XCTAssertTrue(host.contains("onOpenQuotedMedia: onOpenQuotedMedia"))
+        let conversation = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+        XCTAssertTrue(conversation.contains("onOpenQuotedMedia: { reference in openQuotedMediaFromRiver(reference) }"))
+
+        // Deux petits fichiers : le plancher de `source(_:)` les refuserait,
+        // l'ancre ci-dessous suffit à prouver qu'ils sont lus.
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for path in [
+            "Meeshy/Features/Main/Views/ConversationView+MediaOpening.swift",
+            "Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift"
+        ] {
+            let code = AppSourceGuard.stripComments(
+                try String(contentsOf: appRoot.appendingPathComponent(path), encoding: .utf8))
+            XCTAssertTrue(code.contains("QuotedMediaOpening.attachment(for: reference"),
+                          "\(path) élit la pièce par la règle UNIQUE du Fil et de la Rivière")
+        }
+    }
+
     func test_laConversation_ouvreUnVocalCiteEnPleinEcranAudio_jamaisDansLaGalerie() throws {
         let layer = try source("Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift")
         XCTAssertTrue(layer.contains("if startAttachment.type == .audio {"),

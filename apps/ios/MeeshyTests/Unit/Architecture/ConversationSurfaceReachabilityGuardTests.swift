@@ -932,7 +932,9 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         XCTAssertTrue(galerie.contains("viewModel.consumeViewOnce(messageId:"),
                       "La consommation reste l'appel serveur existant, déplacé — pas réécrit.")
 
-        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        // #8283 — l'ouverture a quitté `ConversationView.body` pour le site
+        // partagé du Fil et de la Rivière.
+        let hôte = try source(at: "Features/Main/Views/ConversationView+MediaOpening.swift")
         XCTAssertTrue(hôte.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
                       "L'ouverture arme la consommation, sur le chemin qui ouvre la galerie.")
     }

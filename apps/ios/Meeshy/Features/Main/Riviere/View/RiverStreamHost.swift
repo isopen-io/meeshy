@@ -96,6 +96,10 @@ struct RiverStreamHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// #8283 — ouvre en plein écran le média d'une citation ; rend `false`
+    /// quand il n'y a rien d'honnête à ouvrir (média protégé, document, pièce
+    /// introuvable), et la citation retombe alors sur son saut (`openReply`).
+    var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -265,6 +269,16 @@ struct RiverStreamHost: View {
     /// `focusRank` lit (`readingLineRatio`), pour que la bande de couloirs
     /// nomme aussitôt la voix rejointe. Le couloir et le rang viennent du
     /// mapping, jamais recalculés ici.
+    /// Le plein écran d'abord, le saut ensuite : une zone média touchée
+    /// n'est jamais une cible morte.
+    private var quotedMediaTap: ((ReplyReference) -> Void)? {
+        guard let onOpenQuotedMedia else { return nil }
+        return { reference in
+            guard !onOpenQuotedMedia(reference) else { return }
+            openReply(reference.messageId)
+        }
+    }
+
     private func openReply(_ messageId: String) {
         guard let cursor = RiverConversationMapping.cursor(forMessageId: messageId, geometry: geometry) else { return }
         navigation.moveTo(cursor)
@@ -559,6 +573,7 @@ struct RiverStreamHost: View {
                 content: content,
                 contentWidth: columns.bubbleContentWidth,
                 onOpenReply: openReply,
+                onQuotedMediaTap: quotedMediaTap,
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,

@@ -104,6 +104,42 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(bob?.layout, geometry.layout)
     }
 
+    // MARK: - #8283 — la citation d'un média montre son aperçu
+
+    private func quoteContent(_ reference: ReplyReference) -> RiverBubbleContent? {
+        var reply = message("m2", sender: "bob", name: "Bob", minutes: 1, replyTo: "m1")
+        reply.replyTo = reference
+        let messages = [message("m1", sender: "alice", name: "Alice", minutes: 0), reply]
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        return RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "12:45" }
+        ).first { $0.bubble.messageId == "m2" }
+    }
+
+    func test_contents_quotedVideoWithoutThumbnail_carriesThePosterFace_andTheReferenceToOpen() {
+        let reference = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "",
+                                       attachmentType: "video/mp4", attachmentFileUrl: "https://cdn.meeshy.me/v.mp4")
+        let media = quoteContent(reference)?.replyPreview?.media
+        XCTAssertEqual(media?.face, .videoPoster, "la Rivière montre le MÊME poster que Bulles, Focal et Script")
+        XCTAssertEqual(media?.reference.attachmentFileUrl, "https://cdn.meeshy.me/v.mp4",
+                       "la zone média remet au plein écran la citation qui sait reconstruire la pièce")
+    }
+
+    func test_contents_quotedVoice_carriesTheAudioFace() {
+        let reference = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "", attachmentType: "audio/m4a")
+        XCTAssertEqual(quoteContent(reference)?.replyPreview?.media?.face, .audio)
+    }
+
+    func test_contents_quotedProtectedMedia_carriesNoFace() {
+        let reference = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "",
+                                       attachmentType: "video/mp4", attachmentThumbnailUrl: "https://cdn.meeshy.me/t.jpg",
+                                       attachmentFileUrl: "https://cdn.meeshy.me/v.mp4", attachmentIsProtected: true)
+        let preview = quoteContent(reference)?.replyPreview
+        XCTAssertNotNil(preview, "la citation reste — seul son aperçu disparaît")
+        XCTAssertNil(preview?.media, "un média protégé n'a ni aperçu ni ouverture, dans la Rivière comme ailleurs")
+    }
+
     func test_initialCursor_isTheMostRecentBubble_orTheReadersShoreWhenEmpty() {
         let messages = [message("m1", sender: "alice", minutes: 0), message("m2", sender: "bob", minutes: 1), message("m3", sender: "alice", minutes: 2)]
         let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))

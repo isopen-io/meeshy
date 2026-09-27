@@ -39,6 +39,8 @@ struct RiverConversationHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// #8283 — le plein écran du média cité, relayé jusqu'à la bulle.
+    var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
     /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
     /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
     /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
@@ -82,6 +84,7 @@ struct RiverConversationHost: View {
         onOpenInThread: ((String) -> Void)? = nil,
         onReply: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
+        onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -97,6 +100,7 @@ struct RiverConversationHost: View {
         self.onOpenInThread = onOpenInThread
         self.onReply = onReply
         self.onConsumeViewOnce = onConsumeViewOnce
+        self.onOpenQuotedMedia = onOpenQuotedMedia
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
@@ -202,6 +206,7 @@ struct RiverConversationHost: View {
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
                 onConsumeViewOnce: onConsumeViewOnce,
+                onOpenQuotedMedia: onOpenQuotedMedia,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)
