@@ -78,10 +78,22 @@ extension MessageListViewController {
         // reconfigurée : mesuré en CI (`LongMessageAnchorTests`, fenêtre
         // rattachée à la scène, 2 s d'attente), la hauteur restait celle de
         // l'extrait — le message ne se dépliait pas.
+        //
+        // La passe ne suffisait pas (#8232) : la correction de taille de la
+        // cellule traverse le PLAFOND d'invalidations partielles du layout, et
+        // un toucher qui suit un défilement dans le même tour le trouvait déjà
+        // consommé — correction avalée, jamais ré-émise (mesuré : 242 pt au lieu
+        // de 707 après 500 ms, alors que le contenu hébergé mesurait 707). Le
+        // geste rouvre le budget et redemande explicitement la taille des
+        // rangées reconfigurées.
         let timing = LongMessageExpansionLaw.heightTiming(reduceMotion: UIAccessibility.isReduceMotionEnabled)
         let before = timing.map { _ in captureHeightMotion() }
         UIView.performWithoutAnimation {
+            (collectionView.collectionViewLayout as? MessageListLayout)?.admitDeliberateResize()
             applyToDataSource(snapshot) {}
+            items.compactMap { dataSource.indexPath(for: $0) }
+                .compactMap { collectionView.cellForItem(at: $0) }
+                .forEach { $0.invalidateIntrinsicContentSize() }
             collectionView.layoutIfNeeded()
             holdAnchoredEdge()
         }

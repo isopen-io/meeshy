@@ -1,0 +1,32 @@
+import type { StudioChromeCatalogSlice } from './catalog-fr-studio-chrome';
+
+/** Composer plein écran (#8413) et panneau Cadre (#8414) — voir `catalog-fr-studio-chrome.ts`. */
+const deStudioChrome = {
+  'story.studio.more': 'Weitere Optionen',
+  'story.studio.preview': 'Vorschau',
+  'story.studio.preview.close': 'Vorschau schließen',
+  'story.studio.page.remove.current': 'Diese Szene löschen',
+  'story.studio.postText': 'Beitragstext',
+  'story.studio.postText.placeholder': 'Beitragstext schreiben…',
+  'story.studio.postText.done': 'Fertig',
+  'story.studio.tile.page': 'Szene',
+  'story.studio.tile.text': 'Text',
+  'story.studio.tile.editor': 'Einstellungen',
+  'story.studio.tile.frame': 'Rahmen',
+  'story.studio.undo': 'Rückgängig',
+  'story.studio.redo': 'Wiederholen',
+  'story.studio.frame': 'Rahmen',
+  'story.studio.frame.media': 'Das Medium',
+  'story.studio.frame.around': 'Um das Medium',
+  'story.studio.frame.fit': 'Einpassen',
+  'story.studio.frame.fill': 'Füllen',
+  'story.studio.frame.fit.hint': 'Vollständig im 9:16-Rahmen. Nichts wird beschnitten.',
+  'story.studio.frame.fill.hint': 'Füllt den ganzen 9:16-Rahmen und beschneidet dafür die Ränder.',
+  'story.studio.backdrop.blur': 'Unschärfe',
+  'story.studio.backdrop.black': 'Schwarz',
+  'story.studio.backdrop.white': 'Weiß',
+  'story.studio.backdrop.indigo': 'Indigo',
+  'story.studio.backdrop.sand': 'Sand',
+} satisfies StudioChromeCatalogSlice;
+
+export default deStudioChrome;

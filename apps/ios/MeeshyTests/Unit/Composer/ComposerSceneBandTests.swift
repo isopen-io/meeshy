@@ -236,8 +236,10 @@ final class ComposerSceneBandTests: XCTestCase {
     /// zone d'inspecteur du document documente déjà.
     func test_laBande_neSInsereParAucuneAnimation() throws {
         let code = try source("ComposerSceneSurface.swift")
-        guard let corps = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` de la surface de scène est introuvable")
+        // Le chrome de la scène vit dans `chromeLayer` depuis #8370 : le `body`
+        // n'empile plus que les calques, et c'est là que la bande s'insère.
+        guard let corps = declarationBody(startingAt: "private var chromeLayer: some View", in: code) else {
+            return XCTFail("Le calque de chrome de la surface de scène est introuvable")
         }
         let compacte = compact(corps)
         XCTAssertTrue(compacte.contains("ComposerSceneBandView("),

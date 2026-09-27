@@ -135,8 +135,13 @@ final class ComposerTrailingRailTests: XCTestCase {
         // (directive porteur 2026-08-30) : le ressort précède donc l'ensemble,
         // pas la seule boucle d'actions. C'est ce que ce témoin doit dire —
         // rien n'est peint au-dessus du ressort.
+        //
+        // **Le ressort est OPTIONNEL depuis #8370**, comme celui du rail
+        // *leading* : sur la scène plein écran, le rail FLOTTE et un ressort
+        // l'étirait sur toute la hauteur. Quand il est là, il précède toujours
+        // tout.
         let source = compact(try railSource())
-        XCTAssertTrue(source.contains("Spacer(minLength:0)ifletonAddSlide{"),
+        XCTAssertTrue(source.contains("ifpushesToThumb{Spacer(minLength:0)}ifletonAddSlide{"),
                       "Le ressort doit PRÉCÉDER tout ce qui se peint, `[+]` comprise.")
         XCTAssertTrue(source.contains("ForEach(actions,id:\\.self)"),
                       "Les contrôleurs de l'objet suivent la frame, jamais l'inverse.")

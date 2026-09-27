@@ -5,6 +5,7 @@ import deMediaHub from './catalog-de-media-hub';
 import deMediaViewer from './catalog-de-media-viewer';
 import deActivation from './catalog-de-activation';
 import deVerifyEmail from './catalog-de-verify-email';
+import deDevicePush from './catalog-de-device-push';
 import dePassword from './catalog-de-password';
 import deAccounts from './catalog-de-accounts';
 import deCall from './catalog-de-call';
@@ -23,6 +24,7 @@ import deSignup from './catalog-de-signup';
 
 import deGallery from './catalog-de-gallery';
 import deMentions from './catalog-de-mentions';
+import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
@@ -217,6 +219,7 @@ const de = {
   ...deVerifyEmail,
   ...deActivation,
   ...dePassword,
+  ...deDevicePush,
   ...deAccounts,
   ...deCall,
   ...deRowActions,
@@ -1158,6 +1161,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deStudioChrome,
   ...deEphemeral,
   ...deGallery,
   ...deConversationCard,

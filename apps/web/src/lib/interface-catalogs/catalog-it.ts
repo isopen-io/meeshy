@@ -5,6 +5,7 @@ import itMediaHub from './catalog-it-media-hub';
 import itMediaViewer from './catalog-it-media-viewer';
 import itActivation from './catalog-it-activation';
 import itVerifyEmail from './catalog-it-verify-email';
+import itDevicePush from './catalog-it-device-push';
 import itPassword from './catalog-it-password';
 import itAccounts from './catalog-it-accounts';
 import itCall from './catalog-it-call';
@@ -23,6 +24,7 @@ import itSignup from './catalog-it-signup';
 
 import itGallery from './catalog-it-gallery';
 import itMentions from './catalog-it-mentions';
+import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
@@ -217,6 +219,7 @@ const it = {
   ...itVerifyEmail,
   ...itActivation,
   ...itPassword,
+  ...itDevicePush,
   ...itAccounts,
   ...itCall,
   ...itRowActions,
@@ -1158,6 +1161,7 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itStudioChrome,
   ...itEphemeral,
   ...itGallery,
   ...itConversationCard,

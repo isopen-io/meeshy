@@ -85,9 +85,19 @@ public nonisolated enum StoryCanvasFraming {
     /// nomment les deux raisons HISTORIQUES du cardage : les retirer
     /// obligerait chaque appelant à re-prouver qu'il n'en avait pas besoin, et
     /// perdrait la trace de la règle qu'on vient d'inverser.
+    ///
+    /// **RETOURNÉE une seconde fois au #8370 (directive porteur 2026-09-27).**
+    /// La maquette plein écran (`docs/product/composer-plein-ecran/`) dit :
+    /// « la scène est en plein écran et le reste des contrôleurs sont par-dessus
+    /// la scène ». Elle supplante la carte de #4124 : au repos, la scène occupe
+    /// le viewport, et les contrôles flottent dessus en verre. Seul un PANNEAU
+    /// qui réduit la zone visible — band déployée, timeline — la carde encore,
+    /// pour qu'elle se rétracte au-dessus de lui plutôt que de s'y cacher : la
+    /// règle d'avant #4124, et `bandPresent` / `timelineActive` en redeviennent
+    /// les raisons. Les deux immersions (dessin, texte) l'emportent toujours.
     public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
         guard !textActive, !drawingActive else { return false }
-        return true
+        return bandPresent || timelineActive
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.

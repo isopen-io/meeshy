@@ -5,6 +5,7 @@ import enMediaHub from './catalog-en-media-hub';
 import enMediaViewer from './catalog-en-media-viewer';
 import enActivation from './catalog-en-activation';
 import enVerifyEmail from './catalog-en-verify-email';
+import enDevicePush from './catalog-en-device-push';
 import enPassword from './catalog-en-password';
 import enAccounts from './catalog-en-accounts';
 import enCall from './catalog-en-call';
@@ -23,6 +24,7 @@ import enSignup from './catalog-en-signup';
 
 import enGallery from './catalog-en-gallery';
 import enMentions from './catalog-en-mentions';
+import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
@@ -217,6 +219,7 @@ const en = {
   ...enVerifyEmail,
   ...enActivation,
   ...enPassword,
+  ...enDevicePush,
   ...enAccounts,
   ...enCall,
   ...enRowActions,
@@ -1158,6 +1161,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enStudioChrome,
   ...enEphemeral,
   ...enGallery,
   ...enConversationCard,

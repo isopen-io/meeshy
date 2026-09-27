@@ -23,6 +23,7 @@ import {
   type InterfaceLanguage,
 } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { useDevicePushRow } from '@/lib/push/use-device-push';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
@@ -113,6 +114,7 @@ export default function SettingsScreen() {
   const droits = useQuery(adminIdentityQueryOptions(apiDeps));
   const peutAdministrer = canEnterAdmin(droits.data?.permissions ?? null);
   const online = useOnline();
+  const devicePush = useDevicePushRow();
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
   const query = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled }, appQueryClient);
@@ -187,6 +189,7 @@ export default function SettingsScreen() {
           />
           <NotificationsSection
             language={language}
+            device={devicePush}
             view={view}
             disabled={!online}
             onToggle={toggle}

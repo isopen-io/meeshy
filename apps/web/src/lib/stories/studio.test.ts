@@ -14,6 +14,8 @@ import {
   withAddedPage,
   withAddedText,
   withAudience,
+  withBackgroundFrame,
+  withPostText,
   withCurrentPage,
   withPage,
   withSound,
@@ -383,5 +385,45 @@ describe('l’audience du brouillon (#7683) — voyage, jamais un défaut recopi
 
   test('une audience seule ne tient pas un brouillon en vie (la mémoire s’en charge)', () => {
     expect(isStudioDraftEmpty(withAudience(emptyStudioDraft('fr'), 'FRIENDS'))).toBe(true);
+  });
+});
+
+describe('le Cadre du fond (#8414) — posé sur la page COURANTE, persisté, jamais sans fond', () => {
+  test('Remplir + sable se lit sur le fond de la page courante', () => {
+    const draft = withBackgroundFrame(withVisual(empty(), 'visual', visualAsset()), { fitMode: 'fill', backdrop: 'sand' });
+    expect(currentStudioPage(draft).background?.frame).toEqual({ fitMode: 'fill', backdrop: 'sand' });
+  });
+
+  test('sans fond, le Cadre ne change rien', () => {
+    const draft = empty();
+    expect(withBackgroundFrame(draft, { fitMode: 'fill', backdrop: 'sand' })).toBe(draft);
+  });
+
+  test('le Cadre fait l’aller-retour du brouillon persisté ; une valeur inconnue se relit ajusté/flou', () => {
+    const ready = withVisualUpload(withVisual(empty(), 'visual', visualAsset()), 'visual', { phase: 'ready', postMediaId: 'pm-bg', fileUrl: 'bg.jpg' });
+    const framed = withBackgroundFrame(ready, { fitMode: 'fill', backdrop: 'indigo' });
+    const snapshot = studioSnapshotOf(framed, 'fr');
+    expect(snapshot.pages[0]!.background?.frame).toEqual({ fitMode: 'fill', backdrop: 'indigo' });
+    expect(currentStudioPage(studioDraftFromSnapshot(snapshot, (u) => u, 'fr')).background?.frame).toEqual({ fitMode: 'fill', backdrop: 'indigo' });
+
+    const corrupted = { ...snapshot, pages: [{ ...snapshot.pages[0]!, background: { ...snapshot.pages[0]!.background!, frame: { fitMode: 'x', backdrop: 'y' } } }] };
+    expect(currentStudioPage(studioDraftFromSnapshot(corrupted, (u) => u, 'fr')).background?.frame).toEqual({ fitMode: 'fit', backdrop: 'blur' });
+  });
+});
+
+describe('le texte du POST (#8413) — le corps de la publication, un concept de brouillon', () => {
+  test('vide par défaut, écrit par `withPostText`', () => {
+    expect(empty().postText).toBe('');
+    expect(withPostText(empty(), 'Bonjour à tous').postText).toBe('Bonjour à tous');
+  });
+
+  test('il fait l’aller-retour du brouillon persisté', () => {
+    const snapshot = studioSnapshotOf(withPostText(typed('Une'), 'Le corps'), 'fr');
+    expect(snapshot.postText).toBe('Le corps');
+    expect(studioDraftFromSnapshot(snapshot, (u) => u, 'fr').postText).toBe('Le corps');
+  });
+
+  test('vide, il ne s’écrit pas', () => {
+    expect(studioSnapshotOf(typed('Une'), 'fr').postText).toBeUndefined();
   });
 });

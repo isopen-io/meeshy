@@ -11,6 +11,7 @@
  */
 import frGallery from './catalog-fr-gallery';
 import frMentions from './catalog-fr-mentions';
+import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
@@ -20,6 +21,7 @@ import frMediaHub from './catalog-fr-media-hub';
 import frMediaViewer from './catalog-fr-media-viewer';
 import frActivation from './catalog-fr-activation';
 import frVerifyEmail from './catalog-fr-verify-email';
+import frDevicePush from './catalog-fr-device-push';
 import frPassword from './catalog-fr-password';
 import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
@@ -207,6 +209,7 @@ const fr = {
   ...frVerifyEmail,
   ...frActivation,
   ...frPassword,
+  ...frDevicePush,
   ...frAccounts,
   ...frCall,
   ...frRowActions,
@@ -1155,6 +1158,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frStudioChrome,
   ...frEphemeral,
   ...frGallery,
   ...frConversationCard,

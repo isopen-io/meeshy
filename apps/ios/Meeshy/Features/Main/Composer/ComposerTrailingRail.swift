@@ -60,6 +60,19 @@ struct ComposerTrailingRail: View {
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
+    /// **Le ressort qui pousse vers le pouce** — le même contrat que
+    /// `ComposerLeadingRail.pushesToThumb`. Sur la scène plein écran (#8370), le
+    /// rail FLOTTE au bas de la scène libre : un ressort l'y étirait sur toute la
+    /// hauteur, colonne de verre vide au-dessus du `[+]`.
+    var pushesToThumb: Bool = true
+
+    /// **Des TUILES libellées, comme la création de post** (directive porteur
+    /// 2026-09-27 : « la barre droite doit être similaire au mode pour la
+    /// création de post »). Chaque entrée devient une carte — icône, libellé
+    /// dessous, rayon 14 — portant son propre verre teinté, puisqu'elle flotte
+    /// sur la scène. La colonne nue reste le défaut, pour l'éditeur d'objet.
+    var labeledTiles: Bool = false
+
     @State private var lastTapped: String?
 
     /// **Le rail EXISTE dès qu'il a le `[+]`**, même sans objet sélectionné.
@@ -72,8 +85,76 @@ struct ComposerTrailingRail: View {
 
     var body: some View {
         if !isEmpty {
+            if labeledTiles { tiles } else { column }
+        }
+    }
+
+    private var tiles: some View {
+        VStack(spacing: 8) {
+            if let onAddSlide {
+                tile(symbol: "plus.rectangle.on.rectangle",
+                     label: ComposerTrailingRailCopy.addSlide,
+                     color: MeeshyColors.textPrimary(isDark: true),
+                     key: "slide.add") { onAddSlide() }
+            }
+            ForEach(actions, id: \.self) { action in
+                tile(symbol: action.systemImage,
+                     label: action.title,
+                     color: action == .delete ? MeeshyColors.error : MeeshyColors.textSecondary(isDark: true),
+                     key: String(describing: action)) { onAction?(action) }
+            }
+            if let onUndo {
+                tile(symbol: "arrow.uturn.backward", label: ComposerHistoryCopy.undo,
+                     color: MeeshyColors.textPrimary(isDark: true), key: "undo", action: onUndo)
+            }
+            if let onRedo {
+                tile(symbol: "arrow.uturn.forward", label: ComposerHistoryCopy.redo,
+                     color: MeeshyColors.textPrimary(isDark: true), key: "redo", action: onRedo)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(ComposerTrailingRailCopy.railLabel))
+    }
+
+    /// La tuile de la création de post (`ComposerDocumentSurface.toolButton`) :
+    /// icône `.title3` hiérarchique, libellé `.caption2` dessous, carte de 14.
+    private func tile(symbol: String,
+                      label: String,
+                      color: Color,
+                      key: String,
+                      action: @escaping () -> Void) -> some View {
+        Button {
+            lastTapped = key
+            action()
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .composerToolBounce(active: lastTapped == key)
+                Text(label)
+                    .font(.caption2)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundColor(color)
+            .frame(width: ComposerRailGeometry.tileWidth)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 4)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                           tint: plateauTint.opacity(0.55))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+    }
+
+    private var column: some View {
+        Group {
             VStack(spacing: 10) {
-                Spacer(minLength: 0)
+                if pushesToThumb { Spacer(minLength: 0) }
                 // **`[+]` TOUT EN HAUT**, jamais mêlée aux contrôleurs de
                 // l'objet : elle n'agit pas sur le même niveau du modèle. Les
                 // contrôleurs modifient UN objet ; celle-ci ajoute une PAGE à

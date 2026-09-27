@@ -134,9 +134,7 @@ struct CallOutputPillButton: View {
     }
 
     private var spokenValue: String {
-        let state = isSpeaker
-            ? String(localized: "a11y.toggle.on", defaultValue: "Activé", bundle: .main)
-            : String(localized: "a11y.toggle.off", defaultValue: "Désactivé", bundle: .main)
+        let state = ToggleStateLabel.text(isActive: isSpeaker)
         guard let route = model.state.output?.name, !route.isEmpty else { return state }
         return "\(state), \(route)"
     }

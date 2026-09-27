@@ -184,8 +184,10 @@ extension CallView {
                     .frame(width: 120 + CGFloat(index) * 30, height: 120 + CGFloat(index) * 30)
                     .scaleEffect(pulseScale)
                     .opacity(2.0 - Double(pulseScale) * 0.8)
+                    // Reduce Motion : aucune boucle, les anneaux restent posés
+                    // (`startPulseAnimation` ne fait déjà pas varier `pulseScale`).
                     .animation(
-                        .easeInOut(duration: 1.5)
+                        reduceMotion ? nil : .easeInOut(duration: 1.5)
                             .repeatForever(autoreverses: true)
                             .delay(Double(index) * 0.3),
                         value: pulseScale

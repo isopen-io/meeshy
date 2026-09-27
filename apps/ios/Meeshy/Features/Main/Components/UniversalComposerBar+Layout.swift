@@ -157,139 +157,120 @@ extension UniversalComposerBar {
 
     private var expandedComposer: some View {
         VStack(spacing: 0) {
-            // Edit banner
-            if let banner = editBanner { banner }
-            // Reply banner
-            if let banner = replyBanner { banner }
-
-            // Custom attachments (real thumbnails from parent) or default chips
-            if let custom = customAttachmentsPreview {
-                custom
-                    .transition(.scale.combined(with: .opacity))
-            } else if !allAttachments.isEmpty {
-                attachmentsPreview
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            // Swipe handle indicator
+            if startMinimized {
+                swipeHandle
             }
 
-            // Clipboard content preview (for pasted text > 2000 chars)
-            if let clip = clipboardContent {
-                clipboardContentPreview(clip)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            // Ce qui accompagne le message — réponse, édition, pièces
+            // jointes, presse-papiers — vit DANS le verre (#8417).
+            panelHeader
 
-            // Main composer
-            VStack(spacing: 0) {
-                // Swipe handle indicator
-                if startMinimized {
-                    swipeHandle
-                }
-
-                // Les rails qui s'ouvrent au-dessus de la barre d'outils gardent
-                // une marge avec le bord du verre (#7966) : leur propre
-                // `.padding(.horizontal, 8)` sur les côtés, celle-ci en haut.
-                if showEphemeralPicker {
-                    ephemeralDurationPicker
-                        .padding(.top, Self.railTopInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                // Les effets du message s'ouvrent comme la durée éphémère : un
-                // petit panneau dans le verre, jamais une feuille (#7967).
-                if showEffectsPanel {
-                    EffectsPickerView(
-                        flags: pendingEffects.flags,
-                        accent: servedAccent,
-                        muted: mutedColor,
-                        surface: railSurface
-                    )
-                    .padding(.horizontal, 8)
+            // Les rails qui s'ouvrent au-dessus de la barre d'outils gardent
+            // une marge avec le bord du verre (#7966) : leur propre
+            // `.padding(.horizontal, 8)` sur les côtés, celle-ci en haut.
+            if showEphemeralPicker {
+                ephemeralDurationPicker
                     .padding(.top, Self.railTopInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+            }
 
-                // Permanent effects inline picker (for comments)
-                if showPermanentEffectsPicker {
-                    permanentEffectsInlinePicker
-                        .padding(.top, Self.railTopInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+            // Les effets du message s'ouvrent comme la durée éphémère : un
+            // petit panneau dans le verre, jamais une feuille (#7967).
+            if showEffectsPanel {
+                EffectsPickerView(
+                    flags: pendingEffects.flags,
+                    accent: servedAccent,
+                    muted: mutedColor,
+                    surface: railSurface
+                )
+                .padding(.horizontal, 8)
+                .padding(.top, Self.railTopInset)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
-                // Top toolbar (ephemeral, sentiment, language, char counter)
-                // Hidden during recording for a clean, iMessage-like full-width bar
-                if !effectiveIsRecording {
-                    topToolbar
-                        .padding(.horizontal, 8)
-                        .padding(.top, 6)
-                        .padding(.bottom, 2)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+            // Permanent effects inline picker (for comments)
+            if showPermanentEffectsPicker {
+                permanentEffectsInlinePicker
+                    .padding(.top, Self.railTopInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
-                // Composer row — either the recording bar (full-width pill, iMessage-style)
-                // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
-                if effectiveIsRecording {
-                    recordingBar
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .transition(
-                            reduceMotion
-                                ? .opacity
-                                : .asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.96)),
-                                    removal: .opacity
-                                )
-                        )
-                } else {
-                    // Gras, italique, souligné, barré — dès qu'un mot est
-                    // sélectionné (#7849, iOS 18+).
-                    if showsFormatBar {
-                        ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 6)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
-                    HStack(alignment: .bottom, spacing: 12) {
-                        // Left: (+) attach / keyboard toggle button
-                        if resolvedShowAttachment {
-                            attachButton
-                        }
+            // Top toolbar (ephemeral, sentiment, language, char counter)
+            // Hidden during recording for a clean, iMessage-like full-width bar
+            if !effectiveIsRecording {
+                topToolbar
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+                    .padding(.bottom, 2)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
-                        // Center: text field. While the carousel is up, an
-                        // overlay intercepts taps to bring the keyboard back
-                        // (the field isn't focused then). When the keyboard is
-                        // already up there is no overlay, so the TextField keeps
-                        // its native tap-to-place-cursor behaviour.
-                        textInputField
-                            .overlay {
-                                if showAttachOptions {
-                                    Color.clear
-                                        .contentShape(Rectangle())
-                                        .onTapGesture { focusTextField() }
-                                }
-                            }
-
-                        // Right: send (when content) or hidden (idle)
-                        actionButton
-                    }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
+            // Composer row — either the recording bar (full-width pill, iMessage-style)
+            // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
+            if effectiveIsRecording {
+                recordingBar
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .transition(.opacity)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                removal: .opacity
+                            )
+                    )
+            } else {
+                // Gras, italique, souligné, barré — dès qu'un mot est
+                // sélectionné (#7849, iOS 18+).
+                if showsFormatBar {
+                    ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 6)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
+                HStack(alignment: .bottom, spacing: 12) {
+                    // Left: (+) attach / keyboard toggle button
+                    if resolvedShowAttachment {
+                        attachButton
+                    }
 
-                // Attachment carousel — slides up in the keyboard's place when
-                // the (+) toggle is active. Sized to the last known keyboard
-                // height so swapping keyboard <-> carousel keeps the input row
-                // perfectly still.
-                if showAttachOptions && !effectiveIsRecording {
-                    attachmentCarouselPanel
-                        .frame(height: attachmentPanelHeight)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    // Center: text field. While the carousel is up, an
+                    // overlay intercepts taps to bring the keyboard back
+                    // (the field isn't focused then). When the keyboard is
+                    // already up there is no overlay, so the TextField keeps
+                    // its native tap-to-place-cursor behaviour.
+                    textInputField
+                        .overlay {
+                            if showAttachOptions {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { focusTextField() }
+                            }
+                        }
+
+                    // Right: send (when content) or hidden (idle)
+                    actionButton
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .transition(.opacity)
             }
-            .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 4)
+
+            // Attachment carousel — slides up in the keyboard's place when
+            // the (+) toggle is active. Sized to the last known keyboard
+            // height so swapping keyboard <-> carousel keeps the input row
+            // perfectly still.
+            if showAttachOptions && !effectiveIsRecording {
+                attachmentCarouselPanel
+                    .frame(height: attachmentPanelHeight)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
@@ -452,6 +433,47 @@ extension UniversalComposerBar {
             }
         }
     }
+
+    // ========================================================================
+    // MARK: - En-tête du verre
+    // ========================================================================
+
+    /// **Ce qui accompagne le message vit dans le verre** (#8417, directive
+    /// porteur 2026-09-27). Les bandeaux de l'hôte — cartes arrondies du fil
+    /// comme bandes plates de la story — prennent la forme d'une carte posée
+    /// sur la plaque, avec la marge des rails (#7966).
+    @ViewBuilder
+    var panelHeader: some View {
+        if editBanner != nil || replyBanner != nil {
+            VStack(spacing: 6) {
+                if let banner = editBanner { banner.clipShape(Self.bannerShape) }
+                if let banner = replyBanner { banner.clipShape(Self.bannerShape) }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, Self.railTopInset)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        // Custom attachments (real thumbnails from parent) or default chips
+        if let custom = customAttachmentsPreview {
+            custom
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+                .transition(.scale.combined(with: .opacity))
+        } else if !allAttachments.isEmpty {
+            attachmentsPreview
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        // Clipboard content preview (for pasted text > 2000 chars)
+        if let clip = clipboardContent {
+            clipboardContentPreview(clip)
+                .padding(.top, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    static let bannerShape = RoundedRectangle(cornerRadius: 14, style: .continuous)
 
     // ========================================================================
     // MARK: - Panneau de verre

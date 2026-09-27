@@ -5,6 +5,7 @@ import arMediaHub from './catalog-ar-media-hub';
 import arMediaViewer from './catalog-ar-media-viewer';
 import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
+import arDevicePush from './catalog-ar-device-push';
 import arPassword from './catalog-ar-password';
 import arAccounts from './catalog-ar-accounts';
 import arCall from './catalog-ar-call';
@@ -23,6 +24,7 @@ import arSignup from './catalog-ar-signup';
 
 import arGallery from './catalog-ar-gallery';
 import arMentions from './catalog-ar-mentions';
+import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
@@ -217,6 +219,7 @@ const ar = {
   ...arVerifyEmail,
   ...arActivation,
   ...arPassword,
+  ...arDevicePush,
   ...arAccounts,
   ...arCall,
   ...arRowActions,
@@ -1155,6 +1158,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arStudioChrome,
   ...arEphemeral,
   ...arGallery,
   ...arConversationCard,

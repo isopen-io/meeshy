@@ -875,7 +875,7 @@ export const POST_SCENE_DECORATED: FeedPost = {
             // n'en passe aucune) — est désormais RÉSOLUE dans le moteur
             // (`scene-player.tsx#SceneCanvas`, `bg1.payload.thumbHash`
             // ci-dessus) ; la pastille RESTE, en défense en profondeur —
-            // le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85), jamais 1.
+            // le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85) sur du noir.
             payload: { text: 'Ça bouge !', textColor: '#FFFFFF', textBg: '#4338CA' },
           },
           {

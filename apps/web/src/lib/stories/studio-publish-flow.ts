@@ -63,6 +63,18 @@ export async function runStudioPublish(params: {
 }
 
 /**
+ * **LE CORPS D'UNE PUBLICATION** (#8413) — le texte du post ne part que sous
+ * un POST : une story et un réel n'ont pas de corps, tout leur texte vit dans
+ * la scène (`storyEffects`, défaut 4 de #6900). Rogné, et absent s'il est
+ * vide : la passerelle ne reçoit jamais un `content` blanc.
+ */
+export function studioPublicationContent(params: { readonly kind: PublicationKind; readonly postText: string }): string | undefined {
+  if (params.kind !== 'POST') return undefined;
+  const content = params.postText.trim();
+  return content === '' ? undefined : content;
+}
+
+/**
  * **L'ENVOI RÉEL D'UN PLAN** (#7707) — construit la requête `POST
  * posts.root` de CHAQUE publication (`publishStory`, le port UNIQUE, qui
  * rejoue la garde `MEDIA_NOT_CLAIMED` par requête) et la fait passer par
@@ -77,9 +89,13 @@ export function publishStudioPlan(params: {
   readonly kind: PublicationKind;
   readonly visibility: ChoosableAudience | null;
   readonly language: string;
+  /** Le texte du post du brouillon (#8413) — `studioPublicationContent`
+   * décide s'il part. */
+  readonly postText?: string;
   readonly onPublished?: (event: StudioPublishedEvent) => void;
   readonly signal?: AbortSignal;
 }): Promise<StudioPublishOutcome> {
+  const content = studioPublicationContent({ kind: params.kind, postText: params.postText ?? '' });
   return runStudioPublish({
     plan: params.plan,
     ...(params.onPublished !== undefined ? { onPublished: params.onPublished } : {}),
@@ -92,7 +108,10 @@ export function publishStudioPlan(params: {
         // défaut reste une règle SERVEUR (`core.ts:421`) — jamais un défaut
         // recopié ici.
         ...(params.visibility !== null ? { visibility: params.visibility } : {}),
-        ...(publication.hasText ? { originalLanguage: params.language } : {}),
+        // Le corps porte AUSSI une langue : un post dont seul le corps est
+        // écrit la déclare, comme un post dont la scène porte du texte.
+        ...(publication.hasText || content !== undefined ? { originalLanguage: params.language } : {}),
+        ...(content !== undefined ? { content } : {}),
         ...(publication.mediaCaption !== undefined ? { mediaCaption: publication.mediaCaption } : {}),
         storyEffects: publication.storyEffects,
         mediaIds: publication.mediaIds,

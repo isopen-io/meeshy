@@ -5,6 +5,7 @@ import ptMediaHub from './catalog-pt-media-hub';
 import ptMediaViewer from './catalog-pt-media-viewer';
 import ptActivation from './catalog-pt-activation';
 import ptVerifyEmail from './catalog-pt-verify-email';
+import ptDevicePush from './catalog-pt-device-push';
 import ptPassword from './catalog-pt-password';
 import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
@@ -23,6 +24,7 @@ import ptSignup from './catalog-pt-signup';
 
 import ptGallery from './catalog-pt-gallery';
 import ptMentions from './catalog-pt-mentions';
+import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
@@ -221,6 +223,7 @@ const pt = {
   ...ptVerifyEmail,
   ...ptActivation,
   ...ptPassword,
+  ...ptDevicePush,
   ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
@@ -1162,6 +1165,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptStudioChrome,
   ...ptEphemeral,
   ...ptGallery,
   ...ptConversationCard,

@@ -4,6 +4,8 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { gripPose, keyboardPose, pointerFraction, type GripOrigin } from '@/lib/stories/studio-grip';
 import type { StudioPose } from '@/lib/stories/studio-pose';
+import { snapPose, type SnapEngaged } from '@/lib/stories/studio-snap';
+import { StudioManipulationLimits } from '@/routes/story-compose-limits';
 
 /**
  * **LES POIGNÉES DU PLATEAU** (#6943) — ce par quoi un objet se DÉPLACE,
@@ -19,6 +21,11 @@ import type { StudioPose } from '@/lib/stories/studio-pose';
  *    `SceneObjectFrame.applyPose` écrit (`left`, `top`, `transform`) ; l'état
  *    React n'est touché qu'au RELÂCHEMENT. Une vue re-rendue à chaque image
  *    de pointeur ne peut pas être fluide.
+ *  - **le bord et les aimants se voient PENDANT le geste** (#8413) — le
+ *    contour de la scène et les lignes magnétiques (`StudioManipulationLimits`)
+ *    ne se montent qu'entre l'appui et le relâchement, et l'état React ne
+ *    change qu'à l'ENTRÉE ou à la SORTIE d'un aimant, jamais à chaque image ;
+ *    le déplacement s'aimante aux cibles d'iOS (`studio-snap.ts`).
  *  - **tout ce que le pointeur fait, le clavier le fait** — les poignées sont
  *    des `<button>` focusables, et `keyboardPose` y traduit flèches, `+`/`−`
  *    et `[`/`]`. Un plateau qui ne s'exploite qu'à la souris n'est pas livré
@@ -69,10 +76,24 @@ export type StudioHandlesProps = {
 export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCommit }: StudioHandlesProps) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState<{ readonly width: number; readonly height: number } | null>(null);
+  /** L'aimant ENGAGÉ pendant un geste — `null` au repos (rien ne se peint). */
+  const [gesture, setGesture] = useState<SnapEngaged | null>(null);
+  const engagedRef = useRef<SnapEngaged | null>(null);
+  const engage = useCallback((next: SnapEngaged | null) => {
+    gesturing.current = next !== null;
+    const current = engagedRef.current;
+    if (current === next || (current !== null && next !== null && current.x === next.x && current.y === next.y)) return;
+    engagedRef.current = next;
+    setGesture(next);
+  }, []);
   // La pose EN COURS de geste — une ref, jamais un état : la lire ne doit
   // provoquer aucun rendu.
   const live = useRef(pose);
-  live.current = pose;
+  // PENDANT un geste, la pose vivante n'est plus celle du parent : l'aimant
+  // qui s'engage re-rend ce composant, et relire `pose` ici ramènerait
+  // l'objet à son point de départ au milieu du geste.
+  const gesturing = useRef(false);
+  if (!gesturing.current) live.current = pose;
 
   /** L'élément que le MOTEUR a peint pour CET objet — retrouvé à chaque
    * mesure, jamais mémorisé : la scène se re-rend à chaque frappe, et un
@@ -129,14 +150,18 @@ export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCo
     const stage = stageBox();
     const start = pointerFraction(stage, event.clientX, event.clientY);
     const origin = live.current;
+    engage(FREE);
     const move = (e: PointerEvent) => {
       const at = pointerFraction(stageBox(), e.clientX, e.clientY);
-      applyLive({ ...live.current, x: clamp01(origin.x + (at.x - start.x)), y: clamp01(origin.y + (at.y - start.y)) });
+      const snapped = snapPose({ ...live.current, x: clamp01(origin.x + (at.x - start.x)), y: clamp01(origin.y + (at.y - start.y)) });
+      applyLive(snapped.pose);
+      engage(snapped.engaged);
     };
     const end = () => {
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', end);
       target.removeEventListener('pointercancel', end);
+      engage(null);
       onCommit(live.current);
     };
     target.addEventListener('pointermove', move);
@@ -157,11 +182,13 @@ export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCo
       scale: live.current.scale,
       rotation: live.current.rotation,
     };
+    engage(FREE);
     const move = (e: PointerEvent) => applyLive(gripPose(live.current, origin, e.clientX, e.clientY));
     const end = () => {
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', end);
       target.removeEventListener('pointercancel', end);
+      engage(null);
       onCommit(live.current);
     };
     target.addEventListener('pointermove', move);
@@ -181,67 +208,77 @@ export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCo
   if (box === null) return null;
 
   return (
-    <div
-      ref={frameRef}
-      data-story-object-frame
-      className="absolute"
-      style={{
-        width: box.width,
-        height: box.height,
-        left: `${pose.x * 100}%`,
-        top: `${pose.y * 100}%`,
-        transform: `translate(-50%, -50%) rotate(${pose.rotation}deg) scale(${pose.scale})`,
-        outline: '1px dashed rgba(255,255,255,0.85)',
-        outlineOffset: 4,
-        pointerEvents: 'none',
-      }}
-    >
-      <button
-        type="button"
-        data-story-object-move
-        aria-label={translate(lang, 'story.studio.pose.handle', { name })}
-        title={translate(lang, 'story.studio.pose.handle', { name })}
-        onPointerDown={onMoveDown}
-        onKeyDown={onKey}
-        className="absolute grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+    <>
+      {gesture !== null ? <StudioManipulationLimits engaged={gesture} /> : null}
+      <div
+        ref={frameRef}
+        data-story-object-frame
+        className="absolute"
         style={{
-          width: TARGET,
-          height: TARGET,
-          insetInlineStart: -TARGET / 2,
-          top: -TARGET / 2,
-          pointerEvents: 'auto',
-          touchAction: 'none',
-          color: '#fff',
-          backgroundColor: 'rgba(0,0,0,0.55)',
-          outlineColor: 'var(--color-ios-brand)',
+          width: box.width,
+          height: box.height,
+          left: `${live.current.x * 100}%`,
+          top: `${live.current.y * 100}%`,
+          transform: `translate(-50%, -50%) rotate(${live.current.rotation}deg) scale(${live.current.scale})`,
+          outline: '1px dashed rgba(255,255,255,0.85)',
+          outlineOffset: 4,
+          pointerEvents: 'none',
+          // AU-DESSUS de la saisie transparente (`zIndex: 2`) : sans cela un
+          // texte long recouvrait ses propres poignées, et l'appui partait
+          // dans le champ au lieu de saisir l'objet.
+          zIndex: 5,
         }}
       >
-        <span aria-hidden="true">✥</span>
-      </button>
-      <button
-        type="button"
-        data-story-object-grip
-        aria-label={translate(lang, 'story.studio.pose.grip', { name })}
-        title={translate(lang, 'story.studio.pose.grip', { name })}
-        onPointerDown={onGripDown}
-        onKeyDown={onKey}
-        className="absolute grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{
-          width: TARGET,
-          height: TARGET,
-          insetInlineEnd: -TARGET / 2,
-          bottom: -TARGET / 2,
-          pointerEvents: 'auto',
-          touchAction: 'none',
-          color: '#fff',
-          backgroundColor: 'rgba(0,0,0,0.55)',
-          outlineColor: 'var(--color-ios-brand)',
-        }}
-      >
-        <span aria-hidden="true">⤡</span>
-      </button>
-    </div>
+        <button
+          type="button"
+          data-story-object-move
+          aria-label={translate(lang, 'story.studio.pose.handle', { name })}
+          title={translate(lang, 'story.studio.pose.handle', { name })}
+          onPointerDown={onMoveDown}
+          onKeyDown={onKey}
+          className="absolute grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{
+            width: TARGET,
+            height: TARGET,
+            insetInlineStart: -TARGET / 2,
+            top: -TARGET / 2,
+            pointerEvents: 'auto',
+            touchAction: 'none',
+            color: '#fff',
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            outlineColor: 'var(--color-ios-brand)',
+          }}
+        >
+          <span aria-hidden="true">✥</span>
+        </button>
+        <button
+          type="button"
+          data-story-object-grip
+          aria-label={translate(lang, 'story.studio.pose.grip', { name })}
+          title={translate(lang, 'story.studio.pose.grip', { name })}
+          onPointerDown={onGripDown}
+          onKeyDown={onKey}
+          className="absolute grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{
+            width: TARGET,
+            height: TARGET,
+            insetInlineEnd: -TARGET / 2,
+            bottom: -TARGET / 2,
+            pointerEvents: 'auto',
+            touchAction: 'none',
+            color: '#fff',
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            outlineColor: 'var(--color-ios-brand)',
+          }}
+        >
+          <span aria-hidden="true">⤡</span>
+        </button>
+      </div>
+    </>
   );
 }
+
+/** Un geste commencé, aucun aimant encore engagé. */
+const FREE: SnapEngaged = { x: null, y: null };
 
 const clamp01 = (value: number): number => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5);

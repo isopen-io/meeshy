@@ -252,6 +252,7 @@ extension StoryCanvasUIView {
             }
             manipulatedItemId = id
             baseScale = currentScale(forId: id) ?? 1.0
+            showManipulationLimits()
             if id != backgroundMediaObjectId {
                 bringForegroundToFront(id: id)
             }
@@ -270,6 +271,7 @@ extension StoryCanvasUIView {
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -303,6 +305,7 @@ extension StoryCanvasUIView {
             }
             manipulatedItemId = id
             baseRotation = currentRotation(forId: id) ?? 0
+            showManipulationLimits()
             bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId else { return }
@@ -316,6 +319,7 @@ extension StoryCanvasUIView {
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -336,6 +340,7 @@ extension StoryCanvasUIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+            showManipulationLimits()
             lastBgSnapX = nil
             lastBgSnapY = nil
 
@@ -403,6 +408,7 @@ extension StoryCanvasUIView {
             lastBgSnapX = nil
             lastBgSnapY = nil
             hideSnapGuides()
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
