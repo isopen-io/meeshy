@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frMentions from './catalog-fr-mentions';
+import frEphemeral from './catalog-fr-ephemeral';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
@@ -1154,6 +1155,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frEphemeral,
   ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).

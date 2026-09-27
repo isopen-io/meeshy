@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import {
+  EPHEMERAL_AFTER_READ_SECONDS,
   EPHEMERAL_DURATIONS,
+  isAfterReadChoice,
   characterCounterOf,
   composerAccentOf,
   ephemeralDurationLabelOf,
@@ -138,18 +140,63 @@ describe('flou et vue unique sont exclusifs (#7667)', () => {
   });
 });
 
-describe('EPHEMERAL_DURATIONS — les cinq durées et leurs deux libellés (CoreModels.swift:947-977)', () => {
-  test('cinq durées, dans l’ordre croissant', () => {
-    expect(EPHEMERAL_DURATIONS.map((d) => d.seconds)).toEqual([30, 60, 300, 3600, 86400]);
+describe('EPHEMERAL_DURATIONS — la flamme-œil, 15 s, puis les durées (#8304, CoreModels.swift:947-977)', () => {
+  test('la flamme-œil EN TÊTE, puis 15 s, puis les durées existantes dans l’ordre croissant', () => {
+    expect(EPHEMERAL_DURATIONS.map((d) => d.seconds)).toEqual([EPHEMERAL_AFTER_READ_SECONDS, 15, 30, 60, 300, 3600, 86400]);
+    expect(EPHEMERAL_DURATIONS[0]?.afterRead).toBe(true);
+    expect(EPHEMERAL_DURATIONS.slice(1).every((d) => d.afterRead !== true)).toBe(true);
   });
 
-  test('libellés courts et longs', () => {
-    expect(ephemeralDurationLabelOf(60)).toEqual({ seconds: 60, label: '1min', displayLabel: '1 minute' });
-    expect(ephemeralDurationLabelOf(86400)).toEqual({ seconds: 86400, label: '24h', displayLabel: '24 heures' });
+  test('libellés courts et clés de catalogue des libellés longs', () => {
+    expect(ephemeralDurationLabelOf(15)).toEqual({ seconds: 15, label: '15s', displayKey: 'composer.ephemeral.duration.15' });
+    expect(ephemeralDurationLabelOf(60)).toEqual({ seconds: 60, label: '1min', displayKey: 'composer.ephemeral.duration.60' });
+    expect(ephemeralDurationLabelOf(86400)).toEqual({ seconds: 86400, label: '24h', displayKey: 'composer.ephemeral.duration.86400' });
+  });
+
+  test('la flamme-œil n’a pas de libellé court : son pictogramme le porte', () => {
+    expect(ephemeralDurationLabelOf(EPHEMERAL_AFTER_READ_SECONDS)).toEqual({
+      seconds: EPHEMERAL_AFTER_READ_SECONDS,
+      label: '',
+      displayKey: 'composer.ephemeral.afterRead',
+      afterRead: true,
+    });
   });
 
   test('durée inconnue ⇒ undefined', () => {
     expect(ephemeralDurationLabelOf(120)).toBeUndefined();
+  });
+});
+
+describe('protectionFieldsOf — la flamme-œil (#8304, contrat #8302)', () => {
+  test('bits EPHEMERAL | EPHEMERAL_AFTER_READ, SANS aucune échéance', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: EPHEMERAL_AFTER_READ_SECONDS }, NOW);
+    expect(fields.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ);
+    expect(fields.expiresAt).toBeUndefined();
+    expect('expiresAt' in fields).toBe(false);
+  });
+
+  test('se combine au flou sans rien perdre', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: EPHEMERAL_AFTER_READ_SECONDS, blurred: true }, NOW);
+    expect(fields.effectFlags).toBe(
+      MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ | MESSAGE_EFFECT_FLAGS.BLURRED,
+    );
+    expect(fields.isBlurred).toBe(true);
+  });
+
+  test('une durée ordinaire ne pose JAMAIS le bit après lecture', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: 15 }, NOW);
+    expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ).toBe(0);
+    expect(fields.expiresAt).toEqual(new Date(NOW + 15_000));
+  });
+
+  test('la flamme-œil colore la barre comme tout éphémère', () => {
+    expect(composerAccentOf({ ephemeralSeconds: EPHEMERAL_AFTER_READ_SECONDS })).toBe('ephemeral');
+  });
+
+  test('isAfterReadChoice ne reconnaît que la flamme-œil', () => {
+    expect(isAfterReadChoice(EPHEMERAL_AFTER_READ_SECONDS)).toBe(true);
+    expect(isAfterReadChoice(15)).toBe(false);
+    expect(isAfterReadChoice(undefined)).toBe(false);
   });
 });
 

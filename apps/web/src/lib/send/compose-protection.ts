@@ -16,7 +16,8 @@ import { DECORATIVE_EFFECTS } from '@/lib/effects';
  * qui l'arme.
  */
 export type ComposeProtection = {
-  /** Durée en SECONDES avant expiration — `undefined` = pas d'éphémère.
+  /** Durée en SECONDES avant expiration — `undefined` = pas d'éphémère,
+   * `EPHEMERAL_AFTER_READ_SECONDS` = la flamme-œil (#8304), sans échéance.
    * Miroir de `EphemeralDuration.rawValue` (`CoreModels.swift:947-977`). */
   readonly ephemeralSeconds?: number;
   readonly blurred?: boolean;
@@ -35,22 +36,45 @@ export type ComposeProtection = {
 export const NO_PROTECTION: ComposeProtection = {};
 
 /**
- * `EphemeralDuration` (`CoreModels.swift:947-977`) — les CINQ durées et leurs
- * DEUX libellés (court, pour la capsule fermée ; long, pour l'a11y et le
- * sélecteur). `seconds` EST `rawValue` : jamais une seconde échelle.
+ * LA FLAMME-ŒIL (#8304, contrat #8302) — le choix « disparaît après lecture »
+ * n'a pas de durée : il voyage dans le MÊME champ que les durées
+ * (`ephemeralSeconds`), sous cette valeur réservée, pour que le brouillon, la
+ * préférence collante et le rail le portent sans seconde bascule. Aucune
+ * durée réelle ne vaut 0 seconde : la valeur ne peut pas être prise pour une
+ * échéance — `protectionFieldsOf` ne pose jamais d'`expiresAt` pour elle.
  */
+export const EPHEMERAL_AFTER_READ_SECONDS = 0;
+
+export function isAfterReadChoice(seconds: number | undefined): boolean {
+  return seconds === EPHEMERAL_AFTER_READ_SECONDS;
+}
+
+/**
+ * `EphemeralDuration` (`CoreModels.swift:947-977`) — la flamme-œil, puis les
+ * SIX durées (#8304 : 15 s ajoutée en tête des durées). `seconds` EST
+ * `rawValue` : jamais une seconde échelle. Le libellé COURT (capsule fermée)
+ * est un nombre neutre ; le libellé LONG (a11y, sélecteur) vit au catalogue
+ * d'interface, dans les sept langues.
+ */
+export type EphemeralDisplayKey =
+  | 'composer.ephemeral.afterRead'
+  | `composer.ephemeral.duration.${15 | 30 | 60 | 300 | 3600 | 86400}`;
+
 export type EphemeralDurationOption = {
   readonly seconds: number;
   readonly label: string;
-  readonly displayLabel: string;
+  readonly displayKey: EphemeralDisplayKey;
+  readonly afterRead?: true;
 };
 
 export const EPHEMERAL_DURATIONS: readonly EphemeralDurationOption[] = [
-  { seconds: 30, label: '30s', displayLabel: '30 secondes' },
-  { seconds: 60, label: '1min', displayLabel: '1 minute' },
-  { seconds: 300, label: '5min', displayLabel: '5 minutes' },
-  { seconds: 3600, label: '1h', displayLabel: '1 heure' },
-  { seconds: 86400, label: '24h', displayLabel: '24 heures' },
+  { seconds: EPHEMERAL_AFTER_READ_SECONDS, label: '', displayKey: 'composer.ephemeral.afterRead', afterRead: true },
+  { seconds: 15, label: '15s', displayKey: 'composer.ephemeral.duration.15' },
+  { seconds: 30, label: '30s', displayKey: 'composer.ephemeral.duration.30' },
+  { seconds: 60, label: '1min', displayKey: 'composer.ephemeral.duration.60' },
+  { seconds: 300, label: '5min', displayKey: 'composer.ephemeral.duration.300' },
+  { seconds: 3600, label: '1h', displayKey: 'composer.ephemeral.duration.3600' },
+  { seconds: 86400, label: '24h', displayKey: 'composer.ephemeral.duration.86400' },
 ];
 
 export function ephemeralDurationLabelOf(seconds: number): EphemeralDurationOption | undefined {
@@ -82,13 +106,15 @@ export function protectionFieldsOf(protection: ComposeProtection, now: number): 
   let flags = protection.effectFlags ?? 0;
   if (blurred) flags |= MESSAGE_EFFECT_FLAGS.BLURRED;
   if (protection.ephemeralSeconds !== undefined) flags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+  const afterRead = isAfterReadChoice(protection.ephemeralSeconds);
+  if (afterRead) flags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
   if (protection.viewOnce === true) flags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
   return {
     isBlurred: blurred,
     isViewOnce: protection.viewOnce === true,
     effectFlags: flags,
-    ...(protection.ephemeralSeconds === undefined
+    ...(protection.ephemeralSeconds === undefined || afterRead
       ? {}
       : { expiresAt: new Date(now + protection.ephemeralSeconds * 1000) }),
   };

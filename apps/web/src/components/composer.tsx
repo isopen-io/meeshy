@@ -33,6 +33,7 @@ import {
 } from '@/lib/send/compose-protection';
 import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
+import type { StickyProtection } from '@/lib/send/protection-preference';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
@@ -132,6 +133,7 @@ export const Composer = memo(function Composer({
   onCancelReply,
   rights,
   draft,
+  stickyProtection,
   onDraftChange,
   maxLength,
 }: {
@@ -190,6 +192,13 @@ export const Composer = memo(function Composer({
    * aucun brouillon.
    */
   draft?: ComposerDraft | null;
+  /**
+   * LES PROTECTIONS ARMÉES DE LA CONVERSATION (#8306) — lues UNE fois au
+   * montage, comme `draft` ; elles priment sur celles du brouillon. L'hôte
+   * les réécrit depuis `onDraftChange` (`useComposerDraft`), ce composant
+   * ne fait que semer son état.
+   */
+  stickyProtection?: StickyProtection | null;
   /** Appelée à CHAQUE changement (texte, langue, protection) — la politique
    * de débounce vit chez l'hôte (`useComposerDraft`), jamais ici. */
   onDraftChange?: (report: ComposerDraftReport) => void;
@@ -270,12 +279,16 @@ export const Composer = memo(function Composer({
    * La gate « image en attente » de #7354 la rendait invisible dans l'état
    * par défaut du composeur : c'est le défaut que #7597 corrige.
    */
-  const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(draft?.protection.ephemeralSeconds);
+  /* LA PRÉFÉRENCE DE LA CONVERSATION D'ABORD (#8306) — réécrite à chaque
+     changement, elle est toujours au moins aussi fraîche que le brouillon ;
+     celui-ci ne sert de graine qu'aux conversations sans préférence. */
+  const armed = stickyProtection ?? draft?.protection;
+  const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(armed?.ephemeralSeconds);
   const [ephemeralPickerOpen, setEphemeralPickerOpen] = useState(false);
   // Un brouillon d'avant #7667 peut porter flou ET vue unique : la vue
   // unique, plus forte, l'emporte dès la restauration.
-  const [blurred, setBlurred] = useState(draft?.protection.blurred === true && draft?.protection.viewOnce !== true);
-  const [viewOnce, setViewOnce] = useState(draft?.protection.viewOnce === true);
+  const [blurred, setBlurred] = useState(armed?.blurred === true && armed?.viewOnce !== true);
+  const [viewOnce, setViewOnce] = useState(armed?.viewOnce === true);
   const [effectFlags, setEffectFlags] = useState(draft?.protection.effectFlags ?? 0);
   /** Flou et vue unique sont EXCLUSIFS (#7667) — la loi pure décide, la
    * rangée haute ne fait que poser ses deux valeurs. */
@@ -470,15 +483,13 @@ export const Composer = memo(function Composer({
          ici. */
       if (opts?.keepFocus) field.current.focus();
     }
-    // LA PROTECTION EST REMISE À ZÉRO APRÈS L'ENVOI (#6175) — miroir
-    // `ConversationViewModel+Send.swift:156-159` : éphémère, flou et effets
-    // ne survivent PAS au message qui vient de partir, contrairement à la
-    // LANGUE (qui reste COLLANTE, `compose.noteSent()`).
-    setEphemeralSeconds(undefined);
+    // LES PROTECTIONS RESTENT ARMÉES (#8306, directive porteur 2026-09-27) —
+    // éphémère, flou et vue unique décrivent la CONVERSATION et survivent à
+    // l'envoi (leur préférence est tenue par l'hôte, `useComposerDraft`) ;
+    // les effets DÉCORATIFS décrivent CE message et repartent à zéro, comme
+    // #6175 le posait pour tout.
     setEphemeralPickerOpen(false);
     setEffectsPanelOpen(false);
-    setBlurred(false);
-    setViewOnce(false);
     setEffectFlags(0);
     /* LE LIEU NE SURVIT PAS AU MESSAGE QUI VIENT DE PARTIR (#7280) — même
        règle que la protection, et pour la même raison : il DÉCRIT ce

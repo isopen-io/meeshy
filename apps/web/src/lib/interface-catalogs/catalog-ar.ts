@@ -22,6 +22,7 @@ import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
+import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
@@ -1154,6 +1155,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arEphemeral,
   ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,

@@ -5,6 +5,7 @@ import type { PendingAttachment } from '@/lib/send/attachments';
 import { withAttachmentReply } from '@/lib/send/attachment-reply';
 import type { ComposeProtection } from '@/lib/send/compose-protection';
 import type { ComposerDraft, DraftStore } from '@/lib/send/draft-store';
+import type { StickyProtection } from '@/lib/send/protection-preference';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
@@ -25,6 +26,8 @@ export type ThreadComposeSendInput = {
 
 export type ThreadComposeState = {
   readonly initialDraft: ComposerDraft | null;
+  /** Les protections armées de la conversation (#8306), graine du composeur. */
+  readonly stickyProtection: StickyProtection | null;
   readonly setReplyTarget: (id: string | null) => void;
   /** Répondre à une PIÈCE (#6303) — la citation nomme la pièce regardée en plein écran. */
   readonly setReplyToMedia: (messageId: string, attachmentId: string) => void;
@@ -69,7 +72,7 @@ export function useThreadCompose(params: {
 }): ThreadComposeState {
   const { store, scope, conversationId, messages, readerLanguages, send } = params;
 
-  const { initial: initialDraft, replyTarget, setReplyTarget: setDraftReplyTarget, reportComposerDraft } = useThreadDraft({
+  const { initial: initialDraft, initialProtection: stickyProtection, replyTarget, setReplyTarget: setDraftReplyTarget, reportComposerDraft } = useThreadDraft({
     store,
     scope,
     conversationId,
@@ -138,5 +141,5 @@ export function useThreadCompose(params: {
 
   const onCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
 
-  return { initialDraft, setReplyTarget, setReplyToMedia, replyTo, reportComposerDraft, onSend, onCancelReply };
+  return { initialDraft, stickyProtection, setReplyTarget, setReplyToMedia, replyTo, reportComposerDraft, onSend, onCancelReply };
 }
