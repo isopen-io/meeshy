@@ -375,6 +375,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             await capturer.stopCapture()
             throw CancellationError()
         }
+        await attachZoom(to: camera)
         // applyVideoEncoding() is deferred — it runs once the video track is
         // attached to its transceiver; a sender does not exist yet at this point.
         Logger.webrtc.info("[WEBRTC] video track prepared (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
@@ -545,20 +546,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         } else {
             Logger.webrtc.warning("[WEBRTC] audio encoding NOT applied — encodings array empty")
         }
-    }
-
-    /// Selects a capture device for a desired logical position. On iPhone/iPad the
-    /// front/back cameras report `.front`/`.back`. On **iOS-app-on-Mac** the
-    /// built-in / Continuity / USB cameras report `.unspecified`, so a strict
-    /// `.front` filter finds nothing and the call silently degrades to audio
-    /// (P0-1). Fallback chain: exact position → `.unspecified` (Mac) → opposite
-    /// camera → first available.
-    static func pickCaptureDevice(preferring position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-        let cams = RTCCameraVideoCapturer.captureDevices()
-        if let exact = cams.first(where: { $0.position == position }) { return exact }
-        if let unspecified = cams.first(where: { $0.position == .unspecified }) { return unspecified }
-        let opposite: AVCaptureDevice.Position = position == .front ? .back : .front
-        return cams.first(where: { $0.position == opposite }) ?? cams.first
     }
 
     /// Calls the throwing `setCodecPreferences:error:` selector on the given
@@ -960,6 +947,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 await capturer.stopCapture()
                 return
             }
+            await attachZoom(to: camera)
             Logger.webrtc.info("[WEBRTC] capturer restarted on toggleVideo(true) (\(fps)fps)")
         } catch {
             Logger.webrtc.error("[WEBRTC] capturer restart failed: \(error.localizedDescription)")
@@ -1013,6 +1001,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             await capturer.stopCapture()
             return
         }
+        await attachZoom(to: camera)
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 
@@ -1030,26 +1019,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         return CameraCatalog.options(from: descriptors)
     }
 
-    private static func facing(for device: AVCaptureDevice) -> CameraFacing {
-        switch device.position {
-        case .front: return .front
-        case .back: return .back
-        default:
-            // iOS-on-Mac / iPad: Continuity & USB cameras report `.unspecified`
-            // with an external-class device type.
-            if #available(iOS 17.0, *), device.deviceType == .external || device.deviceType == .continuityCamera {
-                return .external
-            }
-            return .unspecified
-        }
-    }
-
     // §7.1 — switch to a specific capture device by uniqueID. Mirrors
     // `switchCamera` (stop → reselect format → start) but targets a named device
     // (Continuity / USB) rather than toggling front/back.
     func switchToCamera(uniqueID: String) async throws {
         guard let capturer = videoCapturer else { return }
-        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.uniqueID == uniqueID }) else {
+        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.uniqueID == uniqueID }).map(Self.zoomCapable) else {
             throw WebRTCError.noCameraAvailable
         }
         guard let selectedFormat = selectFormat(for: camera) else {
@@ -1069,6 +1044,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         usingFrontCamera = (camera.position == .front)
+        await attachZoom(to: camera)
         Logger.webrtc.info("[WEBRTC] switched to camera \(camera.localizedName, privacy: .public)")
     }
 
@@ -1253,6 +1229,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         audioTransceiver = nil
         videoTransceiver = nil
         videoCapturer = nil
+        Task { @MainActor in CameraZoomController.shared.detach() }
         stopObservingCaptureInterruptions()
         pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
