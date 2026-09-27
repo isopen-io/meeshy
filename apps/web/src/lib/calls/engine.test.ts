@@ -240,6 +240,28 @@ describe('appel entrant', () => {
     expect(h.call()?.phase.kind).toBe('connecting');
   });
 
+  test('un appel VIDÉO entrant montre la caméra de l’appelant dès le décroché (#8295)', async () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, initiated);
+    expect(h.call()?.members[PEER]?.cameraOn).toBe(true);
+    await h.engine.accept();
+    expect(h.call()?.members[PEER]?.cameraOn).toBe(true);
+  });
+
+  test('un appel AUDIO entrant garde la caméra de l’appelant éteinte (#8295)', () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, { ...initiated, type: 'audio' });
+    expect(h.call()?.members[PEER]?.cameraOn).toBe(false);
+  });
+
+  test('la session rendue par call:join porte l’état caméra et micro de ses membres (#8295)', async () => {
+    const callSession = { participants: [{ id: 'p-9', userId: PEER, leftAt: null, isAudioEnabled: false, isVideoEnabled: true, user: { username: 'amina', displayName: 'Amina' } }] };
+    const h = harness({ acks: { [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession, iceServers: [] } } } });
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, { ...initiated, type: 'audio' });
+    await h.engine.accept();
+    expect(h.call()?.members[PEER]).toMatchObject({ cameraOn: true, micMuted: true });
+  });
+
   test('« Répondre sans vidéo » rejoint un appel vidéo micro seul', async () => {
     const h = harness();
     h.engine.handle(SERVER_EVENTS.CALL_INITIATED, initiated);
