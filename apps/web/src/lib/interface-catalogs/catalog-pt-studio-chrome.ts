@@ -27,6 +27,19 @@ const ptStudioChrome = {
   'story.studio.backdrop.white': 'Branco',
   'story.studio.backdrop.indigo': 'Índigo',
   'story.studio.backdrop.sand': 'Areia',
+  'story.studio.animated': 'Animado',
+  'story.studio.timeline': 'Linha do tempo da cena',
+  'story.studio.timeline.play': 'Reproduzir',
+  'story.studio.timeline.pause': 'Pausa',
+  'story.studio.timeline.start': 'Início de {name}',
+  'story.studio.timeline.end': 'Fim de {name}',
+  'story.studio.timeline.empty': 'Escreva um texto ou coloque uma camada: cada objeto ganha sua faixa.',
+  'story.studio.timeline.overlay': 'Camada',
+  'story.studio.retouch.title': 'Editar a imagem',
+  'story.studio.retouch.done': 'Concluído',
+  'story.studio.retouch.cancel': 'Descartar a edição',
+  'composer.attachment.edit': 'Editar {name}',
+  'story.studio.retouch.failed': 'Não foi possível gerar a imagem.',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

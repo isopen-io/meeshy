@@ -149,3 +149,107 @@ export function thumbHashImage(base64: string | undefined): string | undefined {
   });
   return `data:image/bmp;base64,${btoa(binary)}`;
 }
+
+/**
+ * **L'ENCODEUR** (#8425) — miroir de `rgbaToThumbHash` de la même référence
+ * (Evan Wallace, licence MIT) : le composer hache le RENDU RÉDUIT de sa scène
+ * (au plus 100 px de côté) pour peindre son sol du composite, comme iOS
+ * (`StorySlideRenderer.computeThumbHash`).
+ */
+export function rgbaToThumbHash(w: number, h: number, rgba: Uint8Array): Uint8Array {
+  if (w > 100 || h > 100) throw new Error(`${w}x${h} dépasse 100x100`);
+  const px = (i: number): number => rgba[i] ?? 0;
+  let avgR = 0;
+  let avgG = 0;
+  let avgB = 0;
+  let avgA = 0;
+  for (let i = 0, j = 0; i < w * h; i++, j += 4) {
+    const alpha = px(j + 3) / 255;
+    avgR += (alpha / 255) * px(j);
+    avgG += (alpha / 255) * px(j + 1);
+    avgB += (alpha / 255) * px(j + 2);
+    avgA += alpha;
+  }
+  if (avgA > 0) {
+    avgR /= avgA;
+    avgG /= avgA;
+    avgB /= avgA;
+  }
+  const hasAlpha = avgA < w * h;
+  const lLimit = hasAlpha ? 5 : 7;
+  const lx = Math.max(1, Math.round((lLimit * w) / Math.max(w, h)));
+  const ly = Math.max(1, Math.round((lLimit * h) / Math.max(w, h)));
+  const l: number[] = [];
+  const p: number[] = [];
+  const q: number[] = [];
+  const a: number[] = [];
+  for (let i = 0, j = 0; i < w * h; i++, j += 4) {
+    const alpha = px(j + 3) / 255;
+    const r = avgR * (1 - alpha) + (alpha / 255) * px(j);
+    const g = avgG * (1 - alpha) + (alpha / 255) * px(j + 1);
+    const b = avgB * (1 - alpha) + (alpha / 255) * px(j + 2);
+    l[i] = (r + g + b) / 3;
+    p[i] = (r + g) / 2 - b;
+    q[i] = r - g;
+    a[i] = alpha;
+  }
+  const encodeChannel = (channel: readonly number[], nx: number, ny: number): { dc: number; ac: number[]; scale: number } => {
+    let dc = 0;
+    const ac: number[] = [];
+    let scale = 0;
+    const fx: number[] = [];
+    for (let cy = 0; cy < ny; cy++) {
+      for (let cx = 0; cx * ny < nx * (ny - cy); cx++) {
+        let f = 0;
+        for (let x = 0; x < w; x++) fx[x] = Math.cos((Math.PI / w) * cx * (x + 0.5));
+        for (let y = 0; y < h; y++) {
+          const fy = Math.cos((Math.PI / h) * cy * (y + 0.5));
+          for (let x = 0; x < w; x++) f += (channel[x + y * w] ?? 0) * (fx[x] ?? 0) * fy;
+        }
+        f /= w * h;
+        if (cx > 0 || cy > 0) {
+          ac.push(f);
+          scale = Math.max(scale, Math.abs(f));
+        } else {
+          dc = f;
+        }
+      }
+    }
+    return { dc, ac: scale > 0 ? ac.map((value) => 0.5 + (0.5 / scale) * value) : ac, scale };
+  };
+  const L = encodeChannel(l, Math.max(3, lx), Math.max(3, ly));
+  const P = encodeChannel(p, 3, 3);
+  const Q = encodeChannel(q, 3, 3);
+  const A = hasAlpha ? encodeChannel(a, 5, 5) : null;
+  const isLandscape = w > h;
+  const header24 =
+    Math.round(63 * L.dc) |
+    (Math.round(31.5 + 31.5 * P.dc) << 6) |
+    (Math.round(31.5 + 31.5 * Q.dc) << 12) |
+    (Math.round(31 * L.scale) << 18) |
+    ((hasAlpha ? 1 : 0) << 23);
+  const header16 = (isLandscape ? ly : lx) | (Math.round(63 * P.scale) << 3) | (Math.round(63 * Q.scale) << 9) | ((isLandscape ? 1 : 0) << 15);
+  const hash: number[] = [header24 & 255, (header24 >> 8) & 255, header24 >> 16, header16 & 255, header16 >> 8];
+  if (A !== null) hash.push(Math.round(15 * A.dc) | (Math.round(15 * A.scale) << 4));
+  const acStart = hasAlpha ? 6 : 5;
+  let acIndex = 0;
+  const channels = A !== null ? [L.ac, P.ac, Q.ac, A.ac] : [L.ac, P.ac, Q.ac];
+  channels.forEach((ac) =>
+    ac.forEach((f) => {
+      const index = acStart + (acIndex >> 1);
+      hash[index] = (hash[index] ?? 0) | (Math.round(15 * f) << ((acIndex & 1) << 2));
+      acIndex++;
+    }),
+  );
+  return new Uint8Array(hash);
+}
+
+/** Le hash en base64 STANDARD — la forme que la passerelle sert et que
+ * `thumbHashImage` relit. */
+export function thumbHashToBase64(hash: Uint8Array): string {
+  let binary = '';
+  hash.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}

@@ -1,7 +1,8 @@
 import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 
-import { flush, harness, image, mount, publishButton, registerStudioBench, selectFile, typeText } from '@/test-support/story-studio-bench';
+import { createStudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { VIEWER_ID, flush, harness, image, mount, onePageSnapshot, publishButton, registerStudioBench, selectFile, typeText } from '@/test-support/story-studio-bench';
 
 /**
  * LE COMPOSER PLEIN ÉCRAN, PARITÉ iOS (#8413) ET LE PANNEAU CADRE (#8414) —
@@ -132,6 +133,47 @@ describe('le sol de la scène', () => {
   });
 });
 
+describe('le sol du COMPOSITE (#8425)', () => {
+  /** Un « canvas » qui rend une scène rouge uni : le hash qui en sort est
+   * celui du RENDU, pas celui d'un média. */
+  const redCanvas = () => {
+    let pixels = new Uint8ClampedArray(0);
+    return {
+      fillStyle: '',
+      filter: 'none',
+      fillRect: () => undefined,
+      drawImage: () => undefined,
+      save: () => undefined,
+      restore: () => undefined,
+      translate: () => undefined,
+      rotate: () => undefined,
+      getImageData: (_x: number, _y: number, w: number, h: number) => {
+        pixels = new Uint8ClampedArray(w * h * 4).map((_, i) => (i % 4 === 0 || i % 4 === 3 ? 255 : 0));
+        return { data: pixels } as ImageData;
+      },
+    } as unknown as CanvasRenderingContext2D;
+  };
+
+  test('dès que le rendu réduit est haché, le sol le peint à la place de l’image de fond', async () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(VIEWER_ID, onePageSnapshot({ texts: [], background: { postMediaId: 'pm-1', fileUrl: '2026/09/u/f.jpg', mediaType: 'image', aspectRatio: 4 / 3 } }));
+    const bench = harness({ drafts });
+    const el = mount({ ...bench.deps, composite: { createCanvas: redCanvas, loadImage: async () => ({}) as CanvasImageSource } });
+    await flush(() => el.querySelector('[data-story-studio-floor="hash"]') !== null);
+    expect(el.querySelector('[data-story-studio-floor] img')?.getAttribute('src')).toMatch(/^data:image\/bmp;base64,/);
+  });
+
+  test('sans canvas (rendu impossible), le repli : l’image de fond elle-même', async () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(VIEWER_ID, onePageSnapshot({ texts: [], background: { postMediaId: 'pm-1', fileUrl: '2026/09/u/f.jpg', mediaType: 'image', aspectRatio: 4 / 3 } }));
+    const el = mount({ ...harness({ drafts }).deps, composite: { createCanvas: () => null, loadImage: async () => null } });
+    await flush();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await flush();
+    expect(el.querySelector('[data-story-studio-floor]')?.getAttribute('data-story-studio-floor')).toBe('media');
+  });
+});
+
 describe('le panneau Cadre (#8414)', () => {
   test('la tuile Cadre n’existe qu’avec un média de fond', () => {
     const el = mount(harness({}).deps);
@@ -140,10 +182,23 @@ describe('le panneau Cadre (#8414)', () => {
     expect(el.querySelector('[data-story-option="frame"]')).not.toBeNull();
   });
 
-  test('Remplir couvre le cadre ; les fonds ne s’offrent qu’à un média ajusté', () => {
+  test('le panneau est du MÊME verre que la barre, les rails et le socle — pas un aplat opaque', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
+    const tokens = (el.querySelector('[data-story-frame-panel]')?.className ?? '').split(/\s+/);
+    const rail = (el.querySelector('[data-story-studio-rail="leading"]')?.className ?? '').split(/\s+/);
+    expect(tokens).toContain('glass');
+    expect(rail).toContain('glass');
+    expect(tokens).not.toContain('glass-prominent');
+  });
+
+  test('Remplir couvre le cadre ; les fonds ne s’offrent qu’à un média ajusté', async () => {
+    const el = mount(harness({}).deps);
+    selectFile(el, 'visual', image());
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     expect(el.querySelectorAll('[data-story-frame-panel] [data-story-frame-option]')).toHaveLength(7);
     click(el.querySelector('[data-story-frame-option="fill"]'));
     expect(el.querySelector('[data-scene-stage] img:not([data-scene-letterbox])')?.className).toContain('object-cover');
@@ -156,6 +211,7 @@ describe('le panneau Cadre (#8414)', () => {
     selectFile(el, 'visual', image());
     await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     click(el.querySelector('[data-story-frame-option="sand"]'));
     expect(el.querySelector('[data-scene-stage] [data-scene-letterbox]')?.getAttribute('data-scene-backdrop')).toBe('sand');
     click(publishButton(el));
@@ -163,5 +219,86 @@ describe('le panneau Cadre (#8414)', () => {
     const effects = bench.posts[0]?.storyEffects as { scenes: { objects: { id: string; payload: { transform?: unknown } }[] }[] };
     const background = effects.scenes[0]?.objects.find((object) => object.id === 'background');
     expect(background?.payload.transform).toEqual({ videoFitMode: 'fit', backdrop: 'sand' });
+  });
+});
+
+/** « Une story reste visible vingt heures. » ne se dit que d'une STORY : sous
+ * un post ou un réel, la phrase était FAUSSE (retour de revue #8425). Et le
+ * socle ne garde pas une carte vide quand il n'a rien à dire. */
+describe('le message du socle suit le format', () => {
+  test('STORY : la durée de vie se dit', () => {
+    const el = mount(harness({}).deps, 'STORY');
+    expect(el.querySelector('[data-story-studio-bottom]')?.textContent).toContain('vingt heures');
+  });
+
+  test('POST vide : ni la phrase, ni carte vide au-dessus de Publier', () => {
+    const el = mount(harness({}).deps, 'POST');
+    expect(el.querySelector('[data-story-studio-bottom]')?.textContent).not.toContain('vingt heures');
+    expect(el.querySelector('[data-story-studio-socle-card]')).toBeNull();
+  });
+
+  test('REEL vide : sa propre raison de refus, jamais la phrase de la story', () => {
+    const el = mount(harness({}).deps, 'REEL');
+    const socle = el.querySelector('[data-story-studio-bottom]')?.textContent ?? '';
+    expect(socle).not.toContain('vingt heures');
+    expect(el.querySelector('[data-publish-refusal="reel-without-qualifying-media"]')).not.toBeNull();
+  });
+
+  test('POST avec un média : la carte revient pour le média, toujours sans la phrase', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    selectFile(el, 'visual', image());
+    // La montée se laisse aboutir : un transport encore en vol au démontage
+    // répondrait après la fin du banc.
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    expect(el.querySelector('[data-story-studio-socle-card]')).not.toBeNull();
+    expect(el.querySelector('[data-story-studio-bottom]')?.textContent).not.toContain('vingt heures');
+  });
+});
+
+describe('le mode Animé (#8415)', () => {
+  test('la pastille ouvre la frise : une piste par objet, rails et volets retirés ; la refermer rend tout', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    const toggle = el.querySelector('[data-story-animated]')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    click(toggle);
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    expect(el.querySelector('[data-story-animated]')?.getAttribute('aria-pressed')).toBe('true');
+    expect([...el.querySelectorAll('[data-story-track]')].map((track) => track.getAttribute('data-story-track'))).toEqual(['text-1']);
+    expect(el.querySelector('[data-story-studio-rail="leading"]')).toBeNull();
+    expect(el.querySelector('[data-story-studio-rail="trailing"]')).toBeNull();
+    expect(el.querySelector('[data-story-object-move]')).toBeNull();
+    expect(el.querySelector('[data-story-publish]')).not.toBeNull();
+    click(el.querySelector('[data-story-animated]'));
+    expect(el.querySelector('[data-story-timeline]')).toBeNull();
+    expect(el.querySelector('[data-story-studio-rail="trailing"]')).not.toBeNull();
+  });
+
+  test('la fenêtre réglée à la frise PART dans le document, avec la durée de la scène', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-track-handle="start"]') !== null);
+    const start = el.querySelector<HTMLButtonElement>('[data-story-track-handle="start"]')!;
+    for (let i = 0; i < 2; i++) act(() => start.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })));
+    expect(el.querySelector('[data-story-track="text-1"]')?.getAttribute('data-story-track-start')).toBe('1');
+    click(publishButton(el));
+    await flush(() => bench.posts.length === 1);
+    const scene = (bench.posts[0]?.storyEffects as { scenes: { timelineDuration?: number; objects: { kind: string; timing?: unknown }[] }[] }).scenes[0]!;
+    expect(scene.timelineDuration).toBe(5);
+    expect(scene.objects.find((object) => object.kind === 'text')?.timing).toEqual({ start: 1, end: 5 });
+  });
+
+  test('la frise se ferme d’un geste, et Annuler défait l’animation', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    click(el.querySelector('[data-story-animated]'));
+    click(el.querySelector('[data-story-option="undo"]'));
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    expect(el.querySelector('[data-story-timeline-duration]')?.textContent).toContain('5');
   });
 });

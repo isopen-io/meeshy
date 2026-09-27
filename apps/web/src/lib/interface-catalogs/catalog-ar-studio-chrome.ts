@@ -27,6 +27,19 @@ const arStudioChrome = {
   'story.studio.backdrop.white': 'أبيض',
   'story.studio.backdrop.indigo': 'نيلي',
   'story.studio.backdrop.sand': 'رملي',
+  'story.studio.animated': 'متحرك',
+  'story.studio.timeline': 'الخط الزمني للمشهد',
+  'story.studio.timeline.play': 'تشغيل',
+  'story.studio.timeline.pause': 'إيقاف مؤقت',
+  'story.studio.timeline.start': 'بداية {name}',
+  'story.studio.timeline.end': 'نهاية {name}',
+  'story.studio.timeline.empty': 'اكتب نصًا أو ضع طبقة: لكل عنصر مساره.',
+  'story.studio.timeline.overlay': 'طبقة',
+  'story.studio.retouch.title': 'تعديل الصورة',
+  'story.studio.retouch.done': 'تم',
+  'story.studio.retouch.cancel': 'تجاهل التعديل',
+  'composer.attachment.edit': 'تعديل {name}',
+  'story.studio.retouch.failed': 'تعذّر إنشاء الصورة.',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;
