@@ -33,6 +33,7 @@ import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from '
 import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
 import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
 import { emailBaseStyles } from './email/base-styles';
+import { claimWarningFor } from './email/claim-warning';
 import { emailMayLeave, registeredEmailRecipientLookup, type RecipientAddressLookup } from './email/recipient-policy';
 
 // Logger dédié pour EmailService
@@ -92,6 +93,8 @@ export interface EmailVerificationData {
    * rempli, qui présenterait un pseudo vide comme si c'était le sien.
    */
   identity?: IdentiteDuCompte;
+  /** Une REVENDICATION d'adresse (#8227) : l'e-mail dit que le code la retire à un compte existant. */
+  claim?: boolean;
 }
 
 export interface PasswordChangedEmailData {
@@ -422,9 +425,11 @@ export class EmailService {
     // mentions d'expiration : le geste demandé reste le premier lu.
     const identityHtml = data.identity ? accountIdentityBlockHtml(data.identity, data.language) : '';
     const identityText = data.identity ? `\n\n${accountIdentityBlockText(data.identity, data.language)}` : '';
+    const claimWarning = data.claim ? claimWarningFor(this.normalizeLanguage(data.language)) : '';
+    const claimHtml = claimWarning ? `<div class="warning"><strong>⚠️</strong> ${claimWarning}</div>` : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}${identityHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p>${claimHtml}<div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}${identityHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}${claimWarning ? `\n\n${claimWarning}` : ''}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
   }

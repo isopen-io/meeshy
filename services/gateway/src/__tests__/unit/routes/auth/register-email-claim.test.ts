@@ -180,3 +180,17 @@ describe('« ce n’est pas moi » — `claimEmail: true`', () => {
     await app.close();
   });
 });
+
+describe('revendication + numéro TRANSFÉRÉ — refusée explicitement (#8227)', () => {
+  it('400 `CLAIM_WITH_PHONE_TRANSFER`, aucun compte créé', async () => {
+    const register = jest.fn<any>();
+    const app = await monter(register);
+
+    const res = await inscrire(app, { email: 'marie@example.com', claimEmail: true, phoneTransferToken: 'jeton-de-transfert' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, code: 'CLAIM_WITH_PHONE_TRANSFER' });
+    expect(register).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
