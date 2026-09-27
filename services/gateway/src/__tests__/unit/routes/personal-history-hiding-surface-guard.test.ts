@@ -429,6 +429,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
       "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
   },
+  'messaging/consumeAfterReadMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Consommation flamme-œil (#8302) : elle lit le bitfield et l'expéditeur " +
+      "des messages que le lecteur VIENT de voir, et ne rend aucun contenu. " +
+      'Un masquage personnel empêcherait ce lecteur de faire disparaître ' +
+      'chez lui ce qu\'il a vu — le contraire de la directive.',
+  },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,
