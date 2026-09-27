@@ -6,6 +6,7 @@ import deMediaViewer from './catalog-de-media-viewer';
 import deActivation from './catalog-de-activation';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
+import deAccounts from './catalog-de-accounts';
 import deCall from './catalog-de-call';
 import deRowActions from './catalog-de-row-actions';
 import deCallShell from './catalog-de-call-shell';
@@ -213,6 +214,7 @@ const de = {
   ...deVerifyEmail,
   ...deActivation,
   ...dePassword,
+  ...deAccounts,
   ...deCall,
   ...deRowActions,
   ...deCallShell,

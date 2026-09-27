@@ -6,6 +6,7 @@ import itMediaViewer from './catalog-it-media-viewer';
 import itActivation from './catalog-it-activation';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
+import itAccounts from './catalog-it-accounts';
 import itCall from './catalog-it-call';
 import itRowActions from './catalog-it-row-actions';
 import itCallShell from './catalog-it-call-shell';
@@ -213,6 +214,7 @@ const it = {
   ...itVerifyEmail,
   ...itActivation,
   ...itPassword,
+  ...itAccounts,
   ...itCall,
   ...itRowActions,
   ...itCallShell,

@@ -6,6 +6,7 @@ import esMediaViewer from './catalog-es-media-viewer';
 import esActivation from './catalog-es-activation';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
+import esAccounts from './catalog-es-accounts';
 import esCall from './catalog-es-call';
 import esRowActions from './catalog-es-row-actions';
 import esCallShell from './catalog-es-call-shell';
@@ -213,6 +214,7 @@ const es = {
   ...esVerifyEmail,
   ...esActivation,
   ...esPassword,
+  ...esAccounts,
   ...esCall,
   ...esRowActions,
   ...esCallShell,

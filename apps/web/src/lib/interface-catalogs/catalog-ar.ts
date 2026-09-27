@@ -6,6 +6,7 @@ import arMediaViewer from './catalog-ar-media-viewer';
 import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
+import arAccounts from './catalog-ar-accounts';
 import arCall from './catalog-ar-call';
 import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
@@ -213,6 +214,7 @@ const ar = {
   ...arVerifyEmail,
   ...arActivation,
   ...arPassword,
+  ...arAccounts,
   ...arCall,
   ...arRowActions,
   ...arCallShell,
