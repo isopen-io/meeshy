@@ -338,7 +338,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 282 → 281 (#8303) : le lot iOS consomme `byIdMessagesAfterReadConsume`
 // (`MessageService.consumeAfterRead`, rejoué par l'outbox). Valeur MESURÉE le
 // 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 281;
+// 281 → 280 (#8365) : la garde de l'e-mail (`EmailVerificationGate`) lit ses
+// routes dans le catalogue, dont `ConversationsEndpoint.byIdNewLink`, jamais
+// appelée jusque-là. Valeur MESURÉE le 2026-09-27.
+const BASELINE_DEAD_ENTRIES = 280;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
