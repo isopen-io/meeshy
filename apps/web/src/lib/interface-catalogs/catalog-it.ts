@@ -21,6 +21,7 @@ import itCallCaptions from './catalog-it-call-captions';
 import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
+import itGallery from './catalog-it-gallery';
 import itMentions from './catalog-it-mentions';
 import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
@@ -1159,6 +1160,7 @@ const it = {
 
   ...itMentions,
   ...itEphemeral,
+  ...itGallery,
   ...itConversationCard,
   ...itStoriesMine,
   ...itContactCard,

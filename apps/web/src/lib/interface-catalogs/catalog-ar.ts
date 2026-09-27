@@ -21,6 +21,7 @@ import arCallCaptions from './catalog-ar-call-captions';
 import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
+import arGallery from './catalog-ar-gallery';
 import arMentions from './catalog-ar-mentions';
 import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
@@ -1156,6 +1157,7 @@ const ar = {
 
   ...arMentions,
   ...arEphemeral,
+  ...arGallery,
   ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,

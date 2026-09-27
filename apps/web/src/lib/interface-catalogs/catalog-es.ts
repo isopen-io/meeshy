@@ -21,6 +21,7 @@ import esCallCaptions from './catalog-es-call-captions';
 import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
+import esGallery from './catalog-es-gallery';
 import esMentions from './catalog-es-mentions';
 import esEphemeral from './catalog-es-ephemeral';
 import esConversationCard from './catalog-es-conversation-card';
@@ -1159,6 +1160,7 @@ const es = {
 
   ...esMentions,
   ...esEphemeral,
+  ...esGallery,
   ...esConversationCard,
   ...esStoriesMine,
   ...esContactCard,

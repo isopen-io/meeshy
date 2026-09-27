@@ -21,6 +21,7 @@ import ptCallCaptions from './catalog-pt-call-captions';
 import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
+import ptGallery from './catalog-pt-gallery';
 import ptMentions from './catalog-pt-mentions';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
@@ -1163,6 +1164,7 @@ const pt = {
 
   ...ptMentions,
   ...ptEphemeral,
+  ...ptGallery,
   ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,

@@ -21,6 +21,7 @@ import enCallCaptions from './catalog-en-call-captions';
 import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
+import enGallery from './catalog-en-gallery';
 import enMentions from './catalog-en-mentions';
 import enEphemeral from './catalog-en-ephemeral';
 import enConversationCard from './catalog-en-conversation-card';
@@ -1159,6 +1160,7 @@ const en = {
 
   ...enMentions,
   ...enEphemeral,
+  ...enGallery,
   ...enConversationCard,
   ...enStoriesMine,
   ...enContactCard,
