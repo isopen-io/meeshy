@@ -931,7 +931,7 @@ struct ConversationView: View {
                     onSaveMedia: {
                         guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                         HapticFeedback.light()
-                        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                        mediaSaveCoordinator.save(MediaSaveRequest(
                             kind: attachment.kind,
                             origin: .transmitted,
                             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
@@ -2529,7 +2529,7 @@ struct ConversationView: View {
                     // que pour un message à exactement UN attachment.
                     guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                     HapticFeedback.light()
-                    mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                    mediaSaveCoordinator.save(MediaSaveRequest(
                         kind: attachment.kind,
                         origin: .transmitted,
                         remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
@@ -2702,7 +2702,7 @@ struct ConversationView: View {
             Button {
                 guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
                 HapticFeedback.light()
-                mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                mediaSaveCoordinator.save(MediaSaveRequest(
                     kind: attachment.kind,
                     origin: .transmitted,
                     remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,

@@ -232,15 +232,26 @@ final class CallRecordingControllerTests: XCTestCase {
         XCTAssertEqual(env.recorder.stopCallCount, 0)
     }
 
+    /// Deux avis se succèdent, et le témoin lit chacun à SON instant (#8327) :
+    /// « arrêté » tout de suite, au geste, puis « ajouté à la conversation »
+    /// quand le fichier a rejoint la bulle — comme l'arrêt décidé par la
+    /// passerelle et comme le miroir web (`call-recording.ts`, `finish`).
+    /// Lire le premier APRÈS avoir attendu l'émission vers la passerelle
+    /// mesurait une course avec le dépôt, que le dépôt gagne.
     func test_stop_byTheViewer_endsCapture_andTellsTheGateway() async {
         let env = makeSUT()
         env.sut.receive(started())
 
-        await env.sut.stop()?.value
+        let emission = env.sut.stop()
 
+        XCTAssertEqual(env.sut.phase, .idle)
+        XCTAssertEqual(env.sut.notice, .stopped(reason: "stopped", wasRecording: true))
+        await emission?.value
+        await env.sut.pendingSave?.value
         XCTAssertEqual(env.recorder.stopCallCount, 1)
         XCTAssertEqual(env.socket.stops.map(\.recordingId), ["rec-1"])
-        XCTAssertEqual(env.sut.notice, .stopped(reason: "stopped", wasRecording: true))
+        XCTAssertEqual(env.remote.links.map(\.attachmentId), ["att-1"])
+        XCTAssertEqual(env.sut.notice, .saved)
     }
 
     func test_captureFailure_stopsTheRecordingForEveryone() async {
