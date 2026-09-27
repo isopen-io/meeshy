@@ -18,6 +18,10 @@ import type { StoryFrame } from '@/lib/stories/story-document';
  * il n'existe que si la scène a un média de fond (l'hôte ne monte la tuile
  * qu'à cette condition).
  *
+ * Le panneau est du MÊME verre que la barre, les rails et le socle (`glass`,
+ * retour de revue #8425) ; ses libellés sont à l'encre pleine : l'encre
+ * secondaire ne tient pas AA sur ce verre en clair (3,58:1, #6308).
+ *
  * Un choix s'APPLIQUE sur-le-champ (la scène le montre sous le panneau) et se
  * défait par l'historique comme tout geste sur la scène. Échap ferme.
  */
@@ -96,14 +100,14 @@ export function StudioFramePanel({
     <section
       data-story-frame-panel
       aria-label={title}
-      className="glass-prominent flex w-64 max-w-[calc(100vw-6rem)] flex-col gap-2 rounded-3xl p-3.5 shadow-lg"
+      className="glass flex w-64 max-w-[calc(100vw-6rem)] flex-col gap-2 rounded-3xl p-3.5 shadow-lg"
       style={{ color: 'var(--color-ios-ink)' }}
     >
       <h2 className="text-body font-bold">{title}</h2>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+      <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(lang, FIT_HINT_KEY[frame.fitMode])}
       </p>
-      <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink-2)' }}>
+      <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(lang, 'story.studio.frame.media')}
       </p>
       <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex gap-1.5">
@@ -117,7 +121,7 @@ export function StudioFramePanel({
           proposent qu'à un média ajusté — un choix sans effet n'est pas offert. */}
       {frame.fitMode === 'fit' ? (
         <>
-          <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
             {translate(lang, 'story.studio.frame.around')}
           </p>
           <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.around')} className="flex flex-wrap gap-1.5">

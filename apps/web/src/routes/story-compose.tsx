@@ -74,6 +74,7 @@ import { takeStudioSeed } from '@/lib/stories/studio-seed';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan, uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
+import { browserCompositeDeps, type StudioCompositeDeps } from '@/lib/stories/studio-composite';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
@@ -87,7 +88,7 @@ import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-
 import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
-import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
+import { publicationRefusalText, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import { StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioFramePanel } from '@/routes/story-compose-frame';
@@ -96,6 +97,7 @@ import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-ra
 import { StudioObjectHandles } from '@/routes/story-compose-stage';
 import { measureSceneText, sameSceneTextBox, type SceneTextBox } from '@/routes/story-compose-text-box';
 import { StudioTextInput } from '@/routes/story-compose-text-input';
+import { useStudioCompositeHash } from '@/routes/use-studio-composite-hash';
 
 /**
  * **CRÉER UNE STORY** (#6900, devenue un PLATEAU par #6943/#6944) — plusieurs
@@ -162,6 +164,9 @@ export type StoryStudioDeps = {
    * UNIQUEMENT, comme tout le réseau de cet écran. La production prend
    * `protectedMediaDeps`, le site UNIQUE. */
   readonly media?: ProtectedMediaDeps;
+  /** LE RENDU RÉDUIT de la scène pour le sol (#8425) — injectable pour les
+   * témoins ; la production dessine dans un canvas hors écran. */
+  readonly composite?: StudioCompositeDeps;
 };
 
 const defaultStoryStudioDeps: StoryStudioDeps = {
@@ -798,8 +803,13 @@ function StoryStudio({
   const selectedPose: StudioPose | null =
     selectedId === 'overlay' ? (page.overlay?.pose ?? null) : (selectedLayer?.pose ?? null);
 
-  /** LE SOL (#8413) — recalculé quand la MATIÈRE change, jamais à la frappe. */
-  const floor = useMemo(() => studioFloor({ page }), [page.background, page.overlay]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** LE SOL (#8413) — le hash du COMPOSITE (#8425), sinon celui du fond ;
+   * recalculé quand la MATIÈRE change, jamais à la frappe. */
+  const sceneHash = useStudioCompositeHash(page, deps.composite ?? browserCompositeDeps);
+  const floor = useMemo(
+    () => studioFloor({ page, ...(sceneHash !== undefined ? { sceneHash } : {}) }),
+    [page.background, page.overlay, sceneHash], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const frame = page.background?.frame ?? DEFAULT_FRAME;
   const history = historyRef.current;
   const menuItems: readonly StudioMenuItem[] = [
@@ -952,7 +962,8 @@ function StoryStudio({
           l'audience, un espace, le texte du post (un POST seulement), la
           capsule Publier. VERROUILLÉ pendant l'envoi (#7707). */}
       <footer data-story-studio-bottom className="relative z-20 flex shrink-0 flex-col gap-2 px-2 pt-1 pb-safe">
-        <div className="glass flex flex-col gap-1 rounded-2xl px-2.5 py-2">
+        {editorOpen || page.background !== null || page.overlay !== null || page.sound !== null || studioFooterSpeaks({ kind, placeRefusal, kindRefusal, publishFailure }) ? (
+        <div data-story-studio-socle-card className="glass flex flex-col gap-1 rounded-2xl px-2.5 py-2">
           {editorOpen ? (
             <div data-story-editor-panel className="overflow-y-auto" style={{ maxHeight: 200 }} inert={publishing}>
               <Suspense fallback={null}>
@@ -980,8 +991,9 @@ function StoryStudio({
             onSoundPlane={(plane) => edit((current) => withSoundPlane(current, plane))}
             locked={publishing}
           />
-          <StudioFooterMessage lang={lang} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
+          <StudioFooterMessage lang={lang} kind={kind} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
         </div>
+        ) : null}
         <div className="flex items-center gap-2.5 pb-3">
           <AudienceChip lang={lang} value={audienceValue} source={audienceSource} open={audienceOpen} onOpen={openAudience} disabled={publishing} />
           <span aria-hidden="true" className="flex-1" />
