@@ -223,6 +223,10 @@ export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCo
           outline: '1px dashed rgba(255,255,255,0.85)',
           outlineOffset: 4,
           pointerEvents: 'none',
+          // AU-DESSUS de la saisie transparente (`zIndex: 2`) : sans cela un
+          // texte long recouvrait ses propres poignées, et l'appui partait
+          // dans le champ au lieu de saisir l'objet.
+          zIndex: 5,
         }}
       >
         <button
