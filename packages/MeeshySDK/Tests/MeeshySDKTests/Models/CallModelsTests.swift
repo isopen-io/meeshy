@@ -171,3 +171,67 @@ struct ActiveCallSessionTests {
         #expect(session.remoteParticipant(currentUserId: "user-1")?.userId == "user-2")
     }
 }
+
+/// Le journal des appels (#8066) : un appel de groupe nomme ses participants,
+/// et la recherche les trouve — sans accents ni casse, comme le web.
+struct CallRecordParticipantsTests {
+
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+
+    private func decode(_ extra: String) throws -> APICallRecord {
+        let json = """
+        {"callId":"g1","conversationId":"conv-g","conversationType":"group","conversationTitle":"Équipe","conversationAvatar":null,"mode":"sfu","status":"ended","endReason":null,"direction":"outgoing","isVideo":false,"startedAt":"2026-09-20T10:00:00Z","answeredAt":null,"endedAt":null,"durationSec":60,"bytesSent":null,"bytesReceived":null,"peer":null\(extra)}
+        """
+        return try Self.decoder.decode(APICallRecord.self, from: Data(json.utf8))
+    }
+
+    private func participant(_ name: String, username: String? = nil) -> CallHistoryParticipant {
+        CallHistoryParticipant(participantId: "p-\(name)", userId: nil, username: username, displayName: name, avatar: nil)
+    }
+
+    private func group(_ participants: [CallHistoryParticipant]) -> APICallRecord {
+        APICallRecord(
+            callId: "g1", conversationId: "conv-g", conversationType: "group", conversationTitle: "Équipe",
+            mode: "sfu", status: "ended", direction: "outgoing", isVideo: false,
+            startedAt: Date(timeIntervalSince1970: 0), durationSec: 0,
+            participants: participants
+        )
+    }
+
+    @Test func decodesGroupParticipants() throws {
+        let record = try decode(#","participants":[{"participantId":"p1","userId":"u1","username":"ada","displayName":"Ada","avatar":null},{"participantId":"p2","userId":null,"username":null,"displayName":"Invité","avatar":"g.jpg"}]"#)
+        #expect(record.participants.map(\.displayName) == ["Ada", "Invité"])
+        #expect(record.participants.last?.avatar == "g.jpg")
+    }
+
+    @Test func missingParticipants_decodesAsEmpty() throws {
+        let record = try decode("")
+        #expect(record.participants.isEmpty)
+    }
+
+    @Test func participantSummary_namesTheFirstAndCountsTheRest() {
+        let record = group(["Ada", "Bruno", "Chloé", "Dia"].map { participant($0) })
+        #expect(record.participantSummary(limit: 2) == CallParticipantSummary(names: ["Ada", "Bruno"], more: 2))
+        #expect(record.participantSummary(limit: 5) == CallParticipantSummary(names: ["Ada", "Bruno", "Chloé", "Dia"], more: 0))
+    }
+
+    @Test func matches_foldsAccentsAndCase_onNamePeerAndParticipants() {
+        let record = group([participant("Chloé", username: "chloe_b")])
+        let direct = APICallRecord(
+            callId: "d1", conversationId: "conv-d", conversationType: "direct",
+            mode: "p2p", status: "ended", direction: "incoming", isVideo: false,
+            startedAt: Date(timeIntervalSince1970: 0), durationSec: 0,
+            peer: CallHistoryPeer(userId: "u1", username: "eloi", displayName: "Éloi")
+        )
+        #expect(record.matches(query: "EQUIPE", fallback: "Inconnu"))
+        #expect(record.matches(query: "chloe", fallback: "Inconnu"))
+        #expect(record.matches(query: "chloe_b", fallback: "Inconnu"))
+        #expect(!record.matches(query: "eloi", fallback: "Inconnu"))
+        #expect(direct.matches(query: "ELOI", fallback: "Inconnu"))
+        #expect(direct.matches(query: "   ", fallback: "Inconnu"))
+    }
+}
