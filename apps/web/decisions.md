@@ -4379,3 +4379,17 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **L'alerte « sans numéro » (#8040) se tait quand on a CHOISI l'e-mail seul** : le lien discret de la phase 1 était déjà la question.
 
 **Conséquences.** `signup-rungs.ts` est retiré ; `routes/signup.tsx` se découpe en `signup-phone-glass.tsx`, `signup-identity-card.tsx` et `signup-extras.tsx`. Le code d'une carte vit hors du `<form>` de l'inscription (un formulaire ne s'imbrique pas) ; le bouton principal lui appartient par `form="signup-form"`. Dix clés `signup.*` rejoignent les sept catalogues (`budgets.json`, plafond 144).
+
+## D-144 — Sur la coque Android, les images et vidéos REÇUES s'enregistrent seules, une seule fois, dans l'album « Meeshy » — derrière une interface dont le plugin natif n'est pas encore posé (2026-09-27, #8308)
+
+**Contexte.** Directive porteur 2026-09-27, jumelle de l'issue iOS : à la réception, sans doublon, jamais un média protégé, un interrupteur dans les réglages, l'album « Meeshy ». La coque ne porte qu'un plugin Capacitor (`@capacitor/push-notifications`) ; aucun ne sait écrire dans la galerie. `@capacitor-community/media` 9.1.0 (peer `@capacitor/core >=8`) le sait, mais exige sur Android un `albumIdentifier` et, sous Android 9 et moins, la permission d'écriture externe — rien de cela n'est vérifiable sur appareil dans ce lot.
+
+**Décision.**
+- **La dépendance native n'est PAS ajoutée ce lot.** Toute la logique vit derrière `GallerySaver` (`lib/gallery/gallery-saver.ts`) : l'implémentation coque n'appelle le plugin `Media` que s'il est DÉCLARÉ par la coque (`PluginHeaders`, motif `native-shell.ts`, jamais `@capacitor/core`) et sur `getPlatform() === 'android'` ; sinon le saver est NUL et rien ne se passe. Ajouter le plugin (`cap sync`, permission ≤ API 28, vérification appareil) suffira à l'allumer.
+- **La garde** (`lib/gallery/auto-save.ts`, `galleryCandidates`) refuse ce qui est à moi (participant, compte, ou écho portant un `clientMessageId`), tout message protégé (vue unique, flou, chiffré, `expiresAt`, `ephemeralDuration`, drapeaux `EPHEMERAL`/`BLURRED`/`VIEW_ONCE`/`EPHEMERAL_AFTER_READ`) et toute PIÈCE protégée (`isViewOnce`, `isBlurred`, `isEncrypted`, champs de chiffrement, drapeaux) ; images et vidéos seulement.
+- **Une seule fois** : registre `localStorage` borné (500), clé préfixée par le lecteur ; une pièce n'est notée qu'ENREGISTRÉE, et les pièces en vol ne repartent pas sur un second écho.
+- **Déclenché à la réception** : le puits `message:new` (`api/socket.ts`) appelle `noteGalleryReception` ; hors coque Android, sans effet.
+- **L'interrupteur** vit dans la section « Données » des réglages (la rangée « Médias » n'est pas portée, #6723), réglage LOCAL actif par défaut, offert sur la seule coque qui sait écrire (loi 4) — le navigateur ne le voit pas, et `check-settings` n'y compte aucune bascule de plus.
+- **« Enregistrer » dans la visionneuse**, sur la coque, écrit droit dans l'album, sans feuille (`save-to-gallery.ts`) ; le navigateur garde son téléchargement.
+
+**Conséquences.** `base64De` (`media/file-delivery-host.ts`) est exporté et partagé. Deux clés `settings.gallery.*` rejoignent les sept catalogues en tranche `catalog-<l>-gallery.ts`.

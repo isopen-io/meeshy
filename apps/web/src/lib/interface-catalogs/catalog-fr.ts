@@ -9,6 +9,7 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frGallery from './catalog-fr-gallery';
 import frMentions from './catalog-fr-mentions';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
@@ -1154,6 +1155,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frGallery,
   ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).

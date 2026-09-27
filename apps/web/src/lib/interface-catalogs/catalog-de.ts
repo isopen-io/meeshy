@@ -21,6 +21,7 @@ import deCallCaptions from './catalog-de-call-captions';
 import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
+import deGallery from './catalog-de-gallery';
 import deMentions from './catalog-de-mentions';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
@@ -1157,6 +1158,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deGallery,
   ...deConversationCard,
   ...deStoriesMine,
   ...deContactCard,

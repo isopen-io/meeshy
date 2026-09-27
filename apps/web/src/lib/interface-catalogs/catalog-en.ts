@@ -21,6 +21,7 @@ import enCallCaptions from './catalog-en-call-captions';
 import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
+import enGallery from './catalog-en-gallery';
 import enMentions from './catalog-en-mentions';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
@@ -1157,6 +1158,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enGallery,
   ...enConversationCard,
   ...enStoriesMine,
   ...enContactCard,
