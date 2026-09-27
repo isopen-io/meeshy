@@ -21,6 +21,9 @@ protocol SignupRegistering: AnyObject {
     /// - `PhoneOwnershipConflict` — numéro déjà rattaché à un compte vérifié ;
     /// - `MeeshyError.network(…)` — réseau indisponible.
     func register(_ request: RegisterRequest) async throws -> RegistrationOutcome
+    /// Crée le compte SANS poser la session (#8288) : la carte de l'inscription
+    /// la tient le temps de recevoir son code. Mêmes refus que `register`.
+    func registerHoldingSession(_ request: RegisterRequest) async throws -> RegistrationHold
 }
 
 /// L'implémentation de production : une couche mince au-dessus d'`AuthManager`.
@@ -44,6 +47,10 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
 
     func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
         try await authManager.registerThrowing(request: request)
+    }
+
+    func registerHoldingSession(_ request: RegisterRequest) async throws -> RegistrationHold {
+        try await authManager.registerHoldingSession(request: request)
     }
 }
 
@@ -146,7 +153,9 @@ final class SignupViewModel: ObservableObject {
 
     // MARK: - État
 
-    @Published var form: SignupForm
+    @Published var form: SignupForm {
+        didSet { advanceProgress() }
+    }
     @Published private(set) var isSubmitting = false
     /// Le message à poser SOUS chaque champ. Vidé à chaque nouvel envoi : un
     /// refus qui survit à la correction qu'il a provoquée est un mensonge.
@@ -181,20 +190,53 @@ final class SignupViewModel: ObservableObject {
     /// l'écran retombe alors sur la récupération seule.
     @Published private(set) var emailOwner: APIRejection.EmailOwner?
 
+    // MARK: - Les phases (#8288)
+
+    /// « Continuer avec l'e-mail seulement » a été touché.
+    @Published private(set) var phoneSkipped = false
+    /// Ce qui est PARU — monotone (`SignupProgress`).
+    @Published private(set) var progress: SignupProgress = .initial
+    /// Ce que la carte sait du compte qu'elle a créé.
+    @Published private(set) var card: SignupCard = .editing
+    /// « Valider mon compte maintenant » est en cours.
+    @Published private(set) var isValidating = false
+    /// La saisie du code DANS la carte — la machine de l'écran du code
+    /// (`EmailVerificationViewModel`), jamais une seconde.
+    @Published private(set) var codeEntry: EmailVerificationViewModel?
+
     private let registrar: any SignupRegistering
     /// Le code du lien d'invitation ouvert avant l'inscription (#8075).
     private let referrals: PendingReferralStoreProviding
     private let linkRequester: any SignInLinkRequesting
+    /// Pose la session TENUE par la carte (#8288).
+    private let confirmer: EmailVerificationConfirming
+    /// Le préchargement de l'arrivée, sans seconde fête (#8089, #8288).
+    private let celebration: ArrivalCelebrating
+    private let makeCodeEntry: (SignupCodeStep) -> EmailVerificationViewModel
 
     init(
         registrar: any SignupRegistering = AuthManagerSignupRegistrar.shared,
         locale: Locale = .current,
         referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
-        linkRequester: any SignInLinkRequesting = AuthServiceSignInLinkRequester.shared
+        linkRequester: any SignInLinkRequesting = AuthServiceSignInLinkRequester.shared,
+        confirmer: EmailVerificationConfirming? = nil,
+        celebration: ArrivalCelebrating? = nil,
+        makeCodeEntry: ((SignupCodeStep) -> EmailVerificationViewModel)? = nil
     ) {
         self.registrar = registrar
         self.referrals = referrals
         self.linkRequester = linkRequester
+        self.confirmer = confirmer ?? AuthManager.shared
+        self.celebration = celebration ?? ArrivalCelebrationController.shared
+        self.makeCodeEntry = makeCodeEntry ?? { step in
+            EmailVerificationViewModel(
+                email: step.email,
+                accountCreated: true,
+                pendingSessionToken: step.pendingSessionToken,
+                sessionOrigin: .registration,
+                celebratesArrival: false
+            )
+        }
         self.form = SignupForm(locale: locale)
     }
 
@@ -272,7 +314,7 @@ final class SignupViewModel: ObservableObject {
     /// saisi (#8040), sinon crée le compte.
     func requestSubmit() async -> SignupSubmitOutcome {
         guard canSubmit else { return .rejected }
-        if SignupPhoneNudge.shouldNudge(before: form) {
+        if SignupPhases.shouldNudgePhone(hasPhone: form.hasPhone, phoneSkipped: phoneSkipped) {
             isPhoneNudgePresented = true
             return .phoneNudged
         }
@@ -300,17 +342,7 @@ final class SignupViewModel: ObservableObject {
         guard form.canSubmit, !isSubmitting else { return false }
 
         isSubmitting = true
-        fieldErrors = [:]
-        bannerError = nil
-        // Les suggestions décrivent un refus RÉVOLU : les laisser survivre à
-        // un nouvel envoi proposerait des pseudos pour un conflit qui n'est
-        // peut-être plus.
-        usernameSuggestions = []
-        emailAlreadyRegistered = false
-        rejectedEmail = nil
-        emailOwner = nil
-        signInLinkError = nil
-        pendingVerification = nil
+        clearFeedback()
         defer { isSubmitting = false }
 
         do {
@@ -323,12 +355,137 @@ final class SignupViewModel: ObservableObject {
             let outcome = try await registrar.register(request)
             referrals.forget()
             if case .verificationRequired(let pending) = outcome {
+                // #8288 — le code s'attend DANS la carte, jamais sur un autre écran.
                 pendingVerification = pending
+                beginCode(SignupCodeStep(email: pending.email, pendingSessionToken: pending.pendingSessionToken, held: nil))
             }
             return true
         } catch {
             apply(error)
             return false
+        }
+    }
+
+    /// Un nouvel envoi efface les refus d'avant : un refus qui survit à la
+    /// correction qu'il a provoquée est un mensonge. Les suggestions décrivent
+    /// un refus RÉVOLU : les laisser survivre proposerait des pseudos pour un
+    /// conflit qui n'est peut-être plus.
+    private func clearFeedback() {
+        fieldErrors = [:]
+        bannerError = nil
+        usernameSuggestions = []
+        emailAlreadyRegistered = false
+        rejectedEmail = nil
+        emailOwner = nil
+        signInLinkError = nil
+        pendingVerification = nil
+    }
+
+    // MARK: - Phases et carte (#8288)
+
+    var cardStage: SignupCardStage {
+        switch card {
+        case .editing: return .editing
+        case .awaitingCode(let step): return .awaitingCode(signedIn: step.held != nil)
+        case .verified: return .verified
+        }
+    }
+
+    var phase: SignupPhase { SignupPhases.phase(progress: progress, card: cardStage) }
+
+    var primaryAction: SignupPrimaryAction {
+        SignupPhases.primaryAction(
+            progress: progress,
+            card: cardStage,
+            formReady: form.canSubmit && !isSubmitting && !isValidating
+        )
+    }
+
+    /// « Continuer avec l'e-mail seulement » — l'adresse paraît.
+    func skipPhone() {
+        phoneSkipped = true
+        advanceProgress()
+    }
+
+    private func advanceProgress() {
+        let next = progress.advanced(
+            phoneGiven: form.hasPhone && form.isPhoneValid,
+            phoneSkipped: phoneSkipped,
+            emailValid: form.isEmailValid
+        )
+        if next != progress { progress = next }
+    }
+
+    /// « Valider mon compte maintenant » : crée le compte en TENANT sa session,
+    /// et fait paraître le code dans la carte. `true` quand le compte existe.
+    @discardableResult
+    func validateNow() async -> Bool {
+        guard form.canSubmit, !isSubmitting, !isValidating, case .editing = card else { return false }
+        isValidating = true
+        clearFeedback()
+        defer { isValidating = false }
+
+        do {
+            let request = form.registerRequest().referred(byCode: referrals.recall())
+            let hold = try await registrar.registerHoldingSession(request)
+            referrals.forget()
+            switch hold {
+            case .session(let held, let pendingSessionToken):
+                let email = form.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                beginCode(SignupCodeStep(email: email, pendingSessionToken: pendingSessionToken, held: held))
+            case .verificationRequired(let pending):
+                pendingVerification = pending
+                beginCode(SignupCodeStep(email: pending.email, pendingSessionToken: pending.pendingSessionToken, held: nil))
+            }
+            return true
+        } catch {
+            apply(error)
+            return false
+        }
+    }
+
+    private func beginCode(_ step: SignupCodeStep) {
+        let entry = makeCodeEntry(step)
+        entry.onVerified = { [weak self] in self?.verify(by: .code) }
+        entry.onProvenElsewhere = { [weak self] in self?.verify(by: .link) }
+        codeEntry = entry
+        card = .awaitingCode(step)
+    }
+
+    /// Le code juste valide toujours ; le lien ouvert AILLEURS ne valide que le
+    /// compte dont la session est tenue ici — « si et seulement si » (#8083) :
+    /// un compte sans session n'entre que par le code saisi sur cet appareil.
+    private func verify(by proof: SignupProof) {
+        guard case .awaitingCode(let step) = card else { return }
+        if proof == .link, step.held == nil { return }
+        card = .verified(SignupVerified(proof: proof, held: step.held))
+    }
+
+    /// Ce qui ouvre la session pour « S'inscrire » sans code ou « Parler aux
+    /// autres » — `nil` quand le compte n'a encore rien à ouvrir. L'hôte
+    /// l'appelle une fois l'inscription refermée (#8059).
+    func sessionOpener() -> ProvenSessionOpener? {
+        switch card {
+        case .editing:
+            return nil
+        case .awaitingCode(let step):
+            return step.held.map(openHeld)
+        case .verified(let verified):
+            guard verified.proof == .code, let entry = codeEntry else { return verified.held.map(openHeld) }
+            let fallback = verified.held.map(openHeld)
+            return {
+                entry.openProvenSession()
+                if !entry.sessionOpened { fallback?() }
+            }
+        }
+    }
+
+    private func openHeld(_ held: EmailProvenSession) -> ProvenSessionOpener {
+        let confirmer = self.confirmer
+        let celebration = self.celebration
+        return {
+            confirmer.openSession(held)
+            celebration.prepare(userId: held.user.id)
         }
     }
 
@@ -536,4 +693,31 @@ final class SignupViewModel: ObservableObject {
         defaultValue: "L'inscription a été refusée — réessayez dans un instant.",
         bundle: .main
     )
+}
+
+// MARK: - La carte de l'inscription (#8288)
+
+/// Le compte que la carte a créé et qui attend son code.
+struct SignupCodeStep {
+    let email: String
+    /// Le jeton d'attente (#8083) — la carte apprend que le lien a été ouvert ailleurs.
+    let pendingSessionToken: String?
+    /// La session TENUE ; `nil` pour un compte qui n'entre que par son code.
+    let held: EmailProvenSession?
+}
+
+enum SignupProof: Equatable {
+    case code
+    case link
+}
+
+struct SignupVerified {
+    let proof: SignupProof
+    let held: EmailProvenSession?
+}
+
+enum SignupCard {
+    case editing
+    case awaitingCode(SignupCodeStep)
+    case verified(SignupVerified)
 }

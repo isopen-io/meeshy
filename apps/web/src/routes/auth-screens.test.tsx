@@ -306,7 +306,7 @@ describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » c
     const el = mount(<SignupScreen />);
     const column = authColumnIn(el);
     expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
-    expect(column?.querySelector('#signup-email')).not.toBeNull();
+    expect(column?.querySelector('#signup-phone')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 });

@@ -16,6 +16,16 @@ const enSignup = {
   'signup.emailTaken.itsMe': 'It’s me — recover my account',
   'signup.emailTaken.notMe': 'It’s not me',
   'signup.emailTaken.notMeNote': 'The code sent to this address will be required to claim it.',
+  'signup.phone.skip': 'Continue with email only',
+  'signup.card.title': 'Your account',
+  'signup.card.validateNow': 'Verify my account now',
+  'signup.card.validateNow.busy': 'Creating your account…',
+  'signup.card.code.lead': 'Enter the 6-digit code sent to {email}, or open the link you received.',
+  'signup.card.verified': 'Account verified!',
+  'signup.card.verified.lead': 'You’re all set: people read you in your language.',
+  'signup.submit': 'Sign up',
+  'signup.submit.busy': 'Signing up…',
+  'signup.talk': 'Talk to people',
 };
 
 export default enSignup;

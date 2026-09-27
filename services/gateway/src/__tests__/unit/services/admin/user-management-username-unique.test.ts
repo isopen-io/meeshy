@@ -56,3 +56,52 @@ describe('UserManagementService.createUser — pseudonyme unique à la casse pr�
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * UserManagementService.updateUser — renommer un membre (#8289). La fiche
+ * d'administration rend le pseudo éditable ; l'index `User_username_key` est
+ * sensible à la casse, et `updateUser` ne posait AUCUNE question : `Alice`
+ * pouvait coexister avec `alice`. Le refus porte les pseudos LIBRES dérivés du
+ * pseudo demandé, pour que l'écran propose sans un second aller-retour.
+ */
+describe('UserManagementService.updateUser — pseudonyme unique à la casse près (#8289)', () => {
+  const TARGET = '507f1f77bcf86cd799439011';
+
+  it('refuses a username carried by ANOTHER account regardless of case, offers the free candidates, and writes nothing', async () => {
+    const findFirst = jest.fn(async (args: { where: Record<string, unknown> }) =>
+      'username' in args.where ? { id: 'someone-else' } : null);
+    const findMany = jest.fn(async () => [{ username: 'alice1' }]);
+    const update = jest.fn();
+    const svc = makeService(makePrisma({ findFirst, findMany, update }));
+
+    await expect(svc.updateUser(TARGET, { username: 'Alice' } as never)).rejects.toMatchObject({
+      field: 'username',
+      suggestions: ['Alice7', 'Alice_', 'Alice26'],
+    });
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { username: { equals: 'Alice', mode: 'insensitive' }, id: { not: TARGET } },
+    }));
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('lets a member keep their own username under another case (the target is excluded)', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const findUnique = jest.fn().mockResolvedValue(makeUser());
+    const update = jest.fn().mockResolvedValue(makeUser({ username: 'TestUser' }));
+    const svc = makeService(makePrisma({ findFirst, findUnique, update }));
+
+    await svc.updateUser(TARGET, { username: 'TestUser' } as never);
+
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing when the username is not part of the edit', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const update = jest.fn().mockResolvedValue(makeUser());
+    const svc = makeService(makePrisma({ findFirst, update }));
+
+    await svc.updateUser(TARGET, { bio: 'hello' } as never);
+
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+});

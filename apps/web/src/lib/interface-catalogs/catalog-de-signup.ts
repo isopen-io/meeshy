@@ -16,6 +16,16 @@ const deSignup = {
   'signup.emailTaken.itsMe': 'Das bin ich — Konto wiederherstellen',
   'signup.emailTaken.notMe': 'Das bin ich nicht',
   'signup.emailTaken.notMeNote': 'Der an diese Adresse gesendete Code wird verlangt, um sie zu erhalten.',
+  'signup.phone.skip': 'Nur mit E-Mail fortfahren',
+  'signup.card.title': 'Dein Konto',
+  'signup.card.validateNow': 'Konto jetzt bestätigen',
+  'signup.card.validateNow.busy': 'Konto wird erstellt…',
+  'signup.card.code.lead': 'Gib den 6-stelligen Code ein, der an {email} gesendet wurde, oder öffne den erhaltenen Link.',
+  'signup.card.verified': 'Konto bestätigt!',
+  'signup.card.verified.lead': 'Alles bereit: Deine Kontakte lesen dich in ihrer Sprache.',
+  'signup.submit': 'Registrieren',
+  'signup.submit.busy': 'Registrierung…',
+  'signup.talk': 'Mit anderen sprechen',
 };
 
 export default deSignup;

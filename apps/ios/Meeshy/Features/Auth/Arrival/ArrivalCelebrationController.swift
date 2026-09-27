@@ -14,6 +14,13 @@ protocol ArrivalPrefetching: AnyObject {
 @MainActor
 protocol ArrivalCelebrating: AnyObject {
     func begin(userId: String)
+    /// Le préchargement SEUL, sans la fête : la carte de l'inscription a déjà
+    /// joué son feu d'artifice quand elle ouvre la session (#8288).
+    func prepare(userId: String)
+}
+
+extension ArrivalCelebrating {
+    func prepare(userId: String) {}
 }
 
 /// La célébration de l'arrivée (#8089, jumelle iOS de #8088) : la feuille
@@ -64,6 +71,10 @@ final class ArrivalCelebrationController: ObservableObject, ArrivalCelebrating {
             guard !Task.isCancelled else { return }
             self?.isShowing = false
         }
+    }
+
+    func prepare(userId: String) {
+        startPrefetch(for: userId)
     }
 
     /// Toucher l'écran passe la fête — le préchargement, lui, continue.

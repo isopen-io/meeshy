@@ -16,6 +16,16 @@ const ptSignup = {
   'signup.emailTaken.itsMe': 'Sou eu — recuperar minha conta',
   'signup.emailTaken.notMe': 'Não sou eu',
   'signup.emailTaken.notMeNote': 'O código enviado para este endereço será pedido para obtê-lo.',
+  'signup.phone.skip': 'Continuar só com o e-mail',
+  'signup.card.title': 'A sua conta',
+  'signup.card.validateNow': 'Validar a minha conta agora',
+  'signup.card.validateNow.busy': 'A criar a conta…',
+  'signup.card.code.lead': 'Introduza o código de 6 dígitos enviado para {email} ou abra o link recebido.',
+  'signup.card.verified': 'Conta validada!',
+  'signup.card.verified.lead': 'Tudo pronto: os seus contactos leem-no na língua deles.',
+  'signup.submit': 'Inscrever-me',
+  'signup.submit.busy': 'A inscrever…',
+  'signup.talk': 'Falar com os outros',
 };
 
 export default ptSignup;

@@ -292,6 +292,8 @@ const dropServiceWorkerScripts = (): Plugin => ({
  */
 const FIXTURE_MODULE = /\/src\/lib\/api\/fixtures[\w-]*\.ts$/;
 
+const proxyTarget = process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me';
+
 export default defineConfig({
   /**
    * LE LIEN PROFOND CASSAIT SES PROPRES ACTIFS (#5725, D-27 — corrigé en
@@ -352,6 +354,9 @@ export default defineConfig({
      */
     __FIXTURES__: JSON.stringify(declaredDataSource !== 'gateway'),
     __APP_VERSION__: JSON.stringify(appVersion),
+    /** La passerelle que le proxy de dev vise (#8287) — l'écran de connexion la
+     * montre EN DÉVELOPPEMENT seulement, comme le sélecteur iOS au simulateur. */
+    __API_PROXY_TARGET__: JSON.stringify(proxyTarget),
   },
   /**
    * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
@@ -377,7 +382,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/v1': {
-        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        target: proxyTarget,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
@@ -394,7 +399,7 @@ export default defineConfig({
        * verrait passer `localhost:5173` telle quelle et la refuserait.
        */
       '/socket.io': {
-        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        target: proxyTarget,
         ws: true,
         changeOrigin: true,
         configure: (proxy) => {

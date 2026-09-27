@@ -11,7 +11,7 @@ import { useEffect, useState, type ReactNode } from 'react';
  * Le rendu conditionnel, lui, ne ment à personne.
  *
  * **L'animation est une ENTRÉE, jamais une sortie.** La loi des barreaux est
- * monotone (`signup-rungs.ts`) : rien ne se referme, donc il n'y a rien à
+ * monotone (`signup-phases.ts`, #8288) : rien ne se referme, donc il n'y a rien à
  * animer en sens inverse. Le ressort est celui que l'inscription emploie déjà
  * (`.signup-spring`, `app.css` § « LE RESSORT DU COMPOSER ») : une grille
  * `0fr → 1fr`, donc la HAUTEUR réelle du contenu, jamais une valeur devinée
