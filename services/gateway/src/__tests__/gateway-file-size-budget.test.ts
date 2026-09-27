@@ -165,6 +165,11 @@ const MAX_LINES = 1000;
  * `services/MentionService.ts` : SORTI (1235 → 687, #7852, 2026-09-25). Les
  * suggestions d'autocomplete sont parties vers `services/mentions/`, avec la
  * portée qu'elles partagent désormais avec la validation à l'envoi.
+ *
+ * `services/AuthService.ts` : SORTI (1324 → 945, #8238, 2026-09-27). La
+ * vérification du numéro par SMS est partie vers `services/auth/phone-verification.ts`
+ * avant que la loi du délai de grâce (`services/auth/account-activation.ts`)
+ * n'entre dans la porte du mot de passe.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 3761,
@@ -178,7 +183,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/EmailService.ts': 1032,
   'server.ts': 1406,
   'services/PostFeedService.ts': 1199,
-  'services/AuthService.ts': 1324,
   'services/messaging/MessageProcessor.ts': 1110,
   'services/PushNotificationService.ts': 1032,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
