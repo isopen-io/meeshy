@@ -42,7 +42,8 @@ const SOURCE_RE = /\.tsx?$/;
 // 348 → 303 (#7716, lot admin).
 // 303 → 287 (#7716, lot appels).
 // 287 → 235 (#7716, lot authentification et compte).
-const BASELINE = 235;
+// 235 → 191 (#7716, lot profil et annuaire).
+const BASELINE = 191;
 
 export const isCountedFile = (name) => SOURCE_RE.test(name) && !TEST_FILE_RE.test(name);
 

@@ -11,7 +11,7 @@ export const PROFILE_IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,
 /**
  * **TÉLÉVERSER UNE IMAGE DE PROFIL** — la moitié de `performImageUpdate` qui
  * ne dépend pas de QUI la pose : recompresser, puis monter par
- * `POST /api/v1/attachments/upload`. Le membre la pose ensuite sur lui-même
+ * `POST attachments.upload`. Le membre la pose ensuite sur lui-même
  * (`PATCH /users/me/avatar`), l'administrateur sur un membre
  * (`PUT /admin/users/:userId/profile-images/:kind`, #8217) — un seul chemin de
  * recompression et de montage pour les deux, jamais une jumelle.

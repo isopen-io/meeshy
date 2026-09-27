@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -6,7 +7,7 @@ import type { ApiResult, HttpTransport } from './http';
 
 /**
  * **LE PORT DU PROFIL PUBLIC** (#7032, étendu par #7083) —
- * `GET /api/v1/directory/people/:handle?expand=stats,relation`
+ * `GET directory.peopleByHandle?expand=stats,relation`
  * (`services/gateway/src/routes/directory/person.ts:170`,
  * `routes/users/public-profile.ts#servirProfilPublic`).
  *
@@ -221,7 +222,7 @@ export async function loadPublicProfile(
   const query = new URLSearchParams({ expand: PUBLIC_PROFILE_EXPAND });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/directory/people/${encodeURIComponent(params.handle)}?${query.toString()}`,
+    path: `${directoryEndpoints.peopleByHandle(params.handle)}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
