@@ -785,6 +785,8 @@ struct CallView: View {
 
             CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
                 .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
+            CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
+                .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
             // Live captions toggle — floating vertical control on the trailing
             // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
@@ -1718,6 +1720,11 @@ struct CallView: View {
                     screenSharePicker.toggle(controller: callManager.screenShare)
                 }
                 .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
+            }
+            if callManager.mayRequestRecording || callManager.recording.phase.isActive {
+                callControlButton(icon: callManager.recording.phase.isActive ? "stop.circle.fill" : "record.circle", color: MeeshyColors.error, bgColor: MeeshyColors.error, isActive: callManager.recording.phase.isActive, toggleValue: callManager.recording.phase.isActive, caption: CallRecordingCopy.caption, label: CallRecordingCopy.label(isActive: callManager.recording.phase.isActive), hint: CallRecordingCopy.hint, isToggle: true) {
+                    _ = callManager.recording.phase.isActive ? callManager.recording.stop() : callManager.recording.request()
+                }
             }
 
             // PiP système — réduire en fenêtre vidéo flottante. Visible seulement

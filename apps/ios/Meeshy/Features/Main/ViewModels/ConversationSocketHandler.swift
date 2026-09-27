@@ -655,6 +655,7 @@ final class ConversationSocketHandler {
                                     callSummaryJson: callSummaryJson,
                                     serverUpdatedAt: serverUpdatedAt
                                 )
+                                try await persistence.applyCallNoticeAttachments(from: apiMsg)
                             } catch {
                                 Logger.messages.warning("[ConversationSocket] applyCallNoticeUpdate failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                             }
