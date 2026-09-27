@@ -132,9 +132,11 @@ struct ArrivalCelebrationView: View {
                 .fill(MeeshyColors.success.opacity(0.16))
                 .frame(width: 104, height: 104)
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 52, weight: .semibold))
+                .font(.system(.largeTitle).weight(.semibold))
+                .imageScale(.large)
                 .foregroundStyle(MeeshyColors.success)
         }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .scaleEffect(motion == .fade || appeared ? 1 : 0.4)
         .accessibilityHidden(true)
     }

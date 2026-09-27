@@ -112,10 +112,10 @@ final class ArrivalPrefetcher: ArrivalPrefetching {
     static let prewarmedReelCount = 2
 
     func prefetch() async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in await Self.prefetchFeedAndReels() }
-            group.addTask { @MainActor in await ContactsListViewModel().loadFriends() }
-        }
+        let feed = Task { await Self.prefetchFeedAndReels() }
+        let contacts = Task { await ContactsListViewModel().loadFriends() }
+        await feed.value
+        await contacts.value
     }
 
     private static func prefetchFeedAndReels() async {
