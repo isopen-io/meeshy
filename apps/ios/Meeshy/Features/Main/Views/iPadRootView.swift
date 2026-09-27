@@ -278,8 +278,7 @@ struct iPadRootView: View {
         // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
         // écrivain disque des posts, commentaires et réactions.
         // `arm()` est idempotent — jamais désarmé (miroir de RootView).
-        DependencyContainer.shared.feedSocketHandler.arm()
-        await ConversationSyncEngine.shared.startSocketRelay()
+        await RealtimeRelays.arm()
 
         Task.detached(priority: .background) {
             try? await Task.sleep(for: .seconds(5))

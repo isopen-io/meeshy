@@ -214,7 +214,7 @@ extension ConversationMediaGalleryView {
         case .scene(let scene):
             StoryPhotoSaveService.shared.save(scene: scene)
         case .media(let request):
-            saveCoordinator.requestSave(request)
+            saveCoordinator.save(request)
         }
     }
 

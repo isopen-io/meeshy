@@ -504,6 +504,8 @@ class ConversationViewModel: ObservableObject {
     let afterReadConsumer: AfterReadConsumptionProviding
     /// #8305 — ce que la conversation garde armé, entre deux envois et deux visites.
     let protectionPreferences: ConversationProtectionPreferenceProviding
+    /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy à l'accusé de réception.
+    let receivedMediaAutoSaver: ReceivedMediaAutoSaving
     private let activeCallService: ActiveCallServiceProviding
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
@@ -589,8 +591,10 @@ class ConversationViewModel: ObservableObject {
         attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
         messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
         afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
-        protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared
+        protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
+        receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared
     ) {
+        self.receivedMediaAutoSaver = receivedMediaAutoSaver
         self.afterReadConsumer = afterReadConsumer
         self.protectionPreferences = protectionPreferences
         self.activeCallService = activeCallService
@@ -1121,6 +1125,7 @@ class ConversationViewModel: ObservableObject {
     /// equally permissive error path.
     func markAsReceived() {
         commandHandler.markAsReceived()
+        receivedMediaAutoSaver.consider(messages)
     }
 
     // MARK: - Préférences de langue (ardoise de cache)
