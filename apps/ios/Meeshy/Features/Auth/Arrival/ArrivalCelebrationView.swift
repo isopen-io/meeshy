@@ -141,25 +141,50 @@ struct ArrivalCelebrationView: View {
         .accessibilityHidden(true)
     }
 
+    private var fireworks: some View {
+        ArrivalFireworksCanvas(startDate: startDate)
+            .ignoresSafeArea()
+    }
+}
+
+/// Le feu d'artifice DESSINÉ — partagé par la célébration de l'arrivée et la
+/// carte de l'inscription, où le code juste le déclenche (#8288). La loi du
+/// temps est `ArrivalFireworks` ; ce dessin n'en garde aucun état.
+///
+/// `stopsAfterShow` : la carte le retire une fois la dernière gerbe éteinte —
+/// l'écran de l'inscription reste ouvert, et un `TimelineView` qui ne dessine
+/// plus rien ne doit pas continuer à battre à 120 Hz.
+struct ArrivalFireworksCanvas: View {
+    let startDate: Date
+    var stopsAfterShow = false
+    @State private var isOver = false
+
     private static let palette: [Color] = [
         MeeshyColors.indigo400, MeeshyColors.purple500, MeeshyColors.success, MeeshyColors.warning, MeeshyColors.info,
     ]
 
-    private var fireworks: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                let elapsed = timeline.date.timeIntervalSince(startDate)
-                for spark in ArrivalFireworks.sparks(at: elapsed) {
-                    let radius = spark.radius
-                    let rect = CGRect(x: spark.x * size.width - radius, y: spark.y * size.height - radius,
-                                      width: radius * 2, height: radius * 2)
-                    context.fill(Path(ellipseIn: rect),
-                                 with: .color(Self.palette[spark.colorIndex % Self.palette.count].opacity(spark.opacity)))
+    var body: some View {
+        if !isOver {
+            TimelineView(.animation) { timeline in
+                Canvas { context, size in
+                    let elapsed = timeline.date.timeIntervalSince(startDate)
+                    for spark in ArrivalFireworks.sparks(at: elapsed) {
+                        let radius = spark.radius
+                        let rect = CGRect(x: spark.x * size.width - radius, y: spark.y * size.height - radius,
+                                          width: radius * 2, height: radius * 2)
+                        context.fill(Path(ellipseIn: rect),
+                                     with: .color(Self.palette[spark.colorIndex % Self.palette.count].opacity(spark.opacity)))
+                    }
                 }
             }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task {
+                guard stopsAfterShow else { return }
+                try? await Task.sleep(for: .seconds(ArrivalFireworks.showDuration))
+                guard !Task.isCancelled else { return }
+                isOver = true
+            }
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }

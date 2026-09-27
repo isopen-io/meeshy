@@ -30,9 +30,22 @@ final class MockSignupRegistrar: SignupRegistering {
         return try registerResult.get()
     }
 
+    /// #8288 — « Valider mon compte maintenant » : la session est TENUE.
+    var holdResult: Result<RegistrationHold, Error> = .success(.verificationRequired(
+        PendingEmailVerification(email: "awa@example.com", accountCreated: true)
+    ))
+    private(set) var holdCallCount = 0
+
+    func registerHoldingSession(_ request: RegisterRequest) async throws -> RegistrationHold {
+        holdCallCount += 1
+        lastRegisterRequest = request
+        return try holdResult.get()
+    }
+
     func reset() {
         registerResult = .success(.authenticated)
         registerCallCount = 0
+        holdCallCount = 0
         lastRegisterRequest = nil
     }
 }
