@@ -66,14 +66,14 @@ extension BubbleStandardLayout {
         case 1:
             let item = items[0]
             if item.type == .video {
-                // Video : the cell fills the bubble width, and the source
-                // ratio drives the height — no cap. Portrait 9:16 becomes tall
-                // (≈ width × 1.78), landscape 16:9 becomes short (≈ width ×
-                // 0.56). Le ratio était reporté par le lecteur inline ; la
-                // tuile n'étant plus qu'un poster (#8231), il se pose ici.
+                // Video : the cell fills the bubble width, and the renderer's
+                // own `.aspectRatio(videoAspectRatio, .fit)` drives the height
+                // intrinsically from the source ratio — no cap. Portrait 9:16
+                // becomes tall (≈ width × 1.78), landscape 16:9 becomes short
+                // (≈ width × 0.56). Replaces the legacy hardcoded `height: 200`
+                // that squashed portrait sources.
                 makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
-                    .frame(width: gridMaxWidth,
-                           height: gridMaxWidth / (item.videoAspectRatio ?? (16.0 / 9.0)))
+                    .frame(width: gridMaxWidth)
             } else {
                 makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth, height: 240)
@@ -337,21 +337,24 @@ fileprivate struct BubbleGridCell: View {
         revealedAttachmentIds.contains(attachment.id)
     }
 
-    /// **Une seule forme pour l'image ET la vidéo** (#8231) : une vidéo n'a
-    /// plus de corps à elle, qui montait un lecteur inline dans la tuile. Elle
-    /// s'y montre en poster fixe, et son toucher ouvre le plein écran — où la
-    /// galerie lance la lecture. Le chemin d'une pièce protégée ne change pas.
+    /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
+    /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
+    /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
+    /// vidéo n'est qu'un poster.
     var body: some View {
-        standardBody
+        if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
+            videoBody
+        } else {
+            standardBody
+        }
     }
 
-    /// Image, vidéo (poster), pièce protégée : toucher = plein écran,
-    /// DownloadBadge centré pour l'image seule.
+    /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
+    /// écran, DownloadBadge centré pour l'image seule.
     private var standardBody: some View {
         ZStack {
             Color.black
             mediaLayer
-            consumptionBar
             overflowOverlay
             blurOverlay
             viewCountBadge
@@ -437,6 +440,47 @@ fileprivate struct BubbleGridCell: View {
         }
     }
 
+    /// **Lecture inline à trois contrôles : son, lecture/pause, plein écran**
+    /// (#8231, porteur 2026-09-27). Le bouton lecture joue DANS la bulle ;
+    /// toucher la vidéo ailleurs — le poster avant, la surface pendant — ouvre
+    /// le plein écran, où la galerie reprend le moteur partagé à la même
+    /// position. Les gestes vivent tous DANS le lecteur : un tap simultané
+    /// posé sur la tuile faisait jouer ET ouvrir sur un seul toucher.
+    ///
+    /// PAS de `.frame(maxWidth: .infinity, maxHeight: .infinity)` sur le
+    /// `VideoAvailabilityResolver` : ça écraserait la contrainte d'`.aspectRatio`
+    /// posée par le `_InlineRenderer` interne, et la bulle s'aplatirait en
+    /// paysage au moment du tap-play.
+    private var videoBody: some View {
+        ZStack {
+            Color.black
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineMinimal,
+                    accentColor: contactColor,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    playButtonDiameter: solo ? 64 : 44,
+                    surfaceTapExpands: true,
+                    onDownload: onDownload,
+                    onExpand: { openFullscreen() }
+                )
+            }
+            .overlay(alignment: .bottom) {
+                MediaConsumptionProgressBar(
+                    attachmentId: attachment.id,
+                    accentHex: contactColor,
+                    servedConsumption: attachment.currentUserConsumption,
+                    totalDuration: Double(attachment.duration ?? 0) / 1000.0)
+            }
+            viewCountBadge
+        }
+        .clipped()
+    }
+
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
 
     @ViewBuilder
@@ -450,23 +494,6 @@ fileprivate struct BubbleGridCell: View {
                                     playButtonDiameter: solo ? 64 : 44)
         default:
             EmptyView()
-        }
-    }
-
-    /// Jusqu'où l'utilisateur a regardé la vidéo — la barre que portait le
-    /// lecteur inline, restée sur le poster : la lecture a quitté la tuile, la
-    /// trace de la lecture non.
-    @ViewBuilder
-    private var consumptionBar: some View {
-        if attachment.type == .video, !attachmentIsProtected || isRevealed {
-            VStack {
-                Spacer()
-                MediaConsumptionProgressBar(
-                    attachmentId: attachment.id,
-                    accentHex: contactColor,
-                    servedConsumption: attachment.currentUserConsumption,
-                    totalDuration: Double(attachment.duration ?? 0) / 1000.0)
-            }
         }
     }
 
@@ -716,6 +743,12 @@ struct BubbleCarouselView: View {
             carouselIndex = newIndex
 
             if oldIndex != newIndex {
+                let oldAttachment = items[oldIndex]
+                if oldAttachment.type == .video {
+                    // BUG E fix : release (URL-gated) plutôt que pause sur
+                    // swipe-away — le player ne traîne pas en mémoire.
+                    SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)
+                }
                 HapticFeedback.light()
             }
 
@@ -728,6 +761,11 @@ struct BubbleCarouselView: View {
     private var carouselTopBar: some View {
         HStack(spacing: 0) {
             Button {
+                // BUG E fix : libère le player de la slide active (URL-gated).
+                let current = items[max(0, min(carouselIndex, items.count - 1))]
+                if current.type == .video {
+                    SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
+                }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCarousel = false
                 }
@@ -861,13 +899,23 @@ struct BubbleCarouselView: View {
 
     // MARK: - Video Cell
 
-    /// Une page vidéo du carrousel est un POSTER (#8231) : le toucher de la
-    /// page (`carouselPage`) ouvre le plein écran, qui lance la lecture.
+    /// Même lecteur que la tuile (#8231) : trois contrôles, et le toucher de
+    /// la vidéo hors contrôles ouvre le plein écran.
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        ConversationVideoPoster(attachment: attachment,
-                                accentHex: contactColor,
-                                playButtonDiameter: 64,
-                                keepsNaturalRatio: true)
+        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineMinimal,
+                accentColor: contactColor,
+                frame: .bubble,
+                availability: availability,
+                performance: .carousel,
+                surfaceTapExpands: true,
+                onDownload: onDownload,
+                onExpand: { fullscreenAttachment = attachment }
+            )
+        }
             .overlay(alignment: .bottom) {
                 MediaConsumptionProgressBar(
                     attachmentId: attachment.id,

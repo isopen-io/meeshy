@@ -42,15 +42,22 @@ struct BubbleAttachmentView: View {
         case .video:
             // Chemin mort en pratique — une vidéo passe par `visualMediaGrid`
             // (`BubbleStandardLayout`). S'il était atteint, il suivrait la même
-            // règle que le fil (#8231) : un poster fixe, jamais de lecture dans
-            // la bulle, et le toucher remis à l'hôte qui ouvre le plein écran.
-            ConversationVideoPoster(attachment: attachment,
-                                    accentHex: accentHex,
-                                    playButtonDiameter: 64)
-                .aspectRatio(attachment.videoAspectRatio ?? (16.0 / 9.0), contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                .contentShape(Rectangle())
-                .onTapGesture { onOpenVideo?(attachment) }
+            // règle que le fil (#8231) : trois contrôles, et le toucher de la
+            // vidéo hors contrôles remis à l'hôte qui ouvre le plein écran.
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineMinimal,
+                    accentColor: accentHex,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    surfaceTapExpands: true,
+                    onDownload: onDownload,
+                    onExpand: { onOpenVideo?(attachment) }
+                )
+            }
 
         case .audio:
             // Cohérence avec case .video : on wrap dans un resolver qui

@@ -119,7 +119,7 @@ final class ConversationVideoInlineMinimalGuardTests: XCTestCase {
                       "le poster rend le toucher à la cellule : un seul déclencheur")
         XCTAssertTrue(poster.contains("MeeshyVideoThumbnail("),
                       "le poster réutilise l'extraction de première image du SDK")
-        for forbidden in ["MeeshyVideoPlayer(", "AVPlayer", "onTapGesture", "Button"] {
+        for forbidden in ["MeeshyVideoPlayer(", "AVPlayer", "onTapGesture", "Button(", "Button {"] {
             XCTAssertFalse(poster.contains(forbidden), "le poster est une image fixe décorative : `\(forbidden)` interdit")
         }
         let bubbles = try stripped("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")

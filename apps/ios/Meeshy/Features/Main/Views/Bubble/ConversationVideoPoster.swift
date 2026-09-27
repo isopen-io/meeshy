@@ -2,32 +2,25 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **Le visage d'une vidéo dans le fil : une image fixe, jamais un lecteur**
-/// (#8231, directive porteur 2026-09-27 : « Supprime la lecture de vidéo
-/// inline ! Au touché d'une vidéo/scène reçue, ouvrir en plein écran
-/// DIRECTEMENT ! »).
+/// **Le visage d'une vidéo du fil qui ne se LIT PAS dans sa tuile** (#8231) :
+/// la tuile de débordement (« +N », dont le toucher ouvre le carrousel) et la
+/// vidéo protégée (vue unique, flou), dont le toucher suit son chemin de
+/// révélation. Partout ailleurs, la vidéo se lit inline à trois contrôles.
 ///
-/// Monté par les trois cellules vidéo du fil — tuile de grille et page de
-/// carrousel des Bulles, tuile du mode Focal (que Script monte aussi). Aucun
-/// `AVPlayer` n'est créé : l'image vient de `MeeshyVideoThumbnail` (SDK), qui
-/// sert la vignette du serveur, sinon la première image extraite par un `GET`
-/// partiel et persistée, et fait patienter sur le thumbHash.
+/// Aucun `AVPlayer` n'est créé : l'image vient de `MeeshyVideoThumbnail`
+/// (SDK), qui sert la vignette du serveur, sinon la première image extraite
+/// par un `GET` partiel et persistée, et fait patienter sur le thumbHash.
 ///
 /// **Le poster ne capte AUCUN toucher** (`.allowsHitTesting(false)`) : le geste
-/// appartient à la cellule, qui ouvre le plein écran — la galerie lance la
-/// lecture. Le badge play est DÉCORATIF ; en faire un bouton rouvrirait le
-/// double déclenchement que ce lot retire (le bouton du lecteur inline jouait
-/// dans la bulle pendant que le toucher de la tuile ouvrait la galerie).
+/// appartient à la cellule. Le badge play est DÉCORATIF ; en faire un bouton
+/// donnerait deux déclencheurs à un seul toucher.
 struct ConversationVideoPoster: View {
     let attachment: MessageAttachment
     let accentHex: String
     /// Diamètre extérieur du badge play : 64 pour une vidéo seule, 44 en grille
-    /// — les cotes du bouton de l'ancien lecteur inline, que la loi de la
+    /// — les cotes du bouton du lecteur inline de la tuile, que la loi de la
     /// Lentille (web, `curve-media-grid.mjs`) relit sur la grille.
     var playButtonDiameter: CGFloat = 44
-    /// `true` dans une page de carrousel plus haute que la vidéo : l'image garde
-    /// son rapport naturel, centrée, au lieu de remplir la page en la rognant.
-    var keepsNaturalRatio: Bool = false
 
     var body: some View {
         ZStack {
@@ -41,24 +34,15 @@ struct ConversationVideoPoster: View {
         .accessibilityValue(attachment.durationFormatted ?? "")
     }
 
-    @ViewBuilder
     private var poster: some View {
-        let thumbnail = MeeshyVideoThumbnail(
+        MeeshyVideoThumbnail(
             attachment: attachment,
             accentColor: accentHex,
             showPlayBadge: false,
             showDurationBadge: false
         )
-        if keepsNaturalRatio {
-            thumbnail
-                .aspectRatio(attachment.videoAspectRatio ?? (16.0 / 9.0), contentMode: .fit)
-                .clipped()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            thumbnail
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-        }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .clipped()
     }
 
     private var playBadge: some View {

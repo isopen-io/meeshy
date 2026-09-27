@@ -57,9 +57,10 @@ struct DownloadBadgeView: View {
     /// aucun ne voyait l'autre. Il ne sert plus que l'image, dont la vue n'a pas
     /// d'autre affordance.
     ///
-    /// Depuis #8231 la vidéo ne se lit plus dans le fil : son lecteur est
-    /// celui du PLEIN ÉCRAN (la page vidéo de la galerie résout la même
-    /// disponibilité), et la tuile ne montre qu'un poster.
+    /// Depuis #8231 ce lecteur, dans le fil, n'a que trois contrôles (son,
+    /// lecture/pause, plein écran) ; son bouton central garde le
+    /// téléchargement. La tuile de débordement et la pièce protégée ne
+    /// montrent qu'un poster : c'est le plein écran qui y télécharge.
     var yieldsToThePlayer: Bool {
         attachment.type == .video
     }
