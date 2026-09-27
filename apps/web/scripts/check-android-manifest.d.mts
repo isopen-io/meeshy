@@ -14,6 +14,12 @@ export declare function auditManifestPermissions(
   options: Readonly<{ readonly manifest: string; readonly required?: readonly string[] }>,
 ): readonly PermissionViolation[];
 
+export declare const FORBIDDEN_PERMISSIONS: readonly string[];
+
+export declare function auditForbiddenPermissions(
+  options: Readonly<{ readonly manifest: string; readonly forbidden?: readonly string[] }>,
+): readonly string[];
+
 export declare function auditCallComponents(
   options: Readonly<{ readonly manifest: string }>,
 ): readonly string[];

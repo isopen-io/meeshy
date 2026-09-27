@@ -101,14 +101,24 @@ export async function retireEarlierClaims(prisma: Pick<PrismaClient, 'user'>, em
     where: { claimedEmail: normalizeEmail(email), isActive: false },
     select: { id: true },
   });
-  await Promise.all(
-    earlier.map(({ id }) =>
+  await retireClaims(prisma, earlier);
+}
+
+/**
+ * Éteindre des revendications : clés, pseudo (`claim-<id>`), numéro et jetons
+ * de recherche. La ligne reste — inactive, sans rien qui la rattache à
+ * personne — pour ne pas avoir à défaire ce qui a pu y être accroché (#8227).
+ */
+async function retireClaims(prisma: Pick<PrismaClient, 'user'>, claims: ReadonlyArray<{ readonly id: string }>): Promise<number> {
+  const written = await Promise.all(
+    claims.map(({ id }) =>
       prisma.user.updateMany({
         where: { id, isActive: false },
         data: {
           username: `claim-${id}`,
           // Une revendication éteinte n'est plus personne : aucun jeton de recherche.
           searchTokens: [],
+          phoneNumber: null,
           emailVerificationToken: null,
           emailVerificationCode: null,
           emailVerificationExpiry: null,
@@ -116,6 +126,20 @@ export async function retireEarlierClaims(prisma: Pick<PrismaClient, 'user'>, em
       }),
     ),
   );
+  return written.reduce((total, { count }) => total + count, 0);
+}
+
+/**
+ * LE BALAYAGE DES REVENDICATIONS ABANDONNÉES (#8227) : une revendication
+ * jamais prouvée dont la paire a expiré s'éteint et libère son pseudo. Un
+ * compte actif n'est jamais touché (`isActive: false` dans chaque écriture).
+ */
+export async function sweepAbandonedEmailClaims(prisma: Pick<PrismaClient, 'user'>, now: Date): Promise<number> {
+  const abandoned = await prisma.user.findMany({
+    where: { isActive: false, claimedEmail: { not: null }, emailVerificationExpiry: { lt: now } },
+    select: { id: true },
+  });
+  return retireClaims(prisma, abandoned);
 }
 
 export type EmailClaimStore = Pick<

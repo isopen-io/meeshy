@@ -169,7 +169,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   // POST /register - Main registration endpoint
   fastify.post('/register', {
     schema: {
-      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation. When the address already belongs to another account, the 409 EMAIL_TAKEN carries its masked identity (`emailOwner`); resubmitting with `claimEmail: true` creates the account inactive, without the address, until the code or the link is presented to POST /auth/verify-email (#8214).',
+      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation. When the address already belongs to another account, the 409 EMAIL_TAKEN carries its masked identity (`emailOwner`); resubmitting with `claimEmail: true` creates the account inactive, without the address, until the code or the link is presented to POST /auth/verify-email (#8214). A claim cannot carry a transferred phone number: `claimEmail` with `phoneTransferToken` is refused with 400 CLAIM_WITH_PHONE_TRANSFER (#8227).',
       tags: ['auth'],
       summary: 'User registration',
       body: registerRequestSchema,
@@ -322,6 +322,18 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       };
 
       const requestContext = await getRequestContext(request, { geoTimeoutMs: GEO_AVANT_REPONSE_MS });
+
+      // #8227 — une REVENDICATION d'adresse n'emporte pas de numéro TRANSFÉRÉ.
+      // Le compte revendiquant naît inactif et peut ne jamais être prouvé :
+      // transférer maintenant retirerait le numéro à un compte vivant pour un
+      // compte qui n'existera peut-être jamais, et différer le transfert à la
+      // preuve exigerait de garder un jeton de transfert (vie courte) au-delà
+      // de sa fenêtre. Refus explicite, avant de toucher au jeton : l'un, puis
+      // l'autre, une fois le compte actif.
+      if (inscription.claimEmail && inscription.phoneTransferToken) {
+        rembourserLaTentative(limiteurs, request);
+        return sendBadRequest(reply, "Une revendication d'adresse ne peut pas emporter un numéro transféré : revendiquez l'adresse, puis transférez le numéro depuis le compte activé.", { code: 'CLAIM_WITH_PHONE_TRANSFER' });
+      }
 
       // Check if phoneTransferToken is provided
       let phoneTransferValidated = false;
