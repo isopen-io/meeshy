@@ -145,7 +145,16 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "callsNonContacts", icon: "phone.arrow.down.left",
                     title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
-                    color: "FF6B6B", keyPath: \.allowCallsFromNonContacts
+                    color: "FF6B6B", keyPath: \.acceptCallsFromNonContacts,
+                    info: SettingsInfo(
+                        id: "privacy.calls_non_contacts",
+                        title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
+                        message: String(
+                            localized: "settings.privacy.calls_non_contacts.info",
+                            defaultValue: "Désactivé, seuls vos amis peuvent vous faire sonner. Les autres voient que vous n'acceptez que les appels de vos contacts.",
+                            bundle: .main
+                        )
+                    )
                 ),
             ]
         )
@@ -279,8 +288,7 @@ struct PrivacySettingsView: View {
 
     /// Bascules de confidentialité pas encore appliquées — ni côté iOS, ni
     /// côté gateway (`blockScreenshots` n'a pas d'API publique iOS pour
-    /// réellement bloquer une capture ; `allowCallsFromNonContacts` exigerait
-    /// de toucher `CallManager.swift`, hors-lane ici ; `saveMediaToGallery`
+    /// réellement bloquer une capture ; `saveMediaToGallery`
     /// supposerait un pipeline d'auto-save à la réception, inexistant ;
     /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics` ;
     /// `allowContactRequests`/`allowGroupInvites` exigeraient un check côté
@@ -300,7 +308,6 @@ struct PrivacySettingsView: View {
 
     nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
         \PrivacyPreferences.blockScreenshots,
-        \PrivacyPreferences.allowCallsFromNonContacts,
         \PrivacyPreferences.saveMediaToGallery,
         \PrivacyPreferences.shareUsageData,
         \PrivacyPreferences.allowContactRequests,
