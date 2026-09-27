@@ -3,17 +3,12 @@ import XCTest
 
 /// **Quitter un compte sans l'oublier.**
 ///
-/// `logout()` efface l'entrée du sélecteur (`removeFromSavedAccounts`) : revenir
-/// sur le compte imposait de retaper son identifiant, alors que l'écran de
-/// connexion sait déjà le proposer. `logout(forgettingAccount:)` rend ce seul
-/// geste optionnel — tout le reste (trousseau, caches par compte, files) est
-/// effacé dans les DEUX cas.
-///
-/// **Ce n'est pas un affaiblissement** : une `SavedAccount` ne porte que
-/// l'identité, et `LoginView.attemptAccountLogin` appelle
-/// `login(username:password:)`. Revenir sur le compte redemande le mot de
-/// passe ; le drapeau épargne la SAISIE de l'identifiant, jamais
-/// l'authentification.
+/// `logout()` efface l'entrée du sélecteur (`removeFromSavedAccounts`).
+/// `logout(forgettingAccount: false)` est la « Déconnexion » des réglages
+/// (#8286) : la session finit — trousseau, caches, files — mais le compte
+/// reste listé, et y revenir redemande le mot de passe. « Changer de compte »
+/// ne passe pas par ici : il GARDE la session (`switchAccount(to:)`, témoins
+/// de comportement dans `AuthAccountSwitchingTests`, hôte applicatif).
 ///
 /// **Pourquoi une garde de SOURCE et non un témoin de comportement.** Le corps
 /// de `logout` sort tôt sur `activeUserId`, une propriété PRIVÉE adossée au

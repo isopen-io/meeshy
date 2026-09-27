@@ -46,3 +46,4 @@
 - [2026-09-18 : un modèle PARTAGÉ se remet sur DEUX canaux — l'objet pour qui le lit, la valeur pour qui le passe](decisions/2026-09-18-un-modele-partage-se-remet-sur-deux-canaux-l-objet-pour-qui-le-lit.md)
 - [2026-09-21 : I3 — « délivré puis lu » avance sans geste, la fiche « Vu par » se recharge en DIRECT](decisions/2026-09-21-i3-delivre-puis-lu-avance-sans-geste-la-fiche-vu-par-se-recharge-en.md)
 - [2026-09-27 : refuser un appel avec un message — CallKit ne porte pas de réponse personnalisée, l'écran entrant de l'app la porte](decisions/2026-09-27-refuser-un-appel-avec-un-message-callkit-ne-porte-pas-de-reponse.md)
+- [2026-09-27 : plusieurs comptes sur l'appareil — changer de compte GARDE les sessions, « Déconnexion » les ferme ; le trousseau porte les jetons de chaque compte gardé](decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md)

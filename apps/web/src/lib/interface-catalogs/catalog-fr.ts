@@ -19,6 +19,7 @@ import frMediaViewer from './catalog-fr-media-viewer';
 import frActivation from './catalog-fr-activation';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
+import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
@@ -202,6 +203,7 @@ const fr = {
   ...frVerifyEmail,
   ...frActivation,
   ...frPassword,
+  ...frAccounts,
   ...frCall,
   ...frRowActions,
   ...frCallShell,

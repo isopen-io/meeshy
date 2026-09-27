@@ -155843,43 +155843,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستعود إلى شاشة تسجيل الدخول. سيبقى هذا الحساب في القائمة، وسيُطلب منك كلمة المرور مرة أخرى."
+            "value": "انتقل من حساب إلى آخر دون تسجيل الخروج."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kehrst zum Anmeldebildschirm zurück. Dieses Konto bleibt in der Liste, und das Passwort wird erneut abgefragt."
+            "value": "Wechsle zwischen deinen Konten, ohne dich abzumelden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You will return to the sign-in screen. This account stays in the list, and its password will be asked again."
+            "value": "Move between your accounts without signing out."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volverás a la pantalla de inicio de sesión. Esta cuenta seguirá en la lista y se te pedirá su contraseña."
+            "value": "Pasa de una cuenta a otra sin cerrar sesión."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé."
+            "value": "Passez d’un compte à l’autre sans vous déconnecter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tornerai alla schermata di accesso. Questo account resta nell’elenco e la password verrà richiesta di nuovo."
+            "value": "Passa da un account all’altro senza disconnetterti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você voltará à tela de login. Esta conta continuará na lista e a senha será solicitada novamente."
+            "value": "Alterne entre suas contas sem sair."
           }
         }
       }
@@ -205221,6 +205221,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconectando…"
+          }
+        }
+      }
+    },
+    "accounts.keep_signed_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "البقاء متصلاً على هذا الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät angemeldet bleiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stay signed in on this device"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener la sesión en este dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rester connecté sur cet appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resta connesso su questo dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manter sessão neste dispositivo"
+          }
+        }
+      }
+    },
+    "accounts.row.current": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحساب الحالي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktuelles Konto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuenta actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compte actuel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account attuale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conta atual"
+          }
+        }
+      }
+    },
+    "accounts.row.signed_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angemeldet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión iniciada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connesso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado"
+          }
+        }
+      }
+    },
+    "accounts.add": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة حساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add an account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir una cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi un account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar uma conta"
           }
         }
       }
