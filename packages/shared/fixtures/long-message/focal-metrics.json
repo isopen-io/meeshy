@@ -8,5 +8,6 @@
   "neighborOpacity": 0.62,
   "enterDurationMs": 250,
   "flattenDurationMs": 450,
-  "expandDurationMs": 300
+  "expandDurationMs": 300,
+  "expandCurve": [0.2, 0, 0, 1]
 }

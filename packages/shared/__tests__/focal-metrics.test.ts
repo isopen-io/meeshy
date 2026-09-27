@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { FOCAL_METRICS, focalLoupeScale } from '../utils/focal-metrics.js';
+import { FOCAL_METRICS, focalExpandEasingCss, focalLoupeScale } from '../utils/focal-metrics.js';
 
 const MIRROR_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'long-message', 'focal-metrics.json');
 
@@ -19,6 +19,17 @@ describe('FOCAL_METRICS', () => {
   it('reprend les valeurs iOS de référence (rayon 18, gain 0,05)', () => {
     expect(FOCAL_METRICS.glassRadius).toBe(18);
     expect(FOCAL_METRICS.loupeGain).toBe(0.05);
+  });
+});
+
+describe('le tempo du dépliage (#8232)', () => {
+  it('déplie en 300 ms sur la courbe décélérée que web et iOS jouent tous deux', () => {
+    expect(FOCAL_METRICS.expandDurationMs).toBe(300);
+    expect(FOCAL_METRICS.expandCurve).toEqual([0.2, 0, 0, 1]);
+  });
+
+  it('projette la courbe en cubic-bezier CSS, sans la réécrire', () => {
+    expect(focalExpandEasingCss()).toBe('cubic-bezier(0.2, 0, 0, 1)');
   });
 });
 
