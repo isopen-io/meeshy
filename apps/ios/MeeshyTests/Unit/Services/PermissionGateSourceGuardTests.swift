@@ -17,6 +17,14 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// L'écran d'inscription est découpé par surface (#8288) : la garde lit
+    /// l'écran ENTIER, pas le seul fichier qui portait le champ avant l'extraction.
+    private func signupScreenSource() throws -> String {
+        try ["SignupView.swift", "SignupView+Card.swift", "SignupView+Phone.swift"]
+            .map { try source("Meeshy/Features/Auth/Signup/\($0)") }
+            .joined(separator: "\n")
+    }
+
     private func source(_ relativePath: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // Services
@@ -635,7 +643,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// garde vérifie donc qu'un identifiant est déclaré, sans imposer lequel —
     /// l'imposer reviendrait à exiger le retour d'un champ supprimé.
     func test_signupPasswordFields_optIntoKeychainSave() throws {
-        let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
+        let src = try signupScreenSource()
         XCTAssertEqual(
             src.components(separatedBy: "role: .new").count - 1, 1,
             "Une seule saisie de mot de passe, et elle doit être `.newPassword` (`MeeshyPasswordField` rôle `.new`, #8054)."
@@ -651,8 +659,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// « Afficher le mot de passe » (mesuré au simulateur, #8054). Le champ de
     /// mot de passe se libelle LUI-MÊME, et le bloc ne l'écrase pas.
     func test_signupPasswordField_keepsTheEyeButtonAccessibilityLabel() throws {
-        let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
-        let block = try XCTUnwrap(src.range(of: "private var passwordField: some View").map { String(src[$0.lowerBound...].prefix(1200)) })
+        let src = try signupScreenSource()
+        let block = try XCTUnwrap(src.range(of: "var passwordField: some View").map { String(src[$0.lowerBound...].prefix(1200)) })
         XCTAssertTrue(block.contains("labelsContent: false"), "Le bloc ne doit pas écraser le libellé de l'œil.")
         XCTAssertTrue(block.contains("accessibilityLabel:"), "Le champ porte son propre libellé VoiceOver.")
     }
