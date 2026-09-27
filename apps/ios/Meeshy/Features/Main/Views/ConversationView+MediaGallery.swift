@@ -57,25 +57,35 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     func body(content: Content) -> some View {
         content.fullScreenCover(item: $scrollState.galleryStartAttachment,
                                 onDismiss: handleGalleryDismiss) { startAttachment in
-            ConversationMediaGalleryView(
-                allAttachments: Self.galleryAttachments(start: startAttachment, all: galleryPieces),
-                startAttachmentId: startAttachment.id,
-                accentColor: accentColor,
-                captionMap: viewModel.mediaCaptionMap.merging(catalog.snapshot.captions) { loaded, _ in loaded },
-                senderInfoMap: viewModel.mediaSenderInfoMap.merging(catalog.snapshot.senderInfo) { loaded, _ in loaded },
-                onComposeWithMedia: armCompose,
-                onReplyToMedia: replyToCarrier,
-                onSendReplyToMedia: sendReplyToMedia,
-                replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
-                onReactToMedia: reactToMedia,
-                reactableMedia: { catalog.snapshot.isLoaded($0.id) }
-            )
-            .onAppear(perform: openCatalog)
-            .onReceive(viewModel.$messages) { messages in
-                catalog.syncLive(messages, serverId: viewModel.serverId(for:))
+            // Un vocal (cité, #8230) a son propre plein écran ; la galerie ne
+            // sait rendre que l'image et la vidéo.
+            if startAttachment.type == .audio {
+                audioFullscreen(start: startAttachment)
+            } else {
+                gallery(start: startAttachment)
             }
-            .onDisappear { catalog.close() }
         }
+    }
+
+    private func gallery(start startAttachment: MessageAttachment) -> some View {
+        ConversationMediaGalleryView(
+            allAttachments: Self.galleryAttachments(start: startAttachment, all: galleryPieces),
+            startAttachmentId: startAttachment.id,
+            accentColor: accentColor,
+            captionMap: viewModel.mediaCaptionMap.merging(catalog.snapshot.captions) { loaded, _ in loaded },
+            senderInfoMap: viewModel.mediaSenderInfoMap.merging(catalog.snapshot.senderInfo) { loaded, _ in loaded },
+            onComposeWithMedia: armCompose,
+            onReplyToMedia: replyToCarrier,
+            onSendReplyToMedia: sendReplyToMedia,
+            replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
+            onReactToMedia: reactToMedia,
+            reactableMedia: { catalog.snapshot.isLoaded($0.id) }
+        )
+        .onAppear(perform: openCatalog)
+        .onReceive(viewModel.$messages) { messages in
+            catalog.syncLive(messages, serverId: viewModel.serverId(for:))
+        }
+        .onDisappear { catalog.close() }
     }
 
     /// La fenêtre tant que le catalogue n'a rien fusionné — le premier rendu de
