@@ -113,17 +113,21 @@ export function CallsHeader({ language, edit }: { readonly language: InterfaceLa
  * sur l'indigo 500 descend à 4,47:1, sous AA.
  */
 export type CallsSearch = { readonly value: string; readonly onChange: (value: string) => void };
+/** « Vidéo seulement » (#8203) — un interrupteur à côté des capsules, pas une troisième capsule : il se combine à « Manqués ». */
+export type CallsVideoToggle = { readonly pressed: boolean; readonly onToggle: () => void };
 
 export function CallFilterRail({
   language,
   selected,
   onSelect,
   search,
+  video,
 }: {
   readonly language: InterfaceLanguage;
   readonly selected: CallHistoryFilter;
   readonly onSelect: (filter: CallHistoryFilter) => void;
   readonly search?: CallsSearch;
+  readonly video?: CallsVideoToggle;
 }) {
   return (
     <div
@@ -157,6 +161,28 @@ export function CallFilterRail({
           </button>
         );
       })}
+      {video === undefined ? null : (
+        <button
+          type="button"
+          data-call-type-video
+          aria-pressed={video.pressed}
+          aria-label={translate(language, 'calls.filter.videoOnly')}
+          onClick={video.onToggle}
+          className={`grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 ${video.pressed ? '' : BRAND_INK}`}
+          style={{ outlineColor: BRAND }}
+        >
+          <span
+            className="grid place-items-center rounded-full"
+            style={
+              video.pressed
+                ? { width: 30, height: 30, color: 'white', backgroundColor: 'var(--ios-indigo-600)' }
+                : { width: 30, height: 30, boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-600) 35%, transparent)' }
+            }
+          >
+            <CallGlyph name="videoCamera" size={15} />
+          </span>
+        </button>
+      )}
       {search === undefined ? null : <CallsSearchField language={language} search={search} />}
     </div>
   );

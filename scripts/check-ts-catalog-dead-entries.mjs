@@ -56,7 +56,8 @@
 //
 // EXCEPTIONS CONNUES (#5427)
 //
-// Quatre entrées mesurées en instruisant #5373 sont des FAUX MORTS : la
+// Quatre entrées mesurées en instruisant #5373 étaient des FAUX MORTS (trois
+// depuis #7716 : `static.byFilename` a gagné un appelant par le catalogue) : la
 // route est réellement appelée en production, mais jamais via
 // `API_ENDPOINTS.ns.entrée` — la seule forme que ce script reconnaît comme
 // appelant. Un marqueur manuel, documenté par cas et vérifié par grep avant
@@ -72,13 +73,6 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `apps/web/lib/utils/link-parser.ts:116-117`,
   // `apps/web/components/chat/message-with-links.tsx`.
   'l.byToken',
-  // `GET /api/v1/static/:filename` — l'URL complète (`fileUrl`) est rendue
-  // par le serveur dans la charge utile et consommée directement (balise
-  // `<img>`/`<a>`, `fetch(attachment.fileUrl)`) — jamais reconstruite via
-  // `API_ENDPOINTS.static.byFilename`. Appelants réels (parmi d'autres) :
-  // `apps/web/components/markdown/MarkdownLightbox.tsx`,
-  // `apps/web/components/text/TextViewer.tsx`.
-  'static.byFilename',
   // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
   // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
   // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
@@ -238,7 +232,8 @@ export const callersIn = (contents, nsNames) => {
 //
 // Ce qu'il faudrait pour la ressusciter, et qui n'est pas de ce lot : un
 // catalogue SCINDABLE, dont un client puisse tirer trois adresses sans en
-// embarquer 444.
+// embarquer 444. (FAIT par #7716 : un module par groupe, importé en espace de
+// noms — `me.meeshMint` et `me.engagement` ont désormais leur appelant.)
 //
 // 269 → 270 (#3954) : `posts.byPostIdObjectsByObjectIdResponses`
 // (`POST`/`DELETE`/`GET /posts/:postId/objects/:objectId/responses`, table
@@ -322,88 +317,22 @@ export const callersIn = (contents, nsNames) => {
 // chemin écrit ses adresses en littéraux (`path: '/api/v1/…'`) sans importer
 // le catalogue. 455 entrées sur 459 n'ont donc plus d'appelant. Trancher entre
 // « le web adopte le catalogue » et « le catalogue part » : #7716.
-// 455 → 456 (#7729, 2026-09-24) : `me.onboarding`, générée depuis le manifeste
-// quand #7756 a monté `GET|PATCH /me/onboarding`. Son client web
-// (`feat/web-v2-onboarding-7729`, `lib/api/onboarding.ts`) écrit l'adresse en
-// littéral, comme tout `apps/web` depuis #7668 : elle reste morte ici tant que
-// #7716 n'a pas tranché, au même titre que les 455 précédentes.
-// 456 → 457 (#7797, 2026-09-24) : l'entrée de `GET /links/:linkId/stats`,
-// générée depuis le manifeste quand la passerelle a monté la route. Son client
-// web (l'écran de détail d'un lien, développé en parallèle) écrit l'adresse en
-// littéral comme tout `apps/web` : morte ici au même titre, jusqu'à #7716.
-// 457 → 460 (#7873) : `admin.anonymousUsersByParticipantId`,
-// `admin.usersByUserIdCommunities` et `admin.usersByUserIdVoiceProfile`,
-// générées depuis `route-manifest.json`. L'espace d'administration web les
-// appelle par adresse écrite, comme toutes ses lectures admin voisines déjà au
-// compte (`admin.usersByUserIdActivity`, `admin.anonymousUsers`…) : ce lot
-// n'ouvre pas la migration du web vers le catalogue. Valeur MESURÉE sur la
-// branche du 2026-09-25.
-// 460 → 463 (#7845, 2026-09-25) : `admin.usersByUserIdStats`,
-// `admin.usersByUserIdPreferences` et `admin.usersByUserIdPreferencesByCategory`,
-// générées depuis `route-manifest.json`. La page membre de l'espace
-// d'administration web les appelle par adresse écrite, comme ses lectures
-// admin voisines déjà au compte ; aucun écran d'administration iOS ne les
-// appelle. Valeur MESURÉE sur la branche du 2026-09-25.
-// 460 → 461 (#6937) : `app.shellVersion`, générée depuis `route-manifest.json`
-// quand la passerelle a monté `GET /app/shell-version`. Son client
-// (`apps/web/src/lib/app-update/shell-update.ts`) écrit l'adresse en littéral
-// comme tout `apps/web`, et comme sa jumelle `app.minVersion`, déjà au compte :
-// morte ici au même titre, jusqu'à #7716. Valeur MESURÉE sur la branche du
-// 2026-09-25.
-// Fusion #6937 + #7845 : les deux ajouts se cumulent. Valeur MESURÉE sur l'arbre fusionné du 2026-09-25.
-// 464 → 467 (#7938) : `me.stickers`, `me.stickersByStickerId`,
-// `me.stickersByStickerIdUse` — la bibliothèque « Mes stickers », entrées
-// GÉNÉRÉES depuis `route-manifest.json`. Leur client
-// (`apps/web/src/lib/api/stickers.ts`) écrit l'adresse en littéral comme tout
-// `apps/web` : mortes ici au même titre que `me.starredMessages`, jusqu'à
-// #7716. Valeur MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
-// 467 → 470 (#7999) : `admin.conversationsByConversationId`,
-// `admin.conversationsByConversationIdParticipantsByUserId` et
-// `admin.conversationsByConversationIdParticipantsByUserIdRemove` — configurer
-// une conversation, le rang et le retrait d'un de ses membres, sans en être
-// membre. Leur client (`apps/web/src/lib/api/admin-conversation-settings.ts`)
-// écrit l'adresse en littéral comme tout `apps/web` : mortes ici au même titre
-// que leurs voisines admin, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
-// 470 → 471 (#8083) : `auth.verificationStatus` — la route d'état de l'écran
-// du code ; son client web écrit l'adresse en littéral, comme toutes les
-// routes `auth.*` de `apps/web`. Valeur MESURÉE le 2026-09-26.
-// 471 → 472 (#8101) : `contacts.resolve` — rapprocher les numéros et adresses
-// d'une carte de visite partagée des comptes Meeshy ; son client web
-// (`apps/web/src/lib/contact-card/resolve.ts`) écrit l'adresse en littéral,
-// comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
-// 472 → 474 (#8099) : `conversations.byIdCard` et `links.byIdentifierCard` —
-// la carte de conversation ; son client web
-// (`apps/web/src/lib/api/conversation-card.ts`) écrit les deux adresses en
-// littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
-// 474 → 475 (#8066) : `calls.historyByCallId` — effacer une ligne du journal
-// d'appels ; son client web (`apps/web/src/lib/api/call-history-actions.ts`)
-// écrit l'adresse en littéral, comme tout `apps/web`, jusqu'à #7716. Valeur
-// MESURÉE le 2026-09-26.
-// 475 → 476 (#8051) : `admin.usersByUserIdPasswordProposals` — les mots de
-// passe proposés à un administrateur ; son client web
-// (`apps/web/src/lib/api/admin-user-password.ts`) écrit l'adresse en
-// littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27.
-// 476 → 478 (#8217) : `admin.usersByUserIdProfileImageCandidates` et
-// `admin.usersByUserIdProfileImagesByKind` — photo et bannière d'un membre
-// posées par un administrateur ; leur client web
-// (`apps/web/src/lib/api/admin-user-images.ts`) écrit les adresses en
-// littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-27
-// (CI de dev rouge sur 7943044432, relevé fusionné sans le cliquet).
-// 478 → 443 (#7716, lot admin) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-// 443 → 436 (#7716, lot appels) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-// 436 → 407 (#7716, lot authentification et compte) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-// 407 → 388 (#7716, lot profil et annuaire) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-// 388 → 371 (#7716, lot conversations et messages) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-// 371 → 364 (#7716, lot liens) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-// 364 → 344 (#7716, lot publications, stories et notifications) : le web appelle ces entrées par le module de
-// groupe du catalogue au lieu d'écrire l'adresse. Valeur MESURÉE.
-const BASELINE_DEAD_ENTRIES = 344;
+// 455 → 478 (2026-09-24 → 27) : vingt-trois entrées générées pour des routes
+// neuves (#7729, #7797, #7873, #7845, #6937, #7938, #7999, #8083, #8101,
+// #8099, #8066, #8051, #8217), toutes appelées par le web en écrivant leur
+// adresse à la main — donc mortes ici. Le détail de ces relèvements est dans
+// l'historique git de ce fichier ; leur motif commun a disparu avec #7716.
+// 478 → 337 (#7716, 2026-09-27) : le web n'écrit plus AUCUNE adresse
+// `/api/v1/…` (`scripts/check-web-api-literals.mjs`, interdiction pure) ; il
+// importe le module de groupe du catalogue (`import * as adminEndpoints from
+// '@meeshy/shared/api/endpoints/admin'`), que ce script reconnaît comme
+// appelant. Les 337 restantes n'ont aucun appelant sous `apps/web` ni
+// `packages/shared` : routes servies aux clients natifs (catalogue Swift),
+// routes d'administration sans écran web, ou routes sans client. Valeur
+// MESURÉE sur l'arbre fusionné avec `dev` du 2026-09-27.
+// 337 → 335 (#8239, 2026-09-27) : la modal « Validez votre compte » du web
+// appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
+const BASELINE_DEAD_ENTRIES = 335;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

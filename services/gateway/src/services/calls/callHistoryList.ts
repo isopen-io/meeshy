@@ -14,6 +14,9 @@ import {
   type CallHistoryRow
 } from '../callHistory';
 import { resolveGroupCallParticipants } from './callHistoryParticipants';
+import { journalConversationsMatching, normalizedJournalQuery } from './callHistorySearch';
+
+export type CallHistoryType = 'all' | 'audio' | 'video';
 
 /** Call journal sliding window: 3 months. */
 export const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -63,12 +66,30 @@ const journalScope = (userId: string, windowStart: Date): Prisma.CallSessionWher
 export async function listCallHistory(
   prisma: PrismaClient,
   userId: string,
-  options: { limit: number; cursor?: string; filter: 'all' | 'missed'; viewer: PresenceViewer }
+  options: {
+    limit: number;
+    cursor?: string;
+    filter: 'all' | 'missed';
+    type?: CallHistoryType;
+    q?: string;
+    viewer: PresenceViewer;
+  }
 ): Promise<{ items: CallHistoryItem[]; hasMore: boolean; nextCursor?: string }> {
   const { limit, cursor, filter, viewer } = options;
   const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
 
   const where: Prisma.CallSessionWhereInput = journalScope(userId, windowStart);
+  // Type d'appel (#8203) : `isVideo` est posé à la création ; un appel plus
+  // ancien que ce champ (non encore rattrapé par la migration 020) n'en porte
+  // pas et se lit « audio », comme `callIsVideo` le lit sur `metadata`.
+  if (options.type === 'video') where.isVideo = true;
+  if (options.type === 'audio') where.AND = [{ NOT: { isVideo: true } }];
+  const query = normalizedJournalQuery(options.q);
+  if (query !== null) {
+    const conversationIds = await journalConversationsMatching(prisma, userId, query);
+    if (conversationIds.length === 0) return { items: [], hasMore: false, nextCursor: undefined };
+    where.conversationId = { in: conversationIds };
+  }
   if (filter === 'missed') {
     // A missed call, for THIS user, is either (a) the call-wide `missed`
     // status the ringing-timeout sets when nobody at all answered, or (b)

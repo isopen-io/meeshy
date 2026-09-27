@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
@@ -15,7 +15,16 @@ import { performClearCallHistory, performHideCall } from '@/lib/api/call-history
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
-import { CALL_FILTER_PARAM, callFilterFromSearch, searchCallRecords, seededCallHistory, type CallHistoryData } from '@/lib/calls/view';
+import {
+  CALL_FILTER_PARAM,
+  CALL_TYPE_PARAM,
+  callFilterFromSearch,
+  callTypeFromSearch,
+  refinedCallHistory,
+  searchCallRecords,
+  seededCallHistory,
+  type CallHistoryData,
+} from '@/lib/calls/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
@@ -24,6 +33,7 @@ import { useSearch } from '@/lib/router';
 import { coldStateOf } from '@/lib/view/cold-state';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
+import { useDebouncedValue } from '@/lib/view/use-media-hub-index';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
@@ -65,14 +75,21 @@ import {
  * **Effacer et chercher (#8066).** « Modifier » passe les lignes en mode
  * édition (une corbeille au lieu du rappel) et ouvre « Tout effacer », qui
  * demande confirmation. Les deux gestes sont optimistes et effacent pour SOI
- * seul (`call-history-actions.ts`). La recherche filtre ce qui est chargé et
- * charge la page suivante tant qu'il en reste, pour qu'un appel ancien finisse
- * par apparaître.
+ * seul (`call-history-actions.ts`).
+ *
+ * **Chercher et filtrer « vidéo » (#8203)** se font côté PASSERELLE, en une
+ * requête (`?q=`, `?type=`). En attendant sa réponse, les lignes déjà en
+ * cache qui correspondent se peignent (`refinedCallHistory`), et la frappe
+ * filtre ce qui est affiché sans attendre la fin de la temporisation. Le
+ * type vit dans l'ADRESSE (`?type=video`), comme le filtre.
  *
  * **Le couloir des disques flottants.** En-tête (64) et filtre (52) finissent
  * au-dessus du couloir 126 → 178 ; la première ligne commence SOUS lui au repos
  * (`CALLS_TOP_RESERVE`). `scripts/check-calls.mjs` le mesure.
  */
+/** La temporisation de la recherche — celle d'iOS (`CallsTab.searchDebounceNanoseconds`). */
+const SEARCH_DEBOUNCE_MS = 250;
+
 export default function CallsScreen() {
   const language = currentInterfaceLanguage();
   const [search, setSearch] = useSearch();
@@ -84,22 +101,30 @@ export default function CallsScreen() {
   const now = useMemo(() => new Date(), [minute]);
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
 
+  const type = callTypeFromSearch(search.get(CALL_TYPE_PARAM));
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
+  const refine = useMemo(() => ({ type, q: debouncedQuery }), [type, debouncedQuery]);
+  const unknownName = translate(language, 'calls.unknown');
+
   const history = useInfiniteQuery(
     {
-      ...callHistoryQueryOptions(apiDeps, filter),
+      ...callHistoryQueryOptions(apiDeps, filter, refine),
       enabled: apiDeps.source === 'fixtures' || signedIn,
-      placeholderData: () => seededCallHistory(appQueryClient.getQueryData<CallHistoryData>(callHistoryQueryKey('all')), filter),
+      placeholderData: () => {
+        const seeded = seededCallHistory(appQueryClient.getQueryData<CallHistoryData>(callHistoryQueryKey('all')), filter);
+        const base = appQueryClient.getQueryData<CallHistoryData>(callHistoryQueryKey(filter)) ?? seeded;
+        return refinedCallHistory(base, refine, unknownName) ?? seeded;
+      },
     },
     appQueryClient,
   );
 
-  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(false);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [eraseFailed, setEraseFailed] = useState(false);
 
   const loaded = history.data?.pages.flatMap((page) => page.records) ?? null;
-  const unknownName = translate(language, 'calls.unknown');
   const records = useMemo(() => (loaded === null ? null : searchCallRecords(loaded, query, unknownName)), [loaded, query, unknownName]);
   const searching = query.trim() !== '';
   const cold = coldStateOf(history);
@@ -132,13 +157,12 @@ export default function CallsScreen() {
     setConfirmingClear(false);
   }, []);
 
-  const canFetchMore = history.hasNextPage && !history.isFetchingNextPage && !history.isPlaceholderData;
-  const { fetchNextPage } = history;
-  useEffect(() => {
-    if (searching && canFetchMore) void fetchNextPage({ cancelRefetch: false }).catch(() => undefined);
-  }, [searching, canFetchMore, fetchNextPage]);
+  const onToggleVideo = useCallback(() => {
+    const kept = [...search.entries()].filter(([name]) => name !== CALL_TYPE_PARAM);
+    setSearch(new URLSearchParams(type === 'video' ? kept : [...kept, [CALL_TYPE_PARAM, 'video']]), true);
+  }, [search, setSearch, type]);
 
-  const onRefresh = useCallback(() => refreshCallHistory(appQueryClient, apiDeps, filter), [filter]);
+  const onRefresh = useCallback(() => refreshCallHistory(appQueryClient, apiDeps, filter, refine), [filter, refine]);
   const pull = usePullToRefresh({ root: frame, onRefresh, threshold: PULL_THRESHOLD });
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
@@ -195,7 +219,13 @@ export default function CallsScreen() {
         language={language}
         {...((loaded?.length ?? 0) > 0 || editing ? { edit: { editing, onToggle: onToggleEdit } } : {})}
       />
-      <CallFilterRail language={language} selected={filter} onSelect={onSelect} search={{ value: query, onChange: setQuery }} />
+      <CallFilterRail
+        language={language}
+        selected={filter}
+        onSelect={onSelect}
+        search={{ value: query, onChange: setQuery }}
+        video={{ pressed: type === 'video', onToggle: onToggleVideo }}
+      />
       <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
       <ul
         ref={frame}

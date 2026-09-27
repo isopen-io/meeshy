@@ -52,6 +52,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   showReadReceipts: true,
   showTypingIndicator: true,
   hideProfileFromSearch: false,
+  acceptCallsFromNonContacts: true,
   ...overrides,
 });
 
@@ -179,6 +180,25 @@ describe('la confidentialité — cinq bascules que la passerelle obéit', () =>
       expect(label).not.toContain('settings.');
       expect(label).not.toBe(DISCRETION);
     }
+  });
+
+  /* #8073 — la passerelle refuse de faire sonner un non-contact quand le
+     réglage est coupé : la bascule a un effet, elle se montre. */
+  test('les appels hors contacts se basculent, écrivent LEUR clé et disent ce qu’ils coûtent', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ acceptCallsFromNonContacts: false })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, 'Appels hors contacts');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('acceptCallsFromNonContacts');
+    expect(host.textContent).toContain('seuls vos amis peuvent vous faire sonner');
   });
 
   test('hors ligne, aucune bascule n’est actionnable', () => {

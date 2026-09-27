@@ -2,7 +2,16 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CallHistoryPage, CallRecord } from '@/lib/api/calls';
 
-import { callDisplayNameOf, callDurationLabel, callFilterFromSearch, callParticipantNames, searchCallRecords, seededCallHistory } from './view';
+import {
+  callDisplayNameOf,
+  callDurationLabel,
+  callFilterFromSearch,
+  callParticipantNames,
+  callTypeFromSearch,
+  refinedCallHistory,
+  searchCallRecords,
+  seededCallHistory,
+} from './view';
 
 /**
  * LES RÈGLES PURES DU JOURNAL D'APPELS (#6362) — miroir des accesseurs de
@@ -124,5 +133,34 @@ describe('les participants d’un appel de groupe (#8066)', () => {
   test('chercher un participant trouve l’appel de groupe où il était', () => {
     expect(searchCallRecords([record(), group], 'chloe', 'Inconnu').map((r) => r.callId)).toEqual(['g1']);
     expect(searchCallRecords([record(), group], 'BRUNO', 'Inconnu').map((r) => r.callId)).toEqual(['g1']);
+  });
+});
+
+describe('le journal raffiné se peint depuis le cache (#8203)', () => {
+  const base = cached([
+    { records: [record({ callId: 'v1', isVideo: true }), record({ callId: 'a1' }), record({ callId: 'v2', isVideo: true, peer: null, conversationTitle: 'Équipe' })], nextCursor: 'n' },
+  ]);
+  const ids = (data: ReturnType<typeof refinedCallHistory>) => data?.pages.flatMap((page) => page.records.map((r) => r.callId));
+
+  test('« vidéo » garde les appels vidéo du cache, sans curseur à suivre', () => {
+    const data = refinedCallHistory(base, { type: 'video', q: '' }, 'Inconnu');
+    expect(ids(data)).toEqual(['v1', 'v2']);
+    expect(data?.pages.at(-1)?.nextCursor).toBeNull();
+  });
+
+  test('la recherche se combine au type', () => {
+    expect(ids(refinedCallHistory(base, { type: 'video', q: 'equipe' }, 'Inconnu'))).toEqual(['v2']);
+  });
+
+  test('sans cache, rien à peindre ; sans raffinement, rien à emprunter', () => {
+    expect(refinedCallHistory(undefined, { type: 'video', q: '' }, 'Inconnu')).toBeUndefined();
+    expect(refinedCallHistory(base, { type: 'all', q: ' ' }, 'Inconnu')).toBeUndefined();
+  });
+
+  test('le type se lit dans l’adresse, « tous » par défaut', () => {
+    expect(callTypeFromSearch('video')).toBe('video');
+    expect(callTypeFromSearch('audio')).toBe('audio');
+    expect(callTypeFromSearch('x')).toBe('all');
+    expect(callTypeFromSearch(null)).toBe('all');
   });
 });

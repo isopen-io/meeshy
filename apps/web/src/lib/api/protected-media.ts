@@ -1,3 +1,5 @@
+import * as staticEndpoints from '@meeshy/shared/api/endpoints/static';
+
 import { currentCredential } from './client';
 import { credentialHeaders, type Credential } from './http';
 
@@ -6,7 +8,7 @@ import { credentialHeaders, type Credential } from './http';
  *
  * ## Le défaut, mesuré en production le 2026-09-18
  *
- *     GET https://gate.meeshy.me/api/v1/static/d0bf39b7-…m4a   ->  401
+ *     GET https://gate.meeshy.me + static.byFilename('d0bf39b7-…m4a')   ->  401
  *
  * **Ce n'est pas un 404** : le fichier existe (`/app/sounds`, 18 fichiers,
  * relevés dans le conteneur `meeshy-gateway`). La route porte
@@ -65,10 +67,10 @@ import { credentialHeaders, type Credential } from './http';
 /**
  * LE CHEMIN DE LA ROUTE PROTÉGÉE, écrit UNE fois — même motif que
  * `ATTACHMENT_STREAM_PATH` (`media-url.ts`). La passerelle n'en sert qu'un
- * seul montage : `GET /api/v1/static/:filename` (`route-manifest.json`), sans
+ * seul montage : `GET static.byFilename` (`route-manifest.json`), sans
  * alias racine ni jumeau non versionné.
  */
-export const PROTECTED_MEDIA_PATH = '/api/v1/static/';
+export const PROTECTED_MEDIA_PATH = staticEndpoints.byFilename('');
 
 /**
  * CE QUE LA ROUTE SERT, ET RIEN D'AUTRE (revue-correction #7015).
@@ -121,8 +123,9 @@ function pathnameOf(src: string): string | null {
 /**
  * `true` si cette source ne peut être obtenue qu'en présentant une identité.
  *
- * Lit le PRÉFIXE du chemin, jamais la chaîne entière : `/api/v1/posts/api/v1/static/x`
- * n'est pas cette route, et `/api/v1/statics/x` non plus.
+ * Lit le PRÉFIXE du chemin, jamais la chaîne entière : une route de publication
+ * qui CONTIENDRAIT ce préfixe plus loin n'est pas cette route, et un segment
+ * `statics` (au pluriel) non plus.
  */
 export function isProtectedMediaSrc(src: string): boolean {
   const path = pathnameOf(src);

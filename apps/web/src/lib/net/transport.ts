@@ -19,11 +19,11 @@
  * HTTP qu'il introduit lit `GET /me` pour la recette manuelle. Le type reste
  * ADDITIF — un ajout futur (`DELETE`, `PATCH`) suit la même règle : jamais
  * avant qu'une route citée l'exige. `DELETE` rejoint le trio avec le retrait
- * d'une réaction (#5814, `DELETE /api/v1/reactions/:messageId/:emoji`,
+ * d'une réaction (#5814, `DELETE reactions.byMessageIdByEmoji`,
  * `services/gateway/src/routes/reactions.ts:279-283`) — SANS corps, comme le
  * `body` optionnel ci-dessous le permet déjà.
  *
- * `PATCH` rejoint le quatuor avec le profil (#6289) : `PATCH /api/v1/users/me`,
+ * `PATCH` rejoint le quatuor avec le profil (#6289) : `PATCH users.me`,
  * `/users/me/avatar` et `/users/me/banner`
  * (`services/gateway/src/routes/users/profile-updates.ts:42,286,392`) n'ont
  * aucun autre verbe.

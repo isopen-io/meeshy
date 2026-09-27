@@ -117,7 +117,9 @@ export const getActiveCallForUserSchema = z.object({});
 export const callHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(30),
   cursor: objectIdSchema.optional(),
-  filter: z.enum(['all', 'missed']).default('all')
+  filter: z.enum(['all', 'missed']).default('all'),
+  type: z.enum(['all', 'audio', 'video']).default('all'),
+  q: z.string().max(100).optional()
 });
 export type CallHistoryQueryInput = z.infer<typeof callHistoryQuerySchema>;
 

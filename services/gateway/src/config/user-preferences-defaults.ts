@@ -4,6 +4,8 @@
  * They are also used as the base for creating new preferences
  */
 
+import { PRIVACY_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
+
 // ========== USER PREFERENCES DEFAULTS (Key-Value) ==========
 
 export const USER_PREFERENCES_DEFAULTS: Record<string, { value: string; valueType: string; description: string }> = {
@@ -200,6 +202,10 @@ export interface PrivacyPreferencesDefaults {
   allowContactRequests: boolean;
   allowGroupInvites: boolean;
 
+  // Qui peut faire SONNER (#8073) — lue par `services/calls/callRingPolicy.ts`.
+  // Postérieure à janvier 2026 : aucune ligne kebab-case héritée.
+  acceptCallsFromNonContacts: boolean;
+
   // Data settings
   saveMediaToGallery: boolean;
   allowAnalytics: boolean;
@@ -224,6 +230,10 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
   // Contact settings - all enabled by default
   allowContactRequests: true,
   allowGroupInvites: true,
+
+  // Le défaut DÉCLARÉ par le schéma partagé, lu et non recopié : ce que
+  // l'écran montre est ce que la porte obéit.
+  acceptCallsFromNonContacts: PRIVACY_PREFERENCE_DEFAULTS.acceptCallsFromNonContacts,
 
   // Data settings
   saveMediaToGallery: false, // disabled by default for privacy

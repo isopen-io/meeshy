@@ -120,7 +120,7 @@ const STORED_PRIVACY = {
   showTypingIndicator: true,
   allowContactRequests: true,
   allowGroupInvites: true,
-  allowCallsFromNonContacts: false,
+  acceptCallsFromNonContacts: false,
   saveMediaToGallery: false,
   allowAnalytics: false,
   shareUsageData: false,

@@ -57,7 +57,7 @@ export const defaultMediaDeps = protectedMediaDeps;
  * #7015 — LA PISTE N'EST PAS TOUJOURS POSABLE TELLE QUELLE.
  *
  * Un son de fond emprunté à la bibliothèque est servi par
- * `GET /api/v1/static/:filename`, une route AUTHENTIFIÉE — et une balise
+ * `GET static.byFilename`, une route AUTHENTIFIÉE — et une balise
  * `<audio src>` n'envoie aucun en-tête `Authorization` : mesuré en production,
  * la requête part anonyme et rend **401**. `useProtectedMediaSrc` demande les
  * octets par `fetch` (le seul transport du navigateur qui porte un en-tête) et

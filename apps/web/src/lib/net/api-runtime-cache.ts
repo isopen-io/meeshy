@@ -62,13 +62,13 @@
  *
  * MESURÉ en rejouant le routeur de Workbox sur `dist/sw.js` du 2026-09-18 :
  *
- *     SEAU api   [image] …/api/v1/attachments/file/2026%2F09%2Fu%2Favatar.png
- *     SEAU api   [image] …/api/v1/attachments/file/2026%2F09%2Fu%2Fscene.jpg
- *     SEAU api   [video] …/api/v1/attachments/file/2026%2F09%2Fu%2Freel.mp4
- *     SEAU api   [audio] …/api/v1/attachments/file/2026%2F09%2Fu%2Fvoix.m4a
- *     SEAU api   [json ] …/api/v1/conversations?limit=30
+ *     SEAU api   [image] attachments.fileByWildcard — …%2Fu%2Favatar.png
+ *     SEAU api   [image] attachments.fileByWildcard — …%2Fu%2Fscene.jpg
+ *     SEAU api   [video] attachments.fileByWildcard — …%2Fu%2Freel.mp4
+ *     SEAU api   [audio] attachments.fileByWildcard — …%2Fu%2Fvoix.m4a
+ *     SEAU api   [json ] conversations.root — ?limit=30
  *
- * TOUTE URL de média passe par `/api/v1/attachments/…` (`lib/api/media-url.ts`,
+ * TOUTE URL de média passe par `attachments.fileByWildcard` (`lib/api/media-url.ts`,
  * site unique `streamSrc`), ce motif n'était ancré sur aucune ORIGINE, et le
  * routeur retient la PREMIÈRE route qui matche : les médias gagnaient la route
  * du JSON, enregistrée la première.
@@ -80,18 +80,18 @@
  * qu'il vient de voir passer. Sorti de là, le plafond redevient RÉSERVÉ au
  * JSON, et c'était le vrai enjeu.
  *
- * Les DEUX montages de la passerelle sont exclus : `/api/v1/attachments/` et
- * le montage LEGACY non versionné `/api/attachments/`, qui sert encore des
+ * Les DEUX montages de la passerelle sont exclus : le groupe `attachments` et
+ * le montage LEGACY non versionné `apiLegacyAttachments`, qui sert encore des
  * `fileUrl` persistées depuis des années (`download.ts`,
  * § `registerFileStreamRoute`). Une garde posée d'un côté ne protège pas
  * l'autre — c'est ce que ce fichier de la passerelle dit de lui-même.
  *
- * ## LA TROISIÈME ROUTE DE MÉDIA (#7015) — `/api/v1/static/`
+ * ## LA TROISIÈME ROUTE DE MÉDIA (#7015) — `static.byFilename`
  *
  * L'énumération ci-dessus portait DEUX affirmations, et seule la première
  * était vérifiée : « ces montages sont exclus » (vrai) et « ce sont les
  * montages de média de la passerelle » (jamais mesuré). Il en existait un
- * troisième — `GET /api/v1/static/:filename`, les SONS DE FOND des stories et
+ * troisième — `GET static.byFilename`, les SONS DE FOND des stories et
  * des réels (`routes/posts/audio.ts`, volume `/app/sounds` : 18 fichiers en
  * production, jusqu'à 7 Mo pièce). Il n'est ni `admin` ni `attachments`, donc
  * le seau `api` le prenait, avec les deux conséquences que #6973 venait de

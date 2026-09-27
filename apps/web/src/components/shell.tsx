@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
+import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -116,9 +117,24 @@ const AppUpdateBanner = lazy(chargerBanniereMaj);
 const chargerBadge = () => import('./app-badge').then((m) => ({ default: m.AppBadge }));
 const AppBadge = lazy(chargerBadge);
 
+/**
+ * ...ET L'INVITATION À VALIDER SON COMPTE (#8239), cinquième exception : de J7
+ * à J28, la modal « Validez votre compte » s'ouvre à l'OUVERTURE de l'app,
+ * quelle que soit la route — donc ici. À la demande, SANS préchargement, sur
+ * le modèle de la bannière : `useActivationInviteArmed` seul est statique, et
+ * son OUI (session ouverte, pas encore montrée aujourd'hui) va chercher l'hôte,
+ * qui relit l'état servi et n'ouvre la modal qu'en phase `invite`.
+ */
+const chargerInvitation = () =>
+  Promise.all([import('./activation-invite-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ActivationInviteHost,
+  }));
+const ActivationInviteHost = lazy(chargerInvitation);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
+  const invitationArmee = useActivationInviteArmed();
   const routeKey = useRoute().key;
   const menusArmes = showsFloatingMenus(routeKey);
 
@@ -167,6 +183,11 @@ export default function Shell({ children }: { children: ReactNode }) {
           et un appel entrant s'affiche sur toutes les routes, comme
           `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
       <CallLayer />
+      {invitationArmee ? (
+        <Suspense fallback={null}>
+          <ActivationInviteHost />
+        </Suspense>
+      ) : null}
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
           tranche, et un menu recouvert par l'écran qu'il commande serait le
           défaut le plus bête du lot. */}

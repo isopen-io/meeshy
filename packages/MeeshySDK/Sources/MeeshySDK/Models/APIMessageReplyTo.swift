@@ -199,6 +199,8 @@ public extension APIMessageReplyTo {
                 ?? attachmentReplyTo?.declaredKind,
             attachmentId: attachmentReplyTo?.attachmentId,
             attachmentThumbnailUrl: representative?.thumbnailUrl,
+            // Retenue par l'init dès que la citation est déclarée protégée.
+            attachmentFileUrl: representative?.fileUrl,
             attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
             attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) }
         )

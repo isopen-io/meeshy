@@ -25,7 +25,8 @@ import { Texte } from './admin-user-edit-sheet';
  * L'administrateur choisit : il ATTESTE l'adresse (le compte se connecte
  * aussitôt avec son pseudonyme ou son adresse), ou il laisse la preuve due —
  * le membre recevra un code à cette adresse à sa première connexion. La case
- * est décochée par défaut : attester est un geste, pas un réglage implicite.
+ * est COCHÉE par défaut (directive porteur 2026-09-27) : un compte créé par
+ * l'administration se connecte aussitôt ; laisser la preuve due est le geste.
  *
  * ## Les refus se posent SOUS leur champ
  *
@@ -70,7 +71,7 @@ export function AdminUserCreateSheet({
     role: 'USER',
     systemLanguage: language,
   });
-  const [atteste, setAtteste] = useState(false);
+  const [atteste, setAtteste] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [refus, setRefus] = useState<Refus>(null);

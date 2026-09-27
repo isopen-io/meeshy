@@ -54,7 +54,7 @@ export function SceneObjectAudio({
    * #7015, revue-correction — **UN SON POSÉ PEUT ÊTRE EMPRUNTÉ, LUI AUSSI.**
    *
    * `objectMediaSrc` résout `payload.mediaURL` par `attachmentSrc` — la MÊME
-   * voie que l'élection du fond, donc la MÊME URL `/api/v1/static/…` pour une
+   * voie que l'élection du fond, donc la MÊME URL `static.byFilename` pour une
    * piste de bibliothèque. Seul `isBackground` sépare les deux couches, et
    * c'est un rôle de MIXAGE que n'importe quel son porte ou non
    * (`ComposerHostRules.swift` : « le CRÉDIT : `soundId` ; le rôle de
