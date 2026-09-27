@@ -36,7 +36,7 @@ final class ComposerEffectsPanelTests: XCTestCase {
     func test_lesRails_gardentUneMargeAvecLeBordDuVerre() throws {
         let layout = try Self.source("Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift")
         let marges = layout.components(separatedBy: ".padding(.top, Self.railTopInset)").count - 1
-        XCTAssertEqual(marges, 3, "durée éphémère, effets et effets permanents s'écartent du bord haut du verre")
+        XCTAssertEqual(marges, 4, "durée éphémère, effets, effets permanents et bandeaux de réponse/édition (#8417) s'écartent du bord haut du verre")
     }
 
     private static func source(_ relative: String) throws -> String {

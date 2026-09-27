@@ -1287,7 +1287,6 @@ struct CommentsSheetView: View {
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 8)
     }
 
     // MARK: - Comment Composer (UniversalComposerBar)
