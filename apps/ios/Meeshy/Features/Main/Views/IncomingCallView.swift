@@ -18,6 +18,7 @@ struct IncomingCallView: View {
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false
+    @State private var isDeclineSheetPresented: Bool = false
 
     /// Tranche les permissions AVANT de laisser `CallManager` répondre.
     ///
@@ -73,7 +74,15 @@ struct IncomingCallView: View {
 
             // Accept / Reject buttons
             actionButtons
-                .padding(.bottom, 80)
+                .padding(.bottom, 20)
+
+            declineWithMessageButton
+                .padding(.bottom, 40)
+        }
+        .sheet(isPresented: $isDeclineSheetPresented) {
+            CallDeclineSheet(callManager: callManager) {
+                isDeclineSheetPresented = false
+            }
         }
         .onAppear {
             let callerName = callManager.remoteUsername
@@ -184,6 +193,27 @@ struct IncomingCallView: View {
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Vidéo", bundle: .main)
                 : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main)
         )
+    }
+
+    // MARK: - Decline With Message
+
+    private var declineWithMessageButton: some View {
+        Button {
+            isDeclineSheetPresented = true
+        } label: {
+            Label(
+                String(localized: "call.decline.open", defaultValue: "Message", bundle: .main),
+                systemImage: "message.fill"
+            )
+            .font(.callout.weight(.medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .frame(minHeight: 44)
+            .adaptiveGlass(in: Capsule())
+        }
+        .pressable()
+        .accessibilityLabel(String(localized: "call.decline.open.label", defaultValue: "Refuser avec un message", bundle: .main))
+        .accessibilityHint(String(localized: "call.decline.open.hint", defaultValue: "Propose des réponses rapides qui refusent l'appel", bundle: .main))
     }
 
     // MARK: - Action Buttons

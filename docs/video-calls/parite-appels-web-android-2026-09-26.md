@@ -66,7 +66,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | C10 | **Sonnerie application fermée** (poussée d'appel entrant) | ✅ PushKit + CallKit | ❌ | ❌ | ❌ | 0 + 7 | serveur n'envoie `call` qu'en `voip`/`apns` (`CallEventsHandler.ts:~2206`) |
 | C11 | Notification d'appel plein écran avec Répondre / Refuser | ✅ CallKit | ❌ | ❌ service worker | ❌ | 0 + 7 | web `public/sw-push.js` sans type `call` · coque sans `USE_FULL_SCREEN_INTENT` |
 | C12 | Notification d'appel manqué | ✅ | 🟡 cloche | 🟡 cloche seulement | 🟡 | 3 | web `lib/notifications/categories.ts:109` |
-| C13 | Refuser avec un message | ❌ | ❌ | ❌ | ❌ | — | |
+| C13 | Refuser avec un message (4 réponses rapides en 7 langues + texte libre, envoyé par le chemin d'envoi ordinaire, traduit pour l'appelant) | ✅ écran entrant de l'app (#8065) — 🟡 écran CallKit : aucune action personnalisée possible | ❌ | ✅ (#8065) | ✅ même interface | 3 | iOS `CallDeclineSheet.swift` + `CallManager+DeclineReply.swift` + `CallDeclineMessenger.swift` · web `components/call-decline-sheet.tsx` + `lib/calls/decline-reply.ts` · décision web D-137 |
 
 ### D. Pendant l'appel
 
