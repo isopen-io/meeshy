@@ -253,9 +253,16 @@ describe('callRoutes', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('route registration', () => {
-    it('registers all 11 routes', () => {
+    it('registers all 12 routes', () => {
       const { routes } = setup();
-      expect(routes).toHaveLength(11);
+      expect(routes).toHaveLength(12);
+    });
+
+    it('registers POST /calls/:callId/recordings/:recordingId/attachment', () => {
+      const { routes } = setup();
+      expect(
+        routes.some((r) => r.method === 'POST' && r.path === '/calls/:callId/recordings/:recordingId/attachment')
+      ).toBe(true);
     });
 
     it('registers GET /calls/:callId/transcript', () => {
