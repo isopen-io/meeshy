@@ -148,6 +148,7 @@ export async function listCallHistory(
       bytesSent: true,
       bytesReceived: true,
       metadata: true,
+      reactionCounts: true,
       conversation: { select: { type: true, title: true, avatar: true } }
     }
   });

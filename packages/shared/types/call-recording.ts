@@ -28,8 +28,22 @@ export const CALL_RECORDING_ERROR_CODES = [
 
 export type CallRecordingErrorCode = typeof CALL_RECORDING_ERROR_CODES[number];
 
+/**
+ * Ce qu'on enregistre (#8437) : l'audio seul, ou la vidéo avec son audio. Le
+ * type voyage avec la DEMANDE, pour que chacun consente en connaissance.
+ */
+export const CALL_RECORDING_KINDS = ['audio', 'video'] as const;
+
+export type CallRecordingKind = typeof CALL_RECORDING_KINDS[number];
+
+/** Un enregistrement antérieur au champ (ou une valeur inconnue) se lit « audio ». */
+export const callRecordingKindOf = (stored: string | null | undefined): CallRecordingKind =>
+  stored === 'video' ? 'video' : 'audio';
+
 export type CallRecordingRequestEvent = {
   readonly callId: string;
+  /** Absent chez un client antérieur à #8437 : `audio`. */
+  readonly kind?: CallRecordingKind;
 };
 
 export type CallRecordingConsentEvent = {
@@ -53,6 +67,7 @@ export type CallRecordingRequestedEvent = {
   readonly requesterId: string;
   readonly requiredUserIds: readonly string[];
   readonly expiresAt: string;
+  readonly kind: CallRecordingKind;
 };
 
 export type CallRecordingStartedEvent = {
@@ -60,6 +75,7 @@ export type CallRecordingStartedEvent = {
   readonly recordingId: string;
   readonly recorderId: string;
   readonly startedAt: string;
+  readonly kind: CallRecordingKind;
 };
 
 export type CallRecordingStoppedEvent = {
@@ -76,6 +92,7 @@ export type CallRecordingLinkBody = {
 
 export type CallRecordingLinkResult = {
   readonly recordingId: string;
+  readonly kind: CallRecordingKind;
   readonly messageId: string;
   readonly attachmentId: string;
 };

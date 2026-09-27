@@ -506,6 +506,11 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
                       isOnline: { type: 'boolean' }
                     }
                   },
+                  reactionCounts: {
+                    type: 'object',
+                    additionalProperties: { type: 'integer' },
+                    description: 'Reactions sent during the call, counted per emoji (#8439)'
+                  },
                   participants: {
                     type: 'array',
                     items: {

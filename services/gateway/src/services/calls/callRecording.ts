@@ -3,6 +3,7 @@ import {
   type CallRecordingAck,
   type CallRecordingConsentEvent,
   type CallRecordingErrorCode,
+  type CallRecordingKind,
   type CallRecordingRequestEvent,
   type CallRecordingRequestedEvent,
   type CallRecordingStartedEvent,
@@ -40,6 +41,7 @@ export type CallRecordingRow = {
   readonly requiredUserIds: readonly string[];
   readonly consentedUserIds: readonly string[];
   readonly requestedAt: Date;
+  readonly kind: CallRecordingKind;
   readonly startedAt: Date | null;
   readonly stoppedAt: Date | null;
   readonly stopReason: string | null;
@@ -58,6 +60,7 @@ export type CallRecordingRepository = {
     readonly requesterId: string;
     readonly requiredUserIds: readonly string[];
     readonly requestedAt: Date;
+    readonly kind: CallRecordingKind;
   }): Promise<CallRecordingRow>;
   findById(id: string): Promise<CallRecordingRow | null>;
   findOpen(callSessionId: string): Promise<CallRecordingRow | null>;
@@ -129,6 +132,7 @@ export class CallRecordingService {
       requesterId: userId,
       requiredUserIds,
       requestedAt: now,
+      kind: input.kind ?? 'audio',
     });
     const winner = await this.deps.repository.findOpen(input.callId);
     if (winner && winner.id !== created.id) {
@@ -146,6 +150,7 @@ export class CallRecordingService {
           requesterId: userId,
           requiredUserIds,
           expiresAt: new Date(now.getTime() + CALL_RECORDING_CONSENT_TIMEOUT_MS).toISOString(),
+          kind: created.kind,
         },
       },
     ]);
@@ -230,6 +235,7 @@ export class CallRecordingService {
           recordingId: fresh.id,
           recorderId: fresh.requesterId,
           startedAt: now.toISOString(),
+          kind: fresh.kind,
         },
       },
     ];
