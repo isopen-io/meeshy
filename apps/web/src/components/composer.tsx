@@ -17,6 +17,14 @@ import {
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import {
+  contactCardFile,
+  contactFromVCardFile,
+  contactSourceOf,
+  defaultContactHost,
+  pickContact,
+} from '@/lib/send/contact-card';
+import type { ParsedVCard } from '@meeshy/shared/types/contact-card';
+import {
   composerAccentOf,
   decorativeEffectCountOf,
   toggledVeil,
@@ -502,16 +510,44 @@ export const Composer = memo(function Composer({
    * seconde pièce, jamais un remplacement silencieux. Ce qui est ÉCARTÉ (droit,
    * taille, nombre) est DIT (`acceptPendingFiles`, `send/attachments.ts`) :
    * un fichier qui disparaît sans un mot est le pire des deux mondes. */
-  const addFiles = (files: FileList | null) => {
+  const addFiles = (files: FileList | readonly File[] | null) => {
     if (files === null || files.length === 0) return;
+    /* `draftNow` et non `pending` : une carte de contact arrive APRÈS un
+       sélecteur asynchrone, quand l'état capturé par ce rendu a pu vieillir. */
     const outcome = acceptPendingFiles({
-      current: pending,
+      current: draftNow.current.pending,
       files: Array.from(files),
       ...(rights === undefined ? {} : { rights }),
     });
     setFileRefusal(outcome.refusal ?? null);
     setPending(outcome.list);
     setPanelOpen(false);
+  };
+
+  /**
+   * LA TUILE « CONTACT » (#8242) — la fiche CHOISIE devient une carte
+   * `text/vcard` (`lib/send/contact-card.ts`) qui rejoint la sélection par
+   * `addFiles`, comme un fichier : mêmes droits, même aperçu, même envoi.
+   * Un sélecteur refermé n'ajoute rien ; une fiche illisible est DITE.
+   */
+  const contactSource = useMemo(() => contactSourceOf(defaultContactHost()), []);
+  const addContact = (card: ParsedVCard | null) => {
+    if (card !== null) addFiles([contactCardFile(card)]);
+  };
+  const refuseContact = () => setFileRefusal(translate(uiLanguage, 'composer.contact.failed'));
+  const contact = {
+    source: contactSource,
+    onRequest: () => {
+      setPanelOpen(false);
+      if (contactSource === 'file') return;
+      pickContact(contactSource, defaultContactHost()).then(addContact, refuseContact);
+    },
+    onPickFile: (files: FileList | null) => {
+      const file = files?.[0];
+      setPanelOpen(false);
+      if (file === undefined) return;
+      contactFromVCardFile(file).then((card) => (card === null ? refuseContact() : addContact(card)), refuseContact);
+    },
   };
 
   /**
@@ -936,6 +972,7 @@ export const Composer = memo(function Composer({
               setPanelOpen(false);
               setStickerSheetOpen(true);
             }}
+            contact={contact}
             onStartVoice={() => {
               setPanelOpen(false);
               recorder.start();

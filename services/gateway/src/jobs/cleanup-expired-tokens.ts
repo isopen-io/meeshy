@@ -6,6 +6,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
+import { sweepAbandonedEmailClaims } from '../services/auth/email-claim';
 
 const logger = enhancedLogger.child({ module: 'CleanupExpiredTokens' });
 
@@ -85,6 +86,16 @@ export class CleanupExpiredTokens {
 
     } catch (error) {
       logger.error('Error during cleanup', error as Error);
+    }
+
+    // #8227 — une revendication d'adresse jamais prouvée s'éteint à
+    // l'expiration de sa paire et libère son pseudo. Sa propre garde : une
+    // panne des jetons ne la retient pas, et inversement.
+    try {
+      const retirees = await sweepAbandonedEmailClaims(this.prisma, new Date());
+      if (retirees > 0) logger.info(`Retired ${retirees} abandoned email claim(s)`);
+    } catch (error) {
+      logger.error('Error during abandoned email claim sweep', error as Error);
     }
   }
 

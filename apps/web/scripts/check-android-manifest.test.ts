@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   auditCallComponents,
+  auditForbiddenPermissions,
   auditManifestPermissions,
   formatViolations,
   REQUIRED_PERMISSIONS,
@@ -239,5 +240,23 @@ describe('auditCallComponents — la coque déclare les composants de l appel na
       line.includes('DeclineCallReceiver') ? `<!-- ${line.trim()} -->` : line,
     );
     expect(auditCallComponents({ manifest })).toEqual(['.DeclineCallReceiver — absent ou exporté']);
+  });
+});
+
+describe('les permissions que la coque ne DEMANDE PAS (#8242)', () => {
+  const READ_CONTACTS = 'android.permission.READ_CONTACTS';
+
+  test('le sélecteur de contacts passe par ACTION_PICK : le carnet entier n est jamais lisible', () => {
+    expect(auditForbiddenPermissions({ manifest: manifestWith(REQUIRED_PERMISSIONS.map(declaration)) })).toEqual([]);
+  });
+
+  test('READ_CONTACTS déclarée → violation qui la nomme', () => {
+    const manifest = manifestWith([...REQUIRED_PERMISSIONS.map(declaration), declaration(READ_CONTACTS)]);
+    expect(auditForbiddenPermissions({ manifest })).toEqual([READ_CONTACTS]);
+  });
+
+  test('une déclaration en commentaire ne compte pas', () => {
+    const manifest = manifestWith([`<!-- ${declaration(READ_CONTACTS).trim()} -->`]);
+    expect(auditForbiddenPermissions({ manifest })).toEqual([]);
   });
 });
