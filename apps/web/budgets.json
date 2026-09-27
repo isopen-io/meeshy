@@ -192,6 +192,24 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,96 Ko -- les sous-titres d un appel (`lib/calls/call-captions-runtime.ts` : langue du lecteur et nom de l emetteur ; `call-captions-controller.ts` : journal, modes, data channel `transcription`, emission de `call:transcription-segment` et `call:transcription-active` ; `call-speech.ts` : la Web Speech API et sa detection). Charge A LA DEMANDE par `engine-defaults.ts` (`lazyCaptions`) au premier evenement de sous-titres, au premier canal de transcription ou au premier appui sur CC : il ne pese ni sur qui n appelle pas, ni sur un appel ou personne ne sous-titre. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,84 mesures apres fusion de dev, contre 9,41 avant #8048). La loi pure qu il partage avec le panneau est comptee a part (`call_captions_law`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
+    "call_recording_layer": {
+      "pattern": "^assets/call-recording-layer-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8064, NON ARBITREE",
+        "source": "Mesure du 2026-09-27 (`bun run build` puis gzip -9) : 1,25 Ko -- ce que chacun voit d'un enregistrement d'appel (`components/call-recording-layer.tsx` : la question de consentement, l'indicateur PERSISTANT « Enregistrement en cours » pose chez tous, l'attente du demandeur et le mot de fin). Monte A LA DEMANDE par `components/call-layer.tsx` seulement quand une demande, un enregistrement ou un mot de fin existe : un appel sans enregistrement ne le telecharge jamais. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
+    "call_recording_runtime": {
+      "pattern": "^assets/call-recording-runtime-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8064, NON ARBITREE",
+        "source": "Mesure du 2026-09-27 (`bun run build` puis gzip -9) : 1,16 Ko -- ce qui capte, chez l'enregistreur SEUL (`lib/calls/call-recording-runtime.ts` : le melange WebAudio de sa voix et de celle de chaque pair, `MediaRecorder`, le depot du fichier par le chemin des pieces jointes et son rattachement a la bulle de l'appel). Charge A LA DEMANDE par `lib/calls/call-recording-live.ts` a `call:recording-started`, quand le spectateur est le demandeur : les autres participants ne le telechargent jamais. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
     "call_captions_law": {
       "pattern": "^assets/call-captions-[A-Za-z0-9_-]{8}\\.js$",
       "kb": {
@@ -222,9 +240,9 @@
       "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 7,
-        "status": "CIBLE -- MESUREE PAR #8045, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 5,93 Ko -- l ecran d appel, la pastille flottante, le bandeau d appel en attente et leurs glyphes (`components/call-overlay.tsx`, `call-screen.tsx`, `call-media-elements.tsx`, `glyphs-call-screen.ts`). Monte A LA DEMANDE par `components/call-layer.tsx` seulement quand un appel, un appel en attente ou un avis existe. Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge."
+        "value": 9,
+        "status": "CIBLE -- REMESUREE PAR #8064, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9), DEUX builds du MEME arbre : 7,10 Ko avec le bouton « Enregistrer l'appel » (#8064, `RecordButton` dans `components/call-screen-tools.tsx`), 6,94 Ko sans lui -- le bouton pese 0,16 Ko, le reste de la croissance depuis la mesure de #8045 (5,93) vient des lots #8046/#8047/#8063 deja fusionnes. Le bouton est dans l'en-tete de l'ecran d'appel ; le sortir en chunk a part couterait une requete a chaque ecran d'appel pour 0,16 Ko. Tout le reste de l'enregistrement est hors de ce chunk (`call_recording_layer`, `call_recording_runtime`, `interface_catalogs_call_recording`). Arrondi au Ko SUPERIEUR (8) + 1 Ko de marge, meme discipline que la valeur precedente (5,93 -> 7). HISTORIQUE : mesure initiale #8045 le 2026-09-26, 5,93 Ko -- l ecran d appel, la pastille flottante, le bandeau d appel en attente et leurs glyphes (`components/call-overlay.tsx`, `call-screen.tsx`, `call-media-elements.tsx`, `glyphs-call-screen.ts`), monte A LA DEMANDE par `components/call-layer.tsx` seulement quand un appel, un appel en attente ou un avis existe."
       }
     },
     "reel_images": {
@@ -542,6 +560,15 @@
         "value": 20,
         "status": "CIBLE -- MESUREE PAR #7796/#7797, NON ARBITREE",
         "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9, zlib) : 19 195 o pour les SEPT catalogues des invitations (invite.* et linkDetail.*, 171 cles), de 2,49 Ko (en) a 2,99 Ko (ar). Charges avec /chat/:link et /links/share/:link seulement ; un lecteur n en telecharge qu UN (~2,7 Ko). Arrondi au Ko SUPERIEUR (19) + 1 Ko de marge."
+      }
+    },
+    "interface_catalogs_call_recording": {
+      "pattern": "^assets/catalog-call-recording-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #8064, NON ARBITREE",
+        "source": "Mesure du 2026-09-27 (`bun run build` puis gzip -9, zlib) : 3 015 o pour les SEPT catalogues de l'enregistrement d'appel (17 cles `callRecording.*`), de 0,38 Ko (en) a 0,46 Ko (ar). Charges avec la couche d'enregistrement seulement, en parallele de son chunk (`components/call-layer.tsx`) ; un lecteur n'en telecharge qu'UN. POURQUOI UN CATALOGUE A PART : les ajouter aux catalogues d'interface les portait a 141,83 Ko pour un plafond ARBITRE de 141 (mesure du meme arbre : 140,11 sans elles) -- seules les deux cles du bouton, visibles avant toute demande, y vivent (140,33 Ko). Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
     "conversation_media_hub": {

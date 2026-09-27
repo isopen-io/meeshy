@@ -97,7 +97,7 @@ function dateFieldOf<K extends string>(key: K, value: Date | string | null | und
  * `createdAt` reste la chaîne que le cache tient, D-26) — le décodeur est donc
  * `sansNull` et rien d'autre.
  */
-function decodeAttachment(raw: Attachment): Attachment {
+export function decodeAttachment(raw: Attachment): Attachment {
   return sansNull(raw);
 }
 

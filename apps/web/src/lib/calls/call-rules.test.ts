@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { decodeAck, decodeInitiated, decodeSessionMembers, decodeSignal, mapServerEndReason } from './call-decode';
+import type { Attachment } from '@/lib/api/types';
+
 import { callNoticeTarget } from './call-notice';
 import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
@@ -127,7 +129,7 @@ describe('la file des événements', () => {
 
 describe('la bulle d’appel', () => {
   test('un résumé terminé se rappelle ; un appel en cours se rejoint', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false });
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', callType: 'video' } })).toEqual({ conversationId: 'c', callId: 'k', media: 'video', live: false, transcript: false, recording: null });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', callType: 'audio' } })).toMatchObject({ live: true, media: 'audio' });
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
   });
@@ -137,6 +139,15 @@ describe('la bulle d’appel', () => {
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 0 } })?.transcript).toBe(false);
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', durationSeconds: 60 } })?.transcript).toBe(false);
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', durationSeconds: 60 } })?.transcript).toBe(false);
+  });
+
+  test('l’enregistrement consenti rattaché à la bulle se réécoute depuis le fil (#8064)', () => {
+    const recording = { id: 'att-rec', mimeType: 'audio/webm', fileUrl: '/u/rec.webm' } as unknown as Attachment;
+    const image = { id: 'att-img', mimeType: 'image/png' } as unknown as Attachment;
+    const summary = { conversationId: 'c', originalLanguage: 'en', metadata: { kind: 'call', callId: 'k' } };
+    expect(callNoticeTarget({ ...summary, attachments: [image, recording] })?.recording).toEqual({ attachment: recording, language: 'en' });
+    expect(callNoticeTarget({ ...summary, attachments: [image] })?.recording).toBeNull();
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k' }, attachments: [recording] })?.recording).toBeNull();
   });
 });
 

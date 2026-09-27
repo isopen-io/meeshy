@@ -3,9 +3,11 @@ import type { MessageDeletedEventData, SocketIOMessage } from '@meeshy/shared/ty
 
 import { quotedIsProtected } from '@/lib/view/quoted-protection';
 
+import { decodeAttachment } from './decode';
+
 import { deleteLastMessage, editLastMessage } from './list-preview';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
-import type { Message } from './types';
+import type { Attachment, Message } from './types';
 import { purgeViewOnceIn } from './view-once-seal';
 
 /**
@@ -60,8 +62,16 @@ const belongsTo = (message: Message, conversationId: string): boolean => message
 const servedTranslations = (data: SocketIOMessage): Message['translations'] =>
   Array.isArray(data.translations) && data.translations.length > 0 ? (data.translations as Message['translations']) : [];
 
+/** Une rediffusion qui porte ses pièces jointes les pose (l'enregistrement rattaché à la bulle d'un appel, #8064) ; une charge qui n'en dit rien garde celles en place. */
+const isServedAttachment = (value: unknown): value is Attachment =>
+  typeof value === 'object' && value !== null && typeof (value as { readonly id?: unknown }).id === 'string';
+
+const servedAttachments = (data: SocketIOMessage): Pick<Message, 'attachments'> | Record<string, never> =>
+  Array.isArray(data.attachments) ? { attachments: data.attachments.filter(isServedAttachment).map(decodeAttachment) } : {};
+
 const editedRow = (known: Message, data: SocketIOMessage): Message => ({
   ...known,
+  ...servedAttachments(data),
   content: data.content,
   isEdited: true,
   translations: servedTranslations(data),
