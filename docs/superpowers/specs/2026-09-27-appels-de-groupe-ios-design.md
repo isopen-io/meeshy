@@ -114,13 +114,19 @@ en audio peut donc passer en vidéo pour tous.
 
 ### 2.9 CallKit pour un groupe
 
-Un seul `CXCall` par appel de groupe (pas un par pair) : `remoteHandle` =
-`conversationId` du groupe, `localizedCallerName` = titre du groupe
-(« Alice — Équipe design » à la sonnerie, `conversationTitle` de
-`call:initiated`). `supportsGrouping`/`maximumCallsPerCallGroup` restent à
-1 : le groupe est un appel, pas une conférence CallKit de plusieurs appels.
-Mise en attente / fin CallKit = quitter le groupe (la passerelle traite `end`
-comme un départ tant qu'il reste des membres).
+Un seul `CXCall` par appel de groupe (pas un par pair).
+`supportsGrouping`/`maximumCallsPerCallGroup` restent à 1 : le groupe est un
+appel, pas une conférence CallKit de plusieurs appels. Mise en attente / fin
+CallKit = quitter le groupe (la passerelle traite `end` comme un départ tant
+qu'il reste des membres).
+
+**Livré au lot 1, côté APPELANT seulement** : `startGroupCall` passe
+`userId = conversationId` et `displayName = titre du groupe` au moteur
+existant — la poignée CallKit et les Récents du téléphone rappellent donc le
+groupe. **Côté APPELÉ**, la carte CallKit garde le nom de l'initiateur :
+réécrire `localizedCallerName` en « Alice — Équipe design » demande de toucher
+le chemin de sonnerie de `CallManager.swift` (hors budget, 6 367 lignes) — suivi
+(§ 6).
 
 ### 2.10 Entrée
 
@@ -129,11 +135,17 @@ vidéo) que la conversation directe, cible 44 pt, libellé et indice VoiceOver.
 L'appelant démarre sans pair principal ; le premier `participant-joined`
 le désigne (`CallManager` assigne `remoteUserId`, applique la politesse, offre).
 
+La pastille « Rejoindre » (appel de groupe déjà en cours, réconcilié par
+`ActiveCallService`) rejoint aussi un groupe : l'arrivant n'a pas de principal,
+les membres présents lui offrent, et le PREMIER qui offre est désigné principal
+(`routesToGroupMesh`) ; les suivants passent par le maillage.
+
 ### 2.11 Accessibilité et langues
 
-- Chaque tuile : `accessibilityElement(children: .combine)`, libellé = nom,
-  valeur = « parle », « micro coupé », « caméra coupée », « partage son écran ».
-- Grille : `accessibilityLabel` « Appel de groupe, N participants ».
+- Chaque tuile : `accessibilityElement(children: .ignore)`, libellé = nom,
+  valeur = « parle », « micro coupé », « caméra coupée », « partage son écran »,
+  « reconnexion… ».
+- Grille : conteneur `accessibilityLabel` « Participants à l'appel ».
 - Cibles ≥ 44 pt ; Dynamic Type sur les noms ; RTL natif (HStack/LazyVGrid).
 - Textes dans `apps/ios/Meeshy/Localizable.xcstrings` en fr (source), en, es,
   de, it, pt, ar — les langues du catalogue.
@@ -149,8 +161,10 @@ le désigne (`CallManager` assigne `remoteUserId`, applique la politesse, offre)
 | qui parle | oui | à mesurer |
 | micro/caméra par pair | oui | oui |
 | partage d'écran reçu | badge + vidéo | oui |
+| rejoindre un appel de groupe déjà en cours | oui (1er offrant = principal) | oui |
 | partage d'écran émis vers le maillage | suivi | oui |
 | départ du principal sans couper les autres | suivi | oui |
+| nom du groupe sur la carte CallKit de l'appelé | suivi | — |
 
 ## 4. Plan (TDD, lot 1)
 
@@ -167,12 +181,20 @@ le désigne (`CallManager` assigne `remoteUserId`, applique la politesse, offre)
    (l'émission `call:signal`) ; XCTest avec mocks.
 4. **Adaptateur WebRTC** — `WebRTCGroupPeerLink` (RTCPeerConnection réelle,
    non testable hors appareil ; relu, et couvert par le mock en 3).
-5. **Branchements minimaux dans `CallManager`** — payés par une extraction
-   préalable (formatage de durée, règles de négociation → fichiers voisins) :
-   routage des signaux (§ 2.1), désignation du principal d'un groupe (§ 2.10).
-6. **UI** — `GroupCallGridView` (tuiles, qui parle, badges, VoiceOver) monté
-   par `CallPresentationLayer` quand le maillage compte au moins un membre ;
-   bouton d'appel de l'en-tête de groupe.
+5. **Branchements minimaux dans `CallManager`** — À LIGNES CONSTANTES
+   (6 367 avant, 6 367 après) : l'extraction envisagée était interdite par les
+   gardes de source qui épinglent `isPolitePeer`, `isStaleNegotiation`,
+   `emitOfferWithRetry` dans `CallManager.swift`. Sept lignes modifiées sur
+   place (trois gardes de signal, la bascule média, la désignation du
+   principal, la cible de l'offre, la visibilité du setter de `remoteUserId`) ;
+   la logique vit dans `CallManager+GroupMesh.swift`, avec la liaison socket →
+   coordinateur (`GroupCallMeshBinding`, branchée par `CallManagerHost.adopt`
+   sur la pile de production seulement).
+6. **UI** — `GroupCallStageView` (tuiles, qui parle, badges, VoiceOver) posé
+   par `CallPresentationLayer` en surimpression de `CallView` (hors budget),
+   entre son chrome du haut et ses contrôles du bas, à partir de DEUX membres
+   distants ; bouton d'appel de l'en-tête de groupe (`HeaderCallButtonsView`,
+   `isGroup`).
 7. **Catalogue** — 7 langues ; gardes du dépôt.
 
 ## 5. Dimensions visées
@@ -195,3 +217,11 @@ réagencement quand un membre parle — seul le liseré change), accessibilité
 - SFU au-delà de 6 participants.
 - Validation sur appareils réels à 3, 4 et 6 participants (profil mémoire,
   thermique, voie montante 4G).
+- Nom du groupe sur la carte CallKit de l'APPELÉ (« Alice — Équipe design »).
+- Appel de groupe réveillé à froid par PushKit : la charge VoIP ne dit pas
+  `conversationType` ; la nature « groupe » n'est inférée qu'à l'arrivée d'un
+  tiers.
+- État caméra d'un membre découvert par son offre (arrivant tardif) : supposé
+  égal à la nature de l'appel jusqu'à son premier `call:media-toggled`.
+- Intégrer la grille DANS `CallView` (au lieu d'une surimpression) une fois
+  `CallView.swift` redescendu sous le budget.
