@@ -43,7 +43,7 @@ on:
         type: choice
         options:
           - all
-          - web-v31
+          - webapp
           - gateway
           - translator
           - agent
@@ -156,7 +156,7 @@ jobs:
             fi
 
             if [[ "$SERVICES" == "all" ]]; then
-              echo "web_v31=true" >> $GITHUB_OUTPUT
+              echo "webapp=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
@@ -164,11 +164,9 @@ jobs:
               # Sélection par JETON, pas par sous-chaîne. `*"web"*` répondait vrai
               # pour « web-v31 » : demander la v3.1 construisait AUSSI le legacy, et
               # rien dans le texte ne le disait. Les virgules encadrantes rendent
-              # « web » et « web-v31 » disjoints — le legacy n'étant plus construit
-              # (2026-09-16), la règle protège désormais `web-v31` d'un jeton voisin
-              # plutôt que du legacy, et reste donc nécessaire.
+              # les jetons disjoints : `webapp` ne répond pas à un jeton voisin.
               SELECTED=",${SERVICES// /},"
-              echo "web_v31=$([[ "$SELECTED" == *",web-v31,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              echo "webapp=$([[ "$SELECTED" == *",webapp,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "agent=$([[ "$SELECTED" == *",agent,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -180,7 +178,7 @@ jobs:
             # application web en développement. Une omission dans une
             # énumération ne rougit nulle part : elle produit une release
             # complète en apparence, amputée en fait.
-            echo "web_v31=true" >> $GITHUB_OUTPUT
+            echo "webapp=true" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
             echo "agent=true" >> $GITHUB_OUTPUT
@@ -220,12 +218,12 @@ jobs:
               CHANGED="__BASE_INTROUVABLE__"
             fi
             if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
-              echo "web_v31=true" >> $GITHUB_OUTPUT
+              echo "webapp=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
-            echo "web_v31=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "webapp=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -248,11 +246,12 @@ jobs:
           # porteur 2026-09-16) et son code a quitté le dépôt (#7668). Sa
           # dernière forme se restaure depuis le tag `legacy-web-final`.
 
-          # LA v3.1 — image `meeshy-web-v31`. C'est le nom que le compose de
-          # l'HÔTE de staging tire : le changer ici sans lui figerait staging en
-          # silence, le déploiement ne recréant que les services dont l'image a
-          # été construite. Son renommage est un geste coordonné avec l'hôte.
-          if [[ "${{ steps.changes.outputs.web_v31 }}" == "true" ]]; then
+          # LA WEBAPP (`apps/web`) — service `webapp`, image `meeshy-webapp`
+          # (directive porteur 2026-09-28, #7709 ; ex `web-v31` / `meeshy-web-v31`).
+          # C'est le nom que tirent les hôtes, par `FRONTEND_IMAGE` dans leur
+          # `.env` : le changer ici sans eux figerait staging et production en
+          # silence. Son renommage est un geste coordonné avec les hôtes.
+          if [[ "${{ steps.changes.outputs.webapp }}" == "true" ]]; then
             HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
@@ -276,7 +275,7 @@ jobs:
             # fixtures montre Kwame Mensah à de vrais utilisateurs. Le défaut du
             # `Dockerfile` reste `fixtures` pour qu'un build local n'exige aucune
             # passerelle ; une image, elle, en a toujours une.
-            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
+            SERVICES+='{"service":"webapp","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-webapp","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
             FIRST=false
           fi
 
@@ -529,7 +528,7 @@ jobs:
           INCONNUS=""
           for SVC in $(echo "$SERVICES_JSON" | jq -r '.include[].service'); do
             case "$SVC" in
-              web-v31)    CIBLES="$CIBLES frontend-staging" ;;
+              webapp)     CIBLES="$CIBLES frontend-staging" ;;
               gateway)    CIBLES="$CIBLES gateway-staging" ;;
               translator) CIBLES="$CIBLES translator-staging" ;;
               agent)      CIBLES="$CIBLES agent-staging" ;;

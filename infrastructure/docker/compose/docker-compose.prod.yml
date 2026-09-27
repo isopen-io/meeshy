@@ -376,7 +376,7 @@ services:
   # leur adresse. Retour arrière : `FRONTEND_IMAGE=isopen/meeshy-web:latest` et
   # le bloc précédent de ce service (port 3100, variables `NEXT_PUBLIC_*`).
   frontend:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-web-v31:latest}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-webapp:latest}
     container_name: meeshy-frontend
     restart: unless-stopped
     volumes:
