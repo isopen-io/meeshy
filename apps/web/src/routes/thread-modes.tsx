@@ -3,6 +3,7 @@ import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import { AfterReadWatermark, afterReadReachOf } from '@/components/after-read-watermark';
 import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { MessageEffectsHost } from '@/components/message-effects-host';
@@ -30,6 +31,7 @@ import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 import { protectionOf } from '@/lib/reading-mode/protection';
+import { isAfterReadMessage } from '@/lib/view/after-read';
 import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
@@ -551,6 +553,7 @@ export function ThreadModes({
           });
           const rowExpired = rowPhase === 'gone';
           const rowProtection = rowExpired ? 'expired' : protectionOf(p.message, renderNow);
+          const rowAfterRead = isAfterReadMessage(p.message) && rowProtection !== 'deleted' && rowProtection !== 'expired';
           /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
              nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
              pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
@@ -670,6 +673,7 @@ export function ThreadModes({
                   `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
               <div
                 {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
+                {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                 {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                 {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
@@ -685,6 +689,17 @@ export function ThreadModes({
                 {/* LE DÉPLIAGE D'UN MESSAGE LONG (#8147) : même nœud, même
                     raison — le verre, la loupe et l'atténuation des voisins
                     valent pour toutes les peaux. */}
+                {/* LE FILIGRANE DE LA FLAMME-ŒIL (#8304) — sur le nœud des
+                    DEUX peaux, comme la destruction : tous les modes le
+                    reçoivent, et il remplace la pastille de décompte. */}
+                {rowAfterRead ? (
+                  <AfterReadWatermark
+                    reach={afterReadReachOf({
+                      flat: usesFlatRow(mode),
+                      mediaOnly: p.message.content.trim() === '' && (p.message.attachments?.length ?? 0) > 0,
+                    })}
+                  />
+                ) : null}
                 <UnfoldStage messageId={p.message.id}>
                   <MessageEffectsHost effectFlags={p.message.effectFlags}>
                     {usesFlatRow(mode) ? (

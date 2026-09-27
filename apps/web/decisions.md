@@ -4379,3 +4379,29 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **L'alerte « sans numéro » (#8040) se tait quand on a CHOISI l'e-mail seul** : le lien discret de la phase 1 était déjà la question.
 
 **Conséquences.** `signup-rungs.ts` est retiré ; `routes/signup.tsx` se découpe en `signup-phone-glass.tsx`, `signup-identity-card.tsx` et `signup-extras.tsx`. Le code d'une carte vit hors du `<form>` de l'inscription (un formulaire ne s'imbrique pas) ; le bouton principal lui appartient par `form="signup-form"`. Dix clés `signup.*` rejoignent les sept catalogues (`budgets.json`, plafond 144).
+
+## D-144 — Sur la coque Android, les images et vidéos REÇUES s'enregistrent seules, une seule fois, dans l'album « Meeshy » — derrière une interface dont le plugin natif n'est pas encore posé (2026-09-27, #8308)
+
+**Contexte.** Directive porteur 2026-09-27, jumelle de l'issue iOS : à la réception, sans doublon, jamais un média protégé, un interrupteur dans les réglages, l'album « Meeshy ». La coque ne porte qu'un plugin Capacitor (`@capacitor/push-notifications`) ; aucun ne sait écrire dans la galerie. `@capacitor-community/media` 9.1.0 (peer `@capacitor/core >=8`) le sait, mais exige sur Android un `albumIdentifier` et, sous Android 9 et moins, la permission d'écriture externe — rien de cela n'est vérifiable sur appareil dans ce lot.
+
+**Décision.**
+- **La dépendance native n'est PAS ajoutée ce lot.** Toute la logique vit derrière `GallerySaver` (`lib/gallery/gallery-saver.ts`) : l'implémentation coque n'appelle le plugin `Media` que s'il est DÉCLARÉ par la coque (`PluginHeaders`, motif `native-shell.ts`, jamais `@capacitor/core`) et sur `getPlatform() === 'android'` ; sinon le saver est NUL et rien ne se passe. Ajouter le plugin (`cap sync`, permission ≤ API 28, vérification appareil) suffira à l'allumer.
+- **La garde** (`lib/gallery/auto-save.ts`, `galleryCandidates`) refuse ce qui est à moi (participant, compte, ou écho portant un `clientMessageId`), tout message protégé (vue unique, flou, chiffré, `expiresAt`, `ephemeralDuration`, drapeaux `EPHEMERAL`/`BLURRED`/`VIEW_ONCE`/`EPHEMERAL_AFTER_READ`) et toute PIÈCE protégée (`isViewOnce`, `isBlurred`, `isEncrypted`, champs de chiffrement, drapeaux) ; images et vidéos seulement.
+- **Une seule fois** : registre `localStorage` borné (500), clé préfixée par le lecteur ; une pièce n'est notée qu'ENREGISTRÉE, et les pièces en vol ne repartent pas sur un second écho.
+- **Déclenché à la réception** : le puits `message:new` (`api/socket.ts`) appelle `noteGalleryReception` ; hors coque Android, sans effet.
+- **L'interrupteur** vit dans la section « Données » des réglages (la rangée « Médias » n'est pas portée, #6723), réglage LOCAL actif par défaut, offert sur la seule coque qui sait écrire (loi 4) — le navigateur ne le voit pas, et `check-settings` n'y compte aucune bascule de plus.
+- **« Enregistrer » dans la visionneuse**, sur la coque, écrit droit dans l'album, sans feuille (`save-to-gallery.ts`) ; le navigateur garde son téléchargement.
+
+**Conséquences.** `base64De` (`media/file-delivery-host.ts`) est exporté et partagé. Deux clés `settings.gallery.*` rejoignent les sept catalogues en tranche `catalog-<l>-gallery.ts`.
+
+## D-145 — La flamme-œil ne décompte rien et se consomme en QUITTANT le fil ; une protection armée reste armée dans la conversation (2026-09-27, #8304, #8306)
+
+**Contexte.** Directive porteur 2026-09-27, contrat serveur #8302 : un éphémère « flamme-œil » (`EPHEMERAL | EPHEMERAL_AFTER_READ`, sans `ephemeralDuration`) disparaît chez chaque lecteur quand il l'a VU puis a QUITTÉ la conversation ; l'éphémère gagne 15 s ; et une protection armée (éphémère, flou, vue unique) ne se désarme plus à l'envoi.
+
+**Décision.**
+- **Le rail** (`composer-top-row.tsx`) : Désactivé, flamme-œil, 15 s, puis 30 s … 24 h. La flamme-œil voyage dans `ephemeralSeconds` sous la valeur réservée `EPHEMERAL_AFTER_READ_SECONDS = 0` (`compose-protection.ts`) : brouillon, préférence et rail la portent sans seconde bascule ; `protectionFieldsOf` pose les deux bits et JAMAIS d'`expiresAt`. Le pictogramme est COMPOSÉ (`flame-eye-glyph.tsx`) depuis `flameFill` + un œil en `evenodd`. Libellés au catalogue (`catalog-<l>-ephemeral.ts`, sept langues).
+- **Dans le fil**, ni pastille ni chrono : `resolveEphemeralDeadline` rend `none` pour le bit (site unique, donc tous les modes, expéditeur compris). À la place, un filigrane (`after-read-watermark.tsx`) posé sur le nœud qui enveloppe les deux peaux, sous la rangée (`z-index: -1` en contexte isolé), du bord du défilement jusqu'à la première lettre (colonne du nom en rangée plate, marge de la bulle, angle de la pièce jointe seule).
+- **VU = la frontière de lecture existante** (`useReadTracking` → `noteSeenUpTo`) ; **QUITTÉ = démontage, changement de conversation, onglet masqué, `pagehide`** (`use-after-read-consumption.ts`). Alors, pour les flammes-œil REÇUES vues seulement : retrait local immédiat (`removeAfterReadLocally`), puis consommation mise en FILE persistée par lecteur (`lib/api/after-read.ts`), vidée tout de suite, au retour du réseau et à l'ouverture d'un fil ; tant qu'elle attend, le fil cache le message. L'expéditeur ne perd rien avant `message:expired`.
+- **Protections collantes** (`protection-preference.ts`) : une préférence PAR (lecteur, conversation), écrite à chaque changement par `useComposerDraft`, prioritaire sur le brouillon à l'ouverture ; l'envoi ne remet plus à zéro que les effets DÉCORATIFS. Effacée à la déconnexion (`purgeAccountLocalData`).
+
+**Suivi assumé.** L'adresse de la route se compose par `byIdMessagesByMessageIdConsume(id, 'after-read')` tant que le manifeste n'a pas d'entrée dédiée. Kotlin natif : rien (gel).

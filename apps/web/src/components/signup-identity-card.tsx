@@ -103,7 +103,7 @@ export function SignupIdentityCard({
             </>
           ) : (
             <div className="grid gap-3" data-signup-code>
-              <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
                 {withStrongEmail(translate(language, 'signup.card.code.lead', { email: verification.email }), verification.email)}
               </p>
               <EmailCodeForm
@@ -178,7 +178,7 @@ function Verified({ language }: { readonly language: InterfaceLanguage }) {
       <p role="status" className="relative text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'signup.card.verified')}
       </p>
-      <p className="relative text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+      <p className="relative text-caption" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'signup.card.verified.lead')}
       </p>
     </div>

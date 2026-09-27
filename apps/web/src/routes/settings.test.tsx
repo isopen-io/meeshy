@@ -258,6 +258,23 @@ describe('les données — seul l’export reste offert', () => {
   });
 });
 
+describe('la galerie de la coque Android (#8308)', () => {
+  test('hors coque Android, aucune bascule de galerie n’est offerte', () => {
+    const host = dom(<DataSection language="fr" />);
+    expect(host.querySelector('[data-setting="galleryAutoSave"]')).toBeNull();
+  });
+
+  test('sur la coque, la bascule s’annonce avec son état et sa légende', () => {
+    const on = dom(<DataSection language="fr" gallery={{ enabled: true, onToggle: noop }} />);
+    const toggle = switchNamed(on, 'Enregistrer dans la galerie');
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('galleryAutoSave');
+    expect(on.textContent).toContain('album Meeshy');
+    const off = dom(<DataSection language="fr" gallery={{ enabled: false, onToggle: noop }} />);
+    expect(switchNamed(off, 'Enregistrer dans la galerie')?.getAttribute('aria-checked')).toBe('false');
+  });
+});
+
 describe('l’apparence', () => {
   const appearance = (props: Partial<Parameters<typeof AppearanceSection>[0]> = {}) =>
     dom(

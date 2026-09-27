@@ -1,4 +1,5 @@
 import type { Message } from '@/lib/api/types';
+import { isAfterReadMessage } from '@/lib/view/after-read';
 
 /**
  * LA LOI DE PROTECTION D'UN MESSAGE — miroir de `BubbleContentBuilder.Kind`
@@ -79,14 +80,15 @@ export function viewOnceSpent(message: ViewOnceConsumptionFields): boolean {
   return message.isFullyConsumed === true || viewOnceOpenedByMe(message);
 }
 
-type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt'> & {
+type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'effectFlags'> & {
   readonly consumedByMe?: boolean;
   readonly isFullyConsumed?: boolean;
   readonly ephemeralDuration?: number;
 };
 
-/** Un message dont la DURÉE d'éphémère est posée — le seul qui a le droit de partir à l'échéance. */
-function isEphemeral(message: Pick<ProtectionFields, 'ephemeralDuration'>): boolean {
+/** Un message dont la DURÉE d'éphémère est posée, ou une flamme-œil (#8304) — les seuls qui ont le droit de partir à l'échéance. */
+function isEphemeral(message: Pick<ProtectionFields, 'ephemeralDuration' | 'effectFlags'>): boolean {
+  if (isAfterReadMessage(message)) return true;
   const duration = message.ephemeralDuration;
   return typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
 }

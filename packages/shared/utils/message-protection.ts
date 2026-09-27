@@ -33,7 +33,10 @@ export function messageProtection(input: MessageProtectionInput): MessageProtect
   const flags = input.effectFlags ?? 0;
   const hasDuration = typeof input.ephemeralDuration === 'number' && input.ephemeralDuration > 0;
   return {
-    ephemeral: input.expiresAt != null || hasDuration || (flags & MESSAGE_EFFECT_FLAGS.EPHEMERAL) !== 0,
+    ephemeral:
+      input.expiresAt != null ||
+      hasDuration ||
+      (flags & (MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ)) !== 0,
     viewOnce: input.isViewOnce === true || (flags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) !== 0,
     blurred: input.isBlurred === true || (flags & MESSAGE_EFFECT_FLAGS.BLURRED) !== 0,
     encrypted: input.isEncrypted === true,

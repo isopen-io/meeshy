@@ -111,7 +111,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
   });
 
-  test('après un envoi, la substitution retombe — la protection est remise à zéro', () => {
+  test('après un envoi, la substitution TIENT — la protection reste armée (#8306)', () => {
     const el = mount(() => {});
     const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
     type(field, 'texte');
@@ -123,7 +123,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
-    expect(root.style.getPropertyValue('--accent')).toBe('');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
   });
 
   /**

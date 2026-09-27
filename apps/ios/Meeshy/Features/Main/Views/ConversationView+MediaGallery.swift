@@ -235,3 +235,29 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         promotePendingCompose()
     }
 }
+
+// MARK: - Le toucher d'un média du fil ouvre la galerie
+
+extension ConversationView {
+
+    /// **L'ouvreur UNIQUE du plein écran depuis le fil** — Bulles, Focal,
+    /// Script et, depuis #8310, la Rivière, dont le voile d'un message flouté
+    /// n'avait aucun ouvreur : l'image y restait inatteignable.
+    ///
+    /// Extrait de l'hôte, qui le portait en fermeture littérale : la Rivière
+    /// devait recevoir le MÊME geste, et une seconde copie aurait divergé à la
+    /// première règle ajoutée (la garde du menu, l'armement de la vue unique).
+    func openMediaFullscreen(_ attachment: MessageAttachment) {
+        // #8009 — le relâcher d'un appui long n'ouvre rien : son menu est déjà là.
+        guard !overlayState.showOverlayMenu else { return }
+        // Préchauffe ce que le plein écran AFFICHE (variante élue, poster net).
+        GalleryPrewarm.warm(attachment)
+        // #7499 — une vue unique s'OUVRE au toucher et se consomme à la
+        // FERMETURE. On arme ici, la galerie consomme en se refermant : c'est
+        // le seul endroit qui voie les deux.
+        if attachment.isViewOnce {
+            scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
+        }
+        scrollState.galleryStartAttachment = attachment
+    }
+}

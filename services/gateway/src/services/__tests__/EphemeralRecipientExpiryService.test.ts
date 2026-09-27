@@ -166,3 +166,33 @@ describe('EphemeralRecipientExpiryService.sweep', () => {
     expect(notificationFindMany).not.toHaveBeenCalled();
   });
 });
+
+describe('EphemeralRecipientExpiryService.expireNow — la flamme-œil consommée (#8302)', () => {
+  it("expire TOUT DE SUITE les entrées remises, sans attendre la passe à la minute", async () => {
+    const result = await service().expireNow([dueEntry({ ephemeralExpiresAt: NOW })], undefined);
+
+    expect(result).toEqual({ expired: 1 });
+    expect(entryFindMany).not.toHaveBeenCalled();
+    expect(emitted).toEqual([
+      {
+        room: `user:${USER_ID}`,
+        event: 'message:expired',
+        data: { messageId: MESSAGE_ID, conversationId: CONVERSATION_ID },
+      },
+    ]);
+  });
+
+  it("n'annonce pas deux fois une entrée déjà réclamée — la consommation est idempotente", async () => {
+    entryUpdateMany.mockResolvedValue({ count: 0 });
+
+    expect(await service().expireNow([dueEntry({ ephemeralExpiresAt: NOW })], undefined)).toEqual({ expired: 0 });
+    expect(emitted).toEqual([]);
+  });
+
+  it("refuse une entrée dont l'échéance n'est pas encore échue", async () => {
+    const later = new Date(NOW.getTime() + 60_000);
+
+    expect(await service().expireNow([dueEntry({ ephemeralExpiresAt: later })], undefined)).toEqual({ expired: 0 });
+    expect(entryUpdateMany).not.toHaveBeenCalled();
+  });
+});
