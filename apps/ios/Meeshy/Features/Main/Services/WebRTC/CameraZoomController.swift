@@ -59,6 +59,10 @@ final class CameraZoomController: ObservableObject, CameraZoomProviding {
     private var pinchStart: CGFloat?
     private let applier: any CameraZoomApplying
 
+    // Sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, la deinit synthétisée
+    // est isolée et double-libère sur iOS 26.1 (abrt au démontage d'un test).
+    nonisolated deinit {}
+
     init(applier: any CameraZoomApplying = CameraZoomQueue()) {
         self.applier = applier
     }
