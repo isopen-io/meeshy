@@ -3,7 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { setAttachmentReactionEmitter, type AttachmentReactionRequest } from '@/lib/api/attachment-reaction-emit';
 import { mediaHubPath, mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
+import { appQueryClient } from '@/lib/api/query-client';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { MessagesPage } from '@/lib/api/messages-pages';
@@ -241,6 +243,70 @@ describe('la grille et la visionneuse conversation-entière (#6303)', () => {
     expect(viewer?.getAttribute('data-viewer-index')).toBe('1');
     expect(viewer?.getAttribute('aria-label')).toBe('Média 2 sur 3');
     expect(viewer?.querySelector('[data-viewer-footer]')?.textContent).toContain('Nour Haddad');
+  });
+});
+
+/**
+ * #8180 — OUVERTE DEPUIS L'ÉCRAN DES MÉDIAS, la visionneuse offre ce qu'elle
+ * sait FAIRE sans le fil : Enregistrer, Réagir, Créer avec ce média. Pas
+ * « Répondre » : l'écran ne tient pas le composeur (iOS `MediaHubGalleryCover`
+ * non plus). La réaction se relit dans l'index d'où la visionneuse est ouverte.
+ */
+describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () => {
+  const openFirst = async (messages: readonly unknown[]) => {
+    const client = appQueryClient;
+    mountHub({ replies: { [pathOf('visual')]: page(messages) }, client });
+    await until(() => $$('[data-media-hub-tile]').length === messages.length);
+    click($$('[data-media-hub-tile]')[0] ?? null);
+    await until(() => $('[data-media-viewer]') !== null);
+    return client;
+  };
+  const hubPieceOf = (client: QueryClient, messageId: string) =>
+    client
+      .getQueryData<{ pages: MessagesPage[] }>(mediaHubQueryKey('c1', 'visual', null))
+      ?.pages.flatMap((p) => p.messages)
+      .find((m: Message) => m.id === messageId)?.attachments?.[0];
+
+  afterEach(() => {
+    appQueryClient.clear();
+    setAttachmentReactionEmitter(null);
+  });
+
+  test('Enregistrer, Réagir et Créer avec ce média sont offerts ; Répondre ne l’est pas', async () => {
+    await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="compose"]') !== null && $('[data-viewer-action="save"]') !== null);
+    expect($('[data-viewer-action="save"]')).not.toBeNull();
+    expect($('[data-viewer-action="react"]')).not.toBeNull();
+    expect($('[data-viewer-action="compose"]')).not.toBeNull();
+    expect($('[data-viewer-action="reply"]')).toBeNull();
+  });
+
+  test('Réagir vise la PIÈCE regardée et se relit aussitôt dans l’index de l’écran', async () => {
+    const sent: AttachmentReactionRequest[] = [];
+    setAttachmentReactionEmitter((request) => {
+      sent.push(request);
+      return Promise.resolve('ok');
+    });
+    const client = await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="react"]') !== null);
+    click($('[data-viewer-action="react"]'));
+    const emoji = $('[data-viewer-reactions] button');
+    await act(async () => {
+      emoji?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ action: 'add', attachmentId: 'a-m2', messageId: 'm2' });
+    expect(hubPieceOf(client, 'm2')?.currentUserReactions).toEqual([sent[0]!.emoji]);
+    expect(hubPieceOf(client, 'm1')?.currentUserReactions).toBeUndefined();
+  });
+
+  test('une pièce floutée, même ouverte en clair, n’offre aucune action', async () => {
+    const blurred = photoMessage('m1');
+    const protectedMessage = { ...blurred, attachments: blurred.attachments.map((a) => ({ ...a, isBlurred: true })) };
+    await openFirst([protectedMessage]);
+    await settle(60);
+    expect($('[data-viewer-action]')).toBeNull();
   });
 });
 

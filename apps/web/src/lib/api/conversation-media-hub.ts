@@ -1,4 +1,4 @@
-import type { InfiniteData } from '@tanstack/react-query';
+import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 
 import { itemsOfKind, type MediaHubKind } from '@/lib/view/media-hub';
 
@@ -43,9 +43,29 @@ export function mediaHubSearchTerm(raw: string): string | null {
   return term.length >= MIN_SEARCH_LENGTH ? term : null;
 }
 
+/** Toutes les clés d'index d'UNE conversation — chaque segment, chaque recherche. */
+export const mediaHubConversationKey = (conversationId: string) => ['conversation-media-hub', conversationId] as const;
+
 /** Hors de `['conversations', …]` : ce préfixe porte des conversations et des fils, parcourus comme tels. */
 export const mediaHubQueryKey = (conversationId: string, kind: MediaHubKind, term: string | null) =>
-  ['conversation-media-hub', conversationId, kind, term ?? ''] as const;
+  [...mediaHubConversationKey(conversationId), kind, term ?? ''] as const;
+
+/**
+ * RÉÉCRIRE LES MESSAGES DE L'INDEX D'UNE CONVERSATION (#8180) — le jumeau de
+ * `patchThreadMessages` pour l'écran des médias : un geste posé depuis la
+ * visionneuse de l'écran (réagir à une pièce) doit se relire dans l'index
+ * d'où elle a été ouverte, sur chaque segment et chaque recherche en cache.
+ */
+export function patchMediaHubMessages(
+  queryClient: QueryClient,
+  conversationId: string,
+  updater: (messages: readonly Message[]) => readonly Message[],
+): void {
+  queryClient.setQueriesData<MediaHubData>({ queryKey: mediaHubConversationKey(conversationId) }, (data) => {
+    if (data === undefined || !Array.isArray(data.pages)) return data;
+    return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
+  });
+}
 
 export function mediaHubPath(params: {
   readonly conversationId: string;

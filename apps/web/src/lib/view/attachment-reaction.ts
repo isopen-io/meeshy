@@ -2,8 +2,9 @@ import type { QueryClient } from '@tanstack/react-query';
 import { isReactionAllowed } from '@meeshy/shared/utils/reaction-limit';
 
 import { emitAttachmentReaction } from '@/lib/api/attachment-reaction-emit';
+import { patchMediaHubMessages } from '@/lib/api/conversation-media-hub';
 import { patchThreadMessages } from '@/lib/api/messages';
-import type { Attachment } from '@/lib/api/types';
+import type { Attachment, Message } from '@/lib/api/types';
 
 /**
  * RÉAGIR À UNE PIÈCE, PAS AU MESSAGE (#6303) — miroir de
@@ -13,7 +14,8 @@ import type { Attachment } from '@/lib/api/types';
  * et la pastille de la tuile (`AttachmentReactionBadge`, #7894) la reflète.
  *
  * Optimiste : le résumé et « la mienne » bougent AVANT l'accusé, dans le cache
- * du fil (la même ligne que la tuile lit) ; un refus ou une coupure les
+ * du fil (la même ligne que la tuile lit) ET dans l'index de l'écran des
+ * médias (#8180 — la visionneuse qui en est ouverte y relit sa page) ; un refus ou une coupure les
  * RENDENT tels qu'ils étaient — jamais une pastille qui ment sur ce qui est
  * parti. La diffusion `attachment:reaction-*` qui suit remplace ensuite le
  * résumé par le compte ABSOLU du serveur (`realtime-attachment-reactions.ts`).
@@ -54,19 +56,21 @@ export async function performAttachmentReaction(params: {
   const plan = attachmentReactionPlan(mine, emoji);
   if (plan === 'refused') return 'limit';
   const delta: 1 | -1 = plan === 'add' ? 1 : -1;
-  const apply = (d: 1 | -1): void =>
-    patchThreadMessages(queryClient, conversationId, (messages) =>
-      messages.map((message) =>
-        message.id !== messageId || message.attachments === undefined
-          ? message
-          : {
-              ...message,
-              attachments: message.attachments.map((attachment) =>
-                attachment.id === attachmentId ? withAttachmentReaction(attachment, emoji, d) : attachment,
-              ),
-            },
-      ),
+  const onPiece = (d: 1 | -1) => (messages: readonly Message[]): readonly Message[] =>
+    messages.map((message) =>
+      message.id !== messageId || message.attachments === undefined
+        ? message
+        : {
+            ...message,
+            attachments: message.attachments.map((attachment) =>
+              attachment.id === attachmentId ? withAttachmentReaction(attachment, emoji, d) : attachment,
+            ),
+          },
     );
+  const apply = (d: 1 | -1): void => {
+    patchThreadMessages(queryClient, conversationId, onPiece(d));
+    patchMediaHubMessages(queryClient, conversationId, onPiece(d));
+  };
   apply(delta);
   const ack = await emitAttachmentReaction({ action: plan, attachmentId, messageId, emoji });
   if (ack !== 'ok') apply(delta === 1 ? -1 : 1);
