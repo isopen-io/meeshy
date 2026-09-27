@@ -130,7 +130,7 @@ export default function CommunitiesScreen() {
                 onChange={(event) => setTyped(event.currentTarget.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                className="min-w-0 flex-1 bg-transparent text-body outline-none"
+                className="w-0 min-w-0 flex-1 bg-transparent text-body outline-none"
                 style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
               />
               {typed === EMPTY_SEARCH ? null : (

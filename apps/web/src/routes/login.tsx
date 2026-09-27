@@ -258,7 +258,14 @@ export function LoginDoors({
   }
 
   return (
-    <AuthColumn className="items-center justify-center gap-8 px-6 py-10">
+    /* LES ESPACES PLIENT, PAS L'ÉCRAN (#8418). `gap-8 py-10` fixes
+       faisaient 672 px de la porte par défaut et 830 de celle du mot de
+       passe : sur un téléphone, la connexion défilait. iOS range la même
+       colonne entre des `Spacer()` (`LoginView.swift:128-201`) qui cèdent la
+       place avant le contenu — ici `justify-evenly` partage le blanc
+       restant, et `gap-2` / `py-2` sont le plancher quand il n'en reste
+       plus. Témoin : `scripts/check-phone-frame.mjs`, 375×667. */
+    <AuthColumn className="items-center justify-evenly gap-2 px-6 py-2">
       {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
           Directive porteur 2026-09-14 : « à la connexion la page doit être
           sans titre sauf la baguette magique ». La porte par défaut a la
