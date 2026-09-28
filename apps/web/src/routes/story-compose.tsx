@@ -50,6 +50,7 @@ import {
   withSelected,
   withSoundPlane,
   withAnimated,
+  withStatic,
   withAudience,
   withBackgroundFrame,
   withPlacedWhileAnimated,
@@ -76,7 +77,7 @@ import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
-import { studioPageDuration, studioTracks, timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
+import { pageIsAnimated, studioPageDuration, studioTracks, timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
 import type { StudioTiming } from '@/lib/stories/studio-text';
 import type { StoryFrame } from '@/lib/stories/story-document';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
@@ -664,9 +665,12 @@ function StoryStudio({
     [page.background, page.overlay, sceneHash], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const frame = page.background?.frame ?? DEFAULT_FRAME;
-  const { timelineOpen, timelinePlaying, clock, setClock, toggleAnimated, playPause } = useStudioTimeline({
+  const animated = pageIsAnimated(page);
+  const { timelineOpen, timelinePlaying, clock, setClock, toggleAnimated, toggleTime, playPause } = useStudioTimeline({
+    animated,
     duration: studioPageDuration(page),
     animate: () => edit(withAnimated),
+    makeStatic: () => edit(withStatic),
     closePanels: () => {
       setFrameOpen(false);
       setEditingId(null);
@@ -713,7 +717,7 @@ function StoryStudio({
       menu={
         retouching ? undefined : (
           <>
-            <StudioAnimatedToggle lang={lang} active={timelineOpen} onToggle={toggleAnimated} disabled={publishing} />
+            <StudioAnimatedToggle lang={lang} active={animated} onToggle={toggleAnimated} disabled={publishing} />
             <StudioMoreMenu lang={lang} items={menuItems} disabled={publishing} />
           </>
         )
@@ -744,7 +748,7 @@ function StoryStudio({
         ) : null}
 
         {timelineOpen ? null : (
-          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} sound={!retouching} />
+          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} />
         )}
 
         {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
@@ -787,27 +791,27 @@ function StoryStudio({
           }}
         />
 
-        {timelineOpen ? null : (
-          <StudioTrailingRail
-            lang={lang}
-            locked={publishing}
-            onAddPage={draft.pages.length < STUDIO_PAGE_MAX && !retouching ? () => edit((current) => withAddedPage(current, language)) : null}
-            onAddText={addTextAndWrite}
-            editorOpen={editing !== null}
-            onToggleEditor={selectedId !== null && stageObjects.some((object) => object.id === selectedId) ? () => (editing !== null ? setEditingId(null) : startEditing(selectedId)) : null}
-            frameOpen={frameOpen}
-            onToggleFrame={
-              page.background !== null
-                ? () => {
-                    setEditingId(null);
-                    setFrameOpen((open) => !open);
-                  }
-                : null
-            }
-            onUndo={history.past.length > 0 ? undo : null}
-            onRedo={history.future.length > 0 ? redo : null}
-          />
-        )}
+        {/* LE RAIL DROIT (#8516, `ComposerTrailingRail.tiles`) : annuler,
+            rétablir, Temps, Cadre, nouvelle scène. Frise ouverte, seul Temps
+            reste — le geste qui la RANGE demeure là où il l'a ouverte. */}
+        <StudioTrailingRail
+          lang={lang}
+          locked={publishing}
+          onUndo={!timelineOpen && history.past.length > 0 ? undo : null}
+          onRedo={!timelineOpen && history.future.length > 0 ? redo : null}
+          timeOpen={timelineOpen}
+          onToggleTime={animated ? toggleTime : null}
+          frameOpen={frameOpen}
+          onToggleFrame={
+            !timelineOpen && page.background !== null
+              ? () => {
+                  setEditingId(null);
+                  setFrameOpen((open) => !open);
+                }
+              : null
+          }
+          onAddPage={!timelineOpen && draft.pages.length < STUDIO_PAGE_MAX && !retouching ? () => edit((current) => withAddedPage(current, language)) : null}
+        />
       </div>
 
       {/* LE SOCLE — sous la scène, jamais sur elle. Les contrôleurs de l'outil

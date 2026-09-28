@@ -492,9 +492,10 @@ async function runScheme(colorScheme) {
       `${tag} : rouvert après publication, le studio doit avoir purgé le brouillon et relu la mémoire (COMMUNITY/chosen, texte vide) — ${JSON.stringify(afterPublish)}`,
     );
 
-    /* ── LE MODE ANIMÉ (#8415) : la pastille ouvre la frise, les rails se
-       retirent, la tête de lecture AVANCE sur l'horloge du moteur, et la
-       refermer rend les rails. ─────────────────────────────────────────── */
+    /* ── LE MODE ANIMÉ (#8415, #8516) : la pastille ouvre la frise, le couloir
+       gauche se retire et le rail droit ne garde que « Temps », la tête de
+       lecture AVANCE sur l'horloge du moteur ; « Temps » range la frise d'une
+       scène qui reste animée ; éteindre Animé rend la scène statique. ───── */
     await writeAsAuthor(page, 'Animé', tag);
     await page.click('[data-story-animated]');
     await page.waitForSelector('[data-story-timeline] [data-story-track]', { timeout: 8000 });
@@ -506,18 +507,45 @@ async function runScheme(colorScheme) {
         return left !== null && left !== depart && left !== '0%';
       }, avant, { timeout: 4000 })
       .catch(() => undefined);
+    const railDroit = () =>
+      page.evaluate(() => [...document.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-option]')].map((tile) => tile.getAttribute('data-story-option')));
     const anime = await page.evaluate(() => ({
       tete: document.querySelector('[data-story-timeline-head]')?.style.left ?? null,
-      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+      couloir: document.querySelector('[data-story-studio-rail="leading"]') !== null,
       pistes: document.querySelectorAll('[data-story-track]').length,
       publier: document.querySelector('[data-story-publish]') !== null,
+      unite: document.querySelector('[data-story-timeline-duration]')?.parentElement?.textContent ?? null,
     }));
-    check(anime.rails === 0 && anime.pistes >= 1 && anime.publier, `${tag} : frise ouverte, rails retirés, une piste par objet, Publier gardé — ${JSON.stringify(anime)}`);
+    const friseRail = await railDroit();
+    check(
+      !anime.couloir && JSON.stringify(friseRail) === '["time"]' && anime.pistes >= 1 && anime.publier,
+      `${tag} : frise ouverte, couloir retiré, seul « Temps » au rail droit, une piste par objet, Publier gardé — ${JSON.stringify({ ...anime, friseRail })}`,
+    );
     check(avant !== anime.tete && anime.tete !== '0%', `${tag} : la tête de lecture doit avancer pendant la lecture (${avant} → ${anime.tete})`);
+    check(/ s \/ .* s$/.test(anime.unite ?? ''), `${tag} : le compteur de la frise porte son unité — « ${anime.unite} »`);
+    /* « Temps » range la frise ; la scène RESTE animée, les deux rails reviennent. */
+    await page.click('[data-story-option="time"]');
+    const range = await page.evaluate(() => ({
+      frise: document.querySelector('[data-story-timeline]') !== null,
+      anime: document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') ?? null,
+      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+    }));
+    const railRange = await railDroit();
+    check(
+      !range.frise && range.anime === 'true' && range.rails === 2 && railRange.includes('time') && railRange.indexOf('time') < railRange.indexOf('add-page'),
+      `${tag} : « Temps » range la frise d'une scène qui reste animée, rails rendus dans l'ordre d'iOS — ${JSON.stringify({ ...range, railRange })}`,
+    );
+    /* Éteindre Animé : la scène redevient STATIQUE — plus de « Temps ». */
     await page.click('[data-story-animated]');
     check(
-      await page.evaluate(() => document.querySelector('[data-story-timeline]') === null && document.querySelectorAll('[data-story-studio-rail]').length === 2),
-      `${tag} : refermer Animé rend les deux rails`,
+      await page.evaluate(
+        () =>
+          document.querySelector('[data-story-timeline]') === null &&
+          document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') === 'false' &&
+          document.querySelector('[data-story-option="time"]') === null &&
+          document.querySelectorAll('[data-story-studio-rail]').length === 2,
+      ),
+      `${tag} : éteindre Animé rend la scène statique (ni frise, ni « Temps »), les deux rails présents`,
     );
 
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
