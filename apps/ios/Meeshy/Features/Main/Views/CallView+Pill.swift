@@ -261,19 +261,22 @@ extension CallView {
 
     /// Duo : une rangée de boutons sans légende dans le bloc, au-dessus de la
     /// rangée de base, ou deux quand elle ne tiendrait pas (`CallActionSet.duoRows`).
+    /// Chaque action prend une part égale de la largeur, avec la marge de la
+    /// rangée de base : à quatre, elles tombent dans les colonnes de
+    /// Plus · Micro · Sortie · Fin.
     /// Le nom de chaque bouton est porté par l'accessibilité.
     private func duoActionRows(_ actions: CallActionSet) -> some View {
         VStack(spacing: 8) {
             ForEach(Array(actions.duoRows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 12) {
+                HStack(spacing: 0) {
                     ForEach(row, id: \.self) { action in
                         actionButton(action, captioned: false)
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 8)
         .padding(.top, 12)
         .padding(.bottom, 10)
         .accessibilityElement(children: .contain)
