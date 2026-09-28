@@ -76,6 +76,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { writeOnStage } from './lib/stage-typing.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const ICON = new URL('../public/icon-192.png', import.meta.url).pathname;
@@ -91,6 +92,14 @@ let invariants = 0;
 const check = (ok, what) => {
   invariants += 1;
   if (!ok) failures.push(what);
+};
+
+/** Écrire sur la scène par le clic et le clavier (#8515) — jamais `page.fill`. */
+const writeAsAuthor = async (page, text, tag) => {
+  const why = await writeOnStage(page, text);
+  // Dit TOUT DE SUITE : l'attente suivante expirerait avant la liste des échecs.
+  if (why !== null) console.error(`  ${tag} « ${text.slice(0, 24)} » : ${why}`);
+  check(why === null, `${tag} : ${why}`);
 };
 
 const round = (v) => Math.round(v * 100) / 100;
@@ -312,7 +321,7 @@ async function runScheme(colorScheme) {
       ['un texte long', 'Un texte suffisamment long pour forcer plusieurs lignes dans le moteur partagé et dans la saisie transparente qui le recouvre.'],
     ];
     for (const [label, text] of alignmentCases) {
-      await page.fill('#story-studio-text', text);
+      await writeAsAuthor(page, text, tag);
       await twoFrames(page);
       const alignement = await page.evaluate(() => {
         const textarea = document.querySelector('#story-studio-text');
@@ -347,7 +356,7 @@ async function runScheme(colorScheme) {
     }
 
     /* ── 6. un texte tapé SURVIT à un rechargement (brouillon) ──────────── */
-    await page.fill('#story-studio-text', 'Recette du gate');
+    await writeAsAuthor(page, 'Recette du gate', tag);
     await page.waitForTimeout(50); // l'effet qui persiste le brouillon n'est pas synchrone au frappé.
     await page.reload({ waitUntil: 'load' });
     await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
@@ -483,10 +492,11 @@ async function runScheme(colorScheme) {
       `${tag} : rouvert après publication, le studio doit avoir purgé le brouillon et relu la mémoire (COMMUNITY/chosen, texte vide) — ${JSON.stringify(afterPublish)}`,
     );
 
-    /* ── LE MODE ANIMÉ (#8415) : la pastille ouvre la frise, les rails se
-       retirent, la tête de lecture AVANCE sur l'horloge du moteur, et la
-       refermer rend les rails. ─────────────────────────────────────────── */
-    await page.fill('#story-studio-text', 'Animé');
+    /* ── LE MODE ANIMÉ (#8415, #8516) : la pastille ouvre la frise, le couloir
+       gauche se retire et le rail droit ne garde que « Temps », la tête de
+       lecture AVANCE sur l'horloge du moteur ; « Temps » range la frise d'une
+       scène qui reste animée ; éteindre Animé rend la scène statique. ───── */
+    await writeAsAuthor(page, 'Animé', tag);
     await page.click('[data-story-animated]');
     await page.waitForSelector('[data-story-timeline] [data-story-track]', { timeout: 8000 });
     const avant = await page.evaluate(() => document.querySelector('[data-story-timeline-head]')?.style.left ?? null);
@@ -497,18 +507,45 @@ async function runScheme(colorScheme) {
         return left !== null && left !== depart && left !== '0%';
       }, avant, { timeout: 4000 })
       .catch(() => undefined);
+    const railDroit = () =>
+      page.evaluate(() => [...document.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-option]')].map((tile) => tile.getAttribute('data-story-option')));
     const anime = await page.evaluate(() => ({
       tete: document.querySelector('[data-story-timeline-head]')?.style.left ?? null,
-      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+      couloir: document.querySelector('[data-story-studio-rail="leading"]') !== null,
       pistes: document.querySelectorAll('[data-story-track]').length,
       publier: document.querySelector('[data-story-publish]') !== null,
+      unite: document.querySelector('[data-story-timeline-duration]')?.parentElement?.textContent ?? null,
     }));
-    check(anime.rails === 0 && anime.pistes >= 1 && anime.publier, `${tag} : frise ouverte, rails retirés, une piste par objet, Publier gardé — ${JSON.stringify(anime)}`);
+    const friseRail = await railDroit();
+    check(
+      !anime.couloir && JSON.stringify(friseRail) === '["time"]' && anime.pistes >= 1 && anime.publier,
+      `${tag} : frise ouverte, couloir retiré, seul « Temps » au rail droit, une piste par objet, Publier gardé — ${JSON.stringify({ ...anime, friseRail })}`,
+    );
     check(avant !== anime.tete && anime.tete !== '0%', `${tag} : la tête de lecture doit avancer pendant la lecture (${avant} → ${anime.tete})`);
+    check(/ s \/ .* s$/.test(anime.unite ?? ''), `${tag} : le compteur de la frise porte son unité — « ${anime.unite} »`);
+    /* « Temps » range la frise ; la scène RESTE animée, les deux rails reviennent. */
+    await page.click('[data-story-option="time"]');
+    const range = await page.evaluate(() => ({
+      frise: document.querySelector('[data-story-timeline]') !== null,
+      anime: document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') ?? null,
+      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+    }));
+    const railRange = await railDroit();
+    check(
+      !range.frise && range.anime === 'true' && range.rails === 2 && railRange.includes('time') && railRange.indexOf('time') < railRange.indexOf('add-page'),
+      `${tag} : « Temps » range la frise d'une scène qui reste animée, rails rendus dans l'ordre d'iOS — ${JSON.stringify({ ...range, railRange })}`,
+    );
+    /* Éteindre Animé : la scène redevient STATIQUE — plus de « Temps ». */
     await page.click('[data-story-animated]');
     check(
-      await page.evaluate(() => document.querySelector('[data-story-timeline]') === null && document.querySelectorAll('[data-story-studio-rail]').length === 2),
-      `${tag} : refermer Animé rend les deux rails`,
+      await page.evaluate(
+        () =>
+          document.querySelector('[data-story-timeline]') === null &&
+          document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') === 'false' &&
+          document.querySelector('[data-story-option="time"]') === null &&
+          document.querySelectorAll('[data-story-studio-rail]').length === 2,
+      ),
+      `${tag} : éteindre Animé rend la scène statique (ni frise, ni « Temps »), les deux rails présents`,
     );
 
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
@@ -726,14 +763,14 @@ for (const colorScheme of ['light', 'dark']) {
   await page.click('[data-self-create]');
   await page.waitForURL((url) => url.pathname === '/stories/new', { timeout: 8000 });
   await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
-  await page.fill('#story-studio-text', 'Une');
+  await writeAsAuthor(page, 'Une', tag);
   for (const [text, count] of [
     ['Deux', 2],
     ['Trois', 3],
   ]) {
     await page.click('[data-story-option="add-page"]');
     await page.waitForFunction((n) => document.querySelectorAll('[data-story-studio-page]').length === n, count, { timeout: 8000 });
-    await page.fill('#story-studio-text', text);
+    await writeAsAuthor(page, text, tag);
   }
   check(
     await page.evaluate(() => document.querySelector('[data-publish-refusal]') === null),

@@ -46,13 +46,13 @@ export function PageMark({ size = 20 }: { readonly size?: number }) {
   );
 }
 
-export function SlidersMark({ size = 20 }: { readonly size?: number }) {
+/** « Temps » (#8516) — des pistes et la tête de lecture, le `timeline.selection`
+ * d'iOS (`ComposerTrailingRail.tiles`). */
+export function TimeMark({ size = 20 }: { readonly size?: number }) {
   return (
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-      <path d="M4 7h16M4 12h16M4 17h16" />
-      <circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="17" r="2" fill="currentColor" stroke="none" />
+      <path d="M3 8h8M15 8h6M3 16h4M11 16h10" />
+      <path d="M13 3v18" />
     </svg>
   );
 }

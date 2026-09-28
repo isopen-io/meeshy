@@ -2,7 +2,6 @@ import { useState } from 'react';
 
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { withTextDuplicated, withTextLayer, withTextMoved, withVisualPose, withoutText, type StudioDraft } from '@/lib/stories/studio';
 import type { StudioPage } from '@/lib/stories/studio-page';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
@@ -17,7 +16,6 @@ import type { StudioObjectAction } from '@/routes/story-compose-object-menu';
 export function useStudioObjects({
   page,
   lang,
-  kind,
   edit,
   select,
   removeOverlay,
@@ -25,7 +23,6 @@ export function useStudioObjects({
 }: {
   readonly page: StudioPage;
   readonly lang: InterfaceLanguage;
-  readonly kind: PublicationKind;
   readonly edit: (change: (current: StudioDraft) => StudioDraft, key?: string | null) => void;
   readonly select: (id: string) => void;
   readonly removeOverlay: () => void;
@@ -56,13 +53,15 @@ export function useStudioObjects({
     edit((current) => (id === 'overlay' ? withVisualPose(current, 'overlay', pose) : withTextLayer(current, id, (layer) => ({ ...layer, pose: clampPose(pose) }))));
 
   /** Seules les actions qui ont un EFFET : pas de « Monter » au sommet, pas
-   * de « Dupliquer » pour le calque (une scène n'en porte qu'un). Un média
-   * hors story « sort de la scène ». */
+   * de « Dupliquer » pour le calque (une scène n'en porte qu'un). Aucun
+   * « Sortir de la scène » (#8515) : il SUPPRIMAIT le média, et iOS ne le sert
+   * pas (`ComposerHostRules.swift`, `leaveScene` : ce que devient un objet
+   * sorti n'est tranché nulle part) — retirer se dit « Retirer ». */
   const objectActions = (id: string): readonly StudioObjectAction[] => {
     if (id === 'overlay') {
       return [
         { id: 'edit', label: translate(lang, 'story.studio.object.edit'), onSelect: () => startEditing('overlay') },
-        { id: 'remove', label: translate(lang, kind === 'STORY' ? 'story.studio.object.remove' : 'story.studio.object.leave'), destructive: true, onSelect: removeOverlay },
+        { id: 'remove', label: translate(lang, 'story.studio.object.remove'), destructive: true, onSelect: removeOverlay },
       ];
     }
     const index = page.texts.findIndex((layer) => layer.id === id);

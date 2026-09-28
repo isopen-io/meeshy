@@ -80,6 +80,27 @@ export function pageAnimated(page: StudioPage): StudioPage {
   };
 }
 
+/** Une scène est ANIMÉE quand elle porte une durée — le document le dit, pas
+ * la frise ouverte ou fermée. */
+export const pageIsAnimated = (page: StudioPage): boolean => page.duration !== undefined;
+
+/** Un objet sans fenêtre — la clé `timing` absente, jamais `undefined` posé. */
+function untimed<T extends { readonly timing?: StudioTiming }>(object: T): T {
+  if (object.timing === undefined) return object;
+  const { timing: _timing, ...rest } = object;
+  return rest as T;
+}
+
+/** ÉTEINDRE « Animé » (#8516, maquette `toggleDynamic`) — la scène redevient
+ * STATIQUE : sa durée et CHAQUE fenêtre s'effacent, rien d'animé ne part. Une
+ * scène déjà statique reste le MÊME objet. */
+export function pageStatic(page: StudioPage): StudioPage {
+  const timed = page.texts.some((layer) => layer.timing !== undefined) || page.overlay?.timing !== undefined;
+  if (!pageIsAnimated(page) && !timed) return page;
+  const { duration: _duration, ...rest } = page;
+  return { ...rest, texts: page.texts.map(untimed), overlay: page.overlay === null ? null : untimed(page.overlay) };
+}
+
 export function pageWithTrackTiming(page: StudioPage, id: string, timing: StudioTiming): StudioPage {
   const clamped = clampTiming(timing, studioPageDuration(page));
   const duration = studioPageDuration(page);
