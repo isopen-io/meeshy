@@ -125,7 +125,12 @@ extension StoryCardView {
             // MONTE depuis là où elle est, elle ne descend pas au bas de
             // l'écran. La marge basse était annulée au dépliage — le texte
             // changeait donc de place au moment où on demandait à en voir plus.
-            .padding(.bottom, topInset + 130)
+            //
+            // **Et « là où elle est », c'est posée sur le composeur** (#8431) :
+            // son bord bas touche le haut de la plaque de verre MESURÉE, plus
+            // la hauteur arbitraire qui la faisait flotter trop haut.
+            .padding(.bottom, captionBottomInset(geometry: geometry))
+            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: composerBlockHeight)
             .transition(.opacity)
             // **L'invite doit recevoir le doigt** (#4762, mesuré au
             // simulateur le 2026-09-02).
@@ -175,7 +180,7 @@ extension StoryCardView {
                             .fill(Color.black.opacity(0.55))
                     )
                     .padding(.horizontal, 20)
-                    .padding(.bottom, topInset + 130)
+                    .padding(.bottom, captionBottomInset(geometry: geometry))
             }
             .allowsHitTesting(false)
             .transition(.opacity)

@@ -53,8 +53,10 @@ export type StudioPageSnapshot = {
     };
   /** LE CALQUE d'avant-plan et SA pose (#6943). */
   readonly overlay?: StudioDraftAssetRef &
-    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly pose?: unknown };
+    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly pose?: unknown; readonly timing?: unknown };
   readonly sound?: StudioDraftAssetRef & { readonly plane?: unknown };
+  /** LA DURÉE d'une scène animée (#8415) — LÂCHE, normalisée à la relecture. */
+  readonly duration?: unknown;
 };
 
 export type StudioDraftSnapshot = {
@@ -105,6 +107,7 @@ export type StudioTextLayerSnapshot = {
   readonly align?: unknown;
   readonly background?: unknown;
   readonly pose?: unknown;
+  readonly timing?: unknown;
 };
 
 const keyOf = (viewerId: string): string => `meeshy.draft.story.${viewerId}`;

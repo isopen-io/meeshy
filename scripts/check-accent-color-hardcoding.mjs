@@ -185,8 +185,17 @@
 // (`CallCaptionsViews`, `line.speakerColorHex`). C'est l'identité d'un
 // participant, pas le contexte d'une conversation : `accentColor` n'y aurait
 // aucun sens. Aucun littéral ne bouge (118).
-const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 440;
+//
+// 2026-09-27 (#8414) — littéraux 118 → 120, variables inconnues 440 → 443.
+// Le panneau Cadre du composer peint les bandes d'un média ajusté du FOND
+// choisi (`StoryBackdrop` : flou, noir, blanc, indigo, sable — contrat commun
+// au web) et prévisualise le fond « indigo » par son dégradé de marque
+// (`FB923C` → `4F46E5`, deux littéraux). Les trois variables sont la teinte du
+// fond choisi, relue au canvas, au lecteur et au composite. C'est le fond
+// d'une SCÈNE, pas le contexte d'une conversation : `accentColor` n'y aurait
+// aucun sens.
+const REFERENCE_LITERAL_COLOR_COUNT = 120;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

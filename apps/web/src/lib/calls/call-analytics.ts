@@ -8,9 +8,10 @@ import type { PeerQuality } from './call-quality';
  * (`CallAnalyticsEvent`, validé par `socketCallAnalyticsSchema`), émis une fois
  * au raccrochage. Le legacy l'émettait avec `codec: 'unknown'` et
  * `transcriptionUsed: false` codés en dur : ici chaque champ est LU — le codec
- * dans `getStats`, les sous-titres quand ils ont été affichés. Le web n'a ni
- * effet ni filtre vidéo : `effectsUsed: []` et `filtersUsed: false` sont vrais,
- * pas des bouche-trous.
+ * dans `getStats`, les sous-titres quand ils ont été affichés, les effets de ma
+ * vidéo posés pendant l'appel (#8442) : `effectsUsed` les nomme
+ * (`filter:warm`, `brightness`, `background-blur`), `filtersUsed` dit si la
+ * couleur a été touchée.
  *
  * Mémoire bornée (un appel peut durer des heures) : des sommes et des
  * compteurs, jamais l'historique des échantillons.
@@ -29,6 +30,7 @@ export type Telemetry = {
   readonly levels: CallQualityDistribution;
   readonly codec: string | null;
   readonly captionsShown: boolean;
+  readonly effects: readonly string[];
 };
 
 export type TelemetrySample = { readonly level: ConnectionQualityLevel; readonly rtt: number; readonly packetLoss: number };
@@ -38,7 +40,7 @@ export type AnalyticsContext = { readonly callId: string; readonly now: number; 
 const NO_LEVELS: CallQualityDistribution = { excellent: 0, good: 0, fair: 0, poor: 0 };
 
 export function createTelemetry(startedAt: number): Telemetry {
-  return { startedAt, negotiatingAt: null, connectedAt: null, reconnections: 0, networkTransitions: 0, samples: 0, rttSum: 0, lossSum: 0, maxLoss: 0, levels: NO_LEVELS, codec: null, captionsShown: false };
+  return { startedAt, negotiatingAt: null, connectedAt: null, reconnections: 0, networkTransitions: 0, samples: 0, rttSum: 0, lossSum: 0, maxLoss: 0, levels: NO_LEVELS, codec: null, captionsShown: false, effects: [] };
 }
 
 /** Le décroché, ou l'arrivée du pair : ce qui sépare la sonnerie humaine de la négociation WebRTC. */
@@ -52,6 +54,14 @@ export const markReconnecting = (telemetry: Telemetry): Telemetry => ({ ...telem
 export const markNetworkChange = (telemetry: Telemetry): Telemetry => ({ ...telemetry, networkTransitions: telemetry.networkTransitions + 1 });
 
 export const markCaptions = (telemetry: Telemetry): Telemetry => (telemetry.captionsShown ? telemetry : { ...telemetry, captionsShown: true });
+
+/** Les effets actifs à un instant : l'appel retient chacun, une fois. */
+export function markEffects(telemetry: Telemetry, names: readonly string[]): Telemetry {
+  const added = names.filter((name) => !telemetry.effects.includes(name));
+  return added.length === 0 ? telemetry : { ...telemetry, effects: [...telemetry.effects, ...added] };
+}
+
+const isColorFilter = (name: string): boolean => name.startsWith('filter:') || name === 'brightness';
 
 export const withCodec = (telemetry: Telemetry, codec: string | null): Telemetry => (codec === null || codec === telemetry.codec ? telemetry : { ...telemetry, codec });
 
@@ -106,8 +116,8 @@ export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext
     averagePacketLoss: share(telemetry.lossSum, samples),
     maxPacketLoss: telemetry.maxLoss,
     codec: telemetry.codec ?? 'unknown',
-    effectsUsed: [],
-    filtersUsed: false,
+    effectsUsed: telemetry.effects,
+    filtersUsed: telemetry.effects.some(isColorFilter),
     transcriptionUsed: telemetry.captionsShown,
     qualityDistribution: { excellent: share(levels.excellent, samples), good: share(levels.good, samples), fair: share(levels.fair, samples), poor: share(levels.poor, samples) },
     platform: context.platform,

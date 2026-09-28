@@ -13,7 +13,9 @@ import {
   studioSnapshotOf,
   withAddedPage,
   withAddedText,
+  withAnimated,
   withAudience,
+  withTrackTiming,
   withBackgroundFrame,
   withPostText,
   withCurrentPage,
@@ -425,5 +427,25 @@ describe('le texte du POST (#8413) — le corps de la publication, un concept de
 
   test('vide, il ne s’écrit pas', () => {
     expect(studioSnapshotOf(typed('Une'), 'fr').postText).toBeUndefined();
+  });
+});
+
+describe('le mode Animé (#8415) — posé sur la page courante et persisté', () => {
+  test('ouvrir Animé puis régler une piste ; le tout fait l’aller-retour du brouillon', () => {
+    const animated = withTrackTiming(withAnimated(typed('Une')), seedId(typed('Une')), { start: 1, end: 3 });
+    const page = currentStudioPage(animated);
+    expect(page.duration).toBe(5);
+    expect(page.texts[0]!.timing).toEqual({ start: 1, end: 3 });
+    const restored = currentStudioPage(studioDraftFromSnapshot(studioSnapshotOf(animated, 'fr'), (u) => u, 'fr'));
+    expect(restored.duration).toBe(5);
+    expect(restored.texts[0]!.timing).toEqual({ start: 1, end: 3 });
+  });
+
+  test('une fenêtre corrompue dans le brouillon se relit SANS fenêtre (l’objet couvre la scène)', () => {
+    const snapshot = studioSnapshotOf(withAnimated(typed('Une')), 'fr');
+    const corrupted = { ...snapshot, pages: [{ ...snapshot.pages[0]!, duration: -2, texts: [{ ...snapshot.pages[0]!.texts[0]!, timing: { start: 'x' } }] }] };
+    const restored = currentStudioPage(studioDraftFromSnapshot(corrupted, (u) => u, 'fr'));
+    expect(restored.duration).toBeUndefined();
+    expect(restored.texts[0]!.timing).toBeUndefined();
   });
 });

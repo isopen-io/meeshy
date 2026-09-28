@@ -1,10 +1,11 @@
 import Foundation
 
 /// #8394 — la vue d'appel « C adapté ». La pilule du bas porte toujours
-/// `(…) · Micro · Sortie · Fin` ; le `(…)` déploie les autres actions, en deux
-/// rails de verre aux bords en duo, en deux rangées légendées dans la même
-/// pilule en groupe. Ce fichier tient les RÈGLES (quelles actions, où, quand) ;
-/// les vues ne font que les dessiner.
+/// `(…) · Micro · Sortie · Fin` ; le `(…)` déploie les autres actions
+/// AU-DESSUS de la pilule (#8432) : une rangée de boutons de verre en duo, deux
+/// rangées légendées en groupe. La conversation n'est PAS une action : sa
+/// seule porte est le bouton de l'en-tête (#8436). Ce fichier tient les RÈGLES
+/// (quelles actions, où, quand) ; les vues ne font que les dessiner.
 
 /// Une action déployée par le `(…)`.
 enum CallAction: String, CaseIterable, Sendable {
@@ -16,7 +17,6 @@ enum CallAction: String, CaseIterable, Sendable {
     case captions
     case recording
     case pictureInPicture
-    case messages
 }
 
 /// Ce que l'appel permet, lu une fois par rendu depuis `CallManager`.
@@ -29,16 +29,27 @@ struct CallActionContext: Equatable, Sendable {
     let isConnected: Bool
     let mayRecord: Bool
     let canPictureInPicture: Bool
-    let hasConversation: Bool
 }
 
-/// Les deux groupes d'actions : le rail GAUCHE agit sur « mon image », le rail
-/// DROIT sur « l'appel ». En groupe, ce sont les deux rangées, dans cet ordre.
+/// Les deux groupes d'actions : le premier agit sur « mon image », le second
+/// sur « l'appel ». En groupe, ce sont les deux rangées légendées, dans cet
+/// ordre ; en duo, la rangée les enchaîne.
 struct CallActionSet: Equatable, Sendable {
     static let maxPerRow = 4
 
     let myImage: [CallAction]
     let theCall: [CallAction]
+
+    /// Duo (#8432) : les actions tiennent sur UNE rangée au-dessus de la
+    /// pilule tant qu'elle ne dépasse pas cinq boutons de 44 pt (l'écran le
+    /// plus étroit, marges comprises) ; au-delà, « mon image » puis « l'appel ».
+    static let maxPerDuoRow = 5
+
+    var duoRows: [[CallAction]] {
+        let all = myImage + theCall
+        guard all.count > Self.maxPerDuoRow else { return [all] }
+        return [myImage, theCall].filter { !$0.isEmpty }
+    }
 
     static func resolve(_ context: CallActionContext) -> CallActionSet {
         CallActionSet(myImage: myImageActions(context), theCall: theCallActions(context))
@@ -59,8 +70,7 @@ struct CallActionSet: Equatable, Sendable {
     private static func theCallActions(_ context: CallActionContext) -> [CallAction] {
         let recording: [CallAction] = context.mayRecord ? [.recording] : []
         let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
-        let messages: [CallAction] = context.hasConversation ? [.messages] : []
-        return [.captions] + recording + pip + messages
+        return [.captions] + recording + pip
     }
 }
 
@@ -68,9 +78,9 @@ struct CallActionSet: Equatable, Sendable {
 enum CallActionsPresentation: Equatable, Sendable {
     /// `(…)` replié : la pilule seule.
     case hidden
-    /// Duo : deux rails verticaux aux bords, à mi-hauteur.
-    case rails
-    /// Groupe : la pilule grandit vers le haut, deux rangées légendées.
+    /// Duo : une rangée de boutons de verre au-dessus de la pilule.
+    case row
+    /// Groupe : deux rangées légendées au-dessus de la pilule.
     case rows
 }
 
@@ -94,7 +104,7 @@ struct CallControlsDisclosure: Equatable, Sendable {
 
     func presentation(isGroup: Bool) -> CallActionsPresentation {
         guard isExpanded else { return .hidden }
-        return isGroup ? .rows : .rails
+        return isGroup ? .rows : .row
     }
 
     var accessibilityState: AccessibilityState {

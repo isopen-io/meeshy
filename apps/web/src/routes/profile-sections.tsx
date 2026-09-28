@@ -378,7 +378,7 @@ export function IdentitySection({
                   onChange={(event) => onDraft({ ...draft, [key]: event.currentTarget.value })}
                   onFocus={() => setFocused(key)}
                   onBlur={() => setFocused(null)}
-                  className="min-w-0 flex-1 bg-transparent text-body outline-none"
+                  className="w-0 min-w-0 flex-1 bg-transparent text-body outline-none"
                   style={{ minHeight: 44, color: INK }}
                 />
               )}
@@ -402,7 +402,7 @@ export function IdentitySection({
                 onChange={(event) => onDraft({ ...draft, bio: event.currentTarget.value })}
                 onFocus={() => setFocused('bio')}
                 onBlur={() => setFocused(null)}
-                className="min-w-0 flex-1 resize-none bg-transparent py-3 text-body outline-none"
+                className="w-0 min-w-0 flex-1 resize-none bg-transparent py-3 text-body outline-none"
                 style={{ color: INK }}
               />
             )}

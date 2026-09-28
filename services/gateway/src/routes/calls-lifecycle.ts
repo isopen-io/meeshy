@@ -7,6 +7,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import { resolveInvitedGuestParticipantId } from '../services/calls/callInvitation';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
@@ -22,21 +23,29 @@ import {
   leaveCallSchema
 } from '../validation/call-schemas.js';
 import { callSessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
+import {
+  activeCallStanding,
+  conversationRoleRank,
+  mayModerateCallParticipant,
+  MODERATOR_RANK,
+  type CallModerationActor,
+  type ModeratedCallSession,
+} from '../services/calls/callModerationPolicy.js';
 import { CallParams, CallRouteDeps } from './calls-shared';
 import { resolvePreJoinDeclineParticipantId } from '../socketio/call-participants.js';
 import { noticeRemovedFromCall } from '../socketio/call-removal-notice.js';
 
 /**
- * Numeric conversation-role rank (creator=40 > admin=30 > moderator=20 >
- * member=10), 0 for anything unrecognized. SSOT: `MEMBER_ROLE_HIERARCHY`
- * (`@meeshy/shared/types/role-types`) — the same table
- * `conversations/participants.ts`' role-update route and
- * `packages/shared/utils/member-visibility.ts` compare against, so a
- * conversation's role hierarchy is decided in exactly one place.
+ * #8433 — une personne INVITÉE dans l'appel n'a aucune participation ACTIVE à
+ * la conversation : on la trouve parmi les connectés de l'appel, sans rang.
  */
-const conversationRoleRank = (role: string | null | undefined): number =>
-  MEMBER_ROLE_HIERARCHY[(role ?? '') as MemberRole] ?? 0;
+const invitedGuestTarget = (
+  call: ModeratedCallSession,
+  key: string
+): { id: string; userId: string | null; role: string } | null => {
+  const standing = activeCallStanding(call, key);
+  return standing ? { id: standing.participantId, userId: key, role: '' } : null;
+};
 
 interface ParticipantParams {
   callId: string;
@@ -484,7 +493,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
             where: { userId, conversationId: call.conversationId, isActive: true },
             select: { id: true },
           });
-          joinParticipantId = p?.id;
+          joinParticipantId = p?.id ?? (await resolveInvitedGuestParticipantId(prisma, { callId, userId })) ?? undefined;
         }
       }
       const callSession = await callService.joinCall({
@@ -602,7 +611,12 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
         }
       });
 
-      if (!callerMembership) {
+      // #8433 — une personne INVITÉE dans l'appel n'est pas membre de la
+      // conversation : elle ne peut que se retirer elle-même, et seulement si
+      // elle est connectée à CET appel.
+      const callerInCall = activeCallStanding(call, userId);
+      const guestSelfLeave = !callerMembership && participantId === userId && callerInCall !== null;
+      if (!callerMembership && !guestSelfLeave) {
         return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
@@ -611,9 +625,16 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
       // conversation's highest rank — clears this floor too; the old
       // `role === 'admin' || role === 'moderator'` check omitted it, so a
       // group call's own creator got PERMISSION_DENIED removing anyone.
-      const callerRank = conversationRoleRank(callerMembership.role);
+      // #8438 — celui qui a LANCÉ l'appel, tant qu'il y est connecté, en est
+      // l'admin : il franchit ce plancher quel que soit son rang.
+      const callerRank = conversationRoleRank(callerMembership?.role);
+      const moderator: CallModerationActor = {
+        key: userId,
+        isActiveCallInitiator: call.initiatorId === userId && callerInCall !== null,
+        conversationRank: callerRank,
+      };
       if (participantId !== userId) {
-        if (callerRank < MEMBER_ROLE_HIERARCHY[MemberRole.MODERATOR]) {
+        if (callerRank < MODERATOR_RANK && !moderator.isActiveCallInitiator) {
           return sendForbidden(reply, 'PERMISSION_DENIED');
         }
       }
@@ -632,7 +653,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
       if (participantId === userId && authRequest.authContext.participantId) {
         leaveParticipantId = authRequest.authContext.participantId;
       } else if (participantId === userId) {
-        leaveParticipantId = callerMembership.id;
+        leaveParticipantId = callerMembership?.id ?? callerInCall?.participantId ?? userId;
       } else {
         // A registered target is resolved by `userId`. An anonymous
         // (shared-link) target has `Participant.userId: null`
@@ -653,7 +674,8 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
           (await prisma.participant.findFirst({
             where: { conversationId: call.conversationId, id: participantId, isActive: true },
             select: { id: true, userId: true, role: true }
-          }));
+          })) ??
+          invitedGuestTarget(call, participantId);
         // Do NOT fall back to the raw, unresolved `participantId` string here
         // — that fallback is what previously let a caller with no real
         // relationship to this call's conversation reach
@@ -672,7 +694,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
         // `creator` guard, PermissionsService.canManage) already enforces.
         // Equal rank does not outrank: two moderators cannot remove each
         // other via this route.
-        if (callerRank <= conversationRoleRank(targetParticipant.role)) {
+        if (!mayModerateCallParticipant(moderator, { key: participantId, conversationRank: conversationRoleRank(targetParticipant.role) })) {
           return sendForbidden(reply, 'PERMISSION_DENIED');
         }
         leaveParticipantId = targetParticipant.id;

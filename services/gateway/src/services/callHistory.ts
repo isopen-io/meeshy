@@ -10,6 +10,8 @@
  * `packages/MeeshySDK/.../Models/CallModels.swift`. Keep the two in sync.
  */
 
+import { parseCallReactionCounts, type CallReactionCounts } from '@meeshy/shared/types/call-controls';
+
 export type CallDirection = 'incoming' | 'outgoing' | 'missed';
 
 export interface CallHistoryPeer {
@@ -59,6 +61,8 @@ export interface CallHistoryItem {
   peer: CallHistoryPeer | null;
   /** Who joined a group call, reader excluded, in join order; empty for a direct call. */
   participants: CallHistoryParticipant[];
+  /** Reactions sent during the call, counted per emoji (#8439); `{}` when none. */
+  reactionCounts: CallReactionCounts;
 }
 
 /** The minimal `CallSession` projection the builder consumes. */
@@ -76,6 +80,8 @@ export interface CallHistoryRow {
   bytesSent: number | null;
   bytesReceived: number | null;
   metadata: unknown;
+  /** `CallSession.reactionCounts` as stored — read without trust. */
+  reactionCounts?: unknown;
   conversation: { type: string; title: string | null; avatar: string | null };
 }
 
@@ -159,5 +165,6 @@ export function buildCallHistoryItem(
     bytesReceived: clampNonNegativeInt(row.bytesReceived),
     peer,
     participants: [...participants],
+    reactionCounts: parseCallReactionCounts(row.reactionCounts),
   };
 }

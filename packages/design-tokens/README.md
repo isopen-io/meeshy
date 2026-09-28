@@ -18,7 +18,7 @@ light.css     schéma clair  — porté par .light seulement
 Un franchissement de frontière de paquet se **déclare** : `@meeshy/design-tokens`
 est un workspace, `apps/web` le porte en dépendance, et `docker.yml` reconstruit son
 image quand ce paquet change (`packages/design-tokens/` figure dans la détection
-de `web_v31`). `apps/web/scripts/check-docker-context.mjs` vérifie que
+de `webapp`). `apps/web/scripts/check-docker-context.mjs` vérifie que
 `.dockerignore` laisse entrer les cinq fichiers.
 
 ## `ios.css` — la palette dérivée

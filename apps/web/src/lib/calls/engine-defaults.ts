@@ -7,6 +7,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
+import { createCameraEffects } from './camera-effects';
 import { preferredInputs } from './call-devices';
 import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
@@ -14,6 +15,7 @@ import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
 import { createPeerLink } from './peer-link';
+import { browserColorSupport, videoEffectsStore } from './video-effects';
 
 /**
  * **LES DÉPENDANCES DU NAVIGATEUR** (#6382, #8047) — ce que le moteur
@@ -67,6 +69,17 @@ function lazyCaptions(ctx: CaptionsContext): CaptionsPort {
   };
 }
 
+/**
+ * Les effets de ma vidéo (#8442) : le traitement des images est un chunk à
+ * part (`budgets.json` › `call_video_effects`), chargé au premier effet de
+ * couleur — jamais pour qui n'en pose aucun.
+ */
+const cameraEffects = createCameraEffects({
+  effects: () => videoEffectsStore.getState().effects,
+  colorSupported: browserColorSupport,
+  loadPipeline: () => import('./video-effects-pipeline').then((module) => (camera, effects) => module.createEffectsPipeline(camera, effects)),
+});
+
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
   return {
     transport: currentCallTransport,
@@ -76,6 +89,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
     acquireDisplay: () => acquireDisplay(),
     createLink: createPeerLink,
+    cameraEffects,
     createStream: defaultCreateStream,
     now: Date.now,
     schedule: (fn, ms) => setTimeout(fn, ms),

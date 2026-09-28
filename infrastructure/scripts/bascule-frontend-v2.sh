@@ -26,7 +26,7 @@ set -euo pipefail
 cd /opt/meeshy/production
 
 MODE=${1:-verifier}
-IMAGE_V2=isopen/meeshy-web-v31:latest
+IMAGE_V2=isopen/meeshy-webapp:latest
 IMAGE_LEGACY=isopen/meeshy-web:latest
 STAMP=$(date -u +%Y%m%d-%H%M)
 SUFFIXE="bascule-v2"
@@ -36,7 +36,7 @@ sans_fuite() { grep -avE 'variable is not set|Defaulting to a blank string' || t
 bloc_v2() {
   cat <<'YAML'
   frontend:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-web-v31:latest}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-webapp:latest}
     container_name: meeshy-frontend
     restart: unless-stopped
     volumes:

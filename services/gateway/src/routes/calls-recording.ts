@@ -33,7 +33,7 @@ export function registerCallsRecordingRoutes(fastify: FastifyInstance, deps: Cal
       ...ROUTE_RATE_LIMITS.callOperations,
       schema: {
         description:
-          'Attach the uploaded audio file of a consented call recording to the call bubble. Only the participant who recorded it may link it, once, with an audio attachment they uploaded themselves.',
+          'Attach the uploaded audio (or video, for a video recording) file of a consented call recording to the call bubble. Only the participant who recorded it may link it, once, with an audio attachment they uploaded themselves.',
         tags: ['calls'],
         summary: 'Link a call recording to its call bubble',
         params: {
@@ -58,6 +58,7 @@ export function registerCallsRecordingRoutes(fastify: FastifyInstance, deps: Cal
                   recordingId: { type: 'string' },
                   messageId: { type: 'string' },
                   attachmentId: { type: 'string' },
+                  kind: { type: 'string', enum: ['audio', 'video'] },
                 },
               },
             },
@@ -67,7 +68,7 @@ export function registerCallsRecordingRoutes(fastify: FastifyInstance, deps: Cal
           403: { description: 'Only the recorder may link the file', ...errorResponseSchema },
           404: { description: 'Recording or attachment not found', ...errorResponseSchema },
           409: { description: 'Already linked, never started, or no call bubble', ...errorResponseSchema },
-          415: { description: 'The attachment is not audio', ...errorResponseSchema },
+          415: { description: 'The attachment is not the consented media (audio, or video for a video recording)', ...errorResponseSchema },
           500: { description: 'Internal server error', ...errorResponseSchema },
         },
       },
@@ -108,7 +109,7 @@ export function registerCallsRecordingRoutes(fastify: FastifyInstance, deps: Cal
           ).catch((error: unknown) => logger.error('call-recording: notification failed', { callId, error }));
         }
 
-        return sendSuccess(reply, { recordingId, messageId: result.message.id, attachmentId });
+        return sendSuccess(reply, { recordingId, messageId: result.message.id, attachmentId, kind: result.recordingKind });
       } catch (error) {
         logger.error('call-recording: link failed', { error });
         return sendError(reply, 500, 'INTERNAL_ERROR');

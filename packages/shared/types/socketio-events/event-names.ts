@@ -233,6 +233,12 @@ export const SERVER_EVENTS = {
   CALL_RECORDING_REQUESTED: 'call:recording-requested',
   CALL_RECORDING_STARTED: 'call:recording-started',
   CALL_RECORDING_STOPPED: 'call:recording-stopped',
+  /** #8433 — une personne vient d'être invitée dans l'appel : diffusé aux participants. */
+  CALL_PARTICIPANT_INVITED: 'call:participant-invited',
+  /** #8438 — à la personne visée seulement : son micro a été coupé, elle le coupe elle-même. */
+  CALL_MUTED_BY_MODERATOR: 'call:muted-by-moderator',
+  /** #8439 — une réaction d'un participant, relayée aux autres participants connectés. */
+  CALL_REACTION_RECEIVED: 'call:reaction-received',
   /**
    * L'accusé de remise et de lecture — le SEUL nom sous lequel il voyage.
    *
@@ -667,6 +673,12 @@ export const CLIENT_EVENTS = {
   CALL_RECORDING_REQUEST: 'call:recording-request',
   CALL_RECORDING_CONSENT: 'call:recording-consent',
   CALL_RECORDING_STOP: 'call:recording-stop',
+  /** #8433 — inviter un ami accepté dans l'appel en cours (accusé `CallControlAck`). */
+  CALL_INVITE_PARTICIPANT: 'call:invite-participant',
+  /** #8438 — couper le micro d'un participant (initiateur, ou modérateur+ qui dépasse la cible). */
+  CALL_MUTE_PARTICIPANT: 'call:mute-participant',
+  /** #8439 — réagir pendant l'appel, emoji de la liste blanche `CALL_REACTION_EMOJIS`. */
+  CALL_REACTION: 'call:reaction',
 
   // --- Location sharing ---
   LOCATION_LIVE_START: 'location:live-start',

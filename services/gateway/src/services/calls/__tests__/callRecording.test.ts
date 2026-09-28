@@ -29,6 +29,7 @@ const fakeRepository = (world: World): CallRecordingRepository => {
         requiredUserIds: [...input.requiredUserIds],
         consentedUserIds: [],
         requestedAt: input.requestedAt,
+        kind: input.kind,
         startedAt: null,
         stoppedAt: null,
         stopReason: null,
@@ -237,5 +238,29 @@ describe('CallRecordingService — l’enregistrement ne démarre qu’avec l’
     const again = await serviceFor(world).request('bob', { callId: 'call' });
     expect(again.ack.success).toBe(true);
     expect(again.broadcasts.map((b) => b.event)).toEqual(['stopped', 'requested']);
+  });
+});
+
+describe('CallRecordingService — le type d’enregistrement voyage avec la demande (#8437)', () => {
+  it('une demande sans type est une demande audio, comme avant #8437', async () => {
+    const world = makeWorld();
+    const outcome = await serviceFor(world).request('alice', { callId: 'call' });
+
+    expect(outcome.broadcasts[0]?.payload).toMatchObject({ kind: 'audio' });
+    expect(world.rows[0]?.kind).toBe('audio');
+  });
+
+  it('une demande vidéo est annoncée vidéo à ceux qui consentent, stockée, puis démarrée vidéo', async () => {
+    const world = makeWorld();
+    const requested = await serviceFor(world).request('alice', { callId: 'call', kind: 'video' });
+    if (!requested.ack.success) throw new Error('refused');
+    const recordingId = requested.ack.recordingId;
+
+    expect(requested.broadcasts[0]?.payload).toMatchObject({ kind: 'video', requiredUserIds: ['bob', 'carol'] });
+    expect(world.rows[0]?.kind).toBe('video');
+
+    await serviceFor(world).consent('bob', { callId: 'call', recordingId, accepted: true });
+    const last = await serviceFor(world).consent('carol', { callId: 'call', recordingId, accepted: true });
+    expect(last.broadcasts[0]?.payload).toMatchObject({ recordingId, kind: 'video' });
   });
 });

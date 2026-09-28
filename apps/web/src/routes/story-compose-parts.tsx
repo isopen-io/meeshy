@@ -221,7 +221,7 @@ export function StudioAssetRow({
         <span
           role={upload.phase === 'failed' ? 'alert' : 'status'}
           className="min-w-0 flex-1 truncate"
-          style={{ color: upload.phase === 'failed' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
+          style={{ color: upload.phase === 'failed' ? 'var(--color-error)' : 'var(--color-ios-ink)' }}
         >
           {upload.phase === 'uploading'
             ? translate(lang, 'story.studio.upload.progress', { percent: String(Math.round(upload.progress * 100)) })
@@ -268,7 +268,7 @@ export function StudioAssetRow({
             value={caption.value}
             onInput={(event) => caption.onChange(event.currentTarget.value)}
             placeholder={translate(lang, 'story.studio.caption.placeholder')}
-            className="w-full rounded-chip px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="w-full rounded-chip px-3 text-input focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: TARGET,
               color: 'var(--color-ios-ink)',

@@ -45,7 +45,9 @@ import {
   STUDIO_TEXT_STYLES,
   nextTextLayerId,
   type StudioTextLayer,
+  type StudioTiming,
 } from './studio-text';
+import { pageAnimated, pageWithTrackTiming } from './studio-timeline';
 
 /**
  * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943, #6944 puis #7684) —
@@ -287,6 +289,16 @@ export function withBackgroundFrame(draft: StudioDraft, frame: StoryFrame): Stud
   return currentStudioPage(draft).background === null ? draft : withCurrentPageChange(draft, (page) => pageWithBackgroundFrame(page, frame));
 }
 
+/** OUVRIR « Animé » sur la page courante (#8415, `pageAnimated`). */
+export function withAnimated(draft: StudioDraft): StudioDraft {
+  const page = currentStudioPage(draft);
+  return pageAnimated(page) === page ? draft : withCurrentPageChange(draft, pageAnimated);
+}
+
+export function withTrackTiming(draft: StudioDraft, id: string, timing: StudioTiming): StudioDraft {
+  return withCurrentPageChange(draft, (page) => pageWithTrackTiming(page, id, timing));
+}
+
 export function withPostText(draft: StudioDraft, postText: string): StudioDraft {
   return { ...draft, postText };
 }
@@ -338,6 +350,19 @@ const poseOf = (value: unknown): StudioPose => {
 };
 
 /** LE CADRE relu — chaque champ NORMALISÉ contre le contrat (#8414). */
+/** UNE FENÊTRE relue (#8415) — deux nombres finis, fin après début ; tout le
+ * reste se relit SANS fenêtre (l'objet couvre la scène). */
+const timingOf = (value: unknown): StudioTiming | undefined => {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { start, end } = value as Record<string, unknown>;
+  return typeof start === 'number' && typeof end === 'number' && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start
+    ? { start, end }
+    : undefined;
+};
+
+const durationOf = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+
 const frameOf = (value: unknown): StoryFrame => {
   const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
   return { fitMode: sceneFitModeOf(record.fitMode), backdrop: sceneBackdropOf(record.backdrop) };
@@ -358,6 +383,7 @@ function textLayerFromSnapshot(snapshot: StudioTextLayerSnapshot, language: stri
         ? snapshot.background
         : null,
     pose: poseOf(snapshot.pose),
+    ...(timingOf(snapshot.timing) !== undefined ? { timing: timingOf(snapshot.timing)! } : {}),
   };
 }
 
@@ -377,6 +403,7 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
           caption: ref.caption ?? '',
           pose: poseOf('pose' in ref ? ref.pose : undefined),
           ...('frame' in ref && ref.frame !== undefined ? { frame: frameOf(ref.frame) } : {}),
+          ...('timing' in ref && timingOf(ref.timing) !== undefined ? { timing: timingOf(ref.timing)! } : {}),
           upload: {
             phase: 'ready',
             postMediaId: ref.postMediaId,
@@ -392,6 +419,7 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
     id: snapshot.id,
     texts,
     selected: texts[0]?.id ?? null,
+    ...(durationOf(snapshot.duration) !== undefined ? { duration: durationOf(snapshot.duration)! } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
     sound:
@@ -425,6 +453,7 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
       ...(asset.caption !== '' ? { caption: asset.caption } : {}),
       pose: asset.pose,
       ...(asset.frame !== undefined ? { frame: asset.frame } : {}),
+      ...(asset.timing !== undefined ? { timing: asset.timing } : {}),
     };
   };
   const background = visual(page.background);
@@ -433,6 +462,7 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
   return {
     id: page.id,
     texts: page.texts.map((layer) => ({ ...layer })),
+    ...(page.duration !== undefined ? { duration: page.duration } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(overlay !== undefined ? { overlay } : {}),
     ...(sound !== null && page.sound !== null

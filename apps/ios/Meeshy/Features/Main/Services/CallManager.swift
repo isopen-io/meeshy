@@ -261,7 +261,7 @@ final class CallManager: ObservableObject {
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
-    @Published private(set) var isSystemPiPActive: Bool = false
+    @Published var isSystemPiPActive: Bool = false
     /// Bord d'ancrage de la bulle d'appel repliée (`.bubble` displayMode). Vit
     /// sur CallManager (pas en `@State` local d'une View) car visible depuis
     /// deux sites de montage distincts (`RootView`, `iPadRootView`) — même
@@ -1856,7 +1856,7 @@ final class CallManager: ObservableObject {
     @MainActor
     private func performLocalMediaStart(isVideo: Bool, callId: String) async {
         do {
-            try await webRTCService.startLocalMedia(isVideo: isVideo)
+            try await startLocalMediaKeepingMute(isVideo: isVideo, callId: callId)
             guard currentCallId == callId else { return }
             if isVideo { hasLocalVideoTrack = true }
         } catch WebRTCError.simulatorVideoUnsupported {
@@ -1864,7 +1864,7 @@ final class CallManager: ObservableObject {
             guard currentCallId == callId else { return }
             isVideoEnabled = false
             do {
-                try await webRTCService.startLocalMedia(isVideo: false)
+                try await startLocalMediaKeepingMute(isVideo: false, callId: callId)
             } catch {
                 // Le repli a échoué à son tour : l'appel n'a PLUS AUCUN média
                 // (ni vidéo ni audio) — état muet invisible sans cette trace.
@@ -1876,7 +1876,7 @@ final class CallManager: ObservableObject {
             guard currentCallId == callId else { return }
             isVideoEnabled = false
             do {
-                try await webRTCService.startLocalMedia(isVideo: false)
+                try await startLocalMediaKeepingMute(isVideo: false, callId: callId)
             } catch {
                 // Le repli a échoué à son tour : l'appel n'a PLUS AUCUN média
                 // (ni vidéo ni audio) — état muet invisible sans cette trace.
@@ -2409,15 +2409,19 @@ final class CallManager: ObservableObject {
 
     #if canImport(WebRTC)
     /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
-    private lazy var pip: PiPCallProviding = PiPCallController.shared
+    lazy var pip: PiPCallProviding = PiPCallController.shared
     #else
-    private let pip: PiPCallProviding = NoOpPiPController()
+    let pip: PiPCallProviding = NoOpPiPController()
     #endif
-    /// `true` entre un tap « revenir » (restore) et la fermeture effective du PiP,
-    /// pour distinguer ce chemin de la croix système (qui retombe sur la pilule).
-    private var pipRestoring = false
-    private weak var pipConfiguredTrack: AnyObject?
-    private weak var pipConfiguredSource: UIView?
+    /// `true` entre un tap « agrandir » (restore) et la fermeture effective du
+    /// PiP, pour distinguer ce chemin de la croix système. Le reste de l'état et
+    /// les rappels vivent dans `CallManager+SystemPiP.swift` (#8435).
+    var pipRestoring = false
+    var pipStartOrigin: CallPiPStartOrigin = .automatic
+    /// Remonte les `PiPSourceAnchor` à chaque fermeture de fenêtre (#8435).
+    @Published var pipAnchorGeneration = 0
+    weak var pipConfiguredTrack: AnyObject?
+    weak var pipConfiguredSource: UIView?
     /// Mode d'affichage en vigueur au démarrage de la fenêtre PiP, restauré à sa
     /// fermeture. Poser `.pip` inconditionnellement dégradait en pilule un appel
     /// qui était plein écran (retour dans l'app) ou en bulle (repli manuel).
@@ -2426,7 +2430,7 @@ final class CallManager: ObservableObject {
     /// `failedToStartPictureInPictureWithError` appelle `onStop` sans qu'`onStart`
     /// ait tiré, et une valeur persistante y ferait restaurer le mode du PiP
     /// PRÉCÉDENT.
-    private var pipDisplayModeAtStart: CallDisplayMode?
+    var pipDisplayModeAtStart: CallDisplayMode?
 
     /// L'UI d'appel doit rendre le layout vidéo dès qu'un flux est visible :
     /// caméra locale active OU vidéo distante reçue (escalade unilatérale du
@@ -2448,83 +2452,9 @@ final class CallManager: ObservableObject {
         hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
     }
 
-    /// Configure le PiP système pour cet appel (appelé par la vue avec la
-    /// `sourceView` vidéo inline). No-op si l'appel n'est pas éligible.
-    func attachSystemPiP(sourceView: UIView) {
-        guard canActivateSystemPiP, let track = remoteVideoTrack else { return }
-        let trackObject = track as AnyObject
-        // Idempotence : `configure()` reconstruit le controller AVKit — et commence
-        // par `tearDown()`, donc `stopPictureInPicture()`. Deux ancres coexistent
-        // (plein écran + mode réduit) et `PiPSourceAnchor` n'a aucune propriété
-        // stockée : chaque bascule de mode monte une nouvelle vue, donc l'identité
-        // de la sourceView change à chaque fois. Sans le refus pendant un PiP actif,
-        // la bascule tuerait la fenêtre en cours. Cf. `CallPiPPolicy`.
-        guard CallPiPPolicy.shouldReconfigure(
-            isPiPActive: isSystemPiPActive,
-            sourceChanged: pipConfiguredSource !== sourceView,
-            trackChanged: pipConfiguredTrack !== trackObject
-        ) else { return }
-        pipConfiguredSource = sourceView
-        pipConfiguredTrack = trackObject
-        pip.configure(
-            sourceView: sourceView, remoteTrack: trackObject, autoStart: true,
-            onStart: { [weak self] in
-                guard let self else { return }
-                self.pipDisplayModeAtStart = self.displayMode
-                self.isSystemPiPActive = true
-            },
-            onRestoreUI: { [weak self] in
-                self?.pipRestoring = true
-                self?.displayMode = .fullScreen
-            },
-            onStop: { [weak self] in
-                guard let self else { return }
-                self.isSystemPiPActive = false
-                let restored = CallPiPPolicy.displayModeAfterStop(
-                    callIsActive: self.callState.isActive,
-                    isRestoringUI: self.pipRestoring,
-                    modeAtStart: self.pipDisplayModeAtStart
-                )
-                self.pipRestoring = false
-                self.pipDisplayModeAtStart = nil
-                // Ré-armement AVANT de toucher `displayMode` : `PiPSourceAnchor`
-                // n'a pas de propriété stockée, `updateUIView` est son unique
-                // déclencheur, et c'est le changement de mode qui le provoque.
-                // Sans ce reset, la garde ci-dessus resterait épinglée sur une
-                // ancre morte et aucun second PiP ne pourrait plus être configuré.
-                self.pipConfiguredSource = nil
-                self.pipConfiguredTrack = nil
-                if let restored { self.displayMode = restored }
-            }
-        )
-        // Aligne le framerate sur l'état thermique courant dès la config (le
-        // handler thermal ignore les changements hors-appel → évite un héritage
-        // périmé entre deux appels).
-        pip.setMaxFrameRate(pipFrameRate(for: ProcessInfo.processInfo.thermalState))
-    }
-
-    /// Démarre le PiP manuellement (bouton). No-op si impossible/déjà actif.
-    func startSystemPiP() { pip.start() }
-
-    /// Quitte le PiP manuellement (bouton, second tap). No-op si aucun PiP
-    /// n'est actif. Symétrique de `startSystemPiP()` — sans ce wrapper, le
-    /// bouton in-app n'avait aucun moyen de fermer une fenêtre PiP déjà
-    /// ouverte hormis le chrome système de la fenêtre flottante elle-même.
-    func stopSystemPiP() { pip.stop() }
-
-    /// Libère le PiP (fin d'appel / éligibilité perdue).
-    func detachSystemPiP() {
-        pip.tearDown()
-        isSystemPiPActive = false
-        pipRestoring = false
-        pipDisplayModeAtStart = nil
-        pipConfiguredTrack = nil
-        pipConfiguredSource = nil
-    }
-
     /// Framerate cible du PiP selon l'état thermique (vignette petite → throttle
     /// agressif sous stress). Partagé par la config et le handler thermal.
-    private func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
+    func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
         switch state {
         case .critical: return QualityThresholds.pipFrameRateCritical
         case .serious: return QualityThresholds.pipFrameRateSerious

@@ -13,7 +13,7 @@ const REC = '64b7f0c2a1b2c3d4e5f60719';
 
 const started: RecordingBroadcast = {
   event: 'started',
-  payload: { callId: CALL, recordingId: REC, recorderId: 'alice', startedAt: '2026-09-27T10:00:00.000Z' },
+  payload: { callId: CALL, recordingId: REC, recorderId: 'alice', startedAt: '2026-09-27T10:00:00.000Z', kind: 'audio' },
 };
 
 const harness = (overrides: { userId?: string; allowed?: boolean; outcome?: RecordingOutcome } = {}) => {
@@ -22,7 +22,7 @@ const harness = (overrides: { userId?: string; allowed?: boolean; outcome?: Reco
   const scheduled: Array<() => void> = [];
   const outcome: RecordingOutcome = overrides.outcome ?? { ack: { success: true, recordingId: REC }, broadcasts: [started] };
   const authority = {
-    request: jest.fn(async () => outcome),
+    request: jest.fn(async (_userId: string, _input: unknown) => outcome),
     consent: jest.fn(async () => outcome),
     stop: jest.fn(async () => outcome),
     arrival: jest.fn(async (_callId: string, _userId: string) => [started]),
@@ -115,5 +115,16 @@ describe('call-recording-events — la porte socket du consentement (#8064)', ()
     await announceRecordingArrival({ io: h.io as never, authority: h.authority as unknown as CallRecordingAuthority }, CALL, 'dave');
     expect(h.authority.arrival).toHaveBeenCalledWith(CALL, 'dave');
     expect(h.emitted.map((e) => e.event)).toEqual([SERVER_EVENTS.CALL_RECORDING_STARTED]);
+  });
+});
+
+describe('call-recording-events — le type demandé passe la porte (#8437)', () => {
+  it('relaie « video » à l’autorité et refuse un type inconnu', async () => {
+    const h = harness();
+    expect(await h.send(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId: CALL, kind: 'video' })).toEqual({ success: true, recordingId: REC });
+    expect(h.authority.request).toHaveBeenCalledWith('alice', { callId: CALL, kind: 'video' });
+
+    expect(await h.send(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId: CALL, kind: 'hologram' }))
+      .toEqual({ success: false, code: 'VALIDATION_ERROR' });
   });
 });

@@ -622,7 +622,7 @@ export function InviteCard({
           onInput={(event) => onEmailChange(event.currentTarget.value)}
           aria-invalid={status === 'invalid' || status === 'conflict'}
           {...(feedback === null ? {} : { 'aria-describedby': feedbackId })}
-          className="min-w-0 flex-1 rounded-[10px] px-3 text-body focus-visible:outline-2"
+          className="w-0 min-w-0 flex-1 rounded-[10px] px-3 text-body focus-visible:outline-2"
           style={{ minHeight: 44, color: INK, backgroundColor: FIELD_FILL, outlineColor: BRAND }}
         />
         <button
@@ -688,7 +688,7 @@ export function DiscoverSearchField({
             onChange={(event) => onChange(event.currentTarget.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            className="min-w-0 flex-1 bg-transparent text-body outline-none"
+            className="w-0 min-w-0 flex-1 bg-transparent text-body outline-none"
             style={{ minHeight: 44, color: INK }}
           />
           {value === '' ? null : (
