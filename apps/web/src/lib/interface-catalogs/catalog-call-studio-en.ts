@@ -1,0 +1,40 @@
+import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
+
+/** Le studio d'un appel vidéo — en (#8551, #8552). */
+const en = {
+  'callStudio.close': 'Close',
+  'callStudio.effects.faces': 'Effects',
+  'callStudio.effects.color': 'Color',
+  'callStudio.effects.settings': 'Settings',
+  'callStudio.face.none': 'None',
+  'callStudio.face.smoothing': 'Skin smoothing',
+  'callStudio.face.toad': 'Toad',
+  'callStudio.face.angel': 'Angel',
+  'callStudio.face.demon': 'Demon',
+  'callStudio.face.volcano': 'Eruption',
+  'callStudio.capture.title': 'Capture',
+  'callStudio.capture.montage': 'Layout',
+  'callStudio.capture.actions': 'Actions',
+  'callStudio.montage.screen': 'Full screen',
+  'callStudio.montage.grid': 'Mosaic',
+  'callStudio.montage.strip': 'Photo booth',
+  'callStudio.montage.polaroid': 'Polaroid',
+  'callStudio.montage.magazine': 'Magazine',
+  'callStudio.montage.comic': 'Comic',
+  'callStudio.montage.heart': 'Heart',
+  'callStudio.capture.preview': 'Preview of the {style} layout',
+  'callStudio.capture.shoot': 'Capture',
+  'callStudio.capture.shootLabel': 'Capture the {style} layout',
+  'callStudio.capture.faces': 'Each face',
+  'callStudio.capture.facesLabel': 'Save each face separately',
+  'callStudio.capture.saved': 'Capture saved',
+  'callStudio.capture.faceSaved': '1 face saved',
+  'callStudio.capture.facesSaved': '{count} faces saved',
+  'callStudio.capture.failed': 'The capture could not be saved',
+  'callStudio.capture.cancelled': 'Saving cancelled',
+  'callStudio.capture.empty': 'Nothing to capture: no picture is showing',
+  'callStudio.capture.busy': 'Capturing…',
+  'callStudio.capture.bubble': 'What a call!',
+} satisfies CallStudioCatalog;
+
+export default en;

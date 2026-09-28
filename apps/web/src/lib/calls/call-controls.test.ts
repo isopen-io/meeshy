@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callControlSet, chromeHidden, CHROME_IDLE_MS, controlsArrangement, flipOffered, isVideoScene } from './call-controls';
+import { callControlSet, chromeAfter, chromeHidden, CHROME_IDLE_MS, flipOffered, isVideoScene } from './call-controls';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -20,6 +20,7 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   canShare: true,
   canEffect: true,
   canFlip: true,
+  videoScene: false,
   ...overrides,
 });
 
@@ -77,10 +78,19 @@ describe('une autre caméra où se retourner (#8432)', () => {
   });
 });
 
-describe('où les actions sortent', () => {
-  test('en duo : deux rails ; en groupe : des rangées dans la pilule', () => {
-    expect(controlsArrangement({ isGroup: false })).toBe('rails');
-    expect(controlsArrangement({ isGroup: true })).toBe('rows');
+describe('« Capturer » (#8552)', () => {
+  test('une vidéo connectée l’offre dans l’appel, après Enregistrer', () => {
+    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'record', 'capture', 'invite', 'react']);
+  });
+
+  test('jamais en audio, ni pendant une reconnexion ou la sonnerie', () => {
+    expect(callControlSet(context({ videoScene: false })).call).not.toContain('capture');
+    expect(callControlSet(context({ videoScene: true, phase: { kind: 'reconnecting' } })).call).not.toContain('capture');
+    expect(callControlSet(context({ videoScene: true, phase: { kind: 'outgoing' } })).call).toEqual([]);
+  });
+
+  test('un appel pas encore identifié peut capturer ce qu’il voit', () => {
+    expect(callControlSet(context({ videoScene: true, callId: null })).call).toEqual(['captions', 'capture']);
   });
 });
 
@@ -127,5 +137,32 @@ describe('le masquage automatique', () => {
 
   test('jamais sous prefers-reduced-motion', () => {
     expect(chromeHidden(state({ reducedMotion: true, idleMs: 60_000 }))).toBe(false);
+  });
+});
+
+describe('toucher la scène efface ou rend TOUTES les commandes (#8550)', () => {
+  test('un toucher efface des commandes visibles, un second les rend', () => {
+    expect(chromeAfter('shown', 'tap')).toBe('dismissed');
+    expect(chromeAfter('dismissed', 'tap')).toBe('shown');
+  });
+
+  test('un toucher rend aussi des commandes effacées par l’attente', () => {
+    expect(chromeAfter('resting', 'tap')).toBe('shown');
+  });
+
+  test('bouger la souris rend ce que l’attente a effacé, jamais ce qu’un toucher a rangé', () => {
+    expect(chromeAfter('resting', 'stir')).toBe('shown');
+    expect(chromeAfter('dismissed', 'stir')).toBe('dismissed');
+    expect(chromeAfter('shown', 'stir')).toBe('shown');
+  });
+
+  test('le clavier rend toujours les commandes', () => {
+    expect(chromeAfter('dismissed', 'key')).toBe('shown');
+    expect(chromeAfter('resting', 'key')).toBe('shown');
+  });
+
+  test('l’attente n’efface que des commandes visibles', () => {
+    expect(chromeAfter('shown', 'rest')).toBe('resting');
+    expect(chromeAfter('dismissed', 'rest')).toBe('dismissed');
   });
 });

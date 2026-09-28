@@ -51,6 +51,8 @@ const fr = {
   'callControls.record.audioDetail': 'Les voix de tous',
   'callControls.record.video': 'Audio et vidéo',
   'callControls.record.videoDetail': 'Les images visibles et les voix',
+  'callControls.capture': 'Capturer',
+  'callControls.capture.label': 'Capturer l’appel',
 } as const;
 
 export default fr;

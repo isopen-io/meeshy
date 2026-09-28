@@ -26,7 +26,8 @@ extension CallView {
 
                 CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
                     .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
-                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
+                    .callChromeVisibility(chromeVisibility.isVisible(.screenShareBanner))
+                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
                     .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
                 if !isGroupStage {
@@ -34,18 +35,21 @@ extension CallView {
                 }
 
                 callControlsLayer
+
+                CallCaptureFlash(trigger: capture.flashCount, reduceMotion: reduceMotion)
             }
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en
         // permanence, et en UN seul endroit : le bouton « Écran » n'existe que
         // (…) déployé, dans la rangée du duo ou celle du groupe.
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
-        // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
-        // showControls flips to true (a reveal tap) or the (…) is used;
-        // no-op for audio / Mac / effects-open via shouldAutoHideControls.
-        .task(id: AutoHideKey(isVisible: showControls, isExpanded: controlsDisclosure.isExpanded)) {
+        // §7.3 — auto-hide after 4s of no interaction, in duo AND group
+        // video. Re-arms whenever showControls flips to true (a reveal tap)
+        // or the (…) / a panel is used; never while a panel is open, on Mac,
+        // under VoiceOver or without video (shouldAutoHideControls).
+        .task(id: AutoHideKey(isVisible: showControls, isExpanded: controlsDisclosure.isExpanded, openPanel: controlsDisclosure.openPanel)) {
             guard showControls, shouldAutoHideControls else { return }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
             if !Task.isCancelled {
                 withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
             }
@@ -55,9 +59,13 @@ extension CallView {
         .task(id: callManager.isVideoEnabled) {
             if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
         }
+        .onAppear { showEffectsToolbar = false }
         .onDisappear { showControls = true }
         .adaptiveOnChange(of: isGroupStage) { _, isGroup in
             if !isGroup { isStageFullScreen = false }
+        }
+        .adaptiveOnChange(of: isVideoStage) { _, isVideo in
+            if !isVideo { withAnimation(.easeInOut(duration: 0.25)) { showControls = true } }
         }
         // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
         // tap time (the start path is async — permission request + on-device
@@ -179,7 +187,7 @@ extension CallView {
                 swipeDownOffset = CallPiPPolicy.swipeDownOffset(
                     translation: value.translation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar
+                    isEffectsOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil
                 )
             }
             .onEnded { value in
@@ -187,7 +195,7 @@ extension CallView {
                     translation: value.translation.height,
                     predictedTranslation: value.predictedEndTranslation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar,
+                    isEffectsOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil,
                     canSystemPiP: callManager.canActivateSystemPiP
                 )
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -224,35 +232,39 @@ extension CallView {
         VStack(spacing: 8) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
-            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen)
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, onStageTap: toggleControls)
                 .padding(.horizontal, 12)
             if !isStageFullScreen {
-                callControlsPill
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, Self.chromeBottomInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                ZStack(alignment: .bottom) {
+                    callControlsPill
+                        .callChromeVisibility(isChromeVisible)
+                    if showTranscript && !isChromeVisible {
+                        captionsBand(hasOwnGlass: true)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, Self.chromeBottomInset)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.bottom, isStageFullScreen ? DeviceLayout.safeAreaBottom : 0)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isStageFullScreen)
     }
 
-    /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
-    /// (controls are persistent on desktop), never for audio-only (no video to
-    /// reveal), never while the effects tray is open, and never while VoiceOver
-    /// is running (VoiceOver users can't tap the video to reveal hidden controls).
-    /// Jamais non plus en groupe : un toucher y met une vignette à la une, il
-    /// ne pourrait pas faire revenir les commandes — le plein écran d'une
-    /// vignette est le geste qui les masque.
+    /// §7.3 — controls auto-hide only on a video stage (duo or group, #8550),
+    /// never on Mac (no touch to recall them), never while a panel is open,
+    /// and never while VoiceOver is running. The rule is
+    /// `CallChromeVisibility.mayAutoHide`.
     private var shouldAutoHideControls: Bool {
-        callManager.isVideoUIActive
-            && !showEffectsToolbar
-            && !isGroupStage
-            && !ProcessInfo.processInfo.isiOSAppOnMac
-            && !UIAccessibility.isVoiceOverRunning
+        CallChromeVisibility.mayAutoHide(
+            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil,
+            isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
+        )
     }
 
     func toggleControls() {
+        guard CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) else { return }
         withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
     }
 

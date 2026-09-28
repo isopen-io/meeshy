@@ -856,11 +856,12 @@ emit({
  * | Reagir (#8439) | `smiley` |
  * | Retirer de l'appel (#8438) | `user-minus` |
  * | Son de l'apercu avant decroche, coupe (#8480) | `speaker-slash` |
+ * | Capturer l'appel (#8552) | `aperture` |
  *
  * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
  */
 emit({
-  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash'],
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash', 'aperture'],
   output: join(HERE, '../src/components/glyphs-call-view.ts'),
   constant: 'CALL_VIEW_GLYPHS',
   type: 'CallViewGlyphName',
