@@ -67,8 +67,11 @@ nonisolated enum ComposerRailGeometry {
     static var lane: CGFloat { outerMargin + railWidth + gutter }
 
     /// PLEIN ÉCRAN (#8370) : les rails flottent sur la scène, qui ne cède plus
-    /// aucune largeur aux couloirs.
-    static let floatingInset: CGFloat = 0
+    /// aucune largeur aux couloirs — mais elle ne colle pas au bord du verre
+    /// (retour porteur 2026-09-28 : « toute la scène est trop collée au
+    /// viewport à gauche et à droite »). La respiration est celle des rails,
+    /// `outerMargin` : la carte et les boutons partent du même bord.
+    static let floatingInset: CGFloat = outerMargin
 
     /// L'encastrement horizontal de la scène, par côté.
     static func sceneInset(railsShown: Bool) -> CGFloat {
