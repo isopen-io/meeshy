@@ -244,7 +244,21 @@ struct ComposerObjectEditorView: View {
         // C'est aussi ce que fait tout le reste du produit : le socle est ancré
         // en bas, les options de l'outil DESSIN aussi. L'éditeur plein écran
         // était l'exception.
-        .safeAreaInset(edge: .bottom, spacing: 0) { options }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            options
+                // **Le glissement BAS rend l'écran à la scène** (#5027) — posé
+                // sur le PANNEAU seulement depuis le 2026-09-28 : sur tout
+                // l'écran, déplacer un texte vers le bas au doigt repliait
+                // aussi le panneau.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { valeur in
+                            guard ComposerObjectEditorDismissGesture.completes(
+                                translation: valeur.translation) else { return }
+                            yieldScreenToScene()
+                        }
+                )
+        }
         .background(plateauTint.ignoresSafeArea())
         .preferredColorScheme(.dark)
         // **Le glissement du bord de tête RAMÈNE à la scène** (#4997).
@@ -255,21 +269,6 @@ struct ComposerObjectEditorView: View {
         // posé sur toute la vue — le canvas y déplace des objets, et un
         // glissement horizontal capté partout lui volerait chaque translation.
         .overlay(alignment: .leading) { edgeBackStrip }
-        // **Le glissement BAS rend l'écran à la scène** (#5027) : le clavier
-        // part, puis le panneau de l'outil se replie.
-        //
-        // Posé en `simultaneousGesture` et non en `gesture` : la zone
-        // d'options défile et le plan 2D panne. Un `gesture` exclusif leur
-        // volerait le doigt ; la règle, elle, refuse tout ce qui n'est pas
-        // franchement vertical, donc les deux cohabitent.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { valeur in
-                    guard ComposerObjectEditorDismissGesture.completes(
-                        translation: valeur.translation) else { return }
-                    yieldScreenToScene()
-                }
-        )
         // **Changer d'objet peut changer de FAMILLE** (#4937), et l'outil
         // courant peut ne plus exister pour elle : passer d'un texte réglé sur
         // POLICE à un sticker laisserait le bas vide.
@@ -439,7 +438,12 @@ struct ComposerObjectEditorView: View {
             // geste : « Terminé », qui appelle `closeObjectEditor`.
             onInlineTextEditEnded: { _ in },
             // `nil` — voir le doc-comment : pas de cadre en plein écran (#4850).
-            selectedItemId: nil
+            selectedItemId: nil,
+            // **Le texte se manipule AU DOIGT pendant qu'on l'édite** (#8540,
+            // retour porteur 2026-09-28) : un glisser, un pincer ou une
+            // rotation suspend la saisie et rend le texte à sa place ; le
+            // toucher la reprend. Sans quitter cet écran.
+            inlineEditYieldsToManipulation: true
         )
         // **Le sujet RÉCLAME la hauteur libre** (#4997) : la carte est figée à
         // son ratio et se centre dans ce qu'on lui donne, donc sans
