@@ -281,7 +281,9 @@ struct ComposerObjectEditorView: View {
             let demandee = initialSectionPending ? (initialSection ?? selectedTool) : selectedTool
             initialSectionPending = false
             selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
-                                                              keeping: demandee)
+                                                              keeping: demandee,
+                                                              hasTrimmableSource: objectHasTrimmableSource,
+                                                              offersFilter: objectOffersFilter)
         }
     }
 
@@ -503,7 +505,8 @@ struct ComposerObjectEditorView: View {
             VStack(spacing: 8) {
                 ForEach(ComposerObjectEditorRail.entries(
                     for: family,
-                    hasTrimmableSource: viewModel.sourceTrim(id: objectId) != nil), id: \.self) { entree in
+                    hasTrimmableSource: objectHasTrimmableSource,
+                    offersFilter: objectOffersFilter), id: \.self) { entree in
                     Button {
                         // **La bascule vit dans la RÈGLE** (#5098) : retaper
                         // l'entrée OUVERTE range son panneau, taper une autre

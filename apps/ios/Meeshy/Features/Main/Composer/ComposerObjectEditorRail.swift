@@ -250,9 +250,15 @@ nonisolated enum ComposerObjectEditorRail {
     /// la LECTURE d'une source qui a une durée — une vidéo, un son. Une image
     /// n'en a pas, et l'outil y ouvrait une plaque vide. Le défaut `true` garde
     /// l'inventaire de la famille ; l'éditeur passe le fait de l'objet.
+    ///
+    /// **`offersFilter`** (même retour) : le filtre d'un objet se cuit dans son
+    /// IMAGE ; une vidéo posée n'en rend aucun, et l'outil y serait inerte.
     static func entries(for family: MeeshySceneObject.Kind,
-                        hasTrimmableSource: Bool = true) -> [ComposerObjectEditorSection] {
-        entriesOfFamily(family).filter { hasTrimmableSource || $0 != .media(.trim) }
+                        hasTrimmableSource: Bool = true,
+                        offersFilter: Bool = true) -> [ComposerObjectEditorSection] {
+        entriesOfFamily(family).filter {
+            (hasTrimmableSource || $0 != .media(.trim)) && (offersFilter || $0 != .media(.filter))
+        }
     }
 
     private static func entriesOfFamily(_ family: MeeshySceneObject.Kind) -> [ComposerObjectEditorSection] {
@@ -407,8 +413,10 @@ nonisolated enum ComposerObjectEditorRail {
     /// ne doit pas ramener l'auteur au premier outil, sans quoi régler la même
     /// chose sur trois textes de suite deviendrait trois fois le même chemin.
     static func selection(forFamily family: MeeshySceneObject.Kind,
-                          keeping current: ComposerObjectEditorSection) -> ComposerObjectEditorSection {
-        let servies = entries(for: family)
+                          keeping current: ComposerObjectEditorSection,
+                          hasTrimmableSource: Bool = true,
+                          offersFilter: Bool = true) -> ComposerObjectEditorSection {
+        let servies = entries(for: family, hasTrimmableSource: hasTrimmableSource, offersFilter: offersFilter)
         guard let premiere = servies.first else { return current }
         return servies.contains(current) ? current : premiere
     }

@@ -54,6 +54,9 @@ struct ComposerTopBar: View {
     /// Le haut de la rangée de la Dynamic Island : la barre de la scène plein
     /// écran monte jusque-là (`ComposerSceneSurface.chromeLift`).
     static let islandRowTop: CGFloat = 4
+    /// La part de la zone sûre que la barre remonte : la moitié la pose juste
+    /// sous la Dynamic Island (retour porteur 2026-09-28, « redescendre »).
+    static let liftShare: CGFloat = 0.5
 
     /// **Ce que la barre occupe sous la zone sûre** — lu par la scène plein
     /// écran (#8370) pour se poser JUSTE SOUS la croix, jamais dessous.

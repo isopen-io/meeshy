@@ -601,8 +601,13 @@ struct ComposerSceneSurface: View {
     /// **De combien la barre haute monte dans la zone sûre** : jusqu'à la
     /// rangée de la Dynamic Island, où la barre de statut effacée a rendu la
     /// place. Aux coins, la croix et le `⋯` ne croisent pas l'îlot, centré.
+    ///
+    /// **Redescendue de moitié** (retour porteur 2026-09-28 : « profites pour
+    /// redescendre (X) et (…) ») : la barre ne monte plus jusqu'à la rangée de
+    /// l'îlot, elle s'arrête à mi-chemin — sous la Dynamic Island, jamais sur
+    /// la scène. `ComposerTopBar.liftShare` est la part de montée gardée.
     private var chromeLift: CGFloat {
-        max(0, safeTop - ComposerTopBar.islandRowTop)
+        max(0, safeTop - ComposerTopBar.islandRowTop) * ComposerTopBar.liftShare
     }
 
     /// Le fond choisi au Cadre, quand la scène AJUSTE un média : il s'applique
