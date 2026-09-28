@@ -13,22 +13,14 @@ extension CallView {
     /// pill. User-requested 2026-07-11: "la zone de transcription ne doit
     /// pas être en overlay des autres points d'action".
     var transcriptPanel: some View {
-        ScrollView {
-            transcriptSegmentsList
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        CallJournalList(
+            segments: transcriptionService.displayedSegments,
+            line: captionLine,
+            onToggleOriginal: { toggleOriginal(of: $0) },
+            contentPadding: 12
+        )
         .callChromeGlass(in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    /// Tout l'historique retenu, horodaté — le panneau audio.
-    private var transcriptSegmentsList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(captionLines) { line in
-                CallCaptionRow(line: line, showsTime: true) { toggleOriginal(of: line.id) }
-            }
-        }
     }
 
     // MARK: - Caption lines (#8396)
@@ -37,17 +29,15 @@ extension CallView {
     /// la personne, étiquette « EN → FR ». Le réglage Traduit/Original du
     /// bouton Sous-titres (`showOriginalText`) vaut pour toutes les lignes ;
     /// un toucher sur une phrase l'inverse pour elle seule.
-    private var captionLines: [CallCaptionLine] {
+    func captionLine(for segment: TranscriptionSegment) -> CallCaptionLine {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
-        return transcriptionService.displayedSegments.map { segment in
-            CallCaptionLine.make(
-                segment: segment,
-                isLocal: segment.speakerId == localUserId,
-                speakerName: speakerName(for: segment, localUserId: localUserId),
-                prefersOriginal: showOriginalText,
-                isRevealed: revealedCaptionIds.contains(segment.id)
-            )
-        }
+        return CallCaptionLine.make(
+            segment: segment,
+            isLocal: segment.speakerId == localUserId,
+            speakerName: speakerName(for: segment, localUserId: localUserId),
+            prefersOriginal: showOriginalText,
+            isRevealed: revealedCaptionIds.contains(segment.id)
+        )
     }
 
     /// Le nom du locuteur : le mien, puis le roster du groupe (source de
@@ -80,7 +70,7 @@ extension CallView {
     /// sont rangées ; en groupe il se pose dans le verre de la pilule.
     func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
         CallCaptionsBand(
-            lines: Array(captionLines.suffix(2)),
+            lines: transcriptionService.displayedSegments.suffix(2).map(captionLine),
             hasOwnGlass: hasOwnGlass,
             onToggleOriginal: { toggleOriginal(of: $0) },
             onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
@@ -102,7 +92,8 @@ extension CallView {
 
     var captionsJournal: some View {
         CallCaptionsJournalSheet(
-            lines: captionLines,
+            segments: transcriptionService.displayedSegments,
+            line: captionLine,
             showsOriginal: $showOriginalText,
             onToggleOriginal: { toggleOriginal(of: $0) }
         )
@@ -120,7 +111,8 @@ extension CallView {
     func announceLatestCaption() {
         guard showTranscript, UIAccessibility.isVoiceOverRunning,
               let id = latestFinalRemoteSegmentId,
-              let announcement = captionLines.first(where: { $0.id == id })?.announcement else { return }
+              let segment = transcriptionService.displayedSegments.last(where: { $0.id == id }),
+              let announcement = captionLine(for: segment).announcement else { return }
         UIAccessibility.post(notification: .announcement, argument: announcement)
     }
 

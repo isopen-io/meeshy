@@ -296,6 +296,7 @@ struct CallView: View {
         // textes blancs deviennent illisibles (white-on-white).
         .environment(\.colorScheme, .dark)
         .onAppear {
+            showTranscript = transcriptionService.isShowingOverlay
             startPulseAnimation()
             // Expansion depuis la bannière PiP : le contenu démarre contracté
             // vers le haut (là où vivait la bannière) puis s'étire en plein
