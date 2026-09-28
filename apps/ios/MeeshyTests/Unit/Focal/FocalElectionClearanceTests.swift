@@ -34,27 +34,18 @@ final class FocalElectionClearanceTests: XCTestCase {
     }
 
     private func layout(isFirstInGroup: Bool, nextIsFirstInGroup: Bool = false, cellHeight: CGFloat, scale: CGFloat) -> Layout {
-        let strip = FocalMetrics.FocusStrip.self
-        let lift = strip.contentLift(isFirstInGroup: isFirstInGroup)
         let clearance = FocalScrollPerspective.electionClearance(isFirstInGroup: isFirstInGroup, cellHeight: cellHeight, scale: scale)
         let above = FocalScrollPerspective.electionShift(cellMidY: -1_000, magnifiedMidY: 0, clearance: clearance)
         let below = FocalScrollPerspective.electionShift(cellMidY: 1_000, magnifiedMidY: 0, clearance: clearance)
-        // La loupe se pose autour du CENTRE du layer de la cellule.
-        let mid = cellHeight / 2
-        func loupe(_ y: CGFloat) -> CGFloat { mid + scale * (y - mid) }
-        let blockTop = pad + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
-        let blockBottom = cellHeight - pad
-        let extent = FocalScrollPerspective.electedCardExtent(isFirstInGroup: isFirstInGroup, cellHeight: cellHeight)
-        // En tête de groupe, l'en-tête — effacé en focus, toujours réservé —
-        // précède le texte ; en suite, le texte commence au bloc, descendu.
-        let header = isFirstInGroup ? FocalMetrics.Focus.avatarSize : 0
-        let stripTop = blockBottom + lift + strip.stripGap
+        // #8537 — seul le contenu grossit ; identité, bande et cadre gardent
+        // leur échelle d'origine.
+        let g = FocalScrollPerspective.electedGeometry(isFirstInGroup: isFirstInGroup, cellHeight: cellHeight, contentScale: scale)
         let nextTop = pad + (nextIsFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         return Layout(
-            card: Span(top: loupe(extent.top), bottom: loupe(extent.bottom)),
-            identityChip: Span(top: loupe(blockTop), bottom: loupe(blockTop + strip.identityChipHeight)),
-            ownText: Span(top: loupe(blockTop + lift + header), bottom: loupe(blockBottom + lift)),
-            bottomStrip: Span(top: loupe(stripTop), bottom: loupe(stripTop + strip.chipHeight)),
+            card: Span(top: g.card.top, bottom: g.card.bottom),
+            identityChip: Span(top: g.identityChip.top, bottom: g.identityChip.bottom),
+            ownText: Span(top: g.content.top, bottom: g.content.bottom),
+            bottomStrip: Span(top: g.strip.top, bottom: g.strip.bottom),
             previousTextBottom: -pad + above,
             nextTextTop: cellHeight + nextTop + below
         )
@@ -143,12 +134,14 @@ final class FocalElectionClearanceTests: XCTestCase {
     }
 
     /// Le passage grandit avec la loupe : un message haut agrandi pousse ses
-    /// voisines plus loin qu'un court — l'écrêtage vertical qui annulait la
-    /// loupe des messages hauts a disparu (#8506).
+    /// voisines du DESSOUS plus loin qu'un court — l'écrêtage vertical qui
+    /// annulait la loupe des messages hauts a disparu (#8506). Depuis #8537 le
+    /// contenu grossit vers le bas depuis son bord haut, sous une identité à
+    /// l'échelle 1 : le haut du cadre ne dépend plus de la hauteur.
     func test_theClearance_growsWithTheMagnifiedHeight() {
         let short = FocalScrollPerspective.electionClearance(isFirstInGroup: false, cellHeight: 60, scale: 1.2)
         let tall = FocalScrollPerspective.electionClearance(isFirstInGroup: false, cellHeight: 300, scale: 1.2)
-        XCTAssertGreaterThan(tall.above, short.above)
+        XCTAssertEqual(tall.above, short.above, accuracy: 0.001)
         XCTAssertGreaterThan(tall.below, short.below)
     }
 
@@ -184,15 +177,16 @@ final class FocalElectionClearanceTests: XCTestCase {
         XCTAssertEqual(cell.contentView.bounds.height, 96, accuracy: 0.001)
     }
 
-    /// Le passage se pose dans le repère RENVERSÉ du fil, avec la loupe.
+    /// Le passage se pose dans le repère RENVERSÉ du fil — sans échelle
+    /// depuis #8537 : la loupe vit sur le seul contenu, dans la rangée.
     @MainActor
-    func test_magnifyElected_composesThePassageWithTheLoupe() {
+    func test_poseElectionPassage_translatesTheLayer_inTheFlippedSpace() {
         let layer = CALayer()
         layer.bounds = CGRect(x: 0, y: 0, width: 390, height: 60)
-        FocalScrollPerspective.magnifyElected(layer, isFocused: false, isRightToLeft: false, shift: 12, animated: false)
+        FocalScrollPerspective.poseElectionPassage(layer, shift: 12, animated: false)
         XCTAssertEqual(layer.transform.m42, -12, accuracy: 0.0001, "vers le bas visuel = −y du layer renversé")
         XCTAssertEqual(layer.transform.m11, 1, accuracy: 0.0001)
-        FocalScrollPerspective.magnifyElected(layer, isFocused: false, isRightToLeft: false, shift: 0, animated: false)
+        FocalScrollPerspective.poseElectionPassage(layer, shift: 0, animated: false)
         XCTAssertTrue(CATransform3DIsIdentity(layer.transform))
     }
 }
