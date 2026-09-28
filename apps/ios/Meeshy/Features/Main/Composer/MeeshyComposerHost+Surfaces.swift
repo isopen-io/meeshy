@@ -325,6 +325,7 @@ extension MeeshyComposerHost {
             sceneImages: viewModel.loadedImages,
             sceneStickerAnimations: viewModel.loadedStickerAnimations,
             sceneImagesVersion: viewModel.loadedImagesVersion,
+            sceneLocalMediaAliases: viewModel.adoptedLocalMedia,
             onItemTapped: { id, kind in
                 selectedSceneItemId = id
                 selectedSceneItemKind = kind

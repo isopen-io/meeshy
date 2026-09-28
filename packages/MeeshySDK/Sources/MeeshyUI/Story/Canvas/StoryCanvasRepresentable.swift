@@ -135,6 +135,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
     /// pour un clip non publié, le resolver par `postMediaId` échouait.
     public var loadedAudioURLs: [String: URL] = [:]
+    /// Les médias adoptés rendus à leur fichier (`StoryReaderContext.localMediaAliases`).
+    public var localMediaAliases: [String: URL] = [:]
     /// Corner radius applied to the embedded `StoryCanvasUIView`'s backing layer
     /// so the rounded « card » actually clips the CALayer story content. A
     /// SwiftUI `.clipShape` on this representable cannot round the embedded
@@ -178,7 +180,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 loadedImagesVersion: UInt64 = 0,
                 loadedAudioURLs: [String: URL] = [:],
                 canvasCornerRadius: CGFloat = 0,
-                timelineBridge: StoryCanvasTimelineBridge? = nil) {
+                timelineBridge: StoryCanvasTimelineBridge? = nil,
+                localMediaAliases: [String: URL] = [:]) {
+        self.localMediaAliases = localMediaAliases
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -221,6 +225,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     nonisolated deinit {}
         var lastLoadedImagesVersion: UInt64?
         var lastLoadedAudioURLs: [String: URL]?
+        var lastLocalMediaAliases: [String: URL]?
     }
 
     /// Construit le `StoryReaderContext` d'édition : pont image (bitmaps édités
@@ -231,7 +236,22 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         let reader = ComposerImageCacheReader(images: loadedImages,
                                               animations: loadedStickerAnimations,
                                               version: loadedImagesVersion)
-        return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
+        // Un média POSÉ adopté se résout par son `postMediaId` vers son fichier
+        // local (`StoryMediaLayer.resolvedMediaURL`) ; sans alias, aucun
+        // résolveur, comme avant — la garde d'existence des `file://` reste
+        // celle du composer.
+        let aliases = localMediaAliases
+        var mediaResolver: (@Sendable (String) -> URL?)?
+        if !aliases.isEmpty {
+            mediaResolver = { (cle: String) -> URL? in
+                guard let local = aliases[cle], FileManager.default.fileExists(atPath: local.path) else { return nil }
+                return local
+            }
+        }
+        return StoryReaderContext(postMediaURLResolver: mediaResolver,
+                                  imageCache: reader,
+                                  localAudioURLResolver: audioResolver,
+                                  localMediaAliases: aliases)
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -283,6 +303,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.playsAudioInEditMode = true
         context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
         context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+        context.coordinator.lastLocalMediaAliases = localMediaAliases
         timelineBridge?.canvas = view
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
@@ -343,9 +364,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // `reconfigureAudioForPlayback`, qui lit alors le resolver à jour.
         let imageChanged = context.coordinator.lastLoadedImagesVersion != loadedImagesVersion
         let audioChanged = context.coordinator.lastLoadedAudioURLs != loadedAudioURLs
-        if imageChanged || audioChanged {
+        let aliasesChanged = context.coordinator.lastLocalMediaAliases != localMediaAliases
+        if imageChanged || audioChanged || aliasesChanged {
             context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
             context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+            context.coordinator.lastLocalMediaAliases = localMediaAliases
             uiView.setReaderContext(makeComposerContext())
             if imageChanged { uiView.invalidateImageCache() }
         }

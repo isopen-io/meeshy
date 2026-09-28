@@ -62,6 +62,9 @@ struct ComposerSceneSurface: View {
     /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
     var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
+    /// Les médias adoptés rendus à leur fichier local : l'échange avec l'URL
+    /// téléversée ne se voit pas (retour porteur 2026-09-28).
+    var sceneLocalMediaAliases: [String: URL] = [:]
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
 
     /// **« Modifier » — l'appui long, et l'action VoiceOver du même nom**
@@ -679,7 +682,8 @@ struct ComposerSceneSurface: View {
             selectedItemId: selectedItemId,
             selectionBadge: selectionBadge,
             timelineBridge: timelineBridge,
-            onItemTrimRequested: onItemTrim
+            onItemTrimRequested: onItemTrim,
+            localMediaAliases: sceneLocalMediaAliases
         )
         // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
         // que la mesure du bord gauche ci-dessous lit : les deux ne peuvent pas

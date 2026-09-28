@@ -122,6 +122,9 @@ public struct EmbeddedSceneCanvas: View {
     /// donc c'est LUI qui dit au canvas qu'un bitmap a changé. Le transmettre
     /// sans le cookie laisserait le canvas sur sa version périmée.
     public var loadedImagesVersion: UInt64
+    /// Les médias adoptés rendus à leur fichier local (retour porteur
+    /// 2026-09-28 — l'adoption doit être imperceptible).
+    public var localMediaAliases: [String: URL]
 
     /// **Le canvas doit RETIRER son calque de dessin persisté pendant qu'une
     /// surface de dessin est active** (#4092).
@@ -197,8 +200,10 @@ public struct EmbeddedSceneCanvas: View {
         selectionBadge: String? = nil,
         referenceViewport: CGSize = CGSize(width: 402, height: 874),
         timelineBridge: StoryCanvasTimelineBridge? = nil,
-        onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
+        onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+        localMediaAliases: [String: URL] = [:]
     ) {
+        self.localMediaAliases = localMediaAliases
         self.timelineBridge = timelineBridge
         self.onItemTrimRequested = onItemTrimRequested
         self._slide = slide
@@ -278,7 +283,8 @@ public struct EmbeddedSceneCanvas: View {
                 // `cornerRadius / scale` atterrit bien à `cornerRadius` à l'écran
                 // (même compensation que `canvasComposerLayer`).
                 canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
-                timelineBridge: timelineBridge
+                timelineBridge: timelineBridge,
+                localMediaAliases: localMediaAliases
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
             // les capture** — sinon le doigt qui trace déplacerait aussi
