@@ -45,6 +45,8 @@ protocol CallFaceLocating: AnyObject, Sendable {
 final class PhotoLibraryCaptureSaver: CallCapturePhotoSaving {
     static let shared = PhotoLibraryCaptureSaver()
 
+    nonisolated deinit {}
+
     func requestAccess() async -> Bool {
         await PhotoLibraryManager.shared.requestAuthorization()
     }
@@ -89,6 +91,10 @@ final class CallCaptureController: ObservableObject {
     private let now: () -> Date
     private var previewTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
+
+    // Sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, la deinit synthétisée
+    // est isolée et double-libère sur iOS 26.1 (abrt au démontage).
+    nonisolated deinit {}
 
     init(
         grabber: any CallFrameGrabbing = CallFrameGrabber(),
