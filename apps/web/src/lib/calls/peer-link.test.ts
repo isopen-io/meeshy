@@ -61,7 +61,7 @@ function fakeConnection() {
   return { pc, calls, setState };
 }
 
-function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean } = {}) {
+function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean } = {}) {
   const fake = fakeConnection();
   const sent: OutgoingSignal[] = [];
   const states: LinkState[] = [];
@@ -75,6 +75,7 @@ function link(options: { readonly local?: string; readonly remote?: string; read
     remoteUserId: options.remote ?? 'u-b',
     iceServers: [],
     localStream,
+    ...(options.receiveOnly === true ? { receiveOnly: true } : {}),
     send: (signal) => void sent.push(signal),
     onRemoteStream: () => undefined,
     onState: (state) => void states.push(state),
@@ -137,6 +138,17 @@ describe('offre et réponse', () => {
     expect(fake.calls).toEqual(['setRemote:offer', 'setLocal:answer']);
     expect(fake.pc.getTransceivers()[0]?.direction).toBe('sendrecv');
     expect(sent).toEqual([{ type: 'answer', sdp: 'answer-sdp', negotiationId: 4 }]);
+  });
+
+  test('en réception seule (aperçu avant décroché, #8480), le répondant n’accroche AUCUNE piste et ne peut pas en ajouter', async () => {
+    const { peer, fake, sent } = link({ local: 'u-b', remote: 'u-a', video: true, receiveOnly: true });
+    fake.pc.addTransceiver('audio', { direction: 'sendrecv' });
+    fake.pc.addTransceiver('video', { direction: 'sendrecv' });
+    await peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 1);
+    await peer.setVideoTrack({ kind: 'video' } as unknown as MediaStreamTrack);
+    await peer.setAudioTrack({ kind: 'audio' } as unknown as MediaStreamTrack);
+    expect(fake.pc.getTransceivers().map((t) => [t.direction, t.sender.track])).toEqual([['recvonly', null], ['recvonly', null]]);
+    expect(sent.map((signal) => signal.type)).toEqual(['answer']);
   });
 
   test('un candidat arrivé avant la description attend, puis passe', async () => {
