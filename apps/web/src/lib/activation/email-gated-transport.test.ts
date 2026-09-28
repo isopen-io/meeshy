@@ -12,11 +12,10 @@ import { emailGateReasonOf, withEmailGate } from './email-gated-transport';
 
 /**
  * **UN REFUS `EMAIL_NOT_VERIFIED` MÈNE À LA VALIDATION, PUIS L'ACTION REPART**
- * (#8365). La garde serveur (#6437) reste : `POST /posts`,
- * `/posts/from-attachment`, `/invitations/email`, `/links`,
- * `/conversations/:id/new-link`. Le transport, seul site par lequel ces cinq
- * routes passent, ouvre la validation et REJOUE la requête refusée — même
- * corps, donc rien du brouillon n'est perdu.
+ * (#8365). Le transport, seul site par lequel les cinq routes gardées
+ * passent, ouvre la validation et REJOUE la requête refusée — même corps,
+ * donc rien du brouillon n'est perdu. Publier n'est jamais retenu d'avance :
+ * la passerelle le permet pendant tout le délai de grâce (#8476).
  */
 
 const REFUSED: ApiResult<never> = { ok: false, status: 403, error: 'Email verification required', code: 'EMAIL_NOT_VERIFIED' };
@@ -130,24 +129,30 @@ describe('withEmailGate — prévenir plutôt que guérir', () => {
     const gate = fakeGate(false);
     const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
 
-    const result = await gated.request(post({ type: 'POST', content: 'x' }));
+    const result = await gated.request({ method: 'POST', path: invitationsEndpoints.email, body: { email: 'a@b.c' } });
 
     expect(sent).toHaveLength(0);
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.code).toBe('EMAIL_NOT_VERIFIED');
   });
 
-  test('une STORY n’est jamais retenue d’avance : la première est permise (#7907)', async () => {
-    const { transport, sent } = fakeTransport([CREATED]);
-    const gate = fakeGate(false);
-    const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
+  for (const request of [
+    post({ type: 'POST', content: 'x' }),
+    post({ type: 'STORY', mediaIds: ['m-1'] }),
+    { method: 'POST', path: postsEndpoints.fromAttachment, body: { attachmentId: 'a-1' } } satisfies HttpRequest,
+  ]) {
+    test(`publier n’est jamais retenu d’avance : le délai de grâce le permet (#8476) — ${request.path}`, async () => {
+      const { transport, sent } = fakeTransport([CREATED]);
+      const gate = fakeGate(false);
+      const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
 
-    const result = await gated.request(post({ type: 'STORY', mediaIds: ['m-1'] }));
+      const result = await gated.request(request);
 
-    expect(result).toEqual(CREATED);
-    expect(gate.asked).toEqual([]);
-    expect(sent).toHaveLength(1);
-  });
+      expect(result).toEqual(CREATED);
+      expect(gate.asked).toEqual([]);
+      expect(sent).toHaveLength(1);
+    });
+  }
 
   test('une route non gardée passe sans rien demander', async () => {
     const { transport, sent } = fakeTransport([CREATED]);

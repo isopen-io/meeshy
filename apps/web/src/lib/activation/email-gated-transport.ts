@@ -8,9 +8,10 @@ import type { EmailGateReason } from './email-gate';
 
 /**
  * **UN REFUS `EMAIL_NOT_VERIFIED` MÈNE À LA VALIDATION, PUIS L'ACTION REPART**
- * (#8365). La garde serveur de #6437 reste en place
- * (`EMAIL_VERIFICATION_GATED_ROUTES`, `services/gateway/src/middleware/auth.ts`) :
- * publier, inviter par e-mail et créer un lien exigent une adresse prouvée.
+ * (#8365). La passerelle garde inviter par e-mail et créer un lien derrière une
+ * adresse prouvée (`EMAIL_VERIFICATION_GATED_ROUTES`), et publier derrière le
+ * délai de grâce de l'adresse (`requirePublishingGrace`, #8476) —
+ * `services/gateway/src/middleware/auth.ts`.
  *
  * Le transport est le SEUL site par lequel ces cinq routes passent : c'est donc
  * ici — une fois, pour tous les écrans — que le refus ouvre la validation de
@@ -20,10 +21,9 @@ import type { EmailGateReason } from './email-gate';
  *
  * Prévenir plutôt que guérir : quand la session SAIT l'adresse non prouvée
  * (`SessionUser.emailUnproven`), la validation s'ouvre AVANT tout envoi ; si le
- * lecteur la ferme, le refus est rendu sans aller-retour. Une STORY n'est
- * jamais retenue d'avance : la première est permise sans adresse prouvée
- * (#7907, `email-verification-first-story.ts`) — seul le serveur sait si c'est
- * la première, donc seul son refus ouvre la validation.
+ * lecteur la ferme, le refus est rendu sans aller-retour. PUBLIER n'est jamais
+ * retenu d'avance : la passerelle le permet tant que le délai de grâce court
+ * (#8476) — seul son refus, une fois le délai échu, ouvre la validation.
  */
 
 const NEW_LINK = /^\/api\/v1\/conversations\/[^/]+\/new-link$/;
@@ -39,9 +39,6 @@ export function emailGateReasonOf(request: HttpRequest): EmailGateReason | null 
   return null;
 }
 
-const isStory = (request: HttpRequest): boolean =>
-  typeof request.body === 'object' && request.body !== null && Reflect.get(request.body, 'type') === 'STORY';
-
 const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
 
 const refusedLocally: ApiFailure = { ok: false, status: 403, error: 'Email verification required', code: EMAIL_NOT_VERIFIED };
@@ -55,7 +52,7 @@ export function withEmailGate(inner: HttpTransport, gate: EmailGatePort): HttpTr
   async function request<T>(sent: HttpRequest): Promise<ApiResult<T>> {
     const reason = emailGateReasonOf(sent);
     if (reason === null) return inner.request<T>(sent);
-    if (!isStory(sent) && gate.emailUnproven() && !(await gate.ask(reason))) return refusedLocally;
+    if (reason !== 'publish' && gate.emailUnproven() && !(await gate.ask(reason))) return refusedLocally;
     const first = await inner.request<T>(sent);
     if (first.ok || first.code !== EMAIL_NOT_VERIFIED) return first;
     if (!(await gate.ask(reason))) return first;
