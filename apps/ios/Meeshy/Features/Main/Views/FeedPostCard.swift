@@ -84,6 +84,9 @@ struct FeedPostCard: View {
     // évite que chaque changement de thème force un re-render de toutes les cards.
     var theme: ThemeManager { ThemeManager.shared }
     @State var showCommentsSheet = false
+    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE — posé par le glissé
+    /// d'un commentaire de l'aperçu (#8582), effacé à la fermeture.
+    @State var commentsReplyTarget: FeedComment?
     @State var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State var selectedProfileUser: ProfileSheetUser?
@@ -698,8 +701,8 @@ struct FeedPostCard: View {
                 )
         )
         .padding(.horizontal, 16)
-        .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor)
+        .sheet(isPresented: $showCommentsSheet, onDismiss: { commentsReplyTarget = nil }) {
+            CommentsSheetView(post: post, accentColor: accentColor, initialReplyTarget: commentsReplyTarget)
         }
         .sheet(isPresented: $showTranslationSheet) {
             PostTranslationSheet(

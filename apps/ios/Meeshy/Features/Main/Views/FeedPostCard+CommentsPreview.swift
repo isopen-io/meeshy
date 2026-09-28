@@ -75,6 +75,15 @@ extension FeedPostCard {
         .accessibilityHint(String(localized: "feed.post.view_comments.hint", defaultValue: "Ouvre la liste des commentaires", bundle: .main))
     }
 
+    /// Ouvre la feuille des commentaires, en réponse à `comment` quand il est
+    /// fourni. La cible ne se remet JAMAIS à `nil` ici : un toucher et un
+    /// glissé peuvent finir sur le même relâcher, et l'ordre de leurs rappels
+    /// n'est pas garanti — c'est la fermeture de la feuille qui l'efface.
+    func openComments(replyingTo comment: FeedComment) {
+        commentsReplyTarget = comment
+        showCommentsSheet = true
+    }
+
     // MARK: - Top Comment Row
     func topCommentRow(comment: FeedComment, isLast: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -131,33 +140,39 @@ extension FeedPostCard {
                         }
                     }
 
-                    // Content (Prisme Linguistique) — masqué pour un commentaire
-                    // média-seul (displayContent vide) : évite une ligne fantôme.
-                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(comment.displayContent)
-                            .font(.footnote)
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(2)
-                    }
+                    // Le CORPS — texte + média — porte les effets du commentaire,
+                    // voile du flou compris (#8582) : l'aperçu ne montre plus en
+                    // clair ce que la feuille masque.
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Content (Prisme Linguistique) — masqué pour un commentaire
+                        // média-seul (displayContent vide) : évite une ligne fantôme.
+                        if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(comment.displayContent)
+                                .font(.footnote)
+                                .foregroundColor(theme.textPrimary)
+                                .lineLimit(2)
+                        }
 
-                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
-                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
-                    // ainsi lisible/arrêtable directement (le player porte son propre
-                    // bouton, qui capte le tap sans ouvrir la sheet).
-                    if let media = comment.media.first {
-                        CommentMediaView(
-                            media: media,
-                            accentColor: accentColor,
-                            commentId: comment.id,
-                            carrierText: comment.displayContent,
-                            carrierOriginalLanguage: comment.originalLanguage,
-                            authorName: comment.author,
-                            authorAvatarURL: comment.authorAvatarURL,
-                            authorColor: comment.authorColor,
-                            sentAt: comment.timestamp
-                        )
-                        .padding(.top, 2)
+                        // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
+                        // du feed avec les MÊMES building blocks que la sheet. L'audio est
+                        // ainsi lisible/arrêtable directement (le player porte son propre
+                        // bouton, qui capte le tap sans ouvrir la sheet).
+                        if let media = comment.media.first {
+                            CommentMediaView(
+                                media: media,
+                                accentColor: accentColor,
+                                commentId: comment.id,
+                                carrierText: comment.displayContent,
+                                carrierOriginalLanguage: comment.originalLanguage,
+                                authorName: comment.author,
+                                authorAvatarURL: comment.authorAvatarURL,
+                                authorColor: comment.authorColor,
+                                sentAt: comment.timestamp
+                            )
+                            .padding(.top, 2)
+                        }
                     }
+                    .commentBody(effects: comment.effects)
 
                     // Lieu attaché au commentaire — sticker cliquable (même
                     // véhicule SharedPlace que le post porteur).
@@ -204,6 +219,10 @@ extension FeedPostCard {
                     .padding(.top, 2)
                 }
             }
+            // Glisser un commentaire de l'aperçu ouvre la feuille EN RÉPONSE à
+            // lui (#8582) : bannière « Réponse à », composeur au focus. Le
+            // toucher, lui, ouvre toujours la feuille sans cible.
+            .commentSwipeToReply(onReply: { openComments(replyingTo: comment) })
 
             // Separator (except for last item)
             if !isLast {

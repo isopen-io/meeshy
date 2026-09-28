@@ -18,6 +18,10 @@ struct CommentsSheetView: View {
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
     var onCommentSent: ((_ postId: String) -> Void)? = nil
+    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE — le glissé d'un
+    /// commentaire de l'aperçu du fil (#8582). Consommé UNE fois, par le chemin
+    /// unique de la réponse (`beginReply`) : bannière, focus, @mention.
+    var initialReplyTarget: FeedComment? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -60,6 +64,7 @@ struct CommentsSheetView: View {
     /// réels), la feuille ne revendique rien et ne relâche rien à sa
     /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
     @State private var claimedActivePost: Bool = false
+    @State private var didConsumeInitialReplyTarget = false
     @State var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
@@ -503,6 +508,12 @@ struct CommentsSheetView: View {
             // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
             if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: post.id) {
                 composerText = draft
+            }
+            // APRÈS le brouillon : la @mention d'une réponse à une réponse se
+            // pose devant lui, jamais écrasée par lui.
+            if !didConsumeInitialReplyTarget, let initialReplyTarget {
+                didConsumeInitialReplyTarget = true
+                beginReply(to: initialReplyTarget)
             }
         }
         .onDisappear {

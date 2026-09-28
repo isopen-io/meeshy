@@ -30,6 +30,7 @@ struct StoryCommentRowView: View, Equatable {
         lhs.isLiked == rhs.isLiked &&
         lhs.likeCount == rhs.likeCount &&
         lhs.isInFlight == rhs.isInFlight &&
+        lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.content == rhs.comment.content &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
         lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
@@ -75,23 +76,28 @@ struct StoryCommentRowView: View, Equatable {
 
             VStack(alignment: .leading, spacing: 4) {
                 headerRow
-                contentText
-                // Média unique du commentaire (image/vidéo/audio) — inline + plein
-                // écran, identique aux autres surfaces de commentaires.
-                if let media = comment.media.first {
-                    CommentMediaView(
-                        media: media,
-                        accentColor: comment.authorColor,
-                        commentId: comment.id,
-                        carrierText: comment.displayContent,
-                        carrierOriginalLanguage: comment.originalLanguage,
-                        authorName: comment.author,
-                        authorAvatarURL: comment.authorAvatarURL,
-                        authorColor: comment.authorColor,
-                        sentAt: comment.timestamp
-                    )
-                    .padding(.top, 2)
+                // Le CORPS — texte + média — porte les effets du commentaire, voile
+                // du flou compris (#8582), comme dans la feuille et le fil.
+                VStack(alignment: .leading, spacing: 4) {
+                    contentText
+                    // Média unique du commentaire (image/vidéo/audio) — inline + plein
+                    // écran, identique aux autres surfaces de commentaires.
+                    if let media = comment.media.first {
+                        CommentMediaView(
+                            media: media,
+                            accentColor: comment.authorColor,
+                            commentId: comment.id,
+                            carrierText: comment.displayContent,
+                            carrierOriginalLanguage: comment.originalLanguage,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp
+                        )
+                        .padding(.top, 2)
+                    }
                 }
+                .commentBody(effects: comment.effects)
                 // Lieu attaché au commentaire — sticker cliquable, même surface
                 // plein écran que les autres rows de commentaires.
                 if let place = comment.location {
@@ -105,6 +111,10 @@ struct StoryCommentRowView: View, Equatable {
 
             Spacer(minLength: 0)
         }
+        // Glisser à droite répond, comme le bouton « Répondre » (#8582). Le
+        // lecteur ne pagine pas sous ce geste : né dans la liste, il revient à la
+        // surface défilante (`StoryReaderDragStartZone.yieldsToScrollableSurface`).
+        .commentSwipeToReply(onReply: onReply)
         .padding(.vertical, 8)
         .padding(.trailing, 12)
         .fullScreenCover(item: $rowFullscreenPlace) { item in
@@ -210,7 +220,6 @@ struct StoryCommentRowView: View, Equatable {
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)
-            .messageEffects(comment.effects)
             // Halo renforcé sur le corps du commentaire — c'est le texte le plus
             // long, donc le plus exposé à un fond clair/chargé. Le sens du halo
             // suit `colorScheme` : noir pour détacher un texte clair d'un fond
