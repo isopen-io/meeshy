@@ -462,7 +462,8 @@ struct ComposerSceneSurface: View {
                                     plateauTint: plateauTint,
                                     onToolControl: onRailToolControl,
                                     onExitTool: onRailExitTool,
-                                    axis: .horizontal)
+                                    axis: .horizontal,
+                                    separateButtons: true)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, ComposerRailGeometry.outerMargin)
                     .padding(.bottom, 4)
@@ -559,13 +560,23 @@ struct ComposerSceneSurface: View {
     /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
     /// pendant un tracé, qui possède l'écran entier.
     private var sceneLetterbox: some View {
-        Group {
-            if let teinte = floorBackdropColor {
-                teinte
-            } else {
-                SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+        // **Le sol est BORNÉ par un calque neutre** (retour porteur 2026-09-28 :
+        // en dessin, les contrôleurs « s'étirent et sortent » du viewport).
+        // `SceneBackdropView` peint le thumbhash en `.scaledToFill()` et laisse
+        // l'hôte clipper : une image en fill ANNONCE la taille de son
+        // remplissage, plus large que l'écran dès que son rapport diffère —
+        // et le calque de la surface s'élargissait d'autant, emportant la
+        // croix, la carte et les pinceaux hors de l'écran. `Color.clear`
+        // prend la taille proposée ; l'`overlay` ne peut plus la changer.
+        Color.clear
+            .overlay {
+                if let teinte = floorBackdropColor {
+                    teinte
+                } else {
+                    SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+                }
             }
-        }
+            .clipped()
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture { onBackgroundTapped?() }
@@ -654,6 +665,10 @@ struct ComposerSceneSurface: View {
             timelineBridge: timelineBridge,
             onItemTrimRequested: onItemTrim
         )
+        // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
+        // que la mesure du bord gauche ci-dessous lit : les deux ne peuvent pas
+        // diverger.
+        .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
         // (#4080, directive porteur 2026-09-04). Le meuble le monte une seule
@@ -664,6 +679,7 @@ struct ComposerSceneSurface: View {
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self,
                                   value: .bounds) { $0 }
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
                 .allowsHitTesting(false)
         }
         // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011) : la
@@ -750,7 +766,18 @@ struct ComposerSceneSurface: View {
             // `ComposerLowZone`, jamais sur la présence du panneau.
             switch ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
             case .toolOptions:
-                if let toolOptions { toolOptions }
+                // La marge des rails : les options d'un outil ne touchent pas
+                // le bord du verre (retour porteur 2026-09-28).
+                // Sur une PLAQUE DE VERRE, comme les options de l'éditeur
+                // d'objet (directive porteur 2026-09-27).
+                if let toolOptions {
+                    toolOptions
+                        .padding(10)
+                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                                       tint: plateauTint.opacity(0.55))
+                        .padding(.horizontal, ComposerRailGeometry.outerMargin)
+                        .padding(.bottom, 6)
+                }
             case .band(let ouverte):
                 ComposerSceneBandView(band: ouverte,
                                       colors: bandColors,
@@ -836,7 +863,10 @@ struct ComposerSceneSurface: View {
             }
             // **Le volet CÈDE au viseur** (#4080) : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
-            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage) {
+            // **Un outil ou une bande ouverts prennent le bas pour eux seuls**
+            // (retour porteur 2026-09-28) : la légende s'efface le temps du
+            // dessin ou du Cadre, comme la barre canonique sous un panneau.
+            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage), !toolIsOpen, band == nil {
                 descriptionOverlay
             }
         }

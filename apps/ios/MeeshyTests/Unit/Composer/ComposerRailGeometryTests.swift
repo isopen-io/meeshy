@@ -32,12 +32,18 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// remplissage (cf. le témoin iPad plus bas).
     /// PLEIN ÉCRAN (maquette 2026-09-27, #8370) : les rails FLOTTENT sur la
     /// scène — elle ne cède plus aucune largeur aux couloirs.
-    func test_pleinEcran_laSceneOccupeToute_laLargeurUtile() {
+    ///
+    /// Elle garde pourtant une RESPIRATION au bord (retour porteur
+    /// 2026-09-28) : la marge des rails, jamais un couloir.
+    func test_pleinEcran_laSceneOccupeLaLargeurUtile_moinsSaRespiration() {
         for utile in [320.0, 375.0, 402.0, 430.0, 744.0, 1024.0] as [CGFloat] {
-            XCTAssertEqual(ComposerRailGeometry.sceneWidth(usableWidth: utile, railsShown: true), utile,
+            XCTAssertEqual(ComposerRailGeometry.sceneWidth(usableWidth: utile, railsShown: true),
+                           utile - 2 * ComposerRailGeometry.outerMargin,
                            accuracy: 0.01, "largeur utile \(utile) : un couloir retire encore de la place à la scène")
         }
-        XCTAssertEqual(ComposerRailGeometry.floatingInset, 0)
+        XCTAssertEqual(ComposerRailGeometry.floatingInset, ComposerRailGeometry.outerMargin)
+        XCTAssertLessThan(ComposerRailGeometry.floatingInset, ComposerRailGeometry.lane,
+                          "La respiration n'est pas un couloir.")
     }
 
     /// La cible tactile est un PLANCHER d'accessibilité, pas un réglage : ce
