@@ -77,10 +77,7 @@ nonisolated final class CallFrameGrabber: CallFrameGrabbing, @unchecked Sendable
     }
 
     func snapshot(maxDimension: CGFloat?) async -> CallFrameSnapshot {
-        lock.lock()
-        let pending = frames
-        let mirrored = mirroredIds
-        lock.unlock()
+        let (pending, mirrored) = pendingFrames()
         guard !pending.isEmpty else { return .empty }
         return await withCheckedContinuation { continuation in
             queue.async { [self] in
@@ -93,6 +90,12 @@ nonisolated final class CallFrameGrabber: CallFrameGrabbing, @unchecked Sendable
                 continuation.resume(returning: CallFrameSnapshot(images: images))
             }
         }
+    }
+
+    private func pendingFrames() -> ([String: CallGrabbedFrame], Set<String>) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (frames, mirroredIds)
     }
 
     private static func scaled(_ image: CIImage, maxDimension: CGFloat?) -> CIImage {
