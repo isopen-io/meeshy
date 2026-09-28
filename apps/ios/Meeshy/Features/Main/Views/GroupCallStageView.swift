@@ -94,6 +94,7 @@ struct GroupCallStageView: View {
     @ObservedObject var callManager: CallManager
     @Binding var isFullScreen: Bool
     var onStageTap: () -> Void = {}
+    var onSelfFeaturedChange: (Bool) -> Void = { _ in }
 
     /// Le choix LOCAL (jamais partagé) : une vignette épinglée, ou « Grille ».
     @State private var choice: GroupCallSpotlightChoice?
@@ -124,6 +125,10 @@ struct GroupCallStageView: View {
             zoom = 1
             if newFocus == .grid { isFullScreen = false }
         }
+        .adaptiveOnChange(of: GroupCallSpotlight.featuresLocal(focus), initial: true) { _, isFeatured in
+            onSelfFeaturedChange(isFeatured)
+        }
+        .onDisappear { onSelfFeaturedChange(false) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "call.group.stage", defaultValue: "Participants à l'appel", bundle: .main))
         .removalConfirmation(pendingRemoval: pendingRemoval, isPresented: $isRemovalPresented, controls: callManager.controls)
@@ -213,6 +218,7 @@ struct GroupCallStageView: View {
             zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
         )
         .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
+        .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
         .onTapGesture(count: 2) {
             guard isScreenShare else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { zoom = 1 }

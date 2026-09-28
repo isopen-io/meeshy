@@ -26,7 +26,10 @@ final class CallMontageLayoutTests: XCTestCase {
     // MARK: - Catalogue
 
     func test_styles_followTheSharedDesignOrder() {
-        XCTAssertEqual(CallMontageStyle.allCases.map(\.rawValue), ["screen", "grid", "strip", "polaroid", "magazine", "comic", "heart"])
+        XCTAssertEqual(
+            CallMontageStyle.allCases.map(\.rawValue),
+            ["screen", "cover", "gold", "redcarpet", "grid", "strip", "polaroid", "magazine", "film", "neon", "noir", "comic", "heart"]
+        )
     }
 
     func test_captureSize_isFullHDPortrait() {
@@ -206,6 +209,77 @@ final class CallMontageLayoutTests: XCTestCase {
         let heart = slots(.heart, 1)[0].frame
         XCTAssertEqual(heart.midX, bounds.midX, accuracy: 0.001)
         XCTAssertGreaterThan(heart.width, bounds.width * 0.8)
+    }
+
+    // MARK: - Glamour (#8580)
+
+    func test_glamour_neverOverlaps_forEveryGroupSize() {
+        for style in [CallMontageStyle.cover, .gold, .redcarpet, .film, .neon, .noir] {
+            for count in 1 ... CallMontageLayout.maxParticipants {
+                XCTAssertFalse(overlaps(slots(style, count).map(\.frame)), "\(style) × \(count)")
+            }
+        }
+    }
+
+    func test_glamour_titlesNeverCoverAFace() {
+        for style in [CallMontageStyle.cover, .gold, .redcarpet, .neon, .noir] {
+            guard let band = CallMontageLayout.captionBand(style: style, canvas: canvas) else { return XCTFail("\(style) needs its title") }
+            for count in 1 ... CallMontageLayout.maxParticipants {
+                XCTAssertTrue(slots(style, count).allSatisfy { !$0.frame.intersects(band) }, "\(style) × \(count)")
+            }
+        }
+    }
+
+    func test_cover_heroLeadsAndTheOthersAreMedallions() {
+        let cover = slots(.cover, 5)
+        XCTAssertTrue(cover.dropFirst().allSatisfy { $0.shape == .circle && abs($0.frame.width - $0.frame.height) < 0.001 })
+        XCTAssertTrue(cover.dropFirst().allSatisfy { $0.frame.width < cover[0].frame.width / 3 })
+        XCTAssertTrue(cover.dropFirst().allSatisfy { $0.frame.minY > cover[0].frame.maxY })
+    }
+
+    func test_cover_alone_heroFillsThePageUnderTheMasthead() {
+        let hero = slots(.cover, 1)[0].frame
+        XCTAssertGreaterThan(hero.height, bounds.height * 0.7)
+        XCTAssertEqual(hero.midX, bounds.midX, accuracy: 0.001)
+    }
+
+    func test_gold_portraitsAreCameoOvals() {
+        let cameos = slots(.gold, 4)
+        XCTAssertTrue(cameos.allSatisfy { $0.shape == .circle })
+        XCTAssertTrue(cameos.allSatisfy { abs($0.frame.height / $0.frame.width - CallMontageLayout.goldCameoAspect) < 0.001 })
+    }
+
+    func test_redcarpet_smallGroup_standsInOneLine() {
+        let line = slots(.redcarpet, 4)
+        XCTAssertEqual(Set(line.map { Int($0.frame.minY.rounded()) }).count, 1)
+        XCTAssertEqual(line.map(\.frame.minX), line.map(\.frame.minX).sorted())
+        XCTAssertTrue(line.allSatisfy { $0.frame.height > $0.frame.width })
+    }
+
+    func test_film_framesAreLandscapeInsideTheirStrip() {
+        for count in [1, 4, 7, 12] {
+            let strips = CallMontageLayout.filmStrips(count: count, canvas: canvas)
+            let frames = slots(.film, count).map(\.frame)
+            XCTAssertTrue(frames.allSatisfy { abs($0.height / $0.width - CallMontageLayout.filmFrameAspect) < 0.001 }, "\(count)")
+            XCTAssertTrue(frames.allSatisfy { frame in strips.contains { $0.contains(frame) } }, "\(count)")
+        }
+    }
+
+    func test_filmStrips_bigGroup_runsTwoStrips() {
+        XCTAssertEqual(CallMontageLayout.filmStrips(count: 3, canvas: canvas).count, 1)
+        XCTAssertEqual(CallMontageLayout.filmStrips(count: 8, canvas: canvas).count, 2)
+        XCTAssertTrue(CallMontageLayout.filmStrips(count: 0, canvas: canvas).isEmpty)
+    }
+
+    func test_render_everyStyle_drawsTheWholeCanvas() {
+        let portraits = ["Ana", "Bo", "Céline"].map { CallMontagePortrait(id: $0, name: $0, image: nil) }
+        let caption = CallMontageCaption(title: "Meeshy", subtitle: "28 sept.")
+        let size = CGSize(width: 216, height: 384)
+        for style in CallMontageStyle.allCases {
+            let image = CallMontageRenderer.render(style: style, portraits: portraits, canvas: size, caption: caption)
+            XCTAssertEqual(image?.width, 216, "\(style)")
+            XCTAssertEqual(image?.height, 384, "\(style)")
+        }
     }
 
     // MARK: - Recadrage d'un visage

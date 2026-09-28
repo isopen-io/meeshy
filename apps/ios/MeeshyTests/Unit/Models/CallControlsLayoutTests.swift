@@ -4,8 +4,8 @@ import XCTest
 /// #8394 — la pilule d'appel « C adapté » : ce que le (…) déploie, et quelles
 /// actions rejoignent le groupe « mon image » et le groupe « l'appel » selon le
 /// contexte de l'appel. #8550 — une rangée par famille, empilées au-dessus de
-/// la rangée de base, en duo comme en groupe ; un sous-menu s'ouvre DANS la
-/// pilule. #8436 — la conversation n'a qu'une porte : l'en-tête.
+/// la rangée de base, en duo comme en groupe. #8578 — l'état de l'écran vit
+/// dans `CallScreenLayer`. #8436 — la conversation n'a qu'une porte : l'en-tête.
 @MainActor
 final class CallControlsLayoutTests: XCTestCase {
 
@@ -27,82 +27,6 @@ final class CallControlsLayoutTests: XCTestCase {
             canPictureInPicture: canPictureInPicture,
             showsVideo: showsVideo
         )
-    }
-
-    // MARK: - (…) — l'état du déploiement
-
-    func test_disclosure_default_isCollapsed() {
-        XCTAssertFalse(CallControlsDisclosure().isExpanded)
-        XCTAssertNil(CallControlsDisclosure().openPanel)
-    }
-
-    func test_toggled_collapsed_returnsExpanded_andBack() {
-        let expanded = CallControlsDisclosure().toggled()
-        XCTAssertTrue(expanded.isExpanded)
-        XCTAssertFalse(expanded.toggled().isExpanded)
-    }
-
-    func test_presentation_collapsed_returnsHidden() {
-        XCTAssertEqual(CallControlsDisclosure().presentation, .hidden)
-    }
-
-    func test_presentation_expanded_returnsRowsWithoutPanel() {
-        XCTAssertEqual(CallControlsDisclosure(isExpanded: true).presentation, .rows(panel: nil))
-    }
-
-    func test_accessibilityValue_followsExpansion() {
-        XCTAssertEqual(CallControlsDisclosure(isExpanded: false).accessibilityState, .collapsed)
-        XCTAssertEqual(CallControlsDisclosure(isExpanded: true).accessibilityState, .expanded)
-    }
-
-    // MARK: - Sous-menus dans la pilule
-
-    func test_toggling_panel_opensItInsideTheExpandedPill() {
-        let disclosure = CallControlsDisclosure(isExpanded: true).toggling(.effects)
-        XCTAssertEqual(disclosure.presentation, .rows(panel: .effects))
-        XCTAssertTrue(disclosure.isOpen(.effects))
-    }
-
-    func test_toggling_samePanelTwice_closesIt_keepsTheRows() {
-        let disclosure = CallControlsDisclosure(isExpanded: true).toggling(.capture).toggling(.capture)
-        XCTAssertEqual(disclosure.presentation, .rows(panel: nil))
-    }
-
-    func test_toggling_anotherPanel_replacesTheOpenOne() {
-        let disclosure = CallControlsDisclosure(isExpanded: true).toggling(.react).toggling(.recording)
-        XCTAssertEqual(disclosure.openPanel, .recording)
-    }
-
-    func test_toggled_collapsingThePill_closesTheOpenPanel() {
-        let collapsed = CallControlsDisclosure(isExpanded: true).toggling(.effects).toggled()
-        XCTAssertEqual(collapsed.presentation, .hidden)
-        XCTAssertNil(collapsed.toggled().openPanel, "Rouvrir le (…) ne rouvre pas un sous-menu oublié")
-    }
-
-    func test_init_collapsedWithPanel_keepsNoPanel() {
-        XCTAssertNil(CallControlsDisclosure(isExpanded: false, openPanel: .capture).openPanel)
-    }
-
-    func test_closingPanel_keepsTheFamilyRows() {
-        let disclosure = CallControlsDisclosure(isExpanded: true).toggling(.effects).closingPanel()
-        XCTAssertEqual(disclosure.presentation, .rows(panel: nil))
-    }
-
-    func test_reconciled_panelWhoseActionVanished_closesIt() {
-        let audioOnly = CallActionSet.resolve(context(isVideoEnabled: false))
-        let disclosure = CallControlsDisclosure(isExpanded: true).toggling(.effects).reconciled(with: audioOnly)
-        XCTAssertNil(disclosure.openPanel)
-        XCTAssertTrue(disclosure.isExpanded)
-    }
-
-    func test_reconciled_panelStillOffered_keepsIt() {
-        let video = CallActionSet.resolve(context(isVideoEnabled: true))
-        let disclosure = CallControlsDisclosure(isExpanded: true).toggling(.capture).reconciled(with: video)
-        XCTAssertEqual(disclosure.openPanel, .capture)
-    }
-
-    func test_panel_eachPointsAtItsOwnAction() {
-        XCTAssertEqual(CallControlsPanel.allCases.map(\.action), [.effects, .capture, .react, .recording])
     }
 
     // MARK: - Groupe « mon image »
@@ -134,23 +58,32 @@ final class CallControlsLayoutTests: XCTestCase {
 
     // MARK: - Groupe « l'appel »
 
-    func test_theCall_minimal_offersCaptionsAddPeopleAndReact() {
-        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .addPeople, .react])
+    func test_theCall_minimal_offersCaptionsJournalAddPeopleAndReact() {
+        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .journal, .addPeople, .react])
+    }
+
+    /// #8579 — le journal de l'appel a sa porte dans « L'appel », sous-titres
+    /// affichés ou non.
+    func test_theCall_journal_isAlwaysOfferedRightAfterCaptions() {
+        for isConnected in [true, false] {
+            let theCall = CallActionSet.resolve(context(isConnected: isConnected)).theCall
+            XCTAssertEqual(Array(theCall.prefix(2)), [.captions, .journal])
+        }
     }
 
     /// #8433 · #8439 — ajouter et réagir n'ont de sens qu'une fois l'appel établi.
     func test_theCall_notYetConnected_offersNeitherAddNorReact() {
-        XCTAssertEqual(CallActionSet.resolve(context(isConnected: false)).theCall, [.captions])
+        XCTAssertEqual(CallActionSet.resolve(context(isConnected: false)).theCall, [.captions, .journal])
     }
 
-    func test_theCall_everythingAvailable_ordersCaptionsAddReactCaptureRecordPip() {
+    func test_theCall_everythingAvailable_ordersCaptionsJournalAddReactCaptureRecordPip() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, canPictureInPicture: true))
-        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .react, .capture, .recording, .pictureInPicture])
+        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .capture, .recording, .pictureInPicture])
     }
 
     func test_theCall_recordingNotAllowed_isAbsent() {
         let actions = CallActionSet.resolve(context(canPictureInPicture: true))
-        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .react, .pictureInPicture])
+        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .pictureInPicture])
     }
 
     /// #8552 — on ne capture que ce qu'on voit : un appel sans vidéo n'a rien

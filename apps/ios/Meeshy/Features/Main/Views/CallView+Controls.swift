@@ -38,7 +38,7 @@ extension CallView {
                     .foregroundColor(.white.opacity(0.7))
             }
         }
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main))
         .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main))
         // L'indice disait « ouvre OU ferme » — ambigu précisément parce que
@@ -69,7 +69,7 @@ extension CallView {
             }
             .frame(width: 68)
         }
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main))
         .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
     }

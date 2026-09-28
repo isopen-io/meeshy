@@ -316,7 +316,7 @@ extension UniversalComposerBar {
     /// Le cadenas d'une protection imposée par le message cité (#8557).
     func imposedLockGlyph(tint: Color) -> some View {
         Image(systemName: "lock.fill")
-            .font(.system(size: 8, weight: .bold))
+            .font(MeeshyFont.relative(8, weight: .bold))
             .foregroundColor(tint)
             .accessibilityHidden(true)
     }

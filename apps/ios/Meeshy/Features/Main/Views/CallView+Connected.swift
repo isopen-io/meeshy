@@ -27,14 +27,19 @@ extension CallView {
                 CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
                     .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
                     .callChromeVisibility(chromeVisibility.isVisible(.screenShareBanner))
-                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
-                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
-                if !isGroupStage {
+                if !isGroupStage && chromeVisibility.isVisible(.selfView) {
                     duoOverlays
                 }
 
+                cameraRail
+
                 callControlsLayer
+
+                callModeLayer
+
+                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
+                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
                 CallCaptureFlash(trigger: capture.flashCount, reduceMotion: reduceMotion)
             }
@@ -47,7 +52,7 @@ extension CallView {
         // video. Re-arms whenever showControls flips to true (a reveal tap)
         // or the (…) / a panel is used; never while a panel is open, on Mac,
         // under VoiceOver or without video (shouldAutoHideControls).
-        .task(id: AutoHideKey(isVisible: showControls, isExpanded: controlsDisclosure.isExpanded, openPanel: controlsDisclosure.openPanel)) {
+        .task(id: AutoHideKey(isVisible: showControls, layer: layer)) {
             guard showControls, shouldAutoHideControls else { return }
             try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
             if !Task.isCancelled {
@@ -60,9 +65,20 @@ extension CallView {
             if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
         }
         .onAppear { showEffectsToolbar = false }
-        .onDisappear { showControls = true }
+        .onDisappear {
+            showControls = true
+            layer = .idle
+        }
+        .adaptiveOnChange(of: currentActionSet) { _, actions in
+            let reconciled = layer.reconciled(with: actions)
+            guard reconciled != layer else { return }
+            withAnimation(disclosureAnimation) { layer = reconciled }
+        }
         .adaptiveOnChange(of: isGroupStage) { _, isGroup in
-            if !isGroup { isStageFullScreen = false }
+            if !isGroup {
+                isStageFullScreen = false
+                isSelfFeatured = false
+            }
         }
         .adaptiveOnChange(of: isVideoStage) { _, isVideo in
             if !isVideo { withAnimation(.easeInOut(duration: 0.25)) { showControls = true } }
@@ -89,7 +105,7 @@ extension CallView {
         .adaptiveOnChange(of: latestFinalRemoteSegmentId) { _, _ in
             announceLatestCaption()
         }
-        .sheet(isPresented: $showCaptionsJournal) {
+        .sheet(isPresented: panelSheet(.journal)) {
             captionsJournal
         }
     }
@@ -187,7 +203,7 @@ extension CallView {
                 swipeDownOffset = CallPiPPolicy.swipeDownOffset(
                     translation: value.translation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil
+                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide
                 )
             }
             .onEnded { value in
@@ -195,7 +211,7 @@ extension CallView {
                     translation: value.translation.height,
                     predictedTranslation: value.predictedEndTranslation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil,
+                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide,
                     canSystemPiP: callManager.canActivateSystemPiP
                 )
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -232,7 +248,7 @@ extension CallView {
         VStack(spacing: 8) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
-            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, onStageTap: toggleControls)
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
                 .padding(.horizontal, 12)
             if !isStageFullScreen {
                 ZStack(alignment: .bottom) {
@@ -258,7 +274,7 @@ extension CallView {
     /// `CallChromeVisibility.mayAutoHide`.
     private var shouldAutoHideControls: Bool {
         CallChromeVisibility.mayAutoHide(
-            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil,
+            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
             isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
         )
     }
@@ -481,6 +497,7 @@ extension CallView {
             // phone/tablet. The duration chip lives in the header row
             // (`topChrome`, #8394), inside the safe area.
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
+                .callCameraZoom(isEnabled: effectiveSwapStreams)
                 .ignoresSafeArea()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

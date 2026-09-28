@@ -47,6 +47,26 @@ final class CallChromeVisibilityTests: XCTestCase {
         XCTAssertTrue(CallChromeVisibility(isRevealed: true, isStageFullScreen: true).toggled().isStageFullScreen)
     }
 
+    // MARK: - Un mode libère l'écran (#8578)
+
+    func test_isVisible_modeActive_hidesTheWholeCallChromeAndTheSelfView() {
+        let visibility = CallChromeVisibility(isRevealed: true, isModeActive: true)
+        XCTAssertTrue(hideable.allSatisfy { !visibility.isVisible($0) })
+        XCTAssertFalse(visibility.isVisible(.selfView))
+    }
+
+    func test_isVisible_modeActive_keepsCaptionsAndConsent() {
+        let visibility = CallChromeVisibility(isRevealed: true, isModeActive: true)
+        XCTAssertTrue(visibility.isVisible(.captions))
+        XCTAssertTrue(visibility.isVisible(.recordingConsent))
+    }
+
+    func test_toggled_keepsTheModeAndStaysHidden() {
+        let toggled = CallChromeVisibility(isRevealed: false, isModeActive: true).toggled()
+        XCTAssertTrue(toggled.isModeActive)
+        XCTAssertFalse(toggled.isVisible(.controls))
+    }
+
     // MARK: - Qui peut masquer par un toucher
 
     func test_mayToggleByTap_videoStage_inDuoAndGroup() {
