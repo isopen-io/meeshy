@@ -1,0 +1,228 @@
+import CoreGraphics
+import Foundation
+import MeeshySDK
+import MeeshyUI
+import UIKit
+import Vision
+
+nonisolated struct CallCaptureSubject: Equatable, Sendable {
+    let id: String
+    let name: String
+    let isMirrored: Bool
+    let showsVideo: Bool
+}
+
+enum CallCaptureStatus: Equatable, Sendable {
+    case idle
+    case working
+    case saved
+    case facesSaved(Int)
+    case denied
+    case noVideo
+    case failed
+}
+
+nonisolated struct CallCaptureImages: @unchecked Sendable {
+    let images: [CGImage]
+}
+
+nonisolated struct CallMontagePreviews: @unchecked Sendable {
+    let thumbnails: [CallMontageStyle: CGImage]
+    let preview: CGImage?
+}
+
+@MainActor
+protocol CallCapturePhotoSaving: AnyObject {
+    func requestAccess() async -> Bool
+    func save(_ image: CGImage) async -> Bool
+}
+
+protocol CallFaceLocating: AnyObject, Sendable {
+    nonisolated func faceRect(in image: CGImage) -> CGRect?
+}
+
+@MainActor
+final class PhotoLibraryCaptureSaver: CallCapturePhotoSaving {
+    static let shared = PhotoLibraryCaptureSaver()
+
+    func requestAccess() async -> Bool {
+        await PhotoLibraryManager.shared.requestAuthorization()
+    }
+
+    func save(_ image: CGImage) async -> Bool {
+        await PhotoLibraryManager.shared.saveImage(UIImage(cgImage: image))
+    }
+}
+
+nonisolated final class VisionFaceLocator: CallFaceLocating, @unchecked Sendable {
+    static let shared = VisionFaceLocator()
+
+    func faceRect(in image: CGImage) -> CGRect? {
+        let request = VNDetectFaceRectanglesRequest()
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        guard (try? handler.perform([request])) != nil else { return nil }
+        return request.results?
+            .max { $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height }?
+            .boundingBox
+    }
+}
+
+@MainActor
+final class CallCaptureController: ObservableObject {
+    @Published private(set) var style: CallMontageStyle = .screen
+    @Published private(set) var thumbnails: [CallMontageStyle: CGImage] = [:]
+    @Published private(set) var preview: CGImage?
+    @Published private(set) var status: CallCaptureStatus = .idle
+    @Published private(set) var flashCount = 0
+    private(set) var subjects: [CallCaptureSubject] = []
+
+    nonisolated static let previewIntervalNanoseconds: UInt64 = 200_000_000
+    nonisolated static let statusDisplayNanoseconds: UInt64 = 2_500_000_000
+    nonisolated static let previewMaxDimension: CGFloat = 480
+    nonisolated static let thumbnailCanvas = CGSize(width: 108, height: 192)
+    nonisolated static let previewCanvas = CGSize(width: 360, height: 640)
+    nonisolated static let brand = "Meeshy"
+
+    private let grabber: any CallFrameGrabbing
+    private let saver: any CallCapturePhotoSaving
+    private let faceLocator: any CallFaceLocating
+    private let now: () -> Date
+    private var previewTask: Task<Void, Never>?
+    private var statusTask: Task<Void, Never>?
+
+    init(
+        grabber: any CallFrameGrabbing = CallFrameGrabber(),
+        saver: any CallCapturePhotoSaving = PhotoLibraryCaptureSaver.shared,
+        faceLocator: any CallFaceLocating = VisionFaceLocator.shared,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.grabber = grabber
+        self.saver = saver
+        self.faceLocator = faceLocator
+        self.now = now
+    }
+
+    var isRunning: Bool { previewTask != nil }
+
+    var caption: CallMontageCaption {
+        CallMontageCaption(title: Self.brand, subtitle: now().formatted(date: .abbreviated, time: .shortened))
+    }
+
+    func start(subjects: [CallCaptureSubject], tracks: [String: Any]) {
+        update(subjects: subjects, tracks: tracks)
+        guard previewTask == nil else { return }
+        previewTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let controller = self else { return }
+                await controller.refreshPreviews()
+                try? await Task.sleep(nanoseconds: Self.previewIntervalNanoseconds)
+            }
+        }
+    }
+
+    func update(subjects: [CallCaptureSubject], tracks: [String: Any]) {
+        self.subjects = subjects
+        grabber.keepOnly(Set(subjects.map(\.id)))
+        subjects.forEach { subject in
+            grabber.attach(track: tracks[subject.id], id: subject.id, isMirrored: subject.isMirrored)
+        }
+    }
+
+    func stop() {
+        previewTask?.cancel()
+        previewTask = nil
+        grabber.detachAll()
+        thumbnails = [:]
+        preview = nil
+    }
+
+    func select(_ newStyle: CallMontageStyle) {
+        guard newStyle != style else { return }
+        style = newStyle
+        preview = thumbnails[newStyle]
+    }
+
+    func refreshPreviews() async {
+        let snapshot = await grabber.snapshot(maxDimension: Self.previewMaxDimension)
+        let portraits = portraits(from: snapshot)
+        let selected = style
+        let caption = caption
+        let rendered = await Task.detached(priority: .userInitiated) {
+            Self.renderPreviews(portraits: portraits, selected: selected, caption: caption)
+        }.value
+        guard !Task.isCancelled else { return }
+        thumbnails = rendered.thumbnails
+        preview = rendered.preview
+    }
+
+    func capture() async {
+        guard status != .working else { return }
+        begin()
+        guard await saver.requestAccess() else { return finish(.denied) }
+        let snapshot = await grabber.snapshot(maxDimension: nil)
+        guard !snapshot.images.isEmpty else { return finish(.noVideo) }
+        let portraits = portraits(from: snapshot)
+        let selected = style
+        let caption = caption
+        let rendered = await Task.detached(priority: .userInitiated) {
+            CallCaptureImages(images: [
+                CallMontageRenderer.render(style: selected, portraits: portraits, canvas: CallMontageLayout.captureSize, caption: caption)
+            ].compactMap { $0 })
+        }.value
+        guard let image = rendered.images.first else { return finish(.failed) }
+        finish(await saver.save(image) ? .saved : .failed)
+    }
+
+    func captureFaces() async {
+        guard status != .working else { return }
+        begin()
+        guard await saver.requestAccess() else { return finish(.denied) }
+        let snapshot = await grabber.snapshot(maxDimension: nil)
+        let sources = CallCaptureImages(images: subjects.filter(\.showsVideo).compactMap { snapshot.images[$0.id] })
+        guard !sources.images.isEmpty else { return finish(.noVideo) }
+        let locator = faceLocator
+        let faces = await Task.detached(priority: .userInitiated) {
+            CallCaptureImages(images: sources.images.compactMap { source in
+                CallMontageRenderer.faceSquare(from: source, face: locator.faceRect(in: source), side: CallMontageLayout.faceSide)
+            })
+        }.value
+        var saved = 0
+        for face in faces.images {
+            if await saver.save(face) { saved += 1 }
+        }
+        finish(saved > 0 ? .facesSaved(saved) : .failed)
+    }
+
+    func portraits(from snapshot: CallFrameSnapshot) -> [CallMontagePortrait] {
+        subjects.map { subject in
+            CallMontagePortrait(id: subject.id, name: subject.name, image: subject.showsVideo ? snapshot.images[subject.id] : nil)
+        }
+    }
+
+    nonisolated static func renderPreviews(portraits: [CallMontagePortrait], selected: CallMontageStyle, caption: CallMontageCaption) -> CallMontagePreviews {
+        guard !portraits.isEmpty else { return CallMontagePreviews(thumbnails: [:], preview: nil) }
+        let thumbnails = CallMontageStyle.allCases.reduce(into: [CallMontageStyle: CGImage]()) { result, style in
+            result[style] = CallMontageRenderer.render(style: style, portraits: portraits, canvas: thumbnailCanvas, caption: caption)
+        }
+        let preview = CallMontageRenderer.render(style: selected, portraits: portraits, canvas: previewCanvas, caption: caption)
+        return CallMontagePreviews(thumbnails: thumbnails, preview: preview)
+    }
+
+    private func begin() {
+        statusTask?.cancel()
+        status = .working
+        flashCount += 1
+        HapticFeedback.medium()
+    }
+
+    private func finish(_ outcome: CallCaptureStatus) {
+        status = outcome
+        if case .saved = outcome { HapticFeedback.success() }
+        if case .facesSaved = outcome { HapticFeedback.success() }
+        statusTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.statusDisplayNanoseconds)
+            guard !Task.isCancelled else { return }
+            self?.status = .idle
+        }
+    }
+}
