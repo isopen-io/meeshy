@@ -74,3 +74,13 @@ export function focusFrame(input: FocusFrameMeasure & { readonly reducedMotion: 
     pushDown: below > 0 ? below + FOCUS_NEIGHBOUR_CLEARANCE : 0,
   };
 }
+
+/**
+ * L'ENCRE D'UN NŒUD TEXTE — les plages `[début, fin[` de ses caractères non
+ * blancs. En `white-space: pre-wrap`, l'espace d'une coupure de ligne PEND
+ * au-delà du dernier mot : la boîte du nœud entier le compte et recule la
+ * portée du contenu jusqu'au bord de la colonne. Seuls les mots s'impriment.
+ */
+export function inkRuns(text: string): ReadonlyArray<readonly [number, number]> {
+  return Array.from(text.matchAll(/\S+/g), (match) => [match.index, match.index + match[0].length] as const);
+}

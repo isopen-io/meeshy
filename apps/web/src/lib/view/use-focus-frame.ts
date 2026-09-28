@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { focusFrame, type FocusFrame, type FocusFrameMeasure } from '@/lib/reading-mode/focus-frame';
+import { focusFrame, inkRuns, type FocusFrame, type FocusFrameMeasure } from '@/lib/reading-mode/focus-frame';
 
 /**
  * LE CADRE DE L'ÉLU (#8506, #8536) — pose la loupe sur le CONTENU de la rangée
@@ -41,10 +41,12 @@ const NOT_INK = '[data-protected-rest]';
 
 function inkRects(node: Node, into: DOMRect[]): void {
   if (node.nodeType === Node.TEXT_NODE) {
-    if ((node.textContent ?? '').trim() === '') return;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    into.push(...Array.from(range.getClientRects()));
+    inkRuns(node.textContent ?? '').forEach(([start, end]) => {
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      into.push(...Array.from(range.getClientRects()));
+    });
     return;
   }
   if (!(node instanceof Element) || node.matches(NOT_INK)) return;
