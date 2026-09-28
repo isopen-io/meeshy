@@ -69,6 +69,10 @@ const esStudioChrome = {
   'story.studio.objects.edit': 'Editar {name}',
   'story.studio.media.alt': 'Texto alternativo',
   'story.studio.media.alt.placeholder': 'Describe este contenido para los lectores de pantalla',
+  'composer.reelOffer.title': '¿Publicar como reel?',
+  'composer.reelOffer.body': 'Tu publicación tiene un solo vídeo: como reel, se abre a pantalla completa en Reels.',
+  'composer.reelOffer.reel': 'Es un reel',
+  'composer.reelOffer.post': 'Es una publicación',
 } satisfies StudioChromeCatalogSlice;
 
 export default esStudioChrome;

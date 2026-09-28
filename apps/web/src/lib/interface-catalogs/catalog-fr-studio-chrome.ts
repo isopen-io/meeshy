@@ -72,6 +72,10 @@ const frStudioChrome = {
   'story.studio.objects.edit': 'Modifier {name}',
   'story.studio.media.alt': 'Texte alternatif',
   'story.studio.media.alt.placeholder': 'Décrivez ce média pour les lecteurs d’écran',
+  'composer.reelOffer.title': 'Publier en réel ?',
+  'composer.reelOffer.body': 'Votre post n’a qu’une vidéo : en réel, elle s’ouvre en plein écran dans les Réels.',
+  'composer.reelOffer.reel': 'C’est un Réel',
+  'composer.reelOffer.post': 'C’est un Post',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

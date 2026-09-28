@@ -69,6 +69,10 @@ const ptStudioChrome = {
   'story.studio.objects.edit': 'Editar {name}',
   'story.studio.media.alt': 'Texto alternativo',
   'story.studio.media.alt.placeholder': 'Descreva esta mídia para os leitores de tela',
+  'composer.reelOffer.title': 'Publicar como reel?',
+  'composer.reelOffer.body': 'Sua publicação tem um único vídeo: como reel, ela abre em tela cheia nos Reels.',
+  'composer.reelOffer.reel': 'É um reel',
+  'composer.reelOffer.post': 'É uma publicação',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;
