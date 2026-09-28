@@ -11,7 +11,9 @@ const deStudioChrome = {
   'story.studio.postText.done': 'Fertig',
   'story.studio.tile.page': 'Szene',
   'story.studio.tile.text': 'Text',
-  'story.studio.tile.editor': 'Einstellungen',
+  'story.studio.tile.time': 'Zeit',
+  'story.studio.rail.scene': 'Szenenwerkzeuge',
+  'story.studio.timeline.unit': 's',
   'story.studio.tile.frame': 'Rahmen',
   'story.studio.undo': 'Rückgängig',
   'story.studio.redo': 'Wiederholen',
@@ -59,13 +61,14 @@ const deStudioChrome = {
   'story.studio.object.duplicate': 'Duplizieren',
   'story.studio.object.edit': 'Bearbeiten',
   'story.studio.object.remove': 'Entfernen',
-  'story.studio.object.leave': 'Aus der Szene nehmen',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Nach links',
   'story.studio.pose.right': 'Nach rechts',
   'story.studio.pose.up': 'Nach oben',
   'story.studio.pose.down': 'Nach unten',
   'story.studio.objects.edit': '{name} bearbeiten',
+  'story.studio.media.alt': 'Alternativtext',
+  'story.studio.media.alt.placeholder': 'Beschreibe dieses Medium für Screenreader',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

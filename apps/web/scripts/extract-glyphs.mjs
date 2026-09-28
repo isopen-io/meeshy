@@ -310,6 +310,10 @@ emit({
  * glyphe que `AUTH`/`THREAD_STATES` (composeur, avatar), un jeu D'ÉCRAN
  * distinct parce que ce menu et le fil des messages ne se chargent jamais
  * ensemble.
+ *
+ * `image-square` — « Exporter en image » : le message (et sa citation) peint
+ * en carte PNG, enregistrée dans la galerie. `lightning` — « Export rapide »,
+ * la même carte dans le format par défaut, sans passer par les options.
  */
 const THREAD_MENU = [
   'check-circle',
@@ -321,6 +325,8 @@ const THREAD_MENU = [
   'star',
   'star-fill',
   'pencil-simple',
+  'image-square',
+  'lightning',
 ];
 
 emit({
@@ -856,11 +862,12 @@ emit({
  * | Reagir (#8439) | `smiley` |
  * | Retirer de l'appel (#8438) | `user-minus` |
  * | Son de l'apercu avant decroche, coupe (#8480) | `speaker-slash` |
+ * | Capturer l'appel (#8552) | `aperture` |
  *
  * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
  */
 emit({
-  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash'],
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash', 'aperture'],
   output: join(HERE, '../src/components/glyphs-call-view.ts'),
   constant: 'CALL_VIEW_GLYPHS',
   type: 'CallViewGlyphName',

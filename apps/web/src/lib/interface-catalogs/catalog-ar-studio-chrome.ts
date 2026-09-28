@@ -11,7 +11,9 @@ const arStudioChrome = {
   'story.studio.postText.done': 'تم',
   'story.studio.tile.page': 'مشهد',
   'story.studio.tile.text': 'نص',
-  'story.studio.tile.editor': 'الإعدادات',
+  'story.studio.tile.time': 'الوقت',
+  'story.studio.rail.scene': 'أدوات المشهد',
+  'story.studio.timeline.unit': 'ث',
   'story.studio.tile.frame': 'الإطار',
   'story.studio.undo': 'تراجع',
   'story.studio.redo': 'إعادة',
@@ -59,13 +61,14 @@ const arStudioChrome = {
   'story.studio.object.duplicate': 'تكرار',
   'story.studio.object.edit': 'تعديل',
   'story.studio.object.remove': 'إزالة',
-  'story.studio.object.leave': 'إخراج من المشهد',
   'story.studio.edit.done': 'حسنًا',
   'story.studio.pose.left': 'إلى اليسار',
   'story.studio.pose.right': 'إلى اليمين',
   'story.studio.pose.up': 'إلى الأعلى',
   'story.studio.pose.down': 'إلى الأسفل',
   'story.studio.objects.edit': 'تعديل {name}',
+  'story.studio.media.alt': 'النص البديل',
+  'story.studio.media.alt.placeholder': 'صِف هذه الوسائط لقارئات الشاشة',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

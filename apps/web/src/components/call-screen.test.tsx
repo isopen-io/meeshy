@@ -224,28 +224,68 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const peers = { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) };
 
-  test('en duo, (…) sort deux rails — mon image à gauche, l’appel à droite — et les range', () => {
+  const rowLabels = (host: HTMLElement, family: string) => [...host.querySelectorAll(`[data-call-row="${family}"] [data-call-row-scroll] button`)].map((button) => button.getAttribute('aria-label'));
+
+  for (const [shape, overrides] of [
+    ['en duo', { members: { 'u-peer': member() } }],
+    ['en groupe', { isGroup: true, members: peers }],
+  ] as const) {
+    test(`${shape}, (…) fait grandir la pilule : une rangée par famille, légendée, qui défile à l’horizontale (#8550)`, () => {
+      const view = mount(overrides);
+      view.press('[data-call-more]');
+      expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('true');
+      expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
+      const rows = [...view.host.querySelectorAll('[data-call-control-pill] [data-call-row]')].map((row) => [row.getAttribute('data-call-row'), row.querySelector('[data-call-row-title]')?.textContent]);
+      expect(rows).toEqual([
+        ['mine', 'Mon image'],
+        ['call', 'L’appel'],
+      ]);
+      const scroller = view.find('[data-call-row="call"] [data-call-row-scroll]');
+      expect(scroller?.getAttribute('role')).toBe('toolbar');
+      expect(scroller?.getAttribute('aria-orientation')).toBe('horizontal');
+      expect(scroller?.className).toContain('overflow-x-auto');
+      expect(scroller?.className).toContain('snap-x');
+      expect(scroller?.className).not.toContain('flex-wrap');
+      expect(rowLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
+      expect(view.find('[data-call-row="call"] [data-call-captions]')).not.toBeNull();
+      expect(view.find('[data-call-row="call"] [data-call-record]')).not.toBeNull();
+      expect(view.find('[data-call-rail]')).toBeNull();
+      expect(view.find('[data-call-row] button')?.className).not.toContain('glass-call');
+      view.press('[data-call-more]');
+      expect(view.find('[data-call-row]')).toBeNull();
+      view.done();
+    });
+  }
+
+  test('les flèches passent d’une action à sa voisine dans la rangée', () => {
     const view = mount({ members: { 'u-peer': member() } });
     view.press('[data-call-more]');
-    expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('true');
-    expect(view.find('[data-call-rail="mine"] [data-call-control="camera"]')).not.toBeNull();
-    expect(view.find('[data-call-rail="mine"] [data-call-screen-share]')).not.toBeNull();
-    expect(view.find('[data-call-rail="call"] [data-call-captions]')).not.toBeNull();
-    expect(view.find('[data-call-rail="call"] [data-call-record]')).not.toBeNull();
-    expect(view.find('[data-call-rail="mine"]')?.className).toContain('glass-call');
-    expect(view.find('[data-call-rail="mine"] button')?.className).not.toContain('glass-call');
-    expect(view.find('[data-call-rail="mine"] button')?.getAttribute('title')).toBe('Activer la caméra');
-    view.press('[data-call-more]');
-    expect(view.find('[data-call-rail]')).toBeNull();
+    const first = view.find('[data-call-row="mine"] [data-call-row-scroll] button') as HTMLElement;
+    act(() => first.focus());
+    act(() => view.find('[data-call-row="mine"] [data-call-row-scroll]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Partager l’écran');
     view.done();
   });
 
-  test('caméra allumée, « Effets » vient dans le rail de mon image, entre Retourner et Écran (#8442)', () => {
+  test('caméra allumée, « Effets » vient dans la rangée de mon image, entre Retourner et Écran (#8442)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
     view.press('[data-call-more]');
-    const mine = [...view.host.querySelectorAll('[data-call-rail="mine"] button')].map((button) => button.getAttribute('aria-label'));
-    expect(mine).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(rowLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
     view.done();
+  });
+
+  test('en vidéo connectée, « Capturer » rejoint la rangée de l’appel, après Enregistrer ; jamais en audio (#8552)', () => {
+    const video = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    video.press('[data-call-more]');
+    const labels = rowLabels(video.host, 'call');
+    const record = labels.findIndex((label) => label === 'Enregistrer l’appel');
+    expect(record).toBeGreaterThanOrEqual(0);
+    expect(labels[record + 1]).toBe('Capturer l’appel');
+    video.done();
+    const audio = mount({ members: { 'u-peer': member() } });
+    audio.press('[data-call-more]');
+    expect(audio.find('[data-call-control="capture"]')).toBeNull();
+    audio.done();
   });
 
   test('« Effets » absent là où le navigateur ne sait rien en faire, et caméra éteinte', () => {
@@ -259,7 +299,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     cameraOff.done();
   });
 
-  test('« Effets » ouvre le panneau au-dessus de la pilule, et le referme', async () => {
+  test('« Effets » ouvre son panneau DANS le cadre de la pilule, au-dessus des rangées, et le referme', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
     view.press('[data-call-more]');
     view.press('[data-call-control="effects"]');
@@ -269,24 +309,58 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     await act(async () => {});
     expect(view.find('[data-call-control="effects"]')?.getAttribute('aria-expanded')).toBe('true');
     const panel = view.find('[data-call-effects-panel]');
-    expect(panel).not.toBeNull();
-    expect(panel?.closest('[data-call-controls]')).not.toBeNull();
+    expect(panel?.closest('[data-call-control-pill]')).not.toBeNull();
+    expect(panel?.className).not.toContain('glass-call');
+    const rows = view.find('[data-call-row="mine"]');
+    expect(rows !== null && panel !== null && (panel.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
     view.press('[data-call-effects-close]');
     expect(view.find('[data-call-effects-panel]')).toBeNull();
     expect(view.find('[data-call-control="effects"]')?.getAttribute('aria-expanded')).toBe('false');
     view.done();
   });
 
-  test('en groupe, (…) fait grandir la pilule : deux rangées légendées, mon image d’abord', () => {
-    const view = mount({ isGroup: true, members: peers });
+  test('« Capturer » ouvre son panneau DANS le cadre : l’aperçu du montage, ses sept styles, ses actions (#8552)', async () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
     view.press('[data-call-more]');
-    expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
-    const rows = [...view.host.querySelectorAll('[data-call-row]')].map((row) => [row.getAttribute('data-call-row'), row.querySelector('span')?.textContent]);
-    expect(rows).toEqual([
-      ['mine', 'Mon image'],
-      ['call', 'L’appel'],
-    ]);
-    expect(view.find('[data-call-rail]')).toBeNull();
+    view.press('[data-call-control="capture"]');
+    await act(async () => {
+      await import('./call-capture-panel');
+    });
+    await act(async () => {});
+    const panel = view.find('[data-call-capture-panel]');
+    expect(panel?.closest('[data-call-control-pill]')).not.toBeNull();
+    expect(view.find('[data-call-control="capture"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(view.find('[data-call-capture-preview]')?.tagName).toBe('CANVAS');
+    expect(view.host.querySelectorAll('[data-call-capture-style]')).toHaveLength(7);
+    expect(view.find('[data-call-capture-shoot]')).not.toBeNull();
+    act(() => panel?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(view.find('[data-call-capture-panel]')).toBeNull();
+    expect(document.activeElement?.getAttribute('data-call-control')).toBe('capture');
+    view.done();
+  });
+
+  test('un sous-menu ouvert retient l’écran : il ne s’efface pas de lui-même', async () => {
+    jest.useFakeTimers();
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    view.press('[data-call-more]');
+    view.press('[data-call-control="capture"]');
+    act(() => jest.advanceTimersByTime(8000));
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
+    jest.useRealTimers();
+  });
+
+  test('ranger les actions referme le panneau ouvert', async () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    view.press('[data-call-more]');
+    view.press('[data-call-control="effects"]');
+    await act(async () => {
+      await import('./call-effects-panel');
+    });
+    view.press('[data-call-more]');
+    view.press('[data-call-more]');
+    await act(async () => {});
+    expect(view.find('[data-call-effects-panel]')).toBeNull();
     view.done();
   });
 
@@ -297,7 +371,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(chrome()).toBe('shown');
     act(() => jest.advanceTimersByTime(4100));
     expect(chrome()).toBe('hidden');
-    act(() => view.find('[data-call-screen]')?.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+    act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
     expect(chrome()).toBe('shown');
     view.done();
     jest.useRealTimers();
@@ -329,6 +403,56 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
     view.done();
     jest.useRealTimers();
+  });
+
+  const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
+
+  test('toucher la scène efface TOUTES les commandes — en-tête, pilule, pastilles — et un second toucher les rend (#8550)', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member({ micMuted: true }) } });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    tapStage(view);
+    expect(chrome()).toBe('hidden');
+    expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(view.find('[data-call-header]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(view.find('[data-call-pill="peer-muted"]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    tapStage(view);
+    expect(chrome()).toBe('shown');
+    view.done();
+  });
+
+  test('en groupe, les pastilles d’état s’effacent avec le reste', () => {
+    const view = mount({ isGroup: true, cameraOn: true, members: { ...peers, 'u-b': member({ userId: 'u-b', name: 'Bintou', micMuted: true }) } });
+    expect(view.find('[data-call-pill-row]')?.closest('[data-call-chrome-fade]')).not.toBeNull();
+    view.done();
+  });
+
+  test('toucher un bouton n’efface rien ; bouger la souris ne rend pas ce qu’un toucher a rangé', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    view.press('[data-call-more]');
+    expect(chrome()).toBe('shown');
+    tapStage(view);
+    act(() => view.find('[data-call-screen]')?.dispatchEvent(new Event('pointermove', { bubbles: true })));
+    expect(chrome()).toBe('hidden');
+    view.done();
+  });
+
+  test('effacées par l’attente, bouger la souris les rend', () => {
+    jest.useFakeTimers();
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    act(() => jest.advanceTimersByTime(4100));
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    act(() => view.find('[data-call-screen]')?.dispatchEvent(new Event('pointermove', { bubbles: true })));
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
+    jest.useRealTimers();
+  });
+
+  test('en audio, toucher ne cache rien', () => {
+    const view = mount({ members: { 'u-peer': member() } });
+    act(() => (view.find('[data-call-status]') as HTMLElement | null)?.click());
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
   });
 });
 

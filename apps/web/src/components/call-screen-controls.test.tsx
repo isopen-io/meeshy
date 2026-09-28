@@ -109,10 +109,10 @@ const settle = async (chunk: () => Promise<unknown>) => {
 };
 
 describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
-  test('en duo, le rail de l’appel les porte ; en groupe, la rangée de l’appel aussi', () => {
+  test('en duo comme en groupe, la rangée de l’appel les porte', () => {
     const duo = mount(<CallScreen call={call()} canShare initiallyExpanded />);
-    expect(duo.find('[data-call-rail="call"] [data-call-control="invite"]')?.getAttribute('aria-label')).toBe('Ajouter des personnes à l’appel');
-    expect(duo.find('[data-call-rail="call"] [data-call-control="react"]')?.getAttribute('aria-label')).toBe('Envoyer une réaction');
+    expect(duo.find('[data-call-row="call"] [data-call-control="invite"]')?.getAttribute('aria-label')).toBe('Ajouter des personnes à l’appel');
+    expect(duo.find('[data-call-row="call"] [data-call-control="react"]')?.getAttribute('aria-label')).toBe('Envoyer une réaction');
     duo.done();
     const group = mount(<CallScreen call={call({ isGroup: true, members: { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno') } })} canShare initiallyExpanded />);
     expect(group.find('[data-call-row="call"] [data-call-control="invite"]')).not.toBeNull();
@@ -157,7 +157,7 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
 describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('chaque réaction part aussitôt, et la palette reste ouverte pour enchaîner', () => {
     const sent: string[] = [];
-    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
+    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
     view.press('[data-call-react="🎉"]');
     view.press('[data-call-react="👍"]');
     expect(sent).toEqual(['🎉', '👍']);
@@ -168,13 +168,13 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('« Audio et vidéo » demande un enregistrement vidéo et ferme le choix ; sans canevas filmable, il n’est pas offert', () => {
     const asked: string[] = [];
     const closed: string[] = [];
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
+    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
     expect(view.find('[data-call-record-kind="audio"]')?.textContent).toContain('Audio seul');
     view.press('[data-call-record-kind="video"]');
     expect(asked).toEqual(['video']);
     expect(closed).toHaveLength(1);
     view.done();
-    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
+    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
     expect(bare.find('[data-call-record-kind="video"]')?.hasAttribute('disabled')).toBe(true);
     bare.done();
   });
@@ -241,6 +241,32 @@ describe('le menu de modération', () => {
     act(() => view.find('[data-call-moderation-menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-moderation-menu]')).toBeNull();
     expect(document.activeElement?.getAttribute('data-call-moderate')).toBe('u-nadia');
+    view.done();
+  });
+
+  /**
+   * LE RETOUR ANDROID REFERME LE MENU, PUIS L'ALERTE (#8504) — dans la coque,
+   * le bouton retour est un `popstate`. Sans `useBackDismiss`, le menu et
+   * l'alerte restaient ouverts pendant que le retour faisait reculer la page
+   * sous l'écran d'appel ; Échap les refermait sur le web.
+   */
+  test('le retour matériel referme le menu, puis l’alerte, sans retirer personne', () => {
+    const log: string[] = [];
+    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} glyphs={GLYPHS} />);
+    view.press('[data-call-moderate]');
+    expect(typeof (window.history.state as { backDismiss?: unknown } | null)?.backDismiss).toBe('string');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(view.find('[data-call-moderation-menu]')).toBeNull();
+    view.press('[data-call-moderate]');
+    view.press('[data-call-remove]');
+    expect(view.find('[role="alertdialog"]')).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(view.find('[role="alertdialog"]')).toBeNull();
+    expect(log).toEqual([]);
     view.done();
   });
 });

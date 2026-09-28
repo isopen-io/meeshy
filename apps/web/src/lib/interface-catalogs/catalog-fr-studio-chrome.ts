@@ -14,7 +14,9 @@ const frStudioChrome = {
   'story.studio.postText.done': 'Terminé',
   'story.studio.tile.page': 'Scène',
   'story.studio.tile.text': 'Texte',
-  'story.studio.tile.editor': 'Réglages',
+  'story.studio.tile.time': 'Temps',
+  'story.studio.rail.scene': 'Outils de la scène',
+  'story.studio.timeline.unit': 's',
   'story.studio.tile.frame': 'Cadre',
   'story.studio.undo': 'Annuler',
   'story.studio.redo': 'Rétablir',
@@ -62,13 +64,14 @@ const frStudioChrome = {
   'story.studio.object.duplicate': 'Dupliquer',
   'story.studio.object.edit': 'Modifier',
   'story.studio.object.remove': 'Retirer',
-  'story.studio.object.leave': 'Sortir de la scène',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Vers la gauche',
   'story.studio.pose.right': 'Vers la droite',
   'story.studio.pose.up': 'Vers le haut',
   'story.studio.pose.down': 'Vers le bas',
   'story.studio.objects.edit': 'Modifier {name}',
+  'story.studio.media.alt': 'Texte alternatif',
+  'story.studio.media.alt.placeholder': 'Décrivez ce média pour les lecteurs d’écran',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

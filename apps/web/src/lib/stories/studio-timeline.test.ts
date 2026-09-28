@@ -14,7 +14,9 @@ import {
   STUDIO_TRACK_MIN,
   draggedTiming,
   pageAnimated,
+  pageIsAnimated,
   pagePlacedWhileAnimated,
+  pageStatic,
   timingEnteringAt,
   timingExitingAt,
   pageWithTrackTiming,
@@ -138,5 +140,31 @@ describe('draggedTiming — la fenêtre après un glissement', () => {
 
   test('un pas non fini ne bouge rien', () => {
     expect(draggedTiming({ start: 1, end: 3 }, 'move', Number.NaN, 6)).toEqual({ start: 1, end: 3 });
+  });
+});
+
+describe('pageStatic — éteindre « Animé » rend la scène STATIQUE (#8516)', () => {
+  test('la durée et TOUTES les fenêtres s’effacent : le document publié n’a plus rien d’animé', () => {
+    const animated = pageWithTrackTiming(pageAnimated(withOverlay(typed('Bonjour'))), 'text-1', { start: 1, end: 3 });
+    expect(pageIsAnimated(animated)).toBe(true);
+    const still = pageStatic(animated);
+    expect(pageIsAnimated(still)).toBe(false);
+    expect(still.duration).toBeUndefined();
+    expect(still.texts[0]!.timing).toBeUndefined();
+    expect(still.overlay?.timing).toBeUndefined();
+    const published = JSON.stringify(buildStoryCanvasEffects({ texts: still.texts }));
+    expect(published).not.toContain('timing');
+    expect(published).not.toContain('timelineDuration');
+  });
+
+  test('une scène déjà statique reste le MÊME objet (aucun rendu, aucun pas d’historique)', () => {
+    const page = withOverlay(typed('Bonjour'));
+    expect(pageStatic(page)).toBe(page);
+  });
+
+  test('rallumer après avoir éteint repart de la durée par défaut, chaque piste couvrant la scène', () => {
+    const relit = pageAnimated(pageStatic(pageWithTrackTiming(pageAnimated(typed('Bonjour')), 'text-1', { start: 2, end: 4 })));
+    expect(relit.duration).toBe(STUDIO_ANIMATED_DEFAULT_DURATION);
+    expect(relit.texts[0]!.timing).toEqual({ start: 0, end: STUDIO_ANIMATED_DEFAULT_DURATION });
   });
 });

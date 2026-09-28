@@ -15169,6 +15169,53 @@
         }
       }
     },
+    "composer.frise.earlier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أبكر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Früher"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earlier"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus tôt"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais cedo"
+          }
+        }
+      }
+    },
     "composer.frise.empty": {
       "extractionState": "manual",
       "localizations": {
@@ -15306,6 +15353,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sai aqui"
+          }
+        }
+      }
+    },
+    "composer.frise.later": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لاحقًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Später"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Después"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus tard"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Più tardi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais tarde"
           }
         }
       }
@@ -76085,6 +76179,53 @@
         }
       }
     },
+    "composer.publish.multiScene.mediaNotCarried": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحمل هذا المنشور متعدد المشاهد وسائط لا يمكن نشرها بعد في منشور واحد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Beitrag mit mehreren Szenen enthält Medien, die noch nicht in einer einzigen Veröffentlichung gesendet werden können"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This multi-scene post has media that can’t yet be sent as a single publication"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta publicación de varias escenas contiene medios que aún no pueden enviarse en una sola publicación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce post à plusieurs scènes porte des médias qui ne peuvent pas encore partir en une seule publication"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo post con più scene contiene contenuti multimediali che non possono ancora essere inviati in un'unica pubblicazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este post com várias cenas tem mídias que ainda não podem ser enviadas em uma única publicação"
+          }
+        }
+      }
+    },
     "composer.quickEmoji.label": {
       "extractionState": "manual",
       "localizations": {
@@ -135035,6 +135176,53 @@
         }
       }
     },
+    "post.publish.queue.enqueued": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حفظ المنشور — سيُنشر عند عودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitrag gespeichert — Veröffentlichung, sobald du wieder online bist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post saved — it will be published when you’re back online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicación guardada — se publicará al volver a estar en línea"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post enregistré — publication au retour en ligne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post salvato — verrà pubblicato quando tornerai online"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post salvo — será publicado quando você voltar a ficar online"
+          }
+        }
+      }
+    },
     "post.repost.error": {
       "extractionState": "manual",
       "localizations": {
@@ -142769,6 +142957,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível preparar %lld mídias — use toda a fototeca"
+          }
+        }
+      }
+    },
+    "reel.publish.queue.enqueued": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حفظ الريل — سيُنشر عند عودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel gespeichert — Veröffentlichung, sobald du wieder online bist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel saved — it will be published when you’re back online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel guardado — se publicará al volver a estar en línea"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réel enregistré — publication au retour en ligne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel salvato — verrà pubblicato quando tornerai online"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel salvo — será publicado quando você voltar a ficar online"
           }
         }
       }
@@ -209545,6 +209780,1792 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reações"
+          }
+        }
+      }
+    },
+    "call.panel.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar"
+          }
+        }
+      }
+    },
+    "call.effects.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التأثيرات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effekte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effects"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efectos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effets"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effetti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efeitos"
+          }
+        }
+      }
+    },
+    "call.effects.row.face": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التأثيرات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effekte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effects"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efectos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effets"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effetti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efeitos"
+          }
+        }
+      }
+    },
+    "call.effects.row.color": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اللون"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cor"
+          }
+        }
+      }
+    },
+    "call.effects.row.settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإعدادات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impostazioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
+          }
+        }
+      }
+    },
+    "call.effects.color.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguno"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma"
+          }
+        }
+      }
+    },
+    "call.effects.blur": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمويه الخلفية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hintergrund unscharf"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background blur"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desenfoque de fondo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flou du fond"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sfondo sfocato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desfocar fundo"
+          }
+        }
+      }
+    },
+    "call.effects.brightness": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السطوع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Helligkeit"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brightness"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brillo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luminosité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luminosità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brilho"
+          }
+        }
+      }
+    },
+    "call.effects.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزيد من الإعدادات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weitere Einstellungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más ajustes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus de réglages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altre impostazioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais ajustes"
+          }
+        }
+      }
+    },
+    "call.effects.face.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keiner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguno"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum"
+          }
+        }
+      }
+    },
+    "call.effects.face.smoothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنعيم البشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hautglättung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skin smoothing"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suavizado de piel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lissage de peau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pelle levigata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suavizar pele"
+          }
+        }
+      }
+    },
+    "call.effects.face.toad": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ضفدع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kröte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toad"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sapo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crapaud"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rospo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sapo"
+          }
+        }
+      }
+    },
+    "call.effects.face.angel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ángel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ange"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angelo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anjo"
+          }
+        }
+      }
+    },
+    "call.effects.face.demon": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شيطان"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dämon"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demon"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demonio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démon"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demone"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demônio"
+          }
+        }
+      }
+    },
+    "call.effects.face.volcano": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ثوران"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausbruch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eruption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erupción"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éruption"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eruzione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erupção"
+          }
+        }
+      }
+    },
+    "call.control.capture": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anruf festhalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture the call"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturar la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturer l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cattura la chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturar a chamada"
+          }
+        }
+      }
+    },
+    "call.control.capture.caption": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufnahme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cattura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura"
+          }
+        }
+      }
+    },
+    "call.capture.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufnahme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cattura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura"
+          }
+        }
+      }
+    },
+    "call.capture.row.montage": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التركيب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collage"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Montaje"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Montage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Montaggio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Montagem"
+          }
+        }
+      }
+    },
+    "call.capture.row.actions": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإجراءات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktionen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ações"
+          }
+        }
+      }
+    },
+    "call.capture.shoot": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufnehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cattura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturar"
+          }
+        }
+      }
+    },
+    "call.capture.shoot.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحفظ التركيب المختار في الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichert die gewählte Collage in Fotos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saves the chosen collage to Photos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda el montaje elegido en Fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistre le montage choisi dans Photos"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva il montaggio scelto in Foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva a montagem escolhida em Fotos"
+          }
+        }
+      }
+    },
+    "call.capture.faces": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل وجه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Gesicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each face"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada rostro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque visage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni volto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada rosto"
+          }
+        }
+      }
+    },
+    "call.capture.faces.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحفظ صورة مربعة لكل مشارك في الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichert ein quadratisches Porträt jedes Teilnehmers in Fotos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saves a square portrait of each participant to Photos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda un retrato cuadrado de cada participante en Fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistre un portrait carré de chaque participant dans Photos"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva un ritratto quadrato di ogni partecipante in Foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva um retrato quadrado de cada participante em Fotos"
+          }
+        }
+      }
+    },
+    "call.capture.preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة التركيب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collage-Vorschau"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collage preview"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa del montaje"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu du montage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima del montaggio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pré-visualização da montagem"
+          }
+        }
+      }
+    },
+    "call.capture.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ الحفظ…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gespeichert…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardando…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrement…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvataggio…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvando…"
+          }
+        }
+      }
+    },
+    "call.capture.style.screen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الشاشة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildschirm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schermo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tela"
+          }
+        }
+      }
+    },
+    "call.capture.style.grid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شبكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raster"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grid"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mosaico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mosaïque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mosaico"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mosaico"
+          }
+        }
+      }
+    },
+    "call.capture.style.strip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كشك الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotoautomat"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo booth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotomatón"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photomaton"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cabina foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cabine de fotos"
+          }
+        }
+      }
+    },
+    "call.capture.style.polaroid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بولارويد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polaroid"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polaroid"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polaroid"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polaroïd"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polaroid"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polaroid"
+          }
+        }
+      }
+    },
+    "call.capture.style.magazine": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مجلة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magazin"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magazine"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magazine"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rivista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revista"
+          }
+        }
+      }
+    },
+    "call.capture.style.comic": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قصة مصورة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comic"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comic"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómic"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BD"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fumetto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quadrinhos"
+          }
+        }
+      }
+    },
+    "call.capture.style.heart": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قلب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herz"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heart"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corazón"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cœur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coração"
+          }
+        }
+      }
+    },
+    "call.capture.saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حفظ اللقطة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufnahme gespeichert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture saved"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura guardada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture enregistrée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cattura salvata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura salva"
+          }
+        }
+      }
+    },
+    "call.capture.faces.saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حفظ %d وجوه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Gesichter gespeichert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d faces saved"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d rostros guardados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d visages enregistrés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d volti salvati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d rostos salvos"
+          }
+        }
+      }
+    },
+    "call.capture.denied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمح لـ Meeshy بإضافة الصور من الإعدادات لحفظ لقطاتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlaube Meeshy in den Einstellungen, Fotos hinzuzufügen, um deine Aufnahmen zu speichern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Meeshy to add photos in Settings to save your captures."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite que Meeshy añada fotos en Ajustes para guardar tus capturas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisez Meeshy à ajouter des photos dans Réglages pour enregistrer vos captures."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consenti a Meeshy di aggiungere foto in Impostazioni per salvare le tue catture."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permita que o Meeshy adicione fotos em Ajustes para salvar suas capturas."
+          }
+        }
+      }
+    },
+    "call.capture.noVideo": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد صورة لالتقاطها بعد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch kein Bild zum Aufnehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to capture yet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay imagen que capturar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune image à capturer pour le moment"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora nessuna immagine da catturare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda não há imagem para capturar"
+          }
+        }
+      }
+    },
+    "call.capture.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر حفظ اللقطة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Aufnahme konnte nicht gespeichert werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The capture couldn't be saved"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar la captura"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La capture n'a pas pu être enregistrée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile salvare la cattura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar a captura"
           }
         }
       }

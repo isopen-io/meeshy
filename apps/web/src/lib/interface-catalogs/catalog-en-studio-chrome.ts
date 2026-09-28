@@ -11,7 +11,9 @@ const enStudioChrome = {
   'story.studio.postText.done': 'Done',
   'story.studio.tile.page': 'Scene',
   'story.studio.tile.text': 'Text',
-  'story.studio.tile.editor': 'Settings',
+  'story.studio.tile.time': 'Time',
+  'story.studio.rail.scene': 'Scene tools',
+  'story.studio.timeline.unit': 's',
   'story.studio.tile.frame': 'Frame',
   'story.studio.undo': 'Undo',
   'story.studio.redo': 'Redo',
@@ -59,13 +61,14 @@ const enStudioChrome = {
   'story.studio.object.duplicate': 'Duplicate',
   'story.studio.object.edit': 'Edit',
   'story.studio.object.remove': 'Remove',
-  'story.studio.object.leave': 'Take off the scene',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Move left',
   'story.studio.pose.right': 'Move right',
   'story.studio.pose.up': 'Move up',
   'story.studio.pose.down': 'Move down',
   'story.studio.objects.edit': 'Edit {name}',
+  'story.studio.media.alt': 'Alt text',
+  'story.studio.media.alt.placeholder': 'Describe this media for screen readers',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

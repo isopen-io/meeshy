@@ -88,6 +88,7 @@ import { checkRowIdentityAndLabel } from './lib/check-identity.mjs';
 import { pageÀInstantFigé } from './lib/instant.mjs';
 import { checkLivingSummary } from './lib/check-summary.mjs';
 import { assertRiverBelowThreshold, checkEligibleRiverRow } from './lib/check-river-menu.mjs';
+import { checkFocalElectedControls } from './lib/check-focal-elected.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { scrollRowIntoView } from './lib/scroll-row.mjs';
 import { waitForFlattenFade, waitForRevealedOpacity } from './lib/scene-polling.mjs';
@@ -706,17 +707,14 @@ const noRowCarriesContinuousPerspective = (page) =>
   });
   expect(identity.height >= 34, `le chip d'identité de l'élue mesure au moins 34 px de haut (${identity.height})`);
   /**
-   * `IDENTITY_AVATAR_SIZE` (26) est la cote NOMINALE, NON transformée — la
-   * rangée élue GRANDIT de `FOCUS_LOUPE_GAIN` (0,26 depuis #8506 : « agrandis
-   * tout le contenu intérieur par ×1,2 encore »), chip d'identité compris : la
-   * loupe grandit la CELLULE entière, comme `FocalScrollPerspective.magnify`
-   * côté iOS. L'avatar rendu mesure donc entre 26 px (aucun gain, ou contenu
-   * pleine largeur) et 26 × 1,26 px (gain plein) — jamais davantage, la loupe
-   * ne fait QUE grandir.
+   * `IDENTITY_AVATAR_SIZE` (26) — la cote NOMINALE, et désormais la cote
+   * RENDUE : depuis #8536 (« seul le contenu grandit : […] l'auteur et son
+   * avatar doivent rester à la taille originale »), la loupe ne grossit plus
+   * la rangée entière mais son seul contenu (`[data-loupe]`).
    */
   expect(
-    identity.avatarWidth !== null && identity.avatarWidth >= 26 && identity.avatarWidth <= 26 * 1.26 + 0.01,
-    `l'avatar du chip d'identité mesure entre 26 et 32,8 px — nominal, ou grandi par la loupe de l'élue (#8506) (${identity.avatarWidth})`,
+    identity.avatarWidth !== null && Math.abs(identity.avatarWidth - 26) < 0.5,
+    `l'avatar du chip d'identité garde sa taille d'origine, 26 px — la loupe ne le grossit pas (#8536) (${identity.avatarWidth})`,
   );
 
   /**
@@ -744,7 +742,8 @@ const noRowCarriesContinuousPerspective = (page) =>
             if (getComputedStyle(e).visibility === 'hidden' || r.width === 0) return false;
             return r.top < card.bottom - 1 && card.top + 1 < r.bottom && r.left < card.right && card.left < r.right;
           }).length;
-    const m = /scale\(([0-9.]+)\)/.exec(row.style.transform);
+    const loupe = row.querySelector('[data-loupe]');
+    const m = loupe === null ? null : /matrix\(([0-9.]+)/.exec(getComputedStyle(loupe).transform);
     return {
       scale: m === null ? 1 : Number(m[1]),
       identity: part('.focus-identity'),
@@ -778,9 +777,11 @@ const noRowCarriesContinuousPerspective = (page) =>
   );
   expect(frame.cardInsideRow, `le cadre grossi ne dépasse jamais la largeur de sa rangée — ${JSON.stringify(frame)}`);
   expect(frame.scale >= 1 && frame.scale <= 1.26 + 1e-9, `la loupe de l'élue reste entre ×1 et ×1,26 — ${JSON.stringify(frame)}`);
-  /* L'élue de ce corpus ne remplit pas la largeur de son cadre : elle doit
-     grossir NETTEMENT. Témoin du tampon compté à tort comme de l'encre
-     (monté dans le bloc de contenu, il bornait la loupe à ×1,02). */
+  /* L'élue de ce corpus ne remplit pas la largeur de son cadre : son CONTENU
+     doit grossir NETTEMENT. Depuis #8536 seule l'encre du contenu borne la
+     loupe : ni le tampon ni la bande basse, restés à l'échelle 1, n'y
+     comptent plus (ils la bornaient à ×1,02, puis à ×1,107 en CI où la police
+     du runner élargit la bande). */
   expect(frame.scale > 1.15, `un message qui ne remplit pas son cadre grossit nettement (×${frame.scale})`);
   expect(
     frame.coveredAbove === 0 && frame.coveredBelow === 0,
@@ -1104,7 +1105,7 @@ const noRowCarriesContinuousPerspective = (page) =>
   const metaOpacities = () =>
     page.evaluate(() =>
       [...document.querySelectorAll('main li [data-reading-mode] time')]
-        .filter((t) => !t.classList.contains('focus-stamp'))
+        .filter((t) => t.closest('.focus-stamp') === null)
         .map((t) => Number(getComputedStyle(t.closest('.focal-meta') ?? t).opacity)),
     );
 
@@ -1410,6 +1411,10 @@ const noRowCarriesContinuousPerspective = (page) =>
 
 // --- 11 : LA RIVIÈRE ÉLIGIBLE, grisée et motivée SANS MENTIR (#5696) — `lib/check-river-menu.mjs`.
 await checkEligibleRiverRow({ browser, BASE, setScheme, expect });
+
+// --- L'ÉLU AU TOUCHER (#8536) : seul le contenu grossit, le verre respire,
+// chaque contrôle agit au premier clic ET au premier toucher.
+await checkFocalElectedControls({ browser, BASE, setScheme, preferFocal, expect });
 
 // --- 14 : LE RÉSUMÉ VIVANT (#5695) — `lib/check-summary.mjs` (l'hôte est hors
 // budget de taille) ; il reçoit LE compteur de défauts et LA pose de schéma.

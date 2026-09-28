@@ -132,7 +132,43 @@ function writeNativeValue(element: HTMLElement, prototype: object | null, value:
   return true;
 }
 
+/** Le point où le doigt touche l'invite : `happy-dom` ne peint rien, la
+ * boîte de la saisie y est POSÉE (hors de toute boîte peinte substituée par un
+ * témoin, `tapObject` en pose en 10,10 → 110,50). */
+const INVITE_BOX = { top: 100, left: 20, width: 200, height: 40 } as const;
+const INVITE_POINT = { clientX: 120, clientY: 120 } as const;
+
+/** TOUCHER LA SCÈNE — par le calque des gestes, comme le doigt (#8515) :
+ * c'est lui qui recouvre la scène, jamais la saisie. */
+export function tapStageAt(host: ParentNode, point: { readonly clientX: number; readonly clientY: number }): void {
+  const layer = host.querySelector<HTMLElement>('[data-story-stage-gestures]');
+  if (layer === null) throw new Error('aucun calque des gestes : la scène ne se touche pas');
+  layer.setPointerCapture = () => undefined;
+  const at = { bubbles: true, button: 0, pointerId: 1, ...point };
+  act(() => layer.dispatchEvent(new PointerEvent('pointerdown', at)));
+  act(() => layer.dispatchEvent(new PointerEvent('pointerup', at)));
+}
+
+/** TOUCHER L'INVITE « Écrivez… » — la boîte de la saisie. */
+export function tapInvite(host: ParentNode): void {
+  const field = host.querySelector<HTMLTextAreaElement>('#story-studio-text');
+  if (field === null) throw new Error('aucune invite à écrire sur la scène');
+  field.getBoundingClientRect = () => fakeRect(INVITE_BOX);
+  tapStageAt(host, INVITE_POINT);
+}
+
+/**
+ * **ÉCRIRE COMME UN AUTEUR** (#8515) — la saisie n'est remplie qu'une fois
+ * ATTEINTE par le doigt : un toucher sur l'invite (un texte vide), deux sur un
+ * texte déjà écrit (la sélection silencieuse le sélectionne au premier). Le
+ * banc écrivait directement dans le champ et gardait le défaut : le calque des
+ * gestes le couvrait et aucun doigt n'y arrivait.
+ */
 export function typeText(host: ParentNode, value: string): void {
+  const reached = () => document.activeElement !== null && document.activeElement === host.querySelector('#story-studio-text');
+  if (!reached()) tapInvite(host);
+  if (!reached()) tapInvite(host);
+  if (!reached()) throw new Error('toucher la scène n’a pas donné le focus à la saisie : on ne peut pas y écrire (#8515)');
   const textarea = host.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
   act(() => {
     if (!writeNativeValue(textarea, Object.getPrototypeOf(textarea), value)) throw new Error('aucun setter natif de value');

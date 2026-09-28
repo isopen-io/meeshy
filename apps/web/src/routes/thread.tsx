@@ -902,6 +902,10 @@ export default function ThreadScreen() {
         readerLocale={readerLocale}
         conversationId={conversationId}
         viewerId={viewer.id ?? ''}
+        viewerName={viewer.displayName}
+        viewerHandle={viewer.handle}
+        conversationTitle={title}
+        announce={announcer.announce}
       />
     </div>
     </ThreadMediaContext.Provider>

@@ -7,9 +7,9 @@ import { focusFrame } from '@/lib/reading-mode/focus-frame';
 import { useFocusFrame } from './use-focus-frame';
 
 /**
- * `useFocusFrame` (#8506) — le câblage : mesurer la rangée élue, poser la
- * loupe et ses variables, écarter les voisines, tout retirer quand l'élection
- * part. La GÉOMÉTRIE est jugée par `focus-frame.test.ts` ; happy-dom ne
+ * `useFocusFrame` (#8506, #8536) — le câblage : mesurer la rangée élue, poser
+ * les variables de la loupe du CONTENU, écarter les voisines, tout retirer
+ * quand l'élection part. La GÉOMÉTRIE est jugée par `focus-frame.test.ts` ; happy-dom ne
  * calcule aucun layout, les boîtes sont donc posées par élément.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -51,11 +51,18 @@ const boxed = (box: Box) => (node: HTMLElement | null) => {
     ({ ...box, width: box.right - box.left, height: box.bottom - box.top, x: box.left, y: box.top }) as DOMRect;
 };
 
-const ROW: Box = { top: 100, bottom: 160, left: 0, right: 390 };
-const CARD: Box = { top: 103, bottom: 157, left: 6, right: 376 };
-const INK: Box = { top: 120, bottom: 140, left: 57, right: 156 };
-const STAMP: Box = { top: 133, bottom: 157, left: 280, right: 366 };
+const ROW: Box = { top: 100, bottom: 200, left: 0, right: 390 };
+const CARD: Box = { top: 103, bottom: 197, left: 6, right: 376 };
+const LOUPE: Box = { top: 140, bottom: 180, left: 57, right: 376 };
+const INK: Box = { top: 150, bottom: 170, left: 57, right: 156 };
+const IDENTITY: Box = { top: 110, bottom: 140, left: 16, right: 360 };
+const STAMP: Box = { top: 173, bottom: 197, left: 280, right: 366 };
 
+/**
+ * #8536 — l'identité et le tampon sont LARGES exprès : comptés comme de
+ * l'encre (ce que faisait la loupe de rangée), ils borneraient la loupe à
+ * ×1. Seul le contenu (`[data-loupe]`) doit décider du gain.
+ */
 function Row({ focused }: { readonly focused: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useFocusFrame(ref, focused);
@@ -68,10 +75,11 @@ function Row({ focused }: { readonly focused: boolean }) {
       }}
     >
       <div className="focus-card" ref={boxed(CARD)} />
+      <div className="focus-identity" ref={boxed(IDENTITY)} />
       <div data-row-content>
-        <span data-ink ref={boxed(INK)} />
-        {/* Le tampon est monté DANS le bloc de contenu, ancré au bord de fin :
-            ce n'est pas de l'encre qui grossit vers la droite. */}
+        <div data-loupe ref={boxed(LOUPE)}>
+          <span data-ink ref={boxed(INK)} />
+        </div>
         <span className="focus-stamp" ref={boxed(STAMP)} />
       </div>
     </div>
@@ -120,31 +128,36 @@ const expected = (reducedMotion: boolean) =>
     rowBottom: ROW.bottom,
     cardTop: CARD.top,
     cardBottom: CARD.bottom,
-    cardWidth: CARD.right - CARD.left,
-    contentExtent: INK.right - CARD.left,
+    contentRoom: CARD.right - LOUPE.left,
+    contentWidth: INK.right - LOUPE.left,
+    contentHeight: LOUPE.bottom - LOUPE.top,
     reducedMotion,
   });
+
+const vars = (row: HTMLElement) => ({
+  s: row.style.getPropertyValue('--loupe-s'),
+  grow: row.style.getPropertyValue('--loupe-grow'),
+  air: row.style.getPropertyValue('--loupe-air'),
+});
 
 describe('useFocusFrame', () => {
   test('non élue -> rien n’est posé', () => {
     mount([]);
-    expect(rowOf('a').style.transform).toBe('');
+    expect(vars(rowOf('a'))).toEqual({ s: '', grow: '', air: '' });
     expect(list().style.getPropertyValue('--focus-push-up')).toBe('');
   });
 
-  test('élue -> la loupe grossit par le bord de début du cadre et par son centre', () => {
+  test('élue -> la loupe du CONTENU se pose par variables ; la rangée elle-même n’est jamais grossie', () => {
     mount(['a']);
     const frame = expected(false);
     expect(frame.scale).toBeGreaterThan(1.2);
     const row = rowOf('a');
-    expect(row.style.transform).toBe(`scale(${frame.scale})`);
-    expect(row.style.transformOrigin).toBe(`${CARD.left - ROW.left}px ${frame.originY}px`);
-    expect(row.style.getPropertyValue('--loupe-s')).toBe(String(frame.scale));
-    expect(row.style.getPropertyValue('--loupe-end-shift')).toBe(`${frame.endShift}px`);
+    expect(vars(row)).toEqual({ s: String(frame.scale), grow: `${frame.grow}px`, air: `${frame.air}px` });
+    expect(row.style.transform).toBe('');
     expect(row.style.transition).toBe('');
   });
 
-  test('élue -> les voisines s’écartent de la croissance du cadre', () => {
+  test('élue -> les voisines s’écartent de l’allongement du cadre', () => {
     mount(['a']);
     const frame = expected(false);
     expect(list().style.getPropertyValue('--focus-push-up')).toBe(`${frame.pushUp}px`);
@@ -154,24 +167,23 @@ describe('useFocusFrame', () => {
   test('l’élection passe à la voisine -> l’ancienne retombe à plat, la liste suit la nouvelle', () => {
     mount(['a']);
     render(['b']);
-    expect(rowOf('a').style.transform).toBe('');
-    expect(rowOf('a').style.getPropertyValue('--loupe-s')).toBe('');
-    expect(rowOf('b').style.transform).toBe(`scale(${expected(false).scale})`);
-    expect(list().style.getPropertyValue('--focus-push-up')).toBe(`${expected(false).pushUp}px`);
+    expect(vars(rowOf('a'))).toEqual({ s: '', grow: '', air: '' });
+    expect(vars(rowOf('b')).s).toBe(String(expected(false).scale));
+    expect(list().style.getPropertyValue('--focus-push-down')).toBe(`${expected(false).pushDown}px`);
   });
 
   test('plus aucune élue -> les voisines reviennent', () => {
     mount(['a']);
     render([]);
-    expect(rowOf('a').style.transform).toBe('');
+    expect(vars(rowOf('a'))).toEqual({ s: '', grow: '', air: '' });
     expect(list().style.getPropertyValue('--focus-push-up')).toBe('');
     expect(list().style.getPropertyValue('--focus-push-down')).toBe('');
   });
 
-  test('Réduire le mouvement -> aucun agrandissement', () => {
+  test('Réduire le mouvement -> aucun agrandissement, mais le verre respire quand même', () => {
     reduced = true;
     mount(['a']);
-    expect(rowOf('a').style.transform).toBe('');
+    expect(vars(rowOf('a'))).toEqual({ s: '1', grow: '0px', air: `${expected(true).air}px` });
     expect(list().style.getPropertyValue('--focus-push-down')).toBe(`${expected(true).pushDown}px`);
   });
 });

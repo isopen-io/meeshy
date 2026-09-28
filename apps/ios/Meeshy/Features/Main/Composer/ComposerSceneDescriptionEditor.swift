@@ -99,7 +99,16 @@ struct ComposerSceneDescriptionEditor: View {
         // cela, la zone occuperait tout le bas de l'écran et la réserve remontée
         // à l'atelier ferait fuir la scène vers le haut.
         .frame(maxHeight: mesureHauteur)
-        .background(alignment: .top) { fond }
+        // **Un cadre de VERRE qui monte du bas** (directive porteur
+        // 2026-09-28 : le contenu du post s'écrit « dans un cadre en liquid
+        // glass comme pour les captions »). Il était un aplat opaque de bord à
+        // bord, qui coupait l'écran sous la scène ; il flotte désormais sur
+        // elle, teinté du plateau comme le reste du chrome.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
+        .padding(.horizontal, 8)
+        .padding(.bottom, 4)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
         .environment(\.colorScheme, .dark)
     }
 
@@ -136,17 +145,6 @@ struct ComposerSceneDescriptionEditor: View {
         .onPreferenceChange(ComposerDescriptionEditorHeightKey.self) { hauteur in
             mesureHauteur = hauteur
             onHeightChange(hauteur)
-        }
-    }
-
-    /// Le filet du haut dit où la scène s'arrête et où l'écriture commence, sans
-    /// fermer la zone par une bordure.
-    private var fond: some View {
-        ZStack(alignment: .top) {
-            plateauTint.ignoresSafeArea(edges: .bottom)
-            Rectangle()
-                .fill(Color.white.opacity(0.14))
-                .frame(height: 1)
         }
     }
 

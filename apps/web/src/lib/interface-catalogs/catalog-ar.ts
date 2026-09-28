@@ -23,6 +23,7 @@ import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
 import arGallery from './catalog-ar-gallery';
+import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
@@ -856,6 +857,7 @@ const ar = {
   'story.studio.refusal.door.visual': 'اختر صورة أو فيديو.',
   'story.studio.refusal.door.sound': 'اختر ملفًا صوتيًا.',
   'story.studio.refusal.media-max': 'هذا المنشور يحمل بالفعل عشرة عناصر وسائط — وهو الحد الأقصى للبوابة.',
+  'story.studio.refusal.import-max': 'لم يتم استيراد {count} من الوسائط: يحمل المنشور عشرة على الأكثر.',
   'story.studio.failure.network': 'الشبكة غير متاحة.',
   'story.studio.failure.timeout': 'لم يستجب الخادم.',
   'story.studio.failure.session': 'انتهت الجلسة — سجّل الدخول مجددًا.',
@@ -1161,6 +1163,7 @@ const ar = {
   ...arStudioChrome,
   ...arEphemeral,
   ...arGallery,
+  ...arMessageCard,
   ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,

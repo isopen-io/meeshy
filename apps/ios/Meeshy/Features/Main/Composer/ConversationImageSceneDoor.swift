@@ -40,10 +40,14 @@ struct ConversationImageSceneEditor: View {
 /// présentation, quel que soit le nombre de rendus du fil derrière.
 final class ConversationImageSeed: ObservableObject {
     let seed: StoryComposerSeed
+    /// Le temporaire de la graine, PURGÉ quand la retouche se ferme (#8524) :
+    /// chaque ouverture en laissait un de plus dans `tmp/`.
+    let fileURL: URL
 
     init(image: UIImage) {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("retouche-\(UUID().uuidString).jpg")
+        fileURL = url
         if let data = image.jpegData(compressionQuality: 0.92), (try? data.write(to: url)) != nil {
             seed = StoryComposerSeed(payload: .image(image),
                                      origin: StoryComposerSeed.Origin(fileURL: url, mimeType: "image/jpeg"))
@@ -54,5 +58,7 @@ final class ConversationImageSeed: ObservableObject {
 
     // Sous l'isolation MainActor par défaut, la deinit synthétisée est isolée
     // et double-libère sur iOS 26.1 (`MainActorDeinitSourceGuardTests`).
-    nonisolated deinit {}
+    nonisolated deinit {
+        try? FileManager.default.removeItem(at: fileURL)
+    }
 }

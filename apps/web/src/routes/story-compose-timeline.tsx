@@ -4,6 +4,8 @@ import type { SceneClockHandle } from '@/components/scene-clock';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StudioTiming } from '@/lib/stories/studio-text';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 import { draggedTiming, type StudioTrack, type StudioTrackGrip } from '@/lib/stories/studio-timeline';
 
 /**
@@ -83,6 +85,7 @@ export function StudioTimelinePanel({
   onEnter,
   onExit,
   onTiming,
+  onClose,
 }: {
   readonly lang: InterfaceLanguage;
   readonly tracks: readonly StudioTrack[];
@@ -99,7 +102,11 @@ export function StudioTimelinePanel({
   readonly onExit: (head: number) => void;
   /** LA FENÊTRE RÉGLÉE à la main — appelée UNE fois, au lâcher. */
   readonly onTiming: (id: string, timing: StudioTiming) => void;
+  /** REFERMER la frise, comme la pastille Animé — le retour matériel et Échap
+   * la referment, elle seule (#8517) ; la scène garde ses pistes. */
+  readonly onClose: () => void;
 }) {
+  useBackDismiss(onClose, { escape: true });
   const headRef = useRef<HTMLDivElement | null>(null);
   const nowRef = useRef<HTMLSpanElement | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -179,7 +186,7 @@ export function StudioTimelinePanel({
   const dragHandlers = { onPointerMove: moveDrag, onPointerUp: endDrag, onPointerCancel: cancelDrag };
 
   return (
-    <section data-story-timeline aria-label={translate(lang, 'story.studio.timeline')} className="glass flex flex-col gap-1.5 rounded-[20px] px-3 py-2.5">
+    <section data-story-timeline aria-label={translate(lang, 'story.studio.timeline')} className={`${STUDIO_PLATE} glass flex flex-col gap-1.5 rounded-[20px] px-3 py-2.5`}>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -197,9 +204,9 @@ export function StudioTimelinePanel({
           <span ref={nowRef} data-story-timeline-now>
             {secondsLabel(lang, 0, 1)}
           </span>
-          {' s / '}
+          {` ${translate(lang, 'story.studio.timeline.unit')} / `}
           <span data-story-timeline-duration>{secondsLabel(lang, duration, 0)}</span>
-          {' s'}
+          {` ${translate(lang, 'story.studio.timeline.unit')}`}
         </p>
         {selected ? (
           <>

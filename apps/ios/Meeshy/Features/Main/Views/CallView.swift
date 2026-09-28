@@ -87,9 +87,10 @@ struct CallView: View {
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
     @State var showCaptionsJournal = false
-    /// #8433 · #8439 — le sélecteur d'amis et la palette des réactions.
+    /// #8433 — le sélecteur d'amis.
     @State var showAddPeople = false
-    @State var showReactionPalette = false
+    /// #8552 — la capture de l'appel, vivante tant que son panneau est ouvert.
+    @StateObject var capture = CallCaptureController()
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).
@@ -119,11 +120,10 @@ struct CallView: View {
         GroupCallStage.isShown(isMeshActive: mesh.isGroupCallActive, roster: mesh.roster)
     }
 
-    /// #8394 — l'en-tête, la pilule et les rails se montrent et se masquent
-    /// ENSEMBLE : masquage automatique (vidéo, 4 s) ou plein écran d'une
-    /// vignette à la une.
+    /// #8394 · #8550 — l'en-tête, la pilule, ses rangées et le panneau ouvert
+    /// se montrent et se masquent ENSEMBLE (`CallChromeVisibility`).
     var isChromeVisible: Bool {
-        showControls && !isStageFullScreen
+        chromeVisibility.isVisible(.controls)
     }
 
     var body: some View {
@@ -254,7 +254,7 @@ struct CallView: View {
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
             // est retiré (pipeline de capture audio inexistant — voir
             // CallEffectsOverlay), il ne reste que les filtres vidéo.
-            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
+            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
                     isVideoEnabled: callManager.isVideoEnabled,

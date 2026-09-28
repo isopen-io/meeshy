@@ -62,6 +62,9 @@ struct ComposerSceneSurface: View {
     /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
     var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
+    /// Les médias adoptés rendus à leur fichier local : l'échange avec l'URL
+    /// téléversée ne se voit pas (retour porteur 2026-09-28).
+    var sceneLocalMediaAliases: [String: URL] = [:]
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
 
     /// **« Modifier » — l'appui long, et l'action VoiceOver du même nom**
@@ -426,6 +429,16 @@ struct ComposerSceneSurface: View {
     /// au lieu de le travestir. C'est ce qui rend la place signifiante — le
     /// doigt apprend qu'à gauche on OUVRE, en bas on RÈGLE, et une place qui
     /// change de sens selon l'état n'apprend rien.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// **L'écran LARGE** — iPad plein écran et Mac (maquette `iPad.dc.html`) :
+    /// marges de 24 pt, rails centrés en hauteur plutôt que posés au pouce, et
+    /// un volet de texte qui ne déborde pas de la carte. Le téléphone, et un
+    /// iPad en écran partagé étroit (classe compacte), gardent la disposition
+    /// du pouce.
+    private var isRoomy: Bool { horizontalSizeClass == .regular }
+    private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
+
     private var floatingRail: AnyView {
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
@@ -443,7 +456,7 @@ struct ComposerSceneSurface: View {
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
                 // `outerMargin` du bord.
-                .padding(.leading, ComposerRailGeometry.outerMargin)
+                .padding(.leading, edge)
                 .padding(.bottom, ComposerRailGeometry.gutter)
         )
     }
@@ -462,7 +475,8 @@ struct ComposerSceneSurface: View {
                                     plateauTint: plateauTint,
                                     onToolControl: onRailToolControl,
                                     onExitTool: onRailExitTool,
-                                    axis: .horizontal)
+                                    axis: .horizontal,
+                                    separateButtons: true)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, ComposerRailGeometry.outerMargin)
                     .padding(.bottom, 4)
@@ -498,7 +512,8 @@ struct ComposerSceneSurface: View {
     private var descriptionOverlay: some View {
         if let descriptionPanel {
             descriptionPanel
-                .padding(.horizontal, ComposerRailGeometry.lane)
+                .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
+                                                                             cardLeading: sceneCardLeading))
                 .padding(.bottom, 10)
         }
     }
@@ -559,13 +574,23 @@ struct ComposerSceneSurface: View {
     /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
     /// pendant un tracé, qui possède l'écran entier.
     private var sceneLetterbox: some View {
-        Group {
-            if let teinte = floorBackdropColor {
-                teinte
-            } else {
-                SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+        // **Le sol est BORNÉ par un calque neutre** (retour porteur 2026-09-28 :
+        // en dessin, les contrôleurs « s'étirent et sortent » du viewport).
+        // `SceneBackdropView` peint le thumbhash en `.scaledToFill()` et laisse
+        // l'hôte clipper : une image en fill ANNONCE la taille de son
+        // remplissage, plus large que l'écran dès que son rapport diffère —
+        // et le calque de la surface s'élargissait d'autant, emportant la
+        // croix, la carte et les pinceaux hors de l'écran. `Color.clear`
+        // prend la taille proposée ; l'`overlay` ne peut plus la changer.
+        Color.clear
+            .overlay {
+                if let teinte = floorBackdropColor {
+                    teinte
+                } else {
+                    SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+                }
             }
-        }
+            .clipped()
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture { onBackgroundTapped?() }
@@ -590,8 +615,13 @@ struct ComposerSceneSurface: View {
     /// **De combien la barre haute monte dans la zone sûre** : jusqu'à la
     /// rangée de la Dynamic Island, où la barre de statut effacée a rendu la
     /// place. Aux coins, la croix et le `⋯` ne croisent pas l'îlot, centré.
+    ///
+    /// **Redescendue de moitié** (retour porteur 2026-09-28 : « profites pour
+    /// redescendre (X) et (…) ») : la barre ne monte plus jusqu'à la rangée de
+    /// l'îlot, elle s'arrête à mi-chemin — sous la Dynamic Island, jamais sur
+    /// la scène. `ComposerTopBar.liftShare` est la part de montée gardée.
     private var chromeLift: CGFloat {
-        max(0, safeTop - ComposerTopBar.islandRowTop)
+        max(0, safeTop - ComposerTopBar.islandRowTop) * ComposerTopBar.liftShare
     }
 
     /// Le fond choisi au Cadre, quand la scène AJUSTE un média : il s'applique
@@ -652,8 +682,13 @@ struct ComposerSceneSurface: View {
             selectedItemId: selectedItemId,
             selectionBadge: selectionBadge,
             timelineBridge: timelineBridge,
-            onItemTrimRequested: onItemTrim
+            onItemTrimRequested: onItemTrim,
+            localMediaAliases: sceneLocalMediaAliases
         )
+        // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
+        // que la mesure du bord gauche ci-dessous lit : les deux ne peuvent pas
+        // diverger.
+        .padding(.horizontal, edge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
         // (#4080, directive porteur 2026-09-04). Le meuble le monte une seule
@@ -664,6 +699,7 @@ struct ComposerSceneSurface: View {
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self,
                                   value: .bounds) { $0 }
+                .padding(.horizontal, edge)
                 .allowsHitTesting(false)
         }
         // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011) : la
@@ -678,7 +714,7 @@ struct ComposerSceneSurface: View {
                         value: ComposerRailGeometry.sceneLeadingInset(
                             overlay: geo.size,
                             ratio: aspectRatio,
-                            horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                            horizontalInset: edge))
             }
         }
         // **La scène se pose ENTRE la barre haute et le socle** (directive
@@ -700,7 +736,8 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 plateauTint: plateauTint,
-                trailingAccessory: animatedToggle
+                trailingAccessory: animatedToggle,
+                edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
             )
             .padding(.top, -chromeLift)
 
@@ -750,18 +787,22 @@ struct ComposerSceneSurface: View {
             // `ComposerLowZone`, jamais sur la présence du panneau.
             switch ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
             case .toolOptions:
-                if let toolOptions { toolOptions }
+                // La marge des rails : les options d'un outil ne touchent pas
+                // le bord du verre (retour porteur 2026-09-28).
+                // Sur une PLAQUE DE VERRE, comme les options de l'éditeur
+                // d'objet (directive porteur 2026-09-27).
+                if let toolOptions {
+                    toolOptions
+                        .padding(10)
+                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                                       tint: plateauTint.opacity(0.55))
+                        .padding(.horizontal, ComposerRailGeometry.outerMargin)
+                        .padding(.bottom, 6)
+                }
             case .band(let ouverte):
-                ComposerSceneBandView(band: ouverte,
-                                      colors: bandColors,
-                                      onPickColor: onPickBandColor,
-                                      openingEffect: bandOpeningEffect,
-                                      onPickOpening: onPickBandOpening,
-                                      fitMode: bandFitMode,
-                                      backdrop: bandBackdrop,
-                                      plateauTint: plateauTint,
-                                      onPickFitMode: onPickBandFitMode,
-                                      onPickBackdrop: onPickBandBackdrop)
+                // Sur grand écran, la bande flotte en CARTE à côté du rail droit
+                // (`roomyBandCard`) ; elle ne prend le bas que sur téléphone.
+                if !isRoomy { bandView(ouverte) }
             case .nothing:
                 EmptyView()
             }
@@ -816,7 +857,9 @@ struct ComposerSceneSurface: View {
     @ViewBuilder
     private var composingFloors: some View {
         ZStack(alignment: .bottom) {
-            HStack(alignment: .bottom, spacing: 0) {
+            // Sur grand écran, les rails se CENTRENT en hauteur (maquette
+            // iPad : ils ne descendent pas au pouce, qui n'y tient pas l'écran).
+            HStack(alignment: isRoomy ? .center : .bottom, spacing: 0) {
                 floatingRail
                 Spacer(minLength: 0)
                 ComposerTrailingRail(actions: trailingActions,
@@ -831,16 +874,47 @@ struct ComposerSceneSurface: View {
                                      frameIsOpen: frameIsOpen,
                                      onTime: onTimeButton,
                                      timeIsOpen: timeIsOpen)
-                    .padding(.trailing, ComposerRailGeometry.outerMargin)
+                    .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.gutter)
             }
+            .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
             // **Le volet CÈDE au viseur** (#4080) : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
-            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage) {
+            // **Un outil ou une bande ouverts prennent le bas pour eux seuls**
+            // (retour porteur 2026-09-28) : la légende s'efface le temps du
+            // dessin ou du Cadre, comme la barre canonique sous un panneau.
+            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage), !toolIsOpen, band == nil {
                 descriptionOverlay
             }
+            roomyBandCard
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private func bandView(_ ouverte: ComposerSceneBand) -> some View {
+        ComposerSceneBandView(band: ouverte,
+                              colors: bandColors,
+                              onPickColor: onPickBandColor,
+                              openingEffect: bandOpeningEffect,
+                              onPickOpening: onPickBandOpening,
+                              fitMode: bandFitMode,
+                              backdrop: bandBackdrop,
+                              plateauTint: plateauTint,
+                              onPickFitMode: onPickBandFitMode,
+                              onPickBackdrop: onPickBandBackdrop)
+    }
+
+    /// **La bande en CARTE flottante, sur grand écran** (maquette
+    /// `iPad.dc.html` : le panneau Cadre se pose à côté du rail droit, 250 pt
+    /// de large, sans quitter la scène des yeux). Le téléphone la garde en bas.
+    @ViewBuilder
+    private var roomyBandCard: some View {
+        if isRoomy, case .band(let ouverte) = ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
+            bandView(ouverte)
+                .frame(width: ComposerRailGeometry.roomyPanelWidth)
+                .padding(.trailing, ComposerRailGeometry.roomyPanelTrailing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        }
     }
 
     // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :

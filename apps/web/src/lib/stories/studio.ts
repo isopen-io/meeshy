@@ -49,7 +49,7 @@ import {
   type StudioTextLayer,
   type StudioTiming,
 } from './studio-text';
-import { pageAnimated, pagePlacedWhileAnimated, pageWithTrackTiming } from './studio-timeline';
+import { pageAnimated, pagePlacedWhileAnimated, pageStatic, pageWithTrackTiming } from './studio-timeline';
 
 /**
  * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943, #6944 puis #7684) —
@@ -321,6 +321,13 @@ export function withBackgroundFrame(draft: StudioDraft, frame: StoryFrame): Stud
 export function withAnimated(draft: StudioDraft): StudioDraft {
   const page = currentStudioPage(draft);
   return pageAnimated(page) === page ? draft : withCurrentPageChange(draft, pageAnimated);
+}
+
+/** ÉTEINDRE « Animé » sur la page courante (#8516, `pageStatic`) — un pas
+ * d'historique ; une page déjà statique laisse le brouillon identique. */
+export function withStatic(draft: StudioDraft): StudioDraft {
+  const page = currentStudioPage(draft);
+  return pageStatic(page) === page ? draft : withCurrentPageChange(draft, pageStatic);
 }
 
 export function withTrackTiming(draft: StudioDraft, id: string, timing: StudioTiming): StudioDraft {

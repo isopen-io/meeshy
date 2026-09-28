@@ -74,6 +74,7 @@ function mountPanel({ selectedId = null as string | null, playing = false } = {}
         onEnter={() => undefined}
         onExit={() => undefined}
         onTiming={(id, timing) => journal.timings.push({ id, timing })}
+        onClose={() => undefined}
       />,
     ),
   );

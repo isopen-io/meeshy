@@ -11,7 +11,9 @@ const ptStudioChrome = {
   'story.studio.postText.done': 'Concluído',
   'story.studio.tile.page': 'Cena',
   'story.studio.tile.text': 'Texto',
-  'story.studio.tile.editor': 'Ajustes',
+  'story.studio.tile.time': 'Tempo',
+  'story.studio.rail.scene': 'Ferramentas da cena',
+  'story.studio.timeline.unit': 's',
   'story.studio.tile.frame': 'Moldura',
   'story.studio.undo': 'Desfazer',
   'story.studio.redo': 'Refazer',
@@ -59,13 +61,14 @@ const ptStudioChrome = {
   'story.studio.object.duplicate': 'Duplicar',
   'story.studio.object.edit': 'Editar',
   'story.studio.object.remove': 'Remover',
-  'story.studio.object.leave': 'Tirar da cena',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Para a esquerda',
   'story.studio.pose.right': 'Para a direita',
   'story.studio.pose.up': 'Para cima',
   'story.studio.pose.down': 'Para baixo',
   'story.studio.objects.edit': 'Editar {name}',
+  'story.studio.media.alt': 'Texto alternativo',
+  'story.studio.media.alt.placeholder': 'Descreva esta mídia para os leitores de tela',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

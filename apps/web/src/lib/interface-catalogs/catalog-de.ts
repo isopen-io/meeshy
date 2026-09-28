@@ -23,6 +23,7 @@ import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
 import deGallery from './catalog-de-gallery';
+import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
@@ -859,6 +860,7 @@ const de = {
   'story.studio.refusal.door.visual': 'Wähle ein Bild oder ein Video.',
   'story.studio.refusal.door.sound': 'Wähle eine Audiodatei.',
   'story.studio.refusal.media-max': 'Diese Veröffentlichung trägt bereits zehn Medien – die Obergrenze der Plattform.',
+  'story.studio.refusal.import-max': '{count} Medien nicht importiert: Eine Veröffentlichung trägt höchstens zehn.',
   'story.studio.failure.network': 'Netzwerk nicht verfügbar.',
   'story.studio.failure.timeout': 'Der Server hat nicht geantwortet.',
   'story.studio.failure.session': 'Sitzung abgelaufen — bitte erneut anmelden.',
@@ -1164,6 +1166,7 @@ const de = {
   ...deStudioChrome,
   ...deEphemeral,
   ...deGallery,
+  ...deMessageCard,
   ...deConversationCard,
   ...deStoriesMine,
   ...deContactCard,

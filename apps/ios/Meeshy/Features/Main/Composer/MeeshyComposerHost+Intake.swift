@@ -69,7 +69,8 @@ extension MeeshyComposerHost {
         // des slides à des médias arrivés autrement sur une story — un
         // changement de comportement que rien ici ne mesure.
         let posePourLaScene = documentContentMedia.contains {
-            mediaRoleByURL[$0.sourceURL] == nil && railPosedMediaURLs.contains($0.sourceURL)
+            mediaRoleByURL[$0.sourceURL] == nil
+                && (railPosedMediaURLs.contains($0.sourceURL) || sceneSeriesMediaURLs.contains($0.sourceURL))
         }
         guard selectedFormat == .post || posePourLaScene else { return }
 
@@ -106,7 +107,8 @@ extension MeeshyComposerHost {
         for media in documentContentMedia where media.kind != .audio
             && mediaRoleByURL[media.sourceURL] == nil {
             let porte: ComposerMediaDoor =
-                railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
+                sceneSeriesMediaURLs.contains(media.sourceURL) ? .sceneSeries
+                : railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
             // **Le MÊME prédicat que `addMediaObject`**, mot pour mot : un fond
             // de slide est un `mediaObject` résolu OU une image de fond posée
             // au niveau de la slide. En omettre la seconde moitié ferait
@@ -144,7 +146,12 @@ extension MeeshyComposerHost {
                 // `1g` — en Post, une slide est UN média.
                 if porte == .sceneRail {
                     target = viewModel.currentSlide.id
-                } else if slideIdByMediaURL.isEmpty,
+                } else if porte == .sceneSeries, !dejaUnFond,
+                          (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                    // La série remplit d'abord la scène courante si elle n'a
+                    // pas de fond ; chaque média suivant fonde la sienne.
+                    target = viewModel.currentSlide.id
+                } else if porte != .sceneSeries, slideIdByMediaURL.isEmpty,
                    (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
                     target = viewModel.currentSlide.id
                 } else if viewModel.canAddSlide {
@@ -162,6 +169,9 @@ extension MeeshyComposerHost {
                     viewModel.applyContentMedia([media], intoSlideId: target)
                 ) { _, neuf in neuf }
                 slideIdByMediaURL[media.sourceURL] = target
+                // En retouche, l'image posée EST l'état de départ (#8524) : ce
+                // qui reste annulable ensuite est ce que l'auteur a fait.
+                if returnsImageToConversation { viewModel.seedHistory() }
             }
         }
 
@@ -742,6 +752,7 @@ extension MeeshyComposerHost {
     func presentMediaIntake(_ intake: ComposerMediaIntake) {
         switch intake {
         case .photoLibrary:
+            openingPickFoundsScenes = false
             showsPhotoPicker = true
         case .camera:
             presentCamera(mode: .photo)
@@ -949,7 +960,7 @@ extension MeeshyComposerHost {
                 durationMs: duration
             ))
         }
-        ingestIntoDocument(medias)
+        routePickedMedia(medias)
         HapticFeedback.light()
     }
 

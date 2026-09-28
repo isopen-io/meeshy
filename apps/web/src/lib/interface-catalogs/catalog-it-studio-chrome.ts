@@ -11,7 +11,9 @@ const itStudioChrome = {
   'story.studio.postText.done': 'Fine',
   'story.studio.tile.page': 'Scena',
   'story.studio.tile.text': 'Testo',
-  'story.studio.tile.editor': 'Impostazioni',
+  'story.studio.tile.time': 'Tempo',
+  'story.studio.rail.scene': 'Strumenti della scena',
+  'story.studio.timeline.unit': 's',
   'story.studio.tile.frame': 'Cornice',
   'story.studio.undo': 'Annulla',
   'story.studio.redo': 'Ripristina',
@@ -59,13 +61,14 @@ const itStudioChrome = {
   'story.studio.object.duplicate': 'Duplica',
   'story.studio.object.edit': 'Modifica',
   'story.studio.object.remove': 'Rimuovi',
-  'story.studio.object.leave': 'Togli dalla scena',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'A sinistra',
   'story.studio.pose.right': 'A destra',
   'story.studio.pose.up': 'In alto',
   'story.studio.pose.down': 'In basso',
   'story.studio.objects.edit': 'Modifica {name}',
+  'story.studio.media.alt': 'Testo alternativo',
+  'story.studio.media.alt.placeholder': 'Descrivi questo contenuto per i lettori di schermo',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

@@ -50,7 +50,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(row.contains("if input.isFocused { focusIdentityChip.offset(y: -focusLift) }"))
         // Le bas porte la bande ET la chip de date, sur la même ligne.
         XCTAssertTrue(
-            row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
+            row.contains("if input.isFocused { electedStrip(elected) }") && row.contains("HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
             "bas : bande à gauche, date+coche à droite"
         )
         // 3 → 2 le 2026-08-24 : la méta a REJOINT la ligne drapeaux+réactions,
@@ -111,11 +111,12 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // #8147 : le message long DÉPLIÉ reçoit un bloc de verre, à ses marges.
         // #8506 : le cadre de l'élu est le fond de la COLONNE du message et
         // englobe identité et bande, à `electedCardMargin`.
-        XCTAssertTrue(row.contains(".background(alignment: .top) { if input.isFocused { electedCardBackground } }"), "cadre de l'élu = fond SwiftUI de la colonne")
+        // #8537 : il se pose sur la mesure du contenu GROSSI, lue par préférence.
+        XCTAssertTrue(row.contains(".backgroundPreferenceValue(FocalElectedContentKey.self) { elected in if input.isFocused { electedCardBackground(elected) } }"), "cadre de l'élu = fond SwiftUI de la colonne")
         XCTAssertTrue(row.contains(".background { if input.isExpanded && !input.isFocused { focusCardBackground } }"), "le déplié garde son verre")
         XCTAssertTrue(row.contains(".offset(y: focusLift)"), "une suite magnifiée descend par offset, pas par hauteur")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
-        XCTAssertTrue(row.contains(".padding(.bottom, -(FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight + margin))"), "le cadre descend sous la bande, à sa marge")
+        XCTAssertTrue(row.contains(".padding(.bottom, -(span.stripTop + FocalMetrics.FocusStrip.chipHeight + margin - proxy.size.height))"), "le cadre descend sous la bande, à sa marge")
         // #8506 : plus aucune réserve de hauteur sous le texte d'un élu (#5718) —
         // la bande se pose sous le contenu, la rangée ne change pas de taille.
         XCTAssertFalse(row.contains("focusOverlayReserveHeight"), "aucune hauteur réservée à l'élection")
@@ -148,7 +149,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition sous le contenu, la date à sa droite")
-        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight)"), "#8506 : la bande entière sous le contenu, dans le cadre")
+        XCTAssertTrue(row.contains(".offset(y: span.stripTop)"), "#8506/#8537 : la bande entière sous le contenu GROSSI, dans le cadre")
         XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")
