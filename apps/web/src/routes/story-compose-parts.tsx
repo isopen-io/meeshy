@@ -84,12 +84,11 @@ export function StudioDoorButton({
     <label
       title={label}
       aria-disabled={disabled}
-      className="grid place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
+      className="glass grid place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
       style={{
         width: TARGET,
         height: TARGET,
         color: 'var(--color-ios-ink)',
-        backgroundColor: 'var(--color-ios-card)',
         outlineColor: 'var(--color-ios-brand)',
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -108,7 +107,7 @@ export function StudioDoorButton({
           if (file !== undefined) onSelect(file);
         }}
       />
-      {glyph === 'layer' ? <LayerMark size={22} /> : <Glyph name={glyph} size={22} />}
+      {glyph === 'layer' ? <LayerMark size={20} /> : <Glyph name={glyph} size={20} />}
     </label>
   );
 }
@@ -186,6 +185,7 @@ export function StudioAssetRow({
   onRemove,
   caption,
   children,
+  discreet,
   locked = false,
 }: {
   readonly lang: InterfaceLanguage;
@@ -200,13 +200,16 @@ export function StudioAssetRow({
    * rendre — l'annoncer serait un contrôle sans effet (loi 4). */
   readonly caption?: { readonly value: string; readonly inputId: string; readonly onChange: (value: string) => void };
   readonly children?: ReactNode;
+  /** Une ligne DISCRÈTE (lot 6) — un visuel prêt ne s'affiche plus en bas ;
+   * la ligne reste pour le lecteur d'écran et le clavier (elle paraît au focus). */
+  readonly discreet?: boolean;
   /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — retirer ou
    * réessayer un média que le plan a déjà réglé ne changerait rien à ce qui
    * part, et légender un média EN VOL de publication en tromperait l'auteur. */
   readonly locked?: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-1" data-asset-phase={upload.phase}>
+    <li className={discreet === true ? 'sr-only focus-within:not-sr-only' : 'flex flex-col gap-1'} data-asset-phase={upload.phase}>
       <div className="flex items-center gap-2 text-caption">
         {glyph === 'layer' ? (
           <span style={{ color: 'var(--color-ios-ink-2)', display: 'grid' }}>

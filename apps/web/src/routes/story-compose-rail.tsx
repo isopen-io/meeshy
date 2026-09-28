@@ -1,38 +1,32 @@
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import type { StudioDoor, StudioPage } from '@/lib/stories/studio-page';
+import type { StudioDoor } from '@/lib/stories/studio-page';
 import { FrameMark, RedoMark, StudioTile, TextMark, UndoMark } from '@/routes/story-compose-chrome';
-import { LayerMark, PageMark, SlidersMark, StudioChip, StudioDoorButton } from '@/routes/story-compose-parts';
+import { PageMark, SlidersMark, StudioDoorButton } from '@/routes/story-compose-parts';
 
 /**
- * **LE COULOIR GAUCHE** — ce qu'on POSE sur la scène (les trois portes), puis
- * ce qui y est déjà posé (`meeshy-composer-modele.md` § 6). VERROUILLÉ pendant
- * l'envoi (#7707) : le plan publié est figé au premier clic sur Publier —
- * poser un objet après coup ne rejoindrait jamais la séquence en cours.
+ * **LE COULOIR GAUCHE** — ce qu'on POSE sur la scène (les portes), en disques
+ * de verre SÉPARÉS, sans libellé (lot 6). Les objets déjà posés ne s'y
+ * listent plus : on les touche sur la scène (sélection silencieuse,
+ * `story-compose-stage.tsx`). VERROUILLÉ pendant l'envoi (#7707).
  */
 export function StudioLeadingRail({
   lang,
-  page,
   locked,
   onPlace,
-  onSelect,
   sound = true,
 }: {
   readonly lang: InterfaceLanguage;
-  readonly page: StudioPage;
   readonly locked: boolean;
   readonly onPlace: (door: StudioDoor, file: File) => void;
-  readonly onSelect: (id: string) => void;
-  /** La porte du SON — absente d'une retouche d'image (#8416) : une image ne
-   * porte pas de son. */
+  /** La porte du SON — absente d'une retouche d'image (#8416). */
   readonly sound?: boolean;
 }) {
-  const selectedId = page.selected;
   return (
     <div
       data-story-studio-rail="leading"
-      className="glass absolute start-2 top-1/2 z-10 flex w-14 -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto rounded-3xl py-2"
+      className="absolute start-2 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto p-0.5"
       style={{ maxHeight: 'calc(100% - 1rem)' }}
     >
       <StudioDoorButton
@@ -61,35 +55,6 @@ export function StudioLeadingRail({
           disabled={locked}
         />
       ) : null}
-      <div role="group" aria-label={translate(lang, 'story.studio.objects.label')} className="flex w-full flex-col items-center gap-1 pt-1">
-        {page.texts.map((layer, index) => (
-          <StudioChip
-            key={layer.id}
-            label={translate(lang, 'story.studio.object.select', {
-              name: translate(lang, 'story.studio.object.text', { index: String(index + 1) }),
-            })}
-            pressed={selectedId === layer.id}
-            onPress={() => onSelect(layer.id)}
-            probe={`select:${layer.id}`}
-            style={{ minWidth: 44, paddingInline: 0 }}
-            disabled={locked}
-          >
-            <span aria-hidden="true">T{index + 1}</span>
-          </StudioChip>
-        ))}
-        {page.overlay !== null ? (
-          <StudioChip
-            label={translate(lang, 'story.studio.object.select', { name: translate(lang, 'story.studio.object.overlay') })}
-            pressed={selectedId === 'overlay'}
-            onPress={() => onSelect('overlay')}
-            probe="select:overlay"
-            style={{ minWidth: 44, paddingInline: 0 }}
-            disabled={locked}
-          >
-            <LayerMark size={16} />
-          </StudioChip>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -122,7 +87,8 @@ export function StudioTrailingRail({
   readonly onAddPage: (() => void) | null;
   readonly onAddText: () => void;
   readonly editorOpen: boolean;
-  readonly onToggleEditor: () => void;
+  /** `null` sans objet sélectionné : rien à modifier (lot 6). */
+  readonly onToggleEditor: (() => void) | null;
   readonly frameOpen: boolean;
   /** `null` sans média de fond. */
   readonly onToggleFrame: (() => void) | null;
@@ -135,7 +101,7 @@ export function StudioTrailingRail({
       data-story-studio-rail="trailing"
       role="group"
       aria-label={translate(lang, 'story.studio.editor.label')}
-      className="absolute end-2 bottom-2 z-10 flex max-h-[calc(100%-1rem)] flex-col items-center gap-2 overflow-y-auto"
+      className="absolute end-2 bottom-2 z-10 flex max-h-[calc(100%-1rem)] flex-col items-center gap-2 overflow-y-auto p-0.5"
     >
       {onAddPage !== null ? (
         <StudioTile label={translate(lang, 'story.studio.tile.page')} hint={translate(lang, 'story.studio.page.add')} probe="add-page" onPress={onAddPage} disabled={locked}>
@@ -148,16 +114,18 @@ export function StudioTrailingRail({
           <Glyph name="plus" size={10} className="absolute -end-2 -top-1" />
         </span>
       </StudioTile>
-      <StudioTile
-        label={translate(lang, 'story.studio.tile.editor')}
-        hint={translate(lang, 'story.studio.editor.label')}
-        probe="editor-toggle"
-        pressed={editorOpen}
-        onPress={onToggleEditor}
-        disabled={locked}
-      >
-        <SlidersMark size={20} />
-      </StudioTile>
+      {onToggleEditor !== null ? (
+        <StudioTile
+          label={translate(lang, 'story.studio.tile.editor')}
+          hint={translate(lang, 'story.studio.editor.label')}
+          probe="editor-toggle"
+          pressed={editorOpen}
+          onPress={onToggleEditor}
+          disabled={locked}
+        >
+          <SlidersMark size={20} />
+        </StudioTile>
+      ) : null}
       {onToggleFrame !== null ? (
         <StudioTile label={translate(lang, 'story.studio.tile.frame')} probe="frame" pressed={frameOpen} onPress={onToggleFrame} disabled={locked}>
           <FrameMark size={20} />

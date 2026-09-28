@@ -14,6 +14,9 @@ import {
   withAddedPage,
   withAddedText,
   withAnimated,
+  withTextDuplicated,
+  withTextMoved,
+  withPlacedWhileAnimated,
   withAudience,
   withTrackTiming,
   withBackgroundFrame,
@@ -447,5 +450,45 @@ describe('le mode Animé (#8415) — posé sur la page courante et persisté', (
     const restored = currentStudioPage(studioDraftFromSnapshot(corrupted, (u) => u, 'fr'));
     expect(restored.duration).toBeUndefined();
     expect(restored.texts[0]!.timing).toBeUndefined();
+  });
+});
+
+describe('un objet posé sur une scène animée entre à la tête (lot 6)', () => {
+  test('scène animée : fenêtre [tête, fin] ; scène statique : inchangé', () => {
+    const animated = withAddedText(withAnimated(typed('Une')), 'fr');
+    const id = currentStudioPage(animated).selected!;
+    expect(currentStudioPage(withPlacedWhileAnimated(animated, id, 2)).texts.find((l) => l.id === id)?.timing).toEqual({ start: 2, end: 6 });
+    const still = withAddedText(typed('Une'), 'fr');
+    expect(withPlacedWhileAnimated(still, currentStudioPage(still).selected!, 2)).toBe(still);
+  });
+});
+
+/** LE MENU D'UN OBJET (lot 6, appui long) — monter, reculer, dupliquer. */
+describe('withTextMoved / withTextDuplicated', () => {
+  const two = () => {
+    const first = typed('Un');
+    return withText(withAddedText(first, 'fr'), 'text-2', 'Deux');
+  };
+
+  test('monter place le texte AU-DESSUS du suivant ; au sommet, rien ne change', () => {
+    const moved = withTextMoved(two(), 'text-1', 1);
+    expect(currentStudioPage(moved).texts.map((l) => l.id)).toEqual(['text-2', 'text-1']);
+    const top = two();
+    expect(withTextMoved(top, 'text-2', 1)).toBe(top);
+  });
+
+  test('reculer le fait passer dessous ; au fond, rien ne change', () => {
+    expect(currentStudioPage(withTextMoved(two(), 'text-2', -1)).texts.map((l) => l.id)).toEqual(['text-2', 'text-1']);
+    const bottom = two();
+    expect(withTextMoved(bottom, 'text-1', -1)).toBe(bottom);
+  });
+
+  test('dupliquer pose une copie décalée, AU-DESSUS, sélectionnée, avec un identifiant neuf', () => {
+    const page = currentStudioPage(withTextDuplicated(two(), 'text-1'));
+    expect(page.texts.map((l) => l.id)).toEqual(['text-1', 'text-3', 'text-2']);
+    expect(page.selected).toBe('text-3');
+    const copy = page.texts[1]!;
+    expect(copy.text).toBe('Un');
+    expect(copy.pose.y).toBeCloseTo(page.texts[0]!.pose.y + 0.06, 5);
   });
 });

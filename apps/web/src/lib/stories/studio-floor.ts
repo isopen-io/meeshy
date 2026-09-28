@@ -1,3 +1,4 @@
+import { SCENE_BACKDROP_TINT } from '@/lib/canvas/backdrop';
 import { thumbHashImage } from '@/lib/media/thumbhash-image';
 
 import type { StudioPage, StudioVisualAsset } from './studio-page';
@@ -16,13 +17,21 @@ import type { StudioPage, StudioVisualAsset } from './studio-page';
  * est ce qu'un thumbhash étiré approche. Une page sans média n'a pas de sol :
  * la surface du thème reste, comme sur iOS.
  */
-export type StudioFloor = { readonly kind: 'hash' | 'media'; readonly src: string };
+export type StudioFloor =
+  | { readonly kind: 'hash' | 'media'; readonly src: string }
+  /** La teinte choisie au Cadre (lot 6) — `src` est la couleur. */
+  | { readonly kind: 'tint'; readonly src: string };
 
 const hashOf = (asset: StudioVisualAsset | null): string | undefined =>
   asset !== null && asset.upload.phase === 'ready' ? asset.upload.thumbHash : undefined;
 
 export function studioFloor(params: { readonly page: StudioPage; readonly sceneHash?: string }): StudioFloor | null {
   const { page } = params;
+  // LE SOL PREND LA TEINTE DU CADRE (lot 6) : autour d'un fond AJUSTÉ, la
+  // couleur choisie (noir, blanc, indigo, sable) prolonge les bandes jusqu'aux
+  // bords de l'écran ; le flou, lui, garde le thumbhash.
+  const frame = page.background?.frame;
+  if (frame !== undefined && frame.fitMode === 'fit' && frame.backdrop !== 'blur') return { kind: 'tint', src: SCENE_BACKDROP_TINT[frame.backdrop] };
   const hashed = [params.sceneHash, hashOf(page.background), hashOf(page.overlay)]
     .map((hash) => thumbHashImage(hash))
     .find((src): src is string => src !== undefined);

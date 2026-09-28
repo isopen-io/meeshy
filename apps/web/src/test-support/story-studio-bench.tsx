@@ -46,6 +46,7 @@ export function registerStudioBench(): void {
       import('@/routes/story-compose-editor'),
       import('@/routes/story-compose-pages'),
       import('@/routes/story-compose-frame'),
+      import('@/routes/story-compose-object-menu'),
       import('@/routes/story-compose-overlays'),
       import('@/lib/stories/studio-composite'),
       import('@/components/layout-mark'),

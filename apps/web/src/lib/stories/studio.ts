@@ -47,7 +47,7 @@ import {
   type StudioTextLayer,
   type StudioTiming,
 } from './studio-text';
-import { pageAnimated, pageWithTrackTiming } from './studio-timeline';
+import { pageAnimated, pagePlacedWhileAnimated, pageWithTrackTiming } from './studio-timeline';
 
 /**
  * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943, #6944 puis #7684) —
@@ -235,6 +235,32 @@ export function withAddedText(draft: StudioDraft, language: string): StudioDraft
   return withCurrentPageChange(draft, (page) => pageWithAddedText(page, textId, language));
 }
 
+/** MONTER (+1) ou RECULER (−1) un texte dans l'ordre de pose — l'ordre EST
+ * le `z` (`composeObjects`). Au sommet ou au fond, le brouillon reste le même. */
+export function withTextMoved(draft: StudioDraft, id: string, step: 1 | -1): StudioDraft {
+  const page = currentStudioPage(draft);
+  const index = page.texts.findIndex((layer) => layer.id === id);
+  const target = index + step;
+  if (index < 0 || target < 0 || target >= page.texts.length) return draft;
+  const texts = [...page.texts];
+  const [moved] = texts.splice(index, 1);
+  if (moved === undefined) return draft;
+  texts.splice(target, 0, moved);
+  return withCurrentPageChange(draft, (p) => ({ ...p, texts }));
+}
+
+/** DUPLIQUER un texte — une copie décalée vers le bas, juste AU-DESSUS de
+ * l'original, sélectionnée, sous un identifiant neuf du brouillon. */
+export function withTextDuplicated(draft: StudioDraft, id: string): StudioDraft {
+  const page = currentStudioPage(draft);
+  const index = page.texts.findIndex((layer) => layer.id === id);
+  const original = page.texts[index];
+  if (original === undefined) return draft;
+  const copy: StudioTextLayer = { ...original, id: nextTextLayerId(allTexts(draft)), pose: clampPose({ ...original.pose, y: original.pose.y + 0.06 }) };
+  const texts = [...page.texts.slice(0, index + 1), copy, ...page.texts.slice(index + 1)];
+  return withCurrentPageChange(draft, (p) => ({ ...p, texts, selected: copy.id }));
+}
+
 export function withSelected(draft: StudioDraft, id: string | null): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithSelected(page, id));
 }
@@ -297,6 +323,13 @@ export function withAnimated(draft: StudioDraft): StudioDraft {
 
 export function withTrackTiming(draft: StudioDraft, id: string, timing: StudioTiming): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithTrackTiming(page, id, timing));
+}
+
+/** UN OBJET POSÉ sur une scène ANIMÉE (lot 6) — il entre à la tête. Sur une
+ * scène statique (sans durée), rien ne change. */
+export function withPlacedWhileAnimated(draft: StudioDraft, id: string, head: number): StudioDraft {
+  const page = currentStudioPage(draft);
+  return page.duration === undefined ? draft : withCurrentPageChange(draft, (p) => pagePlacedWhileAnimated(p, id, head));
 }
 
 export function withPostText(draft: StudioDraft, postText: string): StudioDraft {
