@@ -19,7 +19,11 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * `Main/Focal/Row/FocalRow.swift:848-1047`.
  *
  * QUATRE SUPERPOSITIONS, aucune ne réserve de hauteur — `position: absolute`
- * sur le bloc de contenu, ancré par les variables CSS de
+ * sur le bloc de contenu, TOUTES à l'intérieur du cadre de verre à
+ * `--focus-card-margin` de ses bords (#8506, directive porteur 2026-09-28 :
+ * « place les contrôleurs et détails à l'intérieur du cadre, en laissant de
+ * l'espace sur les bords ») — l'identité et la bande ne chevauchent plus ses
+ * lignes haute et basse ; ancré par les variables CSS de
  * `reading-mode/metrics.ts::sceneStyleVars()` (posées sur `<main>` par
  * `thread.tsx`, héritées jusqu'ici) : élire une rangée ne fait JAMAIS sauter
  * ses voisines (`FocalRow.swift:168-170`, « largeur stable, zéro relayout »).
@@ -45,8 +49,15 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * message est traduit.
  */
 
-export function FocusCard() {
-  return <div className="glass glass-card focus-card" aria-hidden />;
+/**
+ * `continuation` — une SUITE de groupe n'a pas de ligne d'identité réservée
+ * dans son flux : sa pastille d'identité se pose AU-DESSUS de sa première
+ * ligne, et le cadre monte d'autant pour l'englober (#8506).
+ */
+export function FocusCard({ continuation = false }: { readonly continuation?: boolean }) {
+  return (
+    <div className="glass glass-card focus-card" aria-hidden {...(continuation ? { 'data-continuation': '' } : {})} />
+  );
 }
 
 export function FocusIdentity({
@@ -56,7 +67,10 @@ export function FocusIdentity({
   src,
   username,
   storyRing,
+  continuation = false,
 }: {
+  /** Suite de groupe : la pastille se pose au-dessus de la première ligne (#8506). */
+  readonly continuation?: boolean;
   readonly initials: string;
   readonly name: string;
   readonly accent: string;
@@ -84,6 +98,7 @@ export function FocusIdentity({
       className="focus-identity flex items-center gap-1.5"
       style={{ minHeight: IDENTITY_CHIP_HEIGHT }}
       aria-hidden
+      {...(continuation ? { 'data-continuation': '' } : {})}
     >
       <AuthorAvatar
         initials={initials}
