@@ -1,9 +1,11 @@
 package me.meeshy.app;
 
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 
 /**
  * Defaut de coque 3b (#5604, recette 2026-09-07) : `BridgeActivity` (Capacitor
@@ -56,6 +58,20 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyContactsPlugin.class);
         registerPlugin(MeeshyNotificationSettingsPlugin.class);
         super.onCreate(savedInstanceState);
+        // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
+        // premiere image ; la WebView dessine son icone « lecture » grise si
+        // son client ne fournit pas d'apercu. On garde le client de Capacitor
+        // (permissions, fichiers, plein ecran) et on ne change que l'apercu.
+        getBridge()
+            .getWebView()
+            .setWebChromeClient(
+                new BridgeWebChromeClient(getBridge()) {
+                    @Override
+                    public Bitmap getDefaultVideoPoster() {
+                        return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+                    }
+                }
+            );
         getOnBackPressedDispatcher()
             .addCallback(
                 this,
