@@ -4,13 +4,12 @@ import MeeshySDK
 import MeeshyUI
 
 // #8394 — la pilule du bas, identique en audio, en vidéo et en groupe :
-// (…) · Micro · Sortie · Fin. #8432 — chaque bouton est un bouton de VERRE
-// interactif, et le (…) déploie les actions AU-DESSUS de la pilule : en duo,
-// une rangée de verre (deux si elle ne tient pas) ; en groupe, deux rangées
-// légendées de quatre colonnes. Sous iOS 26 les actions naissent du verre du
-// (…) (`glassEffectID`) ; avant iOS 26 et avec Réduire les animations, elles
-// apparaissent en fondu. La conversation n'est pas une action : sa seule
-// porte est l'en-tête (#8436).
+// (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel
+// (`glassEffect` sous iOS 26, matériau avant), et le (…) déploie ses actions
+// DANS ce bloc, au-dessus de la rangée de base : en duo, une rangée (deux si
+// elle ne tient pas) ; en groupe, deux rangées légendées de quatre colonnes.
+// Le bloc grandit d'un ressort, en fondu avec Réduire les animations. La
+// conversation n'est pas une action : sa seule porte est l'en-tête (#8436).
 
 /// Ré-arme l'auto-masquage (§7.3) à chaque révélation ET à chaque usage du (…).
 struct AutoHideKey: Equatable {
@@ -90,31 +89,38 @@ extension CallView {
 
     // MARK: - Pill
 
-    /// Les actions déployées, PUIS la pilule : les actions montent au-dessus
-    /// du bloc qui contrôle l'appel, en duo comme en groupe (#8432).
+    private static let pillShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
+
+    /// Les actions naissent du bas du bloc, là où est le (…) ; avec Réduire
+    /// les animations elles apparaissent en fondu, sans rien déplacer.
+    private var unfoldTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))
+    }
+
+    /// UN bloc de verre : les actions déployées, PUIS (en groupe) les
+    /// sous-titres, PUIS la rangée de base. Le verre enveloppe le tout et
+    /// grandit avec lui (#8459).
     var callControlsPill: some View {
         let actions = CallActionSet.resolve(actionContext)
-        return VStack(spacing: 10) {
+        return VStack(spacing: 0) {
             switch actionsPresentation {
             case .hidden:
                 EmptyView()
             case .row:
-                duoActionRows(actions)
-                    .transition(.opacity)
+                VStack(spacing: 0) {
+                    duoActionRows(actions)
+                    pillHairline
+                }
+                .transition(unfoldTransition)
             case .rows:
-                groupActionRows(actions)
-                    .transition(.opacity)
+                VStack(spacing: 0) {
+                    groupActionRows(actions)
+                    pillHairline
+                }
+                .transition(unfoldTransition)
             }
-            controlsPill
-        }
-        .frame(maxWidth: 440)
-        .animation(disclosureAnimation, value: controlsDisclosure)
-    }
-
-    /// Les quatre boutons de verre, sur un voile non vitré. #8396 — en
-    /// groupe, les sous-titres se posent en haut de ce voile.
-    private var controlsPill: some View {
-        VStack(spacing: 0) {
             if isGroupStage && showTranscript {
                 captionsBand(hasOwnGlass: false)
                     .padding(.leading, 14)
@@ -124,7 +130,10 @@ extension CallView {
             }
             baseRow
         }
-        .callLegibilityVeil(in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .clipShape(Self.pillShape)
+        .callControlsGlass(in: Self.pillShape)
+        .frame(maxWidth: 440)
+        .animation(disclosureAnimation, value: controlsDisclosure)
     }
 
     private var pillHairline: some View {
@@ -186,7 +195,6 @@ extension CallView {
                 caption: captioned ? CallControlsCopy.moreCaption : nil,
                 diameter: Self.pillGlyphDiameter
             )
-            .callGlassMorph(id: "call.more", in: callGlassNamespace)
         }
         .buttonStyle(.plain)
         .pressable()
@@ -213,15 +221,14 @@ extension CallView {
 
     // MARK: - Group rows
 
-    /// Groupe : « mon image » puis « l'appel », deux rangées légendées sur un
-    /// voile, au-dessus de la pilule.
+    /// Groupe : « mon image » puis « l'appel », deux rangées légendées dans
+    /// le bloc, au-dessus de la rangée de base.
     private func groupActionRows(_ actions: CallActionSet) -> some View {
         VStack(spacing: 0) {
             actionRow(title: CallControlsCopy.myImage, actions: actions.myImage)
             pillHairline
             actionRow(title: CallControlsCopy.theCall, actions: actions.theCall)
         }
-        .callLegibilityVeil(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
     /// Une rangée légendée de quatre colonnes : les places vides gardent la
@@ -252,8 +259,8 @@ extension CallView {
 
     // MARK: - Duo row
 
-    /// Duo : une rangée de boutons de verre sans légende au-dessus de la
-    /// pilule, ou deux quand elle ne tiendrait pas (`CallActionSet.duoRows`).
+    /// Duo : une rangée de boutons sans légende dans le bloc, au-dessus de la
+    /// rangée de base, ou deux quand elle ne tiendrait pas (`CallActionSet.duoRows`).
     /// Le nom de chaque bouton est porté par l'accessibilité.
     private func duoActionRows(_ actions: CallActionSet) -> some View {
         VStack(spacing: 8) {
@@ -265,19 +272,18 @@ extension CallView {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .callLegibilityVeil(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.top, 12)
+        .padding(.bottom, 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallControlsCopy.actions)
     }
 
     // MARK: - Actions
 
-    /// Chaque action porte l'identité de verre qui la fait naître du (…).
     func actionButton(_ action: CallAction, captioned: Bool) -> some View {
         actionButtonBody(action, captioned: captioned)
-            .callGlassMorph(id: "call.action.\(action.rawValue)", in: callGlassNamespace)
     }
 
     @ViewBuilder
