@@ -1,6 +1,6 @@
 import { currentGallerySaver, type GallerySaver } from '@/lib/gallery/gallery-saver';
 import { saveToGallery } from '@/lib/gallery/save-to-gallery';
-import { fileDeliveryPortal, type FileDeliveryPortal } from '@/lib/media/deliver-file';
+import type { FileDeliveryPortal } from '@/lib/media/deliver-file';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 
 import { visibleTiles, type CaptureTile } from './call-capture-tiles';
@@ -80,17 +80,22 @@ export async function captureFaces({ stage, env }: { readonly stage: Element; re
   return files.filter((file): file is CaptureFile => file !== null);
 }
 
-type SaveEnv = { readonly saver: GallerySaver | null; readonly portal: FileDeliveryPortal | null };
+/** `portal` se charge à la demande (`budgets.json` › `story_export`, `dynamic_only`) : la photothèque de la coque n'en a pas besoin. */
+type SaveEnv = { readonly saver: GallerySaver | null; readonly portal: () => Promise<FileDeliveryPortal | null> };
 
-export const browserSaveEnv = (): SaveEnv => ({ saver: currentGallerySaver(), portal: fileDeliveryPortal(browserFileDeliveryHost()) });
+export const browserSaveEnv = (): SaveEnv => ({
+  saver: currentGallerySaver(),
+  portal: () => import('@/lib/media/deliver-file').then((module) => module.fileDeliveryPortal(browserFileDeliveryHost())),
+});
 
 const MIME = 'image/png';
 
 async function saveOne(file: CaptureFile, env: SaveEnv): Promise<'saved' | 'failed' | 'cancelled'> {
   const notice = await saveToGallery({ blob: file.blob, fileName: file.fileName, mimeType: MIME, saver: env.saver });
   if (notice !== null) return notice === 'media.viewer.saved' ? 'saved' : 'failed';
-  if (env.portal === null) return 'failed';
-  const outcome = await env.portal.deliver(file.blob, file.fileName, MIME);
+  const portal = await env.portal().catch(() => null);
+  if (portal === null) return 'failed';
+  const outcome = await portal.deliver(file.blob, file.fileName, MIME);
   if (outcome === 'delivered') return 'saved';
   return outcome === 'cancelled' ? 'cancelled' : 'failed';
 }

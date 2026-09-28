@@ -136,13 +136,22 @@ function paintOrnament(context: Surface2D, ornament: Ornament, text: MontageText
       context.fillStyle = '#ffffff';
       context.strokeStyle = '#111111';
       context.lineWidth = unit * 0.008;
-      context.beginPath();
-      context.ellipse(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width / 2, rect.height / 2, 0, 0, Math.PI * 2);
-      context.moveTo(rect.x + rect.width * 0.45, rect.y + rect.height * 0.9);
-      context.lineTo(tail.x, tail.y);
-      context.lineTo(rect.x + rect.width * 0.62, rect.y + rect.height * 0.88);
+      const tailPath = (inset: number): void => {
+        context.beginPath();
+        context.moveTo(rect.x + rect.width * (0.45 + inset), rect.y + rect.height * (0.9 - inset * 2));
+        context.lineTo(tail.x, tail.y - inset * rect.height);
+        context.lineTo(rect.x + rect.width * (0.62 - inset), rect.y + rect.height * (0.88 - inset * 2));
+        context.closePath();
+      };
+      tailPath(0);
       context.fill();
       context.stroke();
+      context.beginPath();
+      context.ellipse(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width / 2, rect.height / 2, 0, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      tailPath(0.03);
+      context.fill();
       context.fillStyle = '#111111';
       context.font = `800 ${Math.round(rect.height * 0.3)}px 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif`;
       context.textAlign = 'center';

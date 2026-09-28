@@ -6,18 +6,20 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import type { CallControlSet, ControlsArrangement } from '@/lib/calls/call-controls';
+import type { CallControlSet } from '@/lib/calls/call-controls';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **LA PILULE DE VERRE** (#8391) — la même en audio, en vidéo et en groupe :
- * `(…)` · Micro · Sortie · Fin. `(…)` est devant le micro : il bascule
- * l'affichage des actions (`aria-expanded`). En duo, elles sortent en rails
- * (`call-control-actions.tsx`) ; en groupe, la pilule GRANDIT vers le haut et
- * les monte en deux rangées légendées, séparées d'elle par un filet — et le
- * bandeau des sous-titres se pose en haut de ce cadre.
+ * **LA PILULE DE VERRE** (#8391, #8550) — la même en audio, en vidéo et en
+ * groupe : `(…)` · Micro · Sortie · Fin. `(…)` est devant le micro : il
+ * bascule l'affichage des actions (`aria-expanded`). Déployée, la pilule
+ * GRANDIT vers le haut : sa ligne de commandes reste en bas, et tout s'empile
+ * au-dessus d'elle, dans le MÊME cadre de verre — le bandeau des sous-titres,
+ * le panneau ouvert (en rangées), puis une rangée par famille
+ * (`call-control-actions.tsx`). Aucun sous-menu n'est une feuille ni un
+ * calque : quand ce qui s'empile dépasse la hauteur, le cadre défile.
  *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
  * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
@@ -29,25 +31,32 @@ type PillProps = {
   readonly call: ActiveCall;
   readonly language: InterfaceLanguage;
   readonly set: CallControlSet;
-  readonly arrangement: ControlsArrangement;
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly prominent: boolean;
-  /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule d'un groupe a grandi. */
+  /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule a grandi. */
   readonly framedCaptions: ReactNode;
   readonly panels: CallPanels;
+  /** Le panneau ouvert, posé au-dessus des rangées. */
+  readonly panel: ReactNode;
 };
 
-export function CallControlPill({ call, language, set, arrangement, expanded, onToggle, prominent, framedCaptions, panels }: PillProps) {
+export function CallControlPill({ call, language, set, expanded, onToggle, prominent, framedCaptions, panels, panel }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
-  const grown = expanded && arrangement === 'rows';
   return (
     <>
-      <div className={`${prominent ? 'glass-call-prominent' : 'glass-call'} mx-auto flex flex-col rounded-[28px] p-1.5 ${grown ? 'w-[min(calc(100%-2rem),24rem)]' : 'w-fit'}`} data-call-control-pill={grown ? 'grown' : 'pill'}>
-        {grown ? (
+      <div
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} mx-auto flex flex-col rounded-[28px] p-1.5 ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        data-call-control-pill={expanded ? 'grown' : 'pill'}
+        data-call-chrome-keep=""
+      >
+        {expanded ? (
           <>
-            {framedCaptions}
-            <CallActionRows call={call} set={set} language={language} panels={panels} />
+            <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="">
+              {framedCaptions}
+              {panel}
+              <CallActionRows call={call} set={set} language={language} panels={panels} />
+            </div>
             <hr className="mx-2 my-2 border-0 border-t border-white/20" />
           </>
         ) : null}

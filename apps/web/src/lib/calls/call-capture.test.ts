@@ -121,7 +121,7 @@ describe('enregistrer', () => {
     const saver: GallerySaver = { available: true, save: async (input) => (saved.push(input.fileName), 'saved') };
     const delivered: string[] = [];
     const portal: FileDeliveryPortal = { deliver: async (_blob, name) => (delivered.push(name), 'delivered') };
-    expect(await saveCaptures([file('a.png'), file('b.png')], { saver, portal })).toEqual({ saved: 2, failed: 0, cancelled: 0 });
+    expect(await saveCaptures([file('a.png'), file('b.png')], { saver, portal: async () => portal })).toEqual({ saved: 2, failed: 0, cancelled: 0 });
     expect(saved).toEqual(['a.png', 'b.png']);
     expect(delivered).toEqual([]);
   });
@@ -129,10 +129,10 @@ describe('enregistrer', () => {
   test('sans photothèque, par la porte de fichiers ; une annulation se compte à part', async () => {
     const outcomes: Array<'delivered' | 'cancelled'> = ['delivered', 'cancelled'];
     const portal: FileDeliveryPortal = { deliver: async () => outcomes.shift() ?? 'unavailable' };
-    expect(await saveCaptures([file('a.png'), file('b.png')], { saver: null, portal })).toEqual({ saved: 1, failed: 0, cancelled: 1 });
+    expect(await saveCaptures([file('a.png'), file('b.png')], { saver: null, portal: async () => portal })).toEqual({ saved: 1, failed: 0, cancelled: 1 });
   });
 
   test('sans aucune porte, c’est un échec dit, jamais un silence', async () => {
-    expect(await saveCaptures([file('a.png')], { saver: null, portal: null })).toEqual({ saved: 0, failed: 1, cancelled: 0 });
+    expect(await saveCaptures([file('a.png')], { saver: null, portal: async () => null })).toEqual({ saved: 0, failed: 1, cancelled: 0 });
   });
 });
