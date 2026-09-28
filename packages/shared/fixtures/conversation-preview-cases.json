@@ -3256,6 +3256,216 @@
       "text": "Alice a créé le groupe"
     },
     {
+      "id": "system-generic-served-text",
+      "matrix": "Système — clé générique (message que le serveur ne sait pas typer) : son texte, comme dans le fil (#8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Bob a rejoint la conversation",
+          "systemEvent": {
+            "key": "system.generic",
+            "params": {}
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bob a rejoint la conversation",
+            "language": null
+          }
+        ]
+      },
+      "text": "Bob a rejoint la conversation"
+    },
+    {
+      "id": "system-generic-served-translation",
+      "matrix": "Système — clé générique : le texte passe par le Prisme du lecteur (#8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Bob a rejoint la conversation",
+          "translations": {
+            "en": "Bob joined the conversation"
+          },
+          "systemEvent": {
+            "key": "system.generic",
+            "params": {}
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bob joined the conversation",
+            "language": "en"
+          }
+        ]
+      },
+      "text": "Bob joined the conversation"
+    },
+    {
+      "id": "system-generic-without-text",
+      "matrix": "Système — clé générique sans texte : le libellé neutre",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "",
+          "systemEvent": {
+            "key": "system.generic",
+            "params": {}
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Conversation mise à jour"
+          }
+        ]
+      },
+      "text": "Conversation mise à jour"
+    },
+    {
+      "id": "system-members-arrived-one",
+      "matrix": "Système — arrivées regroupées de Meeshy Global, une arrivée (#7740, #8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Aïcha vient d’arriver — dis-lui salut",
+          "systemEvent": {
+            "key": "system.members-arrived",
+            "params": {
+              "first": "Aïcha",
+              "second": "",
+              "third": "",
+              "others": 0,
+              "count": 1
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Aïcha vient d’arriver — dis-lui salut"
+          }
+        ]
+      },
+      "text": "Aïcha vient d’arriver — dis-lui salut"
+    },
+    {
+      "id": "system-members-arrived-many",
+      "matrix": "Système — arrivées regroupées, au-delà de trois, dans la langue de cadrage (#7740, #8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Aïcha, Tom et 12 autres viennent d’arriver — dis-leur salut",
+          "systemEvent": {
+            "key": "system.members-arrived",
+            "params": {
+              "first": "Aïcha",
+              "second": "Tom",
+              "third": "",
+              "others": 12,
+              "count": 14
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Aïcha, Tom and 12 others just arrived — say hi"
+          }
+        ]
+      },
+      "text": "Aïcha, Tom and 12 others just arrived — say hi"
+    },
+    {
       "id": "voice-by-recorder-name",
       "matrix": "Vocal — nom de fichier d’enregistreur",
       "input": {
