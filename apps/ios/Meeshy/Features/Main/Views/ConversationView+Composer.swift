@@ -207,9 +207,9 @@ extension ConversationView {
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
-            ephemeralChoice: $viewModel.ephemeralChoice,
+            ephemeralChoice: $viewModel.composerEphemeralChoice,
             hideEphemeral: composerState.editingMessageId != nil,
-            isBlurEnabled: $viewModel.isBlurEnabled,
+            isBlurEnabled: $viewModel.composerBlurEnabled,
             hideBlur: composerState.editingMessageId != nil,
             // #7472 — la vue unique s'arme d'un TAP, à côté du flou, et se
             // cache dans les mêmes cas que lui : en ÉDITION, où la protection
@@ -219,8 +219,10 @@ extension ConversationView {
             // `forceHideAttachment` est passé plus haut (sa propriété est
             // déclarée avant `selectedLanguage`, l'init memberwise l'exige à
             // cette position).
-            isViewOnceEnabled: $viewModel.isViewOnceEnabled,
+            isViewOnceEnabled: $viewModel.composerViewOnceEnabled,
             hideViewOnce: composerState.editingMessageId != nil,
+            // #8557 — la citation impose son flou et son éphémère, verrouillés.
+            imposedProtection: composerState.editingMessageId == nil ? viewModel.replyImposedProtection : .none,
             pendingEffects: $viewModel.pendingEffects,
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
@@ -231,6 +233,10 @@ extension ConversationView {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isViewOnceEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.armedReplyContagion)
+        .adaptiveOnChange(of: outgoingReplyRoute.replyToId, initial: true) { _, replyToId in
+            viewModel.armReplyContagion(quoting: replyToId)
+        }
     }
 
     /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
