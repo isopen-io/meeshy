@@ -24,10 +24,11 @@ public protocol EmailVerificationGating: AnyObject, Sendable {
 }
 
 /// **UN REFUS `EMAIL_NOT_VERIFIED` MÈNE À LA VALIDATION, PUIS L'ACTION REPART**
-/// (#8365). La garde serveur de #6437 reste en place
-/// (`EMAIL_VERIFICATION_GATED_ROUTES`, `services/gateway/src/middleware/auth.ts`) :
-/// `POST /posts`, `/posts/from-attachment`, `/invitations/email`, `/links`,
-/// `/conversations/:id/new-link` exigent une adresse prouvée.
+/// (#8365). La passerelle garde `/invitations/email`, `/links` et
+/// `/conversations/:id/new-link` derrière une adresse prouvée
+/// (`EMAIL_VERIFICATION_GATED_ROUTES`), et `POST /posts`,
+/// `/posts/from-attachment` derrière le délai de grâce de l'adresse
+/// (`requirePublishingGrace`, #8476) — `services/gateway/src/middleware/auth.ts`.
 ///
 /// `APIClient` est le SEUL site par lequel ces cinq routes passent : c'est donc
 /// là — une fois, pour tous les écrans et toutes les files (story, outbox,
@@ -37,9 +38,9 @@ public protocol EmailVerificationGating: AnyObject, Sendable {
 ///
 /// Prévenir plutôt que guérir : quand l'adresse est connue non prouvée, la
 /// validation s'ouvre AVANT l'envoi ; fermée, le refus est rendu sans
-/// aller-retour. Une STORY n'est jamais retenue d'avance : la première est
-/// permise sans adresse prouvée (#7907) — seul le serveur sait si c'est la
-/// première, donc seul son refus ouvre la validation.
+/// aller-retour. PUBLIER n'est jamais retenu d'avance : la passerelle le
+/// permet tant que le délai de grâce court (#8476) — seul son refus, une fois
+/// le délai échu, ouvre la validation.
 ///
 /// Miroir web : `apps/web/src/lib/activation/email-gated-transport.ts`.
 public enum EmailVerificationGate {
@@ -90,13 +91,6 @@ public enum EmailVerificationGate {
         return id.contains("/") ? nil : .link
     }
 
-    /// Le corps demande une STORY — jamais retenue d'avance (#7907).
-    public static func isStory(body: Data?) -> Bool {
-        guard let body,
-              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else { return false }
-        return object["type"] as? String == "STORY"
-    }
-
     /// Le refus local rendu quand le lecteur ferme la validation AVANT l'envoi :
     /// la même forme qu'un 403 de la passerelle, sans aller-retour.
     public static func localRefusal() -> MeeshyError {
@@ -117,7 +111,7 @@ public enum EmailVerificationGate {
         perform: () async throws -> T
     ) async throws -> T {
         guard let gate, let reason = reason(method: method, path: path) else { return try await perform() }
-        if !isStory(body: body), await gate.emailKnownUnproven(), !(await gate.verifyEmail(for: reason)) {
+        if reason != .publish, await gate.emailKnownUnproven(), !(await gate.verifyEmail(for: reason)) {
             throw localRefusal()
         }
         do {

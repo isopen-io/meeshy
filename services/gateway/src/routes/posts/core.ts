@@ -1,8 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
-import { requireEmailVerificationUnlessFirstStory } from '../../middleware/email-verification-first-story';
+import { UnifiedAuthRequest, requirePublishingGrace } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -218,8 +217,8 @@ export function registerCoreRoutes(
   // PARTAGÉ que POST /posts et POST /posts/:postId/repost
   // (`sharedWriteRateLimit`, cf. définition ci-dessus).
   fastify.post('/posts/from-attachment', {
-    // #6437 — même porte de publication que POST /posts ci-dessus.
-    preValidation: [requiredAuth, requireEmailVerification],
+    // #8476 — même porte de publication que POST /posts ci-dessous.
+    preValidation: [requiredAuth, requirePublishingGrace],
     preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -369,10 +368,9 @@ export function registerCoreRoutes(
   // éviter le plafond de création » vit dans ce partage, pas dans un
   // plafond individuel supplémentaire.
   fastify.post('/posts', {
-    // #6437 — publier (post ou story) sort du compte vers d'autres personnes ;
-    // avant le budget d'écriture partagé pour ne pas le consommer en pure perte.
-    // #7907 — sauf la PREMIÈRE story d'un compte au courriel non vérifié.
-    preValidation: [requiredAuth, requireEmailVerificationUnlessFirstStory(prisma)],
+    // #8476 — publier suit le délai de grâce de l'adresse (#8238) ; avant le
+    // budget d'écriture partagé pour ne pas le consommer en pure perte.
+    preValidation: [requiredAuth, requirePublishingGrace],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
