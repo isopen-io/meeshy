@@ -312,7 +312,8 @@ emit({
  * ensemble.
  *
  * `image-square` — « Exporter en image » : le message (et sa citation) peint
- * en carte PNG, enregistrée dans la galerie.
+ * en carte PNG, enregistrée dans la galerie. `lightning` — « Export rapide »,
+ * la même carte dans le format par défaut, sans passer par les options.
  */
 const THREAD_MENU = [
   'check-circle',
@@ -325,6 +326,7 @@ const THREAD_MENU = [
   'star-fill',
   'pencil-simple',
   'image-square',
+  'lightning',
 ];
 
 emit({

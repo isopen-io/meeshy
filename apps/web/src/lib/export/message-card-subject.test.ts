@@ -53,6 +53,7 @@ describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () =>
     expect(subjectOf(reply())).toEqual({
       quoted: { author: amina.displayName ?? '', text: 'On se retrouve où ce soir ?' },
       reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !' },
+      sentAt: new Date('2026-09-28T11:01:00.000Z'),
     });
   });
 

@@ -60,6 +60,7 @@ export function ThreadMessageSheets({
   conversationId,
   viewerId,
   viewerName,
+  conversationTitle,
   announce,
 }: {
   readonly messageMenu: ThreadSheetsMenu;
@@ -70,6 +71,8 @@ export function ThreadMessageSheets({
   readonly viewerId: string;
   /** Le nom de qui exporte : il signe la carte et son filigrane. */
   readonly viewerName: string;
+  /** Le titre du fil, qu'une carte d'export peut afficher. */
+  readonly conversationTitle: string | null;
   readonly announce: (message: string) => void;
 }) {
   return (
@@ -146,8 +149,9 @@ export function ThreadMessageSheets({
           />
         );
       })(messageMenu.detailFor)}
-      {((exportFor) => {
-        if (exportFor === null) return null;
+      {((request) => {
+        if (request === null) return null;
+        const exportFor = request.messageId;
         const exportMessage = messages.find((m) => m.id === exportFor);
         if (exportMessage === undefined) return null;
         const subject = messageCardSubjectOf({
@@ -163,6 +167,8 @@ export function ThreadMessageSheets({
           <MessageExportSheet
             subject={subject}
             exporter={viewerName.trim() === '' ? 'Meeshy' : viewerName.trim()}
+            conversationTitle={conversationTitle}
+            quick={request.quick}
             announce={announce}
             onClose={() => messageMenu.setExportFor(null)}
           />

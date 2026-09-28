@@ -19,6 +19,14 @@ const esMessageCard = {
   'export.announce.expired': 'Toca de nuevo para guardar',
   'export.announce.failed': 'No se pudo crear la imagen',
   'export.announce.unavailable': 'Este dispositivo no puede guardar la imagen',
+  'message.menu.exportQuick': 'Exportación rápida',
+  'export.card.options': 'Mostrar',
+  'export.card.option.title': 'Título de la conversación',
+  'export.card.option.authors': 'Nombres de los autores',
+  'export.card.option.date': 'Fecha',
+  'export.card.default.save': 'Usar como formato predeterminado',
+  'export.card.default.current': 'Formato predeterminado',
+  'export.announce.defaultSaved': 'Formato predeterminado guardado',
 } satisfies MessageCardCatalogSlice;
 
 export default esMessageCard;

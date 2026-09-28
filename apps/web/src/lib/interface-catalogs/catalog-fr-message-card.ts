@@ -20,6 +20,14 @@ const frMessageCard = {
   'export.announce.expired': 'Touchez de nouveau pour enregistrer',
   'export.announce.failed': 'Impossible de créer l’image',
   'export.announce.unavailable': 'Cet appareil ne sait pas enregistrer l’image',
+  'message.menu.exportQuick': 'Export rapide',
+  'export.card.options': 'Afficher',
+  'export.card.option.title': 'Titre de la conversation',
+  'export.card.option.authors': 'Noms des auteurs',
+  'export.card.option.date': 'Date',
+  'export.card.default.save': 'Utiliser comme format par défaut',
+  'export.card.default.current': 'Format par défaut',
+  'export.announce.defaultSaved': 'Format par défaut enregistré',
 } as const;
 
 export type MessageCardCatalogSlice = Readonly<Record<keyof typeof frMessageCard, string>>;

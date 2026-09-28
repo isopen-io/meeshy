@@ -19,6 +19,14 @@ const enMessageCard = {
   'export.announce.expired': 'Tap again to save',
   'export.announce.failed': 'Couldn’t create the image',
   'export.announce.unavailable': 'This device can’t save the image',
+  'message.menu.exportQuick': 'Quick export',
+  'export.card.options': 'Show',
+  'export.card.option.title': 'Conversation title',
+  'export.card.option.authors': 'Author names',
+  'export.card.option.date': 'Date',
+  'export.card.default.save': 'Use as default format',
+  'export.card.default.current': 'Default format',
+  'export.announce.defaultSaved': 'Default format saved',
 } satisfies MessageCardCatalogSlice;
 
 export default enMessageCard;

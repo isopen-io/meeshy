@@ -19,6 +19,14 @@ const itMessageCard = {
   'export.announce.expired': 'Tocca di nuovo per salvare',
   'export.announce.failed': 'Impossibile creare l’immagine',
   'export.announce.unavailable': 'Questo dispositivo non può salvare l’immagine',
+  'message.menu.exportQuick': 'Esportazione rapida',
+  'export.card.options': 'Mostra',
+  'export.card.option.title': 'Titolo della conversazione',
+  'export.card.option.authors': 'Nomi degli autori',
+  'export.card.option.date': 'Data',
+  'export.card.default.save': 'Usa come formato predefinito',
+  'export.card.default.current': 'Formato predefinito',
+  'export.announce.defaultSaved': 'Formato predefinito salvato',
 } satisfies MessageCardCatalogSlice;
 
 export default itMessageCard;

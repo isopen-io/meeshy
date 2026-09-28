@@ -1,22 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Sheet } from '@/components/sheet';
 import type { MessageCardDelivery } from '@/lib/export/deliver-message-card';
+import {
+  INITIAL_MESSAGE_CARD_FORMAT,
+  readDefaultMessageCardFormat,
+  sameMessageCardFormat,
+  writeDefaultMessageCardFormat,
+  type MessageCardFormat,
+} from '@/lib/export/message-card-format';
 import type { MessageCardInput } from '@/lib/export/message-card-layout';
-import { messageCardFileName, type MessageCardSubject } from '@/lib/export/message-card-subject';
 import { MESSAGE_CARD_STYLE_IDS, type MessageCardStyleId } from '@/lib/export/message-card-style-ids';
+import { messageCardFileName, type MessageCardSubject } from '@/lib/export/message-card-subject';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 import { ActionButton } from '@/routes/link-page-parts';
 
 /**
- * **EXPORTER UN MESSAGE EN IMAGE** — la feuille qui montre la carte, laisse
- * choisir son style et l'enregistre. Deux gestes au cas nominal : « Exporter
- * en image » dans le menu, puis « Enregistrer l'image » — le style par défaut
- * est déjà une carte finie.
+ * **EXPORTER UN MESSAGE EN IMAGE — UN COMPOSER SIMPLIFIÉ.** La feuille ne
+ * crée aucun contenu : elle choisit comment MONTRER ce qui existe (le style,
+ * le titre de la conversation, les noms des auteurs, la date), montre la
+ * carte telle qu'elle partira, et l'enregistre.
  *
- * Le peintre (`message-card-paint.ts`) et les polices qu'il réveille sont
- * chargés À LA DEMANDE, à l'ouverture de cette feuille : le fil n'en paie rien.
+ * LE FORMAT PAR DÉFAUT (`message-card-format.ts`) ouvre la feuille déjà
+ * réglée, et « Utiliser comme format par défaut » le remplace. L'« Export
+ * rapide » du menu monte cette même feuille en mode `quick` : la carte, peinte
+ * dans le format par défaut, part dès qu'elle est prête — la feuille n'est
+ * alors qu'un retour visuel, et reste ouverte si l'enregistrement demande un
+ * nouveau geste (feuille de partage annulée, activation expirée).
+ *
+ * Le peintre et les polices qu'il réveille, comme les portes de livraison,
+ * sont chargés À LA DEMANDE : le fil n'en paie rien.
  */
 
 const STYLE_LABEL = {
@@ -33,7 +48,15 @@ const DELIVERY_ANNOUNCE = {
   unavailable: 'export.announce.unavailable',
 } as const satisfies Readonly<Record<MessageCardDelivery, InterfaceCatalogKey>>;
 
-type Rendered = { readonly style: MessageCardStyleId; readonly blob: Blob; readonly url: string; readonly truncated: boolean };
+type Option = 'showConversationTitle' | 'showAuthors' | 'showDate';
+
+const OPTION_LABEL = {
+  showConversationTitle: 'export.card.option.title',
+  showAuthors: 'export.card.option.authors',
+  showDate: 'export.card.option.date',
+} as const satisfies Readonly<Record<Option, InterfaceCatalogKey>>;
+
+type Rendered = { readonly key: string; readonly blob: Blob; readonly url: string; readonly truncated: boolean };
 
 type Painter = (input: MessageCardInput) => Promise<{ readonly blob: Blob; readonly truncated: boolean } | null>;
 
@@ -45,11 +68,69 @@ const defaultPainter: Painter = async (input) => (await import('@/lib/export/mes
 const defaultDeliver = async (blob: Blob, fileName: string): Promise<MessageCardDelivery> =>
   (await import('@/lib/export/deliver-message-card')).deliverMessageCard(blob, fileName);
 
+/** La carte telle que le format la demande — un titre absent ou vide n'est jamais « affiché ». */
+export function messageCardInputOf(params: {
+  readonly subject: MessageCardSubject;
+  readonly format: MessageCardFormat;
+  readonly exporter: string;
+  readonly conversationTitle: string | null;
+  readonly footerLabel: string;
+  readonly formatDate: (date: Date) => string;
+}): MessageCardInput {
+  const { subject, format } = params;
+  return {
+    quoted: subject.quoted,
+    reply: subject.reply,
+    exporter: params.exporter,
+    footerLabel: params.footerLabel,
+    style: format.style,
+    title: format.showConversationTitle ? params.conversationTitle : null,
+    date: format.showDate ? params.formatDate(subject.sentAt) : null,
+    showAuthors: format.showAuthors,
+  };
+}
+
+const formatKey = (format: MessageCardFormat): string => JSON.stringify(format);
+
+function Chip({
+  pressed,
+  onClick,
+  data,
+  children,
+}: {
+  readonly pressed: boolean;
+  readonly onClick: () => void;
+  readonly data: Readonly<Record<`data-${string}`, string>>;
+  readonly children: string;
+}) {
+  return (
+    <button
+      {...data}
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className="shrink-0 rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{
+        minHeight: 44,
+        color: pressed ? 'white' : 'var(--color-ios-ink)',
+        backgroundColor: pressed ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-ios-surface)',
+        border: `1px solid ${pressed ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-edge)'}`,
+        outlineColor: 'var(--accent, var(--color-ios-brand))',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function MessageExportSheet({
   subject,
   exporter,
+  conversationTitle,
+  quick = false,
   onClose,
   announce,
+  storage = safeLocalStorage(),
   paint = defaultPainter,
   deliver = defaultDeliver,
   createObjectURL = (blob) => URL.createObjectURL(blob),
@@ -57,18 +138,26 @@ export function MessageExportSheet({
 }: {
   readonly subject: MessageCardSubject;
   readonly exporter: string;
+  /** Le titre de la conversation — `null` quand elle n'en a pas : l'option ne s'offre alors pas. */
+  readonly conversationTitle: string | null;
+  /** « Export rapide » : le format par défaut, enregistré dès que la carte est peinte. */
+  readonly quick?: boolean;
   readonly onClose: () => void;
   readonly announce: (message: string) => void;
+  readonly storage?: SafeStorage;
   readonly paint?: Painter;
   readonly deliver?: (blob: Blob, fileName: string) => Promise<MessageCardDelivery>;
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
 }) {
   const language = currentInterfaceLanguage();
-  const [style, setStyle] = useState<MessageCardStyleId>(MESSAGE_CARD_STYLE_IDS[0]);
+  const [savedDefault, setSavedDefault] = useState<MessageCardFormat | null>(() => readDefaultMessageCardFormat(storage));
+  const [format, setFormat] = useState<MessageCardFormat>(() => savedDefault ?? INITIAL_MESSAGE_CARD_FORMAT);
   const [rendered, setRendered] = useState<Rendered | null>(null);
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const quickSent = useRef(false);
+  const title = conversationTitle !== null && conversationTitle.trim() !== '' ? conversationTitle.trim() : null;
 
   /* Les portes sont PRÉCHARGÉES pendant que la carte se peint : sur iOS, le
      partage exige l'activation du geste, qu'une attente réseau après le tap
@@ -78,11 +167,21 @@ export function MessageExportSheet({
     void import('@/lib/media/deliver-file').catch(() => undefined);
   }, []);
 
+  const key = formatKey(format);
+
   useEffect(() => {
     let live = true;
     let url: string | null = null;
     setFailed(false);
-    void paint({ ...subject, exporter, footerLabel: translate(language, 'export.card.footer', { name: exporter }), style })
+    const input = messageCardInputOf({
+      subject,
+      format,
+      exporter,
+      conversationTitle: title,
+      footerLabel: translate(language, 'export.card.footer', { name: exporter }),
+      formatDate: (date) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date),
+    });
+    void paint(input)
       .catch(() => null)
       .then((card) => {
         if (!live) return;
@@ -91,16 +190,16 @@ export function MessageExportSheet({
           return;
         }
         url = createObjectURL(card.blob);
-        setRendered({ style, blob: card.blob, url, truncated: card.truncated });
+        setRendered({ key, blob: card.blob, url, truncated: card.truncated });
       });
     return () => {
       live = false;
       if (url !== null) revokeObjectURL(url);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [style, subject, exporter]);
+  }, [key, subject, exporter, title]);
 
-  const ready = rendered !== null && rendered.style === style;
+  const ready = rendered !== null && rendered.key === key;
 
   const save = async () => {
     if (!ready || saving) return;
@@ -110,6 +209,24 @@ export function MessageExportSheet({
     announce(translate(language, DELIVERY_ANNOUNCE[outcome]));
     if (outcome === 'gallery' || outcome === 'shared') onClose();
   };
+
+  useEffect(() => {
+    if (!quick || !ready || quickSent.current) return;
+    quickSent.current = true;
+    void save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quick, ready]);
+
+  const toggle = (option: Option) => setFormat((current) => ({ ...current, [option]: !current[option] }));
+
+  const isDefault = sameMessageCardFormat(format, savedDefault);
+  const useAsDefault = () => {
+    writeDefaultMessageCardFormat(storage, format);
+    setSavedDefault(format);
+    announce(translate(language, 'export.announce.defaultSaved'));
+  };
+
+  const options: readonly Option[] = title === null ? ['showAuthors', 'showDate'] : ['showConversationTitle', 'showAuthors', 'showDate'];
 
   return (
     <Sheet title={translate(language, 'export.card.title')} presentation="centered" bodyAs="div" onClose={onClose}>
@@ -128,9 +245,9 @@ export function MessageExportSheet({
             <img
               src={rendered.url}
               alt={translate(language, 'export.card.preview')}
-              data-export-preview={rendered.style}
+              data-export-preview={format.style}
               className="block w-full"
-              style={{ maxHeight: '55vh', objectFit: 'contain' }}
+              style={{ maxHeight: '50vh', objectFit: 'contain' }}
             />
           ) : (
             <p className="px-4 py-6 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
@@ -146,33 +263,32 @@ export function MessageExportSheet({
         ) : null}
 
         <div role="group" aria-label={translate(language, 'export.card.styles')} className="flex gap-2 overflow-x-auto">
-          {MESSAGE_CARD_STYLE_IDS.map((candidate) => {
-            const pressed = candidate === style;
-            return (
-              <button
-                key={candidate}
-                type="button"
-                aria-pressed={pressed}
-                data-export-style={candidate}
-                onClick={() => setStyle(candidate)}
-                className="shrink-0 rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  minHeight: 44,
-                  color: pressed ? 'white' : 'var(--color-ios-ink)',
-                  backgroundColor: pressed ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-ios-surface)',
-                  border: `1px solid ${pressed ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-edge)'}`,
-                  outlineColor: 'var(--accent, var(--color-ios-brand))',
-                }}
-              >
-                {translate(language, STYLE_LABEL[candidate])}
-              </button>
-            );
-          })}
+          {MESSAGE_CARD_STYLE_IDS.map((candidate) => (
+            <Chip
+              key={candidate}
+              pressed={candidate === format.style}
+              onClick={() => setFormat((current) => ({ ...current, style: candidate }))}
+              data={{ 'data-export-style': candidate }}
+            >
+              {translate(language, STYLE_LABEL[candidate])}
+            </Chip>
+          ))}
+        </div>
+
+        <div role="group" aria-label={translate(language, 'export.card.options')} className="flex flex-wrap gap-2">
+          {options.map((option) => (
+            <Chip key={option} pressed={format[option]} onClick={() => toggle(option)} data={{ 'data-export-option': option }}>
+              {translate(language, OPTION_LABEL[option])}
+            </Chip>
+          ))}
         </div>
 
         <div className="grid gap-2 pt-2">
           <ActionButton disabled={!ready || saving} onClick={() => void save()} data={{ 'data-export-save': '' }}>
             {translate(language, 'export.card.save')}
+          </ActionButton>
+          <ActionButton tone="secondary" disabled={isDefault} onClick={useAsDefault} data={{ 'data-export-default': '' }}>
+            {translate(language, isDefault ? 'export.card.default.current' : 'export.card.default.save')}
           </ActionButton>
           <ActionButton tone="secondary" onClick={onClose}>
             {translate(language, 'common.cancel')}

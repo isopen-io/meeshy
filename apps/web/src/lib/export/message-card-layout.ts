@@ -6,6 +6,7 @@ import { MESSAGE_CARD_STYLES, canvasFont, type MessageCardStyleId } from './mess
  * une règle fixe dans les témoins) et rend la liste des opérations à peindre.
  *
  * LA LECTURE DE HAUT EN BAS EST CELLE DU FIL :
+ *  0. l'en-tête, si l'exportateur l'a voulu : titre de la conversation, date ;
  *  1. le message CITÉ — en entier, en taille RÉDUITE, sous un filet ;
  *  2. le séparateur « ——— ○ ——— » ;
  *  3. la RÉPONSE, en bas, dans la police du style et en grand ;
@@ -35,6 +36,11 @@ export type MessageCardInput = {
   /** « Exporté par {name} », déjà dans la langue d'INTERFACE : cette loi n'en connaît aucune. */
   readonly footerLabel: string;
   readonly style: MessageCardStyleId;
+  /** L'en-tête optionnel : le titre de la conversation et/ou la date, déjà rédigés. */
+  readonly title?: string | null;
+  readonly date?: string | null;
+  /** Les noms des auteurs au-dessus de chaque bloc — `true` par défaut. */
+  readonly showAuthors?: boolean;
 };
 
 export type CardTextOp = {
@@ -93,6 +99,11 @@ const AUTHOR_SIZE = 30;
 const AUTHOR_LINE = 44;
 const AUTHOR_GAP = 14;
 const SEPARATOR_BLOCK = 132;
+const TITLE_SIZE = 34;
+const TITLE_LINE = 46;
+const DATE_SIZE = 26;
+const DATE_LINE = 38;
+const HEADER_GAP = 56;
 const REPLY_START = 68;
 const REPLY_FLOOR = 36;
 const QUOTE_START = 40;
@@ -180,10 +191,14 @@ type Sized = {
 const replyLineHeight = (size: number) => Math.round(size * REPLY_LEADING);
 const quoteLineHeight = (size: number) => Math.round(size * QUOTE_LEADING);
 
-function contentHeight(sized: Sized, hasQuote: boolean): number {
-  const quote = hasQuote ? AUTHOR_LINE + AUTHOR_GAP + sized.quoteLines.length * quoteLineHeight(sized.quoteSize) + SEPARATOR_BLOCK : 0;
-  return quote + AUTHOR_LINE + AUTHOR_GAP + sized.replyLines.length * replyLineHeight(sized.replySize);
+type Chrome = { readonly header: number; readonly author: number };
+
+function contentHeight(sized: Sized, hasQuote: boolean, chrome: Chrome): number {
+  const quote = hasQuote ? chrome.author + sized.quoteLines.length * quoteLineHeight(sized.quoteSize) + SEPARATOR_BLOCK : 0;
+  return chrome.header + quote + chrome.author + sized.replyLines.length * replyLineHeight(sized.replySize);
 }
+
+const nonBlank = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim());
 
 export function layoutMessageCard(input: MessageCardInput, measure: Measure): CardLayout {
   const style = MESSAGE_CARD_STYLES[input.style];
@@ -191,6 +206,13 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const quoteWidth = textWidth - QUOTE_INDENT;
   const hasQuote = input.quoted !== null && input.quoted.text.trim() !== '';
   const budget = CARD_MAX_HEIGHT - PAD_TOP - FOOTER_HEIGHT;
+  const title = nonBlank(input.title);
+  const date = nonBlank(input.date);
+  const showAuthors = input.showAuthors !== false;
+  const chrome: Chrome = {
+    header: title === null && date === null ? 0 : (title === null ? 0 : TITLE_LINE) + (date === null ? 0 : DATE_LINE) + HEADER_GAP,
+    author: showAuthors ? AUTHOR_LINE + AUTHOR_GAP : 0,
+  };
 
   const sizeAt = (step: number): Sized => {
     const replySize = Math.max(REPLY_FLOOR, REPLY_START * SHRINK ** step);
@@ -209,17 +231,17 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
 
   let step = 0;
   let sized = sizeAt(step);
-  while (contentHeight(sized, hasQuote) > budget && (sized.replySize > REPLY_FLOOR || sized.quoteSize > QUOTE_FLOOR)) {
+  while (contentHeight(sized, hasQuote, chrome) > budget && (sized.replySize > REPLY_FLOOR || sized.quoteSize > QUOTE_FLOOR)) {
     step += 1;
     sized = sizeAt(step);
   }
 
   let truncated = false;
-  if (contentHeight(sized, hasQuote) > budget) {
+  if (contentHeight(sized, hasQuote, chrome) > budget) {
     truncated = true;
     const quoteLH = quoteLineHeight(sized.quoteSize);
     const replyLH = replyLineHeight(sized.replySize);
-    const fixed = (hasQuote ? AUTHOR_LINE + AUTHOR_GAP + SEPARATOR_BLOCK : 0) + AUTHOR_LINE + AUTHOR_GAP;
+    const fixed = chrome.header + (hasQuote ? chrome.author + SEPARATOR_BLOCK : 0) + chrome.author;
     const room = budget - fixed;
     /* La citation cède d'abord : au plus un tiers de la place, deux lignes au moins. */
     const quoteKeep = hasQuote ? Math.min(sized.quoteLines.length, Math.max(2, Math.floor((room * 0.3) / quoteLH))) : 0;
@@ -231,14 +253,29 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     };
   }
 
-  const content = contentHeight(sized, hasQuote);
+  const content = contentHeight(sized, hasQuote, chrome);
   const height = truncated ? CARD_MAX_HEIGHT : Math.min(CARD_MAX_HEIGHT, Math.max(CARD_MIN_HEIGHT, PAD_TOP + content + FOOTER_HEIGHT));
   /* Un texte court flotte au milieu de l'espace libre, jamais collé en haut. */
   let y = PAD_TOP + Math.max(0, Math.floor((height - PAD_TOP - FOOTER_HEIGHT - content) / 2));
 
   const ops: CardOp[] = [];
   const authorFont = canvasFont({ family: null, weight: 600, style: 'normal' }, AUTHOR_SIZE);
+  if (title !== null) {
+    const direction = textDirection(title);
+    const titleFont = canvasFont({ family: null, weight: 800, style: 'normal' }, TITLE_SIZE);
+    const [line = title] = truncateLines(wrapText(title, CARD_WIDTH - 2 * PAD_X, titleFont, measure), 1, CARD_WIDTH - 2 * PAD_X, titleFont, measure);
+    ops.push({ kind: 'text', text: line, x: direction === 'rtl' ? CARD_WIDTH - PAD_X : PAD_X, y: y + TITLE_SIZE, font: titleFont, color: style.replyInk, align: direction === 'rtl' ? 'right' : 'left', direction });
+    y += TITLE_LINE;
+  }
+  if (date !== null) {
+    const direction = textDirection(date);
+    ops.push({ kind: 'text', text: date, x: direction === 'rtl' ? CARD_WIDTH - PAD_X : PAD_X, y: y + DATE_SIZE, font: canvasFont({ family: null, weight: 500, style: 'normal' }, DATE_SIZE), color: style.quoteInk, align: direction === 'rtl' ? 'right' : 'left', direction });
+    y += DATE_LINE;
+  }
+  if (chrome.header > 0) y += HEADER_GAP;
+
   const author = (name: string, x: number, direction: 'ltr' | 'rtl') => {
+    if (!showAuthors) return;
     ops.push({ kind: 'text', text: name, x, y: y + AUTHOR_SIZE, font: authorFont, color: style.authorInk, align: direction === 'rtl' ? 'right' : 'left', direction });
     y += AUTHOR_LINE + AUTHOR_GAP;
   };

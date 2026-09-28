@@ -19,6 +19,14 @@ const arMessageCard = {
   'export.announce.expired': 'اضغط مجددًا للحفظ',
   'export.announce.failed': 'تعذّر إنشاء الصورة',
   'export.announce.unavailable': 'لا يستطيع هذا الجهاز حفظ الصورة',
+  'message.menu.exportQuick': 'تصدير سريع',
+  'export.card.options': 'إظهار',
+  'export.card.option.title': 'عنوان المحادثة',
+  'export.card.option.authors': 'أسماء الكتّاب',
+  'export.card.option.date': 'التاريخ',
+  'export.card.default.save': 'استخدام كتنسيق افتراضي',
+  'export.card.default.current': 'التنسيق الافتراضي',
+  'export.announce.defaultSaved': 'حُفظ التنسيق الافتراضي',
 } satisfies MessageCardCatalogSlice;
 
 export default arMessageCard;

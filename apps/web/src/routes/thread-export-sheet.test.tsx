@@ -6,6 +6,9 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { MESSAGE_CARD_FORMAT_KEY } from '@/lib/export/message-card-format';
+import type { SafeStorage } from '@/lib/storage';
+
 import { MessageExportSheet } from './thread-export-sheet';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -27,6 +30,21 @@ afterAll(async () => {
 const subject = {
   quoted: { author: 'Awa', text: 'On se retrouve où ce soir ?' },
   reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !' },
+  sentAt: new Date('2026-09-28T18:30:00.000Z'),
+};
+
+const memoryStorage = (initial: Record<string, string> = {}): SafeStorage & { readonly entries: Map<string, string> } => {
+  const entries = new Map(Object.entries(initial));
+  return {
+    entries,
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => {
+      entries.set(key, value);
+    },
+    removeItem: (key) => {
+      entries.delete(key);
+    },
+  };
 };
 
 type Harness = {
@@ -36,12 +54,23 @@ type Harness = {
   readonly closed: { count: number };
 };
 
-const mountSheet = async (options: { readonly delivery?: MessageCardDelivery; readonly paintFails?: boolean } = {}) => {
+const mountSheet = async (
+  options: {
+    readonly delivery?: MessageCardDelivery;
+    readonly paintFails?: boolean;
+    readonly quick?: boolean;
+    readonly title?: string | null;
+    readonly storage?: SafeStorage;
+  } = {},
+) => {
   const harness: Harness = { painted: [], delivered: [], announced: [], closed: { count: 0 } };
   const host = await mounter.mount(
     <MessageExportSheet
       subject={subject}
       exporter="Jacques"
+      conversationTitle={options.title === undefined ? 'Soirée de lancement' : options.title}
+      quick={options.quick ?? false}
+      storage={options.storage ?? memoryStorage()}
       announce={(message) => harness.announced.push(message)}
       onClose={() => {
         harness.closed.count += 1;
@@ -111,5 +140,57 @@ describe('MessageExportSheet — voir la carte, choisir son style, l’enregistr
     const { host } = await mountSheet({ paintFails: true });
     expect(host.querySelector('[data-export-failed]') !== null).toBe(true);
     expect(host.querySelector<HTMLButtonElement>('[data-export-save]')?.disabled).toBe(true);
+  });
+
+  test('les options montrent le titre de la conversation et la date, ou masquent les auteurs', async () => {
+    const { host, harness } = await mountSheet();
+    expect(harness.painted[0]?.title ?? null).toBeNull();
+    await mounter.click(host.querySelector('[data-export-option="showConversationTitle"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-option="showDate"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-option="showAuthors"]'));
+    await mounter.settle();
+    const last = harness.painted[harness.painted.length - 1];
+    expect(last?.title).toBe('Soirée de lancement');
+    expect(last?.date).toBe('28 septembre 2026');
+    expect(last?.showAuthors).toBe(false);
+  });
+
+  test('une conversation sans titre n’offre pas l’option du titre', async () => {
+    const { host } = await mountSheet({ title: null });
+    expect(host.querySelector('[data-export-option="showConversationTitle"]') === null).toBe(true);
+    expect(host.querySelectorAll('[data-export-option]').length).toBe(2);
+  });
+
+  test('« Utiliser comme format par défaut » l’enregistre sur l’appareil et le dit', async () => {
+    const storage = memoryStorage();
+    const { host, harness } = await mountSheet({ storage });
+    await mounter.click(host.querySelector('[data-export-style="editorial"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-default]'));
+    await mounter.settle();
+    expect(JSON.parse(storage.entries.get(MESSAGE_CARD_FORMAT_KEY) ?? '{}').style).toBe('editorial');
+    expect(harness.announced).toEqual(['Format par défaut enregistré']);
+    expect(host.querySelector<HTMLButtonElement>('[data-export-default]')?.disabled).toBe(true);
+  });
+
+  test('la feuille s’ouvre dans le format par défaut enregistré', async () => {
+    const storage = memoryStorage({
+      [MESSAGE_CARD_FORMAT_KEY]: JSON.stringify({ style: 'manuscrit', showConversationTitle: true, showAuthors: true, showDate: false }),
+    });
+    const { harness } = await mountSheet({ storage });
+    expect(harness.painted[0]?.style).toBe('manuscrit');
+    expect(harness.painted[0]?.title).toBe('Soirée de lancement');
+  });
+
+  test('« Export rapide » enregistre la carte dès qu’elle est peinte, sans autre geste', async () => {
+    const storage = memoryStorage({
+      [MESSAGE_CARD_FORMAT_KEY]: JSON.stringify({ style: 'editorial', showConversationTitle: false, showAuthors: true, showDate: true }),
+    });
+    const { harness } = await mountSheet({ storage, quick: true });
+    expect(harness.painted.map((input) => input.style)).toEqual(['editorial']);
+    expect(harness.delivered.length).toBe(1);
+    expect(harness.closed.count).toBe(1);
   });
 });

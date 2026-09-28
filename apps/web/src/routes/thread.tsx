@@ -903,6 +903,7 @@ export default function ThreadScreen() {
         conversationId={conversationId}
         viewerId={viewer.id ?? ''}
         viewerName={viewer.displayName}
+        conversationTitle={title}
         announce={announcer.announce}
       />
     </div>

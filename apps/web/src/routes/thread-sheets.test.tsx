@@ -105,6 +105,7 @@ const mountSheets = async (menu: ThreadSheetsMenu, messages: readonly Message[])
         conversationId="c-deploiement"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
+        conversationTitle="Déploiement"
         announce={() => {}}
       />
     </QueryClientProvider>,
@@ -133,6 +134,7 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
+        conversationTitle="Déploiement"
         announce={() => {}}
       />,
     );
@@ -149,6 +151,7 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
+        conversationTitle="Déploiement"
         announce={() => {}}
       />,
     );
@@ -189,12 +192,12 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
   });
 
   test('« Exporter en image » monte la carte d’un message ordinaire, avec ses trois styles', async () => {
-    const host = await mountSheets(menuOf({ exportFor: SERVER_MESSAGE_ID }), [ownMessage({ attachments: [] })]);
+    const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ attachments: [] })]);
     expect(host.querySelectorAll('[data-export-style]').length).toBe(3);
   });
 
   test('un message protégé ne monte aucune carte, même ciblé', async () => {
-    const host = await mountSheets(menuOf({ exportFor: SERVER_MESSAGE_ID }), [ownMessage({ isBlurred: true })]);
+    const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ isBlurred: true })]);
     expect(has(host, '[data-export-style]')).toBe(false);
   });
 

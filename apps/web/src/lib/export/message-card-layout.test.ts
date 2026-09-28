@@ -160,4 +160,28 @@ describe('layoutMessageCard — citation réduite en haut, séparateur, réponse
     expect(reply?.direction).toBe('rtl');
     expect(reply?.align).toBe('right');
   });
+
+  test('l’en-tête (titre de la conversation, date) ouvre la carte, avant la citation', () => {
+    const { ops } = layoutMessageCard(cardInput({ title: 'Soirée de lancement', date: '28 septembre 2026' }), measure);
+    const title = opWithText(ops, 'Soirée de lancement');
+    const date = opWithText(ops, '28 septembre 2026');
+    const quote = opWithText(ops, 'On se retrouve où ce soir ?');
+    expect((title?.y ?? Infinity) < (date?.y ?? 0)).toBe(true);
+    expect((date?.y ?? Infinity) < (quote?.y ?? 0)).toBe(true);
+  });
+
+  test('un titre trop long tient sur une ligne, coupé d’une ellipse', () => {
+    const long = 'Une conversation au titre vraiment interminable '.repeat(4).trim();
+    const { ops } = layoutMessageCard(cardInput({ title: long }), measure);
+    const title = texts(ops).find((op) => op.text.startsWith('Une conversation'));
+    expect(title?.text.endsWith('…')).toBe(true);
+    expect((title?.x ?? 0) + measure(title?.text ?? '', title?.font ?? '') <= CARD_WIDTH).toBe(true);
+  });
+
+  test('sans les auteurs, aucun nom n’est peint', () => {
+    const { ops } = layoutMessageCard(cardInput({ showAuthors: false }), measure);
+    expect(opWithText(ops, 'Awa')).toBeUndefined();
+    expect(opWithText(ops, 'Jacques')).toBeUndefined();
+    expect(opWithText(ops, 'Chez Lina, à 20 h !') !== undefined).toBe(true);
+  });
 });

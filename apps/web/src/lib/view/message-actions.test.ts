@@ -195,6 +195,13 @@ describe('« Exporter en image » suit la garde de « Copier »', () => {
     expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('export');
   });
 
+  test('« Export rapide » n’apparaît qu’avec un format par défaut enregistré, juste après « Exporter en image »', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('exportQuick');
+    const ids = messageMenuItems(ctx({ hasDefaultExportFormat: true })).map((i) => i.id);
+    expect(ids.indexOf('exportQuick')).toBe(ids.indexOf('export') + 1);
+    expect(messageMenuItems(ctx({ hasDefaultExportFormat: true, isProtected: true })).map((i) => i.id)).not.toContain('exportQuick');
+  });
+
   test('une vue unique ne propose que « Plus… »', () => {
     expect(messageMenuItems(ctx({ isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
   });

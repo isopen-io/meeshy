@@ -19,6 +19,14 @@ const ptMessageCard = {
   'export.announce.expired': 'Toque novamente para guardar',
   'export.announce.failed': 'Não foi possível criar a imagem',
   'export.announce.unavailable': 'Este dispositivo não consegue guardar a imagem',
+  'message.menu.exportQuick': 'Exportação rápida',
+  'export.card.options': 'Mostrar',
+  'export.card.option.title': 'Título da conversa',
+  'export.card.option.authors': 'Nomes dos autores',
+  'export.card.option.date': 'Data',
+  'export.card.default.save': 'Usar como formato predefinido',
+  'export.card.default.current': 'Formato predefinido',
+  'export.announce.defaultSaved': 'Formato predefinido guardado',
 } satisfies MessageCardCatalogSlice;
 
 export default ptMessageCard;

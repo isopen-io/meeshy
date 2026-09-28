@@ -19,6 +19,14 @@ const deMessageCard = {
   'export.announce.expired': 'Zum Sichern erneut tippen',
   'export.announce.failed': 'Bild konnte nicht erstellt werden',
   'export.announce.unavailable': 'Dieses Gerät kann das Bild nicht sichern',
+  'message.menu.exportQuick': 'Schnellexport',
+  'export.card.options': 'Anzeigen',
+  'export.card.option.title': 'Titel der Unterhaltung',
+  'export.card.option.authors': 'Namen der Verfasser',
+  'export.card.option.date': 'Datum',
+  'export.card.default.save': 'Als Standardformat verwenden',
+  'export.card.default.current': 'Standardformat',
+  'export.announce.defaultSaved': 'Standardformat gesichert',
 } satisfies MessageCardCatalogSlice;
 
 export default deMessageCard;

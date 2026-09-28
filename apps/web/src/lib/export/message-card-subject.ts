@@ -36,6 +36,8 @@ export function cardAuthorOf(message: AuthorFields, viewer: { readonly id: strin
 export type MessageCardSubject = {
   readonly quoted: MessageCardPart | null;
   readonly reply: MessageCardPart;
+  /** L'heure d'envoi de la réponse — la date qu'une carte peut afficher. */
+  readonly sentAt: Date;
 };
 
 export function messageCardSubjectOf(params: {
@@ -58,7 +60,7 @@ export function messageCardSubjectOf(params: {
     const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages: params.readerLanguages, interfaceLanguage: params.interfaceLanguage });
     if (preview.text.trim() !== '') quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text };
   }
-  return { quoted, reply: { author: cardAuthorOf(message, viewer), text } };
+  return { quoted, reply: { author: cardAuthorOf(message, viewer), text }, sentAt: new Date(message.createdAt) };
 }
 
 /** Le nom du fichier : lisible dans une galerie, sans rien du contenu. */
