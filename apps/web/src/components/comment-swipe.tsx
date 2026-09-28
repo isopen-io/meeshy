@@ -47,6 +47,9 @@ const directionOf = (element: Element): 'ltr' | 'rtl' => {
 const reducedMotion = (): boolean =>
   typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Le clic synthétique qui suit un `pointerup` arrive dans la même tâche ou la suivante. */
+const SWALLOW_CLICK_MS = 400;
+
 /** Le ressort iOS (`.spring(response: 0.42, dampingFraction: 0.62)`) approché par une courbe à dépassement. */
 const SPRING_BACK = 'transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1)';
 
@@ -65,7 +68,10 @@ export function CommentSwipe({
   const engaged = useRef(false);
   const crossed = useRef(false);
   const current = useRef(0);
-  const swallowClick = useRef(false);
+  /* L'INSTANT jusqu'auquel un clic est avalé — jamais un drapeau qui
+     attendrait « le prochain clic » : un glissé au doigt n'en produit
+     souvent AUCUN, et le drapeau resté levé mangerait le tap suivant. */
+  const swallowClickUntil = useRef(0);
 
   const reset = useCallback(() => {
     start.current = null;
@@ -112,7 +118,7 @@ export function CommentSwipe({
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const origin = start.current;
       if (origin === null || origin.id !== event.pointerId) return;
-      if (engaged.current) swallowClick.current = true;
+      if (engaged.current) swallowClickUntil.current = Date.now() + SWALLOW_CLICK_MS;
       const replies = engaged.current && commentSwipeCommits(current.current);
       reset();
       if (!replies) return;
@@ -123,8 +129,8 @@ export function CommentSwipe({
   );
 
   const onClickCapture = useCallback((event: { preventDefault: () => void; stopPropagation: () => void }) => {
-    if (!swallowClick.current) return;
-    swallowClick.current = false;
+    if (Date.now() > swallowClickUntil.current) return;
+    swallowClickUntil.current = 0;
     event.preventDefault();
     event.stopPropagation();
   }, []);

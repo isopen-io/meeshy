@@ -176,6 +176,27 @@ describe('CommentSwipe — la loi d’iOS sous le doigt', () => {
     expect(clicks).toBe(1);
   });
 
+  test('un glissé SANS clic synthétique ne mange pas le tap suivant', async () => {
+    let clicks = 0;
+    const host = await monter(
+      <CommentSwipe onReply={() => undefined}>
+        <button type="button" data-cible onClick={() => (clicks += 1)}>cœur</button>
+      </CommentSwipe>,
+    );
+    const surface = host.querySelector('[data-comment-swipe]');
+    const bouton = host.querySelector<HTMLButtonElement>('[data-cible]');
+    if (surface === null || bouton === null) throw new Error('montage incomplet');
+    await glisser(surface, [[10, 10], [100, 10]]);
+    const realNow = Date.now;
+    Date.now = () => realNow() + 1000;
+    try {
+      await act(async () => bouton.click());
+    } finally {
+      Date.now = realNow;
+    }
+    expect(clicks).toBe(1);
+  });
+
   test('sans rappel, aucune surface de glissé n’est montée', async () => {
     const host = await monter(<CommentSwipe onReply={undefined}><p>texte</p></CommentSwipe>);
     expect(host.querySelector('[data-comment-swipe]')).toBeNull();
