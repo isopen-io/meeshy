@@ -560,8 +560,8 @@ struct ComposerSceneSurface: View {
     /// pendant un tracé, qui possède l'écran entier.
     private var sceneLetterbox: some View {
         Group {
-            if let hex = floorBackdropHex {
-                Color(hex: hex)
+            if let teinte = floorBackdropColor {
+                teinte
             } else {
                 SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
             }
@@ -596,12 +596,12 @@ struct ComposerSceneSurface: View {
 
     /// Le fond choisi au Cadre, quand la scène AJUSTE un média : il s'applique
     /// au sol aussi (directive porteur 2026-09-27). Le flou garde le hachage.
-    private var floorBackdropHex: String? {
+    private var floorBackdropColor: Color? {
         let transform = slide.effects.backgroundTransform
         guard !StoryBackgroundFraming.rendersFilled(transform?.videoFitMode),
               slide.effects.mediaObjects?.contains(where: \.isBackground) == true
         else { return nil }
-        return StoryBackdrop.resolve(transform?.backdrop).solidHex
+        return StoryBackdrop.resolve(transform?.backdrop).solidColor
     }
 
     /// Ce qui change le RÉSULTAT au point de changer son hachage : la slide, son

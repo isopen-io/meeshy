@@ -133,7 +133,7 @@ struct ComposerSceneFrise: View {
         return HStack(spacing: 8) {
             Text(ComposerSceneFriseCopy.label(for: piste))
                 .font(MeeshyFont.relative(11, weight: .regular))
-                .foregroundStyle(Color(hex: "D4D4D8"))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(width: ComposerSceneFriseMetrics.labelLane - 8, alignment: .leading)
@@ -174,7 +174,7 @@ struct ComposerSceneFrise: View {
         GeometryReader { geo in
             let piste = geo.size.width - ComposerSceneFriseMetrics.labelLane
             Capsule()
-                .fill(Color(hex: "FBBF24"))
+                .fill(MeeshyColors.warning)
                 .frame(width: 2, height: geo.size.height)
                 .offset(x: ComposerSceneFriseMetrics.labelLane
                         + CGFloat(ComposerSceneFriseMetrics.fraction(timeline.currentTime, of: duree)) * max(0, piste) - 1)
