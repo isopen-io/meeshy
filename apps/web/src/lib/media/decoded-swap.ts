@@ -7,7 +7,7 @@ export type ImageDecode = (src: string) => Promise<void>;
 export const browserImageDecode: ImageDecode = (src) => {
   const image = new Image();
   image.src = src;
-  return image.decode().catch(() => undefined);
+  return typeof image.decode === 'function' ? image.decode().catch(() => undefined) : Promise.resolve();
 };
 
 /** Le temps pendant lequel l'image qui PART reste sous celle qui arrive. */
@@ -20,11 +20,14 @@ export const DECODED_SWAP_FADE_MS = 320;
  * tant que la suivante n'est pas décodée ; à la bascule, `leaving` porte
  * l'ancienne le temps d'un fondu (l'hôte la peint dessous). Une première
  * source, ou un changement qui garde la même `src`, passe tout de suite :
- * il n'y a rien à remplacer.
+ * il n'y a rien à remplacer ; `instant` fait de même pour ce qui ne se
+ * décode pas.
  */
 export function useDecodedSwap<T extends { readonly src: string }>(
   value: T | null,
   decode: ImageDecode = browserImageDecode,
+  /** Une valeur qui n'a rien à décoder (une couleur) passe aussitôt. */
+  instant: (value: T) => boolean = () => false,
 ): { readonly shown: T | null; readonly leaving: T | null } {
   const [shown, setShown] = useState<T | null>(value);
   const [leaving, setLeaving] = useState<T | null>(null);
@@ -33,7 +36,7 @@ export function useDecodedSwap<T extends { readonly src: string }>(
 
   useEffect(() => {
     const current = shownRef.current;
-    if (value === null || current === null || current.src === value.src) {
+    if (value === null || current === null || current.src === value.src || instant(value)) {
       setShown(value);
       return;
     }
