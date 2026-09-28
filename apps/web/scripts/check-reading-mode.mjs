@@ -707,16 +707,84 @@ const noRowCarriesContinuousPerspective = (page) =>
   expect(identity.height >= 34, `le chip d'identité de l'élue mesure au moins 34 px de haut (${identity.height})`);
   /**
    * `IDENTITY_AVATAR_SIZE` (26) est la cote NOMINALE, NON transformée — la
-   * rangée élue GRANDIT désormais de `FOCUS_LOUPE_GAIN` (0,05, #6586/#6588),
-   * chip d'identité compris : la loupe grandit la CELLULE entière, comme
-   * `FocalScrollPerspective.magnify` côté iOS (`cell.contentView.layer`,
-   * pas seulement son texte). L'avatar rendu mesure donc entre 26 px (aucun
-   * gain) et 26 × 1,05 px (gain plein) — jamais davantage, la loupe ne fait
-   * QUE grandir.
+   * rangée élue GRANDIT de `FOCUS_LOUPE_GAIN` (0,26 depuis #8506 : « agrandis
+   * tout le contenu intérieur par ×1,2 encore »), chip d'identité compris : la
+   * loupe grandit la CELLULE entière, comme `FocalScrollPerspective.magnify`
+   * côté iOS. L'avatar rendu mesure donc entre 26 px (aucun gain, ou contenu
+   * pleine largeur) et 26 × 1,26 px (gain plein) — jamais davantage, la loupe
+   * ne fait QUE grandir.
    */
   expect(
-    identity.avatarWidth !== null && identity.avatarWidth >= 26 && identity.avatarWidth <= 26 * 1.05 + 0.01,
-    `l'avatar du chip d'identité mesure entre 26 et 27,3 px — nominal, ou grandi par la loupe de l'élue (#6588) (${identity.avatarWidth})`,
+    identity.avatarWidth !== null && identity.avatarWidth >= 26 && identity.avatarWidth <= 26 * 1.26 + 0.01,
+    `l'avatar du chip d'identité mesure entre 26 et 32,8 px — nominal, ou grandi par la loupe de l'élue (#8506) (${identity.avatarWidth})`,
+  );
+
+  /**
+   * LE CADRE ENGLOBE TOUT (#8506, directive porteur 2026-09-28) — identité,
+   * bande basse et tampon vivent ENTIÈREMENT dans le verre, avec une marge sur
+   * les bords qu'ils bordent ; le cadre tient dans sa rangée en largeur ; et
+   * aucune voisine, écartée par `translate`, ne passe sous lui.
+   */
+  const frame = await elected.evaluate((row) => {
+    const card = row.querySelector('.focus-card').getBoundingClientRect();
+    const li = row.closest('li');
+    const liBox = li.getBoundingClientRect();
+    const part = (sel) => {
+      const el = row.querySelector(sel);
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top - card.top, bottom: card.bottom - r.bottom, left: r.left - card.left, right: card.right - r.right };
+    };
+    const inked = (el) => [...el.querySelectorAll('p, time, span')].filter((e) => (e.textContent ?? '').trim() !== '');
+    const covered = (n) =>
+      n === null
+        ? 0
+        : inked(n).filter((e) => {
+            const r = e.getBoundingClientRect();
+            if (getComputedStyle(e).visibility === 'hidden' || r.width === 0) return false;
+            return r.top < card.bottom - 1 && card.top + 1 < r.bottom && r.left < card.right && card.left < r.right;
+          }).length;
+    const m = /scale\(([0-9.]+)\)/.exec(row.style.transform);
+    return {
+      scale: m === null ? 1 : Number(m[1]),
+      identity: part('.focus-identity'),
+      strip: part('.focus-strip'),
+      stamp: part('.focus-stamp'),
+      cardInsideRow: card.left >= liBox.left - 0.5 && card.right <= liBox.right + 0.5,
+      coveredAbove: covered(li.previousElementSibling),
+      coveredBelow: covered(li.nextElementSibling),
+    };
+  });
+  const MARGIN = 8;
+  expect(
+    frame.identity !== null &&
+      frame.identity.top >= MARGIN &&
+      frame.identity.left >= MARGIN &&
+      frame.identity.right >= 0 &&
+      frame.identity.bottom >= 0,
+    `l'identité de l'élue vit DANS le cadre, à au moins ${MARGIN} px de ses bords haut et gauche — ${JSON.stringify(frame)}`,
+  );
+  expect(
+    frame.stamp !== null &&
+      frame.stamp.bottom >= MARGIN &&
+      frame.stamp.right >= MARGIN &&
+      frame.stamp.top >= 0 &&
+      frame.stamp.left >= 0,
+    `le tampon de l'élue vit DANS le cadre, à au moins ${MARGIN} px de ses bords bas et droit — ${JSON.stringify(frame)}`,
+  );
+  expect(
+    frame.strip === null || (frame.strip.bottom >= MARGIN && frame.strip.left >= MARGIN && frame.strip.top >= 0 && frame.strip.right >= 0),
+    `la bande basse de l'élue vit DANS le cadre, à au moins ${MARGIN} px de ses bords bas et gauche — ${JSON.stringify(frame)}`,
+  );
+  expect(frame.cardInsideRow, `le cadre grossi ne dépasse jamais la largeur de sa rangée — ${JSON.stringify(frame)}`);
+  expect(frame.scale >= 1 && frame.scale <= 1.26 + 1e-9, `la loupe de l'élue reste entre ×1 et ×1,26 — ${JSON.stringify(frame)}`);
+  /* L'élue de ce corpus ne remplit pas la largeur de son cadre : elle doit
+     grossir NETTEMENT. Témoin du tampon compté à tort comme de l'encre
+     (monté dans le bloc de contenu, il bornait la loupe à ×1,02). */
+  expect(frame.scale > 1.15, `un message qui ne remplit pas son cadre grossit nettement (×${frame.scale})`);
+  expect(
+    frame.coveredAbove === 0 && frame.coveredBelow === 0,
+    `les voisines de l'élue s'écartent : aucun de leurs textes ne passe sous le cadre — ${JSON.stringify(frame)}`,
   );
 
   const stampText = await elected.locator('.focus-stamp').first().innerText();
