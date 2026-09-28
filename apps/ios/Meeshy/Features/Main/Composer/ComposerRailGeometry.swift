@@ -73,6 +73,34 @@ nonisolated enum ComposerRailGeometry {
     /// `outerMargin` : la carte et les boutons partent du même bord.
     static let floatingInset: CGFloat = outerMargin
 
+    // MARK: - L'écran LARGE (iPad, Mac) — maquette `iPad.dc.html`
+
+    /// **La marge de bord d'un grand écran** : 24 pt, celle de la maquette
+    /// iPad/Mac (« top: 24px; left: 24px »). Le téléphone garde `outerMargin`.
+    static let roomyMargin: CGFloat = 24
+
+    /// La marge de bord selon l'écran — une seule lecture pour la carte, les
+    /// rails, la barre haute et les rangées du bas.
+    static func edgeMargin(roomy: Bool) -> CGFloat { roomy ? roomyMargin : outerMargin }
+
+    /// La largeur d'un panneau flottant sur grand écran — la carte « Cadre »
+    /// de la maquette (250 pt), portée à ce que la rangée d'ajustement et les
+    /// cinq pastilles de fond demandent sans défiler.
+    static let roomyPanelWidth: CGFloat = 320
+
+    /// Le panneau se pose à côté du rail droit : la marge de bord, le rail, et
+    /// l'écart d'un rail à la scène.
+    static var roomyPanelTrailing: CGFloat { roomyMargin + railWidth + gutter }
+
+    /// **La marge du volet de texte** : sur téléphone, la place d'un rail de
+    /// chaque côté (`lane`, #8388) ; sur grand écran, jamais plus large que la
+    /// CARTE — il traversait tout l'écran, sous une scène trois fois plus
+    /// étroite (retour porteur 2026-09-28, iPad/Mac).
+    static func descriptionInset(roomy: Bool, cardLeading: CGFloat) -> CGFloat {
+        guard roomy, cardLeading.isFinite else { return lane }
+        return max(lane, cardLeading)
+    }
+
     /// L'encastrement horizontal de la scène, par côté.
     static func sceneInset(railsShown: Bool) -> CGFloat {
         railsShown ? floatingInset : legacyInset

@@ -48,6 +48,9 @@ struct ComposerTopBar: View {
     /// Une pastille posée avant le `⋯` — la bascule « Animé » de la scène
     /// (#8415). `nil` ⇒ rien.
     var trailingAccessory: AnyView? = nil
+    /// La marge de bord : 16 pt sur téléphone, celle de la maquette iPad/Mac
+    /// (`ComposerRailGeometry.roomyMargin`) sur grand écran.
+    var edgeMargin: CGFloat = 16
 
     static let topPadding: CGFloat = 12
 
@@ -90,7 +93,7 @@ struct ComposerTopBar: View {
             if let trailingAccessory { trailingAccessory.fixedSize() }
             if let overflowMenu { overflowMenu.fixedSize() }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, edgeMargin)
         .padding(.top, Self.topPadding)
     }
 
