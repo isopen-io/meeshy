@@ -16,6 +16,7 @@ import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { useSceneClock, type SceneClockHandle } from './scene-clock';
 import { BackgroundLayer, BlankBackground, type SceneCallbacks } from './scene-object-background';
+import { SceneGhostContext } from './scene-object-frame';
 import { SceneObjectAudio } from './scene-object-audio';
 import { SceneObjectDrawing } from './scene-object-drawing';
 import { SceneObjectMedia } from './scene-object-media';
@@ -88,6 +89,9 @@ export type ScenePlayerProps = {
    * son de fond (`key` changée) pour la repartir depuis `startOffsetMs`,
    * sans jamais remonter LE PLAYER (Zero Unnecessary Re-render). */
   readonly onLoop?: () => void;
+  /** LE FANTÔME (lot 6) — l'opacité d'un objet hors de sa fenêtre, au lieu de
+   * le cacher (`SceneGhostContext`). Absent : caché, comme partout. */
+  readonly ghostOutsideWindow?: number;
   /** Le remplissage des bandes d'un fond AJUSTÉ (`fit`) — PEINT par défaut,
    * miroir `MeeshyScenePlayer.servesLetterboxFill = true`
    * (`MeeshyScenePlayer.swift:79`). Le lecteur de story le coupe en verdict
@@ -232,6 +236,7 @@ export default function ScenePlayer({
   onLoop,
   servesLetterboxFill = true,
   onClock,
+  ghostOutsideWindow,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
   const config = playerConfig(mode);
@@ -257,6 +262,7 @@ export default function ScenePlayer({
   if (scene === undefined) return null;
 
   const canvas = (
+    <SceneGhostContext.Provider value={ghostOutsideWindow ?? null}>
     <SceneCanvas
       scene={scene}
       carrier={carrier}
@@ -268,6 +274,7 @@ export default function ScenePlayer({
       clock={timed ? clock : null}
       seekClock={clock}
     />
+    </SceneGhostContext.Provider>
   );
 
   return (

@@ -85,10 +85,13 @@ describe('le texte du POST, au socle, à côté de Publier', () => {
 });
 
 describe('le rail droit : des TUILES libellées, et l’historique', () => {
-  test('chaque tuile porte son libellé visible', () => {
+  /** LOT 6 : des disques de verre SÉPARÉS, SANS libellé visible ; seuls les
+   * outils UTILES — sans objet sélectionné, rien à régler. */
+  test('des disques de verre sans libellé, et seulement les outils utiles', () => {
     const el = mount(harness({}).deps);
-    const labels = [...el.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-tile]')].map((tile) => tile.textContent);
-    expect(labels).toEqual(['Scène', 'Texte', 'Réglages']);
+    const tiles = [...el.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-tile]')];
+    expect(tiles.map((tile) => tile.getAttribute('data-story-option'))).toEqual(['add-page', 'add-text']);
+    expect(tiles.every((tile) => tile.textContent === '' && tile.getAttribute('aria-label') !== null && tile.className.split(' ').includes('glass'))).toBe(true);
   });
 
   test('Annuler n’existe qu’après un geste, défait la frappe ; Rétablir la rend', () => {
@@ -188,9 +191,9 @@ describe('le panneau Cadre (#8414)', () => {
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     const tokens = (el.querySelector('[data-story-frame-panel]')?.className ?? '').split(/\s+/);
-    const rail = (el.querySelector('[data-story-studio-rail="leading"]')?.className ?? '').split(/\s+/);
+    const door = (el.querySelector('label:has(input[data-door="visual"])')?.className ?? '').split(/\s+/);
     expect(tokens).toContain('glass');
-    expect(rail).toContain('glass');
+    expect(door).toContain('glass');
     expect(tokens).not.toContain('glass-prominent');
   });
 
@@ -244,13 +247,13 @@ describe('le message du socle suit le format', () => {
     expect(el.querySelector('[data-publish-refusal="reel-without-qualifying-media"]')).not.toBeNull();
   });
 
-  test('POST avec un média : la carte revient pour le média, toujours sans la phrase', async () => {
+  test('POST avec un média PRÊT : plus de carte en bas (lot 6), jamais la phrase', async () => {
     const el = mount(harness({}).deps, 'POST');
     selectFile(el, 'visual', image());
     // La montée se laisse aboutir : un transport encore en vol au démontage
     // répondrait après la fin du banc.
     await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
-    expect(el.querySelector('[data-story-studio-socle-card]')).not.toBeNull();
+    expect(el.querySelector('[data-story-studio-socle-card]')).toBeNull();
     expect(el.querySelector('[data-story-studio-bottom]')?.textContent).not.toContain('vingt heures');
   });
 });
@@ -279,15 +282,25 @@ describe('le mode Animé (#8415)', () => {
     const el = mount(bench.deps);
     typeText(el, 'Bonjour');
     click(el.querySelector('[data-story-animated]'));
-    await flush(() => el.querySelector('[data-story-track-handle="start"]') !== null);
-    const start = el.querySelector<HTMLButtonElement>('[data-story-track-handle="start"]')!;
-    for (let i = 0; i < 2; i++) act(() => start.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })));
-    expect(el.querySelector('[data-story-track="text-1"]')?.getAttribute('data-story-track-start')).toBe('1');
+    await flush(() => el.querySelector('[data-story-track="text-1"]') !== null);
+    // Toucher la piste SÉLECTIONNE l'objet ; toucher la RÈGLE à mi-course place
+    // la tête à 3 s ; « Entre ici » y fait entrer l'objet (maquette).
+    const box = { left: 0, top: 0, width: 100, height: 14, right: 100, bottom: 14, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    const track = el.querySelector<HTMLElement>('[data-story-track="text-1"]')!;
+    const ruler = el.querySelector<HTMLElement>('[data-story-timeline-ruler]')!;
+    track.getBoundingClientRect = () => box;
+    ruler.getBoundingClientRect = () => box;
+    act(() => track.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 0 })));
+    click(el.querySelector('[data-story-timeline-play]'));
+    act(() => ruler.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50 })));
+    await flush(() => el.querySelector('[data-story-timeline-enter]') !== null);
+    click(el.querySelector('[data-story-timeline-enter]'));
+    expect(el.querySelector('[data-story-track="text-1"]')?.getAttribute('data-story-track-start')).toBe('3');
     click(publishButton(el));
     await flush(() => bench.posts.length === 1);
     const scene = (bench.posts[0]?.storyEffects as { scenes: { timelineDuration?: number; objects: { kind: string; timing?: unknown }[] }[] }).scenes[0]!;
-    expect(scene.timelineDuration).toBe(5);
-    expect(scene.objects.find((object) => object.kind === 'text')?.timing).toEqual({ start: 1, end: 5 });
+    expect(scene.timelineDuration).toBe(6);
+    expect(scene.objects.find((object) => object.kind === 'text')?.timing).toEqual({ start: 3, end: 6 });
   });
 
   test('la frise se ferme d’un geste, et Annuler défait l’animation', async () => {
@@ -299,6 +312,79 @@ describe('le mode Animé (#8415)', () => {
     click(el.querySelector('[data-story-option="undo"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
-    expect(el.querySelector('[data-story-timeline-duration]')?.textContent).toContain('5');
+    expect(el.querySelector('[data-story-timeline-duration]')?.textContent).toBe('6');
+  });
+});
+
+/** LOT 6 (directive porteur 2026-09-27 soir) — la sélection silencieuse, le
+ * menu d'objet, l'édition en plaque, le sol teinté, le socle qui se retire. */
+describe('lot 6 — la scène se touche sans s’entourer', () => {
+  const rect = (left: number, top: number, width: number, height: number) =>
+    ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+
+  /** Pose une boîte peinte sur l'objet `id` et touche le calque des gestes. */
+  const tapObject = (el: HTMLElement, id: string, kind: 'tap' | 'context' = 'tap') => {
+    const painted = el.querySelector<HTMLElement>(`[data-scene-object-id="${id}"]`)!;
+    painted.getBoundingClientRect = () => rect(10, 10, 100, 40);
+    const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;
+    layer.setPointerCapture = () => undefined;
+    if (kind === 'context') {
+      act(() => layer.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 30 })));
+      return;
+    }
+    act(() => layer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 50, clientY: 30 })));
+    act(() => layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 50, clientY: 30 })));
+  };
+
+  test('toucher un objet le SÉLECTIONNE sans contour ni poignée ; double-tap ouvre sa plaque d’édition', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    click(el.querySelector('[data-story-option="add-text"]'));
+    typeText(el, 'Deux');
+    await flush(() => el.querySelectorAll('[data-scene-object-id="text-1"]').length === 1);
+    tapObject(el, 'text-1');
+    expect(el.querySelector<HTMLTextAreaElement>('#story-studio-text')?.dataset.storyTextTarget).toBe('text-1');
+    expect(el.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]')).toBeNull();
+    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    tapObject(el, 'text-1');
+    await flush(() => el.querySelector('[data-story-edit-plaque] [data-story-object-editor="text-1"]') !== null);
+    expect(el.querySelector('[data-story-studio-rail="trailing"] [data-story-option="editor-toggle"]')?.getAttribute('aria-pressed')).toBe('true');
+    click(el.querySelector('[data-story-edit-done]'));
+    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+  });
+
+  test('le clic droit (appui long au doigt) ouvre le menu : Dupliquer pose une copie', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
+    tapObject(el, 'text-1', 'context');
+    await flush(() => document.querySelector('[data-story-object-menu]') !== null);
+    const actions = [...document.querySelectorAll('[data-story-object-menu] [data-story-object-action]')].map((a) => a.getAttribute('data-story-object-action'));
+    expect(actions).toEqual(['duplicate', 'edit', 'remove']);
+    click(document.querySelector('[data-story-object-action="duplicate"]'));
+    expect(document.querySelector('[data-story-object-menu]')).toBeNull();
+    await flush(() => el.querySelectorAll('[data-scene-text]').length === 2);
+    expect(el.querySelectorAll('[data-scene-text]')).toHaveLength(2);
+  });
+
+  test('une plaque ouverte en bas retire le socle sur MOBILE', async () => {
+    const el = mount(harness({}).deps);
+    selectFile(el, 'visual', image());
+    await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
+    const row = () => el.querySelector('[data-story-socle-row]')?.className ?? '';
+    expect(row()).not.toContain('max-md:hidden');
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
+    expect(row()).toContain('max-md:hidden');
+  });
+
+  test('le Cadre « sable » teinte AUSSI le sol autour de la carte', async () => {
+    const el = mount(harness({}).deps);
+    selectFile(el, 'visual', image());
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-option="sand"]') !== null);
+    click(el.querySelector('[data-story-frame-option="sand"]'));
+    const floor = el.querySelector<HTMLElement>('[data-story-studio-floor="tint"]');
+    expect(floor?.style.backgroundColor).toBe('#FDE68A');
   });
 });

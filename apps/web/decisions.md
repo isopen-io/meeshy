@@ -4430,3 +4430,17 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - Retouche : la vignette d'une image en attente porte un badge « Éditer » (coin opposé à « Supprimer », posé après lui : au centre, le geste non destructif l'emporte). Il ouvre `StoryComposeScreen` en `retouch`, en portail au-dessus du fil (le composeur garde son brouillon) : sans audience, formats, Animé, ⋯, nouvelle scène, son, texte du post ni légende, sans aucune montée, et avec un magasin de brouillon en mémoire. « Terminé » rend la scène à 1080×1920 en JPEG (`studio-retouch.ts` : fond, Cadre, calque, textes dans leur famille et leur pastille, sans effet de texte) et remplace la pièce (`replacePendingAttachment`, identité neuve).
 
 **Conséquences.** Le studio étant importé par deux portes, Rollup le sort dans `story-compose-*.js` : le motif `story_studio` de `budgets.json` couvre désormais ce chunk (sinon il mesurait 0,26 Ko et restait vert par omission).
+
+## D-148 — Lot 6 du composer plein écran : rails en disques sans libellé, sélection silencieuse (glisser, appui long, double-tap), plaques en bas, sol teinté, pas de Publier sans contenu, frise de la maquette (2026-09-28, #8413, #8415)
+
+**Contexte.** Directives porteur du 2026-09-27 au soir, communes à iOS (`claude/composer-plein-ecran-lot6`) et au web (qui sert la coque Android).
+
+**Décision.**
+- Rails : chaque outil est un disque de verre séparé de 44 px, icône 20, sans libellé visible (nom au lecteur d'écran). Seuls les outils utiles paraissent (Réglages seulement avec un objet sélectionné, Cadre seulement avec un média de fond, Annuler / Rétablir seulement avec de quoi). La pastille Animé devient un disque à éclair.
+- Sélection silencieuse (`story-compose-stage.tsx`) : toucher sélectionne sans contour ni poignée ; glisser déplace (aimants et limites #8413) ; l'appui long ou le clic droit ouvre un menu de verre (monter, reculer, dupliquer, modifier, retirer ; « sortir de la scène » pour un calque hors story) ; le double-tap ouvre l'ÉDITION, dont les options vivent dans une plaque de verre en bas. Le clavier passe par un bouton par objet (flèches, `+`/`−`, `[`/`]`, Entrée = modifier) et par les boutons de pose de la plaque.
+- Plaques en bas : Cadre (avec la légende et « Retirer le fond ») et édition. Sur mobile, le socle se retire le temps de la plaque. La carte du socle ne montre plus un média prêt (sa ligne reste pour le lecteur d'écran).
+- Le sol prend la teinte du Cadre (noir, blanc, indigo, sable) ; le flou garde le thumbhash.
+- Pas de capsule Publier sur un brouillon vide.
+- Frise de la maquette : 6 s, lecture en boucle, « Entre ici » / « Sort ici » à la tête (écart minimal 5 %), règle qui place la tête, pistes qui sélectionnent et placent la tête, tête ambrée ; objets hors fenêtre cachés en lecture et en fantôme (.25) à l'arrêt (`SceneGhostContext`) ; un objet posé sur une scène animée entre à la tête (au plus tard à 80 %).
+
+**Conséquences.** Les poignées (`StudioObjectHandles`) et leur témoin sont retirés. Les gates `check-story-studio` et `check-story-plateau` mesurent la nouvelle règle.

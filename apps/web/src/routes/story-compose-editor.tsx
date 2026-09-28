@@ -242,52 +242,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
         ))}
       </Section>
 
-      {/* LA POSE AU CLAVIER ET AU BOUTON — le geste au pointeur vit sur la
-          scène (`story-compose-stage.tsx`), mais « un objet déplaçable doit
-          aussi être déplaçable au clavier ». Ces quatre cibles sont la voie
-          de secours VISIBLE, en plus des raccourcis de la poignée. */}
-      <Section label={translate(lang, 'story.studio.pose.label')}>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.smaller')}
-          probe="pose:smaller"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, scale: layer.pose.scale / 1.2 })}
-        >
-          <span aria-hidden="true">−</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.bigger')}
-          probe="pose:bigger"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, scale: layer.pose.scale * 1.2 })}
-        >
-          <span aria-hidden="true">+</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.rotateLeft')}
-          probe="pose:rotateLeft"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, rotation: layer.pose.rotation - 15 })}
-        >
-          <span aria-hidden="true">↺</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.rotateRight')}
-          probe="pose:rotateRight"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, rotation: layer.pose.rotation + 15 })}
-        >
-          <span aria-hidden="true">↻</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.reset')}
-          probe="pose:reset"
-          pressed={false}
-          onPress={() => onPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 })}
-        >
-          <span aria-hidden="true">⊙</span>
-        </StudioChip>
-      </Section>
+      <StudioPoseSection lang={lang} pose={layer.pose} onPose={onPose} />
 
       <button
         type="button"
@@ -298,6 +253,76 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
       >
         {translate(lang, 'story.studio.text.remove')}
       </button>
+    </div>
+  );
+}
+
+type PoseKey =
+  | 'story.studio.pose.left'
+  | 'story.studio.pose.right'
+  | 'story.studio.pose.up'
+  | 'story.studio.pose.down'
+  | 'story.studio.pose.smaller'
+  | 'story.studio.pose.bigger'
+  | 'story.studio.pose.rotateLeft'
+  | 'story.studio.pose.rotateRight'
+  | 'story.studio.pose.reset';
+
+/** LA POSE AU CLAVIER ET AU BOUTON (lot 6) — plus aucune poignée sur la
+ * scène : le glissé au doigt déplace, et ces petits boutons sont la voie du
+ * clavier (dimension 5) pour DÉPLACER, agrandir, tourner et recentrer un
+ * texte ou le calque. */
+export function StudioPoseSection({ lang, pose, onPose }: { readonly lang: InterfaceLanguage; readonly pose: StudioPose; readonly onPose: (pose: StudioPose) => void }) {
+  const STEP = 0.05;
+  const nudge = (dx: number, dy: number) => onPose({ ...pose, x: Math.min(1, Math.max(0, pose.x + dx)), y: Math.min(1, Math.max(0, pose.y + dy)) });
+  const chip = (probe: string, key: PoseKey, glyph: string, next: () => void) => (
+    <StudioChip label={translate(lang, key)} probe={`pose:${probe}`} pressed={false} onPress={next}>
+      <span aria-hidden="true">{glyph}</span>
+    </StudioChip>
+  );
+  return (
+    <Section label={translate(lang, 'story.studio.pose.label')}>
+      {chip('left', 'story.studio.pose.left', '←', () => nudge(-STEP, 0))}
+      {chip('right', 'story.studio.pose.right', '→', () => nudge(STEP, 0))}
+      {chip('up', 'story.studio.pose.up', '↑', () => nudge(0, -STEP))}
+      {chip('down', 'story.studio.pose.down', '↓', () => nudge(0, STEP))}
+      {chip('smaller', 'story.studio.pose.smaller', '−', () => onPose({ ...pose, scale: pose.scale / 1.2 }))}
+      {chip('bigger', 'story.studio.pose.bigger', '+', () => onPose({ ...pose, scale: pose.scale * 1.2 }))}
+      {chip('rotateLeft', 'story.studio.pose.rotateLeft', '↺', () => onPose({ ...pose, rotation: pose.rotation - 15 }))}
+      {chip('rotateRight', 'story.studio.pose.rotateRight', '↻', () => onPose({ ...pose, rotation: pose.rotation + 15 }))}
+      {chip('reset', 'story.studio.pose.reset', '⊙', () => onPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 }))}
+    </Section>
+  );
+}
+
+/** L'ÉDITION DU CALQUE (lot 6) — sa pose au bouton, et sa légende
+ * (`PostMedia.caption`), qui a quitté la carte du socle. */
+export function StudioOverlayEditor({
+  lang,
+  pose,
+  caption,
+  onPose,
+  onCaption,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly pose: StudioPose;
+  readonly caption: string;
+  readonly onPose: (pose: StudioPose) => void;
+  readonly onCaption: (value: string) => void;
+}) {
+  return (
+    <div data-story-overlay-editor className="flex flex-col gap-3">
+      <input
+        id="story-studio-caption-overlay"
+        type="text"
+        value={caption}
+        aria-label={translate(lang, 'story.studio.caption.placeholder')}
+        placeholder={translate(lang, 'story.studio.caption.placeholder')}
+        onInput={(event) => onCaption(event.currentTarget.value)}
+        className="h-11 rounded-xl px-3 text-body outline-none"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
+      />
+      <StudioPoseSection lang={lang} pose={pose} onPose={onPose} />
     </div>
   );
 }

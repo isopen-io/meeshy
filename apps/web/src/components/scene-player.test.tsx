@@ -1161,3 +1161,25 @@ describe('ScenePlayer — mode reel, l’horloge d’une scène SANS objet tempo
     });
   });
 });
+
+/** LE FANTÔME (lot 6, maquette `Main.dc.html`) — frise ouverte à l'arrêt, un
+ * objet hors de sa fenêtre se montre à .25 au lieu de disparaître ; sans la
+ * demande de l'hôte, il reste caché (lecture, lecteur). */
+describe('ScenePlayer — `ghostOutsideWindow`', () => {
+  const timed = textObject({ id: 'late', timing: { start: 2, end: 3 }, payload: { text: 'plus tard' } });
+
+  test('sans la demande : hors fenêtre, l’objet est caché', () => {
+    const el = mount(<ScenePlayer document={sceneDocumentOf([timed])} sceneIndex={0} mode="preview" playing={false} carrier={carrier} preferredLanguages={['fr']} />);
+    expect((el.querySelector('[data-scene-object-id="late"]') as HTMLElement | null)?.hidden).toBe(true);
+  });
+
+  test('avec la demande : hors fenêtre, un fantôme à l’opacité demandée', () => {
+    const el = mount(
+      <ScenePlayer document={sceneDocumentOf([timed])} sceneIndex={0} mode="preview" playing={false} carrier={carrier} preferredLanguages={['fr']} ghostOutsideWindow={0.25} />,
+    );
+    const object = el.querySelector('[data-scene-object-id="late"]') as HTMLElement | null;
+    expect(object?.hidden).toBe(false);
+    expect(object?.style.opacity).toBe('0.25');
+    expect(object?.hasAttribute('data-scene-ghost')).toBe(true);
+  });
+});

@@ -79,11 +79,18 @@ export function StudioFramePanel({
   frame,
   onChange,
   onClose,
+  caption,
+  onRemove,
 }: {
   readonly lang: InterfaceLanguage;
   readonly frame: StoryFrame;
   readonly onChange: (frame: StoryFrame) => void;
   readonly onClose: () => void;
+  /** LA LÉGENDE du média de fond (`PostMedia.caption`) — elle a quitté la
+   * carte du socle (lot 6) : on l'écrit là où l'on règle le média. */
+  readonly caption?: { readonly value: string; readonly onChange: (value: string) => void };
+  /** RETIRER le média de fond — sa ligne a quitté le socle (lot 6). */
+  readonly onRemove?: () => void;
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -100,10 +107,21 @@ export function StudioFramePanel({
     <section
       data-story-frame-panel
       aria-label={title}
-      className="glass flex w-64 max-w-[calc(100vw-6rem)] flex-col gap-2 rounded-3xl p-3.5 shadow-lg"
+      className="glass flex flex-col gap-2 rounded-[22px] p-3"
       style={{ color: 'var(--color-ios-ink)' }}
     >
-      <h2 className="text-body font-bold">{title}</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 text-body font-bold">{title}</h2>
+        <button
+          type="button"
+          data-story-frame-done
+          onClick={onClose}
+          className="h-11 rounded-xl px-4 text-caption font-bold"
+          style={{ backgroundColor: '#fff', color: '#111' }}
+        >
+          {translate(lang, 'story.studio.edit.done')}
+        </button>
+      </div>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(lang, FIT_HINT_KEY[frame.fitMode])}
       </p>
@@ -117,6 +135,18 @@ export function StudioFramePanel({
           </Token>
         ))}
       </div>
+      {caption !== undefined ? (
+        <input
+          id="story-studio-caption-visual"
+          type="text"
+          value={caption.value}
+          aria-label={translate(lang, 'story.studio.caption.placeholder')}
+          placeholder={translate(lang, 'story.studio.caption.placeholder')}
+          onInput={(event) => caption.onChange(event.currentTarget.value)}
+          className="h-11 rounded-xl px-3 text-body outline-none"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
+        />
+      ) : null}
       {/* Autour d'un média qui REMPLIT, il n'y a rien : les fonds ne se
           proposent qu'à un média ajusté — un choix sans effet n'est pas offert. */}
       {frame.fitMode === 'fit' ? (
@@ -137,6 +167,18 @@ export function StudioFramePanel({
             ))}
           </div>
         </>
+      ) : null}
+      {onRemove !== undefined ? (
+        <button
+          type="button"
+          data-story-frame-remove
+          onClick={onRemove}
+          aria-label={translate(lang, 'story.studio.background.remove')}
+          className="h-11 self-start rounded-xl px-3 text-caption font-semibold"
+          style={{ color: 'var(--color-ios-ink)' }}
+        >
+          {translate(lang, 'story.studio.background.remove')}
+        </button>
       ) : null}
     </section>
   );

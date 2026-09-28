@@ -9,10 +9,17 @@ import type { StudioTiming } from './studio-text';
  * (`ObjectV3.timing`), exactement ce que le lecteur relit
  * (`lib/canvas/timeline.ts`, `visibilityWindow`).
  */
-export const STUDIO_ANIMATED_DEFAULT_DURATION = 5;
+export const STUDIO_ANIMATED_DEFAULT_DURATION = 6;
 
-/** Une fenêtre plus courte ne se voit ni ne se saisit. */
-export const STUDIO_TRACK_MIN = 0.2;
+/** L'écart minimal d'une fenêtre : 5 % de la scène (maquette : `0.05` en
+ * fraction de la durée). */
+export const STUDIO_TRACK_MIN_FRACTION = 0.05;
+export const STUDIO_TRACK_MIN = STUDIO_TRACK_MIN_FRACTION * STUDIO_ANIMATED_DEFAULT_DURATION;
+
+/** Un objet posé en mode animé n'entre pas plus tard qu'à 80 % de la scène. */
+const LATEST_ENTRY_FRACTION = 0.8;
+
+const minimumOf = (duration: number): number => STUDIO_TRACK_MIN_FRACTION * duration;
 
 export type StudioTrack = { readonly id: string; readonly kind: 'text' | 'overlay'; readonly timing: StudioTiming };
 
@@ -32,9 +39,27 @@ export function studioTracks(page: StudioPage): readonly StudioTrack[] {
 
 /** Une fenêtre bornée à la scène, jamais plus courte que `STUDIO_TRACK_MIN`. */
 export function clampTiming(timing: StudioTiming, duration: number): StudioTiming {
-  const start = Math.min(Math.max(0, timing.start), duration - STUDIO_TRACK_MIN);
-  const end = Math.max(Math.min(duration, timing.end), start + STUDIO_TRACK_MIN);
-  return { start: round(end - start < STUDIO_TRACK_MIN ? end - STUDIO_TRACK_MIN : start), end: round(end) };
+  const minimum = minimumOf(duration);
+  const start = Math.min(Math.max(0, timing.start), duration - minimum);
+  const end = Math.max(Math.min(duration, timing.end), start + minimum);
+  return { start: round(start), end: round(end) };
+}
+
+/** « ENTRE ICI » (maquette) — l'objet entre à la tête, jamais après sa sortie. */
+export function timingEnteringAt(timing: StudioTiming, head: number, duration: number): StudioTiming {
+  return clampTiming({ start: Math.min(head, timing.end - minimumOf(duration)), end: timing.end }, duration);
+}
+
+/** « SORT ICI » (maquette) — l'objet sort à la tête, jamais avant son entrée. */
+export function timingExitingAt(timing: StudioTiming, head: number, duration: number): StudioTiming {
+  return clampTiming({ start: timing.start, end: Math.max(head, timing.start + minimumOf(duration)) }, duration);
+}
+
+/** UN OBJET POSÉ en mode animé (maquette) — il entre à la tête, au plus tard à
+ * 80 % de la scène, et reste jusqu'au bout. */
+export function pagePlacedWhileAnimated(page: StudioPage, id: string, head: number): StudioPage {
+  const duration = studioPageDuration(page);
+  return pageWithTrackTiming(page, id, { start: Math.min(head, LATEST_ENTRY_FRACTION * duration), end: duration });
 }
 
 /** OUVRIR « Animé » — la scène prend sa durée, chaque piste sa fenêtre
