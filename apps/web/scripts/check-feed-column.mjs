@@ -25,7 +25,8 @@
  *  4. la porte de création est dans l'en-tête, atteignable, 44 au moins, et
  *     « Lancer les Réels » RESTE le contrôle le plus à droite ;
  *  5. elle ouvre deux lignes, vers /posts/new et /posts/new?type=reel ;
- *  6. la ligne « Réel » ouvre le COMPOSER UNIQUE (#7497) au format réel ;
+ *  6. la ligne « Réel » ouvre le COMPOSER UNIQUE (#7497) au format réel, sans
+ *     capsule Publier tant que le brouillon est vide (#8457) ;
  *  7. un réel de texte seul est REFUSÉ en le disant, et « Publier le réel »
  *     est éteint ;
  *  8. le chevron de `[Publier … | ▾]` offre story, post et réel — le réel
@@ -228,12 +229,17 @@ for (const scheme of ['light', 'dark']) {
 
     // -------------- 6. la ligne « Réel » ouvre le COMPOSER UNIQUE au format réel
     await page.click('[data-feed-create-choice="reel"]');
-    await page.waitForSelector('[data-publish-split]');
-    const format = () => page.evaluate(() => document.querySelector('[data-story-publish]')?.getAttribute('data-publish-kind') ?? null);
-    check((await format()) === 'REEL', `${label} : la ligne « Réel » n'ouvre pas le composeur au format RÉEL (${await format()})`);
+    await page.waitForSelector('#story-studio-text');
+    check(
+      (await page.$('[data-publish-split]')) === null,
+      `${label} : la capsule Publier paraît sur un brouillon vide`,
+    );
 
     // ------------------- 7. un réel de texte seul est refusé, en le DISANT
     await page.fill('#story-studio-text', 'un réel de texte seul');
+    await page.waitForSelector('[data-publish-split]');
+    const format = () => page.evaluate(() => document.querySelector('[data-story-publish]')?.getAttribute('data-publish-kind') ?? null);
+    check((await format()) === 'REEL', `${label} : la ligne « Réel » n'ouvre pas le composeur au format RÉEL (${await format()})`);
     const refus = await page.evaluate(() => document.querySelector('[data-publish-refusal]')?.getAttribute('data-publish-refusal') ?? null);
     check(refus === 'reel-without-qualifying-media', `${label} : un réel sans média n'est pas refusé en le disant (${refus})`);
     check(
