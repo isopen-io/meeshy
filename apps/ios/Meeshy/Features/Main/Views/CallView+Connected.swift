@@ -12,10 +12,10 @@ extension CallView {
 
     var connectedView: some View {
         // #8394 — UN conteneur de verre pour tout ce qui flotte au-dessus de
-        // l'appel établi : les boutons de verre de la pilule et des actions,
-        // le bandeau de sous-titres. Des verres voisins ne se superposent
-        // jamais (le verre ne peut pas échantillonner le verre) ; ils se
-        // fondent entre eux, et sous iOS 26 les actions naissent du (…) (#8432).
+        // l'appel établi : le bloc de verre de la pilule (qui porte les
+        // actions du (…), #8459), le bandeau de sous-titres, l'en-tête. Des
+        // verres voisins ne se superposent jamais (le verre ne peut pas
+        // échantillonner le verre) ; ils se fondent entre eux.
         AdaptiveGlassContainer(spacing: 12) {
             ZStack {
                 if isGroupStage {
