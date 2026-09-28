@@ -178,6 +178,17 @@ nonisolated enum ComposerSceneFloatingRail {
 
     /// La porte que le SOCLE porte à la place de la rangée basse.
     static let socleDoor: ComposerRailDoor = .content
+
+    /// **Le socle peint le texte du post dès que le post est ARMÉ** (#8473,
+    /// retour porteur 2026-09-28). Le chevron arme le format publié sans
+    /// changer celui de la porte : lire le format de la porte cachait le
+    /// bouton justement quand on venait de choisir « Post ».
+    static func servesPostText(onScene: Bool, armedFormat: ComposerFormat,
+                               allowsCapture: Bool) -> Bool {
+        onScene && ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                            format: armedFormat,
+                                            allowsCapture: allowsCapture).contains(socleDoor)
+    }
 }
 
 

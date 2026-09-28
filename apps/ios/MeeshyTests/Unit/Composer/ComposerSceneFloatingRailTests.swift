@@ -250,4 +250,21 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies, format: .story), [],
                        "rien ne QUALIFIE une story depuis le bas : tout s'y pose.")
     }
+
+    // MARK: - Le texte du post suit le format ARMÉ (#8473)
+
+    func test_armerLePost_peintLeBoutonDuTexteDuPost() {
+        XCTAssertTrue(ComposerSceneFloatingRail.servesPostText(onScene: true, armedFormat: .post,
+                                                               allowsCapture: true))
+    }
+
+    func test_uneStoryArmee_nOffrePasDeTexteDePost() {
+        XCTAssertFalse(ComposerSceneFloatingRail.servesPostText(onScene: true, armedFormat: .story,
+                                                                allowsCapture: true))
+    }
+
+    func test_horsDeLaScene_leSocleNePeintPasLeTexteDuPost() {
+        XCTAssertFalse(ComposerSceneFloatingRail.servesPostText(onScene: false, armedFormat: .post,
+                                                                allowsCapture: true))
+    }
 }

@@ -66,4 +66,22 @@ final class SceneFriseTrackTests: XCTestCase {
         XCTAssertLessThan(piste?.start ?? 99, piste?.end ?? 0)
         XCTAssertEqual(piste?.end ?? -1, 4, accuracy: 0.001)
     }
+
+    /// Glisser la barre d'une piste la DÉPLACE : elle part plus tard, et sa
+    /// durée ne change pas (retour porteur 2026-09-28, #8473).
+    func test_glisserLaBarre_deplaceLaPiste_sansChangerSaDuree() async {
+        let sut = await makeSUT()
+        sut.moveClip(id: "v1", to: 2.5)
+        let piste = sut.sceneFriseTracks.first { $0.id == "v1" }
+        XCTAssertEqual(piste?.start ?? -1, 2.5, accuracy: 0.001)
+        XCTAssertEqual(piste?.end ?? -1, 5.5, accuracy: 0.001)
+    }
+
+    func test_glisserAvantZero_laPisteResteDansLaSlide() async {
+        let sut = await makeSUT()
+        sut.moveClip(id: "t1", to: -3)
+        let piste = sut.sceneFriseTracks.first { $0.id == "t1" }
+        XCTAssertEqual(piste?.start ?? -1, 0, accuracy: 0.001)
+        XCTAssertEqual(piste?.end ?? -1, 2, accuracy: 0.001)
+    }
 }

@@ -63,11 +63,9 @@ extension MeeshyComposerHost {
     /// et garde son unique aiguillage, `handleRailDoor`. Peinte seulement sous
     /// la scène d'un post — la surface document écrit son corps en place.
     var socleServesPostText: Bool {
-        mountedComposerView == .scene
-            && ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
-                                        format: selectedFormat,
-                                        allowsCapture: profile.allowsCapture)
-                .contains(ComposerSceneFloatingRail.socleDoor)
+        ComposerSceneFloatingRail.servesPostText(onScene: mountedComposerView == .scene,
+                                                 armedFormat: armedChoice.format,
+                                                 allowsCapture: profile.allowsCapture)
     }
 
     var postTextButton: some View {
@@ -393,6 +391,12 @@ extension MeeshyComposerHost {
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
         switch ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice) {
         case .atelier:
+            // Le texte du post ARMÉ depuis une scène part avec elle : l'atelier
+            // publie le contenu de la slide, pas `documentText` (#8473).
+            if choice.format == .post,
+               !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                viewModel.applyContentText(documentText)
+            }
             publishTrigger.requestPublish(
                 as: choice.format.postType,
                 visibility: composerVisibility.rawValue,

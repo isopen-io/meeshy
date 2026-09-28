@@ -66,4 +66,32 @@ final class ComposerSceneFriseTests: XCTestCase {
         XCTAssertTrue(code.contains("onTimeButton:sceneIsAnimated&&!returnsImageToConversation?{toggleSceneFrise()}:nil"),
                       "« Temps » doit n'exister qu'en scène animée, et jamais dans la retouche d'une image.")
     }
+
+    // MARK: - Glisser une piste, tirer ses ancres (#8473)
+
+    func test_leGlisser_seMesureEnSecondesSurLaLargeurDeLaPiste() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.seconds(forDelta: 50, width: 200, total: 6), 1.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerSceneFriseMetrics.seconds(forDelta: 50, width: 0, total: 6), 0)
+    }
+
+    func test_glisserLaBarre_gardeSaDuree_etResteDansLaSlide() {
+        let p = piste(.text, start: 1, end: 3)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .barre, by: 1.5, total: 6), 2.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .barre, by: 10, total: 6), 4, accuracy: 0.0001)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .barre, by: -5, total: 6), 0)
+    }
+
+    func test_lAncreDeDebut_neDepassePasLaFin() {
+        let p = piste(.text, start: 1, end: 3)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .debut, by: -0.5, total: 6), 0.5, accuracy: 0.0001)
+        XCTAssertLessThan(ComposerSceneFriseMetrics.dragged(p, edge: .debut, by: 9, total: 6), 3)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .debut, by: -9, total: 6), 0)
+    }
+
+    func test_lAncreDeFin_neRecolePasAvantLeDebut_niApresLaSlide() {
+        let p = piste(.text, start: 1, end: 3)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .fin, by: 1, total: 6), 4, accuracy: 0.0001)
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(p, edge: .fin, by: 9, total: 6), 6)
+        XCTAssertGreaterThan(ComposerSceneFriseMetrics.dragged(p, edge: .fin, by: -9, total: 6), 1)
+    }
 }

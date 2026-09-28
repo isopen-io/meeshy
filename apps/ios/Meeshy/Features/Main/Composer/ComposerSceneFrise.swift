@@ -22,6 +22,10 @@ struct ComposerSceneFrise: View {
     /// texte restait visible à une seconde où il n'existe pas encore.
     var onWindowEdited: () -> Void = {}
 
+    /// La fenêtre de la piste AU DÉBUT du geste : chaque pas du glisser se
+    /// mesure depuis elle, jamais depuis la fenêtre déjà déplacée.
+    @State private var origineDuGeste: SceneFriseTrack?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             transport
@@ -138,22 +142,35 @@ struct ComposerSceneFrise: View {
                 .truncationMode(.tail)
                 .frame(width: ComposerSceneFriseMetrics.labelLane - 8, alignment: .leading)
             GeometryReader { geo in
-                let debut = CGFloat(ComposerSceneFriseMetrics.fraction(piste.start, of: duree))
-                let fin = CGFloat(ComposerSceneFriseMetrics.fraction(piste.end, of: duree))
+                let debut = CGFloat(ComposerSceneFriseMetrics.fraction(piste.start, of: duree)) * geo.size.width
+                let fin = CGFloat(ComposerSceneFriseMetrics.fraction(piste.end, of: duree)) * geo.size.width
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.white.opacity(0.07))
+                        .contentShape(Rectangle())
+                        .onTapGesture(coordinateSpace: .local) { point in
+                            HapticFeedback.light()
+                            timeline.selectClip(id: piste.id)
+                            timeline.scrub(to: temps(x: point.x, largeur: geo.size.width))
+                        }
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(choisie ? MeeshyColors.brandPrimary : Color.white.opacity(0.35))
-                        .frame(width: max(4, (fin - debut) * geo.size.width))
-                        .offset(x: debut * geo.size.width)
+                        .frame(width: max(4, fin - debut))
                         .padding(.vertical, 3)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture(coordinateSpace: .local) { point in
-                    HapticFeedback.light()
-                    timeline.selectClip(id: piste.id)
-                    timeline.scrub(to: temps(x: point.x, largeur: geo.size.width))
+                        .contentShape(Rectangle())
+                        .onTapGesture(coordinateSpace: .local) { point in
+                            HapticFeedback.light()
+                            timeline.selectClip(id: piste.id)
+                            timeline.scrub(to: temps(x: debut + point.x, largeur: geo.size.width))
+                        }
+                        .gesture(glisser(piste, largeur: geo.size.width, bord: .barre))
+                        .offset(x: debut)
+                    if choisie {
+                        poignee(piste, largeur: geo.size.width, bord: .debut)
+                            .offset(x: debut - ComposerSceneFriseMetrics.handleHitWidth / 2)
+                        poignee(piste, largeur: geo.size.width, bord: .fin)
+                            .offset(x: fin - ComposerSceneFriseMetrics.handleHitWidth / 2)
+                    }
                 }
             }
             .frame(height: 22)
@@ -166,6 +183,46 @@ struct ComposerSceneFrise: View {
         .accessibilityAction {
             timeline.selectClip(id: piste.id)
         }
+    }
+
+    /// L'ancre de début ou de fin : un trait blanc de la hauteur de la piste,
+    /// saisi sur 28 pt pour que le pouce la trouve.
+    private func poignee(_ piste: SceneFriseTrack, largeur: CGFloat,
+                         bord: ComposerSceneFriseMetrics.Edge) -> some View {
+        Capsule()
+            .fill(Color.white)
+            .frame(width: 5, height: 20)
+            .shadow(color: .black.opacity(0.35), radius: 2)
+            .frame(width: ComposerSceneFriseMetrics.handleHitWidth, height: 28)
+            .contentShape(Rectangle())
+            .highPriorityGesture(glisser(piste, largeur: largeur, bord: bord))
+            .accessibilityHidden(true)
+    }
+
+    /// Un seul geste pour les trois prises : la barre DÉPLACE la piste, une
+    /// ancre en règle une borne. La piste se choisit dès le premier pas, même
+    /// pendant la lecture.
+    private func glisser(_ piste: SceneFriseTrack, largeur: CGFloat,
+                         bord: ComposerSceneFriseMetrics.Edge) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .local)
+            .onChanged { valeur in
+                let origine = origineDuGeste ?? piste
+                if origineDuGeste == nil {
+                    origineDuGeste = piste
+                    HapticFeedback.light()
+                    timeline.selectClip(id: piste.id)
+                }
+                let delta = ComposerSceneFriseMetrics.seconds(forDelta: valeur.translation.width,
+                                                              width: largeur, total: duree)
+                let cible = ComposerSceneFriseMetrics.dragged(origine, edge: bord, by: delta, total: duree)
+                switch bord {
+                case .barre: timeline.moveClip(id: piste.id, to: cible)
+                case .debut: timeline.setClipEntry(id: piste.id, to: cible)
+                case .fin: timeline.setClipExit(id: piste.id, to: cible)
+                }
+                onWindowEdited()
+            }
+            .onEnded { _ in origineDuGeste = nil }
     }
 
     /// La tête AMBRE (`#fbbf24` de la maquette) court sur la règle et les
@@ -202,6 +259,33 @@ nonisolated enum ComposerSceneFriseMetrics {
     /// La colonne des NOMS de piste — 72 pt de la maquette (64 de texte + 8
     /// d'écart) ; la règle et la tête s'alignent sur elle.
     static let labelLane: CGFloat = 72
+
+    /// La largeur SAISIE d'une ancre, bien plus large que son trait.
+    static let handleHitWidth: CGFloat = 28
+
+    /// Ce que le geste tient : la barre entière, ou l'une de ses deux ancres.
+    enum Edge: Equatable {
+        case barre, debut, fin
+    }
+
+    static func seconds(forDelta dx: CGFloat, width: CGFloat, total: Float) -> Float {
+        guard width > 0, dx.isFinite else { return 0 }
+        return Float(dx / width) * total
+    }
+
+    /// Où le geste porte la prise, sans jamais sortir de la slide : la barre
+    /// garde sa durée, chaque ancre reste de son côté de l'autre.
+    static func dragged(_ origine: SceneFriseTrack, edge: Edge, by delta: Float, total: Float) -> Float {
+        let duree = origine.end - origine.start
+        switch edge {
+        case .barre:
+            return max(0, min(origine.start + delta, max(0, total - duree)))
+        case .debut:
+            return max(0, min(origine.start + delta, origine.end - ClipWindowResolver.minimumDuration))
+        case .fin:
+            return min(total, max(origine.end + delta, origine.start + ClipWindowResolver.minimumDuration))
+        }
+    }
 
     static func fraction(_ seconds: Float, of total: Float) -> Float {
         guard total > 0, seconds.isFinite else { return 0 }

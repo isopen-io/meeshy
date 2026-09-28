@@ -62,6 +62,13 @@ extension TimelineViewModel {
         applyWindow(id: id, edit: .setEnd(seconds))
     }
 
+    /// **Glisser la barre** : la piste entière part à cette seconde, sa durée
+    /// ne change pas (`ClipWindowResolver.Edit.move`). Les déplacements voisins
+    /// se fondent en une seule annulation.
+    public func moveClip(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .move(to: seconds))
+    }
+
     private func track(id: String, kind: SceneFriseTrack.Kind, label: String) -> SceneFriseTrack? {
         guard let window = currentWindow(id: id) else { return nil }
         return SceneFriseTrack(id: id, kind: kind, label: label,
