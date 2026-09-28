@@ -1,5 +1,42 @@
 # @meeshy/shared
 
+## 1.30.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le tampon de l'élu ne borne plus sa loupe ; le gate mesure le cadre
+  - le bloc de verre de Focal est la matière du panneau du composer, vrai verre d'iOS 26 — run test (Refs #8506)
+  - en Focal, identité, bande et tampon vivent dans le cadre de l'élu, agrandis de x1,2 encore
+  - en Focal, l'identité, la bande et l'heure de l'élu vivent dans son cadre, agrandi de 20 % (Refs #8506)
+  - voir et entendre l'appelant avant de décrocher (#8480) (#8498)
+  - la scène garde 10 px de chaque côté et rien ne déborde, ✕ et ⋯ redescendent, plafonds remesurés, captures du lot 7 (Refs #8474, #8482)
+  - plafond du chunk story_studio porté à 25 Ko, remesuré à 23,1 Ko après le lot 7 (Refs #8474)
+  - frise réglable à la main, post rédigé dans un cadre de verre, filtre propre à chaque média posé (Refs #8474)
+  - on voit et, si on le choisit, on entend l'appelant avant de décrocher — passerelle et web (#8494)
+  - la fenêtre d'une piste se déplace et s'étire, écart minimal 0,05 s comme iOS (Refs #8474)
+  - les requêtes ne dépendent plus de AbortSignal.any, absent avant Chromium 116 (#8481)
+  - la coque ne plante plus à la connexion quand FCM n'est pas configuré (#8477)
+  - publier suit le délai de grâce de l'adresse — passerelle, iOS et web alignés
+  - le retour Android referme les feuilles de l'écran d'appel (Refs #8466)
+  - le gate des contrôles d'appel, et l'écran d'appel sous son plafond
+  - la frise et le sol du composer passent par les couleurs du thème (#8457)
+  - le retour Android referme le studio de retouche au lieu de quitter le fil (Refs #8460)
+  - les actions du duo tombent dans les colonnes de la pilule (#8459)
+  - lot 6 du composer plein écran — disques sans libellé, sélection silencieuse, plaques en bas, sol teinté, frise de la maquette
+  - frise de la maquette — 6 s, Entre ici / Sort ici, pose à la tête, fantôme hors fenêtre
+  - le composer plein écran suit la directive du 2026-09-27 — petits boutons, sélection silencieuse, frise de la maquette (#8457)
+  - Ajouter, Réagir, modérer et choisir l'enregistrement à l'écran
+  - la fiche d'un appel compte ses réactions ; les actions d'un groupe se coupent en rangées de quatre (Refs #8433, #8438, #8439)
+  - la pilule est un vrai bloc Liquid Glass et le (…) s'y déploie (#8459)
+  - ajouter une personne, modérer et réagir pendant l'appel — contrôleur, verbes socket et vues (Refs #8433, #8438, #8439)
+  - l'enregistrement choisit audio ou vidéo ; la fiche compte les réactions
+  - le moteur invite, coupe un micro, se laisse couper et réagit
+  - on choisit d'enregistrer l'appel en audio seul ou en vidéo, capté par ReplayKit (Refs #8437)
+  - les gardes de vérification d'adresse quittent auth.ts, revenu à 959 lignes sous le budget de 1000
+  - la loupe de l'élu grossit de 26 % et ne s'écrête plus sur la hauteur
+
 ## 1.29.0
 
 ### Minor Changes
