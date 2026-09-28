@@ -5406,7 +5406,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                 }
             } else if state == .serious {
                 self.webRTCService.videoFilters.config.backgroundBlurEnabled = false
-                self.webRTCService.videoFilters.config.skinSmoothingEnabled = false
+                self.webRTCService.videoFilters.config = self.webRTCService.videoFilters.config.selectingFaceEffect(.none)
                 Logger.calls.warning("Thermal serious — disabled advanced filters")
             }
         }
@@ -5656,10 +5656,10 @@ extension CallManager: WebRTCServiceDelegate {
             self.analyticsPacketLossSum += packetLossPercent
             self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
             // Mirrors analyticsVideoFiltersUsed's polling above it: analyticsEffectsUsed
-            // was declared and serialized into the analytics payload but never actually
-            // populated (no call site ever inserted into it), so every call silently
+            // was declared and serialized but never populated, so every call silently
             // reported effectsUsed: []. Record the concrete effects the config exposes.
             let filterConfig = self.webRTCService.videoFilters.config
+            if let face = filterConfig.activeFaceEffect.analyticsName { self.analyticsEffectsUsed.insert(face) }
             if filterConfig.isEnabled {
                 self.analyticsVideoFiltersUsed = true
                 self.analyticsEffectsUsed.insert("colorFilter")
