@@ -253,6 +253,8 @@ struct ConversationMediaGalleryView: View {
     /// page : un plein écran est une demande de voir, y compris ce qui bouge.
     /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
     @State var scenePlaying = true
+    /// #8598 — l'horloge du curseur de scène, en `@State` pour ne pas observer ses 60 Hz ici.
+    @State var sceneClock = GallerySceneClock()
 
     /// #7362 — la page image en cours de visionnage. `internal` : `+Consumption.swift` l'écrit.
     @State var imageViewSession = GalleryImageViewSession()
