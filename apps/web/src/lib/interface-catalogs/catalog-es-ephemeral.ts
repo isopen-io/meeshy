@@ -13,6 +13,8 @@ const esEphemeral = {
   'composer.ephemeral.active': 'Modo efímero activo: {duration}',
   'composer.ephemeral.off': 'Desactivado',
   'composer.ephemeral.rail': 'Tiempo antes de que desaparezca el mensaje',
+  'composer.protection.imposed.blur': 'Desenfoque impuesto por el mensaje citado',
+  'composer.protection.imposed.ephemeral': 'Modo efímero impuesto por el mensaje citado: {duration}',
 } satisfies EphemeralCatalogSlice;
 
 export default esEphemeral;

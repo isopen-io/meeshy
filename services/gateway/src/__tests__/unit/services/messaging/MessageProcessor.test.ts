@@ -509,6 +509,15 @@ describe('MessageProcessor.saveMessage', () => {
     expect(flags & 4).toBe(4); // VIEW_ONCE
   });
 
+  it('#8557 — une réponse nue à un message flou + flamme-œil est enregistrée floue + flamme-œil', async () => {
+    msgFindFirst.mockResolvedValueOnce({ effectFlags: 1 | 2 | 8, isBlurred: true, ephemeralDuration: null });
+    await processor.saveMessage({ ...baseData, replyToId: 'orig-msg-id' });
+    const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(createArgs.data.effectFlags).toBe(1 | 2 | 8);
+    expect(createArgs.data.isBlurred).toBe(true);
+    expect(createArgs.data.ephemeralDuration).toBeNull();
+  });
+
   it('respects provided effectFlags (does not double-add)', async () => {
     await processor.saveMessage({ ...baseData, effectFlags: 2, isBlurred: true });
     const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
