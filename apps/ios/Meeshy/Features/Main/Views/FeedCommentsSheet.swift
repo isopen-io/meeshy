@@ -18,9 +18,8 @@ struct CommentsSheetView: View {
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
     var onCommentSent: ((_ postId: String) -> Void)? = nil
-    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE — le glissé d'un
-    /// commentaire de l'aperçu du fil (#8582). Consommé UNE fois, par le chemin
-    /// unique de la réponse (`beginReply`) : bannière, focus, @mention.
+    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE (glissé de l'aperçu du fil,
+    /// #8582) — consommé UNE fois par `beginReply` : bannière, focus, @mention.
     let initialReplyTarget: FeedComment?
 
     @Environment(\.dismiss) private var dismiss
@@ -511,8 +510,7 @@ struct CommentsSheetView: View {
             if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: post.id) {
                 composerText = draft
             }
-            // APRÈS le brouillon : la @mention d'une réponse à une réponse se
-            // pose devant lui, jamais écrasée par lui.
+            // APRÈS le brouillon : la @mention d'une réponse se pose devant lui.
             if !didConsumeInitialReplyTarget, let initialReplyTarget {
                 didConsumeInitialReplyTarget = true
                 beginReply(to: initialReplyTarget)
