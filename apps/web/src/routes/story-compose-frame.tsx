@@ -11,8 +11,8 @@ import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryFrame } from '@/lib/stories/story-document';
-import { withVisualFilter } from '@/lib/stories/studio';
-import type { StudioDraftEdit } from '@/lib/stories/studio-media-alt';
+import { pageWithVisualFilter } from '@/lib/stories/studio-page';
+import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 import { StudioAltField, StudioFilterSection } from '@/routes/story-compose-media-fields';
@@ -98,9 +98,9 @@ export function StudioFramePanel({
    * carte du socle (lot 6) : on l'écrit là où l'on règle le média. */
   readonly caption?: { readonly value: string; readonly onChange: (value: string) => void };
   /** LE TEXTE ALTERNATIF (`PostMedia.alt`) et LE FILTRE du média de fond
-   * (#8518) — le panneau écrit le brouillon lui-même (`onDraft`), pour que
+   * (#8518) — le panneau écrit la page lui-même (`onPage`), pour que
    * leur câblage vive dans ce chunk à la demande, pas dans celui du studio. */
-  readonly media?: { readonly alt: string; readonly filter: StoryFilterId | null; readonly onDraft: StudioDraftEdit };
+  readonly media?: { readonly alt: string; readonly filter: StoryFilterId | null; readonly onPage: StudioPageEdit };
   /** RETIRER le média de fond — sa ligne a quitté le socle (lot 6). */
   readonly onRemove?: () => void;
 }) {
@@ -156,7 +156,7 @@ export function StudioFramePanel({
             style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
           />
         ) : null}
-        {media !== undefined ? <StudioAltField lang={lang} door="visual" value={media.alt} onDraft={media.onDraft} /> : null}
+        {media !== undefined ? <StudioAltField lang={lang} door="visual" value={media.alt} onPage={media.onPage} /> : null}
         {/* Autour d'un média qui REMPLIT, il n'y a rien : les fonds ne se
             proposent qu'à un média ajusté — un choix sans effet n'est pas offert. */}
         {frame.fitMode === 'fit' ? (
@@ -181,7 +181,7 @@ export function StudioFramePanel({
         {/* LE FILTRE DU FOND (#8518) — il ne peint que le média de fond, comme
             celui d'un calque ne peint que le calque. */}
         {media !== undefined ? (
-          <StudioFilterSection lang={lang} filter={media.filter} onFilter={(filter) => media.onDraft((draft) => withVisualFilter(draft, 'visual', filter))} />
+          <StudioFilterSection lang={lang} filter={media.filter} onFilter={(filter) => media.onPage((page) => pageWithVisualFilter(page, 'visual', filter))} />
         ) : null}
         {onRemove !== undefined ? (
           <button

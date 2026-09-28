@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { STORY_FILTERS, storyFilterCss, type StoryFilterId } from '@/lib/canvas/media-filter';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { withVisualAlt, type StudioDraftEdit } from '@/lib/stories/studio-media-alt';
+import { pageWithVisualAlt } from '@/lib/stories/studio-page';
+import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 
 import { StudioChip } from './story-compose-parts';
 
@@ -73,12 +74,12 @@ export function StudioAltField({
   lang,
   door,
   value,
-  onDraft,
+  onPage,
 }: {
   readonly lang: InterfaceLanguage;
   readonly door: 'visual' | 'overlay';
   readonly value: string;
-  readonly onDraft: StudioDraftEdit;
+  readonly onPage: StudioPageEdit;
 }) {
   return (
     <input
@@ -91,7 +92,7 @@ export function StudioAltField({
       placeholder={translate(lang, 'story.studio.media.alt.placeholder')}
       onInput={(event) => {
         const alt = event.currentTarget.value;
-        onDraft((draft) => withVisualAlt(draft, door, alt), `alt:${door}`);
+        onPage((page) => pageWithVisualAlt(page, door, alt), `alt:${door}`);
       }}
       className="h-11 rounded-xl px-3 text-body outline-none"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}

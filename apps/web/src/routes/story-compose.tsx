@@ -33,6 +33,7 @@ import {
   type StudioPage,
   type StudioUploadState,
 } from '@/lib/stories/studio-page';
+import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import {
   STUDIO_PAGE_MAX,
   canPublishStudioDraft,
@@ -342,6 +343,8 @@ function StoryStudio({
       return next;
     });
   }, []);
+  /** La page COURANTE, écrite par une plaque à la demande (#8518). */
+  const editPage = useCallback<StudioPageEdit>((change, key) => edit((current) => withPage(current, current.currentPage, change), key), [edit]);
 
   useEffect(() => {
     if (viewerId !== null && !purgedRef.current) deps.drafts.set(viewerId, studioSnapshotOf(draft, language));
@@ -852,7 +855,7 @@ function StoryStudio({
                       lang={lang}
                       pose={page.overlay.pose}
                       caption={page.overlay.caption}
-                      {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onDraft: edit } })}
+                      {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onPage: editPage } })}
                       filter={page.overlay.filter ?? null}
                       onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
                       onPose={(pose) => commitPoseOf('overlay', pose)}
@@ -890,7 +893,7 @@ function StoryStudio({
                   ? {}
                   : {
                       caption: { value: page.background.caption, onChange: (value: string) => edit((current) => withVisualCaption(current, 'visual', value), 'caption:visual') },
-                      media: { alt: page.background.alt ?? '', filter: page.background.filter ?? null, onDraft: edit },
+                      media: { alt: page.background.alt ?? '', filter: page.background.filter ?? null, onPage: editPage },
                     })}
                 onRemove={() => {
                   setFrameOpen(false);

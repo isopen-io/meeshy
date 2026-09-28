@@ -5,7 +5,7 @@ import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { SERVED_TEXT_STYLES, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import type { StudioDraftEdit } from '@/lib/stories/studio-media-alt';
+import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import type { StudioPose } from '@/lib/stories/studio-pose';
 import { STUDIO_TEXT_LANGUAGES, type StudioTextLayer } from '@/lib/stories/studio-text';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -306,7 +306,7 @@ export function StudioOverlayEditor({
   readonly pose: StudioPose;
   readonly caption: string;
   /** LE TEXTE ALTERNATIF — absent d'une retouche, qui ne publie rien. */
-  readonly alt?: { readonly value: string; readonly onDraft: StudioDraftEdit };
+  readonly alt?: { readonly value: string; readonly onPage: StudioPageEdit };
   /** LE FILTRE de CE média (lot 7) — `null` : aucun. */
   readonly filter: StoryFilterId | null;
   readonly onFilter: (filter: StoryFilterId | null) => void;
@@ -325,7 +325,7 @@ export function StudioOverlayEditor({
         className="h-11 rounded-xl px-3 text-body outline-none"
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
       />
-      {alt !== undefined ? <StudioAltField lang={lang} door="overlay" value={alt.value} onDraft={alt.onDraft} /> : null}
+      {alt !== undefined ? <StudioAltField lang={lang} door="overlay" value={alt.value} onPage={alt.onPage} /> : null}
       <StudioFilterSection lang={lang} filter={filter} onFilter={onFilter} />
       <StudioPoseSection lang={lang} pose={pose} onPose={onPose} />
     </div>
