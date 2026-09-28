@@ -4,6 +4,7 @@ import { CALL_PANEL_ID, CallRails, type CallPanel } from '@/components/call-cont
 import { CallControlPill } from '@/components/call-control-pill';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
+import { CallPreview } from '@/components/call-preview';
 import { CallPeerAlerts } from '@/components/call-quality';
 import { CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage } from '@/components/call-stage';
@@ -289,6 +290,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           })}
         </p>
       ) : null}
+      {phase === 'outgoing' && call.previewed ? (
+        <p className="glass-call rounded-full px-3 py-1 text-mini" data-call-previewed="">
+          {translate(language, call.media === 'video' ? 'call.preview.seenBy' : 'call.preview.heardBy', { name: call.title })}
+        </p>
+      ) : null}
       <p className="text-body" role="status" aria-live="polite" style={{ color: INK_2 }} data-call-status="">
         {statusKey === null ? clock : t(statusKey)}
         {endedClock === null ? null : ` · ${endedClock}`}
@@ -367,6 +373,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
     >
+      {call.preview === null ? null : <CallPreview stream={call.preview} language={language} />}
       {overlayVideo ? (
         <div ref={stageRef} className="absolute inset-0">
           {stage}
