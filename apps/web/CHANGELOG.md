@@ -1,5 +1,55 @@
 # @meeshy/web-v2
 
+## 2.9.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la participation d'une personne invitée porte sa langue du Prisme
+  - le contrôleur du zoom déclare sa deinit nonisolated — ses tests ne plantent plus en abrt (Refs #8445)
+  - call:invite-participant fait sonner un ami, qui décroche par l'appel ordinaire
+  - le verre des boutons de sonnerie passe par son site ; gate effets hors composite
+  - le panneau des effets n'importe rien de l'écran d'appel ; budgets remesurés
+  - audit — chaque bouton a un effet, et chaque verre est seul
+  - une personne invitée dans un appel en cours y entre, et seulement dans cet appel
+  - on zoome sa caméra — pincement, molette et capsule « − 1× + »
+  - la garde des couleurs iOS documente les fonds du panneau Cadre (#8414)
+  - la sonnerie d'appel sort de CallEventsHandler dans call-ring.ts
+  - « Effets » dans le rail de mon image, et son panneau de verre
+  - boutons de verre interactifs, actions au-dessus de la pilule, glissé progressif vers le PiP
+  - run test — story : légende posée sur le composeur, repli ⌄ / glissé bas, ni flamme ni vue unique en commentaire
+  - réactions relayées et comptées, micro coupé par l'admin de l'appel
+  - la caméra envoyée passe par les effets ; call:analytics les nomme
+  - pincer sa propre image zoome la caméra envoyée
+  - les effets de ma vidéo — règles, traitement des images, port du moteur
+  - le type d'enregistrement (audio ou vidéo) voyage avec la demande d'accord
+  - mode Animé (frise, une piste par objet) et retouche d'une image du fil dans le studio plein écran
+  - le micro coupé reste coupé à chaque naissance de piste ; le PiP ferme le plein écran
+  - contrat partagé des contrôles d'appel et réactions servies dans la fiche
+  - un seul chemin vers la conversation, « Conversation » à droite de Réduire
+  - le micro coupé avant le média naît coupé et s'annonce coupé
+  - la taille rendue d'une retouche lit le rapport de SceneShape, captures des lots 3 à 5 (#8416)
+  - les plafonds des catalogues et du studio de story suivent le composer plein écran (#8425)
+  - lois du mode Animé — une piste par objet, une durée de scène, relues par le lecteur
+  - une image du brouillon d'un message s'édite dans la scène plein écran et repart dans le fil (#8416)
+  - le chunk du studio et les catalogues repassent sous leur plafond (Quality rouge depuis la fusion de #8425)
+  - retours de revue de #8425 — message du socle selon le format, Cadre en verre, sol du composite
+  - les poignées passent au-dessus de la saisie ; captures web du composer plein écran ; D-146
+  - la scène plein écran se compose animée — bascule « Animé » et frise où chaque objet a sa piste (#8415)
+  - sur téléphone, plus aucune colonne ne glisse de côté et la connexion tient dans la vue (Refs #8418)
+  - gates et témoins du composer plein écran réécrits sur la nouvelle règle
+  - la coque Android dessine le refus des notifications et porte sa propre icône de barre d'état (Refs #7307)
+  - le composer plein écran suit iOS — scène entre la barre et le socle, ⋯ Aperçu, texte du post, tuiles, sol thumbhash, panneau Cadre
+  - le panneau Cadre choisit Ajuster ou Remplir et le fond des bandes d'un média de fond (#8414)
+  - le lecteur peint les bandes d'un fond ajusté du fond choisi au Cadre
+  - lois du composer plein écran — Cadre du fond, texte du post, aimantage, sol thumbhash
+  - réponse, édition et pièces jointes vivent dans le verre du composeur
+  - croix et socle hors de la scène, texte du post au socle, rail droit en tuiles, sol thumbhash, limites et lignes magnétiques — run test (#8370)
+  - la scène du composer prend tout le viewport, le chrome flotte dessus — run test (#8370)
+  - le dépliage d'un message long n'est plus avalé par le plafond d'invalidations du fil — run test (Refs #8232)
+  - la vue d'appel « C adapté » repasse les trois gardes qu'elle faisait rougir (Refs #8394, #8396)
+
 ## 2.8.0
 
 ### Minor Changes
