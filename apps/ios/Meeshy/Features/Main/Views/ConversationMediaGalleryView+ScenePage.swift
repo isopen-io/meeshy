@@ -46,6 +46,12 @@ struct GalleryScenePage: View, Equatable {
     /// libre ; immersive, la MÊME carte occupe le viewport entier, sans couloir
     /// ni chrome — elle grandit, elle ne se remplit pas.
     let stage: GallerySceneStage.Frame
+    /// **Le cadre auquel le player est POSÉ, quel que soit l'état** (#8598,
+    /// `GallerySceneStage.reference`) : `stage` ne dit plus que l'ÉCHELLE.
+    let reference: GallerySceneStage.Frame
+    /// L'horloge du curseur de la galerie (#8598). Hors de l'égalité : c'est la
+    /// même instance pour toute la vie de la galerie.
+    let clock: GallerySceneClock
     /// Voir `GalleryImagePage.presentation` (#6142).
     let presentation: StagePresentation
     let accentColor: String
@@ -72,6 +78,7 @@ struct GalleryScenePage: View, Equatable {
     static func == (lhs: GalleryScenePage, rhs: GalleryScenePage) -> Bool {
         lhs.item == rhs.item
             && lhs.stage == rhs.stage
+            && lhs.reference == rhs.reference
             && lhs.presentation == rhs.presentation
             && lhs.accentColor == rhs.accentColor
             && lhs.preferredContentLanguages == rhs.preferredContentLanguages
@@ -105,33 +112,44 @@ struct GalleryScenePage: View, Equatable {
         // la loi, peint le fond DANS la carte et rogne aux coins de la loi.
         // Cette page n'en refait aucune des trois : elle donne le VIEWPORT que
         // le plateau laisse (`GallerySceneStage`), et ses gestes.
-        SceneCard(layout: stage.layout,
-                  thumbHash: item.thumbHash,
-                  // **En plein écran, le SOL est la scène** (#7039, directive
-                  // porteur du 2026-09-18 : « prendre le fond sol comme scène
-                  // directement et dessiner tous les éléments de la scène
-                  // dessus », « le thumbhash habituel est laissé au profit du
-                  // sol »). Le fond ne change pas de NATURE — c'est la même
-                  // empreinte — il change de PORTEUR : `GallerySceneFloor` la
-                  // peint déjà sur l'écran entier, et sans voile dès que la
-                  // porte du plein cadre est franchie (`fullVeil == 0`).
-                  //
-                  // Les proportions, elles, ne bougent pas : le contenu reste
-                  // cadré à `layout.sceneFrame`, aucune coordonnée n'est
-                  // redistribuée sur le viewport. C'est la précision du porteur
-                  // — « les éléments respectent toujours les proportions de la
-                  // scène ».
-                  //
-                  // CARDÉ, rien ne change : la carte doit se détacher de son
-                  // sol, et c'est son fond qui l'en détache.
-                  paintsBackdrop: !presentation.isFull) {
-            if rendersPlayer {
-                player
-            } else {
-                preview
+        //
+        // **Posée au cadre de RÉFÉRENCE, amenée au cadre de l'état par une
+        // ÉCHELLE** (#8598) — la réponse du lecteur de stories (`readerCard`).
+        // Le canvas ne se re-pose plus au passage cadré ↔ plein cadre : la
+        // transformation s'anime image par image, sans saut. Le rayon courant
+        // est compensé par la carte elle-même (`hostScale`).
+        Color.clear.overlay {
+            SceneCard(layout: reference.layout,
+                      thumbHash: item.thumbHash,
+                      // Le rayon COURANT, REMIS à la carte qui rogne (comme `readerCard`).
+                      cornerRadius: stage.layout.cornerRadius,
+                      hostScale: sceneScale,
+                      // **En plein écran, le SOL est la scène** (#7039, directive
+                      // porteur du 2026-09-18 : « prendre le fond sol comme scène
+                      // directement et dessiner tous les éléments de la scène
+                      // dessus », « le thumbhash habituel est laissé au profit du
+                      // sol »). Le fond ne change pas de NATURE — c'est la même
+                      // empreinte — il change de PORTEUR : `GallerySceneFloor` la
+                      // peint déjà sur l'écran entier, et sans voile dès que la
+                      // porte du plein cadre est franchie (`fullVeil == 0`).
+                      //
+                      // Les proportions, elles, ne bougent pas : le contenu reste
+                      // cadré à `layout.sceneFrame`, aucune coordonnée n'est
+                      // redistribuée sur le viewport. C'est la précision du porteur
+                      // — « les éléments respectent toujours les proportions de la
+                      // scène ».
+                      //
+                      // CARDÉ, rien ne change : la carte doit se détacher de son
+                      // sol, et c'est son fond qui l'en détache.
+                      paintsBackdrop: !presentation.isFull) {
+                if rendersPlayer {
+                    player
+                } else {
+                    preview
+                }
             }
+            .scaleEffect(sceneScale)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **Le tap FOND la carte dans le sol** (#7039). Le porteur décrit un
         // fondu, pas un ressort : « le fondu est la scène avant le tap, qui
         // fait disparaître les éléments de contrôle et d'information, et fait
@@ -139,7 +157,11 @@ struct GalleryScenePage: View, Equatable {
         // contrôles s'effacent déjà en opacité (`overlayLayer`) ; le fond de la
         // carte les rejoint, sur la même durée, pour que les deux sorties se
         // lisent comme un seul geste de mise au point.
-        .animation(.easeInOut(duration: 0.2), value: presentation.isFull)
+        //
+        // La durée est CELLE de la transaction qui franchit la porte
+        // (`onEnterStage`, 0,25 s) : l'échelle de la carte et les retraits du
+        // pager qui la recentrent doivent finir ensemble (#8598).
+        .animation(.easeInOut(duration: 0.25), value: presentation.isFull)
         .contentShape(Rectangle())
         // **Le tap franchit la porte du plein cadre, et en revient** (#6142,
         // #6694). En lecture, le canvas ne RECONNAÎT aucun geste de manipulation
@@ -190,8 +212,15 @@ struct GalleryScenePage: View, Equatable {
             // Un seul état de carte ⇒ un seul peintre, et il se dit par la
             // STRUCTURE — `SceneCard` — plutôt que par un champ de loi devenu
             // constant.
-            servesLetterboxFill: false
+            servesLetterboxFill: false,
+            // **Le pont du curseur** (#8598) — seulement pour une scène qui a
+            // une timeline : sur une scène fixe, il n'y a rien à parcourir.
+            scrubber: item.timeline == nil ? nil : clock.scrubber(for: item.id)
         )
+        .onPlaybackTime { [clock, id = item.id, timeline = item.timeline] seconds in
+            guard let timeline else { return }
+            clock.report(elapsed: seconds, duration: timeline, for: id)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -210,6 +239,10 @@ struct GalleryScenePage: View, Equatable {
         .aspectRatio(contentMode: .fill)
         .clipped()
         .accessibilityHidden(true)
+    }
+
+    private var sceneScale: CGFloat {
+        GallerySceneStage.scale(of: stage, reference: reference)
     }
 
     private func resolveOpening() {
@@ -376,6 +409,8 @@ extension ConversationMediaGalleryView {
         GalleryScenePage(
             item: scene,
             stage: sceneStage(),
+            reference: GallerySceneStage.reference(viewport: DeviceLayout.windowSize),
+            clock: sceneClock,
             presentation: stagePresentation,
             accentColor: accentColor,
             preferredContentLanguages: sceneContext?.playerLanguages ?? [],
