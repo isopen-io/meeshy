@@ -6,8 +6,7 @@
 import * as path from 'path';
 import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
 import { declaredReplyProtection } from './replyProtectionContagion';
-import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
-import type { Prisma } from '@meeshy/shared/prisma/client';
+import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
 import { MentionService } from '../MentionService';

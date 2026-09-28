@@ -2,10 +2,13 @@ package me.meeshy.app;
 
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.WebViewListener;
 
 /**
  * Defaut de coque 3b (#5604, recette 2026-09-07) : `BridgeActivity` (Capacitor
@@ -30,6 +33,9 @@ public class MainActivity extends BridgeActivity {
      * `public/sw-push.js`). Processus tue : faux, la notification sonne.
      */
     private static volatile boolean inForeground;
+
+    /** #8564 — horloge monotone de la derniere reprise, gardee par le processus. */
+    private static volatile long lastRendererRecovery = RendererRecovery.NEVER;
 
     static boolean isInForeground() {
         return inForeground;
@@ -69,6 +75,21 @@ public class MainActivity extends BridgeActivity {
                     @Override
                     public Bitmap getDefaultVideoPoster() {
                         return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+                    }
+                }
+            );
+        getBridge()
+            .addWebViewListener(
+                new WebViewListener() {
+                    @Override
+                    public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail detail) {
+                        long now = SystemClock.elapsedRealtime();
+                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now)) {
+                            return false;
+                        }
+                        lastRendererRecovery = now;
+                        recreate();
+                        return true;
                     }
                 }
             );
