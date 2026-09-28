@@ -508,7 +508,10 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         XCTAssertTrue(ressort.upperBound <= entrees.lowerBound,
                       "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
         // Et les entrées peignent bien les deux modes — extraites ou non.
-        XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
+        // Les portes sont peintes par `doorEntries` (#8558 : la colonne
+        // d'options s'accroche à une porte sans retirer les autres).
+        XCTAssertTrue(source.contains("case.doors(letdoors):doorEntries(doors)"))
+        XCTAssertTrue(source.contains("funcdoorEntries(_doors:[ComposerRailDoor])->someView{ForEach(doors"))
         // **Le mode OUTIL peint ses contrôleurs, sans que la forme soit figée.**
         //
         // L'assertion littérale `case.tool(letcontrols):ForEach(controls)` est
