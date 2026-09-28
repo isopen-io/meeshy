@@ -898,8 +898,10 @@ function StoryStudio({
             editorOpen={editing !== null}
             onToggleEditor={selectedId !== null && stageObjects.some((object) => object.id === selectedId) ? () => (editing !== null ? setEditingId(null) : startEditing(selectedId)) : null}
             frameOpen={frameOpen}
+            // Le Cadre règle le FOND : pendant qu'on édite un objet, seuls
+            // SES outils s'offrent (#8482).
             onToggleFrame={
-              page.background !== null
+              page.background !== null && editing === null
                 ? () => {
                     setEditingId(null);
                     setFrameOpen((open) => !open);

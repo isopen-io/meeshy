@@ -1,7 +1,8 @@
 import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 
-import { flush, harness, mount, publishButton, registerStudioBench, typeText } from '@/test-support/story-studio-bench';
+import { createStudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { VIEWER_ID, flush, harness, mount, onePageSnapshot, publishButton, registerStudioBench, typeText } from '@/test-support/story-studio-bench';
 
 /**
  * LOT 7 DU COMPOSER PLEIN ÉCRAN (#8482, retour porteur du 2026-09-28, déjà
@@ -170,5 +171,92 @@ describe('le texte du post suit le format ARMÉ au chevron (#8482)', () => {
     await flush(() => bench.posts.length === 1);
     expect(bench.posts[0]?.type).toBe('POST');
     expect(bench.posts[0]?.content).toBe('Le corps du post');
+  });
+});
+
+describe('éditer un composant ne touche QUE lui (#8482)', () => {
+  const POSE = { x: 0.3, y: 0.7, scale: 1, rotation: 0 };
+  const TEXT = (id: string, text: string) => ({ id, text, language: 'fr', style: 'bold' as const, effect: 'none' as const, color: 'FFFFFF', align: 'center' as const, pose: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } });
+
+  /** Une scène à QUATRE composants : un fond, un calque, deux textes. */
+  function scene() {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(
+      VIEWER_ID,
+      onePageSnapshot({
+        texts: [TEXT('text-1', 'Un'), TEXT('text-2', 'Deux')],
+        background: { postMediaId: 'pm-bg', fileUrl: '2026/09/u/bg.jpg', mediaType: 'image', aspectRatio: 4 / 3 },
+        overlay: { postMediaId: 'pm-ov', fileUrl: '2026/09/u/ov.jpg', mediaType: 'image', aspectRatio: 1, pose: POSE },
+      }),
+    );
+    const bench = harness({ drafts });
+    return { bench, el: mount(bench.deps) };
+  }
+
+  type Scene = { objects: { id: string; kind: string }[] };
+  const published = async (bench: ReturnType<typeof harness>, el: HTMLElement) => {
+    click(publishButton(el));
+    await flush(() => bench.posts.length === 1);
+    return (bench.posts[0]?.storyEffects as { scenes: Scene[] }).scenes[0]!;
+  };
+  /** Ce que la même scène publie SANS aucune retouche — la référence. */
+  const untouched = () => {
+    const probe = scene();
+    return published(probe.bench, probe.el);
+  };
+  /** Chaque composant publié, par identité : les AUTRES doivent rester identiques. */
+  const others = (published: Scene, id: string) => published.objects.filter((object) => object.id !== id);
+  const one = (published: Scene, id: string) => published.objects.find((object) => object.id === id);
+
+  test('l’éditeur du calque ne montre QUE ses outils — aucun outil de texte', async () => {
+    const { el } = scene();
+    click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-edit-plaque] [data-story-overlay-editor]') !== null);
+    const plaque = el.querySelector('[data-story-edit-plaque]')!;
+    expect(plaque.querySelector('[data-story-object-editor]')).toBeNull();
+    expect(plaque.querySelector('[data-story-option^="style:"], [data-story-option^="color:"]')).toBeNull();
+    expect(el.querySelector('[data-story-frame-panel]')).toBeNull();
+    // Le Cadre règle le FOND : il ne s'offre pas pendant qu'on édite le calque.
+    expect(el.querySelector('[data-story-option="frame"]') === null).toBe(true);
+    click(el.querySelector('[data-story-edit-done]'));
+    expect(el.querySelector('[data-story-option="frame"]') !== null).toBe(true);
+  });
+
+  test('agrandir et légender le calque laisse le fond et les textes intacts', async () => {
+    const reference = await untouched();
+    const { bench, el } = scene();
+    click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-overlay-editor]') !== null);
+    click(el.querySelector('[data-story-edit-plaque] [data-story-option="pose:bigger"]'));
+    const caption = el.querySelector<HTMLInputElement>('#story-studio-caption-overlay')!;
+    act(() => {
+      caption.value = 'Le calque';
+      caption.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const after = await published(bench, el);
+    expect(others(after, 'overlay')).toEqual(others(reference, 'overlay'));
+    expect(one(after, 'overlay')).not.toEqual(one(reference, 'overlay'));
+  });
+
+  test('le Cadre du FOND ne touche ni le calque ni les textes', async () => {
+    const reference = await untouched();
+    const { bench, el } = scene();
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-option="fill"]') !== null);
+    click(el.querySelector('[data-story-frame-option="fill"]'));
+    const after = await published(bench, el);
+    expect(others(after, 'background')).toEqual(others(reference, 'background'));
+    expect(one(after, 'background')).not.toEqual(one(reference, 'background'));
+  });
+
+  test('le style d’un texte ne s’applique qu’à LUI', async () => {
+    const reference = await untouched();
+    const { bench, el } = scene();
+    click(el.querySelector('[data-story-object-edit="text-2"]'));
+    await flush(() => el.querySelector('[data-story-object-editor="text-2"]') !== null);
+    click(el.querySelector('[data-story-edit-plaque] [data-story-option="style:neon"]'));
+    const after = await published(bench, el);
+    expect(others(after, 'text-2')).toEqual(others(reference, 'text-2'));
+    expect(JSON.stringify(one(after, 'text-2'))).toContain('neon');
   });
 });
