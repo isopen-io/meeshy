@@ -174,10 +174,8 @@ nonisolated public enum FocalMetrics {
         public static let surfaceLightAlpha: CGFloat = 0.055
         public static let surfaceDarkAlpha: CGFloat = 0.10
 
-        /// Opacité du FILET d'accent qui borde le bloc de verre (#8147) : le
-        /// verre reste neutre, la couleur de la conversation ne tient qu'au
-        /// bord (parité web) ; l'épaisseur est `ringSize`.
-        public static let glassRimOpacity: Double = 0.55
+        // `glassRimOpacity` (0,55, filet d'accent du verre, #8147) a disparu
+        // avec #8506 : le bloc de verre est la matière du composer, sans filet.
     }
 
     // MARK: - Gabarit large de la rangée

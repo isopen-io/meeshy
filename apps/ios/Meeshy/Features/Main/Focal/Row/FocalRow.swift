@@ -998,7 +998,7 @@ struct FocalRow: View {
     /// `focusCardInnerMargin` en haut et en bas, et s'arrête à
     /// `focusCardHorizontalInset` du bord de la cellule.
     private var focusCardBackground: some View {
-        FocalGlassBlock(accentHex: input.accentHex)
+        FocalGlassBlock()
             .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }
@@ -1009,7 +1009,7 @@ struct FocalRow: View {
     /// celle que la passe mesure (`FocalScrollPerspective.electedCardExtent`).
     private var electedCardBackground: some View {
         let margin = FocalScrollPerspective.electedCardMargin
-        return FocalGlassBlock(accentHex: input.accentHex)
+        return FocalGlassBlock()
             .padding(.horizontal, -margin)
             .padding(.top, -(focusLift + margin))
             .padding(.bottom, -(FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight + margin))

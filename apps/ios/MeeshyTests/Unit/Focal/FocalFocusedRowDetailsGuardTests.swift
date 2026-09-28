@@ -234,7 +234,17 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertFalse(row.contains("strokeBorder"), "ni la carte ni les chips ne tracent de bord")
         // #8147 : le fond est un BLOC DE VERRE teinté de la couleur de la
         // conversation — plus un aplat opaque.
-        XCTAssertTrue(row.contains("FocalGlassBlock(accentHex: input.accentHex)"), "le fond est le bloc de verre, teinté de l'accent")
+        XCTAssertTrue(row.contains("FocalGlassBlock()"), "le fond est le bloc de verre")
+        // #8506 (directive porteur 2026-09-28) : la MÊME matière que le panneau
+        // de la barre de composition — le vrai verre d'iOS 26, sans teinte ni
+        // filet d'accent (le filet à `glassRimOpacity` en faisait une carte bordée).
+        let glass = try normalized("Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift")
+        let composer = try normalized("Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift")
+        XCTAssertTrue(composer.contains(".adaptiveLiquidGlass(in: Self.panelShape"), "référence : le panneau du composer")
+        XCTAssertTrue(glass.contains(".adaptiveLiquidGlass(in: Self.shape)"), "même atome, même verre non teinté")
+        XCTAssertFalse(glass.contains("strokeBorder"), "aucun filet superposé au verre")
+        XCTAssertFalse(glass.contains("glassRimOpacity"), "le filet d'accent a disparu")
+        XCTAssertFalse(glass.contains("Color.clear .adaptiveLiquidGlass"), "le verre se pose sur une forme remplie, pas sur un Color.clear nu")
         XCTAssertFalse(row.contains("focusCardFillOpacity"), "plus aucun aplat opaque sous le message élu")
         let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertFalse(perspective.contains("focusCardBorderOpacity"), "la teinte du cadre n'a plus de porteur")
