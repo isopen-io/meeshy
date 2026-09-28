@@ -88,6 +88,10 @@ public enum StoryExporter {
     ///     médias : sans cet index, l'export peignait 🖼️ à la place du sticker.
     ///     Résolues ici en fichiers locaux par le même chemin que `mediaURL`.
     ///     `[:]` = les stickers image sortent sous leur repli.
+    ///   - images: bitmaps déjà en mémoire (composer, #8599), keyés par id
+    ///     d'élément ou `postMediaId`. Ils priment sur toute adresse : médias
+    ///     retouchés, stickers collés et fond image sortent tels que l'auteur
+    ///     les voit. Voir `StoryExportInputs`.
     public static func export(_ inputSlide: StorySlide,
                               to outputURL: URL,
                               languages: [String] = [],
@@ -95,6 +99,7 @@ public enum StoryExporter {
                               branding: StoryExportBranding.Plan? = nil,
                               audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)? = nil,
                               stickerImageSources: [String: String] = [:],
+                              images: [String: UIImage] = [:],
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         // Keep the export alive if the app is backgrounded mid-render — the same
         // net `TusUploadManager` gives uploads. A story export runs a few seconds
@@ -338,7 +343,8 @@ public enum StoryExporter {
                 introFade: branding?.introFade,
                 outroFade: outroFade,
                 requiredSourceTrackIDs: tracks.map { NSNumber(value: $0) },
-                stickerImageURLs: stickerImageURLs
+                stickerImageURLs: stickerImageURLs,
+                images: images
             )
         }
 
