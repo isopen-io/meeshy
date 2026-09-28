@@ -19,6 +19,7 @@ import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
+import type { CallCaption } from '@/lib/calls/call-captions';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
@@ -154,6 +155,7 @@ const CallMontageMode = lazy(() =>
 const CallReactionPalette = lazy(() => import('./call-control-panels').then((module) => ({ default: module.CallReactionPalette })));
 const CallRecordChoice = lazy(() => import('./call-control-panels').then((module) => ({ default: module.CallRecordChoice })));
 const CallPeopleSheet = lazy(() => import('./call-people-sheet').then((module) => ({ default: module.CallPeopleSheet })));
+const CallJournalPanel = lazy(() => import('./call-journal-panel').then((module) => ({ default: module.CallJournalPanel })));
 
 /** Le bouton qui a ouvert chaque panneau : le focus y revient quand on revient au menu. */
 const PANEL_OPENER: Readonly<Record<CallPanelKind, string>> = {
@@ -414,10 +416,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
   const captionsFramed = expanded && !hidden && chrome.panel !== 'journal';
+  const colorOf = (caption: CallCaption): string => (caption.mine ? SELF_SPEAKER_COLOR : speakerColor(caption.speakerId));
   const captions =
-    call.captionsMode === 'off' || !live ? null : (
+    call.captionsMode === 'off' || !live || chrome.panel === 'journal' ? null : (
       <Suspense fallback={null}>
-        <CallCaptionsPanel call={call} language={language} colorOf={(caption) => (caption.mine ? SELF_SPEAKER_COLOR : speakerColor(caption.speakerId))} surface={captionsFramed ? 'inset' : 'glass'} />
+        <CallCaptionsPanel call={call} language={language} colorOf={colorOf} surface={captionsFramed ? 'inset' : 'glass'} />
       </Suspense>
     );
   const panelOf = (open: CallPanelKind): ReactNode => {
@@ -434,7 +437,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       case 'record':
         return <CallRecordChoice {...base} onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel} />;
       case 'journal':
-        return null;
+        return <CallJournalPanel {...base} captions={call.captions} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />;
       case 'people':
         return <CallPeopleSheet {...base} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
     }

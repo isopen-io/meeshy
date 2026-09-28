@@ -366,6 +366,24 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  test('« Journal », juste après les sous-titres, ouvre TOUT l’appel à la place des rangées — et le bandeau se tait (#8579)', async () => {
+    const said = (n: number) => ({ id: `w-${n}`, speakerId: 'u-peer', speakerName: 'Amina', original: `Line ${n}`, translated: `Ligne ${n}`, pair: { from: 'en', to: 'fr' }, isFinal: true, at: n, mine: false });
+    const view = mount({ members: { 'u-peer': member() }, captionsMode: 'translated', captions: Array.from({ length: 250 }, (_, n) => said(n)) });
+    view.press('[data-call-more]');
+    const row = [...view.host.querySelectorAll('[data-call-row="call"] [data-call-row-scroll] button')];
+    const at = (selector: string) => row.findIndex((button) => button.matches(selector));
+    expect(at('[data-call-control="journal"]')).toBe(at('[data-call-captions]') + 1);
+    expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-label')).toBe('Ouvrir le journal de l’appel');
+    view.press('[data-call-control="journal"]');
+    await settle(() => import('./call-journal-panel'));
+    expect(view.find('[data-call-row]')).toBeNull();
+    expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    view.press('[data-panel-back]');
+    expect(document.activeElement?.getAttribute('data-call-control')).toBe('journal');
+    view.done();
+  });
+
   test('un panneau REMPLACE les rangées : ‹ revient au menu, ✕ ferme tout (#8578)', async () => {
     const view = mount({ members: { 'u-peer': member() } });
     view.press('[data-call-more]');

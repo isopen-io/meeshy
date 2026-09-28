@@ -133,6 +133,14 @@ function mineAction(action: MineAction, { call, language, panels, kit }: ActionC
   }
 }
 
+/** Le Journal (#8579) : une page et ses lignes — ce qui a été dit, et sa traduction. */
+const journalGlyph = (
+  <svg aria-hidden viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 3.5h9l3 3v14H6z" />
+    <path d="M9 9.5h6M9 13h6M9 16.5h3.5" />
+  </svg>
+);
+
 function callAction(action: Exclude<CallAction, 'record'>, context: ActionContext): ActionView {
   const { language, panels, kit } = context;
   if (action === 'invite')
@@ -152,6 +160,15 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       glyph: <GlyphSvg glyph={kit.glyphs.smiley} size={22} />,
       ...panelView(panels, 'react'),
       data: { 'data-call-control': 'react' },
+    };
+  if (action === 'journal')
+    return {
+      key: action,
+      label: translateCallControls(language, 'callControls.journal.label'),
+      caption: translateCallControls(language, 'callControls.journal'),
+      glyph: journalGlyph,
+      ...panelView(panels, 'journal'),
+      data: { 'data-call-control': 'journal' },
     };
   if (action === 'capture')
     return {

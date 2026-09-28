@@ -205,7 +205,7 @@
       "dynamic_only": true,
       "kb": {
         "value": 3,
-        "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
+        "status": "CIBLE -- MESUREE PAR #8048, REMESUREE PAR #8579, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,96 Ko -- les sous-titres d un appel (`lib/calls/call-captions-runtime.ts` : langue du lecteur et nom de l emetteur ; `call-captions-controller.ts` : journal, modes, data channel `transcription`, emission de `call:transcription-segment` et `call:transcription-active` ; `call-speech.ts` : la Web Speech API et sa detection). Charge A LA DEMANDE par `engine-defaults.ts` (`lazyCaptions`) au premier evenement de sous-titres, au premier canal de transcription ou au premier appui sur CC : il ne pese ni sur qui n appelle pas, ni sur un appel ou personne ne sous-titre. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,84 mesures apres fusion de dev, contre 9,41 avant #8048). La loi pure qu il partage avec le panneau est comptee a part (`call_captions_law`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
@@ -259,7 +259,16 @@
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,77 Ko -- la transcription d apres l appel dans la bulle d appel du fil (`components/call-transcript-panel.tsx`, `lib/calls/call-transcript.ts` : `GET /calls/:callId/transcript`, decodage, Prisme du lecteur). Charge A LA DEMANDE par `system-notice.tsx` au premier appui sur « Transcription » : le fil ne la paie pas. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+        "source": "Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 2,16 Ko -- la transcription d apres l appel (`components/call-transcript-panel.tsx`, `lib/calls/call-transcript.ts` : `GET /calls/:callId/transcript` lu PAGE APRES PAGE depuis #8579 -- la passerelle en sert cent a la fois --, decodage, Prisme du lecteur). Charge A LA DEMANDE par `system-notice.tsx` au premier appui sur « Transcription » dans la bulle du fil, et par la fiche d un appel fini (`routes/call-detail-parts.tsx`, #8579) : ni le fil ni la fiche ne la paient avant. HISTORIQUE : 1,77 Ko (#8048, premiere page seule). Arrondi au Ko SUPERIEUR (3), marge incluse : la cible de 3 Ko tient."
+      }
+    },
+    "call_journal_panel": {
+      "pattern": "^assets/call-journal-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8579, NON ARBITREE",
+        "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 1,32 Ko -- le JOURNAL de l appel (`components/call-journal-panel.tsx`, #8579) : tout ce qui a ete dit depuis le debut de l appel, sans rien tronquer -- qui, quand, la phrase servie et son original --, le defilement libre et « Revenir au direct ». Ouvert par « Journal » dans la rangee « L appel », a la place des rangees. Charge A LA DEMANDE par `call-screen.tsx` a la premiere ouverture ; il n importe rien de `call_overlay`, qui lui remet la couleur de chaque personne et le glyphe de Fermer. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
     "call_overlay": {
@@ -268,7 +277,7 @@
       "kb": {
         "value": 16,
         "status": "REMESUREE PAR #8550",
-        "source": "Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 15,63 Ko -- l ecran d appel : la machine d etat de sa couche (#8578, `lib/calls/call-screen-layer.ts` : repos, menu, panneau, mode), la pilule et ses commandes, l en-tete, la scene du duo (`call-stage.tsx` : la vignette en coin qui se PINCE en x1 · x2 · x3, #8577, `lib/calls/call-self-tile.ts`, `use-tile-pinch.ts`), et la machine d etat du toucher qui efface tout l ecran (`lib/calls/use-call-chrome.ts`). #8576 en SORT les rangees d actions et le rail (`call_action_rows`, a qui l ecran REMET son bouton, ses glyphes et ses fleches pour ne pas s importer lui-meme) et le zoom de ma camera (`call_self_camera`) : chacun ne se charge que quand il se montre. Les sous-menus restent chacun dans leur chunk (`call_control_panels`, `call_people_sheet`, `call_journal_panel`), les modes aussi (`call_effects_mode`, `call_montage_mode`). HISTORIQUE : 14,14 Ko (#8433/#8437/#8438/#8439), 14,59 Ko avant #8550, 15,97 Ko apres #8550, 16,67 Ko avec la couche de #8578 avant ces extractions."
+        "source": "Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 15,72 Ko -- l ecran d appel : la machine d etat de sa couche (#8578, `lib/calls/call-screen-layer.ts` : repos, menu, panneau, mode), la pilule et ses commandes, l en-tete, la scene du duo (`call-stage.tsx` : la vignette en coin qui se PINCE en x1 · x2 · x3, #8577, `lib/calls/call-self-tile.ts`, `use-tile-pinch.ts`), et la machine d etat du toucher qui efface tout l ecran (`lib/calls/use-call-chrome.ts`). #8576 en SORT les rangees d actions et le rail (`call_action_rows`, a qui l ecran REMET son bouton, ses glyphes et ses fleches pour ne pas s importer lui-meme) et le zoom de ma camera (`call_self_camera`) : chacun ne se charge que quand il se montre. Les sous-menus restent chacun dans leur chunk (`call_control_panels`, `call_people_sheet`, `call_journal_panel`), les modes aussi (`call_effects_mode`, `call_montage_mode`). HISTORIQUE : 14,14 Ko (#8433/#8437/#8438/#8439), 14,59 Ko avant #8550, 15,97 Ko apres #8550, 16,67 Ko avec la couche de #8578 avant ces extractions, 15,63 Ko apres elles ; le branchement du Journal (#8579) y ajoute 0,09 Ko."
       }
     },
     "call_action_rows": {
