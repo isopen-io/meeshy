@@ -23,6 +23,13 @@ enum PrimaryAction: String, Equatable {
     /// « parmi les premiers éléments ». Vivait dans `MoreItem` (« Plus… »),
     /// enterrée derrière un geste supplémentaire — retour porteur explicite.
     case select
+    /// **Exporter en image** — la carte d'export (miroir du menu web,
+    /// `apps/web/src/lib/view/message-actions.ts`). Même garde que « Copier » :
+    /// une image est une copie qu'on partage, ce qui ne se copie pas ne se peint pas.
+    case exportImage
+    /// **Export rapide** — la carte part dans le format par défaut enregistré
+    /// sur l'appareil, sans passer par les options. N'existe qu'avec ce défaut.
+    case exportQuick
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -123,6 +130,9 @@ struct MessageMenuContext: Equatable {
     /// autre porte : ni copie, ni traduction, ni transfert, ni partage, ni
     /// enregistrement, ni historique d'édition.
     var isBlurred: Bool = false
+    /// Un format d'export par défaut est enregistré sur l'appareil : « Export
+    /// rapide » l'applique sans options (`MessageCardFormat.readDefault`).
+    var hasDefaultExportFormat: Bool = false
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -271,6 +281,10 @@ enum MessageActionResolver {
         let showsContent = !ctx.isBlurred
         if ctx.hasText && showsContent { out.append(.translate) }
         if ctx.hasText && showsContent { out.append(.copy) }
+        if ctx.hasText && showsContent {
+            out.append(.exportImage)
+            if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
+        }
         if ctx.saveableAttachmentCount == 1 && showsContent { out.append(.saveMedia) }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
