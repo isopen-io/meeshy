@@ -71,7 +71,10 @@ extension MeeshyComposerHost {
                                         loadedAudioURLs, loadedStickerAnimations, originalLanguage,
                                         visibility, visibilityUserIds, draftId, references,
                                         accessibility, targetType in
-                onPublishAllInBackground(
+                // Un post ou un réel de M scènes part en UNE publication (#8520).
+                guard atelierHandOffStaysOnAtelier(targetType: targetType,
+                                                   sceneCount: slides.count) else { return false }
+                return onPublishAllInBackground(
                     slides, slideImages, loadedImages, loadedVideoURLs,
                     loadedAudioURLs, loadedStickerAnimations, originalLanguage,
                     visibility, visibilityUserIds, draftId, references,

@@ -59,6 +59,10 @@ extension StoryViewModel {
             id: item.tempStoryId,
             thumbnailImage: media.slideImages.values.first?
                 .preparingThumbnail(of: CGSize(width: 100, height: 178)) ?? UIImage(),
+            // **Le lien d'origine voyage jusqu'au rejeu** (#8522) : persisté
+            // dans l'item, il n'était jamais relu — une republication rejouée
+            // partait orpheline.
+            repostOfId: item.repostOfId,
             progress: 0,
             phase: .uploading,
             authorId: user?.id ?? "",
@@ -69,6 +73,7 @@ extension StoryViewModel {
             loadedImages: media.loadedImages,
             loadedVideoURLs: media.loadedVideoURLs,
             loadedAudioURLs: media.loadedAudioURLs,
+            loadedStickerAnimations: media.loadedStickerAnimations,
             originalLanguage: item.originalLanguage,
             visibility: item.visibility,
             visibilityUserIds: item.visibilityUserIds ?? [],
@@ -334,6 +339,8 @@ extension StoryViewModel {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    loadedStickerAnimations: loadedStickerAnimations,
+                    repostOfId: repostOfId,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,
@@ -403,6 +410,7 @@ extension StoryViewModel {
                 loadedImages: loadedImages,
                 loadedVideoURLs: loadedVideoURLs,
                 loadedAudioURLs: loadedAudioURLs,
+                loadedStickerAnimations: loadedStickerAnimations,
                 originalLanguage: originalLanguage,
                 visibility: visibility,
                 visibilityUserIds: visibilityUserIds,
@@ -511,6 +519,10 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
+        loadedStickerAnimations: [String: Data] = [:],
+        /// Republication hors ligne (#8522) : sans lui, le rejeu publiait une
+        /// publication orpheline de son original.
+        repostOfId: String? = nil,
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
@@ -528,10 +540,12 @@ extension StoryViewModel {
             loadedImages: loadedImages,
             loadedVideoURLs: loadedVideoURLs,
             loadedAudioURLs: loadedAudioURLs,
+            loadedStickerAnimations: loadedStickerAnimations,
             originalLanguage: originalLanguage,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
             draftId: draftId,
+            repostOfId: repostOfId,
             declaredMentions: declaredMentions,
             mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
@@ -547,10 +561,7 @@ extension StoryViewModel {
         )
 
         HapticFeedback.success()
-        FeedbackToastManager.shared.showSuccess(String(
-            localized: "story.publish.queue.enqueued",
-            defaultValue: "Story enregistrée — publication au retour en ligne"
-        ))
+        FeedbackToastManager.shared.showSuccess(StoryPublishCopy.queuedForOffline(targetType))
 
         // L'enrichissement est TOUJOURS le dernier maillon avant le premier
         // octet réseau, et JAMAIS devant un feedback utilisateur. Sur le chemin
@@ -586,6 +597,9 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
+        /// Les octets ANIMÉS des stickers (#8522) : sans eux, le fichier mis en
+        /// file est un PNG fixe et le rejeu publie un sticker figé.
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String? = nil,
         visibility: String,
         visibilityUserIds: [String],
@@ -648,6 +662,7 @@ extension StoryViewModel {
             audios: loadedAudioURLs,
             into: offlineDir,
             alphaPreservingIds: stickerIds,
+            animations: loadedStickerAnimations,
             fileManager: fm
         )
         guard mediaOutcome.isComplete else {
@@ -1033,5 +1048,23 @@ extension StoryViewModel {
         // `Task.detached` qui efface le marqueur côté acteur.
         mutateUpload(id: uploadId) { $0.ownsQueueClaim = false }
         Task.detached { await StoryPublishQueue.shared.clearInFlight(queueId) }
+    }
+}
+
+/// **Ce que dit la file hors ligne, selon ce que l'auteur publie** (#8522).
+/// Un post mis en file s'annonçait « Story enregistrée ».
+nonisolated enum StoryPublishCopy {
+    static func queuedForOffline(_ type: PostType) -> String {
+        switch type {
+        case .story:
+            return String(localized: "story.publish.queue.enqueued",
+                          defaultValue: "Story enregistrée — publication au retour en ligne")
+        case .reel:
+            return String(localized: "reel.publish.queue.enqueued",
+                          defaultValue: "Réel enregistré — publication au retour en ligne")
+        case .post, .status:
+            return String(localized: "post.publish.queue.enqueued",
+                          defaultValue: "Post enregistré — publication au retour en ligne")
+        }
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import os
 import MeeshySDK
+import MeeshyUI
 
 /// Écrit sur disque les médias d'une story mise en file de publication, et dit
 /// LESQUELS n'ont pas pu l'être.
@@ -41,6 +42,7 @@ nonisolated enum StoryOfflineMediaWriter {
                         audios: [String: URL],
                         into directory: URL,
                         alphaPreservingIds: Set<String> = [],
+                        animations: [String: Data] = [:],
                         fileManager: FileManager = .default) -> Outcome {
         var references: [StoryMediaReference] = []
         var failed: [String] = []
@@ -50,10 +52,19 @@ nonisolated enum StoryOfflineMediaWriter {
         for id in images.keys.sorted() {
             guard let image = images[id] else { continue }
             let preservesAlpha = alphaPreservingIds.contains(id)
-            let destination = directory.appendingPathComponent("\(id).\(preservesAlpha ? "png" : "jpg")")
-            guard let data = preservesAlpha
+            // **Les octets ANIMÉS d'un sticker traversent la file tels quels**
+            // (#8522, #3956). Aplatir un GIF en PNG ici publierait au rejeu un
+            // sticker figé que l'auteur avait composé animé.
+            let animated = preservesAlpha
+                ? animations[id].flatMap { bytes in
+                    AnimatedImageEligibility.container(bytes).map { (bytes, $0.filenameExtension) }
+                }
+                : nil
+            let ext = animated?.1 ?? (preservesAlpha ? "png" : "jpg")
+            let destination = directory.appendingPathComponent("\(id).\(ext)")
+            guard let data = animated?.0 ?? (preservesAlpha
                     ? image.pngData()
-                    : image.jpegData(compressionQuality: jpegQuality) else {
+                    : image.jpegData(compressionQuality: jpegQuality)) else {
                 failed.append(id)
                 continue
             }

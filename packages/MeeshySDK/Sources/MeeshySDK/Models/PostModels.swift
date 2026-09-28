@@ -476,6 +476,7 @@ extension APIPostMedia {
             fileName: originalName ?? fileName,
             fileSize: fileSize.map { formatFileSize($0) },
             caption: caption,
+            alt: alt,
             captionLanguage: captionLanguage,
             captionTranslations: flatCaptionTranslations,
             transcription: transcription,

@@ -321,11 +321,11 @@ extension StoryComposerView {
         // (le hand-off n'a pas encore de toast). VoiceOver doit savoir que le
         // tap a été pris en compte, que la publication finisse en ligne ou
         // dans la file offline.
-        AdaptiveAccessibility.announce(String(
-            localized: "story.composer.a11y.publishStarted",
-            defaultValue: "Publication de la story lancée",
-            bundle: .module
-        ))
+        let publishedType = Self.publishedType(requested: publishTrigger?.requestedTargetType,
+                                               atelier: publishTargetType)
+        // L'annonce nomme ce qui PART (#8522) : un post publié depuis l'atelier
+        // s'annonçait « Publication de la story lancée ».
+        AdaptiveAccessibility.announce(Self.publishStartedAnnouncement(for: publishedType))
         // **L'audience SERVIE vient du presseur quand il en a une** (#4135).
         // Deux règles PURES, et pas un `if` ici : c'est la seule moitié de ce
         // lot dont l'erreur est IRRÉVERSIBLE — un contenu « Amis » parti en
@@ -345,8 +345,7 @@ extension StoryComposerView {
             viewModel.loadedStickerAnimations,
             storyLanguage, servedVisibility, ids, viewModel.draftId, viewModel.references,
             Self.accessibilityHandoff(from: accessibilityStore),
-            Self.publishedType(requested: publishTrigger?.requestedTargetType,
-                               atelier: publishTargetType)
+            publishedType
         )
         // Tout ce qui engage le brouillon attend de savoir si le hand-off a
         // été accepté. Un refus (édition hors-ligne, surface inerte) laisse le
@@ -370,6 +369,22 @@ extension StoryComposerView {
         // Le loquet n'existe QUE pour qu'un second tap pendant l'animation de
         // dismiss ne re-publie pas la même story.
         didHandOffPublish = true
+    }
+
+    /// **Ce que VoiceOver entend au geste Publier** (#8522) — le type servi,
+    /// jamais « story » pour un post ou un réel.
+    public static func publishStartedAnnouncement(for type: PostType) -> String {
+        switch type {
+        case .story:
+            return String(localized: "story.composer.a11y.publishStarted",
+                          defaultValue: "Publication de la story lancée", bundle: .module)
+        case .reel:
+            return String(localized: "story.composer.a11y.publishStarted.reel",
+                          defaultValue: "Publication du réel lancée", bundle: .module)
+        case .post, .status:
+            return String(localized: "story.composer.a11y.publishStarted.post",
+                          defaultValue: "Publication du post lancée", bundle: .module)
+        }
     }
 
     /// Snapshot remis au callback : une COPIE de `slides` où les effets du

@@ -104,7 +104,10 @@ struct ConversationScrollState {
     var photosToEdit: [UIImage] = []
     var videosToPreview: [URL] = []
     var editingPendingAttachmentId: String? = nil
-    var videoToEdit: URL? = nil
+    /// La SOURCE de la retouche (#8524) : le fichier de la pièce jointe décodé
+    /// à 2 048 px hors du fil principal, jamais la vignette du plateau.
+    var editingPendingSource: UIImage? = nil
+    var videoToEdit: PendingVideoEdit? = nil
     var audioToEdit: PendingAudioEdit? = nil
     // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
     // output goes through the camera-capture pipeline, never the original).
@@ -127,6 +130,13 @@ struct PreviewMedia: Identifiable {
 
 /// A pending audio attachment opened for editing — carries the attachment id
 /// so the editor can replace that exact tray chip on confirm (never append).
+/// La vidéo en attente ouverte dans l'éditeur, avec l'id de SA pièce jointe
+/// (#8443) : sans lui, le résultat ne savait pas quel chip remplacer.
+struct PendingVideoEdit: Identifiable, Equatable {
+    let id: String
+    let url: URL
+}
+
 struct PendingAudioEdit: Identifiable, Equatable {
     /// The id of the `MessageAttachment` being edited.
     let id: String
