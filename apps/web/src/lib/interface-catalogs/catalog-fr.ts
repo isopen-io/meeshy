@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frGallery from './catalog-fr-gallery';
+import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
@@ -1162,6 +1163,7 @@ const fr = {
   ...frStudioChrome,
   ...frEphemeral,
   ...frGallery,
+  ...frMessageCard,
   ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).

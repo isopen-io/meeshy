@@ -1,4 +1,6 @@
 import { ForwardSheet } from '@/components/forward-sheet';
+import { messageCardSubjectOf } from '@/lib/export/message-card-subject';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
@@ -7,6 +9,8 @@ import type { Message } from '@/lib/api/types';
 import { messageDetailExposureOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
+
+import { MessageExportSheet } from './thread-export-sheet';
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
  * `Pick`, jamais le contrôleur entier : le contrat de ce composant se lit
@@ -26,6 +30,8 @@ export type ThreadSheetsMenu = Pick<
   | 'setReactionSheetFor'
   | 'detailFor'
   | 'setDetailFor'
+  | 'exportFor'
+  | 'setExportFor'
   | 'servedOf'
   | 'starOf'
 >;
@@ -53,6 +59,8 @@ export function ThreadMessageSheets({
   readerLocale,
   conversationId,
   viewerId,
+  viewerName,
+  announce,
 }: {
   readonly messageMenu: ThreadSheetsMenu;
   readonly messages: readonly Message[];
@@ -60,6 +68,9 @@ export function ThreadMessageSheets({
   readonly readerLocale: string;
   readonly conversationId: string;
   readonly viewerId: string;
+  /** Le nom de qui exporte : il signe la carte et son filigrane. */
+  readonly viewerName: string;
+  readonly announce: (message: string) => void;
 }) {
   return (
     <>
@@ -135,6 +146,28 @@ export function ThreadMessageSheets({
           />
         );
       })(messageMenu.detailFor)}
+      {((exportFor) => {
+        if (exportFor === null) return null;
+        const exportMessage = messages.find((m) => m.id === exportFor);
+        if (exportMessage === undefined) return null;
+        const subject = messageCardSubjectOf({
+          message: exportMessage,
+          servedText: messageMenu.servedOf(exportFor)?.text,
+          viewer: { id: viewerId, displayName: viewerName },
+          readerLanguages,
+          interfaceLanguage: currentInterfaceLanguage(),
+          now: Date.now(),
+        });
+        if (subject === null) return null;
+        return (
+          <MessageExportSheet
+            subject={subject}
+            exporter={viewerName.trim() === '' ? 'Meeshy' : viewerName.trim()}
+            announce={announce}
+            onClose={() => messageMenu.setExportFor(null)}
+          />
+        );
+      })(messageMenu.exportFor)}
     </>
   );
 }

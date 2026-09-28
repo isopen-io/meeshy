@@ -66,6 +66,8 @@ export function useMessageMenu(params: {
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [detailFor, setDetailFor] = useState<string | null>(null);
   const [reactionSheetFor, setReactionSheetFor] = useState<string | null>(null);
+  /** Le message dont la carte d'export est ouverte — `null` ⇒ feuille fermée. */
+  const [exportFor, setExportFor] = useState<string | null>(null);
   /** Les ids à transférer, ADMIS — `null` ⇒ la feuille de destinataires est
    * fermée. Elle n'est jamais ouverte sur une sélection refusée (#5866). */
   const [forwardIds, setForwardIds] = useState<readonly string[] | null>(null);
@@ -213,6 +215,11 @@ export function useMessageMenu(params: {
       }
       if (id === 'more') {
         setDetailFor(messageId);
+        return;
+      }
+      if (id === 'export') {
+        focusTakenRef.current = true;
+        setExportFor(messageId);
         return;
       }
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
@@ -385,6 +392,8 @@ export function useMessageMenu(params: {
     setDetailFor,
     reactionSheetFor,
     setReactionSheetFor,
+    exportFor,
+    setExportFor,
     servedOf,
     starOf,
   };

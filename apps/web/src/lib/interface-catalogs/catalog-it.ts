@@ -23,6 +23,7 @@ import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
 import itGallery from './catalog-it-gallery';
+import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
@@ -1165,6 +1166,7 @@ const it = {
   ...itStudioChrome,
   ...itEphemeral,
   ...itGallery,
+  ...itMessageCard,
   ...itConversationCard,
   ...itStoriesMine,
   ...itContactCard,

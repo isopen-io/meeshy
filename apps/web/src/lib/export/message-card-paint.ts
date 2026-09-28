@@ -1,0 +1,145 @@
+import '@/styles/story-fonts.css';
+
+import { layoutMessageCard, type CardLayout, type CardOp, type MessageCardInput } from './message-card-layout';
+import { MESSAGE_CARD_STYLES, canvasFont, type MessageCardStyle } from './message-card-styles';
+
+/**
+ * **LA PEINTURE D'UNE CARTE D'EXPORT** — la moitié impure de
+ * `message-card-layout.ts` : elle ATTEND les polices du style (une carte
+ * peinte avant l'arrivée du WOFF2 figerait la police système dans l'image),
+ * mesure avec le vrai contexte, peint, et rend un PNG.
+ *
+ * Chargée à la demande, au premier « Exporter en image » : ni le fil ni le
+ * menu ne paient ce module, ni les `@font-face` qu'il importe.
+ */
+
+type Paintable = Pick<
+  CanvasRenderingContext2D,
+  | 'fillStyle'
+  | 'strokeStyle'
+  | 'lineWidth'
+  | 'font'
+  | 'textAlign'
+  | 'textBaseline'
+  | 'globalAlpha'
+  | 'fillRect'
+  | 'fillText'
+  | 'measureText'
+  | 'beginPath'
+  | 'arc'
+  | 'moveTo'
+  | 'lineTo'
+  | 'stroke'
+  | 'fill'
+  | 'setLineDash'
+  | 'save'
+  | 'restore'
+  | 'translate'
+  | 'rotate'
+  | 'createLinearGradient'
+  | 'createRadialGradient'
+  | 'roundRect'
+> & { direction: CanvasDirection; lineCap: CanvasLineCap };
+
+/** Le fichier de chaque police du style — attendu, jamais espéré ; une police absente laisse la pile native. */
+export async function loadCardFonts(style: MessageCardStyle, fonts: Pick<FontFaceSet, 'load'> | undefined): Promise<void> {
+  if (fonts === undefined) return;
+  const faces = [style.replyFont, style.quoteFont].filter((font) => font.family !== null);
+  await Promise.all(faces.map((font) => fonts.load(canvasFont(font, 40)).catch(() => undefined)));
+}
+
+function paintBackground(ctx: Paintable, layout: CardLayout, style: MessageCardStyle): void {
+  const gradient = ctx.createLinearGradient(0, 0, layout.width * 0.35, layout.height);
+  for (const [offset, color] of style.background) gradient.addColorStop(offset, color);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, layout.width, layout.height);
+  if (style.glow !== null) {
+    const glow = ctx.createRadialGradient(layout.width * 0.85, layout.height * 0.12, 0, layout.width * 0.85, layout.height * 0.12, layout.width * 0.9);
+    glow.addColorStop(0, style.glow);
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, layout.width, layout.height);
+  }
+}
+
+/** Le filigrane : « Meeshy · l'exportateur », en diagonale, répété sur toute la carte. */
+function paintWatermark(ctx: Paintable, layout: CardLayout, style: MessageCardStyle): void {
+  ctx.save();
+  ctx.globalAlpha = style.watermarkAlpha;
+  ctx.fillStyle = style.watermarkInk;
+  ctx.font = canvasFont({ family: null, weight: 700, style: 'normal' }, 34);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.direction = 'ltr';
+  ctx.translate(layout.width / 2, layout.height / 2);
+  ctx.rotate(-Math.PI / 7);
+  const step = ctx.measureText(`${layout.watermark}    `).width;
+  const span = Math.hypot(layout.width, layout.height);
+  for (let row = -span / 2; row < span / 2; row += 150) {
+    const shift = ((row / 150) % 2) * (step / 2);
+    for (let x = -span / 2 - step + shift; x < span / 2; x += step) ctx.fillText(layout.watermark, x, row);
+  }
+  ctx.restore();
+}
+
+function paintOp(ctx: Paintable, op: CardOp): void {
+  if (op.kind === 'text') {
+    ctx.font = op.font;
+    ctx.fillStyle = op.color;
+    ctx.textAlign = op.align;
+    ctx.textBaseline = 'alphabetic';
+    ctx.direction = op.direction;
+    ctx.fillText(op.text, op.x, op.y);
+    return;
+  }
+  if (op.kind === 'bar') {
+    ctx.fillStyle = op.color;
+    ctx.beginPath();
+    ctx.roundRect(op.x, op.y, op.width, op.height, op.width / 2);
+    ctx.fill();
+    return;
+  }
+  const middle = (op.x1 + op.x2) / 2;
+  ctx.save();
+  ctx.strokeStyle = op.color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.setLineDash([...op.dash]);
+  ctx.beginPath();
+  ctx.moveTo(op.x1, op.y);
+  ctx.lineTo(middle - op.radius - 18, op.y);
+  ctx.moveTo(middle + op.radius + 18, op.y);
+  ctx.lineTo(op.x2, op.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(middle, op.y, op.radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function paintMessageCard(ctx: Paintable, layout: CardLayout, style: MessageCardStyle): void {
+  paintBackground(ctx, layout, style);
+  paintWatermark(ctx, layout, style);
+  for (const op of layout.ops) paintOp(ctx, op);
+}
+
+export type RenderedMessageCard = { readonly blob: Blob; readonly width: number; readonly height: number; readonly truncated: boolean };
+
+/** Rend la carte en PNG — `null` si le navigateur refuse le canvas (mémoire, contexte perdu). */
+export async function renderMessageCard(input: MessageCardInput, doc: Document = document): Promise<RenderedMessageCard | null> {
+  const style = MESSAGE_CARD_STYLES[input.style];
+  await loadCardFonts(style, doc.fonts);
+  const canvas = doc.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) return null;
+  const layout = layoutMessageCard(input, (text, font) => {
+    ctx.font = font;
+    return ctx.measureText(text).width;
+  });
+  canvas.width = layout.width;
+  canvas.height = layout.height;
+  paintMessageCard(ctx, layout, style);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  return blob === null ? null : { blob, width: layout.width, height: layout.height, truncated: layout.truncated };
+}

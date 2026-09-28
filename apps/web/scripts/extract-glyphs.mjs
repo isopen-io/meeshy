@@ -310,6 +310,9 @@ emit({
  * glyphe que `AUTH`/`THREAD_STATES` (composeur, avatar), un jeu D'ÉCRAN
  * distinct parce que ce menu et le fil des messages ne se chargent jamais
  * ensemble.
+ *
+ * `image-square` — « Exporter en image » : le message (et sa citation) peint
+ * en carte PNG, enregistrée dans la galerie.
  */
 const THREAD_MENU = [
   'check-circle',
@@ -321,6 +324,7 @@ const THREAD_MENU = [
   'star',
   'star-fill',
   'pencil-simple',
+  'image-square',
 ];
 
 emit({

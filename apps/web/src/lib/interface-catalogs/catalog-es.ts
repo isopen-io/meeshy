@@ -23,6 +23,7 @@ import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
 import esGallery from './catalog-es-gallery';
+import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
 import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
@@ -1165,6 +1166,7 @@ const es = {
   ...esStudioChrome,
   ...esEphemeral,
   ...esGallery,
+  ...esMessageCard,
   ...esConversationCard,
   ...esStoriesMine,
   ...esContactCard,
