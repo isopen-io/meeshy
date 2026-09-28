@@ -3,17 +3,17 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { CaptureEnv, CaptureFile, SaveOutcome } from '@/lib/calls/call-capture';
-import { onRowKeyDown } from '@/lib/calls/call-row-keys';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { CallCapturePanel } from './call-capture-panel';
+import { CallMontageMode } from './call-montage-mode';
 
 /**
- * LE PANNEAU « CAPTURER » (#8552) — dans le cadre de la pilule : le grand
- * aperçu du montage, la rangée des sept styles (chacun sa vignette vivante),
- * la rangée des actions. Capturer enregistre le montage choisi ; « Chaque
- * visage » un portrait par tuile ; le statut dit ce qui est parti.
+ * LE MODE MONTAGE (#8552, #8578, #8580) — l'écran se libère : le montage
+ * choisi en plein écran et en direct, le carrousel des treize styles en bas
+ * (chacun sa vignette vivante), la barre ✕ · déclencheur · « Chaque visage ».
+ * Le déclencheur enregistre le montage choisi ; le statut dit ce qui est
+ * parti.
  */
 
 const place = (element: Element, box: { left: number; top: number; width: number; height: number }): void => {
@@ -43,7 +43,7 @@ const env: CaptureEnv = {
   now: () => new Date(2026, 8, 28, 9, 5, 3),
 };
 
-describe('CallCapturePanel', () => {
+describe('CallMontageMode', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(async () => {
@@ -71,7 +71,7 @@ describe('CallCapturePanel', () => {
     };
     act(() =>
       root.render(
-        <CallCapturePanel id="call-capture-panel" closeGlyph={null} language="fr" onClose={() => void closed.push('close')} onRowKeyDown={onRowKeyDown} stage={() => stage} env={env} save={save} viewport={() => ({ width: 390, height: 844 })} />,
+        <CallMontageMode language="fr" quitGlyph={null} onExit={() => void closed.push('close')} stage={() => stage} env={env} save={save} viewport={() => ({ width: 390, height: 844 })} />,
       ),
     );
     const find = (selector: string) => host.querySelector(selector);
@@ -87,33 +87,35 @@ describe('CallCapturePanel', () => {
     return { find, all, press, saved, closed, done };
   };
 
-  test('un groupe « Capturer » dans le cadre, sans verre, avec son grand aperçu nommé', () => {
+  test('une région nommée ; le montage en plein écran, en direct, derrière le carrousel', () => {
     const view = mount();
-    const panel = view.find('[data-call-capture-panel]');
-    expect(panel?.getAttribute('role')).toBe('group');
-    expect(panel?.className).not.toContain('glass');
-    expect(view.find('#call-capture-panel-title')?.textContent).toBe('Capturer');
-    const preview = view.find('[data-call-capture-preview]');
+    const region = view.find('[data-call-mode="montage"]');
+    expect(region?.getAttribute('role')).toBe('region');
+    expect(region?.getAttribute('aria-label')).toBe('Capturer l’appel');
+    expect(view.find('[data-call-mode-preview="montage"]')?.className).toContain('fixed inset-0');
+    const preview = view.find('[data-call-mode-preview="montage"] [data-call-capture-preview]');
     expect(preview?.tagName).toBe('CANVAS');
     expect(preview?.getAttribute('aria-label')).toBe('Aperçu du montage Mosaïque');
-    expect([preview?.getAttribute('width'), preview?.getAttribute('height')]).toEqual(['180', '320']);
+    expect([preview?.getAttribute('width'), preview?.getAttribute('height')]).toEqual(['540', '960']);
+    expect(view.all('[data-call-mode-carousel]')).toHaveLength(1);
     view.done();
   });
 
-  test('sept montages en boutons radio, chacun sa vignette ; la rangée défile à l’horizontale', () => {
+  test('treize montages dans le carrousel, dans l’ordre, chacun sa vignette ; il défile à l’horizontale', () => {
     const view = mount();
-    const radios = view.all('[data-call-capture-row="montage"] [role="radio"]');
-    expect(radios.map((radio) => radio.textContent)).toEqual(['Plein écran', 'Mosaïque', 'Photomaton', 'Polaroïd', 'Magazine', 'BD', 'Cœur']);
-    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false', 'false', 'false', 'false', 'false']);
+    const radios = view.all('[data-call-mode-carousel] [role="radio"]');
+    expect(radios.map((radio) => radio.getAttribute('aria-label'))).toEqual(['Plein écran', 'Couverture', 'Doré', 'Tapis rouge', 'Mosaïque', 'Photomaton', 'Polaroïd', 'Magazine', 'Pellicule', 'Néon', 'Noir et blanc', 'BD', 'Cœur']);
+    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false']);
     expect(radios.every((radio) => radio.querySelector('canvas[data-call-capture-thumb]') !== null)).toBe(true);
-    expect(view.find('[data-call-capture-row="montage"] [data-call-row-scroll]')?.className).toContain('overflow-x-auto');
+    expect(view.find('[data-call-mode-carousel] [data-call-row-scroll]')?.className).toContain('overflow-x-auto');
     view.done();
   });
 
   test('choisir « BD » change l’aperçu et le nom du déclencheur', async () => {
     const view = mount();
-    await view.press('[data-call-capture-style="comic"]');
-    expect(view.find('[data-call-capture-style="comic"]')?.getAttribute('aria-checked')).toBe('true');
+    await view.press('[data-carousel-item="comic"]');
+    expect(view.find('[data-carousel-item="comic"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(view.find('[data-call-mode-selected]')?.textContent).toBe('BD');
     expect(view.find('[data-call-capture-preview]')?.getAttribute('data-call-capture-preview')).toBe('comic');
     expect(view.find('[data-call-capture-shoot]')?.getAttribute('aria-label')).toBe('Capturer le montage BD');
     view.done();
@@ -121,7 +123,7 @@ describe('CallCapturePanel', () => {
 
   test('Capturer enregistre le montage choisi, et le dit', async () => {
     const view = mount();
-    await view.press('[data-call-capture-style="polaroid"]');
+    await view.press('[data-carousel-item="polaroid"]');
     await view.press('[data-call-capture-shoot]');
     expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-polaroid-20260928-090503.png']]);
     expect(view.find('[data-call-capture-status]')?.textContent).toBe('Capture enregistrée');
@@ -152,10 +154,19 @@ describe('CallCapturePanel', () => {
     view.done();
   });
 
-  test('Échap ferme le panneau', () => {
+  test('« Couverture » se capture comme les autres, sous son propre nom', async () => {
     const view = mount();
-    act(() => view.find('[data-call-capture-panel]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    expect(view.closed).toEqual(['close']);
+    await view.press('[data-carousel-item="cover"]');
+    await view.press('[data-call-capture-shoot]');
+    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-cover-20260928-090503.png']]);
+    view.done();
+  });
+
+  test('✕ quitte le mode ; Échap aussi', () => {
+    const view = mount();
+    act(() => (view.find('[data-call-mode-quit]') as HTMLElement).click());
+    act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(view.closed).toEqual(['close', 'close']);
     view.done();
   });
 });

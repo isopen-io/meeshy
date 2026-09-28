@@ -125,7 +125,7 @@ final class CommentSwipeToReplyWiringGuardTests: XCTestCase {
                       "La carte doit remettre la cible à la feuille qu'elle présente.")
 
         let sheet = try source("FeedCommentsSheet.swift")
-        XCTAssertTrue(sheet.contains("var initialReplyTarget: FeedComment?"))
+        XCTAssertTrue(sheet.contains("initialReplyTarget: FeedComment?"))
         XCTAssertTrue(sheet.contains("beginReply(to: initialReplyTarget)"),
                       "La feuille consomme la cible par le chemin UNIQUE de la réponse (bannière + focus + @mention).")
     }

@@ -12,8 +12,8 @@ import { describe, expect, test } from 'bun:test';
  * image à `WebChromeClient.getDefaultVideoPoster()` ; `BridgeWebChromeClient`
  * (Capacitor 8.5.1) ne la fournit pas, et Chromium dessine son icône
  * « lecture » grise sur le flux d'un appel qui démarre ou une vignette du fil.
- * La coque garde le client de Capacitor (permissions, fichiers, plein écran)
- * et ne lui retire que cet aperçu.
+ * La coque garde le client de Capacitor (permissions, fichiers) et ne lui
+ * remplace que cet aperçu et le plein écran (#8594).
  */
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,7 +27,9 @@ describe("l'aperçu vidéo par défaut de la coque Android (#8547)", () => {
   const code = sansCommentaires(readFileSync(MAIN_ACTIVITY, 'utf8'));
 
   test('la WebView reçoit un client de Capacitor, pas un client nu', () => {
-    expect(code).toMatch(/setWebChromeClient\(\s*new BridgeWebChromeClient\(\s*getBridge\(\)\s*\)\s*\{/);
+    const client = code.search(/new BridgeWebChromeClient\(\s*getBridge\(\)\s*\)\s*\{/);
+    expect(client).toBeGreaterThan(-1);
+    expect(code.indexOf('setWebChromeClient(', client)).toBeGreaterThan(client);
   });
 
   test("l'aperçu par défaut est une image transparente", () => {

@@ -4,7 +4,6 @@ import { Avatar } from '@/components/avatar';
 import { CallButton } from '@/components/call-glass-button';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo } from '@/components/call-media-elements';
-import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -123,12 +122,9 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
 
 function SelfTile({ self, language, portrait }: { readonly self: CallGridProps['self']; readonly language: InterfaceLanguage; readonly portrait: number }) {
   const you = translate(language, 'call.you');
-  const zoom = useCameraZoom(self.cameraOn ? self.stream : null);
-  const gestures = useZoomGestures(zoom);
   return (
-    <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2" {...gestures} style={{ background: TILE, borderColor: SELF_SPEAKER_COLOR, ...gestures.style }} data-call-tile-self="">
+    <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2" style={{ background: TILE, borderColor: SELF_SPEAKER_COLOR }} data-call-tile-self="">
       {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} /> : <Portrait name={you} avatar={null} size={portrait} pulse={false} />}
-      {zoom === null ? null : <CallZoomControl zoom={zoom} language={language} className="absolute right-2 top-2 z-10" />}
       <NameLabel name={you} muted={false} suffix={null} />
     </div>
   );

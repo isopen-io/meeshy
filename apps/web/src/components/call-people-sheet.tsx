@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
-import { CallPanelFrame } from '@/components/call-panel-frame';
+import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { flattenFriendRequests, friendRequestsQueryOptions } from '@/lib/api/friend-requests';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -40,6 +40,7 @@ type SheetProps = {
   readonly onClose: () => void;
   readonly renderModeration: (member: CallMember) => ReactNode;
   readonly invite?: (person: DecodedPerson) => void;
+  readonly back?: PanelBack | undefined;
 };
 
 const initials = (name: string): string =>
@@ -71,14 +72,14 @@ function useInvitable(query: string, members: readonly CallMember[]) {
   return { loading: accepted.data === undefined && accepted.isPending, all: friends.filter((f) => !inCall.includes(f.id)), shown: invitableFriends({ friends, inCall, query }) };
 }
 
-export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, renderModeration, invite = callActions.invite }: SheetProps) {
+export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, renderModeration, invite = callActions.invite, back }: SheetProps) {
   const [query, setQuery] = useState('');
   const panel = useRef<HTMLDivElement>(null);
   const { loading, all, shown } = useInvitable(query, members);
   const empty = loading ? t(language, 'callControls.people.loading') : all.length === 0 ? t(language, 'callControls.people.empty') : t(language, 'callControls.people.none');
 
   return (
-    <CallPanelFrame id={id} title={t(language, 'callControls.people.title')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} data={{ 'data-call-people-sheet': '' }}>
+    <CallPanelFrame id={id} title={t(language, 'callControls.people.title')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} back={back} data={{ 'data-call-people-sheet': '' }}>
       <div ref={panel} className="flex max-h-[min(45vh,24rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain">
         <section aria-labelledby={`${id}-in`} className="flex flex-col">
           <h3 id={`${id}-in`} className="px-2 text-mini font-semibold" style={{ color: 'rgba(255,255,255,0.72)' }}>

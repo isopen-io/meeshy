@@ -71,7 +71,7 @@ describe('capturer', () => {
 
   test('le montage se rend en 1080 × 1920 sur un écran étroit, une image par tuile affichée, nommé par son style', async () => {
     const { env, sizes, draws } = envWith();
-    const file = await captureMontage({ stage: stageOf(2), style: 'comic', text: { bubble: 'Quel appel !', date: '28 septembre 2026' }, viewport: { width: 390, height: 844 }, env });
+    const file = await captureMontage({ stage: stageOf(2), style: 'comic', text: { bubble: 'Quel appel !', date: '28 septembre 2026', coverlines: [] }, viewport: { width: 390, height: 844 }, env });
     expect(sizes).toEqual([{ width: 1080, height: 1920 }]);
     expect(draws.filter((draw) => draw.op === 'drawImage')).toHaveLength(2);
     expect(draws.some((draw) => draw.op === 'fillText' && draw.args[0] === 'Quel appel !')).toBe(true);
@@ -80,7 +80,7 @@ describe('capturer', () => {
 
   test('rien d’affiché : rien à capturer', async () => {
     const { env, sizes } = envWith();
-    expect(await captureMontage({ stage: stageOf(0), style: 'grid', text: { bubble: '', date: '' }, viewport: { width: 1440, height: 900 }, env })).toBeNull();
+    expect(await captureMontage({ stage: stageOf(0), style: 'grid', text: { bubble: '', date: '', coverlines: [] }, viewport: { width: 1440, height: 900 }, env })).toBeNull();
     expect(sizes).toEqual([]);
   });
 
@@ -100,14 +100,14 @@ describe('capturer', () => {
   test('un miroir se capture comme il se voit : l’image est retournée', () => {
     const { context, draws } = recorder();
     const layout = montageLayout({ style: 'grid', count: 1, size: { width: 100, height: 100 } });
-    drawMontage(context, layout, [{ source: {} as CanvasImageSource, size: { width: 100, height: 100 }, mirrored: true, fit: 'cover' }], { bubble: '', date: '' });
+    drawMontage(context, layout, [{ source: {} as CanvasImageSource, size: { width: 100, height: 100 }, mirrored: true, fit: 'cover' }], { bubble: '', date: '', coverlines: [] });
     expect(draws.some((draw) => draw.op === 'scale' && draw.args[0] === -1)).toBe(true);
   });
 
   test('le cœur découpe le montage dans sa forme', () => {
     const { context, draws } = recorder();
     const layout = montageLayout({ style: 'heart', count: 2, size: { width: 200, height: 200 } });
-    drawMontage(context, layout, [], { bubble: '', date: '' });
+    drawMontage(context, layout, [], { bubble: '', date: '', coverlines: [] });
     expect(draws.filter((draw) => draw.op === 'bezierCurveTo').length).toBeGreaterThanOrEqual(4);
     expect(draws.some((draw) => draw.op === 'clip')).toBe(true);
   });

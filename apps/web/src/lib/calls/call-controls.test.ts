@@ -25,8 +25,8 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
 });
 
 describe('ce que (…) sort', () => {
-  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer, Ajouter, Réagir — la conversation vit dans l’en-tête (#8436)', () => {
-    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record', 'invite', 'react'] });
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Journal, Enregistrer, Ajouter, Réagir — la conversation vit dans l’en-tête (#8436, #8579)', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'journal', 'record', 'invite', 'react'] });
   });
 
   test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
@@ -53,8 +53,8 @@ describe('ce que (…) sort', () => {
   });
 
   test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
-    expect(callControlSet(context({ callId: null })).call).toEqual(['captions']);
-    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'invite', 'react']);
+    expect(callControlSet(context({ callId: null })).call).toEqual(['captions', 'journal']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'journal', 'invite', 'react']);
   });
 
   test('Ajouter et Réagir existent en duo comme en groupe, dès qu’un appel identifié est rejoint (#8433, #8439)', () => {
@@ -80,7 +80,7 @@ describe('une autre caméra où se retourner (#8432)', () => {
 
 describe('« Capturer » (#8552)', () => {
   test('une vidéo connectée l’offre dans l’appel, après Enregistrer', () => {
-    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'record', 'capture', 'invite', 'react']);
+    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'journal', 'record', 'capture', 'invite', 'react']);
   });
 
   test('jamais en audio, ni pendant une reconnexion ou la sonnerie', () => {
@@ -90,7 +90,7 @@ describe('« Capturer » (#8552)', () => {
   });
 
   test('un appel pas encore identifié peut capturer ce qu’il voit', () => {
-    expect(callControlSet(context({ videoScene: true, callId: null })).call).toEqual(['captions', 'capture']);
+    expect(callControlSet(context({ videoScene: true, callId: null })).call).toEqual(['captions', 'journal', 'capture']);
   });
 });
 

@@ -116,6 +116,7 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  await appears(page, '[data-call-actions]');
 };
 
 const startConnectedAudioCall = async (page) => {

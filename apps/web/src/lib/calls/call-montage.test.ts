@@ -16,8 +16,8 @@ const inside = (rect: Rect, size: Size): boolean => rect.x >= -0.5 && rect.y >= 
 const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 
 describe('montageLayout', () => {
-  test('sept styles, dans l’ordre du panneau', () => {
-    expect(MONTAGE_STYLES).toEqual(['screen', 'grid', 'strip', 'polaroid', 'magazine', 'comic', 'heart']);
+  test('treize styles, dans l’ordre du carrousel : les glamour avant les ludiques (#8580)', () => {
+    expect(MONTAGE_STYLES).toEqual(['screen', 'cover', 'gold', 'redcarpet', 'grid', 'strip', 'polaroid', 'magazine', 'film', 'neon', 'noir', 'comic', 'heart']);
   });
 
   MONTAGE_STYLES.flatMap((style) => [1, 2, 3, 5].map((count) => [style, count] as const)).forEach(([style, count]) =>

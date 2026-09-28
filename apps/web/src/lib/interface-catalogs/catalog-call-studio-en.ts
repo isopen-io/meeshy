@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — en (#8551, #8552). */
 const en = {
-  'callStudio.close': 'Close',
-  'callStudio.effects.faces': 'Effects',
   'callStudio.effects.color': 'Color',
   'callStudio.effects.settings': 'Settings',
   'callStudio.face.none': 'None',
@@ -12,9 +10,6 @@ const en = {
   'callStudio.face.angel': 'Angel',
   'callStudio.face.demon': 'Demon',
   'callStudio.face.volcano': 'Eruption',
-  'callStudio.capture.title': 'Capture',
-  'callStudio.capture.montage': 'Layout',
-  'callStudio.capture.actions': 'Actions',
   'callStudio.montage.screen': 'Full screen',
   'callStudio.montage.grid': 'Mosaic',
   'callStudio.montage.strip': 'Photo booth',
@@ -35,6 +30,26 @@ const en = {
   'callStudio.capture.empty': 'Nothing to capture: no picture is showing',
   'callStudio.capture.busy': 'Capturing…',
   'callStudio.capture.bubble': 'What a call!',
+  'callStudio.montage.cover': 'Cover',
+  'callStudio.montage.gold': 'Gold',
+  'callStudio.montage.redcarpet': 'Red carpet',
+  'callStudio.montage.film': 'Film',
+  'callStudio.montage.neon': 'Neon',
+  'callStudio.montage.noir': 'Black & white',
+  'callStudio.cover.line1': 'Call of the year',
+  'callStudio.cover.line2': 'Together at last',
+  'callStudio.cover.line3': 'Exclusive',
+  'callStudio.mode.effects': 'My video effects',
+  'callStudio.mode.montage': 'Capture the call',
+  'callStudio.mode.quit': 'Exit',
+  'callStudio.mode.quitEffects': 'Exit without keeping these changes',
+  'callStudio.mode.validate': 'Done',
+  'callStudio.mode.validateLabel': 'Keep this effect and return to the call',
+  'callStudio.mode.face': 'Face',
+  'callStudio.mode.categories': 'Category',
+  'callStudio.mode.pickEffect': 'Choose an effect',
+  'callStudio.mode.pickMontage': 'Choose a montage',
+  'callStudio.mode.settingsLabel': 'Show settings (brightness, blur)',
 } satisfies CallStudioCatalog;
 
 export default en;

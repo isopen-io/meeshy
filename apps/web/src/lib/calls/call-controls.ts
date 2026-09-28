@@ -28,7 +28,7 @@ import { callLayout, type CallLayout } from './call-view';
 
 export type MineAction = 'camera' | 'flip' | 'effects' | 'screen';
 
-export type CallAction = 'captions' | 'record' | 'capture' | 'invite' | 'react';
+export type CallAction = 'captions' | 'journal' | 'record' | 'capture' | 'invite' | 'react';
 
 export type CallControlSet = { readonly mine: readonly MineAction[]; readonly call: readonly CallAction[] };
 
@@ -55,7 +55,7 @@ export function callControlSet(context: ControlsContext): CallControlSet {
     ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
   ];
   const call: readonly CallAction[] = [
-    ...(inCall ? (['captions'] as const) : []),
+    ...(inCall ? (['captions', 'journal'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
     ...(context.videoScene && context.phase.kind === 'connected' ? (['capture'] as const) : []),
     ...(context.callId !== null && inCall ? (['invite', 'react'] as const) : []),
