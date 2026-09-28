@@ -140,7 +140,8 @@ export const FOCUS_LOUPE_GAIN = 0.26;
  * LE CADRE DE L'ÉLU (#8506) — « place les contrôleurs et détails à
  * l'intérieur du cadre, en laissant de l'espace sur les bords ». Identité,
  * bande basse et tampon vivent DANS le verre, à `FOCUS_CARD_INNER_MARGIN` de
- * ses quatre bords (grossie avec le contenu : ≈ 12,6 px au gain plein).
+ * ses quatre bords — une marge NON grossie depuis #8536 : seul le contenu
+ * grandit, le cadre et ce qu'il porte gardent leurs cotes.
  * `FOCUS_IDENTITY_GAP` sépare la pastille d'identité d'une SUITE de groupe
  * (qui n'a pas de ligne d'identité réservée) de sa première ligne ;
  * `FOCUS_NEIGHBOUR_CLEARANCE` est l'air laissé entre le cadre grossi et les
@@ -150,6 +151,15 @@ export const FOCUS_LOUPE_GAIN = 0.26;
 export const FOCUS_CARD_INNER_MARGIN = 10;
 export const FOCUS_IDENTITY_GAP = 4;
 export const FOCUS_NEIGHBOUR_CLEARANCE = 4;
+
+/**
+ * L'AIR DU CONTENU GROSSI (#8536, directive porteur 2026-09-28 : « le bloc
+ * de verre doit avoir de la marge haut et bas pour que le contenu soit
+ * aéré ! ») — posé AU-DESSUS et AU-DESSOUS du seul contenu que la loupe
+ * grossit : il le décolle de l'identité et de la bande basse, qui restent à
+ * l'échelle 1. Cote du web ; la jumelle iOS suit dans son propre lot.
+ */
+export const FOCUS_CONTENT_AIR = 8;
 
 /*
  * `FOCUS_CARD_FILL_DARK` / `_LIGHT` (la teinte d'accent de la carte) ont
