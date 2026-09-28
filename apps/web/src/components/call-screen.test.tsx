@@ -5,9 +5,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { CallScreen } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
+
+beforeAll(async () => {
+  await loadCallControlsCatalog('fr');
+});
 
 /**
  * L'ÉCRAN D'APPEL DESSINÉ (#6382, #8045) — miroir `CallView.swift` : chaque

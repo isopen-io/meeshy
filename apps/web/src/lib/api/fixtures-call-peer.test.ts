@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { decodeMediaToggled, decodeParticipantJoined, decodeSignal } from '@/lib/calls/call-decode';
+import { decodeMediaToggled, decodeMutedByModerator, decodeParticipantInvited, decodeParticipantJoined, decodeReactionReceived, decodeSignal } from '@/lib/calls/call-decode';
 import { decodeChannelMessage, decodeTranscriptionActive, decodeTranslatedSegment } from '@/lib/calls/call-captions';
 import { peerAlert } from '@/lib/calls/call-peer-alerts';
 
@@ -149,5 +149,26 @@ describe('le pair des gates d’appel', () => {
     channel.onmessage?.({ data: JSON.stringify({ type: 'transcript-entry', entry: { id: 'w', callId: 'call-1', speakerId: 'u-me', speakerDisplayName: 'Moi', text: 'Bonjour', language: 'fr', capturedAtMs: 1, isFinal: true, confidence: 0.9 } }) });
     channel.onmessage?.({ data: 'pas du json' });
     expect(h.created.probe.channelMessages.map((message) => decodeChannelMessage(message))).toMatchObject([{ kind: 'entry', id: 'w', text: 'Bonjour' }, null]);
+  });
+});
+
+describe('le pair des gates, et les contrôles d’un appel (#8433, #8438, #8439)', () => {
+  test('une invitation accusée est diffusée à tout l’appel, sous la forme que décode le moteur', () => {
+    const h = peer();
+    h.created.initiated('call-1');
+    h.created.controlled(CLIENT_EVENTS.CALL_INVITE_PARTICIPANT, { callId: 'call-1', userId: 'u-bruno' });
+    const [event, payload] = h.fired.at(-1) ?? [];
+    expect(event).toBe(SERVER_EVENTS.CALL_PARTICIPANT_INVITED);
+    expect(decodeParticipantInvited(payload)).toMatchObject({ callId: 'call-1', invitee: { userId: 'u-bruno' } });
+    expect(h.created.probe.controls.map((control) => control.event)).toEqual([CLIENT_EVENTS.CALL_INVITE_PARTICIPANT]);
+  });
+
+  test('le pair coupe mon micro et réagit, comme la passerelle le relaie', () => {
+    const h = peer();
+    h.created.initiated('call-1');
+    h.created.probe.muteMe();
+    h.created.probe.react('🎉');
+    expect(decodeMutedByModerator(h.fired[0]?.[1])).toEqual({ callId: 'call-1', byUserId: CALL_PEER_USER_ID });
+    expect(decodeReactionReceived(h.fired[1]?.[1])).toEqual({ callId: 'call-1', userId: CALL_PEER_USER_ID, emoji: '🎉' });
   });
 });

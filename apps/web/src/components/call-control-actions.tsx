@@ -9,6 +9,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -24,6 +25,11 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * Un seul verre par groupe : le rail porte le verre, ses boutons non. Les
  * règles (qui est offert, dans quel ordre) sont dans `lib/calls/call-controls.ts`.
+ *
+ * Quatre boutons OUVRENT un panneau au-dessus de la pilule, un seul à la fois
+ * (`CallPanels`) : Effets (#8442), Ajouter (#8433), Réagir (#8439) et, au
+ * repos, Enregistrer (#8437), qui demande d'abord « Audio seul » ou « Audio et
+ * vidéo ».
  */
 
 export const CALL_ACTIONS_ID = 'call-actions';
@@ -32,15 +38,24 @@ const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.origi
 
 const screenGlyph = (name: CallScreenGlyphName, size = 22) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
-/** Le panneau des effets (#8442) : ouvert ou non, et le geste qui le bascule. */
-export type EffectsToggle = { readonly open: boolean; readonly onToggle: () => void };
+/** Les panneaux qu'un bouton du `(…)` ouvre au-dessus de la pilule — un seul à la fois. */
+export type CallPanel = 'effects' | 'people' | 'react' | 'record';
 
-export const CALL_EFFECTS_PANEL_ID = 'call-effects-panel';
+export type CallPanels = { readonly open: CallPanel | null; readonly toggle: (panel: CallPanel) => void };
+
+export const CALL_PANEL_ID: Readonly<Record<CallPanel, string>> = {
+  effects: 'call-effects-panel',
+  people: 'call-people-panel',
+  react: 'call-react-panel',
+  record: 'call-record-panel',
+};
+
+export const CALL_EFFECTS_PANEL_ID = CALL_PANEL_ID.effects;
 
 type ActionContext = {
   readonly call: ActiveCall;
   readonly language: InterfaceLanguage;
-  readonly effects: EffectsToggle;
+  readonly panels: CallPanels;
   /** Montre la légende sous le bouton (rangées d'un groupe). */
   readonly captioned: boolean;
 };
@@ -54,11 +69,19 @@ type ActionView = {
   readonly tone: CallButtonTone;
   readonly pressed?: boolean;
   readonly expanded?: boolean;
+  readonly panel?: CallPanel;
   readonly disabled?: boolean;
   readonly data: Readonly<Record<`data-${string}`, string>>;
 };
 
-function mineAction(action: MineAction, { call, language, effects }: ActionContext): ActionView {
+const panelView = (panels: CallPanels, panel: CallPanel) => ({
+  onPress: () => panels.toggle(panel),
+  tone: panels.open === panel ? ('active' as const) : ('bare' as const),
+  expanded: panels.open === panel,
+  panel,
+});
+
+function mineAction(action: MineAction, { call, language, panels }: ActionContext): ActionView {
   switch (action) {
     case 'camera':
       return {
@@ -88,9 +111,7 @@ function mineAction(action: MineAction, { call, language, effects }: ActionConte
         label: translate(language, 'call.effects.open'),
         caption: translate(language, 'call.effects'),
         glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.magicWand} size={22} />,
-        onPress: effects.onToggle,
-        tone: effects.open ? 'active' : 'bare',
-        expanded: effects.open,
+        ...panelView(panels, 'effects'),
         data: { 'data-call-control': 'effects' },
       };
     case 'screen':
@@ -107,10 +128,33 @@ function mineAction(action: MineAction, { call, language, effects }: ActionConte
   }
 }
 
-function callAction(action: Exclude<CallAction, 'record'>, { call, language }: ActionContext): ActionView {
+function callAction(action: Exclude<CallAction, 'record'>, context: ActionContext): ActionView {
+  const { language, panels } = context;
+  if (action === 'invite')
+    return {
+      key: action,
+      label: translateCallControls(language, 'callControls.invite.label'),
+      caption: translateCallControls(language, 'callControls.invite'),
+      glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.userPlus} size={22} />,
+      ...panelView(panels, 'people'),
+      data: { 'data-call-control': 'invite' },
+    };
+  if (action === 'react')
+    return {
+      key: action,
+      label: translateCallControls(language, 'callControls.react.label'),
+      caption: translateCallControls(language, 'callControls.react'),
+      glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.smiley} size={22} />,
+      ...panelView(panels, 'react'),
+      data: { 'data-call-control': 'react' },
+    };
+  return captionsAction(context);
+}
+
+function captionsAction({ call, language }: ActionContext): ActionView {
   const invited = call.captionsMode === 'off' && call.captionPeers.length > 0;
   return {
-    key: action,
+    key: 'captions',
     label: translate(language, invited ? 'call.captions.invited' : CAPTIONS_KEY[call.captionsMode]),
     caption: translate(language, 'callCaptions.region'),
     glyph: (
@@ -134,7 +178,7 @@ function ActionButton({ view, captioned }: { readonly view: ActionView; readonly
       onPress={view.onPress}
       tone={view.tone}
       {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
-      {...(view.expanded === undefined ? {} : { expanded: view.expanded, controls: CALL_EFFECTS_PANEL_ID, popup: true })}
+      {...(view.expanded === undefined || view.panel === undefined ? {} : { expanded: view.expanded, controls: CALL_PANEL_ID[view.panel], popup: true })}
       {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
       {...(captioned ? { caption: view.caption } : {})}
       data={view.data}
@@ -143,21 +187,23 @@ function ActionButton({ view, captioned }: { readonly view: ActionView; readonly
 }
 
 /**
- * ENREGISTRER L'APPEL (#8064) — la demande part à la passerelle, qui recueille
- * l'accord de tous ; rien ne s'enregistre avant. Le même bouton renonce à une
- * demande ou arrête l'enregistrement en cours. Il a quitté l'en-tête pour le
- * rail de l'appel (#8391).
+ * ENREGISTRER L'APPEL (#8064, #8437) — au repos, le bouton ouvre le choix
+ * « Audio seul » · « Audio et vidéo » ; la demande part ensuite à la
+ * passerelle, qui recueille l'accord de tous — rien ne s'enregistre avant. Le
+ * même bouton renonce à une demande ou arrête l'enregistrement en cours. Il a
+ * quitté l'en-tête pour le rail de l'appel (#8391).
  */
-function RecordButton({ language, captioned }: { readonly language: InterfaceLanguage; readonly captioned: boolean }) {
+function RecordButton({ language, captioned, panels }: { readonly language: InterfaceLanguage; readonly captioned: boolean; readonly panels: CallPanels }) {
   const kind = useStore(callRecordingStore, (state) => state.view.kind);
   const idle = kind === 'idle';
+  const choosing = idle && panels.open === 'record';
   return (
     <CallButton
       label={translate(language, idle ? 'callRecording.start' : 'callRecording.stop')}
       glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px]'} style={idle ? undefined : { background: 'var(--ios-error-strong)' }} />}
-      onPress={() => void (idle ? callRecording.request() : callRecording.stop())}
-      tone={kind === 'recording' ? 'active' : 'bare'}
-      pressed={kind === 'recording'}
+      onPress={() => (idle ? panels.toggle('record') : void callRecording.stop())}
+      tone={kind === 'recording' || choosing ? 'active' : 'bare'}
+      {...(idle ? { expanded: choosing, controls: CALL_PANEL_ID.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
       {...(captioned ? { caption: translate(language, 'call.record.short') } : {})}
       data={{ 'data-call-record': kind }}
@@ -171,7 +217,7 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
       {actions.map((action) => (
         <Fragment key={action}>
           {action === 'record' ? (
-            <RecordButton language={context.language} captioned={context.captioned} />
+            <RecordButton language={context.language} captioned={context.captioned} panels={context.panels} />
           ) : action === 'camera' || action === 'flip' || action === 'effects' || action === 'screen' ? (
             <ActionButton view={mineAction(action, context)} captioned={context.captioned} />
           ) : (
@@ -183,13 +229,13 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
   );
 }
 
-type FamiliesProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly prominent: boolean; readonly effects: EffectsToggle };
+type FamiliesProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly prominent: boolean; readonly panels: CallPanels };
 
 const RAIL_SIDE = { mine: 'left-3', call: 'right-3' } as const;
 
 /** Les deux rails du duo — collés aux bords, à mi-hauteur. */
-export function CallRails({ call, set, language, prominent, effects }: FamiliesProps) {
-  const context = { call, language, effects, captioned: false };
+export function CallRails({ call, set, language, prominent, panels }: FamiliesProps) {
+  const context = { call, language, panels, captioned: false };
   const families = [
     ['mine', set.mine, 'call.section.mine'],
     ['call', set.call, 'call.section.call'],
@@ -214,8 +260,8 @@ export function CallRails({ call, set, language, prominent, effects }: FamiliesP
 }
 
 /** Les deux rangées légendées d'un groupe, dans la pilule qui a grandi. */
-export function CallActionRows({ call, set, language, effects }: Omit<FamiliesProps, 'prominent'>) {
-  const context = { call, language, effects, captioned: true };
+export function CallActionRows({ call, set, language, panels }: Omit<FamiliesProps, 'prominent'>) {
+  const context = { call, language, panels, captioned: true };
   const families = [
     ['mine', set.mine, 'call.section.mine'],
     ['call', set.call, 'call.section.call'],

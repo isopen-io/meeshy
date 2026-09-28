@@ -2,15 +2,18 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from '@/components/avatar';
 import { CallButton } from '@/components/call-glass-button';
+import { CallModerationMenu } from '@/components/call-moderation-menu';
 import { StreamVideo } from '@/components/call-media-elements';
 import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
+import type { CallModeration } from '@/lib/calls/call-moderation';
 import { autoSharer, chooseGrid, chooseMember, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallMember } from '@/lib/calls/call-store';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
+import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
@@ -25,7 +28,9 @@ import { initialsOf } from '@/lib/view/conversation';
  * ENTIER (`contain` : rogner un écran en cache le texte), son portrait en
  * médaillon, sous « Écran de X ». Un choix manuel l'emporte ; la règle vit dans
  * `lib/calls/call-spotlight.ts`, le choix reste local. Le plein écran s'offre
- * sur l'écran partagé. Sur la une, qui modère trouve « Retirer de l'appel ».
+ * sur l'écran partagé. Qui MODÈRE l'appel trouve sur chaque tuile d'un pair
+ * (et sur la une) le menu « Couper le micro » · « Retirer de l'appel » (#8438) ;
+ * une personne invitée sonne dans sa tuile, portrait pulsé (#8433).
  */
 
 const TILE = 'rgba(255,255,255,0.06)';
@@ -39,12 +44,6 @@ export function Portrait({ name, avatar, size, pulse }: { readonly name: string;
   );
 }
 
-export type CallRemoval = {
-  readonly canRemove: (userId: string) => boolean;
-  readonly remove: (userId: string) => void;
-  readonly failed: boolean;
-};
-
 export type CallGridProps = {
   readonly members: readonly CallMember[];
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
@@ -54,7 +53,7 @@ export type CallGridProps = {
   /** Le plein écran de l'écran partagé : le bandeau et tout le reste s'effacent. */
   readonly immersive: boolean;
   readonly onToggleImmersive: () => void;
-  readonly removal: CallRemoval | null;
+  readonly moderation: CallModeration | null;
   readonly language: InterfaceLanguage;
 };
 
@@ -84,23 +83,41 @@ function Tile({
   readonly portrait: number;
 }) {
   const showVideo = member.cameraOn && hasVideo(stream);
-  const link = member.link === 'connected' ? null : translate(language, member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting');
+  const ringing = member.link === 'ringing';
+  const link = member.link === 'connected' ? null : ringing ? translateCallControls(language, 'callControls.ringing') : translate(language, member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting');
   const body = (
     <>
-      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={false} />}
+      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={ringing} />}
       <NameLabel name={member.name} muted={member.micMuted} suffix={link} />
     </>
   );
   const frame = { background: TILE, borderColor: speakerColor(member.userId) };
   const className = 'relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2';
-  return onPress === null ? (
-    <div className={className} style={frame} data-call-tile={member.userId}>
+  const ring = ringing ? { 'data-call-ringing': '' } : {};
+  return onPress === null || ringing ? (
+    <div className={className} style={frame} data-call-tile={member.userId} {...ring}>
       {body}
     </div>
   ) : (
     <button type="button" aria-label={label} onClick={onPress} className={className} style={frame} data-call-tile={member.userId}>
       {body}
     </button>
+  );
+}
+
+/** Une tuile de pair, et, pour qui modère, son menu posé à côté — jamais DANS le bouton de la tuile. */
+function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: CallModeration | null; readonly menu: boolean }) {
+  const { moderation, menu, ...tile } = props;
+  const moderated = menu && moderation !== null && moderation.canModerate(tile.member.userId);
+  return (
+    <div className="relative grid min-h-0">
+      <Tile {...tile} />
+      {moderated ? (
+        <div className="absolute right-1.5 top-1.5 z-10">
+          <CallModerationMenu member={tile.member} language={tile.language} moderation={moderation} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -132,7 +149,7 @@ function SharedScreen({ member, stream, language }: { readonly member: CallMembe
   );
 }
 
-export function CallGrid({ members, remoteStreams, self, choice, onChoose, immersive, onToggleImmersive, removal, language }: CallGridProps) {
+export function CallGrid({ members, remoteStreams, self, choice, onChoose, immersive, onToggleImmersive, moderation, language }: CallGridProps) {
   const feature = (member: CallMember) => () => onChoose(chooseMember(member.userId));
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
   const view = resolveSpotlight({ members, choice, remoteStreams });
@@ -142,7 +159,7 @@ export function CallGrid({ members, remoteStreams, self, choice, onChoose, immer
     return (
       <div className="grid min-h-0 flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
         {members.map((member) => (
-          <Tile key={member.userId} member={member} stream={remoteStreams[member.userId]} language={language} onPress={feature(member)} label={featureLabel(member)} portrait={64} />
+          <PeerTile key={member.userId} member={member} stream={remoteStreams[member.userId]} language={language} onPress={feature(member)} label={featureLabel(member)} portrait={64} moderation={moderation} menu />
         ))}
         <SelfTile self={self} language={language} portrait={64} />
       </div>
@@ -150,7 +167,7 @@ export function CallGrid({ members, remoteStreams, self, choice, onChoose, immer
   }
 
   const { featured, others, screen } = view;
-  const removable = removal !== null && removal.canRemove(featured.userId);
+  const moderated = moderation !== null && moderation.canModerate(featured.userId);
   const sharer = autoSharer(members, remoteStreams);
   const fullscreen = screen && immersive;
   return (
@@ -189,24 +206,7 @@ export function CallGrid({ members, remoteStreams, self, choice, onChoose, immer
               />
             )}
           </div>
-          {removable && !fullscreen ? (
-            <>
-              <button
-                type="button"
-                onClick={() => removal.remove(featured.userId)}
-                className="min-h-11 rounded-full px-3 text-mini font-semibold text-white"
-                style={{ background: 'var(--ios-error-strong)' }}
-                data-call-remove={featured.userId}
-              >
-                {translate(language, 'call.remove.named', { name: featured.name })}
-              </button>
-              {removal.failed ? (
-                <span role="alert" className="glass-call rounded-full px-2 py-0.5 text-mini">
-                  {translate(language, 'call.remove.failed')}
-                </span>
-              ) : null}
-            </>
-          ) : null}
+          {moderated && !fullscreen ? <CallModerationMenu member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
         </div>
       </div>
       {fullscreen ? null : (

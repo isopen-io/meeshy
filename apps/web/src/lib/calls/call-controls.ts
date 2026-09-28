@@ -16,8 +16,10 @@ import { callLayout, type CallLayout } from './call-view';
  *   partage d'écran, là où le navigateur sait les faire — #8442), Écran (là où
  *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
- *   (appel connecté et identifié). La conversation de l'appel n'est PAS une
- *   action : un seul chemin y mène, « Conversation » dans l'en-tête (#8436).
+ *   (appel connecté et identifié), Ajouter des personnes (#8433) et Réagir
+ *   (#8439), en duo comme en groupe dès qu'un appel identifié est rejoint. La
+ *   conversation de l'appel n'est PAS une action : un seul chemin y mène,
+ *   « Conversation » dans l'en-tête (#8436).
  *
  * En duo, les deux familles sortent en RAILS vers les bords ; en groupe, la
  * pilule grandit et les monte en RANGÉES légendées.
@@ -25,7 +27,7 @@ import { callLayout, type CallLayout } from './call-view';
 
 export type MineAction = 'camera' | 'flip' | 'effects' | 'screen';
 
-export type CallAction = 'captions' | 'record';
+export type CallAction = 'captions' | 'record' | 'invite' | 'react';
 
 export type CallControlSet = { readonly mine: readonly MineAction[]; readonly call: readonly CallAction[] };
 
@@ -54,6 +56,7 @@ export function callControlSet(context: ControlsContext): CallControlSet {
   const call: readonly CallAction[] = [
     ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
+    ...(context.callId !== null && inCall ? (['invite', 'react'] as const) : []),
   ];
   return { mine, call };
 }

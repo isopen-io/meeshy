@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
 import { callRecordingStore } from '@/lib/calls/call-recording-live';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 import { callStore } from '@/lib/calls/call-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -14,7 +15,10 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * soit. Elle ne pèse qu'un abonnement au magasin ; l'écran d'appel est un
  * chunk à part, chargé quand un appel existe.
  */
-const loadOverlay = () => import('./call-overlay').then((module) => ({ default: module.CallOverlay }));
+/* Avec lui, le catalogue de ses contrôles (#8433, #8438, #8439, #8437) — les
+   ajouter aux catalogues d'interface les porterait au-delà de leur plafond. */
+const loadOverlay = () =>
+  Promise.all([import('./call-overlay'), loadCallControlsCatalog(currentInterfaceLanguage())]).then(([module]) => ({ default: module.CallOverlay }));
 const CallOverlay = lazy(loadOverlay);
 /* #8046 — la bulle et l'image dans l'image sont des FRÈRES de l'écran, pas
    ses enfants : un chunk chargé par un autre chunk à la demande ne peut

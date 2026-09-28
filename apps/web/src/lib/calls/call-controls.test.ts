@@ -24,8 +24,8 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
 });
 
 describe('ce que (…) sort', () => {
-  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer — la conversation vit dans l’en-tête (#8436)', () => {
-    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record'] });
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer, Ajouter, Réagir — la conversation vit dans l’en-tête (#8436)', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record', 'invite', 'react'] });
   });
 
   test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
@@ -53,7 +53,13 @@ describe('ce que (…) sort', () => {
 
   test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
     expect(callControlSet(context({ callId: null })).call).toEqual(['captions']);
-    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'invite', 'react']);
+  });
+
+  test('Ajouter et Réagir existent en duo comme en groupe, dès qu’un appel identifié est rejoint (#8433, #8439)', () => {
+    expect(callControlSet(context({ phase: { kind: 'connected' } })).call).toContain('invite');
+    expect(callControlSet(context({ phase: { kind: 'connected' } })).call).toContain('react');
+    expect(callControlSet(context({ phase: { kind: 'connecting' } })).call).toEqual([]);
   });
 
 });
