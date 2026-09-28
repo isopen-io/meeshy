@@ -243,6 +243,32 @@ describe('le menu de modération', () => {
     expect(document.activeElement?.getAttribute('data-call-moderate')).toBe('u-nadia');
     view.done();
   });
+
+  /**
+   * LE RETOUR ANDROID REFERME LE MENU, PUIS L'ALERTE (#8504) — dans la coque,
+   * le bouton retour est un `popstate`. Sans `useBackDismiss`, le menu et
+   * l'alerte restaient ouverts pendant que le retour faisait reculer la page
+   * sous l'écran d'appel ; Échap les refermait sur le web.
+   */
+  test('le retour matériel referme le menu, puis l’alerte, sans retirer personne', () => {
+    const log: string[] = [];
+    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} glyphs={GLYPHS} />);
+    view.press('[data-call-moderate]');
+    expect(typeof (window.history.state as { backDismiss?: unknown } | null)?.backDismiss).toBe('string');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(view.find('[data-call-moderation-menu]')).toBeNull();
+    view.press('[data-call-moderate]');
+    view.press('[data-call-remove]');
+    expect(view.find('[role="alertdialog"]')).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(view.find('[role="alertdialog"]')).toBeNull();
+    expect(log).toEqual([]);
+    view.done();
+  });
 });
 
 describe('les réactions qui montent et le mot d’un contrôle', () => {
