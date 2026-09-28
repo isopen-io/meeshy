@@ -1,5 +1,158 @@
 # @meeshy/web-v2
 
+## 2.9.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la participation d'une personne invitée porte sa langue du Prisme
+  - le contrôleur du zoom déclare sa deinit nonisolated — ses tests ne plantent plus en abrt (Refs #8445)
+  - call:invite-participant fait sonner un ami, qui décroche par l'appel ordinaire
+  - le verre des boutons de sonnerie passe par son site ; gate effets hors composite
+  - le panneau des effets n'importe rien de l'écran d'appel ; budgets remesurés
+  - audit — chaque bouton a un effet, et chaque verre est seul
+  - une personne invitée dans un appel en cours y entre, et seulement dans cet appel
+  - on zoome sa caméra — pincement, molette et capsule « − 1× + »
+  - la garde des couleurs iOS documente les fonds du panneau Cadre (#8414)
+  - la sonnerie d'appel sort de CallEventsHandler dans call-ring.ts
+  - « Effets » dans le rail de mon image, et son panneau de verre
+  - boutons de verre interactifs, actions au-dessus de la pilule, glissé progressif vers le PiP
+  - run test — story : légende posée sur le composeur, repli ⌄ / glissé bas, ni flamme ni vue unique en commentaire
+  - réactions relayées et comptées, micro coupé par l'admin de l'appel
+  - la caméra envoyée passe par les effets ; call:analytics les nomme
+  - pincer sa propre image zoome la caméra envoyée
+  - les effets de ma vidéo — règles, traitement des images, port du moteur
+  - le type d'enregistrement (audio ou vidéo) voyage avec la demande d'accord
+  - mode Animé (frise, une piste par objet) et retouche d'une image du fil dans le studio plein écran
+  - le micro coupé reste coupé à chaque naissance de piste ; le PiP ferme le plein écran
+  - contrat partagé des contrôles d'appel et réactions servies dans la fiche
+  - un seul chemin vers la conversation, « Conversation » à droite de Réduire
+  - le micro coupé avant le média naît coupé et s'annonce coupé
+  - la taille rendue d'une retouche lit le rapport de SceneShape, captures des lots 3 à 5 (#8416)
+  - les plafonds des catalogues et du studio de story suivent le composer plein écran (#8425)
+  - lois du mode Animé — une piste par objet, une durée de scène, relues par le lecteur
+  - une image du brouillon d'un message s'édite dans la scène plein écran et repart dans le fil (#8416)
+  - le chunk du studio et les catalogues repassent sous leur plafond (Quality rouge depuis la fusion de #8425)
+  - retours de revue de #8425 — message du socle selon le format, Cadre en verre, sol du composite
+  - les poignées passent au-dessus de la saisie ; captures web du composer plein écran ; D-146
+  - la scène plein écran se compose animée — bascule « Animé » et frise où chaque objet a sa piste (#8415)
+  - sur téléphone, plus aucune colonne ne glisse de côté et la connexion tient dans la vue (Refs #8418)
+  - gates et témoins du composer plein écran réécrits sur la nouvelle règle
+  - la coque Android dessine le refus des notifications et porte sa propre icône de barre d'état (Refs #7307)
+  - le composer plein écran suit iOS — scène entre la barre et le socle, ⋯ Aperçu, texte du post, tuiles, sol thumbhash, panneau Cadre
+  - le panneau Cadre choisit Ajuster ou Remplir et le fond des bandes d'un média de fond (#8414)
+  - le lecteur peint les bandes d'un fond ajusté du fond choisi au Cadre
+  - lois du composer plein écran — Cadre du fond, texte du post, aimantage, sol thumbhash
+  - réponse, édition et pièces jointes vivent dans le verre du composeur
+  - croix et socle hors de la scène, texte du post au socle, rail droit en tuiles, sol thumbhash, limites et lignes magnétiques — run test (#8370)
+  - la scène du composer prend tout le viewport, le chrome flotte dessus — run test (#8370)
+  - le dépliage d'un message long n'est plus avalé par le plafond d'invalidations du fil — run test (Refs #8232)
+  - la vue d'appel « C adapté » repasse les trois gardes qu'elle faisait rougir (Refs #8394, #8396)
+
+## 2.8.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - un message long déplié se déroule en 300 ms sur la courbe du web, le repli fait glisser ses voisins (Refs #8232)
+  - le préchauffage du premier rendu lit burningEphemeralIds — le témoin du warmup repasse au vert (Refs #8382)
+  - dans la coque, la rangée d'un document en cours d'envoi n'ouvre plus le blob à la place de l'app (#8402)
+  - la vue « C adapté » — pilule de verre, rails, rangées, une, sous-titres
+  - la porte de l'e-mail trouve sa fenêtre par DeviceLayout — la garde des parcours de scènes repasse au vert ; carte des décisions du gateway (Refs #8285)
+  - le volet de légende dégage les rails flottants, le verre du socle est teinté du plateau (#8388, #8370)
+  - vue d'appel « C adapté » — pilule unique, rails, mise à la une, sous-titres par personne
+  - règles pures de la vue « C adapté » — une, couleur, langues, verre d'appel
+  - l'écran d'appel se découpe par responsabilité et repasse sous son budget
+  - les rails flottants du composer passent en verre teinté du plateau (#8370)
+  - toucher un message flouté le révèle sur place ; le plein écran n'arrive qu'au toucher suivant (Refs #8389)
+  - « Prévenir mes contacts quand je reviens » et « Quand un contact revient » se règlent sur le web
+  - toucher un message flouté le révèle sur place, le plein écran attend le toucher suivant — run test (#8389)
+  - un éphémère qui échoit à l'écran brûle et quitte Focal, Script et Bulles sans attendre une écriture en base (#8382)
+  - « X était sur Meeshy récemment » ouvre le profil de X — cloche, bannière, coque, catégorie Contacts
+  - « X était sur Meeshy récemment » se lit, se règle et ouvre le profil de X — run test
+  - le lien de parrainage partagé depuis la coque vise l'origine publique (#8385)
+  - la citation se vise par son marqueur, plus par son libellé français — « Peaux web » repasse au vert (Refs #8320)
+  - le socle du composer flotte au bas de la scène, sur verre (#8370)
+  - une photo reçue par push rejoint l'album Meeshy au réveil — run test (#8358)
+  - un média protégé mis en file hors ligne repart avec sa protection, par le POST après TUS — run test (#8350)
+  - la coque Android écrit les médias reçus dans l'album Meeshy par @capacitor-community/media (#8336)
+  - un éphémère déjà échu rechargé quitte le fil dans les quatre modes, sans pierre tombale (#8352)
+  - la coque Android déclare le plugin de galerie @capacitor-community/media 9.1.0 (squelette, #8336)
+  - toucher une case d'un message flouté multi-images ouvre CETTE pièce, en Bulles comme en Focal — run test (#8340)
+  - le cliquet des entrées TS mortes enregistre l'appel de la flamme-œil par le catalogue (332, #8342)
+  - la consommation flamme-œil passe par l'entrée générée, et une flamme-œil vue au milieu du fil compte comme vue (#8342, #8343)
+  - les rails du composer flottent sur la scène, qui prend toute la largeur
+  - un message long se déplie de nouveau dans le fil — la passe de layout revient, sans animation — run test
+  - la scène du composer prend tout l'écran, les contrôles flottent dessus
+  - le cliquet du catalogue Swift enregistre l'entrée que la garde de l'e-mail consomme (#8365)
+  - la garde de l'e-mail lit ses routes dans le catalogue, et son poids de catalogue est documenté (#8365) — run test
+  - dans une réponse, la citation d'un audio se joue sur place par le lecteur partagé, et VoiceOver nomme l'écoute et le saut (#8320)
+  - dans une réponse, la citation d'un audio se joue sur place et le reste ramène au message, même hors fenêtre (#8320)
+  - publier sans adresse vérifiée ouvre la validation de l'e-mail, et l'action repart au code validé (#8365)
+  - raccrocher ne rouvre plus la bannière « Appel en cours · Reprendre » (#8366)
+  - la zone lecture d'une citation sait quelle piste jouer, et refuse un audio protégé (#8320)
+  - les images et vidéos reçues s'enregistrent seules, une fois, dans l'album Meeshy (#8307)
+  - nonisolated deinit sur les deux classes des lots flamme-œil et protections collantes — run test (Refs #8303 #8305)
+  - une protection armée reste armée dans la conversation jusqu'à ce qu'on la change — run test (#8305)
+  - la flamme-œil de la bulle se pose au bord d'attaque, visible (#8303)
+  - la flamme-œil et les 15 s au sélecteur d'éphémère, retirée à la sortie après lecture (#8303)
+  - toucher une vidéo reçue ouvre le plein écran ; la lecture dans le fil ne garde que son, pause/lecture et plein écran (#8234)
+  - la pierre tombale des citations sort du chunk realtime pour servir aussi la flamme-œil (#8304)
+  - le verre de l'inscription n'écrit qu'aux encres qui tiennent AA sur lui (#8288)
+  - témoins alignés sur les protections collantes, scellement des citations sans tirer le chunk realtime (#8304, #8306)
+  - toucher une image floutée ouvre le plein écran en Rivière et depuis la case de grille — run test
+  - la flamme-œil et 15 s rejoignent l'éphémère, la flamme-œil se consomme en quittant le fil, et une protection armée reste armée dans la conversation (#8304, #8306)
+  - Rivière — la citation d'un audio ou d'une vidéo montre son aperçu et s'ouvre en plein écran (#8283) — run test
+  - une citation d'audio ou de vidéo montre son aperçu et s'ouvre en plein écran (#8233)
+  - actions en un clic et cartes de verre sur la fiche d'un membre (#8289)
+  - le verre de l'inscription tient AA — le gate de contraste redevient vert
+  - l'enregistrement ne fait plus planter iOS 16/17 ni 26.1, les tests d'appel gardent leur hôte
+  - la coque recule au retour d'un lien suivi au lieu de rester sur « Ouverture du lien… » (#8322)
+  - la flamme-œil se consomme par lecteur — route after-read/consume, échéance posée à la consommation, surfaces servies sans le plafond de rétention (#8302)
+  - la coque Android enregistre seule les images et vidéos reçues dans l'album Meeshy (Refs #8308)
+  - squelette — auto-enregistrement galerie coque Android (Refs #8308)
+  - le glyphe play du poster vidéo se dimensionne par son cercle, plus par une police figée — run test (Refs #8231)
+  - le choix du serveur n'apparaît qu'au simulateur iOS et en développement web (#8287) — run test
+  - l'appelé voit la caméra de l'appelant dès le décroché
+  - la fin par départ relit elle aussi le statut après un P2034 et retente (#8293)
+  - le bit EPHEMERAL_AFTER_READ (flamme-œil) rejoint les effets de cycle de vie
+  - le journal des appels liste les appels sans hiddenForUserIds — #8294
+  - CallSession.hiddenForUserIds naît vide (@default([])) — #8294
+  - la fiche d'un membre s'édite en place, section par section (#8289)
+  - un P2034 au raccroché relit le statut et retente la fin au lieu de laisser l'appel « en cours » (#8293)
+  - l'inscription en phases vivantes — téléphone en verre qui ondule, carte d'identité avec son code, « Parler aux autres » (#8288) — run test
+  - changer de compte sans mot de passe, « Déconnexion » garde le compte listé (#8286) — run test
+  - le gabarit .env du gateway ne porte plus d'identifiants MongoDB réels (Closes #8296)
+  - la carte de l'inscription garde la session qu'elle ouvre, sans titre en double (#8288)
+  - l'inscription se déroule en phases vivantes — téléphone en verre, adresse, carte d'identité avec son code, « Parler aux autres » (#8288)
+  - plusieurs comptes sur l'appareil — changer de compte sans mot de passe, déconnexion distincte (#8286)
+  - plus d'effacement manuel du Répertoire — le carnet part avec le compte (#8284)
+  - plus d'effacement manuel du carnet — la politique dit qu'il part avec le compte (#8284)
+  - la flèche de Publier choisit, seul Publier envoie
+  - la célébration de l'arrivée passe avant l'onboarding, fusion de dev — run test
+  - l'appelant garde son audio et l'appelé rattrape « connecté » après une relance ICE
+  - le garde de derive compte les commits de son contexte de build
+  - le sceau de la célébration suit la taille de texte, sans taille figée (#8089)
+  - appels de groupe iOS — maillage p2p, grille, qui parle (#3585)
+  - la célébration de l'arrivée précède l'onboarding et lance le préchargement (#8089)
+  - les destinataires du retour se lisent depuis la projection du cadrage — le balayage #4642 remonte la chaîne (Refs #8285)
+  - « X était sur Meeshy récemment » — amis et carnets prévenus du retour, une fois toutes les 3 h par X (Refs #8285)
+  - une flamme-œil à vue unique suit la destruction de la flamme, jamais la réévaluation « vue unique héritée » (#8345)
+  - la bannière d'un éphémère à durée annonce sa vraie durée, pas « 7j » (#8344)
+  - la suite des routes admin revient sous sa dette de taille héritée (#8289)
+  - le témoin d'enregistrement des routes users n'attend plus clearContactsDirectory (#8284)
+  - renommer un membre et renvoyer une vérification depuis l'administration (#8289)
+  - l'inscription sert le jeton d'attente avec la session (#8288)
+  - supprimer son compte efface son carnet synchronisé et ses notifications (#8284)
+  - la courbe du dépliage d'un message long devient un jeton partagé web/iOS (Refs #8232)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.29.0
+
 ## 2.7.0
 
 ### Minor Changes
