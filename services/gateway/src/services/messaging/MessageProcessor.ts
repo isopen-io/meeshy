@@ -5,6 +5,7 @@
 
 import * as path from 'path';
 import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
+import { declaredReplyProtection } from './replyProtectionContagion';
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
@@ -277,7 +278,7 @@ export class MessageProcessor {
    * existing record's `translations` blob is empty (translator was down on
    * the first attempt).
    */
-  async saveMessage(data: {
+  async saveMessage(request: {
     conversationId: string;
     senderId: string;
     content: string;
@@ -313,6 +314,7 @@ export class MessageProcessor {
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
   }): Promise<Message> {
+    const data = await declaredReplyProtection(this.prisma, request);
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
       conversationId: data.conversationId,

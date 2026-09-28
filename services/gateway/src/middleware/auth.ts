@@ -951,45 +951,9 @@ export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
 export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
-/**
- * LA MÊME DISTINCTION QUE `requireRole` ci-dessus (#4760). Pas de session ⇒
- * 401 `UNAUTHORIZED` ; session valide mais e-mail non vérifié ⇒ 403
- * `EMAIL_NOT_VERIFIED`. Le premier cas rendait ici `403 PERMISSION_DENIED`,
- * c'est-à-dire le code d'un refus de DROIT pour une absence d'IDENTITÉ.
- *
- * Montée depuis #6437 sur `EMAIL_VERIFICATION_GATED_ROUTES` ci-dessous — la
- * décision retenue (documentée sur l'issue) est la réponse intermédiaire que
- * l'issue proposait : ce qui SORT du compte vers d'autres personnes.
- */
-export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-
-  if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-    sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-    return;
-  }
-
-  if (!authContext.registeredUser.emailVerifiedAt) {
-    sendForbidden(reply, 'Email verification required', { code: 'EMAIL_NOT_VERIFIED' });
-    return;
-  }
-}
-
-/**
- * Routes qui exigent un e-mail CONFIRMÉ (#6437) — une constante, pas une
- * prose, comme l'exige le critère de fin de l'issue. Décision : ce qui SORT
- * du compte vers d'autres personnes — publier (posts ET stories, même route),
- * inviter par e-mail, créer un lien de partage. Tout le reste (lecture,
- * messagerie privée, réglages, rejoindre une conversation existante) reste
- * accessible à un compte non confirmé — la décision complète est sur #6437.
- * UNE exception (#7907) : la PREMIÈRE story d'un compte passe `POST /posts`
- * (`email-verification-first-story.ts`) ; tout le reste de cette liste est inchangé.
- */
-export const EMAIL_VERIFICATION_GATED_ROUTES = [
-  'POST /posts',
-  'POST /posts/from-attachment',
-  'POST /invitations/email',
-  'POST /links',
-  'POST /conversations/:id/new-link',
-] as const;
-
+export {
+  requireEmailVerification,
+  requirePublishingGrace,
+  EMAIL_VERIFICATION_GATED_ROUTES,
+  PUBLISHING_GRACE_GATED_ROUTES,
+} from './verification-gates';

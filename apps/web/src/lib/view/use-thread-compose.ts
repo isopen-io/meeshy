@@ -8,6 +8,7 @@ import type { ComposerDraft, DraftStore } from '@/lib/send/draft-store';
 import type { StickyProtection } from '@/lib/send/protection-preference';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+import { imposedReplyProtection, type ImposedReplyProtection } from '@meeshy/shared/utils/reply-protection-contagion';
 
 import { usePublishMentionSource } from './mention-source';
 import { useThreadDraft } from './use-draft';
@@ -32,6 +33,8 @@ export type ThreadComposeState = {
   /** Répondre à une PIÈCE (#6303) — la citation nomme la pièce regardée en plein écran. */
   readonly setReplyToMedia: (messageId: string, attachmentId: string) => void;
   readonly replyTo: ReplyToPreview | undefined;
+  /** Ce que le message cité impose à la réponse (#8557) — rien sans citation. */
+  readonly imposedProtection: ImposedReplyProtection;
   readonly reportComposerDraft: (report: ComposerDraftReport) => void;
   readonly onSend: (input: ThreadComposeSendInput) => void;
   readonly onCancelReply: () => void;
@@ -117,6 +120,9 @@ export function useThreadCompose(params: {
     [quotedMessage, replyPiece],
   );
   const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
+  /* LA CONTAGION (#8557) — la loi partagée, sur le message cité ENTIER (une
+     pièce nommée ne change rien : la protection est celle du message). */
+  const imposedProtection = useMemo(() => imposedReplyProtection(replyToMessage), [replyToMessage]);
 
   const onSend = useCallback(
     ({ text, attachments, language, protection, place, sticker }: ThreadComposeSendInput) => {
@@ -141,5 +147,5 @@ export function useThreadCompose(params: {
 
   const onCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
 
-  return { initialDraft, stickyProtection, setReplyTarget, setReplyToMedia, replyTo, reportComposerDraft, onSend, onCancelReply };
+  return { initialDraft, stickyProtection, setReplyTarget, setReplyToMedia, replyTo, imposedProtection, reportComposerDraft, onSend, onCancelReply };
 }

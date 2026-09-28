@@ -177,6 +177,13 @@ extension ConversationView {
         composerState.preparingAttachments.removeAll { $0.id == prep.id }
     }
 
+    /// Ferme la retouche et oublie sa source décodée (#8524) — l'image à
+    /// 2 048 px ne survit pas à la couverture.
+    func closePendingImageRetouche() {
+        scrollState.editingPendingAttachmentId = nil
+        scrollState.editingPendingSource = nil
+    }
+
     // MARK: - Attachment Preview Tap Handler
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
@@ -186,11 +193,19 @@ extension ConversationView {
             // defense-in-depth fallback for the (rarer) case where the
             // thumbnail vanishes AFTER presentation starts, but there is no
             // reason to open the cover at all for an id that has none now.
-            guard composerState.pendingThumbnails[attachment.id] != nil else { return }
-            scrollState.editingPendingAttachmentId = attachment.id
+            guard let vignette = composerState.pendingThumbnails[attachment.id],
+                  ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
+            let id = attachment.id
+            let fichier = composerState.pendingMediaFiles[id]
+            Task {
+                var source: UIImage?
+                if let fichier { source = await ConversationImageRetouche.loadSource(fileURL: fichier) }
+                scrollState.editingPendingSource = source ?? vignette
+                scrollState.editingPendingAttachmentId = id
+            }
         case .video:
             if let url = composerState.pendingMediaFiles[attachment.id] {
-                scrollState.videoToEdit = url
+                scrollState.videoToEdit = PendingVideoEdit(id: attachment.id, url: url)
             }
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {

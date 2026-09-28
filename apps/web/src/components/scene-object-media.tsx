@@ -4,6 +4,7 @@ import { mediaCropStyle, readMediaCrop } from '@meeshy/shared/utils/media-crop';
 
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
+import { mediaFilterCss } from '@/lib/canvas/media-filter';
 import { MEDIA_CORNER_FRACTION, placedMediaDesignSize } from '@/lib/canvas/media-size';
 import { objectMediaTimeline } from '@/lib/canvas/media-seek';
 import { cqw } from '@/lib/canvas/units';
@@ -59,11 +60,14 @@ export function SceneObjectMedia({
   const isVideo = mediaType?.startsWith('video') === true;
   const loop = payload.loop === true;
 
+  // LE FILTRE DE CET OBJET (lot 7) — sur sa boîte, donc sur lui seul.
+  const filter = mediaFilterCss(payload);
   const boxStyle = {
     width: cqw(size.width / DESIGN_WIDTH),
     height: cqw(size.height / DESIGN_WIDTH),
     borderRadius: cqw((MEDIA_CORNER_FRACTION * Math.min(size.width, size.height)) / DESIGN_WIDTH),
     overflow: 'hidden' as const,
+    ...(filter !== undefined ? { filter } : {}),
   };
   const innerStyle = crop !== null ? { ...mediaCropStyle(crop), position: 'absolute' as const, objectFit: 'fill' as const } : {};
 

@@ -450,7 +450,10 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
       await flush(() => bench.posts.length === 1);
 
       unmountAll();
-      goTo('http://localhost/');
+      // Quitter, c'est NAVIGUER comme le routeur : une entrée poussée. La
+      // plaque d'édition ouverte par la frappe rend alors son entrée sans
+      // défaire la navigation (`useBackDismiss`, #6313 et #8517).
+      window.history.pushState(null, '', '/');
       bench.releasePost();
       await flush(() => drafts.get(VIEWER_ID) === null);
       await flush();

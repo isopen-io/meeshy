@@ -221,7 +221,7 @@ final class CallManager: ObservableObject {
     /// `rejoinActiveCall` (always `false` — a rejoin never has a CallKit
     /// transaction behind it); gates CallKit transactions + audio-session
     /// self-activation (when false, no CallKit means we own the session lifecycle).
-    private var callUsesCallKit = true
+    private(set) var callUsesCallKit = true
     @Published var isSpeaker: Bool = false
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
@@ -414,7 +414,7 @@ final class CallManager: ObservableObject {
     }
     /// Drives the graceful audio-only survival layer from quality samples.
     private let videoSurvivalController: VideoSurvivalController
-    private let ringbackPlayer = RingbackTonePlayer()
+    let ringbackPlayer = RingbackTonePlayer()
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
     // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
@@ -678,7 +678,7 @@ final class CallManager: ObservableObject {
     // here and replayed after the socket reconnects + emitCallJoin fires.
     private var pendingIceCandidates: [[String: Any]] = []
     private var cancellables = Set<AnyCancellable>()
-    fileprivate let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
 
     // Screen capture monitoring
     private var screenCaptureObserver: NSObjectProtocol?
@@ -5336,7 +5336,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                 }
             } else if state == .serious {
                 self.webRTCService.videoFilters.config.backgroundBlurEnabled = false
-                self.webRTCService.videoFilters.config.skinSmoothingEnabled = false
+                self.webRTCService.videoFilters.config = self.webRTCService.videoFilters.config.selectingFaceEffect(.none)
                 Logger.calls.warning("Thermal serious — disabled advanced filters")
             }
         }
@@ -5586,10 +5586,10 @@ extension CallManager: WebRTCServiceDelegate {
             self.analyticsPacketLossSum += packetLossPercent
             self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
             // Mirrors analyticsVideoFiltersUsed's polling above it: analyticsEffectsUsed
-            // was declared and serialized into the analytics payload but never actually
-            // populated (no call site ever inserted into it), so every call silently
+            // was declared and serialized but never populated, so every call silently
             // reported effectsUsed: []. Record the concrete effects the config exposes.
             let filterConfig = self.webRTCService.videoFilters.config
+            if let face = filterConfig.activeFaceEffect.analyticsName { self.analyticsEffectsUsed.insert(face) }
             if filterConfig.isEnabled {
                 self.analyticsVideoFiltersUsed = true
                 self.analyticsEffectsUsed.insert("colorFilter")

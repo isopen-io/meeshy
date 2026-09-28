@@ -239,6 +239,10 @@ export const SERVER_EVENTS = {
   CALL_MUTED_BY_MODERATOR: 'call:muted-by-moderator',
   /** #8439 — une réaction d'un participant, relayée aux autres participants connectés. */
   CALL_REACTION_RECEIVED: 'call:reaction-received',
+  /** #8480 — à l'initiateur d'un appel qui sonne : l'appelé demande l'aperçu avant de décrocher. */
+  CALL_PREVIEW_REQUESTED: 'call:preview-requested',
+  /** #8480 — signal WebRTC de l'aperçu, relayé entre l'initiateur et l'appelé ; ne décroche rien. */
+  CALL_PREVIEW_SIGNAL: 'call:preview-signal',
   /**
    * L'accusé de remise et de lecture — le SEUL nom sous lequel il voyage.
    *
@@ -679,6 +683,10 @@ export const CLIENT_EVENTS = {
   CALL_MUTE_PARTICIPANT: 'call:mute-participant',
   /** #8439 — réagir pendant l'appel, emoji de la liste blanche `CALL_REACTION_EMOJIS`. */
   CALL_REACTION: 'call:reaction',
+  /** #8480 — l'appelé demande à voir l'appelant pendant la sonnerie (accusé `CallControlAck`). */
+  CALL_PREVIEW_REQUEST: 'call:preview-request',
+  /** #8480 — signal WebRTC de l'aperçu (forme de `CallSignalEvent`, accusé `CallControlAck`). */
+  CALL_PREVIEW_SIGNAL: 'call:preview-signal',
 
   // --- Location sharing ---
   LOCATION_LIVE_START: 'location:live-start',

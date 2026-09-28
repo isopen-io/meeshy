@@ -47,6 +47,8 @@ const de = {
   'callControls.record.audioDetail': 'Die Stimmen aller',
   'callControls.record.video': 'Audio und Video',
   'callControls.record.videoDetail': 'Die sichtbaren Bilder und die Stimmen',
+  'callControls.capture': 'Schnappschuss',
+  'callControls.capture.label': 'Schnappschuss vom Anruf',
 } satisfies CallControlsCatalog;
 
 export default de;

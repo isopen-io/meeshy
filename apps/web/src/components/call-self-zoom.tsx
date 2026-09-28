@@ -98,7 +98,7 @@ export function useZoomGestures(zoom: CameraZoom | null): ZoomGestures {
 /** La capsule `−  1×  +` — un verre isolé, posé sur la scène près de mon image. */
 export function CallZoomControl({ zoom, language, className, style }: { readonly zoom: CameraZoom; readonly language: InterfaceLanguage; readonly className?: string; readonly style?: CSSProperties }) {
   return (
-    <div role="group" aria-label={translate(language, 'call.zoom')} className={`glass-call flex items-center rounded-full ${className ?? ''}`} style={style} data-call-zoom="">
+    <div role="group" aria-label={translate(language, 'call.zoom')} className={`glass-call flex items-center rounded-full ${className ?? ''}`} style={style} data-call-zoom="" data-call-chrome-fade="">
       <CallButton label={translate(language, 'call.zoom.out')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} />} onPress={() => zoom.set(zoomNudge(zoom.range, zoom.value, -1))} disabled={zoom.value <= zoom.range.min} size={44} data={{ 'data-call-zoom-out': '' }} />
       <span role="status" aria-live="polite" className="min-w-9 text-center text-mini font-semibold tabular-nums" data-call-zoom-value="">
         {zoomLabel(zoom.value, language)}

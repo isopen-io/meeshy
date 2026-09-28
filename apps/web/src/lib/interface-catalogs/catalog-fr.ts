@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frGallery from './catalog-fr-gallery';
+import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
@@ -877,6 +878,7 @@ const fr = {
   'story.studio.refusal.door.visual': 'Choisissez une image ou une vidéo.',
   'story.studio.refusal.door.sound': 'Choisissez un fichier audio.',
   'story.studio.refusal.media-max': 'Cette publication porte déjà dix médias — le plafond de la passerelle.',
+  'story.studio.refusal.import-max': '{count} média(s) non importé(s) : une publication en porte dix au plus.',
   'story.studio.failure.network': 'Réseau indisponible.',
   'story.studio.failure.timeout': 'La passerelle n’a pas répondu.',
   'story.studio.failure.session': 'Session expirée — reconnectez-vous.',
@@ -1161,6 +1163,7 @@ const fr = {
   ...frStudioChrome,
   ...frEphemeral,
   ...frGallery,
+  ...frMessageCard,
   ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).

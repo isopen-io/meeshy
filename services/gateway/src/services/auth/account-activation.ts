@@ -90,6 +90,17 @@ export function isActivationBlocked(subject: ActivationSubject, now: Date): bool
 }
 
 /**
+ * Publier suit le délai de grâce (#8476) : tant que la phase n'est pas
+ * `blocked`, une adresse non prouvée ne retient rien. Une activation absente
+ * refuse — fail-closed. Lue par la garde de `POST /posts`
+ * (`requirePublishingGrace`) ET par `GET /me/onboarding` (`canPublishStory`) :
+ * la carte ne promet jamais ce que la garde refuse.
+ */
+export function mayPublish(activation: AccountActivation | undefined): boolean {
+  return activation !== undefined && activation.phase !== 'blocked';
+}
+
+/**
  * Le délai est passé : une session EXISTANTE est refusée (`401
  * ACCOUNT_ACTIVATION_REQUIRED` au middleware REST, `auth:session-revoked` au
  * socket), la prochaine connexion mène au code.

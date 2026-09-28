@@ -37,21 +37,24 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(glass.contains("struct CallButtonGlass"), "Le verre par bouton a quitté l'écran d'appel")
     }
 
-    /// #8459 — UN seul bloc de verre réel : la pilule ; les actions du (…) s'y
-    /// déploient, au-dessus de la rangée de base, sans second bloc.
+    /// #8459 · #8550 — UN seul bloc de verre réel : la pilule ; les familles
+    /// ET le sous-menu ouvert s'y déploient, au-dessus de la rangée de base,
+    /// sans second bloc — en duo comme en groupe, par le MÊME chemin.
     func test_actions_unfoldInsideTheSingleGlassBlock_aboveTheBaseRow() throws {
         let code = try callViewCode()
-        let pill = try block("var callControlsPill: some View {", until: "private var pillHairline", in: code)
+        let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: code)
         XCTAssertEqual(pill.components(separatedBy: ".callControlsGlass(in:").count - 1, 1, "Un seul verre pour tout le bloc")
-        let duo = try XCTUnwrap(pill.range(of: "duoActionRows(actions)"))
-        let group = try XCTUnwrap(pill.range(of: "groupActionRows(actions)"))
+        let panel = try XCTUnwrap(pill.range(of: "panelRows(panel)"))
+        let families = try XCTUnwrap(pill.range(of: "familyRows(actions)"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
-        XCTAssertLessThan(duo.lowerBound, base.lowerBound)
-        XCTAssertLessThan(group.lowerBound, base.lowerBound)
-        XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les actions ET la rangée de base")
+        XCTAssertLessThan(panel.lowerBound, families.lowerBound, "Le sous-menu s'ouvre AU-DESSUS des familles")
+        XCTAssertLessThan(families.lowerBound, base.lowerBound)
+        XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les rangées ET la rangée de base")
+        XCTAssertFalse(pill.contains("isGroupStage ?"), "Duo et groupe partagent la même disposition")
         XCTAssertFalse(code.contains("callLegibilityVeil"), "Plus de voile non vitré : le bloc est du verre")
         XCTAssertFalse(code.contains("actionRails"), "Les rails latéraux ont quitté l'écran d'appel")
+        XCTAssertFalse(code.contains("CallReactionPalette"), "La palette flottante a rejoint la pilule")
     }
 
     /// Le bloc de verre est un verre RÉEL sous iOS 26 (`adaptiveGlass`, qui
@@ -65,14 +68,20 @@ final class CallViewGlassGuardTests: XCTestCase {
     }
 
     /// Les rangées d'actions ne portent plus aucun fond propre : elles sont
-    /// DANS le bloc.
+    /// DANS le bloc, et elles défilent à l'horizontale.
     func test_actionRows_carryNoBackgroundOfTheirOwn() throws {
         let code = try callViewCode()
-        let rows = try block("private func groupActionRows(", until: "func actionRow(", in: code)
+        let rows = try block("private func familyRows(", until: "func actionButton(", in: code)
         XCTAssertFalse(rows.contains("callChromeGlass"))
-        let duo = try block("private func duoActionRows(", until: "func actionButton(", in: code)
-        XCTAssertFalse(duo.contains("callChromeGlass"))
+        XCTAssertTrue(rows.contains("CallPillRow("))
         XCTAssertFalse(code.contains("glassEffectID"), "Plus de morphing : les actions naissent dans le bloc qui grandit")
+        let row = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
+        )
+        XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned)"))
+        XCTAssertFalse(row.contains("adaptiveGlass"), "Une rangée dans le bloc de verre n'a pas de verre à elle")
+        XCTAssertFalse(row.contains("callChromeGlass"))
     }
 
     /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si

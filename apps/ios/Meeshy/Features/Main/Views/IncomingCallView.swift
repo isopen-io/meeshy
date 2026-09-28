@@ -72,6 +72,10 @@ struct IncomingCallView: View {
 
             Spacer()
 
+            // #8480 — entendre l'appelant avant de décrocher
+            CallPreviewSoundButton(preview: .shared)
+                .padding(.bottom, 24)
+
             // Accept / Reject buttons
             actionButtons
                 .padding(.bottom, 20)
@@ -79,6 +83,8 @@ struct IncomingCallView: View {
             declineWithMessageButton
                 .padding(.bottom, 40)
         }
+        // #8480 — l'appelant, vu avant de décrocher
+        .background { CallPreviewBackdrop(preview: .shared) }
         .sheet(isPresented: $isDeclineSheetPresented) {
             CallDeclineSheet(callManager: callManager) {
                 isDeclineSheetPresented = false

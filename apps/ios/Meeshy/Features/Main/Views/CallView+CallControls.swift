@@ -2,9 +2,10 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// #8433 · #8439 — « Ajouter » et « Réagir » dans les actions au-dessus de la
-// pilule, et la couche que l'écran d'appel pose par-dessus la scène : envol
-// des réactions, invitations qui sonnent, palette, mot de retour.
+// #8433 · #8439 — « Ajouter » et « Réagir » dans « L'appel », et la couche que
+// l'écran d'appel pose par-dessus la scène : envol des réactions, invitations
+// qui sonnent, mot de retour. #8550 — les réactions se choisissent DANS la
+// pilule, en rangée défilante, jamais dans une palette flottante.
 
 extension CallView {
     var callControls: CallControlsController { callManager.controls }
@@ -22,16 +23,29 @@ extension CallView {
     }
 
     func reactActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        CallPillButton(
+        let isOpen = controlsDisclosure.isOpen(.react)
+        return CallPillButton(
             symbol: "face.smiling",
-            kind: showReactionPalette ? .active : .normal,
+            kind: isOpen ? .active : .normal,
             label: CallControlsCopy.react,
             caption: captioned ? CallControlsCopy.reactCaption : nil,
-            toggleState: showReactionPalette,
+            toggleState: isOpen,
             diameter: diameter
         ) {
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
-                showReactionPalette.toggle()
+            togglePanel(.react)
+        }
+    }
+
+    var reactionPanelRows: some View {
+        VStack(spacing: 0) {
+            CallPanelHeader(title: CallControlsCopy.react, onClose: closePanel)
+            CallPillRow {
+                ForEach(CallReactionEmoji.allCases, id: \.self) { emoji in
+                    CallPillChip(art: .emoji(emoji.rawValue), caption: nil, label: emoji.rawValue) {
+                        HapticFeedback.light()
+                        _ = callControls.react(emoji)
+                    }
+                }
             }
         }
     }
@@ -58,12 +72,6 @@ extension CallView {
                 }
                 if !callControls.invites.isEmpty {
                     CallInviteStrip(invites: callControls.invites).equatable()
-                }
-                if showReactionPalette && isChromeVisible {
-                    CallReactionPalette { emoji in
-                        _ = callControls.react(emoji)
-                    }
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
             }
             .padding(.bottom, Self.chromeBottomInset + 200)

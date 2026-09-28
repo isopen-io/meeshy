@@ -6,8 +6,10 @@ import { protectionOf } from '@/lib/reading-mode/protection';
 import { forwardAction, reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
+import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { safeLocalStorage } from '@/lib/storage';
 
 import {
   messageMenuContextOf,
@@ -36,6 +38,8 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * (`api/query.ts`, qui délègue à `performReaction`). Ce fichier ne fait que
  * les COMPOSER derrière une surface stable pour l'hôte.
  */
+
+export type MessageExportRequest = { readonly messageId: string; readonly quick: boolean };
 
 export type MessageMenuTargetState = { readonly messageId: string; readonly element: HTMLElement; readonly isMine: boolean };
 
@@ -66,6 +70,8 @@ export function useMessageMenu(params: {
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [detailFor, setDetailFor] = useState<string | null>(null);
   const [reactionSheetFor, setReactionSheetFor] = useState<string | null>(null);
+  /** La carte d'export ouverte — `quick` : « Export rapide », le format par défaut enregistré aussitôt peint. */
+  const [exportFor, setExportFor] = useState<MessageExportRequest | null>(null);
   /** Les ids à transférer, ADMIS — `null` ⇒ la feuille de destinataires est
    * fermée. Elle n'est jamais ouverte sur une sélection refusée (#5866). */
   const [forwardIds, setForwardIds] = useState<readonly string[] | null>(null);
@@ -215,6 +221,11 @@ export function useMessageMenu(params: {
         setDetailFor(messageId);
         return;
       }
+      if (id === 'export' || id === 'exportQuick') {
+        focusTakenRef.current = true;
+        setExportFor({ messageId, quick: id === 'exportQuick' });
+        return;
+      }
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
@@ -349,7 +360,10 @@ export function useMessageMenu(params: {
     if (menuTarget === null) return undefined;
     const message = messageOf(menuTarget.messageId);
     if (message === undefined) return undefined;
-    const ctx = messageMenuContextOf(message, { now: Date.now() });
+    const ctx = {
+      ...messageMenuContextOf(message, { now: Date.now() }),
+      hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
+    };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();
     const author = message.sender?.displayName ?? translate(lang, 'message.author.self');
@@ -385,6 +399,8 @@ export function useMessageMenu(params: {
     setDetailFor,
     reactionSheetFor,
     setReactionSheetFor,
+    exportFor,
+    setExportFor,
     servedOf,
     starOf,
   };

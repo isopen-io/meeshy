@@ -87,6 +87,34 @@ class MessageListCell: UICollectionViewCell {
         contentView.layer.transform = pose
     }
 
+    /// **Le cadre de l'élu Focal déborde de la cellule, et ses contrôles avec
+    /// lui** (#8537). La bande basse (pastille de langue, drapeaux, réactions,
+    /// date) est une superposition posée ENTIÈRE sous le contenu : UIKit ne
+    /// remet un toucher qu'à une vue dont les bornes le contiennent, et celui-là
+    /// partait à la voisine du dessous — « rien ne se passe ». La passe Focal
+    /// pose ici l'étendue du cadre (`FocalScrollPerspective.electedTouchOverflow`),
+    /// dans le repère UIKit de la cellule ; `.zero` hors élection.
+    var touchOverflow: UIEdgeInsets = .zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.inset(by: UIEdgeInsets(top: -touchOverflow.top, left: -touchOverflow.left,
+                                      bottom: -touchOverflow.bottom, right: -touchOverflow.right)).contains(point)
+    }
+
+    /// Dans le débord, le toucher va au contenu SwiftUI, qui le résout par sa
+    /// position : ses bornes UIKit ne contiennent pas ce point, le parcours
+    /// ordinaire des sous-vues s'arrêterait à la cellule.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard touchOverflow != .zero, !bounds.contains(point) else { return super.hitTest(point, with: event) }
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
+        return contentView.hitTest(convert(point, to: contentView), with: event) ?? contentView
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        touchOverflow = .zero
+    }
+
     override func preferredLayoutAttributesFitting(
         _ layoutAttributes: UICollectionViewLayoutAttributes
     ) -> UICollectionViewLayoutAttributes {
@@ -101,4 +129,28 @@ class MessageListCell: UICollectionViewCell {
         return fitted
     }
 
+}
+
+/// Le fil de conversation. Il ne diffère d'une `UICollectionView` que par
+/// l'ORDRE dans lequel il interroge ses cellules au toucher (#8537) : la
+/// cellule élue dont le cadre déborde a le premier mot sur son débord — sans
+/// quoi la voisine posée par-dessus dans la pile des sous-vues le prenait.
+final class MessageListCollectionView: UICollectionView {
+    nonisolated deinit {}
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01 else { return nil }
+        return Self.overflowHit(point, in: self, cells: visibleCells, with: event) ?? super.hitTest(point, with: event)
+    }
+
+    /// Le toucher d'un point pris dans le DÉBORD d'une cellule élue, ou `nil`
+    /// pour laisser décider le parcours ordinaire.
+    static func overflowHit(_ point: CGPoint, in container: UIView, cells: [UICollectionViewCell], with event: UIEvent?) -> UIView? {
+        for case let cell as MessageListCell in cells where cell.touchOverflow != .zero && !cell.isHidden {
+            let local = container.convert(point, to: cell)
+            guard !cell.bounds.contains(local), cell.point(inside: local, with: event) else { continue }
+            return cell.hitTest(local, with: event)
+        }
+        return nil
+    }
 }

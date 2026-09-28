@@ -555,6 +555,11 @@ struct MeeshyComposerHost: View {
     @StateObject var mediaPorterStore = ComposerMediaPorterStore()
 
     @State var showsPhotoPicker = false
+    /// Les médias choisis EN SÉRIE : chacun fonde sa scène (`ComposerScenePicking`).
+    @State var sceneSeriesMediaURLs: Set<URL> = []
+    /// Le sélecteur ouvert À L'OUVERTURE du composer : même un seul média y
+    /// fonde la première scène.
+    @State var openingPickFoundsScenes = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
     @State var showsFileImporter = false
 

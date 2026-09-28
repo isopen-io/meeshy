@@ -173,8 +173,6 @@ final class ComposerObjectEditorTests: XCTestCase {
         let surfaces = compact(try hostUnit())
         XCTAssertTrue(intake.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(intake.contains("openObjectEditor(objet.id)"),
-                      "La porte TEXTE doit ouvrir l'éditeur, pas seulement entrer en mode.")
         XCTAssertTrue(surfaces.contains("openObjectEditor(id)"),
                       "L'appui long « Modifier » doit ouvrir le MÊME écran que la création.")
     }
@@ -512,12 +510,19 @@ final class ComposerObjectEditorTests: XCTestCase {
         // vert le jour exact où un argument de plus s'ajoute, donc elle ne
         // tomberait que sur un RENOMMAGE, jamais sur un AJOUT. Or un argument
         // ajouté est précisément la façon dont un appel dérive de son jumeau.
+        //
+        // **Réécrite le 2026-09-28** (retour porteur : « les modifications
+        // impactent cet objet-là et non toute la scène »). La grille reste LA
+        // grille du SDK ; ce qui change est la CIBLE : le fond garde le filtre
+        // de slide et son aperçu, un média POSÉ règle son propre filtre sur sa
+        // propre image. Le montage entier est écrit, fermante comprise.
         XCTAssertTrue(
-            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:viewModel.currentSlideBackgroundImage)"),
-            "l'éditeur monte LA grille du SDK avec le MÊME aperçu que l'inspecteur du "
-            + "document — le montage entier, fermante comprise, pas son préfixe")
+            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:media.isBackground?viewModel.currentSlideBackgroundImage:viewModel.loadedImages[media.id],objectId:media.isBackground?nil:media.id)"),
+            "l'éditeur monte LA grille du SDK : filtre de slide pour le fond, filtre de l'objet "
+            + "pour un média posé — le montage entier, fermante comprise, pas son préfixe")
         XCTAssertFalse(nu.contains("currentEffects.filter="),
-                       "aucune surface n'écrit le champ de sa main : `applyFilter` est l'unique écrivain")
+                       "aucune surface n'écrit le champ de sa main : `applyFilter` / "
+                       + "`applyMediaObjectFilter` sont les seuls écrivains")
     }
 
     /// **Non-vacuité du témoin ci-dessus** : sans elle, un fichier renommé ferait

@@ -65,7 +65,7 @@ final class FocalGlassRenderTests: XCTestCase {
                 row("Bonjour, tu as vu le message ?", isDark: isDark)
                 ZStack(alignment: .topLeading) {
                     if glass {
-                        FocalGlassBlock(accentHex: "#6366F1")
+                        FocalGlassBlock()
                     }
                     Text("This is literally the easiest way to build an AI agent. Zero code. You only need to run a couple of commands.")
                         .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
