@@ -197,9 +197,9 @@ export function StudioTimelinePanel({
           <span ref={nowRef} data-story-timeline-now>
             {secondsLabel(lang, 0, 1)}
           </span>
-          {' s / '}
+          {` ${translate(lang, 'story.studio.timeline.unit')} / `}
           <span data-story-timeline-duration>{secondsLabel(lang, duration, 0)}</span>
-          {' s'}
+          {` ${translate(lang, 'story.studio.timeline.unit')}`}
         </p>
         {selected ? (
           <>
