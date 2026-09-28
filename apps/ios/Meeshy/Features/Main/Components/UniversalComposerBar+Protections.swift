@@ -25,9 +25,11 @@ extension UniversalComposerBar {
 
     @ViewBuilder
     var ephemeralToggleButton: some View {
-        let isActive = ephemeralChoice.wrappedValue != nil
+        let isImposed = imposedProtection.ephemeral != nil
+        let isActive = ephemeralChoice.wrappedValue != nil || isImposed
 
         Button {
+            guard !isImposed else { return }
             onAnyInteraction?()
             HapticFeedback.light()
             if isActive {
@@ -56,6 +58,7 @@ extension UniversalComposerBar {
                         .font(.caption2).fontWeight(.bold)
                         .foregroundColor(ComposerProtection.ephemeral.tint)
                 }
+                if isImposed { imposedLockGlyph(tint: ComposerProtection.ephemeral.tint) }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -73,9 +76,12 @@ extension UniversalComposerBar {
                     )
             )
         }
-        .accessibilityLabel(isActive
+        .accessibilityLabel(isImposed
+                            ? String(localized: "composer.ephemeral.imposed", defaultValue: "Mode éphémère imposé par le message cité : \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
+                            : isActive
                             ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
                             : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
+        .accessibilityRemoveTraits(isImposed ? .isButton : [])
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -175,9 +181,11 @@ extension UniversalComposerBar {
 
     @ViewBuilder
     var blurToggleButton: some View {
-        let isActive = isBlurEnabled.wrappedValue
+        let isImposed = imposedProtection.blurred
+        let isActive = isBlurEnabled.wrappedValue || isImposed
 
         Button {
+            guard !isImposed else { return }
             onAnyInteraction?()
             HapticFeedback.light()
             toggleVeil(.blurred)
@@ -192,6 +200,7 @@ extension UniversalComposerBar {
                         .font(.caption2).fontWeight(.bold)
                         .foregroundColor(ComposerProtection.blurred.tint)
                 }
+                if isImposed { imposedLockGlyph(tint: ComposerProtection.blurred.tint) }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -209,9 +218,12 @@ extension UniversalComposerBar {
                     )
             )
         }
-        .accessibilityLabel(isActive
+        .accessibilityLabel(isImposed
+                            ? String(localized: "composer.blur.imposed", defaultValue: "Flou imposé par le message cité", bundle: .main)
+                            : isActive
                             ? String(localized: "composer.blur.active", defaultValue: "Mode flou actif", bundle: .main)
                             : String(localized: "composer.blur.activate", defaultValue: "Activer le mode flou", bundle: .main))
+        .accessibilityRemoveTraits(isImposed ? .isButton : [])
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -222,8 +234,10 @@ extension UniversalComposerBar {
     @ViewBuilder
     var viewOnceToggleButton: some View {
         let isActive = isViewOnceEnabled.wrappedValue
+        let isBarred = imposedProtection.blurred
 
         Button {
+            guard !isBarred else { return }
             onAnyInteraction?()
             HapticFeedback.light()
             toggleVeil(.viewOnce)
@@ -255,7 +269,10 @@ extension UniversalComposerBar {
                     )
             )
         }
-        .accessibilityLabel(isActive
+        .opacity(isBarred ? 0.4 : 1)
+        .accessibilityLabel(isBarred
+                            ? String(localized: "composer.viewonce.barred_by_imposed_blur", defaultValue: "Vue unique indisponible : flou imposé par le message cité", bundle: .main)
+                            : isActive
                             ? String(localized: "composer.viewonce.active", defaultValue: "Mode vue unique actif", bundle: .main)
                             : String(localized: "composer.viewonce.activate", defaultValue: "Activer le mode vue unique", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
@@ -270,7 +287,7 @@ extension UniversalComposerBar {
     /// de la substituer.
     var dominantProtection: ComposerProtection? {
         ComposerProtection.dominant(
-            ephemeral: ephemeralChoice.wrappedValue != nil,
+            ephemeral: ephemeralChoice.wrappedValue != nil || imposedProtection.ephemeral != nil,
             viewOnce: isViewOnceEnabled.wrappedValue,
             blurred: isBlurEnabled.wrappedValue
         )
@@ -294,6 +311,14 @@ extension UniversalComposerBar {
 
     var servedSecondary: Color {
         dominantProtection?.tint ?? Color(hex: secondaryColor)
+    }
+
+    /// Le cadenas d'une protection imposée par le message cité (#8557).
+    func imposedLockGlyph(tint: Color) -> some View {
+        Image(systemName: "lock.fill")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundColor(tint)
+            .accessibilityHidden(true)
     }
 
     /// Flou et vue unique sont exclusifs : allumer l'un éteint l'autre.

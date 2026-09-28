@@ -68598,6 +68598,65 @@
         }
       }
     },
+    "composer.blur.imposed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التمويه مفروض من الرسالة المقتبسة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unschärfe von der zitierten Nachricht vorgegeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blur set by the quoted message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desenfoque impuesto por el mensaje citado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flou imposé par le message cité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sfocatura imposta dal messaggio citato"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desfocagem imposta pela mensagem citada"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desfoque imposto pela mensagem citada"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模糊由引用的消息强制设置"
+          }
+        }
+      }
+    },
     "composer.blur.label": {
       "extractionState": "manual",
       "localizations": {
@@ -72151,6 +72210,65 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modo efêmero ativo: %@"
+          }
+        }
+      }
+    },
+    "composer.ephemeral.imposed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الوضع المؤقت مفروض من الرسالة المقتبسة: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ephemerer Modus von der zitierten Nachricht vorgegeben: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ephemeral mode set by the quoted message: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo efímero impuesto por el mensaje citado: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode éphémère imposé par le message cité : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modalità effimera imposta dal messaggio citato: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo efémero imposto pela mensagem citada: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo efêmero imposto pela mensagem citada: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅后即焚模式由引用的消息强制设置：%@"
           }
         }
       }
@@ -79358,6 +79476,65 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modo de visualização única ativo"
+          }
+        }
+      }
+    },
+    "composer.viewonce.barred_by_imposed_blur": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العرض لمرة واحدة غير متاح: التمويه مفروض من الرسالة المقتبسة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmalansicht nicht verfügbar: Unschärfe von der zitierten Nachricht vorgegeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View once unavailable: blur set by the quoted message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver una vez no disponible: desenfoque impuesto por el mensaje citado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vue unique indisponible : flou imposé par le message cité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visualizzazione singola non disponibile: sfocatura imposta dal messaggio citato"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visualização única indisponível: desfocagem imposta pela mensagem citada"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visualização única indisponível: desfoque imposto pela mensagem citada"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法使用单次查看：模糊由引用的消息强制设置"
           }
         }
       }
