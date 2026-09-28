@@ -82,6 +82,7 @@ struct CallView: View {
     @State var layer: CallScreenLayer = .idle
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
+    @State var isSelfFeatured = false
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []

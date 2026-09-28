@@ -128,6 +128,26 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
     }
 
+    /// #8576 — le zoom caméra suit MON image en plein écran, jamais la
+    /// vignette ; les options caméra s'y posent en rail vertical, visibles
+    /// avec le chrome.
+    func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
+        let code = try callViewCode()
+        let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
+        XCTAssertFalse(pip.contains("callCameraZoom"), "Pincer la vignette la redimensionne, il ne zoome pas")
+        XCTAssertTrue(code.contains(".callCameraZoom(isEnabled: effectiveSwapStreams)"))
+        let rail = try block("var cameraRail: some View {", until: "\n    }\n}", in: code)
+        XCTAssertTrue(rail.contains("CallCameraRail.actions(from: currentActionSet)"))
+        XCTAssertTrue(rail.contains("CallCameraRail.isShown("))
+        XCTAssertTrue(rail.contains("CallCameraZoomAccessibilityElement()"))
+        XCTAssertTrue(code.contains("cameraRail\n"), "Le rail est monté dans l'appel établi")
+        let stage = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/GroupCallStageView.swift")
+        )
+        XCTAssertTrue(stage.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"))
+        XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))
+    }
+
     /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si
     /// AVKit refuse), exactement comme le glissé.
     func test_pipButton_andSwipe_leaveFullScreenThroughTheSameEntry() throws {

@@ -70,6 +70,10 @@ enum CallControlsCopy {
         String(localized: "call.control.effects.hint", defaultValue: "Libère l'écran pour choisir un effet, un à la fois", bundle: .main)
     }
 
+    static var cameraRail: String {
+        String(localized: "call.control.cameraRail", defaultValue: "Options de ma caméra", bundle: .main)
+    }
+
     static func familyTitle(_ family: CallActionFamily) -> String {
         switch family {
         case .myImage: return myImage
@@ -266,6 +270,10 @@ extension CallView {
 
     func actionButton(_ action: CallAction) -> some View {
         actionButtonBody(action, captioned: true)
+    }
+
+    func railActionButton(_ action: CallAction) -> some View {
+        actionButtonBody(action, captioned: false)
     }
 
     @ViewBuilder

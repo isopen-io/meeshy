@@ -32,6 +32,8 @@ extension CallView {
                     duoOverlays
                 }
 
+                cameraRail
+
                 callControlsLayer
 
                 callModeLayer
@@ -73,7 +75,10 @@ extension CallView {
             withAnimation(disclosureAnimation) { layer = reconciled }
         }
         .adaptiveOnChange(of: isGroupStage) { _, isGroup in
-            if !isGroup { isStageFullScreen = false }
+            if !isGroup {
+                isStageFullScreen = false
+                isSelfFeatured = false
+            }
         }
         .adaptiveOnChange(of: isVideoStage) { _, isVideo in
             if !isVideo { withAnimation(.easeInOut(duration: 0.25)) { showControls = true } }
@@ -243,7 +248,7 @@ extension CallView {
         VStack(spacing: 8) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
-            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, onStageTap: toggleControls)
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
                 .padding(.horizontal, 12)
             if !isStageFullScreen {
                 ZStack(alignment: .bottom) {
@@ -492,6 +497,7 @@ extension CallView {
             // phone/tablet. The duration chip lives in the header row
             // (`topChrome`, #8394), inside the safe area.
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
+                .callCameraZoom(isEnabled: effectiveSwapStreams)
                 .ignoresSafeArea()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -174,4 +174,30 @@ final class CallScreenLayerTests: XCTestCase {
         let rail = Set(CallCameraRail.actions(from: actions()))
         XCTAssertTrue(rail.isDisjoint(with: Set(actions().theCall)))
     }
+
+    func test_isShown_myImageFullScreenWithTheChrome_showsTheRail() {
+        XCTAssertTrue(CallCameraRail.isShown(isMyImageFullScreen: true, chrome: CallChromeVisibility()))
+    }
+
+    func test_isShown_myImageInTheTile_hidesTheRail() {
+        XCTAssertFalse(CallCameraRail.isShown(isMyImageFullScreen: false, chrome: CallChromeVisibility()))
+    }
+
+    func test_isShown_chromeHiddenByATap_hidesTheRail() {
+        XCTAssertFalse(CallCameraRail.isShown(isMyImageFullScreen: true, chrome: CallChromeVisibility(isRevealed: false)))
+    }
+
+    func test_isShown_duringAMode_hidesTheRail() {
+        XCTAssertFalse(CallCameraRail.isShown(isMyImageFullScreen: true, chrome: CallChromeVisibility(isModeActive: true)))
+    }
+
+    func test_isMyImageFullScreen_duo_followsTheLocalPrimary() {
+        XCTAssertTrue(CallCameraRail.isMyImageFullScreen(isGroupStage: false, isSelfFeatured: false, isLocalPrimary: true))
+        XCTAssertFalse(CallCameraRail.isMyImageFullScreen(isGroupStage: false, isSelfFeatured: true, isLocalPrimary: false))
+    }
+
+    func test_isMyImageFullScreen_group_followsMyTileAtTheFront() {
+        XCTAssertTrue(CallCameraRail.isMyImageFullScreen(isGroupStage: true, isSelfFeatured: true, isLocalPrimary: false))
+        XCTAssertFalse(CallCameraRail.isMyImageFullScreen(isGroupStage: true, isSelfFeatured: false, isLocalPrimary: true))
+    }
 }
