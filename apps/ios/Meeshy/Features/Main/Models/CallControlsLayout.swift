@@ -17,6 +17,10 @@ enum CallAction: String, CaseIterable, Sendable {
     case captions
     case recording
     case pictureInPicture
+    /// #8433 — faire sonner un ami dans l'appel en cours.
+    case addPeople
+    /// #8439 — envoyer une réaction à tout l'appel.
+    case react
 }
 
 /// Ce que l'appel permet, lu une fois par rendu depuis `CallManager`.
@@ -70,7 +74,8 @@ struct CallActionSet: Equatable, Sendable {
     private static func theCallActions(_ context: CallActionContext) -> [CallAction] {
         let recording: [CallAction] = context.mayRecord ? [.recording] : []
         let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
-        return [.captions] + recording + pip
+        let together: [CallAction] = context.isConnected ? [.addPeople, .react] : []
+        return [.captions] + together + recording + pip
     }
 }
 

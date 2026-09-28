@@ -342,6 +342,10 @@ extension CallView {
             }
         case .pictureInPicture:
             pictureInPictureActionButton(captioned: captioned, diameter: diameter)
+        case .addPeople:
+            addPeopleActionButton(captioned: captioned, diameter: diameter)
+        case .react:
+            reactActionButton(captioned: captioned, diameter: diameter)
         }
     }
 
