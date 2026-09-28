@@ -139,6 +139,20 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
   test('Réduire est un bouton de verre isolé', () => {
     expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire l’appel"[^>]*class="glass-call/);
   });
+
+  test('UN seul chemin vers la conversation : « Conversation » dans l’en-tête, juste à droite de Réduire (#8436)', () => {
+    const html = screen({ members: { 'u-peer': member() } });
+    const header = html.slice(html.indexOf('data-call-header'));
+    const order = ['aria-label="Réduire l’appel"', 'data-call-conversation'].map((marker) => header.indexOf(marker));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect(order[0]).toBeLessThan(order[1] as number);
+    expect(header).toMatch(/aria-label="Ouvrir la conversation"[^>]*class="glass-call/);
+    expect(html).not.toContain('data-call-control="messages"');
+  });
+
+  test('sans conversation connue, aucun bouton « Conversation »', () => {
+    expect(screen({ conversationId: '', members: { 'u-peer': member() } })).not.toContain('data-call-conversation');
+  });
 });
 
 describe('CallScreen — partage d’écran (#8063)', () => {
@@ -185,11 +199,11 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (overrides: Partial<ActiveCall> = {}) => {
+  const mount = (overrides: Partial<ActiveCall> = {}, effectsSupport: { readonly color: boolean; readonly blur: boolean } = { color: false, blur: false }) => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
-    act(() => root.render(<CallScreen call={call(overrides)} canShare />));
+    act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={effectsSupport} />));
     const find = (selector: string) => host.querySelector(selector);
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const done = () => {
@@ -209,12 +223,48 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail="mine"] [data-call-screen-share]')).not.toBeNull();
     expect(view.find('[data-call-rail="call"] [data-call-captions]')).not.toBeNull();
     expect(view.find('[data-call-rail="call"] [data-call-record]')).not.toBeNull();
-    expect(view.find('[data-call-rail="call"] [data-call-control="messages"]')).not.toBeNull();
     expect(view.find('[data-call-rail="mine"]')?.className).toContain('glass-call');
     expect(view.find('[data-call-rail="mine"] button')?.className).not.toContain('glass-call');
     expect(view.find('[data-call-rail="mine"] button')?.getAttribute('title')).toBe('Activer la caméra');
     view.press('[data-call-more]');
     expect(view.find('[data-call-rail]')).toBeNull();
+    view.done();
+  });
+
+  test('caméra allumée, « Effets » vient dans le rail de mon image, entre Retourner et Écran (#8442)', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    view.press('[data-call-more]');
+    const mine = [...view.host.querySelectorAll('[data-call-rail="mine"] button')].map((button) => button.getAttribute('aria-label'));
+    expect(mine).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    view.done();
+  });
+
+  test('« Effets » absent là où le navigateur ne sait rien en faire, et caméra éteinte', () => {
+    const unsupported = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    unsupported.press('[data-call-more]');
+    expect(unsupported.find('[data-call-control="effects"]')).toBeNull();
+    unsupported.done();
+    const cameraOff = mount({ members: { 'u-peer': member() } }, { color: true, blur: true });
+    cameraOff.press('[data-call-more]');
+    expect(cameraOff.find('[data-call-control="effects"]')).toBeNull();
+    cameraOff.done();
+  });
+
+  test('« Effets » ouvre le panneau au-dessus de la pilule, et le referme', async () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    view.press('[data-call-more]');
+    view.press('[data-call-control="effects"]');
+    await act(async () => {
+      await import('./call-effects-panel');
+    });
+    await act(async () => {});
+    expect(view.find('[data-call-control="effects"]')?.getAttribute('aria-expanded')).toBe('true');
+    const panel = view.find('[data-call-effects-panel]');
+    expect(panel).not.toBeNull();
+    expect(panel?.closest('[data-call-controls]')).not.toBeNull();
+    view.press('[data-call-effects-close]');
+    expect(view.find('[data-call-effects-panel]')).toBeNull();
+    expect(view.find('[data-call-control="effects"]')?.getAttribute('aria-expanded')).toBe('false');
     view.done();
   });
 
@@ -270,6 +320,64 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
     view.done();
     jest.useRealTimers();
+  });
+});
+
+describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const GLASS = '.glass-call, .glass-call-prominent';
+
+  const nestedGlass = async (overrides: Partial<ActiveCall>, openEffects: boolean) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: true, blur: true }} />));
+    act(() => (host.querySelector('[data-call-more]') as HTMLElement | null)?.click());
+    if (openEffects) {
+      act(() => (host.querySelector('[data-call-control="effects"]') as HTMLElement | null)?.click());
+      await act(async () => {
+        await import('./call-effects-panel');
+      });
+      await act(async () => {});
+    }
+    const glasses = [...host.querySelectorAll(GLASS)];
+    const nested = glasses.filter((glass) => glass.parentElement?.closest(GLASS) != null).map((glass) => glass.outerHTML.slice(0, 80));
+    const panel = host.querySelector('[data-call-effects-panel]');
+    act(() => root.unmount());
+    host.remove();
+    return { nested, glasses: glasses.length, panel };
+  };
+
+  test('en duo, actions sorties et panneau des effets ouvert : chaque groupe a UN verre', async () => {
+    const view = await nestedGlass({ cameraOn: true, members: { 'u-peer': member() } }, true);
+    expect(view.panel).not.toBeNull();
+    expect(view.glasses).toBeGreaterThan(3);
+    expect(view.nested).toEqual([]);
+  });
+
+  test('en groupe, la pilule qui a grandi porte ses rangées sans verre à elles', async () => {
+    const view = await nestedGlass({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
+    expect(view.nested).toEqual([]);
+  });
+
+  test('la sonnerie et l’écran de fin : les boutons neutres sont de verre, Refuser et Fin rouges, Accepter vert', () => {
+    const incoming = screen({ phase: { kind: 'incoming' }, media: 'video', direction: 'incoming' });
+    expect(incoming).toMatch(/aria-label="Répondre sans vidéo"[^>]*class="glass-call/);
+    expect(incoming).toMatch(/aria-label="Refuser avec un message"[^>]*class="glass-call/);
+    expect(incoming).not.toMatch(/aria-label="Refuser"[^>]*class="glass-call/);
+    expect(screen({ phase: { kind: 'ended', reason: 'missed', detail: null } })).toMatch(/aria-label="Fermer"[^>]*class="glass-call/);
   });
 });
 

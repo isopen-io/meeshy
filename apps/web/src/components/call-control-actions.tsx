@@ -4,13 +4,13 @@ import { useStore } from 'zustand/react';
 import { CallButton, type CallButtonTone } from '@/components/call-glass-button';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
+import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { href, navigate } from '@/routes/route-table';
 
 /**
  * **CE QUE LE `(…)` SORT** (#8391) — les actions de la vue « C adapté », en
@@ -32,9 +32,15 @@ const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.origi
 
 const screenGlyph = (name: CallScreenGlyphName, size = 22) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
+/** Le panneau des effets (#8442) : ouvert ou non, et le geste qui le bascule. */
+export type EffectsToggle = { readonly open: boolean; readonly onToggle: () => void };
+
+export const CALL_EFFECTS_PANEL_ID = 'call-effects-panel';
+
 type ActionContext = {
   readonly call: ActiveCall;
   readonly language: InterfaceLanguage;
+  readonly effects: EffectsToggle;
   /** Montre la légende sous le bouton (rangées d'un groupe). */
   readonly captioned: boolean;
 };
@@ -47,16 +53,12 @@ type ActionView = {
   readonly onPress: () => void;
   readonly tone: CallButtonTone;
   readonly pressed?: boolean;
+  readonly expanded?: boolean;
   readonly disabled?: boolean;
   readonly data: Readonly<Record<`data-${string}`, string>>;
 };
 
-const openConversation = (conversationId: string) => (): void => {
-  callActions.minimize();
-  navigate(href('thread', { conversation: conversationId }));
-};
-
-function mineAction(action: MineAction, { call, language }: ActionContext): ActionView {
+function mineAction(action: MineAction, { call, language, effects }: ActionContext): ActionView {
   switch (action) {
     case 'camera':
       return {
@@ -80,6 +82,17 @@ function mineAction(action: MineAction, { call, language }: ActionContext): Acti
         tone: 'bare',
         data: { 'data-call-control': 'flip' },
       };
+    case 'effects':
+      return {
+        key: action,
+        label: translate(language, 'call.effects.open'),
+        caption: translate(language, 'call.effects'),
+        glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.magicWand} size={22} />,
+        onPress: effects.onToggle,
+        tone: effects.open ? 'active' : 'bare',
+        expanded: effects.open,
+        data: { 'data-call-control': 'effects' },
+      };
     case 'screen':
       return {
         key: action,
@@ -95,17 +108,6 @@ function mineAction(action: MineAction, { call, language }: ActionContext): Acti
 }
 
 function callAction(action: Exclude<CallAction, 'record'>, { call, language }: ActionContext): ActionView {
-  if (action === 'messages') {
-    return {
-      key: action,
-      label: translate(language, 'call.messages.open'),
-      caption: translate(language, 'call.messages'),
-      glyph: screenGlyph('chatCircleText'),
-      onPress: openConversation(call.conversationId),
-      tone: 'bare',
-      data: { 'data-call-control': 'messages' },
-    };
-  }
   const invited = call.captionsMode === 'off' && call.captionPeers.length > 0;
   return {
     key: action,
@@ -132,6 +134,7 @@ function ActionButton({ view, captioned }: { readonly view: ActionView; readonly
       onPress={view.onPress}
       tone={view.tone}
       {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
+      {...(view.expanded === undefined ? {} : { expanded: view.expanded, controls: CALL_EFFECTS_PANEL_ID, popup: true })}
       {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
       {...(captioned ? { caption: view.caption } : {})}
       data={view.data}
@@ -169,7 +172,7 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
         <Fragment key={action}>
           {action === 'record' ? (
             <RecordButton language={context.language} captioned={context.captioned} />
-          ) : action === 'camera' || action === 'flip' || action === 'screen' ? (
+          ) : action === 'camera' || action === 'flip' || action === 'effects' || action === 'screen' ? (
             <ActionButton view={mineAction(action, context)} captioned={context.captioned} />
           ) : (
             <ActionButton view={callAction(action, context)} captioned={context.captioned} />
@@ -180,13 +183,13 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
   );
 }
 
-type FamiliesProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly prominent: boolean };
+type FamiliesProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly prominent: boolean; readonly effects: EffectsToggle };
 
 const RAIL_SIDE = { mine: 'left-3', call: 'right-3' } as const;
 
 /** Les deux rails du duo — collés aux bords, à mi-hauteur. */
-export function CallRails({ call, set, language, prominent }: FamiliesProps) {
-  const context = { call, language, captioned: false };
+export function CallRails({ call, set, language, prominent, effects }: FamiliesProps) {
+  const context = { call, language, effects, captioned: false };
   const families = [
     ['mine', set.mine, 'call.section.mine'],
     ['call', set.call, 'call.section.call'],
@@ -211,8 +214,8 @@ export function CallRails({ call, set, language, prominent }: FamiliesProps) {
 }
 
 /** Les deux rangées légendées d'un groupe, dans la pilule qui a grandi. */
-export function CallActionRows({ call, set, language }: Omit<FamiliesProps, 'prominent'>) {
-  const context = { call, language, captioned: true };
+export function CallActionRows({ call, set, language, effects }: Omit<FamiliesProps, 'prominent'>) {
+  const context = { call, language, effects, captioned: true };
   const families = [
     ['mine', set.mine, 'call.section.mine'],
     ['call', set.call, 'call.section.call'],

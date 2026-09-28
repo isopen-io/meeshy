@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import type { CameraEffectsPort } from './camera-effects';
 import { createCaptions } from './call-captions-controller';
 import { createCallStore, type CallStoreApi } from './call-store';
 import { callLayout } from './call-view';
@@ -41,7 +42,7 @@ const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number } = {}) {
+function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -130,6 +131,7 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
     ringLabel: () => 'Appel entrant',
     random: () => options.random ?? 0.99,
     createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', viewerName: () => 'Moi', newId: () => 'w-1' }),
+    ...(options.cameraEffects === undefined ? {} : { cameraEffects: options.cameraEffects }),
   };
   const engine = createCallEngine(deps);
 
@@ -807,3 +809,180 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 });
 
+describe('le micro coupé reste coupé, quel que soit le moment où on le coupe (#8434)', () => {
+  const PEER_JOINED = { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } };
+  const audioOf = (h: ReturnType<typeof harness>) => (h.call()?.localStream?.getAudioTracks() ?? []).map((t) => t.enabled);
+  const settingsOf = (h: ReturnType<typeof harness>, event: string) => (h.requested.find(([name]) => name === event)?.[1] as { settings: { audioEnabled: boolean } } | undefined)?.settings;
+
+  test('coupé AVANT que le micro soit prêt (appel sortant) : la piste naît coupée et le serveur l’apprend', async () => {
+    const h = harness();
+    const starting = h.engine.start(DIRECT);
+    h.engine.toggleMic();
+    await starting;
+    expect(h.call()?.micMuted).toBe(true);
+    expect(audioOf(h)).toEqual([false]);
+    expect(settingsOf(h, CLIENT_EVENTS.CALL_INITIATE)?.audioEnabled).toBe(false);
+  });
+
+  test('coupé pendant le décroché (appel entrant) : la piste naît coupée et call:join le dit', async () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, { callId: 'call-9', conversationId: 'c-1', mode: 'p2p', type: 'audio', initiator: { userId: PEER, username: 'amina', displayName: 'Amina', avatar: null }, participants: [] });
+    const accepting = h.engine.accept();
+    h.engine.toggleMic();
+    await accepting;
+    expect(audioOf(h)).toEqual([false]);
+    expect(settingsOf(h, CLIENT_EVENTS.CALL_JOIN)?.audioEnabled).toBe(false);
+  });
+
+  test('coupé pendant qu’on rejoint un appel en cours : même chose', async () => {
+    const h = harness();
+    const joining = h.engine.join({ ...DIRECT, callId: 'call-1' });
+    h.engine.toggleMic();
+    await joining;
+    expect(audioOf(h)).toEqual([false]);
+    expect(settingsOf(h, CLIENT_EVENTS.CALL_JOIN)?.audioEnabled).toBe(false);
+  });
+
+  const mutedInCall = async (request: StartCallRequest = DIRECT) => {
+    const h = harness();
+    await h.engine.start(request);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, PEER_JOINED);
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    h.engine.toggleMic();
+    return h;
+  };
+
+  test('partager l’écran puis l’arrêter ne rouvre pas le micro', async () => {
+    const h = await mutedInCall({ ...DIRECT, media: 'video' });
+    await h.engine.toggleScreen();
+    expect(audioOf(h)).toEqual([false]);
+    await h.engine.toggleScreen();
+    expect(audioOf(h)).toEqual([false]);
+    expect(h.call()?.micMuted).toBe(true);
+  });
+
+  test('allumer, retourner ou changer la caméra ne rouvre pas le micro', async () => {
+    const h = await mutedInCall();
+    await h.engine.toggleCamera();
+    await h.engine.switchCamera();
+    await h.engine.replaceInput('camera', track('video') as unknown as MediaStreamTrack);
+    expect(audioOf(h)).toEqual([false]);
+  });
+
+  test('la reconnexion du socket re-rejoint micro coupé', async () => {
+    const h = await mutedInCall();
+    h.binding.authenticated();
+    expect((h.requested.at(-1)?.[1] as { settings: { audioEnabled: boolean } }).settings.audioEnabled).toBe(false);
+    expect(audioOf(h)).toEqual([false]);
+  });
+
+  test('une reprise ICE (renégociation) ne touche pas au micro', async () => {
+    const h = await mutedInCall();
+    h.linkState(h.links[0] as FakeLink, 'reconnecting');
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    expect(audioOf(h)).toEqual([false]);
+    expect(h.call()?.micMuted).toBe(true);
+  });
+});
+
+
+describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => {
+  const PEER_JOINED = { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } };
+
+  /* Un port d'effets doublé : chaque caméra devient une piste « traitée » ; `refresh` en bâtit une neuve. */
+  function effectsPort() {
+    const released: FakeTrack[] = [];
+    const wrapped: FakeTrack[] = [];
+    let used: readonly string[] = [];
+    const port: CameraEffectsPort = {
+      wrap: async (camera) => {
+        wrapped.push(camera as unknown as FakeTrack);
+        return track('video') as unknown as MediaStreamTrack;
+      },
+      refresh: async () => track('video') as unknown as MediaStreamTrack,
+      release: (sent) => void released.push(sent as unknown as FakeTrack),
+      used: () => used,
+    };
+    return { port, released, wrapped, use: (names: readonly string[]) => void (used = names) };
+  }
+
+  const inVideoCall = async (fx: ReturnType<typeof effectsPort>) => {
+    const h = harness({ cameraEffects: fx.port });
+    await h.engine.start({ ...DIRECT, media: 'video' });
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, PEER_JOINED);
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    return h;
+  };
+
+  test('la caméra acquise au départ passe par les effets : c’est la piste traitée qui part', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    expect(fx.wrapped).toHaveLength(1);
+    const sent = h.call()?.localStream?.getVideoTracks()[0];
+    expect(sent).not.toBe(fx.wrapped[0] as unknown as MediaStreamTrack);
+    expect(h.links[0]?.deps.localStream.getVideoTracks()[0]).toBe(sent as MediaStreamTrack);
+  });
+
+  test('changer d’effet remplace la piste sur chaque lien, sans relâcher la caméra', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    const before = h.call()?.localStream?.getVideoTracks()[0];
+    await h.engine.refreshEffects();
+    const after = h.call()?.localStream?.getVideoTracks()[0];
+    expect(after).not.toBe(before as MediaStreamTrack);
+    expect(h.links[0]?.sent.at(-1)).toBe(after);
+    expect(fx.released).toEqual([]);
+  });
+
+  test('éteindre la caméra relâche la piste traitée par les effets', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    const sent = h.call()?.localStream?.getVideoTracks()[0];
+    await h.engine.toggleCamera();
+    expect(fx.released).toEqual([sent as unknown as FakeTrack]);
+  });
+
+  test('un écran partagé ne passe pas par les effets, et les effets ne s’y appliquent pas', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    await h.engine.toggleScreen();
+    const display = h.displays[0];
+    expect(fx.wrapped).toHaveLength(1);
+    await h.engine.refreshEffects();
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([display] as unknown as MediaStreamTrack[]);
+  });
+
+  test('raccrocher relâche la piste traitée (caméra comprise)', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    const sent = h.call()?.localStream?.getVideoTracks()[0];
+    h.engine.hangup();
+    expect(fx.released).toContain(sent as unknown as FakeTrack);
+  });
+
+  test('le micro coupé reste coupé quand on pose un effet (#8434)', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    h.engine.toggleMic();
+    await h.engine.refreshEffects();
+    expect(h.call()?.localStream?.getAudioTracks().map((t) => t.enabled)).toEqual([false]);
+  });
+
+  test('call:analytics nomme les effets posés pendant l’appel — effectsUsed et filtersUsed', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    fx.use(['filter:warm', 'background-blur']);
+    await h.engine.refreshEffects();
+    fx.use([]);
+    await h.engine.refreshEffects();
+    h.engine.hangup();
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ effectsUsed: ['filter:warm', 'background-blur'], filtersUsed: true });
+  });
+
+  test('sans effet, l’analytique le dit', async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    h.engine.hangup();
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ effectsUsed: [], filtersUsed: false });
+  });
+});

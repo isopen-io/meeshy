@@ -8,14 +8,22 @@ import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/c
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { href, navigate } from '@/routes/route-table';
 
 /**
- * **L'EN-TÊTE DE L'ÉCRAN D'APPEL** (#8046, #8391) — à gauche, Réduire et, là où
- * une vidéo peut flotter, l'image dans l'image ; à droite, la puce « Nom ·
+ * **L'EN-TÊTE DE L'ÉCRAN D'APPEL** (#8046, #8391, #8436) — à gauche, Réduire,
+ * puis « Conversation » (le SEUL chemin vers la conversation de l'appel : il
+ * réduit l'appel et ouvre le fil), puis, là où une vidéo peut flotter, l'image
+ * dans l'image ; à droite, la puce « Nom ·
  * durée » et ses barres de qualité, qui ouvre le détail au toucher. Les
  * réglages d'appareils ont rejoint « Sortie » dans la pilule, Enregistrer le
  * rail de l'appel. Chaque bouton flotte seul : il porte son verre.
  */
+
+function openConversation(conversationId: string): void {
+  callActions.minimize();
+  navigate(href('thread', { conversation: conversationId }));
+}
 
 type HeaderProps = {
   readonly call: ActiveCall;
@@ -32,6 +40,17 @@ export function CallScreenHeader({ call, language, clock, prominent }: HeaderPro
     <div className="flex min-h-11 items-center justify-between gap-2 px-4" data-call-header="">
       <div className="flex shrink-0 items-center gap-2">
         <CallButton label={translate(language, 'call.minimize')} glyph={<GlyphSvg glyph={CALL_SCREEN_GLYPHS.arrowsInSimple} size={20} />} onPress={callActions.minimize} tone="glass" prominent={prominent} size={44} />
+        {call.conversationId === '' ? null : (
+          <CallButton
+            label={translate(language, 'call.conversation.open')}
+            glyph={<GlyphSvg glyph={CALL_SCREEN_GLYPHS.chatCircleText} size={20} />}
+            onPress={() => openConversation(call.conversationId)}
+            tone="glass"
+            prominent={prominent}
+            size={44}
+            data={{ 'data-call-conversation': '' }}
+          />
+        )}
         {offerPip ? (
           <CallButton
             label={translate(language, 'call.pip.enter')}

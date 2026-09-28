@@ -18,7 +18,7 @@ import {
   type DecodedInitiated,
   type DecodedPerson,
 } from './call-decode';
-import { analyticsPayload, createTelemetry, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample, type Telemetry } from './call-analytics';
+import { analyticsPayload, createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample } from './call-analytics';
 import { mediaFailureOf, stopStream, type Facing } from './call-media';
 import {
   callStore,
@@ -34,12 +34,14 @@ import {
   type WaitingCall,
 } from './call-store';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
+import { PASSTHROUGH_EFFECTS, type CameraEffectsPort } from './camera-effects';
 import { feedbackPayload, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
 import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { listenCallEvents, type CallTransport } from './call-transport';
 import { loadDefaultEngineDeps } from './engine-defaults';
+import { baseCall, emptySession } from './engine-session';
 import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-link';
 
 /**
@@ -107,6 +109,8 @@ export type CallEngineDeps = {
   readonly random?: () => number;
   /** Les sous-titres d'un appel (#8048) — un chunk à part, chargé au premier besoin. */
   readonly createCaptions: (ctx: CaptionsContext) => CaptionsPort;
+  /** Les effets de ma vidéo (#8442) — la caméra passe par eux avant de partir. */
+  readonly cameraEffects?: CameraEffectsPort;
 };
 
 export type CallEngine = {
@@ -124,6 +128,8 @@ export type CallEngine = {
   readonly replaceInput: (kind: 'camera' | 'microphone', track: MediaStreamTrack) => Promise<void>;
   readonly setDisplay: (display: ActiveCall['display']) => void;
   readonly toggleCaptions: () => void;
+  /** Un effet a changé (#8442) : la caméra envoyée le suit, piste remplacée sur chaque lien si besoin. */
+  readonly refreshEffects: () => Promise<void>;
   readonly answerWaiting: () => Promise<void>;
   readonly declineWaiting: () => void;
   readonly retry: () => Promise<void>;
@@ -136,72 +142,6 @@ export type CallEngine = {
   readonly pageHidden: () => void;
   readonly dispose: () => void;
 };
-
-type Session = {
-  iceServers: readonly RTCIceServer[];
-  links: Map<string, PeerLink>;
-  participantIds: Map<string, string>;
-  ringTimer: unknown;
-  heartbeat: unknown;
-  qualityTimer: unknown;
-  lastQualityReport: number;
-  retry: StartCallRequest | null;
-  cameraBeforeShare: boolean;
-  loop: QualityLoop | null;
-  telemetry: Telemetry;
-  alertTimers: Map<string, unknown>;
-  unwatchNetwork: (() => void) | null;
-  /** L'appel a souffert (qualité mauvaise ou reprise) : sa note est toujours demandée (#8072). */
-  troubled: boolean;
-  captions: CaptionsPort | null;
-};
-
-const emptySession = (): Session => ({
-  iceServers: [],
-  links: new Map(),
-  participantIds: new Map(),
-  ringTimer: null,
-  heartbeat: null,
-  qualityTimer: null,
-  lastQualityReport: 0,
-  retry: null,
-  cameraBeforeShare: false,
-  loop: null,
-  telemetry: createTelemetry(0),
-  alertTimers: new Map(),
-  unwatchNetwork: null,
-  troubled: false,
-  captions: null,
-});
-
-function baseCall(request: StartCallRequest, direction: ActiveCall['direction'], phase: ActiveCall['phase']): ActiveCall {
-  return {
-    callId: null,
-    conversationId: request.conversationId,
-    media: request.media,
-    direction,
-    isGroup: request.isGroup,
-    title: request.title,
-    avatar: request.avatar,
-    callerName: null,
-    phase,
-    connectedAt: null,
-    endedDurationSec: null,
-    micMuted: false,
-    cameraOn: request.media === 'video',
-    facing: 'user',
-    screenSharing: false,
-    members: {},
-    display: 'full',
-    localStream: null,
-    remoteStreams: {},
-    captions: [],
-    captionsMode: 'off',
-    captionPeers: [],
-    transcription: 'idle',
-    quality: null,
-  };
-}
 
 export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const { store } = deps;
@@ -249,9 +189,23 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     incomingTimer = clear(incomingTimer);
   };
 
+  const effects = deps.cameraEffects ?? PASSTHROUGH_EFFECTS;
+  const noteEffects = (): void => void (session.telemetry = markEffects(session.telemetry, effects.used()));
+  const withEffects = async (camera: MediaStreamTrack): Promise<MediaStreamTrack> => {
+    const sent = await effects.wrap(camera);
+    noteEffects();
+    return sent;
+  };
+  const swapTrack = (stream: MediaStream, from: MediaStreamTrack, to: MediaStreamTrack): void => {
+    if (from === to) return;
+    stream.removeTrack(from);
+    stream.addTrack(to);
+  };
+
   const teardownMedia = (): void => {
     for (const link of session.links.values()) link.close();
     session.links.clear();
+    for (const track of localStream?.getVideoTracks() ?? []) effects.release(track);
     stopStream(localStream);
     localStream = null;
   };
@@ -460,9 +414,17 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     );
   };
 
+  /* Le micro coupé AVANT que le média soit prêt (#8434) — pendant la demande
+     d'autorisation, le décroché ou la rejointe : la piste naît coupée, et ce
+     qu'on annonce au serveur le dit. */
+  const micMuted = (): boolean => read()?.micMuted === true;
+  const mediaSettings = (stream: MediaStream) => ({ audioEnabled: !micMuted(), videoEnabled: stream.getVideoTracks().length > 0 });
+
   const acquire = async (video: boolean, facing: Facing): Promise<MediaStream | null> => {
     try {
       const stream = await deps.acquireMedia({ video, facing });
+      for (const track of stream.getAudioTracks()) track.enabled = !micMuted();
+      for (const camera of stream.getVideoTracks()) swapTrack(stream, camera, await withEffects(camera));
       localStream = stream;
       return stream;
     } catch (error) {
@@ -488,7 +450,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const stream = await acquire(request_.media === 'video', 'user');
     if (stream === null || token !== generation) return;
     update((call) => ({ ...call, callId, localStream: stream, cameraOn: stream.getVideoTracks().length > 0, phase: { kind: 'connecting' } }));
-    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 } }));
+    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: mediaSettings(stream) }));
     if (token !== generation) return;
     if (afterJoinAck(ack)) startHeartbeat(callId);
   };
@@ -513,7 +475,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       await request(CLIENT_EVENTS.CALL_INITIATE, {
         conversationId: callRequest.conversationId,
         type: callRequest.media,
-        settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 },
+        settings: mediaSettings(stream),
       }),
     );
     if (token !== generation || read()?.phase.kind === 'ended') return;
@@ -521,7 +483,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       if (ack.code === 'CALL_ALREADY_ACTIVE') {
         const activeId = await deps.fetchActiveCallId(callRequest.conversationId).catch(() => null);
         if (activeId !== null && token === generation) {
-          const ackJoin = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId: activeId, settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 } }));
+          const ackJoin = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId: activeId, settings: mediaSettings(stream) }));
           if (token !== generation) return;
           update((call) => ({ ...call, callId: activeId, phase: { kind: 'connecting' } }));
           if (afterJoinAck(ackJoin)) startHeartbeat(activeId);
@@ -620,7 +582,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     if (token !== generation) return;
     update((current) => ({ ...current, localStream: stream, cameraOn: stream.getVideoTracks().length > 0 }));
-    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: { audioEnabled: true, videoEnabled: stream.getVideoTracks().length > 0 } }));
+    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: mediaSettings(stream) }));
     if (token !== generation) return;
     if (afterJoinAck(ack)) startHeartbeat(callId);
   };
@@ -776,13 +738,31 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const setCamera = async (track: MediaStreamTrack | null, cameraOn: boolean = track !== null): Promise<void> => {
     const stream = localStream;
     if (stream === null) return;
+    const sent = track !== null && cameraOn ? await withEffects(track) : track;
     for (const old of stream.getVideoTracks()) {
       stream.removeTrack(old);
-      old.stop();
+      effects.release(old);
     }
-    if (track !== null) stream.addTrack(track);
-    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(track).catch(() => undefined)));
+    if (sent !== null) stream.addTrack(sent);
+    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(sent).catch(() => undefined)));
     update((call) => ({ ...call, cameraOn, localStream: deps.createStream(stream.getTracks()) }));
+  };
+
+  const refreshEffects = async (): Promise<void> => {
+    const call = read();
+    const stream = localStream;
+    const current = stream?.getVideoTracks()[0];
+    if (call === null || stream === null || current === undefined || !call.cameraOn || call.screenSharing) return;
+    const next = await effects.refresh(current);
+    noteEffects();
+    if (next === current) return;
+    if (localStream !== stream || !stream.getVideoTracks().includes(current)) {
+      effects.release(next);
+      return;
+    }
+    swapTrack(stream, current, next);
+    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(next).catch(() => undefined)));
+    update((latest) => ({ ...latest, localStream: deps.createStream(stream.getTracks()) }));
   };
 
   const toggleCamera = async (): Promise<void> => {
@@ -964,6 +944,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),
     toggleCaptions: () => captions()?.toggle(),
+    refreshEffects,
     answerWaiting,
     declineWaiting,
     retry: async () => {

@@ -11,26 +11,33 @@ import { callLayout, type CallLayout } from './call-view';
  * chaque famille est celui de la planche :
  *
  * - **mon image** — ce que JE montre : Caméra (qui fait aussi passer d'audio à
- *   vidéo), Retourner (seulement caméra allumée), Écran (là où le navigateur
- *   sait partager, ou pour arrêter un partage en cours) ;
+ *   vidéo), Retourner (caméra allumée, et une AUTRE caméra où se retourner —
+ *   sur un ordinateur à une webcam, le bouton n'aurait aucun effet, #8432), Effets (caméra allumée, hors
+ *   partage d'écran, là où le navigateur sait les faire — #8442), Écran (là où
+ *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
- *   (appel connecté et identifié), Messages (la conversation de l'appel).
+ *   (appel connecté et identifié). La conversation de l'appel n'est PAS une
+ *   action : un seul chemin y mène, « Conversation » dans l'en-tête (#8436).
  *
  * En duo, les deux familles sortent en RAILS vers les bords ; en groupe, la
  * pilule grandit et les monte en RANGÉES légendées.
  */
 
-export type MineAction = 'camera' | 'flip' | 'screen';
+export type MineAction = 'camera' | 'flip' | 'effects' | 'screen';
 
-export type CallAction = 'captions' | 'record' | 'messages';
+export type CallAction = 'captions' | 'record';
 
 export type CallControlSet = { readonly mine: readonly MineAction[]; readonly call: readonly CallAction[] };
 
 export type ControlsArrangement = 'rails' | 'rows';
 
-type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'screenSharing' | 'conversationId'> & {
+type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'screenSharing'> & {
   /** Le navigateur sait émettre un écran (`getDisplayMedia`). */
   readonly canShare: boolean;
+  /** Le navigateur sait traiter ma vidéo, ou la caméra offre son flou (#8442). */
+  readonly canEffect: boolean;
+  /** L'appareil a une autre caméra où se retourner. */
+  readonly canFlip: boolean;
 };
 
 const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'connected' || phase === 'reconnecting';
@@ -38,14 +45,24 @@ const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'conne
 /** Les actions que `(…)` sort, famille par famille, dans l'ordre de la planche. */
 export function callControlSet(context: ControlsContext): CallControlSet {
   const inCall = joined(context.phase.kind);
-  const mine: readonly MineAction[] = ['camera', ...(context.cameraOn ? (['flip'] as const) : []), ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : [])];
+  const mine: readonly MineAction[] = [
+    'camera',
+    ...(context.cameraOn && context.canFlip ? (['flip'] as const) : []),
+    ...(context.cameraOn && context.canEffect && !context.screenSharing ? (['effects'] as const) : []),
+    ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
+  ];
   const call: readonly CallAction[] = [
     ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
-    ...(context.conversationId !== '' ? (['messages'] as const) : []),
   ];
   return { mine, call };
 }
+
+/**
+ * Une autre caméra où se retourner ? Une liste vide (énumération pas encore
+ * rendue) ne retire rien : seule UNE caméra connue le fait.
+ */
+export const flipOffered = (devices: readonly Pick<MediaDeviceInfo, 'kind'>[]): boolean => devices.filter((device) => device.kind === 'videoinput').length !== 1;
 
 /** Rails vers les bords en duo, rangées dans la pilule en groupe. */
 export function controlsArrangement(call: Pick<ActiveCall, 'isGroup'>): ControlsArrangement {

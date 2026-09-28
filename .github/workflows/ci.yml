@@ -818,6 +818,17 @@ jobs:
           cd apps/web
           node scripts/check-calls-quality.mjs
 
+      # #8442 / #8441 — les effets s'appliquent à la piste ENVOYÉE : un pair de
+      # fixtures décroche un appel vidéo ; après « Chaud », la piste émise change
+      # et le pair continue de décoder des images ; le micro coupé le reste sous
+      # effets ; la capsule de zoom passe de 1× à 1,3× sur une caméra qui expose
+      # la capacité zoom.
+      - name: Gate effets et zoom d'appel (piste envoyée, micro tenu, zoom)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-effects.mjs
+
       # #8048 — les sous-titres traduits d'un appel marchent dans les deux sens :
       # le pair de fixtures ouvre ses sous-titres et parle (call:translated-
       # segment) ; modes traduit / original / masqué, journal, aria-live. Une
