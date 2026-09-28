@@ -140,6 +140,8 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                   shouldReceive touch: UITouch) -> Bool {
         StoryCanvasInlineEditTouchPolicy.canvasReceives(touched: touch.view,
-                                                        inlineEditor: inlineEditor)
+                                                        inlineEditor: inlineEditor,
+                                                        yieldsManipulation: inlineEditYieldsToManipulation,
+                                                        isManipulation: isManipulationRecognizer(gestureRecognizer))
     }
 }

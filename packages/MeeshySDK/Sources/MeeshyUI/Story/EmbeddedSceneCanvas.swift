@@ -125,6 +125,9 @@ public struct EmbeddedSceneCanvas: View {
     /// Les médias adoptés rendus à leur fichier local (retour porteur
     /// 2026-09-28 — l'adoption doit être imperceptible).
     public var localMediaAliases: [String: URL]
+    /// L'éditeur d'objet l'opte : le texte en saisie se déplace, se zoome et
+    /// se tourne au doigt (retour porteur 2026-09-28).
+    public var inlineEditYieldsToManipulation: Bool
 
     /// **Le canvas doit RETIRER son calque de dessin persisté pendant qu'une
     /// surface de dessin est active** (#4092).
@@ -201,9 +204,11 @@ public struct EmbeddedSceneCanvas: View {
         referenceViewport: CGSize = CGSize(width: 402, height: 874),
         timelineBridge: StoryCanvasTimelineBridge? = nil,
         onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
-        localMediaAliases: [String: URL] = [:]
+        localMediaAliases: [String: URL] = [:],
+        inlineEditYieldsToManipulation: Bool = false
     ) {
         self.localMediaAliases = localMediaAliases
+        self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self.timelineBridge = timelineBridge
         self.onItemTrimRequested = onItemTrimRequested
         self._slide = slide
@@ -284,7 +289,8 @@ public struct EmbeddedSceneCanvas: View {
                 // (même compensation que `canvasComposerLayer`).
                 canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
                 timelineBridge: timelineBridge,
-                localMediaAliases: localMediaAliases
+                localMediaAliases: localMediaAliases,
+                inlineEditYieldsToManipulation: inlineEditYieldsToManipulation
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
             // les capture** — sinon le doigt qui trace déplacerait aussi

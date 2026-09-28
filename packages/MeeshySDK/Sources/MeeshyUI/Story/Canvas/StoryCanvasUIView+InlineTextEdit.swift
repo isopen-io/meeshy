@@ -54,7 +54,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
             restoreLayerAfterEditing(previousLayer)
         }
 
-        let editor = inlineEditor ?? StoryInlineTextEditor()
+        let editor = inlineEditor ?? parkedInlineEditor ?? StoryInlineTextEditor()
+        parkedInlineEditor = nil
+        editor.isHidden = false
         editor.delegate = self
         if editor.superview == nil { addSubview(editor) }
         inlineEditor = editor
@@ -80,6 +82,13 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// renvoie la calque à sa position/rotation réelles (celles du modèle,
     /// jamais mutées par le recentrage d'édition).
     public func endInlineTextEdit() {
+        endInlineTextEdit(parkingEditor: false)
+    }
+
+    /// `parkingEditor` : le champ est MASQUÉ plutôt que retiré — un geste
+    /// commencé sur lui serait annulé si sa vue quittait la hiérarchie sous le
+    /// doigt. `releaseParkedInlineEditor()` le retire à la fin du geste.
+    func endInlineTextEdit(parkingEditor: Bool) {
         guard let id = inlineEditingTextId else { return }
         if let layer = textLayer(forId: id) {
             layer.setGlyphsHidden(false)
@@ -96,7 +105,12 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // calque que si aucune édition n'a repris entre-temps.
         setInlineEditScrimVisible(false)
         editor?.resignFirstResponder()
-        editor?.removeFromSuperview()
+        if parkingEditor {
+            editor?.isHidden = true
+            parkedInlineEditor = editor
+        } else {
+            editor?.removeFromSuperview()
+        }
     }
 
     /// Hook appelé en fin de `rebuildLayers()` : la calque éditée vient d'être
@@ -350,5 +364,13 @@ extension StoryCanvasUIView: UITextViewDelegate {
     public func textViewDidEndEditing(_ textView: UITextView) {
         guard let id = inlineEditingTextId else { return }
         onInlineTextEditEnded?(id)
+        // Clavier rangé : le texte rend sa place au doigt (hôte qui l'opte).
+        // Différé d'un tour : on ne retire pas le champ pendant son propre
+        // rappel de fin d'édition.
+        guard inlineEditYieldsToManipulation else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.inlineEditingTextId == id, !(self.inlineEditor?.isFirstResponder ?? false) else { return }
+            self.suspendInlineEditForManipulation()
+        }
     }
 }
