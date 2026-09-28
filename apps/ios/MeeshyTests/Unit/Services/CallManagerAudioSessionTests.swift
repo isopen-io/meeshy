@@ -4,14 +4,18 @@ import XCTest
 @MainActor
 final class CallManagerAudioSessionTests: XCTestCase {
 
+    /// `CallManager.swift` et l'extension où `toggleTranscription()` a été
+    /// sortie (#8475) : la garde suit la fonction, pas le fichier.
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let services = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Services")
+        return try ["CallManager.swift", "CallManager+Transcription.swift"]
+            .map { try String(contentsOf: services.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     func test_callManager_sourceCode_doesNotForceAudioSessionActiveBeforeBridge() throws {

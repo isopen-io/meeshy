@@ -231,6 +231,22 @@ describe('le web transcrit son micro (G3, G5)', () => {
     expect(h.captures[0]?.stopped).toBe(true);
   });
 
+  test('micro coupé, ma voix n’est plus captée ni envoyée ; rallumé, la capture reprend (#8475)', () => {
+    const h = harness();
+    h.port.toggle();
+    expect(h.captures).toHaveLength(1);
+    h.store.setState({ call: { ...h.call()!, micMuted: true } });
+    h.port.micChanged();
+    expect(h.captures[0]?.stopped).toBe(true);
+    h.say('dit micro coupé', true);
+    expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toHaveLength(0);
+    h.port.receive(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: 'call-1', speakerId: PEER, active: true });
+    expect(h.captures).toHaveLength(1);
+    h.store.setState({ call: { ...h.call()!, micMuted: false } });
+    h.port.micChanged();
+    expect(h.captures).toHaveLength(2);
+  });
+
   test('les révisions partent en P2P ; le FINAL part AUSSI par call:transcription-segment, à la charge exacte', () => {
     const h = harness();
     const peer = channel();

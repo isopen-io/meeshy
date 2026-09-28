@@ -52,7 +52,7 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
         guard let fn = body(
             source(for: "CallManager.swift"),
             from: "func selectCamera(id: String) {",
-            to: "func toggleTranscription()"
+            to: "var videoFilters: VideoFilterPipeline"
         ) else { return }
         XCTAssertTrue(
             fn.contains("let previousSelectedCameraId = selectedCameraId"),
