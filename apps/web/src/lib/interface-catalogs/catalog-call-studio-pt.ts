@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — pt (#8551, #8552). */
 const pt = {
-  'callStudio.close': 'Fechar',
-  'callStudio.effects.faces': 'Efeitos',
   'callStudio.effects.color': 'Cor',
   'callStudio.effects.settings': 'Ajustes',
   'callStudio.face.none': 'Nenhum',
@@ -12,9 +10,6 @@ const pt = {
   'callStudio.face.angel': 'Anjo',
   'callStudio.face.demon': 'Demônio',
   'callStudio.face.volcano': 'Erupção',
-  'callStudio.capture.title': 'Capturar',
-  'callStudio.capture.montage': 'Montagem',
-  'callStudio.capture.actions': 'Ações',
   'callStudio.montage.screen': 'Tela cheia',
   'callStudio.montage.grid': 'Mosaico',
   'callStudio.montage.strip': 'Cabine de fotos',

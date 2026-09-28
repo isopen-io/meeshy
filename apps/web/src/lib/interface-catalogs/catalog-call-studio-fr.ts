@@ -5,8 +5,6 @@
  * `i18n-call-studio-catalog.test.ts`).
  */
 const fr = {
-  'callStudio.close': 'Fermer',
-  'callStudio.effects.faces': 'Effets',
   'callStudio.effects.color': 'Couleur',
   'callStudio.effects.settings': 'Réglages',
   'callStudio.face.none': 'Aucun',
@@ -15,9 +13,6 @@ const fr = {
   'callStudio.face.angel': 'Ange',
   'callStudio.face.demon': 'Démon',
   'callStudio.face.volcano': 'Éruption',
-  'callStudio.capture.title': 'Capturer',
-  'callStudio.capture.montage': 'Montage',
-  'callStudio.capture.actions': 'Actions',
   'callStudio.montage.screen': 'Plein écran',
   'callStudio.montage.grid': 'Mosaïque',
   'callStudio.montage.strip': 'Photomaton',

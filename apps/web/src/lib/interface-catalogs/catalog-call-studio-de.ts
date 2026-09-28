@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — de (#8551, #8552). */
 const de = {
-  'callStudio.close': 'Schließen',
-  'callStudio.effects.faces': 'Effekte',
   'callStudio.effects.color': 'Farbe',
   'callStudio.effects.settings': 'Einstellungen',
   'callStudio.face.none': 'Keiner',
@@ -12,9 +10,6 @@ const de = {
   'callStudio.face.angel': 'Engel',
   'callStudio.face.demon': 'Dämon',
   'callStudio.face.volcano': 'Vulkanausbruch',
-  'callStudio.capture.title': 'Schnappschuss',
-  'callStudio.capture.montage': 'Collage',
-  'callStudio.capture.actions': 'Aktionen',
   'callStudio.montage.screen': 'Vollbild',
   'callStudio.montage.grid': 'Mosaik',
   'callStudio.montage.strip': 'Fotoautomat',

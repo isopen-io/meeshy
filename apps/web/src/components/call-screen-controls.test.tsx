@@ -120,19 +120,22 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
     group.done();
   });
 
-  test('« Réagir » ouvre la palette des huit réactions, un seul panneau à la fois, et la referme', async () => {
+  test('« Réagir » ouvre la palette des huit réactions À LA PLACE des rangées ; ‹ les rend, un seul panneau à la fois (#8578)', async () => {
     const view = mount(<CallScreen call={call()} canShare initiallyExpanded />);
     view.press('[data-call-control="react"]');
     await settle(() => import('./call-control-panels'));
-    expect(view.find('[data-call-control="react"]')?.getAttribute('aria-expanded')).toBe('true');
     expect(document.body.querySelectorAll('[data-call-react-panel] [data-call-react]')).toHaveLength(8);
+    expect(view.find('[data-call-row]')).toBeNull();
+    view.press('[data-panel-back]');
+    expect(view.find('[data-call-react-panel]')).toBeNull();
+    expect(view.find('[data-call-control="react"]')?.getAttribute('aria-expanded')).toBe('false');
     view.press('[data-call-record]');
     await settle(() => import('./call-control-panels'));
-    expect(view.find('[data-call-react-panel]')).toBeNull();
     expect(view.find('[data-call-record-choice]')).not.toBeNull();
-    expect(view.find('[data-call-record]')?.getAttribute('aria-expanded')).toBe('true');
-    view.press('[data-call-record]');
+    expect(view.find('[data-call-react-panel]')).toBeNull();
+    view.press('[data-panel-close]');
     expect(view.find('[data-call-record-choice]')).toBeNull();
+    expect(view.find('[data-call-row]')).toBeNull();
     view.done();
   });
 

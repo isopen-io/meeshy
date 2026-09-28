@@ -7,6 +7,7 @@ import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyph
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
+import type { CallModeKind, CallPanelKind } from '@/lib/calls/call-screen-layer';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -28,10 +29,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * portent pas. Les règles (qui est offert, dans quel ordre) sont dans
  * `lib/calls/call-controls.ts`.
  *
- * Cinq boutons OUVRENT un panneau, un seul à la fois (`CallPanels`) — et il
- * s'ouvre DANS le même cadre, en rangées posées au-dessus des familles :
- * Effets (#8442, #8551), Enregistrer au repos (#8437), Capturer (#8552),
- * Ajouter (#8433) et Réagir (#8439).
+ * Une chose à la fois (#8578, `call-screen-layer.ts`) : Enregistrer au repos
+ * (#8437), Ajouter (#8433) et Réagir (#8439) ouvrent un PANNEAU qui REMPLACE
+ * les rangées dans le cadre ; Effets (#8442, #8551) et Capturer (#8552)
+ * entrent dans un MODE qui libère tout l'écran.
  */
 
 export const CALL_ACTIONS_ID = 'call-actions';
@@ -40,20 +41,15 @@ const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.origi
 
 const screenGlyph = (name: CallScreenGlyphName, size = 22) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
-/** Les panneaux qu'un bouton du `(…)` ouvre dans le cadre de la pilule — un seul à la fois. */
-export type CallPanel = 'effects' | 'people' | 'react' | 'record' | 'capture';
+/** Ce que les rangées ouvrent : un panneau (qui les remplace) ou un mode (qui libère l'écran). */
+export type CallPanels = { readonly open: CallPanelKind | null; readonly toggle: (panel: CallPanelKind) => void; readonly enter: (mode: CallModeKind) => void };
 
-export type CallPanels = { readonly open: CallPanel | null; readonly toggle: (panel: CallPanel) => void };
-
-export const CALL_PANEL_ID: Readonly<Record<CallPanel, string>> = {
-  effects: 'call-effects-panel',
+export const CALL_PANEL_ID: Readonly<Record<CallPanelKind, string>> = {
   people: 'call-people-panel',
   react: 'call-react-panel',
   record: 'call-record-panel',
-  capture: 'call-capture-panel',
+  journal: 'call-journal-panel',
 };
-
-export const CALL_EFFECTS_PANEL_ID = CALL_PANEL_ID.effects;
 
 type ActionContext = {
   readonly call: ActiveCall;
@@ -70,12 +66,12 @@ type ActionView = {
   readonly tone: CallButtonTone;
   readonly pressed?: boolean;
   readonly expanded?: boolean;
-  readonly panel?: CallPanel;
+  readonly panel?: CallPanelKind;
   readonly disabled?: boolean;
   readonly data: Readonly<Record<`data-${string}`, string>>;
 };
 
-const panelView = (panels: CallPanels, panel: CallPanel) => ({
+const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
   onPress: () => panels.toggle(panel),
   tone: panels.open === panel ? ('active' as const) : ('bare' as const),
   expanded: panels.open === panel,
@@ -112,7 +108,8 @@ function mineAction(action: MineAction, { call, language, panels }: ActionContex
         label: translate(language, 'call.effects.open'),
         caption: translate(language, 'call.effects'),
         glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.magicWand} size={22} />,
-        ...panelView(panels, 'effects'),
+        onPress: () => panels.enter('effects'),
+        tone: 'bare',
         data: { 'data-call-control': 'effects' },
       };
     case 'screen':
@@ -155,7 +152,8 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       label: translateCallControls(language, 'callControls.capture.label'),
       caption: translateCallControls(language, 'callControls.capture'),
       glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.aperture} size={22} />,
-      ...panelView(panels, 'capture'),
+      onPress: () => panels.enter('montage'),
+      tone: 'bare',
       data: { 'data-call-control': 'capture' },
     };
   return captionsAction(context);

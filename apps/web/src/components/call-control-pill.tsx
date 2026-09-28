@@ -15,11 +15,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * **LA PILULE DE VERRE** (#8391, #8550) — la même en audio, en vidéo et en
  * groupe : `(…)` · Micro · Sortie · Fin. `(…)` est devant le micro : il
  * bascule l'affichage des actions (`aria-expanded`). Déployée, la pilule
- * GRANDIT vers le haut : sa ligne de commandes reste en bas, et tout s'empile
- * au-dessus d'elle, dans le MÊME cadre de verre — le bandeau des sous-titres,
- * le panneau ouvert (en rangées), puis une rangée par famille
- * (`call-control-actions.tsx`). Aucun sous-menu n'est une feuille ni un
- * calque : quand ce qui s'empile dépasse la hauteur, le cadre défile.
+ * GRANDIT vers le haut : sa ligne de commandes reste en bas, et au-dessus
+ * d'elle, dans le MÊME cadre de verre, le bandeau des sous-titres puis UNE
+ * chose : les rangées des familles (`call-control-actions.tsx`) OU le panneau
+ * ouvert, qui les REMPLACE (#8578) — jamais les deux empilés.
  *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
  * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
@@ -37,7 +36,7 @@ type PillProps = {
   /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule a grandi. */
   readonly framedCaptions: ReactNode;
   readonly panels: CallPanels;
-  /** Le panneau ouvert, posé au-dessus des rangées. */
+  /** Le panneau ouvert, À LA PLACE des rangées. */
   readonly panel: ReactNode;
 };
 
@@ -54,8 +53,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
           <>
             <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="">
               {framedCaptions}
-              {panel}
-              <CallActionRows call={call} set={set} language={language} panels={panels} />
+              {panel ?? <CallActionRows call={call} set={set} language={language} panels={panels} />}
             </div>
             <hr className="mx-2 my-2 border-0 border-t border-white/20" />
           </>

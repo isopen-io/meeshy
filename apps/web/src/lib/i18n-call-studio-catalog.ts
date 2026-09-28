@@ -25,7 +25,7 @@ type Placeholders<S extends string> = S extends `${string}{${infer Name}}${infer
   ? Name | Placeholders<Rest>
   : never;
 
-type TranslateCallStudioArgs<K extends CallStudioCatalogKey> = [Placeholders<FrenchCallStudioCatalog[K]>] extends [never]
+export type TranslateCallStudioArgs<K extends CallStudioCatalogKey> = [Placeholders<FrenchCallStudioCatalog[K]>] extends [never]
   ? []
   : [params: Readonly<Record<Placeholders<FrenchCallStudioCatalog[K]>, string>>];
 
