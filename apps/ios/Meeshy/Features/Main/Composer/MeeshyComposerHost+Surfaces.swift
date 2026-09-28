@@ -431,13 +431,18 @@ extension MeeshyComposerHost {
             // toujours pendant qu'il est monté — `openObjectEditor` appelle
             // `enterTextEditingMode` — et c'est précisément lui que la règle
             // apprend à ignorer, plutôt qu'un état qu'on interdirait.
+            //
+            // **Depuis le 2026-09-28, la porte TEXTE saisit sur la scène** et
+            // ses options s'accrochent à elle (`anchorsToDoor`) — sauf quand
+            // l'éditeur plein écran est monté : c'est alors lui qui les porte.
             railMode: ComposerRailMode.resolve(
                 drawing: viewModel.isDrawingActive,
                 textEditing: ComposerFirstView.railShowsTextTools(
-                    textEditing: viewModel.textEditingMode.activeTextId != nil),
+                    textEditing: sceneTextEditing),
                 expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
                 expandedTextTool: viewModel.textEditingMode.expandedTool,
-                doors: sceneDoors
+                doors: sceneDoors,
+                anchorsToDoor: true
             ),
             // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
             // ICI parce que les deux magasins vivent ici — la slide pour ce qui
@@ -564,20 +569,16 @@ extension MeeshyComposerHost {
             // dire ICI aussi tient la loi des DEUX côtés, comme les deux
             // bandes le faisaient avant leur retrait.
             toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
-                drawing: viewModel.isDrawingActive)
+                drawing: viewModel.isDrawingActive,
+                textEditing: sceneTextEditing)
                 ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
             editingTextId: viewModel.textEditingMode.activeTextId,
-            // **Le rappel reste, la requête `@` non** (2026-09-05). Ce canvas
-            // ne reçoit plus de frappe : la saisie d'un texte se fait dans
-            // l'éditeur plein écran, qui a son propre `onInlineTextChanged` et
-            // nourrit `handleQuery` là où le doigt tape. La nourrir ici en
-            // plus n'aurait servi qu'à donner deux écrivains à une requête qui
-            // n'en a qu'un.
+            // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
+            // TEXTE y ouvre la saisie en ligne. La requête `@` reste nourrie
+            // par l'éditeur plein écran seul — celui de « Modifier ».
             //
-            // L'écriture du TEXTE, elle, reste — le canvas est toujours monté,
-            // et une écriture qu'on retire « parce qu'elle ne doit plus se
-            // produire » est un pari, là où une écriture idempotente sur le
-            // modèle ne coûte rien.
+            // L'écriture du TEXTE, elle, passe ici : une écriture idempotente
+            // sur le modèle.
             onInlineTextChanged: { id, texte in
                 viewModel.updateTextContent(id: id, text: texte)
             },
@@ -1059,5 +1060,12 @@ extension MeeshyComposerHost {
             .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
             .accessibilityAddTraits(.updatesFrequently)
         }
+    }
+
+    /// **Un texte se saisit-il SUR la scène ?** L'état d'édition existe aussi
+    /// pendant que l'éditeur plein écran est monté (`openObjectEditor`) — la
+    /// scène, couverte, n'a alors rien à montrer.
+    var sceneTextEditing: Bool {
+        viewModel.textEditingMode.activeTextId != nil && editedObject == nil
     }
 }
