@@ -388,3 +388,72 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     expect(floor?.style.backgroundColor).toBe('#FDE68A');
   });
 });
+
+/** LOT 7 (retour porteur 2026-09-28, miroir de la PR iOS #8492) — le post se
+ * rédige au format ARMÉ, dans un cadre de verre ; le filtre d'un média posé
+ * ne touche que lui. */
+describe('lot 7 — le post se rédige au format armé, dans un cadre de verre', () => {
+  test('une story armée « Post » par le chevron offre « Rédiger le post »', async () => {
+    const el = mount(harness({}).deps, 'STORY');
+    typeText(el, 'Bonjour');
+    expect(el.querySelector('[data-story-post-text]')).toBeNull();
+    click(el.querySelector('[data-publish-kind-toggle]'));
+    await flush(() => document.querySelector('[data-publish-kind-choice="POST"]') !== null);
+    click(document.querySelector('[data-publish-kind-choice="POST"]'));
+    expect(el.querySelector('[data-story-post-text]')).not.toBeNull();
+  });
+
+  test('le contenu du post s’écrit dans un cadre de VERRE posé au bas, jamais une feuille opaque', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Sur la scène');
+    click(el.querySelector('[data-story-post-text]'));
+    await flush(() => el.querySelector('[data-story-post-text-frame]') !== null);
+    const frame = el.querySelector('[data-story-post-text-frame]')!;
+    expect(frame.closest('[data-story-studio-bottom]')).not.toBeNull();
+    expect(frame.className.split(' ')).toContain('glass');
+    expect(frame.querySelector('#story-studio-post-text')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    click(el.querySelector('[data-story-post-text-done]'));
+    expect(el.querySelector('[data-story-post-text-frame]')).toBeNull();
+  });
+});
+
+describe('lot 7 — le filtre d’un média posé ne s’applique qu’à lui', () => {
+  const seeded = () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(
+      VIEWER_ID,
+      onePageSnapshot({
+        texts: [],
+        background: { postMediaId: 'pm-bg', fileUrl: '2026/09/u/bg.jpg', mediaType: 'image', aspectRatio: 9 / 16 },
+        overlay: { postMediaId: 'pm-ov', fileUrl: '2026/09/u/ov.jpg', mediaType: 'image', aspectRatio: 1 },
+      }),
+    );
+    return harness({ drafts });
+  };
+
+  test('l’éditeur du calque offre ses filtres ; le choisi part sur le calque seul, jamais sur le fond', async () => {
+    const bench = seeded();
+    const el = mount(bench.deps, 'STORY');
+    await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
+    click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-option="filter:bw"]') !== null);
+    expect(el.querySelector('[data-story-option="filter:none"]')?.getAttribute('aria-pressed')).toBe('true');
+    click(el.querySelector('[data-story-option="filter:bw"]'));
+    expect(el.querySelector('[data-story-option="filter:bw"]')?.getAttribute('aria-pressed')).toBe('true');
+    await flush(() => (el.querySelector<HTMLElement>('[data-scene-object-id="overlay"] > span')?.style.filter ?? '') !== '');
+    click(publishButton(el));
+    await flush(() => bench.posts.length === 1);
+    const objects = (bench.posts[0]?.storyEffects as { scenes: { objects: { id: string; payload: Record<string, unknown> }[] }[] }).scenes[0]!.objects;
+    expect(objects.find((object) => object.id === 'overlay')?.payload.filter).toBe('bw');
+    expect(objects.find((object) => object.id === 'background')?.payload.filter).toBeUndefined();
+  });
+
+  test('l’éditeur d’une IMAGE n’offre pas « Rogner » (elle n’a pas de durée)', async () => {
+    const el = mount(seeded().deps, 'STORY');
+    await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
+    click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-overlay-editor]') !== null);
+    expect(el.querySelector('[data-story-option^="trim"]')).toBeNull();
+  });
+});
