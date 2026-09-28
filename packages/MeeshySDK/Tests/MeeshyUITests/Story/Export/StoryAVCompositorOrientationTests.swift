@@ -221,3 +221,83 @@ final class InertBackdropCapture: BackdropCapturing {
     func cropRegion(_ frame: CGRect) -> MTLTexture? { nil }
     func invalidate() {}
 }
+
+/// **Bout en bout : un vrai MP4 tourné en portrait ressort à l'endroit**
+/// (#8600) — la `preferredTransform` lue sur la piste par `StoryExporter`, remise
+/// au compositor, jusqu'au fichier écrit. Le clip est encodé en paysage 320×160
+/// avec la transformation que pose la caméra d'un iPhone tenu droit.
+final class StoryExporterPortraitClipTests: XCTestCase {
+
+    @MainActor
+    func test_export_portraitCameraClip_bakesUpright() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+                      "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var")
+        let clip = FileManager.default.temporaryDirectory
+            .appendingPathComponent("portrait-clip-\(UUID().uuidString).mp4")
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("portrait-export-\(UUID().uuidString).mp4")
+        defer {
+            try? FileManager.default.removeItem(at: clip)
+            try? FileManager.default.removeItem(at: output)
+        }
+        try await Self.writePortraitClip(to: clip)
+        let slide = BackgroundVideoFixture.videoOnlySlide(backgroundURL: clip, videoDurationSec: 1,
+                                                          slideDuration: 1, loop: false)
+
+        try await Task.detached(priority: .userInitiated) {
+            try await StoryExporter.export(slide, to: output)
+        }.value
+
+        let hautDroite = try await ExportPixelProbe.color(ofMP4: output, atSeconds: 0.5, nx: 0.8, ny: 0.2)
+        let hautGauche = try await ExportPixelProbe.color(ofMP4: output, atSeconds: 0.5, nx: 0.2, ny: 0.2)
+        let basGauche = try await ExportPixelProbe.color(ofMP4: output, atSeconds: 0.5, nx: 0.2, ny: 0.8)
+        XCTAssertTrue(hautDroite.r > 150 && hautDroite.b < 110, "le coin rouge doit finir en haut à droite, trouvé \(hautDroite)")
+        XCTAssertTrue(hautGauche.b > 150 && hautGauche.r < 110, "le haut-gauche doit être bleu, trouvé \(hautGauche)")
+        XCTAssertTrue(basGauche.b > 150 && basGauche.r < 110, "le bas-gauche doit être bleu, trouvé \(basGauche)")
+    }
+
+    private static func writePortraitClip(to url: URL) async throws {
+        let width = 320, height = 160
+        let writer = try AVAssetWriter(url: url, fileType: .mp4)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height
+        ])
+        input.expectsMediaDataInRealTime = false
+        input.transform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: CGFloat(height), ty: 0)
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height
+        ])
+        writer.add(input)
+        guard writer.startWriting() else { throw writer.error ?? NSError(domain: "PortraitClip", code: 1) }
+        writer.startSession(atSourceTime: .zero)
+        for frame in 0..<30 {
+            while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 1_000_000) }
+            guard let pool = adaptor.pixelBufferPool else { throw NSError(domain: "PortraitClip", code: 2) }
+            var created: CVPixelBuffer?
+            CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &created)
+            guard let buffer = created else { throw NSError(domain: "PortraitClip", code: 3) }
+            CVPixelBufferLockBaseAddress(buffer, [])
+            let base = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let red = x < width / 2 && y < height / 2
+                    let offset = y * bytesPerRow + x * 4
+                    base[offset] = red ? 0 : 255
+                    base[offset + 1] = 0
+                    base[offset + 2] = red ? 255 : 0
+                    base[offset + 3] = 255
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(buffer, [])
+            adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 30))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        guard writer.status == .completed else { throw writer.error ?? NSError(domain: "PortraitClip", code: 4) }
+    }
+}
