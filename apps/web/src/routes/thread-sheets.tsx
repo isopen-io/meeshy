@@ -1,5 +1,5 @@
 import { ForwardSheet } from '@/components/forward-sheet';
-import { messageCardSubjectOf } from '@/lib/export/message-card-subject';
+import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
@@ -157,18 +157,22 @@ export function ThreadMessageSheets({
         const exportFor = request.messageId;
         const exportMessage = messages.find((m) => m.id === exportFor);
         if (exportMessage === undefined) return null;
-        const subject = messageCardSubjectOf({
-          message: exportMessage,
-          servedText: messageMenu.servedOf(exportFor)?.text,
-          viewer: { id: viewerId, displayName: viewerName },
-          readerLanguages,
-          interfaceLanguage: currentInterfaceLanguage(),
-          now: Date.now(),
-        });
+        const subjectIn = (language: string | null) =>
+          messageCardSubjectOf({
+            message: exportMessage,
+            servedText: messageMenu.servedOf(exportFor)?.text,
+            viewer: { id: viewerId, displayName: viewerName },
+            readerLanguages,
+            interfaceLanguage: currentInterfaceLanguage(),
+            now: Date.now(),
+            language,
+          });
+        const subject = subjectIn(null);
         if (subject === null) return null;
         return (
           <MessageExportSheet
             subject={subject}
+            exportLanguages={{ codes: messageCardLanguagesOf(exportMessage), subjectIn }}
             handle={viewerHandle}
             conversationTitle={conversationTitle}
             quick={request.quick}

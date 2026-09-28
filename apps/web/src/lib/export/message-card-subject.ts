@@ -1,3 +1,6 @@
+import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
+
+import { served } from '@/lib/api/prism';
 import type { Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { protectionOf } from '@/lib/reading-mode/protection';
@@ -17,7 +20,9 @@ import type { MessageCardPart } from './message-card-layout';
  *
  * LES MOTS SONT CEUX QUE LE LECTEUR VOIT : le texte SERVI (le Prisme, avec la
  * langue que le lecteur a peut-être imposée par « Traduire »), jamais
- * l'original en douce.
+ * l'original en douce — sauf quand l'exportateur CHOISIT une langue d'export
+ * (`language`) : la réponse part alors dans cette langue, et la citation la
+ * suit si elle l'a, sinon elle garde le prisme du lecteur.
  */
 
 type AuthorFields = Pick<Message, 'senderId'> & {
@@ -48,19 +53,34 @@ export function messageCardSubjectOf(params: {
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
   readonly now: number;
+  /** La langue d'export choisie — absente : la carte montre ce que le lecteur lit. */
+  readonly language?: string | null;
 }): MessageCardSubject | null {
   const { message, servedText, viewer } = params;
   if (protectionOf(message, params.now) !== 'standard') return null;
-  const text = (servedText ?? message.content).trim();
+  const language = params.language ?? null;
+  const chosen =
+    language === null
+      ? (servedText ?? message.content)
+      : served({ preferredLanguages: [language], originalLanguage: message.originalLanguage, translations: message.translations, original: message.content }).text;
+  const text = chosen.trim();
+  const readerLanguages = language === null ? params.readerLanguages : [language, ...params.readerLanguages];
   if (text === '') return null;
 
   const replyTo = message.replyTo;
   let quoted: MessageCardPart | null = null;
   if (replyTo !== undefined && replyTo !== null) {
-    const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages: params.readerLanguages, interfaceLanguage: params.interfaceLanguage });
+    const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
     if (preview.text.trim() !== '') quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text };
   }
   return { quoted, reply: { author: cardAuthorOf(message, viewer), text }, sentAt: new Date(message.createdAt) };
+}
+
+/** Les langues dans lesquelles la réponse EXISTE : son original d'abord, puis chaque traduction servie. */
+export function messageCardLanguagesOf(message: Pick<Message, 'originalLanguage' | 'translations'>): readonly string[] {
+  const original = nonBlank(message.originalLanguage);
+  if (original === null) return [];
+  return [...new Set([original, ...Object.keys(buildTranslationRecord(message.translations))])];
 }
 
 /** Le nom du fichier : lisible dans une galerie, sans rien du contenu. */

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Sheet } from '@/components/sheet';
-import type { MessageCardDelivery } from '@/lib/export/deliver-message-card';
+import type { MessageCardDelivery, MessageCardIntent } from '@/lib/export/deliver-message-card';
 import {
   INITIAL_MESSAGE_CARD_FORMAT,
   readDefaultMessageCardFormat,
@@ -28,6 +28,7 @@ import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/ex
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
+import { spokenLanguageName } from '@/lib/view/language-name';
 import { ActionButton } from '@/routes/link-page-parts';
 
 /**
@@ -40,6 +41,12 @@ import { ActionButton } from '@/routes/link-page-parts';
  * par leurs trois dimensions — couleurs, typographie, liaison — ou d'un geste :
  * les « Populaires » (les plus enregistrés sur l'appareil, puis la vitrine) et
  * « Au hasard ». Chaque carte enregistrée compte pour son template.
+ *
+ * APRÈS LE FORMAT, LA LANGUE : la carte part par défaut telle que le lecteur
+ * la lit ; il peut choisir l'original ou une traduction servie du message.
+ *
+ * DEUX GESTES À LA FIN : « Sauvegarder » (la galerie d'abord) et
+ * « Partager » (toujours la feuille du système, où l'utilisateur décide).
  *
  * LE FORMAT PAR DÉFAUT (`message-card-format.ts`) ouvre la feuille déjà
  * réglée, et « Utiliser comme format par défaut » le remplace. L'« Export
@@ -100,8 +107,8 @@ const defaultPainter: Painter = async (input) => (await import('@/lib/export/mes
 /* La livraison (galerie, partage, téléchargement) est un `import()` au premier
    « Enregistrer », comme pour une pièce jointe : `budgets.json › story_export`
    interdit qu'un écran l'importe statiquement. */
-const defaultDeliver = async (blob: Blob, fileName: string): Promise<MessageCardDelivery> =>
-  (await import('@/lib/export/deliver-message-card')).deliverMessageCard(blob, fileName);
+const defaultDeliver = async (blob: Blob, fileName: string, intent: MessageCardIntent): Promise<MessageCardDelivery> =>
+  (await import('@/lib/export/deliver-message-card')).deliverMessageCard(blob, fileName, intent);
 
 /**
  * La carte telle que le format la demande — un titre absent ou vide n'est
@@ -187,8 +194,15 @@ function ChipRow({ label, children }: { readonly label: string; readonly childre
 const swatchOf = (palette: (typeof CARD_PALETTES)[keyof typeof CARD_PALETTES]): string =>
   `linear-gradient(135deg, ${palette.background.map(([offset, color]) => `${color} ${Math.round(offset * 100)}%`).join(', ')})`;
 
+export type MessageExportLanguages = {
+  /** Les langues dans lesquelles la réponse existe — l'original d'abord. */
+  readonly codes: readonly string[];
+  readonly subjectIn: (language: string) => MessageCardSubject | null;
+};
+
 export function MessageExportSheet({
-  subject,
+  subject: asRead,
+  exportLanguages = { codes: [], subjectIn: () => null },
   handle,
   conversationTitle,
   quick = false,
@@ -201,7 +215,9 @@ export function MessageExportSheet({
   revokeObjectURL = (url) => URL.revokeObjectURL(url),
   random = Math.random,
 }: {
+  /** La carte telle que le lecteur la lit. */
   readonly subject: MessageCardSubject;
+  readonly exportLanguages?: MessageExportLanguages;
   /** Le pseudo de qui exporte — il signe le filigrane, anonymat ou pas. */
   readonly handle: string | null;
   /** Le titre de la conversation — `null` quand elle n'en a pas : l'option ne s'offre alors pas. */
@@ -212,7 +228,7 @@ export function MessageExportSheet({
   readonly announce: (message: string) => void;
   readonly storage?: SafeStorage;
   readonly paint?: Painter;
-  readonly deliver?: (blob: Blob, fileName: string) => Promise<MessageCardDelivery>;
+  readonly deliver?: (blob: Blob, fileName: string, intent: MessageCardIntent) => Promise<MessageCardDelivery>;
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
   readonly random?: () => number;
@@ -223,6 +239,12 @@ export function MessageExportSheet({
   const [rendered, setRendered] = useState<Rendered | null>(null);
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exportLanguage, setExportLanguage] = useState<string | null>(null);
+  const subject = useMemo(
+    () => (exportLanguage === null ? asRead : (exportLanguages.subjectIn(exportLanguage) ?? asRead)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [asRead, exportLanguage],
+  );
   const quickSent = useRef(false);
   const [popular] = useState(() => popularTemplates(readTemplateUsage(storage), POPULAR_COUNT));
   const title = conversationTitle !== null && conversationTitle.trim() !== '' ? conversationTitle.trim() : null;
@@ -269,10 +291,10 @@ export function MessageExportSheet({
 
   const ready = rendered !== null && rendered.key === key;
 
-  const save = async () => {
+  const send = async (intent: MessageCardIntent) => {
     if (!ready || saving) return;
     setSaving(true);
-    const outcome = await deliver(rendered.blob, messageCardFileName(new Date())).catch((): MessageCardDelivery => 'unavailable');
+    const outcome = await deliver(rendered.blob, messageCardFileName(new Date()), intent).catch((): MessageCardDelivery => 'unavailable');
     setSaving(false);
     announce(translate(language, DELIVERY_ANNOUNCE[outcome]));
     if (outcome !== 'gallery' && outcome !== 'shared') return;
@@ -283,7 +305,7 @@ export function MessageExportSheet({
   useEffect(() => {
     if (!quick || !ready || quickSent.current) return;
     quickSent.current = true;
-    void save();
+    void send('save');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quick, ready]);
 
@@ -386,10 +408,28 @@ export function MessageExportSheet({
           ))}
         </div>
 
+        {exportLanguages.codes.length > 1 ? (
+          <ChipRow label={translate(language, 'export.card.language')}>
+            <Chip pressed={exportLanguage === null} onClick={() => setExportLanguage(null)} data={{ 'data-export-language': '' }}>
+              {translate(language, 'export.card.language.asRead')}
+            </Chip>
+            {exportLanguages.codes.map((code) => (
+              <Chip key={code} pressed={code === exportLanguage} onClick={() => setExportLanguage(code)} data={{ 'data-export-language': code }}>
+                {spokenLanguageName(code)}
+              </Chip>
+            ))}
+          </ChipRow>
+        ) : null}
+
         <div className="grid gap-2 pt-2">
-          <ActionButton disabled={!ready || saving} onClick={() => void save()} data={{ 'data-export-save': '' }}>
-            {translate(language, 'export.card.save')}
-          </ActionButton>
+          <div className="grid grid-cols-2 gap-2">
+            <ActionButton disabled={!ready || saving} onClick={() => void send('save')} data={{ 'data-export-save': '' }}>
+              {translate(language, 'export.card.save')}
+            </ActionButton>
+            <ActionButton disabled={!ready || saving} onClick={() => void send('share')} data={{ 'data-export-share': '' }}>
+              {translate(language, 'export.card.share')}
+            </ActionButton>
+          </div>
           <ActionButton tone="secondary" disabled={isDefault} onClick={useAsDefault} data={{ 'data-export-default': '' }}>
             {translate(language, isDefault ? 'export.card.default.current' : 'export.card.default.save')}
           </ActionButton>

@@ -22,30 +22,43 @@ const portal = (outcome: DeliverFileOutcome, journal: string[]): FileDeliveryPor
   },
 });
 
-describe('deliverMessageCard — la photothèque d’abord', () => {
+describe('deliverMessageCard(« Sauvegarder ») — la photothèque d’abord', () => {
   test('la galerie de la coque Android enregistre directement, sans feuille', async () => {
     const journal: string[] = [];
-    expect(await deliverMessageCard(blob, 'm.png', { gallery: gallery('saved', journal), portal: async () => portal('delivered', journal) })).toBe('gallery');
+    expect(await deliverMessageCard(blob, 'm.png', 'save', { gallery: gallery('saved', journal), portal: async () => portal('delivered', journal) })).toBe('gallery');
     expect(journal).toEqual(['gallery:m.png:image/png']);
   });
 
   test('une galerie en échec retombe sur le partage du système', async () => {
     const journal: string[] = [];
-    expect(await deliverMessageCard(blob, 'm.png', { gallery: gallery('failed', journal), portal: async () => portal('delivered', journal) })).toBe('shared');
+    expect(await deliverMessageCard(blob, 'm.png', 'save', { gallery: gallery('failed', journal), portal: async () => portal('delivered', journal) })).toBe('shared');
     expect(journal).toEqual(['gallery:m.png:image/png', 'portal:m.png']);
   });
 
   test('sans galerie : feuille de partage (iOS, Safari) ou téléchargement (bureau)', async () => {
     const journal: string[] = [];
-    expect(await deliverMessageCard(blob, 'm.png', { gallery: null, portal: async () => portal('delivered', journal) })).toBe('shared');
+    expect(await deliverMessageCard(blob, 'm.png', 'save', { gallery: null, portal: async () => portal('delivered', journal) })).toBe('shared');
     expect(journal).toEqual(['portal:m.png']);
   });
 
   test('une feuille fermée est une annulation, pas un échec', async () => {
-    expect(await deliverMessageCard(blob, 'm.png', { gallery: null, portal: async () => portal('cancelled', []) })).toBe('cancelled');
+    expect(await deliverMessageCard(blob, 'm.png', 'save', { gallery: null, portal: async () => portal('cancelled', []) })).toBe('cancelled');
   });
 
   test('aucune porte ⇒ indisponible', async () => {
-    expect(await deliverMessageCard(blob, 'm.png', { gallery: null, portal: async () => null })).toBe('unavailable');
+    expect(await deliverMessageCard(blob, 'm.png', 'save', { gallery: null, portal: async () => null })).toBe('unavailable');
+  });
+});
+
+describe('deliverMessageCard(« Partager ») — toujours la feuille du système', () => {
+  test('la galerie n’est jamais touchée : l’utilisateur choisit où envoyer', async () => {
+    const journal: string[] = [];
+    expect(await deliverMessageCard(blob, 'm.png', 'share', { gallery: gallery('saved', journal), portal: async () => portal('delivered', journal) })).toBe('shared');
+    expect(journal).toEqual(['portal:m.png']);
+  });
+
+  test('une feuille fermée reste une annulation, et sans porte rien ne part', async () => {
+    expect(await deliverMessageCard(blob, 'm.png', 'share', { gallery: null, portal: async () => portal('cancelled', []) })).toBe('cancelled');
+    expect(await deliverMessageCard(blob, 'm.png', 'share', { gallery: null, portal: async () => null })).toBe('unavailable');
   });
 });

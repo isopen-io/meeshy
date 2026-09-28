@@ -1,13 +1,15 @@
 import '@/styles/story-fonts.css';
 
 import { layoutMessageCard, type CardLayout, type CardOp, type MessageCardInput } from './message-card-layout';
+import { MEESHY_PNG_METADATA, withPngMetadata } from './png-metadata';
 import { canvasFont, templateFonts, templateOf, type CardPalette, type MessageCardTemplate } from './message-card-templates';
 
 /**
  * **LA PEINTURE D'UNE CARTE D'EXPORT** — la moitié impure de
  * `message-card-layout.ts` : elle ATTEND les polices du template (une carte
  * peinte avant l'arrivée du WOFF2 figerait la police système dans l'image),
- * mesure avec le vrai contexte, peint, et rend un PNG.
+ * mesure avec le vrai contexte, peint, et rend un PNG signé Meeshy dans ses
+ * métadonnées (`png-metadata.ts`).
  *
  * Chargée à la demande, au premier « Exporter en image » : ni le fil ni le
  * menu ne paient ce module, ni les `@font-face` qu'il importe.
@@ -153,6 +155,9 @@ export async function renderMessageCard(input: MessageCardInput, doc: Document =
   canvas.width = layout.width;
   canvas.height = layout.height;
   paintMessageCard(ctx, layout, template);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  return blob === null ? null : { blob, width: layout.width, height: layout.height, truncated: layout.truncated };
+  const painted = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (painted === null) return null;
+  const stamped = withPngMetadata(new Uint8Array(await painted.arrayBuffer()), MEESHY_PNG_METADATA);
+  const blob = new Blob([stamped], { type: 'image/png' });
+  return { blob, width: layout.width, height: layout.height, truncated: layout.truncated };
 }

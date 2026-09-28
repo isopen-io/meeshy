@@ -35,6 +35,14 @@ const subject = {
   sentAt: new Date('2026-09-28T18:30:00.000Z'),
 };
 
+const exportLanguages = {
+  codes: ['fr', 'en'],
+  subjectIn: (language: string) =>
+    language === 'en'
+      ? { quoted: { author: 'Awa', text: 'Where do we meet tonight?' }, reply: { author: 'Jacques', text: 'At Lina’s, 8 pm!' }, sentAt: subject.sentAt }
+      : subject,
+};
+
 const memoryStorage = (initial: Record<string, string> = {}): SafeStorage & { readonly entries: Map<string, string> } => {
   const entries = new Map(Object.entries(initial));
   return {
@@ -52,6 +60,7 @@ const memoryStorage = (initial: Record<string, string> = {}): SafeStorage & { re
 type Harness = {
   readonly painted: MessageCardInput[];
   readonly delivered: string[];
+  readonly intents: string[];
   readonly announced: string[];
   readonly closed: { count: number };
 };
@@ -64,13 +73,15 @@ const mountSheet = async (
     readonly title?: string | null;
     readonly storage?: SafeStorage;
     readonly random?: () => number;
+    readonly languages?: boolean;
   } = {},
 ) => {
-  const harness: Harness = { painted: [], delivered: [], announced: [], closed: { count: 0 } };
+  const harness: Harness = { painted: [], delivered: [], intents: [], announced: [], closed: { count: 0 } };
   const host = await mounter.mount(
     <MessageExportSheet
       subject={subject}
       handle="jacques"
+      {...(options.languages === true ? { exportLanguages } : {})}
       conversationTitle={options.title === undefined ? 'Soirée de lancement' : options.title}
       quick={options.quick ?? false}
       random={options.random ?? (() => 0)}
@@ -83,8 +94,9 @@ const mountSheet = async (
         harness.painted.push(input);
         return options.paintFails === true ? null : { blob: new Blob([input.template], { type: 'image/png' }), truncated: false };
       }}
-      deliver={async (_blob, fileName) => {
+      deliver={async (_blob, fileName, intent) => {
         harness.delivered.push(fileName);
+        harness.intents.push(intent);
         return options.delivery ?? 'gallery';
       }}
       createObjectURL={() => 'blob:card'}
@@ -153,6 +165,7 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     await mounter.settle();
     expect(harness.delivered.length).toBe(1);
     expect(harness.delivered[0]?.endsWith('.png')).toBe(true);
+    expect(harness.intents).toEqual(['save']);
     expect(harness.announced).toEqual(['Image enregistrée dans la galerie']);
     expect(JSON.parse(storage.entries.get(MESSAGE_CARD_USAGE_KEY) ?? '{}')).toEqual({ 'aurore.rond.orbite': 1 });
     expect(harness.closed.count).toBe(1);
@@ -239,5 +252,39 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     expect(harness.painted.map((input) => input.template)).toEqual(['editorial.didone.guillemets']);
     expect(harness.delivered.length).toBe(1);
     expect(harness.closed.count).toBe(1);
+  });
+
+  test('deux boutons à la fin : « Sauvegarder » et « Partager »', async () => {
+    const { host } = await mountSheet();
+    expect(host.querySelector('[data-export-save]')?.textContent).toBe('Sauvegarder');
+    expect(host.querySelector('[data-export-share]')?.textContent).toBe('Partager');
+  });
+
+  test('« Partager » ouvre la feuille du système, compte le template et referme', async () => {
+    const storage = memoryStorage();
+    const { host, harness } = await mountSheet({ delivery: 'shared', storage });
+    await mounter.click(host.querySelector('[data-export-share]'));
+    await mounter.settle();
+    expect(harness.intents).toEqual(['share']);
+    expect(harness.announced).toEqual(['Image prête']);
+    expect(JSON.parse(storage.entries.get(MESSAGE_CARD_USAGE_KEY) ?? '{}')).toEqual({ 'aurore.rond.orbite': 1 });
+    expect(harness.closed.count).toBe(1);
+  });
+
+  test('après le format, la langue : la carte part comme je la lis, ou dans une langue choisie', async () => {
+    const { host, harness } = await mountSheet({ languages: true });
+    expect(host.querySelector('[data-export-language=""]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelectorAll('[data-export-language]').length).toBe(3);
+    await mounter.click(host.querySelector('[data-export-language="en"]'));
+    await mounter.settle();
+    const last = harness.painted[harness.painted.length - 1];
+    expect([last?.quoted?.text, last?.reply.text]).toEqual(['Where do we meet tonight?', 'At Lina’s, 8 pm!']);
+    const rows = Array.from(host.querySelectorAll('[role="group"]')).map((group) => group.getAttribute('aria-label'));
+    expect(rows.indexOf('Langue du message') > rows.indexOf('Liaison')).toBe(true);
+  });
+
+  test('un message dans une seule langue n’offre pas de choix de langue', async () => {
+    const { host } = await mountSheet();
+    expect(host.querySelector('[data-export-language]')).toBeNull();
   });
 });

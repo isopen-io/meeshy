@@ -4,7 +4,7 @@ import { amina, message, translation } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { cardAuthorOf, messageCardFileName, messageCardSubjectOf } from './message-card-subject';
+import { cardAuthorOf, messageCardFileName, messageCardLanguagesOf, messageCardSubjectOf } from './message-card-subject';
 
 beforeAll(async () => {
   await loadInterfaceCatalog('fr');
@@ -100,5 +100,41 @@ describe('cardAuthorOf — qui signe chaque bloc', () => {
 describe('messageCardFileName — un nom lisible, rien du contenu', () => {
   test('horodaté, en .png', () => {
     expect(messageCardFileName(new Date(2026, 8, 28, 9, 5, 7))).toBe('meeshy-20260928-090507.png');
+  });
+});
+
+describe('la langue d’export — choisie après le format', () => {
+  const bilingual = () =>
+    reply({
+      translations: [translation('m-reply', 'en', 'At Lina’s, 8 pm!'), translation('m-reply', 'es', '¡En casa de Lina, a las 20 h!')],
+    });
+
+  test('les langues offertes : l’original d’abord, puis chaque traduction', () => {
+    expect(messageCardLanguagesOf(bilingual())).toEqual(['fr', 'en', 'es']);
+    expect(messageCardLanguagesOf(standalone({ originalLanguage: '' }))).toEqual([]);
+  });
+
+  test('une langue choisie sert la réponse ET la citation dans cette langue', () => {
+    const subject = messageCardSubjectOf({ message: bilingual(), servedText: 'Chez Lina, à 20 h !', viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'en' });
+    expect(subject?.reply.text).toBe('At Lina’s, 8 pm!');
+    expect(subject?.quoted?.text).toBe('Where do we meet tonight?');
+  });
+
+  test('une citation sans cette langue retombe sur le prisme du lecteur, jamais sur un vide', () => {
+    const subject = messageCardSubjectOf({ message: bilingual(), servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'es' });
+    expect(subject?.reply.text).toBe('¡En casa de Lina, a las 20 h!');
+    expect(subject?.quoted?.text).toBe('On se retrouve où ce soir ?');
+  });
+
+  test('la langue de l’original rend l’original, même quand le lecteur lit une traduction', () => {
+    const subject = messageCardSubjectOf({ message: bilingual(), servedText: 'At Lina’s, 8 pm!', viewer: VIEWER, readerLanguages: ['en'], interfaceLanguage: 'fr', now: NOW, language: 'fr' });
+    expect(subject?.reply.text).toBe('Chez Lina, à 20 h !');
+  });
+
+  test('un message protégé ne s’exporte dans aucune langue', () => {
+    const subject = messageCardSubjectOf({ message: bilingual(), servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'en' });
+    expect(subject === null).toBe(false);
+    const hidden = messageCardSubjectOf({ message: { ...bilingual(), isBlurred: true }, servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'en' });
+    expect(hidden).toBeNull();
   });
 });
