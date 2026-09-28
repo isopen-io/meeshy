@@ -15,8 +15,6 @@ const arCallCaptions = {
   'callCaptions.listening': 'يتم تحويل صوتك إلى نص',
   'callCaptions.unsupported': 'هذا المتصفح لا يحوّل صوتك إلى نص: يمكنك قراءة الآخرين',
   'callCaptions.denied': 'تم رفض التعرف على الكلام: يمكنك قراءة الآخرين',
-  'callCaptions.journal.show': 'السجل',
-  'callCaptions.journal.hide': 'إخفاء السجل',
   'callCaptions.journal.title': 'سجل المكالمة',
   'callCaptions.participant': 'مشارك',
   'callTranscript.show': 'النص المكتوب',

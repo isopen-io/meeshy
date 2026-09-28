@@ -1,18 +1,24 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type WheelEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 
-import { CallButton } from '@/components/call-glass-button';
-import { GlyphSvg } from '@/components/glyph';
-import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { applyZoom, clampZoom, currentZoom, zoomAfterPinch, zoomAfterWheel, zoomLabel, zoomNudge, zoomRangeOf, type ZoomRange } from '@/lib/calls/camera-zoom';
 import { cameraSourceOf } from '@/lib/calls/video-effects';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **LE ZOOM DE MA CAMÉRA, À L'ÉCRAN** (#8441) — là où la caméra le propose
- * (Chrome sur Android, la coque) : pincer ma propre image, ou la molette
- * dessus, zoome ; une capsule de verre `−  1×  +` le fait au clavier et au
- * lecteur d'écran, et dit le facteur. Sans zoom proposé, rien n'est affiché.
+ * **MA CAMÉRA EN PLEIN ÉCRAN** (#8441, #8576) — quand MON image remplit
+ * l'écran (un toucher sur ma vignette l'y met), et là seulement :
+ *
+ * - pincer mon image, ou la molette dessus, zoome la caméra, là où elle le
+ *   propose (Chrome sur Android, la coque) ;
+ * - le rail de ma caméra (Retourner, Couper la caméra, Effets, Partager
+ *   l'écran — bâti par l'écran d'appel) se pose sur le bord, et la capsule
+ *   `+  1×  −` du zoom s'y range dessous : elle le fait au clavier et au
+ *   lecteur d'écran, et dit le facteur.
+ *
+ * Chunk à part (`budgets.json` › `call_self_camera`), chargé quand mon image
+ * passe en plein écran : il n'importe rien de l'écran d'appel (`call_overlay`),
+ * qui lui remet ses glyphes et la colonne du rail (`column`).
  */
 
 export type CameraZoom = { readonly range: ZoomRange; readonly value: number; readonly set: (value: number) => void };
@@ -55,10 +61,7 @@ export type ZoomGestures = {
   readonly style?: CSSProperties;
 };
 
-/**
- * Pincer et molette sur ma propre image. Un pincement n'est jamais un toucher :
- * le clic qui le suit (la vignette s'inverse au toucher) est avalé.
- */
+/** Pincer et molette sur mon image. Un pincement n'est jamais un toucher : le clic qui le suit est avalé. */
 export function useZoomGestures(zoom: CameraZoom | null): ZoomGestures {
   const pointers = useRef(new Map<number, Point>());
   const pinch = useRef<{ readonly distance: number; readonly start: number } | null>(null);
@@ -95,15 +98,43 @@ export function useZoomGestures(zoom: CameraZoom | null): ZoomGestures {
   };
 }
 
-/** La capsule `−  1×  +` — un verre isolé, posé sur la scène près de mon image. */
-export function CallZoomControl({ zoom, language, className, style }: { readonly zoom: CameraZoom; readonly language: InterfaceLanguage; readonly className?: string; readonly style?: CSSProperties }) {
+type Glyphs = { readonly plus: ReactNode; readonly minus: ReactNode };
+
+const STEP = 'grid size-11 place-items-center rounded-full transition-transform active:scale-90 disabled:opacity-40 motion-reduce:transition-none';
+
+/** La capsule `+  1×  −`, debout sous le rail. */
+function ZoomCapsule({ zoom, language, glyphs }: { readonly zoom: CameraZoom; readonly language: InterfaceLanguage; readonly glyphs: Glyphs }) {
+  const step = (direction: 1 | -1) => () => zoom.set(zoomNudge(zoom.range, zoom.value, direction));
   return (
-    <div role="group" aria-label={translate(language, 'call.zoom')} className={`glass-call flex items-center rounded-full ${className ?? ''}`} style={style} data-call-zoom="" data-call-chrome-fade="">
-      <CallButton label={translate(language, 'call.zoom.out')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} />} onPress={() => zoom.set(zoomNudge(zoom.range, zoom.value, -1))} disabled={zoom.value <= zoom.range.min} size={44} data={{ 'data-call-zoom-out': '' }} />
-      <span role="status" aria-live="polite" className="min-w-9 text-center text-mini font-semibold tabular-nums" data-call-zoom-value="">
+    <div role="group" aria-label={translate(language, 'call.zoom')} className="glass-call flex flex-col items-center rounded-full p-0.5 text-white" data-call-zoom="">
+      <button type="button" aria-label={translate(language, 'call.zoom.in')} title={translate(language, 'call.zoom.in')} onClick={step(1)} disabled={zoom.value >= zoom.range.max} className={STEP} data-call-zoom-in="">
+        {glyphs.plus}
+      </button>
+      <span role="status" aria-live="polite" className="min-w-9 py-0.5 text-center text-mini font-semibold tabular-nums" data-call-zoom-value="">
         {zoomLabel(zoom.value, language)}
       </span>
-      <CallButton label={translate(language, 'call.zoom.in')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />} onPress={() => zoom.set(zoomNudge(zoom.range, zoom.value, 1))} disabled={zoom.value >= zoom.range.max} size={44} data={{ 'data-call-zoom-in': '' }} />
+      <button type="button" aria-label={translate(language, 'call.zoom.out')} title={translate(language, 'call.zoom.out')} onClick={step(-1)} disabled={zoom.value <= zoom.range.min} className={STEP} data-call-zoom-out="">
+        {glyphs.minus}
+      </button>
     </div>
+  );
+}
+
+type SelfCameraProps = {
+  readonly stream: MediaStream | null;
+  readonly language: InterfaceLanguage;
+  readonly glyphs: Glyphs;
+  /** La colonne du rail, qui accueille la capsule — `null` quand les commandes de ma caméra sont retirées (un mode). */
+  readonly column: ((capsule: ReactNode) => ReactNode) | null;
+};
+
+export function CallSelfCamera({ stream, language, glyphs, column }: SelfCameraProps) {
+  const zoom = useCameraZoom(stream);
+  const gestures = useZoomGestures(zoom);
+  return (
+    <>
+      {zoom === null ? null : <div aria-hidden className="absolute inset-0" {...gestures} data-call-self-gestures="" />}
+      {column === null ? null : column(zoom === null ? null : <ZoomCapsule zoom={zoom} language={language} glyphs={glyphs} />)}
+    </>
   );
 }

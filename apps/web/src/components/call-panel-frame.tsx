@@ -1,13 +1,12 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
 /**
- * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550) — la forme
- * commune des panneaux que le `(…)` ouvre : Effets, Capturer, Réagir,
- * Enregistrer, Ajouter. Aucun n'est plus une carte de verre posée au-dessus
- * de la pilule : chacun s'ouvre DANS son cadre, sous un petit en-tête (titre ·
- * Fermer), en rangées qui défilent à l'horizontale et s'empilent au-dessus
- * des familles d'actions. Un fond à peine plus clair le distingue ; jamais de
- * verre dans le verre.
+ * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550, #8578) — la
+ * forme commune des panneaux que le `(…)` ouvre : Réagir, Enregistrer,
+ * Ajouter, Journal. Chacun s'ouvre DANS le cadre de la pilule et REMPLACE les
+ * rangées d'actions (une chose à la fois), sous un petit en-tête (‹ Retour ·
+ * titre · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
+ * plus clair le distingue ; jamais de verre dans le verre.
  *
  * Échap le ferme sans réduire l'appel ; à l'ouverture, le focus va au choix
  * coché ou au premier bouton ; en fermant, l'écran le rend au bouton qui l'a
@@ -18,7 +17,9 @@ import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 export type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 
-export const PANEL_ROW_SCROLL = 'flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 [&>*]:snap-start';
+export type RowWheel = (event: WheelEvent<HTMLElement>) => void;
+
+export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
 
@@ -28,7 +29,7 @@ export const CHIP = 'flex min-h-11 items-center gap-2 whitespace-nowrap rounded-
 export const chipStyle = (checked: boolean) =>
   checked ? { background: 'white', color: 'var(--ios-indigo-950)' } : { background: 'rgb(255 255 255 / 0.08)', color: 'white', boxShadow: 'inset 0 0 0 1px rgb(255 255 255 / 0.28)' };
 
-const FOCUS_ORDER = ['[data-panel-first]', '[aria-checked="true"]', 'input', '[data-row-item]', 'button:not([data-panel-close])'] as const;
+const FOCUS_ORDER = ['[data-panel-first]', '[aria-checked="true"]', 'input', '[data-row-item]', 'button:not([data-panel-close]):not([data-panel-back])'] as const;
 
 type FrameProps = {
   readonly id: string;
@@ -39,9 +40,19 @@ type FrameProps = {
   readonly children: ReactNode;
   readonly data: Readonly<Record<`data-${string}`, string>>;
   readonly closeData?: Readonly<Record<`data-${string}`, string>>;
+  /** ‹ : revenir au menu des rangées (#8578). */
+  readonly back?: PanelBack | undefined;
 };
 
-export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {} }: FrameProps) {
+export type PanelBack = { readonly label: string; readonly onPress: () => void };
+
+const chevron = (
+  <svg aria-hidden viewBox="0 0 24 24" className="size-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15 5-7 7 7 7" />
+  </svg>
+);
+
+export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back }: FrameProps) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   useEffect(() => {
@@ -65,8 +76,13 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
       style={{ background: 'rgb(255 255 255 / 0.07)' }}
       {...data}
     >
-      <div className="flex items-center justify-between gap-2 pl-3">
-        <h2 id={titleId} className="truncate text-body font-semibold">
+      <div className={`flex items-center gap-1 ${back === undefined ? 'ps-3' : ''}`}>
+        {back === undefined ? null : (
+          <button type="button" aria-label={back.label} title={back.label} onClick={back.onPress} className="grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none" data-panel-back="">
+            {chevron}
+          </button>
+        )}
+        <h2 id={titleId} className="min-w-0 flex-1 truncate text-body font-semibold">
           {title}
         </h2>
         <button
@@ -90,18 +106,19 @@ type RowProps = {
   readonly title: string;
   readonly role: 'toolbar' | 'radiogroup';
   readonly onRowKeyDown: RowKeyDown;
+  readonly onRowWheel?: RowWheel | undefined;
   readonly children: ReactNode;
   readonly data?: Readonly<Record<`data-${string}`, string>>;
 };
 
 /** Une rangée du panneau : sa légende, puis ses choix qui défilent à l'horizontale. */
-export function PanelRow({ title, role, onRowKeyDown, children, data = {} }: RowProps) {
+export function PanelRow({ title, role, onRowKeyDown, onRowWheel, children, data = {} }: RowProps) {
   return (
     <div className="flex min-w-0 flex-col gap-1" {...data}>
       <span aria-hidden className={PANEL_ROW_TITLE}>
         {title}
       </span>
-      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} className={PANEL_ROW_SCROLL} data-call-row-scroll="">
+      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} {...(onRowWheel === undefined ? {} : { onWheel: onRowWheel })} className={PANEL_ROW_SCROLL} data-call-row-scroll="">
         {children}
       </div>
     </div>

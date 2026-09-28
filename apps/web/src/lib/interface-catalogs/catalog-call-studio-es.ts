@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — es (#8551, #8552). */
 const es = {
-  'callStudio.close': 'Cerrar',
-  'callStudio.effects.faces': 'Efectos',
   'callStudio.effects.color': 'Color',
   'callStudio.effects.settings': 'Ajustes',
   'callStudio.face.none': 'Ninguno',
@@ -12,9 +10,6 @@ const es = {
   'callStudio.face.angel': 'Ángel',
   'callStudio.face.demon': 'Demonio',
   'callStudio.face.volcano': 'Erupción',
-  'callStudio.capture.title': 'Capturar',
-  'callStudio.capture.montage': 'Montaje',
-  'callStudio.capture.actions': 'Acciones',
   'callStudio.montage.screen': 'Pantalla completa',
   'callStudio.montage.grid': 'Mosaico',
   'callStudio.montage.strip': 'Fotomatón',
@@ -35,6 +30,26 @@ const es = {
   'callStudio.capture.empty': 'Nada que capturar: no se muestra ninguna imagen',
   'callStudio.capture.busy': 'Capturando…',
   'callStudio.capture.bubble': '¡Qué llamada!',
+  'callStudio.montage.cover': 'Portada',
+  'callStudio.montage.gold': 'Dorado',
+  'callStudio.montage.redcarpet': 'Alfombra roja',
+  'callStudio.montage.film': 'Película',
+  'callStudio.montage.neon': 'Neón',
+  'callStudio.montage.noir': 'Blanco y negro',
+  'callStudio.cover.line1': 'La llamada del año',
+  'callStudio.cover.line2': 'Por fin todos juntos',
+  'callStudio.cover.line3': 'Exclusiva',
+  'callStudio.mode.effects': 'Efectos de mi vídeo',
+  'callStudio.mode.montage': 'Capturar la llamada',
+  'callStudio.mode.quit': 'Salir',
+  'callStudio.mode.quitEffects': 'Salir sin guardar estos cambios',
+  'callStudio.mode.validate': 'Aceptar',
+  'callStudio.mode.validateLabel': 'Mantener este efecto y volver a la llamada',
+  'callStudio.mode.face': 'Rostro',
+  'callStudio.mode.categories': 'Categoría',
+  'callStudio.mode.pickEffect': 'Elegir un efecto',
+  'callStudio.mode.pickMontage': 'Elegir un montaje',
+  'callStudio.mode.settingsLabel': 'Mostrar ajustes (brillo, desenfoque)',
 } satisfies CallStudioCatalog;
 
 export default es;

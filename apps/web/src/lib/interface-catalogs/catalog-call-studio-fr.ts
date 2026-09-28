@@ -5,8 +5,6 @@
  * `i18n-call-studio-catalog.test.ts`).
  */
 const fr = {
-  'callStudio.close': 'Fermer',
-  'callStudio.effects.faces': 'Effets',
   'callStudio.effects.color': 'Couleur',
   'callStudio.effects.settings': 'Réglages',
   'callStudio.face.none': 'Aucun',
@@ -15,9 +13,6 @@ const fr = {
   'callStudio.face.angel': 'Ange',
   'callStudio.face.demon': 'Démon',
   'callStudio.face.volcano': 'Éruption',
-  'callStudio.capture.title': 'Capturer',
-  'callStudio.capture.montage': 'Montage',
-  'callStudio.capture.actions': 'Actions',
   'callStudio.montage.screen': 'Plein écran',
   'callStudio.montage.grid': 'Mosaïque',
   'callStudio.montage.strip': 'Photomaton',
@@ -38,6 +33,26 @@ const fr = {
   'callStudio.capture.empty': 'Rien à capturer : aucune image n’est affichée',
   'callStudio.capture.busy': 'Capture en cours…',
   'callStudio.capture.bubble': 'Quel appel !',
+  'callStudio.montage.cover': 'Couverture',
+  'callStudio.montage.gold': 'Doré',
+  'callStudio.montage.redcarpet': 'Tapis rouge',
+  'callStudio.montage.film': 'Pellicule',
+  'callStudio.montage.neon': 'Néon',
+  'callStudio.montage.noir': 'Noir et blanc',
+  'callStudio.cover.line1': 'L’appel de l’année',
+  'callStudio.cover.line2': 'Tous réunis, enfin',
+  'callStudio.cover.line3': 'Exclusif',
+  'callStudio.mode.effects': 'Effets de ma vidéo',
+  'callStudio.mode.montage': 'Capturer l’appel',
+  'callStudio.mode.quit': 'Quitter',
+  'callStudio.mode.quitEffects': 'Quitter sans garder ces changements',
+  'callStudio.mode.validate': 'Valider',
+  'callStudio.mode.validateLabel': 'Garder cet effet et revenir à l’appel',
+  'callStudio.mode.face': 'Visage',
+  'callStudio.mode.categories': 'Catégorie',
+  'callStudio.mode.pickEffect': 'Choisir un effet',
+  'callStudio.mode.pickMontage': 'Choisir un montage',
+  'callStudio.mode.settingsLabel': 'Afficher les réglages (luminosité, flou)',
 } as const;
 
 export default fr;

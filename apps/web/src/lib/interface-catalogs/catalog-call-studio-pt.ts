@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — pt (#8551, #8552). */
 const pt = {
-  'callStudio.close': 'Fechar',
-  'callStudio.effects.faces': 'Efeitos',
   'callStudio.effects.color': 'Cor',
   'callStudio.effects.settings': 'Ajustes',
   'callStudio.face.none': 'Nenhum',
@@ -12,9 +10,6 @@ const pt = {
   'callStudio.face.angel': 'Anjo',
   'callStudio.face.demon': 'Demônio',
   'callStudio.face.volcano': 'Erupção',
-  'callStudio.capture.title': 'Capturar',
-  'callStudio.capture.montage': 'Montagem',
-  'callStudio.capture.actions': 'Ações',
   'callStudio.montage.screen': 'Tela cheia',
   'callStudio.montage.grid': 'Mosaico',
   'callStudio.montage.strip': 'Cabine de fotos',
@@ -35,6 +30,26 @@ const pt = {
   'callStudio.capture.empty': 'Nada para capturar: nenhuma imagem está sendo exibida',
   'callStudio.capture.busy': 'Capturando…',
   'callStudio.capture.bubble': 'Que chamada!',
+  'callStudio.montage.cover': 'Capa',
+  'callStudio.montage.gold': 'Dourado',
+  'callStudio.montage.redcarpet': 'Tapete vermelho',
+  'callStudio.montage.film': 'Película',
+  'callStudio.montage.neon': 'Néon',
+  'callStudio.montage.noir': 'Preto e branco',
+  'callStudio.cover.line1': 'A chamada do ano',
+  'callStudio.cover.line2': 'Finalmente todos juntos',
+  'callStudio.cover.line3': 'Exclusivo',
+  'callStudio.mode.effects': 'Efeitos do meu vídeo',
+  'callStudio.mode.montage': 'Capturar a chamada',
+  'callStudio.mode.quit': 'Sair',
+  'callStudio.mode.quitEffects': 'Sair sem manter estas alterações',
+  'callStudio.mode.validate': 'Concluir',
+  'callStudio.mode.validateLabel': 'Manter este efeito e voltar à chamada',
+  'callStudio.mode.face': 'Rosto',
+  'callStudio.mode.categories': 'Categoria',
+  'callStudio.mode.pickEffect': 'Escolher um efeito',
+  'callStudio.mode.pickMontage': 'Escolher uma montagem',
+  'callStudio.mode.settingsLabel': 'Mostrar ajustes (brilho, desfoque)',
 } satisfies CallStudioCatalog;
 
 export default pt;

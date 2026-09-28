@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { CALL_REACTION_EMOJIS, type CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import type { CallRecordingKind } from '@meeshy/shared/types/call-recording';
 
-import { CallPanelFrame, PanelRow, type RowKeyDown } from '@/components/call-panel-frame';
+import { CallPanelFrame, PanelRow, type PanelBack, type RowKeyDown, type RowWheel } from '@/components/call-panel-frame';
 import { callActions } from '@/lib/calls/call-actions';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
@@ -34,6 +34,8 @@ type PanelBase = {
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
   readonly onRowKeyDown: RowKeyDown;
+  readonly onRowWheel?: RowWheel | undefined;
+  readonly back?: PanelBack | undefined;
 };
 
 const ITEM = 'grid place-items-center rounded-full transition-transform hover:bg-white/10 focus-visible:bg-white/15 active:scale-90 motion-reduce:transition-none';
@@ -41,8 +43,8 @@ const ITEM = 'grid place-items-center rounded-full transition-transform hover:bg
 export function CallReactionPalette({ react = callActions.react, ...base }: PanelBase & { readonly react?: (emoji: CallReactionEmoji) => void }) {
   const title = t(base.language, 'callControls.react.palette');
   return (
-    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} data={{ 'data-call-react-panel': '' }}>
-      <PanelRow title={title} role="toolbar" onRowKeyDown={base.onRowKeyDown}>
+    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} back={base.back} data={{ 'data-call-react-panel': '' }}>
+      <PanelRow title={title} role="toolbar" onRowKeyDown={base.onRowKeyDown} onRowWheel={base.onRowWheel}>
         {CALL_REACTION_EMOJIS.map((emoji, index) => (
           <button
             key={emoji}
@@ -73,8 +75,8 @@ const CHOICES: readonly { readonly kind: CallRecordingKind; readonly label: 'cal
 export function CallRecordChoice({ request = (kind) => void callRecording.request(kind), videoAvailable = canRecordVideo(), ...base }: PanelBase & { readonly request?: (kind: CallRecordingKind) => void; readonly videoAvailable?: boolean }) {
   const title = t(base.language, 'callControls.record.title');
   return (
-    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} data={{ 'data-call-record-choice': '' }}>
-      <PanelRow title={title} role="toolbar" onRowKeyDown={base.onRowKeyDown}>
+    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} back={base.back} data={{ 'data-call-record-choice': '' }}>
+      <PanelRow title={title} role="toolbar" onRowKeyDown={base.onRowKeyDown} onRowWheel={base.onRowWheel}>
         {CHOICES.map((choice, index) => {
           const disabled = choice.kind === 'video' && !videoAvailable;
           return (

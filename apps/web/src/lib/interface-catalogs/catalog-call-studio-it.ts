@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — it (#8551, #8552). */
 const it = {
-  'callStudio.close': 'Chiudi',
-  'callStudio.effects.faces': 'Effetti',
   'callStudio.effects.color': 'Colore',
   'callStudio.effects.settings': 'Regolazioni',
   'callStudio.face.none': 'Nessuno',
@@ -12,9 +10,6 @@ const it = {
   'callStudio.face.angel': 'Angelo',
   'callStudio.face.demon': 'Demone',
   'callStudio.face.volcano': 'Eruzione',
-  'callStudio.capture.title': 'Cattura',
-  'callStudio.capture.montage': 'Montaggio',
-  'callStudio.capture.actions': 'Azioni',
   'callStudio.montage.screen': 'Schermo intero',
   'callStudio.montage.grid': 'Mosaico',
   'callStudio.montage.strip': 'Cabina fototessere',
@@ -35,6 +30,26 @@ const it = {
   'callStudio.capture.empty': 'Niente da catturare: nessuna immagine visualizzata',
   'callStudio.capture.busy': 'Cattura in corso…',
   'callStudio.capture.bubble': 'Che chiamata!',
+  'callStudio.montage.cover': 'Copertina',
+  'callStudio.montage.gold': 'Oro',
+  'callStudio.montage.redcarpet': 'Tappeto rosso',
+  'callStudio.montage.film': 'Pellicola',
+  'callStudio.montage.neon': 'Neon',
+  'callStudio.montage.noir': 'Bianco e nero',
+  'callStudio.cover.line1': 'La chiamata dell’anno',
+  'callStudio.cover.line2': 'Finalmente tutti insieme',
+  'callStudio.cover.line3': 'Esclusiva',
+  'callStudio.mode.effects': 'Effetti del mio video',
+  'callStudio.mode.montage': 'Cattura la chiamata',
+  'callStudio.mode.quit': 'Esci',
+  'callStudio.mode.quitEffects': 'Esci senza mantenere queste modifiche',
+  'callStudio.mode.validate': 'Fatto',
+  'callStudio.mode.validateLabel': 'Mantieni questo effetto e torna alla chiamata',
+  'callStudio.mode.face': 'Viso',
+  'callStudio.mode.categories': 'Categoria',
+  'callStudio.mode.pickEffect': 'Scegli un effetto',
+  'callStudio.mode.pickMontage': 'Scegli un montaggio',
+  'callStudio.mode.settingsLabel': 'Mostra le impostazioni (luminosità, sfocatura)',
 } satisfies CallStudioCatalog;
 
 export default it;

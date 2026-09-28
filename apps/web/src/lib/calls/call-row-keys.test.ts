@@ -1,6 +1,31 @@
 import { describe, expect, test } from 'bun:test';
 
-import { rowStep } from './call-row-keys';
+import { rowStep, rowWheelDelta } from './call-row-keys';
+
+describe('rowWheelDelta', () => {
+  const row = { scrollLeft: 0, maxScroll: 120, rtl: false };
+
+  test('la molette verticale fait défiler une rangée qui déborde', () => {
+    expect(rowWheelDelta({ ...row, deltaX: 0, deltaY: 40 })).toBe(40);
+    expect(rowWheelDelta({ ...row, scrollLeft: 60, deltaX: 0, deltaY: -40 })).toBe(-40);
+  });
+
+  test('un geste déjà horizontal (pavé tactile) reste au navigateur', () => {
+    expect(rowWheelDelta({ ...row, deltaX: 30, deltaY: 5 })).toBeNull();
+  });
+
+  test('au bout de la rangée, la molette rend la main au défilement vertical', () => {
+    expect(rowWheelDelta({ ...row, deltaX: 0, deltaY: -40 })).toBeNull();
+    expect(rowWheelDelta({ ...row, scrollLeft: 120, deltaX: 0, deltaY: 40 })).toBeNull();
+    expect(rowWheelDelta({ ...row, maxScroll: 0, deltaX: 0, deltaY: 40 })).toBeNull();
+  });
+
+  test('de droite à gauche, descendre avance vers la gauche (scrollLeft négatif)', () => {
+    expect(rowWheelDelta({ scrollLeft: 0, maxScroll: 120, rtl: true, deltaX: 0, deltaY: 40 })).toBe(-40);
+    expect(rowWheelDelta({ scrollLeft: -120, maxScroll: 120, rtl: true, deltaX: 0, deltaY: 40 })).toBeNull();
+    expect(rowWheelDelta({ scrollLeft: -60, maxScroll: 120, rtl: true, deltaX: 0, deltaY: -40 })).toBe(40);
+  });
+});
 
 /**
  * LES FLÈCHES DANS UNE RANGÉE DE L'APPEL (#8550) — chaque rangée défile à
@@ -9,6 +34,13 @@ import { rowStep } from './call-row-keys';
  */
 
 describe('rowStep', () => {
+  test('une colonne (le rail de ma caméra, #8576) : ↓ au suivant, ↑ au précédent — ← et → n’y font rien, même en arabe', () => {
+    expect(rowStep({ key: 'ArrowDown', index: 0, count: 4, rtl: false, vertical: true })).toBe(1);
+    expect(rowStep({ key: 'ArrowUp', index: 0, count: 4, rtl: true, vertical: true })).toBe(3);
+    expect(rowStep({ key: 'ArrowRight', index: 0, count: 4, rtl: false, vertical: true })).toBeNull();
+    expect(rowStep({ key: 'ArrowDown', index: 0, count: 4, rtl: false })).toBeNull();
+  });
+
   test('→ passe au suivant, ← au précédent, et la rangée boucle', () => {
     expect(rowStep({ key: 'ArrowRight', index: 0, count: 4, rtl: false })).toBe(1);
     expect(rowStep({ key: 'ArrowLeft', index: 2, count: 4, rtl: false })).toBe(1);

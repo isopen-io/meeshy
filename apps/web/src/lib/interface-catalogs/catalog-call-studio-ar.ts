@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — ar (#8551, #8552). */
 const ar = {
-  'callStudio.close': 'إغلاق',
-  'callStudio.effects.faces': 'المؤثرات',
   'callStudio.effects.color': 'اللون',
   'callStudio.effects.settings': 'الإعدادات',
   'callStudio.face.none': 'بدون',
@@ -12,9 +10,6 @@ const ar = {
   'callStudio.face.angel': 'ملاك',
   'callStudio.face.demon': 'شيطان',
   'callStudio.face.volcano': 'ثوران بركان',
-  'callStudio.capture.title': 'التقاط',
-  'callStudio.capture.montage': 'التركيب',
-  'callStudio.capture.actions': 'الإجراءات',
   'callStudio.montage.screen': 'ملء الشاشة',
   'callStudio.montage.grid': 'فسيفساء',
   'callStudio.montage.strip': 'كشك الصور',
@@ -35,6 +30,26 @@ const ar = {
   'callStudio.capture.empty': 'لا شيء لالتقاطه: لا تُعرض أي صورة',
   'callStudio.capture.busy': 'جارٍ الالتقاط…',
   'callStudio.capture.bubble': 'يا لها من مكالمة!',
+  'callStudio.montage.cover': 'غلاف',
+  'callStudio.montage.gold': 'ذهبي',
+  'callStudio.montage.redcarpet': 'السجادة الحمراء',
+  'callStudio.montage.film': 'فيلم',
+  'callStudio.montage.neon': 'نيون',
+  'callStudio.montage.noir': 'أبيض وأسود',
+  'callStudio.cover.line1': 'مكالمة العام',
+  'callStudio.cover.line2': 'معًا أخيرًا',
+  'callStudio.cover.line3': 'حصري',
+  'callStudio.mode.effects': 'مؤثرات الفيديو الخاص بي',
+  'callStudio.mode.montage': 'التقاط المكالمة',
+  'callStudio.mode.quit': 'خروج',
+  'callStudio.mode.quitEffects': 'الخروج دون الاحتفاظ بهذه التغييرات',
+  'callStudio.mode.validate': 'تم',
+  'callStudio.mode.validateLabel': 'الاحتفاظ بهذا المؤثر والعودة إلى المكالمة',
+  'callStudio.mode.face': 'الوجه',
+  'callStudio.mode.categories': 'الفئة',
+  'callStudio.mode.pickEffect': 'اختيار مؤثر',
+  'callStudio.mode.pickMontage': 'اختيار مونتاج',
+  'callStudio.mode.settingsLabel': 'عرض الإعدادات (السطوع، التمويه)',
 } satisfies CallStudioCatalog;
 
 export default ar;

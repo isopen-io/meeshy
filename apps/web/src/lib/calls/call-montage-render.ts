@@ -1,4 +1,5 @@
 import { containRect, coverCrop, type MontageCell, type MontageLayout, type Ornament, type Rect, type Size } from './call-montage';
+import { isGlamourOrnament, paintGlamourOrnament } from './call-montage-glamour-render';
 
 /**
  * **LE RENDU D'UN MONTAGE** (#8552) — la couche MINCE : elle trace ce que
@@ -11,7 +12,10 @@ type Surface2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 export type Paintable = { readonly source: CanvasImageSource; readonly size: Size; readonly mirrored: boolean; readonly fit: 'cover' | 'contain' };
 
-export type MontageText = { readonly bubble: string; readonly date: string };
+/** Les mots d'un montage : la bulle de la BD, la date, les trois accroches d'une couverture (#8580). */
+export type MontageText = { readonly bubble: string; readonly date: string; readonly coverlines: readonly string[] };
+
+const BACKDROP: ReadonlySet<Ornament['kind']> = new Set(['drapes', 'bokeh', 'flashes']);
 
 /** Le cœur, dans sa boîte : deux lobes et une pointe. */
 export function heartPath(context: Surface2D, box: Rect): void {
@@ -54,6 +58,15 @@ function paintCell(context: Surface2D, cell: MontageCell, tile: Paintable): void
     context.rotate((cell.rotation * Math.PI) / 180);
     context.translate(-cx, -cy);
   }
+  if (cell.glow !== null) {
+    context.save();
+    context.shadowColor = cell.glow;
+    context.shadowBlur = Math.min(cell.card.width, cell.card.height) * 0.12;
+    context.fillStyle = cell.glow;
+    rounded(context, cell.photo, cell.radius);
+    context.fill();
+    context.restore();
+  }
   if (cell.cardColor !== null) {
     context.shadowColor = 'rgba(0, 0, 0, 0.45)';
     context.shadowBlur = cell.card.width * 0.05;
@@ -70,6 +83,7 @@ function paintCell(context: Surface2D, cell: MontageCell, tile: Paintable): void
   context.clip();
   context.fillStyle = '#000000';
   context.fillRect(cell.photo.x, cell.photo.y, cell.photo.width, cell.photo.height);
+  if (cell.tone === 'mono') context.filter = 'grayscale(1) contrast(1.25) brightness(1.05)';
   paintInto(context, tile, cell.photo);
   context.restore();
   if (cell.stroke !== null) {
@@ -83,6 +97,10 @@ function paintCell(context: Surface2D, cell: MontageCell, tile: Paintable): void
 
 function paintOrnament(context: Surface2D, ornament: Ornament, text: MontageText, size: Size): void {
   const unit = Math.min(size.width, size.height);
+  if (isGlamourOrnament(ornament)) {
+    paintGlamourOrnament(context, ornament, text.coverlines, size);
+    return;
+  }
   switch (ornament.kind) {
     case 'holes':
       context.fillStyle = '#f2efe6';
@@ -163,19 +181,30 @@ function paintOrnament(context: Surface2D, ornament: Ornament, text: MontageText
   }
 }
 
+function backgroundFill(context: Surface2D, layout: MontageLayout): string | CanvasGradient {
+  const { background, size } = layout;
+  if (background.kind === 'solid') return background.color;
+  if (background.kind === 'vertical') {
+    const gradient = context.createLinearGradient(0, 0, 0, size.height);
+    gradient.addColorStop(0, background.from);
+    gradient.addColorStop(1, background.to);
+    return gradient;
+  }
+  const reach = Math.hypot(size.width, size.height) / 2;
+  const gradient = context.createRadialGradient(size.width / 2, size.height * 0.4, 0, size.width / 2, size.height * 0.4, reach);
+  gradient.addColorStop(0, background.inner);
+  gradient.addColorStop(1, background.outer);
+  return gradient;
+}
+
 export function drawMontage(context: Surface2D, layout: MontageLayout, tiles: readonly Paintable[], text: MontageText): void {
   const { size } = layout;
   context.save();
-  if (layout.background.kind === 'solid') context.fillStyle = layout.background.color;
-  else {
-    const gradient = context.createLinearGradient(0, 0, 0, size.height);
-    gradient.addColorStop(0, layout.background.from);
-    gradient.addColorStop(1, layout.background.to);
-    context.fillStyle = gradient;
-  }
+  context.fillStyle = backgroundFill(context, layout);
   context.fillRect(0, 0, size.width, size.height);
+  layout.ornaments.filter((ornament) => BACKDROP.has(ornament.kind)).forEach((ornament) => paintOrnament(context, ornament, text, size));
   const halftones = layout.ornaments.filter((ornament) => ornament.kind === 'halftone');
-  const overlays = layout.ornaments.filter((ornament) => ornament.kind !== 'halftone');
+  const overlays = layout.ornaments.filter((ornament) => ornament.kind !== 'halftone' && !BACKDROP.has(ornament.kind));
   if (layout.clip !== null) {
     const heart = layout.clip.box;
     context.save();

@@ -2,8 +2,6 @@ import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 /** Le studio d'un appel vidéo — de (#8551, #8552). */
 const de = {
-  'callStudio.close': 'Schließen',
-  'callStudio.effects.faces': 'Effekte',
   'callStudio.effects.color': 'Farbe',
   'callStudio.effects.settings': 'Einstellungen',
   'callStudio.face.none': 'Keiner',
@@ -12,9 +10,6 @@ const de = {
   'callStudio.face.angel': 'Engel',
   'callStudio.face.demon': 'Dämon',
   'callStudio.face.volcano': 'Vulkanausbruch',
-  'callStudio.capture.title': 'Schnappschuss',
-  'callStudio.capture.montage': 'Collage',
-  'callStudio.capture.actions': 'Aktionen',
   'callStudio.montage.screen': 'Vollbild',
   'callStudio.montage.grid': 'Mosaik',
   'callStudio.montage.strip': 'Fotoautomat',
@@ -35,6 +30,26 @@ const de = {
   'callStudio.capture.empty': 'Nichts aufzunehmen: Es wird kein Bild angezeigt',
   'callStudio.capture.busy': 'Wird aufgenommen…',
   'callStudio.capture.bubble': 'Was für ein Anruf!',
+  'callStudio.montage.cover': 'Titelseite',
+  'callStudio.montage.gold': 'Gold',
+  'callStudio.montage.redcarpet': 'Roter Teppich',
+  'callStudio.montage.film': 'Film',
+  'callStudio.montage.neon': 'Neon',
+  'callStudio.montage.noir': 'Schwarzweiß',
+  'callStudio.cover.line1': 'Der Anruf des Jahres',
+  'callStudio.cover.line2': 'Endlich alle zusammen',
+  'callStudio.cover.line3': 'Exklusiv',
+  'callStudio.mode.effects': 'Effekte meines Videos',
+  'callStudio.mode.montage': 'Anruf festhalten',
+  'callStudio.mode.quit': 'Beenden',
+  'callStudio.mode.quitEffects': 'Beenden, ohne diese Änderungen zu behalten',
+  'callStudio.mode.validate': 'Fertig',
+  'callStudio.mode.validateLabel': 'Diesen Effekt behalten und zum Anruf zurückkehren',
+  'callStudio.mode.face': 'Gesicht',
+  'callStudio.mode.categories': 'Kategorie',
+  'callStudio.mode.pickEffect': 'Effekt wählen',
+  'callStudio.mode.pickMontage': 'Montage wählen',
+  'callStudio.mode.settingsLabel': 'Einstellungen anzeigen (Helligkeit, Unschärfe)',
 } satisfies CallStudioCatalog;
 
 export default de;
