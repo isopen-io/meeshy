@@ -9,7 +9,7 @@ struct CallPanelHeader: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            headerButton(symbol: "chevron.left", label: CallControlsCopy.backToMenu, action: onBack)
+            headerButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(.white)
