@@ -23,6 +23,7 @@ import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
 import ptGallery from './catalog-pt-gallery';
+import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
@@ -1169,6 +1170,7 @@ const pt = {
   ...ptStudioChrome,
   ...ptEphemeral,
   ...ptGallery,
+  ...ptMessageCard,
   ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,
