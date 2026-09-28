@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 
 import type { PendingAttachment } from '@/lib/send/attachments';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /** LE STUDIO, chargé avec cette couche — jamais avec le chunk du fil. */
 const StoryComposeScreen = lazy(() => import('@/routes/story-compose'));
@@ -13,6 +14,9 @@ const StoryComposeScreen = lazy(() => import('@/routes/story-compose'));
  * navigation), semé de l'image, en mode RETOUCHE. « Terminé » rend le
  * composite, que l'hôte substitue à la pièce ; ✕ ou Échap referment sans rien
  * changer. Rien n'est envoyé.
+ *
+ * Le retour matériel de la coque Android la referme aussi (#8460) : c'est une
+ * couche modale, elle passe par `useBackDismiss` comme les autres.
  */
 export default function ComposerRetouch({
   attachment,
@@ -25,6 +29,7 @@ export default function ComposerRetouch({
   readonly onCancel: () => void;
   readonly render?: StudioRetouchDeps;
 }) {
+  useBackDismiss(onCancel);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onCancel();
