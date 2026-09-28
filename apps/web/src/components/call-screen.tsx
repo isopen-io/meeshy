@@ -480,7 +480,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         {chrome.header ? (
-          <div className={fade} aria-hidden={hidden ? true : undefined}>
+          <div className={`relative z-20 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-plane="">
             <CallScreenHeader call={call} language={language} clock={joined ? clock : null} prominent={sharedScreenShown} />
           </div>
         ) : null}
@@ -514,7 +514,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div className="flex flex-col gap-3 pb-6">
+          <div className="relative z-20 flex flex-col gap-3 pb-6" data-call-plane="">
             {captionsFramed ? null : <div className="relative z-10">{captions}</div>}
             {mode === null ? (
               <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">

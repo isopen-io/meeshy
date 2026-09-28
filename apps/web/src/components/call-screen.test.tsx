@@ -348,6 +348,20 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  /* Les plans de l'écran d'appel, du fond vers le lecteur : la scène, ma
+     vignette (z-10, au-dessus de l'espace vide de la colonne pour recevoir le
+     doigt), puis l'en-tête et la pilule avec ses panneaux (z-20). Mesuré dans
+     Chromium à 320 × 568 : sans ce plan, la vignette couvrait « Fermer » du
+     Journal, qui monte jusqu'à elle. */
+  test('l’en-tête et la pilule passent au-dessus de ma vignette, qui passe au-dessus de la scène', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    const plane = (selector: string) => (view.find(selector)?.closest('[data-call-plane]') as HTMLElement | null)?.className.split(' ') ?? [];
+    expect(plane('[data-call-header]')).toContain('z-20');
+    expect(plane('[data-call-controls]')).toContain('z-20');
+    expect(view.find('[data-call-corner]')?.className.split(' ')).toContain('z-10');
+    view.done();
+  });
+
   test('mon image en plein écran porte le rail de ma caméra ; « Effets » y entre dans le mode, qui le retire (#8576)', async () => {
     const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } }, { color: true, blur: false });
     expect(view.find('[data-call-self-rail]')).toBeNull();
