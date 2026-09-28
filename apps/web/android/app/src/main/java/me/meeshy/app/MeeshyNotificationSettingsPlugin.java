@@ -4,16 +4,23 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.firebase.FirebaseApp;
 
 /**
  * Le chemin de retour d'une permission de notification refusee (#7307).
  * Android ne redemande plus apres un refus : seul l'ecran systeme des
  * notifications de l'app peut la rendre. Les reglages de la coque
  * (`src/lib/push/device-permission.ts`) l'ouvrent par ce pont.
+ *
+ * #8477 — il dit aussi si FCM est configure. Sans `google-services.json`,
+ * aucune `FirebaseApp` n'existe et `PushNotificationsPlugin.register` leve sur
+ * le fil des plugins : le processus meurt. La garde JS (`fcm-guard.ts`) lit
+ * `fcmStatus` avant tout `register()`.
  */
 @CapacitorPlugin(name = "MeeshyNotificationSettings")
 public class MeeshyNotificationSettingsPlugin extends Plugin {
@@ -31,5 +38,12 @@ public class MeeshyNotificationSettingsPlugin extends Plugin {
         } catch (Exception error) {
             call.reject("settings-unavailable", error);
         }
+    }
+
+    @PluginMethod
+    public void fcmStatus(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("configured", !FirebaseApp.getApps(getContext()).isEmpty());
+        call.resolve(result);
     }
 }
