@@ -4444,3 +4444,15 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - Frise de la maquette : 6 s, lecture en boucle, « Entre ici » / « Sort ici » à la tête (écart minimal 5 %), règle qui place la tête, pistes qui sélectionnent et placent la tête, tête ambrée ; objets hors fenêtre cachés en lecture et en fantôme (.25) à l'arrêt (`SceneGhostContext`) ; un objet posé sur une scène animée entre à la tête (au plus tard à 80 %).
 
 **Conséquences.** Les poignées (`StudioObjectHandles`) et leur témoin sont retirés. Les gates `check-story-studio` et `check-story-plateau` mesurent la nouvelle règle.
+
+## D-149 — Lot 7 du composer plein écran : pistes glissées et étirées, texte du post du format armé, scène à 10 px des bords, plaques bornées, une retouche ne touche que son composant (2026-09-28, #8482)
+
+**Contexte.** Retour porteur du 2026-09-28, déjà livré sur iOS (#8473) ; le web (qui sert la coque Android) doit le suivre.
+
+**Décision.**
+- Frise (`story-compose-timeline.tsx`, loi pure `lib/stories/studio-track-drag.ts`) : la barre d'une piste se GLISSE (durée gardée, bornée à la scène) ; deux ancres de 28 px, sur la seule piste choisie, règlent entrée et sortie (écart minimal 5 %) ; pointeur, doigt et clavier (flèches 0,1 s, Maj 1 s). Une piste se choisit pendant la lecture, et « Entre ici » / « Sort ici » y restent. Un glisser est UN pas d'historique.
+- Texte du post : le bouton suit le format ARMÉ au chevron (c'était déjà le cas au web, désormais témoigné), et son éditeur quitte la feuille centrée pour une plaque de verre qui monte du bas dans le socle (`StudioPostTextPlaque`). Le texte part en `content` avec la scène (`check-story-plateau`).
+- Géométrie : la carte se cadre à 10 px des bords (les boutons flottants d'iOS) ; ✕ et ⋯ descendent de 8 px sous la zone sûre. Cadre, édition, frise et texte du post sont bornés (`STUDIO_PLATE` : pleine largeur au téléphone, 36 rem centrés au bureau), sans débordement.
+- Édition d'un composant : audit sans défaut de portée — le Cadre est le réglage du FOND, le calque n'a que sa pose et sa légende, le style d'un texte ne touche que lui ; des témoins publient la même scène avant et après et comparent chaque autre composant. Pendant l'édition d'un objet, la tuile Cadre (outil du fond) se retire, et la saisie de texte ne peint plus son invite sur un calque.
+
+**Hors lot.** Le web n'a ni mode dessin ni rognage libre d'un média : le Cadre (Ajuster / Remplir) est son seul recadrage. Les deux relèvent d'issues à part.

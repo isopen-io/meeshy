@@ -44,14 +44,14 @@ export function StudioShell({
   return (
     <main data-story-studio className="relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
       {floor}
-      {/* LA BARRE HAUTE (lot 6, #8482) — ✕ et ⋯ descendent de 8 px sous la
-          zone sûre du haut (retour porteur 2026-09-28 : ils collaient au
+      {/* LA BARRE HAUTE (lot 6, #8482) — ✕ et ⋯ descendent de 8 px (`mt-2`) sous
+          la zone sûre du haut (`pt-safe`) (retour porteur 2026-09-28 : ils collaient au
           bord), toujours AU-DESSUS de la scène, qui se cadre sous eux. Ils ne
           passent pas DANS la barre d'état : iOS l'efface, le web ne le peut
           pas (l'horloge y resterait dessous). */}
       <header
         data-story-studio-top
-        className="relative z-20 flex shrink-0 items-center gap-3 px-3 pt-[calc(var(--safe-top)+8px)] pb-1"
+        className="relative z-20 mt-2 flex shrink-0 items-center gap-3 px-3 pt-safe pb-1"
       >
         {onCancel !== undefined ? (
           <button
