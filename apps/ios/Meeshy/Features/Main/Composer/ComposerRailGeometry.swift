@@ -59,6 +59,45 @@ nonisolated enum ComposerRailGeometry {
     /// scène — l'ambiguïté même que l'encastrement existe pour lever.
     static let gutter: CGFloat = 8
 
+    /// **Le disque de verre d'un bouton FLOTTANT** (directive porteur
+    /// 2026-09-28 : « réduis la taille des boutons flottants liquidglass »).
+    /// Le DESSIN rétrécit, jamais la cible : le cadre du bouton garde
+    /// `railWidth`, et c'est l'écart entre deux cadres qui se resserre
+    /// (`floatingEntrySpacing`) pour que les disques gardent leur respiration.
+    static let floatingButtonSize: CGFloat = 36
+
+    /// L'écart entre deux CADRES de 44 pt dont le disque n'en dessine que 36 :
+    /// `2 + 2 × 4 = 10 pt` entre deux disques, la respiration d'avant.
+    static let floatingEntrySpacing: CGFloat = 2
+
+    /// **La remontée des deux rails flottants** (même directive : « remonte-les
+    /// d'au moins la taille d'un des boutons ») — la gouttière d'avant, plus un
+    /// cadre entier.
+    static var floatingBottomInset: CGFloat { gutter + railWidth }
+
+    /// L'écart entre un bouton et la colonne d'options qu'il ouvre à sa droite.
+    static let flyoutGap: CGFloat = 6
+
+    /// **La hauteur NATURELLE d'une colonne de boutons flottants**, marges de
+    /// verre comprises — ce que la colonne d'options demanderait si rien ne la
+    /// bornait. Au-delà de la hauteur offerte, elle défile.
+    static func floatingColumnHeight(entries: Int) -> CGFloat {
+        guard entries > 0 else { return 0 }
+        return CGFloat(entries) * railWidth
+            + CGFloat(entries - 1) * floatingEntrySpacing
+            + 2 * floatingColumnPadding
+    }
+
+    /// La marge verticale d'une colonne flottante (`ComposerLeadingRail`).
+    static let floatingColumnPadding: CGFloat = 8
+
+    /// **Où se pose la colonne d'options** : son haut s'aligne sur celui du
+    /// bouton qui l'ouvre, puis remonte juste assez pour ne pas sortir de la
+    /// zone offerte — jamais au-dessus de son bord haut.
+    static func flyoutTop(anchorTop: CGFloat, columnHeight: CGFloat, available: CGFloat) -> CGFloat {
+        max(0, min(anchorTop - floatingColumnPadding, available - columnHeight))
+    }
+
     /// L'encastrement d'AVANT les rails, conservé tel quel là où aucun rail
     /// n'est monté : ce lot ne déplace pas une scène qui n'a pas de rails.
     static let legacyInset: CGFloat = 14

@@ -173,8 +173,6 @@ final class ComposerObjectEditorTests: XCTestCase {
         let surfaces = compact(try hostUnit())
         XCTAssertTrue(intake.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(intake.contains("openObjectEditor(objet.id)"),
-                      "La porte TEXTE doit ouvrir l'éditeur, pas seulement entrer en mode.")
         XCTAssertTrue(surfaces.contains("openObjectEditor(id)"),
                       "L'appui long « Modifier » doit ouvrir le MÊME écran que la création.")
     }

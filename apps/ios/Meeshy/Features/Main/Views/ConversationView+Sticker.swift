@@ -116,7 +116,7 @@ extension ConversationView {
         let tempId = ClientMessageId.generate()
         // Un sticker est un ENVOI comme un autre : la protection armée le suit
         // (#7498), et la rangée se désarme au tap, ici comme ailleurs.
-        let protection = viewModel.captureArmedProtection()
+        let protection = viewModel.captureArmedProtection(replyingTo: replyId)
 
         viewModel.insertOptimisticMediaMessage(
             tempId: tempId, content: "", attachments: [local], messageType: .image,

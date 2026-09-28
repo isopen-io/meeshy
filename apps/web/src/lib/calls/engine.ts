@@ -767,6 +767,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     for (const track of localStream?.getAudioTracks() ?? []) track.enabled = !muted;
     write({ ...call, micMuted: muted });
     if (call.phase.kind === 'outgoing') session.mutedWhileRinging = muted;
+    session.captions?.micChanged();
     if (call.callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId: call.callId, enabled: !muted });
   };
 

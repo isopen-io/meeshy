@@ -302,6 +302,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
         // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
         "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
+        // #8582 — RELOCALISATION pure : `StoryCommentRowView` quitte
+        // `StoryViewerView+Content.swift` et emporte son site figé — le
+        // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
+        // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
+        "Features/Main/Views/StoryCommentRowView.swift",
         "Features/Main/Views/StoryViewerView+Content.swift",
         // #4084 — RELOCALISATION pure, même forme qu'au #4102 et au #4014 :
         // l'en-tête du viewer story quitte `+Sidebar` (qui portait DEUX vues

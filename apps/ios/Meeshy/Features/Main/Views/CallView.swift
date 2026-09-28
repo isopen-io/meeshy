@@ -79,17 +79,16 @@ struct CallView: View {
     /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
     /// DANS l'écran d'appel, entre l'en-tête et la pilule.
     @ObservedObject var mesh: GroupCallMeshCoordinator
-    /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
-    @State var controlsDisclosure = CallControlsDisclosure()
+    @State var layer: CallScreenLayer = .idle
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
+    @State var isSelfFeatured = false
+    @State var selfTileScale: CallSelfTileScale = .standard
+    @State var selfTilePinch: CGFloat = 1
+    let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
-    @State var showCaptionsJournal = false
-    /// #8433 — le sélecteur d'amis.
-    @State var showAddPeople = false
-    /// #8552 — la capture de l'appel, vivante tant que son panneau est ouvert.
     @StateObject var capture = CallCaptureController()
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
@@ -108,10 +107,11 @@ struct CallView: View {
     /// racine ignore la safe area, la pilule la retrouve depuis la fenêtre.
     static var chromeBottomInset: CGFloat { DeviceLayout.safeAreaBottom + 12 }
 
-    init(callManager: CallManager, mesh: GroupCallMeshCoordinator) {
+    init(callManager: CallManager, mesh: GroupCallMeshCoordinator, selfTileMemory: (any CallSelfTileRemembering)? = nil) {
         self.callManager = callManager
         self.transcriptionService = callManager.transcriptionService
         self.mesh = mesh
+        self.selfTileMemory = selfTileMemory ?? CallSelfTileMemory.shared
     }
 
     /// #8276 — un appel de groupe (deux membres distants au moins) remplace la
@@ -301,6 +301,7 @@ struct CallView: View {
         // textes blancs deviennent illisibles (white-on-white).
         .environment(\.colorScheme, .dark)
         .onAppear {
+            showTranscript = transcriptionService.isShowingOverlay
             startPulseAnimation()
             // Expansion depuis la bannière PiP : le contenu démarre contracté
             // vers le haut (là où vivait la bannière) puis s'étire en plein

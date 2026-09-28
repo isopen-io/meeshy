@@ -300,6 +300,9 @@ class ConversationViewModel: ObservableObject {
     /// burned). Surfaced by the notification preview composer.
     @Published var isViewOnceEnabled: Bool = false { didSet { persistArmedProtection() } }
 
+    /// La contagion de la citation en attente (#8557) — superposée à l'armement, jamais persistée.
+    @Published var armedReplyContagion: ArmedReplyContagion?
+
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
 

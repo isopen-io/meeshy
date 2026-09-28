@@ -35,6 +35,8 @@ import {
 import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
 import type { StickyProtection } from '@/lib/send/protection-preference';
+import { NO_IMPOSED_PROTECTION, contaminatedComposeProtection, imposedLocksOf } from '@/lib/send/reply-contagion';
+import type { ImposedReplyProtection } from '@meeshy/shared/utils/reply-protection-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
@@ -132,6 +134,7 @@ export const Composer = memo(function Composer({
   onTextChange,
   replyTo,
   onCancelReply,
+  imposedProtection = NO_IMPOSED_PROTECTION,
   rights,
   draft,
   stickyProtection,
@@ -180,6 +183,11 @@ export const Composer = memo(function Composer({
    */
   replyTo?: { author: string; excerpt: string; language?: string };
   onCancelReply?: () => void;
+  /** CE QUE LE MESSAGE CITÉ IMPOSE À LA RÉPONSE (#8557) — `imposedReplyProtection`
+   * de `@meeshy/shared`, calculé par l'hôte (`useThreadCompose`). Il RECOUVRE
+   * l'état des bascules sans jamais l'écrire : retirer la citation rend l'état
+   * d'avant, et la préférence collante (#8306) ne le voit pas. */
+  imposedProtection?: ImposedReplyProtection;
   /** #5668 — les droits d'envoi du LECTEUR (`Participant.permissions`) : une
    * tuile du tiroir ne se rend que si son geste a un effet (loi 4). Absent ⇒
    * tout est autorisé (aucun participant chargé encore). */
@@ -310,6 +318,11 @@ export const Composer = memo(function Composer({
     }),
     [ephemeralSeconds, blurred, viewOnce, effectFlags],
   );
+  /* LA PROTECTION QUI PART (#8557) — celle de l'utilisateur, recouverte par
+     ce que la citation impose : c'est elle que la rangée haute MONTRE et que
+     l'envoi PORTE ; `protection` seule est rapportée au brouillon. */
+  const locks = imposedLocksOf(imposedProtection);
+  const effective = useMemo(() => contaminatedComposeProtection(protection, imposedProtection), [protection, imposedProtection]);
 
   /** LA TONALITÉ — INDICATEUR PASSIF, débounce 300 ms (`use-sentiment.ts`,
    * miroir `TextAnalyzer`). */
@@ -323,7 +336,7 @@ export const Composer = memo(function Composer({
    * pastille de langue…) en hérite sans qu'aucune n'ait à le savoir — le même
    * mécanisme que `withAccent` au niveau de l'écran (`thread.tsx`).
    */
-  const accentState = composerAccentOf(protection);
+  const accentState = composerAccentOf(effective);
   const chromeAccentStyle = composerChromeAccentStyle(accentState);
   /** La couleur ne se voit pas au lecteur d'écran : le champ DIT la
    * protection dominante (#7667, miroir `accessibilityHint` iOS). */
@@ -508,7 +521,7 @@ export const Composer = memo(function Composer({
     // `resetAfterSend`, qui vide le texte et donc changerait ce que
     // `compose.language` rendrait si on le relisait après.
     const language = compose.language;
-    onSend({ text: own, attachments, language, protection, place });
+    onSend({ text: own, attachments, language, protection: effective, place });
     compose.noteSent(); // Le choix cesse d'être ÉPINGLÉ, mais reste COLLANT (Q3).
     resetAfterSend({ keepFocus });
   };
@@ -618,7 +631,7 @@ export const Composer = memo(function Composer({
       text: '',
       attachments: [pendingAttachmentOf(file)],
       language: compose.language,
-      protection,
+      protection: effective,
       place: null,
       sticker: { stickerId },
     });
@@ -717,7 +730,7 @@ export const Composer = memo(function Composer({
       {/* LES RAILS AU-DESSUS DE LA BARRE D'OUTILS (#7980, miroir #7966/#7967)
           — la durée éphémère OU les effets, jamais les deux, à 8 px du bord
           haut du verre et de ses côtés. */}
-      {!isRecording && ephemeralPickerOpen ? (
+      {!isRecording && ephemeralPickerOpen && !locks.ephemeral ? (
         <ComposerEphemeralRail
           {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
           onSelectEphemeral={(seconds) => {
@@ -744,9 +757,11 @@ export const Composer = memo(function Composer({
           `targets/thread.composer-top-row.{light,dark}.png`, 25 nœuds). */}
       {!isRecording ? (
         <ComposerTopRow
-          {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
-          ephemeralPickerOpen={ephemeralPickerOpen}
+          {...(effective.ephemeralSeconds === undefined ? {} : { ephemeralSeconds: effective.ephemeralSeconds })}
+          ephemeralPickerOpen={ephemeralPickerOpen && !locks.ephemeral}
+          locks={locks}
           onToggleEphemeral={() => {
+            if (locks.ephemeral) return;
             if (ephemeralSeconds !== undefined) {
               // ARMÉ ⇒ tap DÉSARME (miroir `+Protections.swift:26-34`).
               setEphemeralSeconds(undefined);
@@ -756,8 +771,10 @@ export const Composer = memo(function Composer({
             setEffectsPanelOpen(false);
             setEphemeralPickerOpen((v) => !v);
           }}
-          blurred={blurred}
-          onToggleBlur={() => applyVeil(toggledVeil('blurred', { blurred, viewOnce }))}
+          blurred={effective.blurred === true}
+          onToggleBlur={() => {
+            if (!locks.blurred) applyVeil(toggledVeil('blurred', { blurred, viewOnce }));
+          }}
           viewOnce={viewOnce}
           onToggleViewOnce={() => applyVeil(toggledVeil('viewOnce', { blurred, viewOnce }))}
           effectCount={decorativeEffectCountOf(effectFlags)}
