@@ -59,7 +59,6 @@ const arStudioChrome = {
   'story.studio.object.duplicate': 'تكرار',
   'story.studio.object.edit': 'تعديل',
   'story.studio.object.remove': 'إزالة',
-  'story.studio.object.leave': 'إخراج من المشهد',
   'story.studio.edit.done': 'حسنًا',
   'story.studio.pose.left': 'إلى اليسار',
   'story.studio.pose.right': 'إلى اليمين',

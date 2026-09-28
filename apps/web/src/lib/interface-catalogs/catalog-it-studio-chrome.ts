@@ -59,7 +59,6 @@ const itStudioChrome = {
   'story.studio.object.duplicate': 'Duplica',
   'story.studio.object.edit': 'Modifica',
   'story.studio.object.remove': 'Rimuovi',
-  'story.studio.object.leave': 'Togli dalla scena',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'A sinistra',
   'story.studio.pose.right': 'A destra',

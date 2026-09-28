@@ -13,6 +13,9 @@
  * donné le focus à la saisie, rien n'est tapé : la phrase rendue nomme le
  * défaut au lieu de le contourner.
  *
+ * `finish` (vrai par défaut) referme ensuite l'édition par « Terminé », comme
+ * l'auteur avant de publier : sur mobile, la plaque d'édition retire le socle.
+ *
  * Rend `null` quand le texte est arrivé, sinon la raison de l'échec.
  */
 const FIELD = '#story-studio-text';
@@ -23,7 +26,7 @@ const focusReached = (page) =>
     .then(() => true)
     .catch(() => false);
 
-export async function writeOnStage(page, text) {
+export async function writeOnStage(page, text, { finish = true } = {}) {
   const focused = await page.evaluate((selector) => document.activeElement === document.querySelector(selector), FIELD);
   if (!focused) {
     const box = await page.locator(FIELD).boundingBox();
@@ -39,12 +42,14 @@ export async function writeOnStage(page, text) {
   if (text === '') await page.keyboard.press('Backspace');
   else await page.keyboard.type(text);
   const value = await page.evaluate((selector) => document.querySelector(selector)?.value ?? null, FIELD);
-  return value === text ? null : `le texte tapé au clavier n’est pas arrivé dans la saisie : « ${value} »`;
+  if (value !== text) return `le texte tapé au clavier n’est pas arrivé dans la saisie : « ${value} »`;
+  if (finish && (await page.locator('[data-story-edit-done]').count()) > 0) await page.click('[data-story-edit-done]');
+  return null;
 }
 
 /** Le « T+ » du rail — il pose un texte ET ouvre sa saisie : on tape aussitôt. */
 export async function addTextOnStage(page, text) {
   await page.click('[data-story-option="add-text"]');
   if (!(await focusReached(page))) return '« T+ » n’a pas ouvert la saisie du texte posé';
-  return writeOnStage(page, text);
+  return writeOnStage(page, text, { finish: false });
 }

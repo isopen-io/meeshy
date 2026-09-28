@@ -59,7 +59,6 @@ const ptStudioChrome = {
   'story.studio.object.duplicate': 'Duplicar',
   'story.studio.object.edit': 'Editar',
   'story.studio.object.remove': 'Remover',
-  'story.studio.object.leave': 'Tirar da cena',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Para a esquerda',
   'story.studio.pose.right': 'Para a direita',

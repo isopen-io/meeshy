@@ -59,7 +59,6 @@ const deStudioChrome = {
   'story.studio.object.duplicate': 'Duplizieren',
   'story.studio.object.edit': 'Bearbeiten',
   'story.studio.object.remove': 'Entfernen',
-  'story.studio.object.leave': 'Aus der Szene nehmen',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Nach links',
   'story.studio.pose.right': 'Nach rechts',

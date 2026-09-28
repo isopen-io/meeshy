@@ -10,7 +10,6 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import { refreshFeedAction } from '@/lib/api/query';
-import { backgroundCss } from '@/lib/canvas/background';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 import { resolveSceneText } from '@/lib/canvas/text';
@@ -23,7 +22,6 @@ import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import {
   composeStoryCanvas,
-  STORY_PLAIN_BACKGROUND,
   studioMediaKindOf,
 } from '@/lib/stories/story-document';
 import {
@@ -77,7 +75,6 @@ import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
-import { keyboardPose } from '@/lib/stories/studio-grip';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
 import { studioPageDuration, studioTracks, timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
 import type { StudioTiming } from '@/lib/stories/studio-text';
@@ -85,8 +82,6 @@ import type { StoryFrame } from '@/lib/stories/story-document';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { GlyphSvg } from '@/components/glyph';
-import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
 import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
@@ -96,8 +91,7 @@ import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-me
 import { StudioAnimatedToggle, StudioEditPlaque, StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
 import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
-import { StudioStageGestures } from '@/routes/story-compose-stage';
-import { StudioTextInput } from '@/routes/story-compose-text-input';
+import { StudioScene } from '@/routes/story-compose-scene';
 import { useStudioBackgroundSound } from '@/routes/use-studio-background-sound';
 import { useStudioCompositeHash } from '@/routes/use-studio-composite-hash';
 import { useStudioTextBox } from '@/routes/use-studio-text-box';
@@ -138,8 +132,6 @@ import { useStudioTimeline } from '@/routes/use-studio-timeline';
  *    changement d'audience était ignoré en silence (défauts 1 et 2, revue de
  *    #7707). Seuls le ✕ (`StudioShell`) et la capsule Publier restent actifs.
  */
-
-const ScenePlayer = lazy(() => import('@/components/scene-player'));
 
 /** LA FEUILLE D'AUDIENCE, CHARGÉE À LA DEMANDE (#7683) — même discipline que
  * `LanguageSheet`/`EffectsSheet` du composeur du fil : elle ne pèse sur le
@@ -450,9 +442,17 @@ function StoryStudio({
   const selectedLayer = selectedTextLayer(draft);
   const selectedId = page.selected;
 
+  /** L'INVITE À ÉCRIRE (#8515) — le texte sélectionné, sinon le premier texte
+   * VIDE de la page ; la saisie la cible et le doigt l'ouvre. Sans texte vide
+   * ni sélection, elle ne s'affiche que sur une page sans aucun texte écrit :
+   * la toucher y pose un texte neuf. */
+  const inviteLayer = selectedLayer ?? page.texts.find((layer) => layer.text.trim() === '') ?? null;
+  const inviteShown = inviteLayer !== null || page.texts.every((layer) => layer.text.trim() === '');
+
   function onTextChange(value: string) {
-    if (selectedId === null) return;
-    edit((current) => withText(current, selectedId, value), `text:${selectedId}`);
+    const target = inviteLayer?.id;
+    if (target === undefined) return;
+    edit((current) => withText(current, target, value), `text:${target}`);
     reportComposeText(value);
   }
 
@@ -650,7 +650,6 @@ function StoryStudio({
   const { stageObjects, editing, setEditingId, objectMenu, setObjectMenu, startEditing, commitPoseOf, objectActions } = useStudioObjects({
     page,
     lang,
-    kind,
     edit,
     select: (id) => setDraft((current) => withSelected(current, id)),
     removeOverlay: () => remove('overlay'),
@@ -673,6 +672,17 @@ function StoryStudio({
       setEditingId(null);
     },
   });
+  /** « T+ » et l'invite sans texte (#8515) — pose un texte (entré à la tête
+   * sur une scène animée) ET ouvre sa saisie : on tape aussitôt. */
+  const addTextAndWrite = () => {
+    const id = currentStudioPage(withAddedText(latestDraft.current, language)).selected;
+    edit((current) => {
+      const added = withAddedText(current, language);
+      const placed = currentStudioPage(added).selected;
+      return placed === null ? added : withPlacedWhileAnimated(added, placed, clock?.now() ?? 0);
+    });
+    if (id !== null) startEditing(id);
+  };
   /** La carte du socle — hors retouche, un média en montée ou en échec, le
    * son, et le message du pied ; plus rien de ce qu'on touche (lot 6). */
   const showsSocleCard = !retouching && (studioAssetsShown(page) || studioFooterSpeaks({ kind, placeRefusal, kindRefusal, publishFailure }));
@@ -739,135 +749,50 @@ function StoryStudio({
 
         {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
             la carte ne colle jamais au bord de l'écran. */}
-        <div className="absolute inset-0 grid place-items-center px-2.5 py-0.5" style={{ containerType: 'size' }}>
-          {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707) — le plan
-              publié lit le brouillon tel qu'il était au premier clic sur
-              Publier : un geste après coup ne changerait plus rien à ce qui
-              part (`StoryViewModel+Publication.swift:549`). */}
-          <div
-            data-scene-stage
-            data-story-studio-current-page={page.id}
-            ref={stageRef}
-            role="group"
-            aria-label={translate(lang, 'story.studio.stage')}
-            className="relative overflow-hidden"
-            style={{
-              width: 'min(100cqw, 100cqh * 9 / 16)',
-              height: 'min(100cqh, 100cqw * 16 / 9)',
-              containerType: 'inline-size',
-              borderRadius: 22,
-              backgroundColor: backgroundCss(STORY_PLAIN_BACKGROUND, 'var(--color-ios-card)'),
-            }}
-            inert={publishing}
-          >
-            {previewDocument !== null ? (
-              <Suspense fallback={null}>
-                <ScenePlayer
-                  document={previewDocument}
-                  sceneIndex={0}
-                  mode="preview"
-                  playing
-                  carrier={PREVIEW_CARRIER}
-                  preferredLanguages={reader.languages}
-                  muted={soundMuted}
-                  onContentReady={remeasureText}
-                  // L'horloge est remise DÈS le montage, frise fermée : le moteur ne
-                  // la rappelle qu'à son changement, et une frise ouverte après
-                  // coup n'aurait jamais reçu la sienne (tête immobile).
-                  onClock={setClock}
-                  // LA FRISE (maquette) : lecture en BOUCLE, objets hors de leur
-                  // fenêtre CACHÉS en lecture et en FANTÔME (.25) à l'arrêt ;
-                  // frise fermée, la scène se règle dans l'espace : tout se voit.
-                  {...(timelineOpen && timelinePlaying ? {} : { ghostOutsideWindow: timelineOpen ? 0.25 : 1 })}
-                  {...(timelineOpen ? { playing: timelinePlaying, onEnded: () => clock?.seek(0) } : {})}
-                />
-              </Suspense>
-            ) : null}
-            {soundSrc !== null && soundSrc !== '' ? (
-              <>
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption -- son de fond décoratif, aucun sous-titre à porter ici (P1) */}
-                <audio ref={soundAudioRef} data-story-studio-sound src={soundSrc} loop muted={soundMuted} />
-                <button
-                  type="button"
-                  data-story-studio-sound-toggle
-                  aria-label={translate(lang, soundMuted ? 'story.studio.sound.unmute' : 'story.studio.sound.mute')}
-                  aria-pressed={!soundMuted}
-                  onClick={() => setSoundMuted((current) => !current)}
-                  className="absolute start-2 bottom-2 grid place-items-center rounded-full"
-                  style={{ width: 44, height: 44, backgroundColor: 'rgba(0,0,0,0.45)', color: 'white', zIndex: 3 }}
-                >
-                  <GlyphSvg glyph={soundMuted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={20} />
-                </button>
-              </>
-            ) : null}
-            {timelineOpen ? null : (
-              <StudioTextInput
-                lang={lang}
-                targetId={selectedId}
-                layer={selectedLayer}
-                fallbackLanguage={language}
-                textBox={textBox}
-                fontSize={textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null}
-                onText={onTextChange}
-                onPublish={() => void publish()}
-                locked={publishing}
-                editing={editing !== null && editing === selectedId && editing !== 'overlay'}
-              />
-            )}
-            {/* LA SÉLECTION SILENCIEUSE (lot 6) — toucher sélectionne sans
-                entourer, glisser déplace, appui long ouvre le menu, double-tap
-                ouvre l'édition. Frise ouverte, la scène se règle dans le temps. */}
-            {timelineOpen ? null : (
-              <>
-                <StudioStageGestures
-                  stageRef={stageRef}
-                  objects={stageObjects}
-                  locked={publishing}
-                  onSelect={(id) => {
-                    if (id !== editing) setEditingId(null);
-                    setDraft((current) => (id === null ? current : withSelected(current, id)));
-                  }}
-                  onEdit={startEditing}
-                  onCommit={commitPoseOf}
-                  onMenu={(id, point) => setObjectMenu({ id, point })}
-                />
-                {/* La voie du CLAVIER et du lecteur d'écran : un bouton par objet. */}
-                {stageObjects.map((object) => (
-                  <button
-                    key={object.id}
-                    type="button"
-                    className="sr-only"
-                    data-story-object-edit={object.id}
-                    onClick={() => startEditing(object.id)}
-                    // Tout ce que le doigt fait, le clavier le fait : flèches,
-                    // `+`/`−` et `[`/`]` déplacent, agrandissent et tournent.
-                    onKeyDown={(event) => {
-                      const next = keyboardPose(object.pose, event.key, event.shiftKey);
-                      if (next === null) return;
-                      event.preventDefault();
-                      commitPoseOf(object.id, next);
-                    }}
-                  >
-                    {translate(lang, 'story.studio.objects.edit', { name: objectName(object.id) })}
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
+        <StudioScene
+          lang={lang}
+          stageRef={stageRef}
+          pageId={page.id}
+          locked={publishing}
+          preview={{ document: previewDocument, carrier: PREVIEW_CARRIER, preferredLanguages: reader.languages, onContentReady: remeasureText, onClock: setClock }}
+          sound={{ src: soundSrc, muted: soundMuted, audioRef: soundAudioRef, onToggle: () => setSoundMuted((current) => !current) }}
+          timeline={{ open: timelineOpen, playing: timelinePlaying, onEnded: () => clock?.seek(0) }}
+          writing={
+            inviteShown
+              ? {
+                  lang,
+                  targetId: inviteLayer?.id ?? null,
+                  layer: inviteLayer,
+                  fallbackLanguage: language,
+                  textBox,
+                  fontSize: textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null,
+                  onText: onTextChange,
+                  onPublish: () => void publish(),
+                  locked: publishing,
+                  editing: editing !== null && editing === inviteLayer?.id,
+                }
+              : null
+          }
+          objects={{
+            items: stageObjects,
+            nameOf: objectName,
+            onSelect: (id) => {
+              if (id !== editing) setEditingId(null);
+              setDraft((current) => withSelected(current, id));
+            },
+            onEdit: startEditing,
+            onCommit: commitPoseOf,
+            onMenu: (id, point) => setObjectMenu({ id, point }),
+            onWrite: (id) => (id === null ? addTextAndWrite() : startEditing(id)),
+          }}
+        />
 
         {timelineOpen ? null : (
           <StudioTrailingRail
             lang={lang}
             locked={publishing}
             onAddPage={draft.pages.length < STUDIO_PAGE_MAX && !retouching ? () => edit((current) => withAddedPage(current, language)) : null}
-            onAddText={() =>
-              edit((current) => {
-                const added = withAddedText(current, language);
-                const id = currentStudioPage(added).selected;
-                return id === null ? added : withPlacedWhileAnimated(added, id, clock?.now() ?? 0);
-              })
-            }
+            onAddText={addTextAndWrite}
             editorOpen={editing !== null}
             onToggleEditor={selectedId !== null && stageObjects.some((object) => object.id === selectedId) ? () => (editing !== null ? setEditingId(null) : startEditing(selectedId)) : null}
             frameOpen={frameOpen}

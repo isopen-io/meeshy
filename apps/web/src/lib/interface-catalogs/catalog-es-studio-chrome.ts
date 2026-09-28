@@ -59,7 +59,6 @@ const esStudioChrome = {
   'story.studio.object.duplicate': 'Duplicar',
   'story.studio.object.edit': 'Editar',
   'story.studio.object.remove': 'Quitar',
-  'story.studio.object.leave': 'Sacar de la escena',
   'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Hacia la izquierda',
   'story.studio.pose.right': 'Hacia la derecha',
