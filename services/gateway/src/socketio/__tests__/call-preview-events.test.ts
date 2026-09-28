@@ -11,7 +11,6 @@ const ringing = (overrides: Partial<PreviewCall> = {}): PreviewCall => ({
   initiatorId: 'alice',
   conversationId: 'conv-1',
   conversationType: 'direct',
-  joinedUserIds: ['alice'],
   ...overrides,
 });
 
@@ -86,9 +85,9 @@ describe('call:preview-request — l’appelé demande à voir qui l’appelle (
     expect(await h.request({ callId: CALL })).toEqual({ success: false, code: 'PERMISSION_DENIED' });
   });
 
-  it('un appelé qui a déjà décroché passe par l’appel, plus par l’aperçu', async () => {
-    const h = harness({ call: ringing({ joinedUserIds: ['alice', 'bob'] }) });
-    expect(await h.request({ callId: CALL })).toEqual({ success: false, code: 'ALREADY_IN_CALL' });
+  it('seul le statut dit « décroché » : iOS rejoint la salle dès la sonnerie, l’appel décroché passe à active', async () => {
+    const h = harness({ call: ringing({ status: 'active'}) });
+    expect(await h.request({ callId: CALL })).toEqual({ success: false, code: 'CALL_NOT_ACTIVE' });
   });
 
   it('un appel introuvable est refusé sans diffusion', async () => {
@@ -129,8 +128,8 @@ describe('call:preview-signal — le lien d’aperçu, qui ne décroche rien (#8
 
   it('l’initiateur ne vise qu’un membre qui sonne encore', async () => {
     expect(await harness({ userId: 'alice' }).signal(offer('alice', 'eve'))).toEqual({ success: false, code: 'TARGET_NOT_IN_CALL' });
-    const joined = harness({ userId: 'alice', call: ringing({ joinedUserIds: ['alice', 'bob'] }) });
-    expect(await joined.signal(offer('alice', 'bob'))).toEqual({ success: false, code: 'ALREADY_IN_CALL' });
+    const answered = harness({ userId: 'alice', call: ringing({ status: 'active'}) });
+    expect(await answered.signal(offer('alice', 'bob'))).toEqual({ success: false, code: 'CALL_NOT_ACTIVE' });
   });
 
   it('un signal au nom d’un autre est refusé', async () => {
