@@ -81,9 +81,6 @@ struct CallView: View {
     @ObservedObject var mesh: GroupCallMeshCoordinator
     /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
     @State var controlsDisclosure = CallControlsDisclosure()
-    /// #8432 — l'espace de noms du verre : sous iOS 26, les actions naissent
-    /// du `(…)` et y retournent (`glassEffectID`).
-    @Namespace var callGlassNamespace
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
