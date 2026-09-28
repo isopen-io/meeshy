@@ -235,3 +235,33 @@ struct CallRecordParticipantsTests {
         #expect(direct.matches(query: "   ", fallback: "Inconnu"))
     }
 }
+
+/// #8439 — la fiche d'un appel compte ses réactions, emoji par emoji, dans
+/// l'ordre de la palette ; un emoji hors liste ou un compte non positif est
+/// ignoré, une fiche d'avant #8439 n'en a aucune.
+struct CallRecordReactionCountsTests {
+
+    private func decode(_ extra: String) throws -> APICallRecord {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let json = """
+        {"callId":"c1","conversationId":"v1","conversationType":"direct","mode":"p2p","status":"ended","direction":"outgoing","isVideo":false,"startedAt":"2026-09-20T10:00:00Z","durationSec":60\(extra)}
+        """
+        return try decoder.decode(APICallRecord.self, from: Data(json.utf8))
+    }
+
+    @Test func servesTheCountsInPaletteOrder() throws {
+        let record = try decode(#","reactionCounts":{"🔥":2,"👍":3}"#)
+        #expect(record.reactionTally.map(\.emoji) == [.thumbsUp, .fire])
+        #expect(record.reactionTally.map(\.count) == [3, 2])
+    }
+
+    @Test func dropsUnknownEmojisAndNonPositiveCounts() throws {
+        let record = try decode(#","reactionCounts":{"🦄":4,"❤️":0,"🎉":1}"#)
+        #expect(record.reactionTally.map(\.emoji) == [.party])
+    }
+
+    @Test func absentCounts_areEmpty() throws {
+        #expect(try decode("").reactionTally.isEmpty)
+    }
+}

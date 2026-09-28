@@ -55,6 +55,13 @@ struct CallActionSet: Equatable, Sendable {
         return [myImage, theCall].filter { !$0.isEmpty }
     }
 
+    /// Groupe : chaque groupe légendé se coupe en rangées de quatre colonnes
+    /// au plus ; une rangée de trop continue sous le même titre.
+    var groupSections: [CallActionSection] {
+        [CallActionSection(group: .myImage, actions: myImage), CallActionSection(group: .theCall, actions: theCall)]
+            .filter { !$0.rows.isEmpty }
+    }
+
     static func resolve(_ context: CallActionContext) -> CallActionSet {
         CallActionSet(myImage: myImageActions(context), theCall: theCallActions(context))
     }
@@ -76,6 +83,23 @@ struct CallActionSet: Equatable, Sendable {
         let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
         let together: [CallAction] = context.isConnected ? [.addPeople, .react] : []
         return [.captions] + together + recording + pip
+    }
+}
+
+struct CallActionSection: Equatable, Sendable {
+    enum Group: Equatable, Sendable {
+        case myImage
+        case theCall
+    }
+
+    let group: Group
+    let rows: [[CallAction]]
+
+    init(group: Group, actions: [CallAction]) {
+        self.group = group
+        rows = stride(from: 0, to: actions.count, by: CallActionSet.maxPerRow).map {
+            Array(actions[$0 ..< min($0 + CallActionSet.maxPerRow, actions.count)])
+        }
     }
 }
 

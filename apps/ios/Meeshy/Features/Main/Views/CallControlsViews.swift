@@ -132,9 +132,9 @@ private struct CallFloatingReactionView: View {
 
     var body: some View {
         Text(emoji.rawValue)
-            .font(.system(size: 72))
+            .font(MeeshyFont.relative(34))
             .offset(y: launched && !reduceMotion ? -260 : 0)
-            .scaleEffect(launched && !reduceMotion ? 1.15 : 0.7)
+            .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6)
             .opacity(launched ? 0 : 1)
             .onAppear {
                 withAnimation(.easeOut(duration: 2.5)) { launched = true }
