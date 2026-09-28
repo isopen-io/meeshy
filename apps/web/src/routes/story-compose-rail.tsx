@@ -19,6 +19,7 @@ export function StudioLeadingRail({
   locked,
   onPlace,
   onAddText,
+  onImport,
   sound = true,
 }: {
   readonly lang: InterfaceLanguage;
@@ -26,6 +27,9 @@ export function StudioLeadingRail({
   readonly onPlace: (door: StudioDoor, file: File) => void;
   /** « T+ » — pose un texte et ouvre sa saisie (#8515). */
   readonly onAddText: () => void;
+  /** L'IMPORT MULTIPLE de la porte du fond (#8533) — absent d'une retouche,
+   * qui ne travaille qu'une image. */
+  readonly onImport?: (files: readonly File[]) => void;
   /** La porte du SON — absente d'une retouche d'image (#8416). */
   readonly sound?: boolean;
 }) {
@@ -41,6 +45,7 @@ export function StudioLeadingRail({
         glyph="image"
         accept="image/*,video/*"
         onSelect={(file) => onPlace('visual', file)}
+        {...(onImport !== undefined ? { onSelectMany: onImport } : {})}
         disabled={locked}
       />
       <StudioDoorButton

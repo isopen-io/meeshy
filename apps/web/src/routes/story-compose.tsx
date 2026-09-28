@@ -20,19 +20,8 @@ import { storyReturn } from '@/lib/onboarding/story-return';
 import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
-import {
-  composeStoryCanvas,
-  studioMediaKindOf,
-} from '@/lib/stories/story-document';
-import {
-  pageWithMediaDuration,
-  pageWithSound,
-  pageWithVisual,
-  pageWithVisualAspectRatio,
-  type StudioDoor,
-  type StudioPage,
-  type StudioUploadState,
-} from '@/lib/stories/studio-page';
+import { composeStoryCanvas } from '@/lib/stories/story-document';
+import type { StudioDoor, StudioPage } from '@/lib/stories/studio-page';
 import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import {
   STUDIO_PAGE_MAX,
@@ -41,7 +30,6 @@ import {
   currentStudioPage,
   selectedTextLayer,
   studioDraftFromSnapshot,
-  studioPlaceRefusal,
   studioPublishablePageCount,
   studioSnapshotOf,
   withAddedPage,
@@ -89,11 +77,11 @@ import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
 import { publicationRefusalText, studioAssetsShown, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
-import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import { StudioAnimatedToggle, StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
 import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
 import { StudioScene } from '@/routes/story-compose-scene';
+import { studioPlacer } from '@/routes/story-compose-place';
 import { useStudioBackgroundSound } from '@/routes/use-studio-background-sound';
 import { useStudioCompositeHash } from '@/routes/use-studio-composite-hash';
 import { useStudioTextBox } from '@/routes/use-studio-text-box';
@@ -358,47 +346,17 @@ function StoryStudio({
     [],
   );
 
-  function place(door: StudioDoor, file: File) {
-    const refusal = studioPlaceRefusal(draft, door, file.type);
-    if (refusal !== null) {
-      setPlaceRefusal({ door, reason: refusal });
-      return;
-    }
-    setPlaceRefusal(null);
-    const pageId = page.id;
-    const previewUrl = URL.createObjectURL(file);
-    blobsRef.current.add(previewUrl);
-    const uploading: StudioUploadState = { phase: 'uploading', progress: 0 };
-    if (door === 'sound') {
-      edit((current) => withPage(current, pageId, (p) => pageWithSound(p, { file, previewUrl, upload: uploading, plane: p.sound?.plane ?? 'background' })));
-      void measureDurationMs(previewUrl, 'audio').then((durationMs) => {
-        if (durationMs !== null) setDraft((current) => withPage(current, pageId, (p) => pageWithMediaDuration(p, 'sound', previewUrl, durationMs)));
-      });
-    } else {
-      const mediaType = studioMediaKindOf(file.type);
-      edit((current) => {
-        const placed = withPage(current, pageId, (p) =>
-          pageWithVisual(p, door, { file, previewUrl, mediaType, upload: uploading, caption: '', pose: p.overlay?.pose ?? clampPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 }) }),
-        );
-        // Un calque posé sur une scène ANIMÉE entre à la tête (lot 6).
-        return door === 'overlay' ? withPlacedWhileAnimated(placed, 'overlay', clock?.now() ?? 0) : placed;
-      });
-      // La mesure décode le fichier LOCAL, hors du chemin de montée — un
-      // format que ce navigateur ne sait pas décoder (§ 0, défaut 7) ne
-      // bloque ni l'aperçu ni la publication, il en prive seulement le cadrage.
-      void measureAspectRatio(previewUrl, mediaType).then((aspectRatio) => {
-        if (aspectRatio !== null) setDraft((current) => withPage(current, pageId, (p) => pageWithVisualAspectRatio(p, door, previewUrl, aspectRatio)));
-      });
-      if (mediaType === 'video') {
-        void measureDurationMs(previewUrl, 'video').then((durationMs) => {
-          if (durationMs !== null) setDraft((current) => withPage(current, pageId, (p) => pageWithMediaDuration(p, door, previewUrl, durationMs)));
-        });
-      }
-    }
-    // Une retouche n'envoie RIEN : le fichier ne quitte l'appareil qu'avec le
-    // message, une fois « Terminé » rendu le composite.
-    if (!retouching) startUpload(pageId, door, file, previewUrl);
-  }
+  const { place, importMedia } = studioPlacer({
+    latest: latestDraft,
+    edit,
+    setDraft,
+    blobs: blobsRef,
+    head: () => clock?.now() ?? 0,
+    language,
+    startUpload,
+    retouching,
+    refuse: setPlaceRefusal,
+  });
 
   /* « CRÉER AVEC CE MÉDIA » (#6303) — la visionneuse du fil a déposé la pièce
      avant de naviguer : elle devient le FOND de la page courante par la MÊME
@@ -754,7 +712,7 @@ function StoryStudio({
         ) : null}
 
         {timelineOpen ? null : (
-          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} />
+          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} {...(retouching ? {} : { onImport: importMedia })} />
         )}
 
         {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
