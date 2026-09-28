@@ -16,14 +16,15 @@ extension CallView {
             kind: .normal,
             label: CallControlsCopy.addPeople,
             caption: captioned ? CallControlsCopy.addPeopleCaption : nil,
+            toggleState: layer.openPanel == .people,
             diameter: diameter
         ) {
-            showAddPeople = true
+            togglePanel(.people)
         }
     }
 
     func reactActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        let isOpen = controlsDisclosure.isOpen(.react)
+        let isOpen = layer.openPanel == .react
         return CallPillButton(
             symbol: "face.smiling",
             kind: isOpen ? .active : .normal,
@@ -38,7 +39,7 @@ extension CallView {
 
     var reactionPanelRows: some View {
         VStack(spacing: 0) {
-            CallPanelHeader(title: CallControlsCopy.react, onClose: closePanel)
+            CallPanelHeader(title: CallControlsCopy.react, onBack: backToMenu, onClose: closePanel)
             CallPillRow {
                 ForEach(CallReactionEmoji.allCases, id: \.self) { emoji in
                     CallPillChip(art: .emoji(emoji.rawValue), caption: nil, label: emoji.rawValue) {
@@ -77,7 +78,7 @@ extension CallView {
             .padding(.bottom, Self.chromeBottomInset + 200)
         }
         .onAppear { _ = callControls }
-        .sheet(isPresented: $showAddPeople) {
+        .sheet(isPresented: panelSheet(.people)) {
             CallAddPeopleSheet(excludedIds: callControlsExcludedIds) { user in
                 _ = callControls.invite(user)
             }

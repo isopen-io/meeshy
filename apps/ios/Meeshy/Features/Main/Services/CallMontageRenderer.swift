@@ -41,6 +41,18 @@ nonisolated enum CallMontageRenderer {
             drawComic(context, bounds: bounds, placed: placed, unit: unit)
         case .heart:
             drawHearts(context, bounds: bounds, placed: placed, caption: caption, unit: unit)
+        case .cover:
+            drawCover(context, bounds: bounds, placed: placed, caption: caption, unit: unit)
+        case .gold:
+            drawGold(context, bounds: bounds, placed: placed, caption: caption, unit: unit)
+        case .redcarpet:
+            drawRedCarpet(context, bounds: bounds, placed: placed, caption: caption, unit: unit)
+        case .film:
+            drawFilm(context, bounds: bounds, placed: placed, unit: unit)
+        case .neon:
+            drawNeon(context, bounds: bounds, placed: placed, caption: caption, unit: unit)
+        case .noir:
+            drawNoir(context, bounds: bounds, placed: placed, caption: caption, unit: unit)
         }
         return context.makeImage()
     }
@@ -57,7 +69,7 @@ nonisolated enum CallMontageRenderer {
 
     // MARK: - Styles
 
-    private static func drawStrip(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], caption: CallMontageCaption, unit: CGFloat) {
+    static func drawStrip(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], caption: CallMontageCaption, unit: CGFloat) {
         fill(context, bounds, color: rgb(0.98, 0.97, 0.94))
         placed.forEach { slot, portrait in
             drawPortrait(context, portrait, in: slot)
@@ -68,7 +80,7 @@ nonisolated enum CallMontageRenderer {
         drawText(context, caption.subtitle, font: "AvenirNext-DemiBold", size: 34 * unit, color: rgb(0.45, 0.45, 0.5), centerX: band.midX, baseline: band.minY + band.height * 0.72, maxWidth: band.width * 0.8)
     }
 
-    private static func drawPolaroids(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], unit: CGFloat) {
+    static func drawPolaroids(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], unit: CGFloat) {
         linearGradient(context, bounds, top: rgb(0.42, 0.3, 0.24), bottom: rgb(0.2, 0.13, 0.1))
         placed.forEach { slot, portrait in
             let card = CallMontageLayout.polaroidCard(around: slot.frame)
@@ -84,7 +96,7 @@ nonisolated enum CallMontageRenderer {
         }
     }
 
-    private static func drawMagazine(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], caption: CallMontageCaption, unit: CGFloat) {
+    static func drawMagazine(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], caption: CallMontageCaption, unit: CGFloat) {
         fill(context, bounds, color: rgb(0.1, 0.1, 0.12))
         guard let cover = placed.first else { return }
         drawPortrait(context, cover.1, in: cover.0)
@@ -103,7 +115,7 @@ nonisolated enum CallMontageRenderer {
         }
     }
 
-    private static func drawComic(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], unit: CGFloat) {
+    static func drawComic(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], unit: CGFloat) {
         fill(context, bounds, color: rgb(1, 0.84, 0.12))
         let spacing = bounds.width / 26
         context.setFillColor(rgb(0.95, 0.55, 0.05))
@@ -121,7 +133,7 @@ nonisolated enum CallMontageRenderer {
         }
     }
 
-    private static func drawHearts(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], caption: CallMontageCaption, unit: CGFloat) {
+    static func drawHearts(_ context: CGContext, bounds: CGRect, placed: [(CallMontageSlot, CallMontagePortrait)], caption: CallMontageCaption, unit: CGFloat) {
         linearGradient(context, bounds, top: rgb(1, 0.55, 0.68), bottom: rgb(0.93, 0.24, 0.45))
         let sparkles = CallFaceEffectGeometry.embers(count: 18, time: 0, canvas: bounds, seed: 0x48_45_41_52_54)
         sparkles.forEach { sparkle in
@@ -145,7 +157,7 @@ nonisolated enum CallMontageRenderer {
         }
     }
 
-    private static func drawSpeechBubble(_ context: CGContext, text: String, in panel: CGRect, unit: CGFloat) {
+    static func drawSpeechBubble(_ context: CGContext, text: String, in panel: CGRect, unit: CGFloat) {
         guard !text.isEmpty else { return }
         let fontSize = max(10, min(panel.width, panel.height) * 0.075)
         let width = min(panel.width * 0.7, measure(text, font: "ChalkboardSE-Bold", size: fontSize) + fontSize * 1.4)
@@ -174,7 +186,7 @@ nonisolated enum CallMontageRenderer {
 
     // MARK: - Portraits
 
-    private static func drawPortrait(_ context: CGContext, _ portrait: CallMontagePortrait, in slot: CallMontageSlot) {
+    static func drawPortrait(_ context: CGContext, _ portrait: CallMontagePortrait, in slot: CallMontageSlot) {
         context.saveGState()
         if slot.rotation != 0, slot.shape != .rectangle {
             rotate(context, around: CGPoint(x: slot.frame.midX, y: slot.frame.midY), degrees: slot.rotation)
@@ -189,7 +201,7 @@ nonisolated enum CallMontageRenderer {
         context.restoreGState()
     }
 
-    private static func drawPlaceholder(_ context: CGContext, _ portrait: CallMontagePortrait, in rect: CGRect) {
+    static func drawPlaceholder(_ context: CGContext, _ portrait: CallMontagePortrait, in rect: CGRect) {
         let hue = CGFloat(portrait.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % 360) / 360
         linearGradient(context, rect, top: hsb(hue, 0.55, 0.85), bottom: hsb(hue, 0.7, 0.55))
         let initial = portrait.name.first.map { String($0).uppercased() } ?? "?"
@@ -197,7 +209,7 @@ nonisolated enum CallMontageRenderer {
         drawText(context, initial, font: "AvenirNext-Bold", size: size, color: white(1), centerX: rect.midX, baseline: rect.midY + size * 0.35, maxWidth: rect.width * 0.9)
     }
 
-    private static func drawImage(_ context: CGContext, _ image: CGImage, aspectFill rect: CGRect) {
+    static func drawImage(_ context: CGContext, _ image: CGImage, aspectFill rect: CGRect) {
         let imageSize = CGSize(width: image.width, height: image.height)
         guard imageSize.width > 0, imageSize.height > 0, rect.width > 0, rect.height > 0 else { return }
         let scale = max(rect.width / imageSize.width, rect.height / imageSize.height)
@@ -244,7 +256,7 @@ nonisolated enum CallMontageRenderer {
         return path
     }
 
-    private static func path(for slot: CallMontageSlot) -> CGPath {
+    static func path(for slot: CallMontageSlot) -> CGPath {
         switch slot.shape {
         case .rectangle: return CGPath(rect: slot.frame, transform: nil)
         case .roundedRectangle:
@@ -255,7 +267,7 @@ nonisolated enum CallMontageRenderer {
         }
     }
 
-    private static func stroke(_ context: CGContext, _ slot: CallMontageSlot, color: CGColor, width: CGFloat) {
+    static func stroke(_ context: CGContext, _ slot: CallMontageSlot, color: CGColor, width: CGFloat) {
         context.saveGState()
         context.addPath(path(for: slot))
         context.setStrokeColor(color)
@@ -266,7 +278,7 @@ nonisolated enum CallMontageRenderer {
 
     // MARK: - Drawing primitives
 
-    private static func makeContext(size: CGSize) -> CGContext? {
+    static func makeContext(size: CGSize) -> CGContext? {
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())
         guard width > 0, height > 0,
@@ -284,22 +296,22 @@ nonisolated enum CallMontageRenderer {
         return context
     }
 
-    private static func rotate(_ context: CGContext, around center: CGPoint, degrees: CGFloat) {
+    static func rotate(_ context: CGContext, around center: CGPoint, degrees: CGFloat) {
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: degrees * .pi / 180)
         context.translateBy(x: -center.x, y: -center.y)
     }
 
-    private static func fill(_ context: CGContext, _ rect: CGRect, gray: CGFloat) {
+    static func fill(_ context: CGContext, _ rect: CGRect, gray: CGFloat) {
         fill(context, rect, color: CGColor(gray: gray, alpha: 1))
     }
 
-    private static func fill(_ context: CGContext, _ rect: CGRect, color: CGColor) {
+    static func fill(_ context: CGContext, _ rect: CGRect, color: CGColor) {
         context.setFillColor(color)
         context.fill(rect)
     }
 
-    private static func linearGradient(_ context: CGContext, _ rect: CGRect, top: CGColor, bottom: CGColor) {
+    static func linearGradient(_ context: CGContext, _ rect: CGRect, top: CGColor, bottom: CGColor) {
         guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [top, bottom] as CFArray, locations: [0, 1]) else { return }
         context.saveGState()
         context.clip(to: rect)
@@ -307,15 +319,15 @@ nonisolated enum CallMontageRenderer {
         context.restoreGState()
     }
 
-    private static func rgb(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) -> CGColor {
+    static func rgb(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) -> CGColor {
         CGColor(red: red, green: green, blue: blue, alpha: 1)
     }
 
-    private static func white(_ alpha: CGFloat) -> CGColor {
+    static func white(_ alpha: CGFloat) -> CGColor {
         CGColor(gray: 1, alpha: alpha)
     }
 
-    private static func hsb(_ hue: CGFloat, _ saturation: CGFloat, _ brightness: CGFloat) -> CGColor {
+    static func hsb(_ hue: CGFloat, _ saturation: CGFloat, _ brightness: CGFloat) -> CGColor {
         let sector = hue * 6
         let chroma = brightness * saturation
         let secondary = chroma * (1 - abs(sector.truncatingRemainder(dividingBy: 2) - 1))
@@ -335,7 +347,7 @@ nonisolated enum CallMontageRenderer {
 
     // MARK: - Text
 
-    private static func line(_ text: String, font name: String, size: CGFloat, color: CGColor) -> CTLine {
+    static func line(_ text: String, font name: String, size: CGFloat, color: CGColor) -> CTLine {
         let font = CTFontCreateWithName(name as CFString, max(size, 1), nil)
         let attributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
@@ -344,30 +356,30 @@ nonisolated enum CallMontageRenderer {
         return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
     }
 
-    private static func measure(_ text: String, font: String, size: CGFloat) -> CGFloat {
+    static func measure(_ text: String, font: String, size: CGFloat) -> CGFloat {
         CGFloat(CTLineGetTypographicBounds(line(text, font: font, size: size, color: white(1)), nil, nil, nil))
     }
 
-    private static func fitted(_ text: String, font: String, size: CGFloat, maxWidth: CGFloat) -> CGFloat {
+    static func fitted(_ text: String, font: String, size: CGFloat, maxWidth: CGFloat) -> CGFloat {
         let width = measure(text, font: font, size: size)
         guard width > maxWidth, width > 0 else { return size }
         return size * maxWidth / width
     }
 
-    private static func drawText(_ context: CGContext, _ text: String, font: String, size: CGFloat, color: CGColor, centerX: CGFloat, baseline: CGFloat, maxWidth: CGFloat) {
+    static func drawText(_ context: CGContext, _ text: String, font: String, size: CGFloat, color: CGColor, centerX: CGFloat, baseline: CGFloat, maxWidth: CGFloat) {
         guard !text.isEmpty else { return }
         let fittedSize = fitted(text, font: font, size: size, maxWidth: maxWidth)
         let width = measure(text, font: font, size: fittedSize)
         drawLine(context, line(text, font: font, size: fittedSize, color: color), at: CGPoint(x: centerX - width / 2, y: baseline))
     }
 
-    private static func drawText(_ context: CGContext, _ text: String, font: String, size: CGFloat, color: CGColor, left: CGFloat, baseline: CGFloat, maxWidth: CGFloat) {
+    static func drawText(_ context: CGContext, _ text: String, font: String, size: CGFloat, color: CGColor, left: CGFloat, baseline: CGFloat, maxWidth: CGFloat) {
         guard !text.isEmpty else { return }
         let fittedSize = fitted(text, font: font, size: size, maxWidth: maxWidth)
         drawLine(context, line(text, font: font, size: fittedSize, color: color), at: CGPoint(x: left, y: baseline))
     }
 
-    private static func drawLine(_ context: CGContext, _ line: CTLine, at origin: CGPoint) {
+    static func drawLine(_ context: CGContext, _ line: CTLine, at origin: CGPoint) {
         context.saveGState()
         context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
         context.textPosition = origin

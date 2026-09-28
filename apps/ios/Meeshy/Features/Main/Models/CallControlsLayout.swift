@@ -3,9 +3,8 @@ import Foundation
 /// #8394 — la vue d'appel « C adapté ». La pilule du bas porte toujours
 /// `(…) · Micro · Sortie · Fin`. #8550 — le `(…)` empile AU-DESSUS de la
 /// rangée de base une rangée PAR FAMILLE (« Mon image », « L'appel »), chacune
-/// défilant à l'horizontale, en duo comme en groupe ; un sous-menu (effets,
-/// capture, réactions, enregistrement) s'ouvre DANS le même cadre, en rangées
-/// posées au-dessus des familles. La conversation n'est PAS une action : sa
+/// défilant à l'horizontale, en duo comme en groupe. #8578 — une seule chose à
+/// la fois : `CallScreenLayer`. La conversation n'est PAS une action : sa
 /// seule porte est le bouton de l'en-tête (#8436). Ce fichier tient les RÈGLES
 /// (quelles actions, où, quand) ; les vues ne font que les dessiner.
 
@@ -25,6 +24,7 @@ enum CallAction: String, CaseIterable, Sendable {
     case react
     /// #8552 — capturer l'appel en une image montée, ou chaque visage.
     case capture
+    case journal
 }
 
 /// Ce que l'appel permet, lu une fois par rendu depuis `CallManager`.
@@ -108,78 +108,6 @@ struct CallActionSet: Equatable, Sendable {
         let capture: [CallAction] = context.isConnected && context.showsVideo ? [.capture] : []
         let recording: [CallAction] = context.mayRecord ? [.recording] : []
         let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
-        return [.captions] + together + capture + recording + pip
-    }
-}
-
-/// #8550 — un sous-menu ouvert DANS la pilule, au-dessus des familles.
-enum CallControlsPanel: String, CaseIterable, Sendable {
-    case effects
-    case capture
-    case react
-    case recording
-
-    var action: CallAction {
-        switch self {
-        case .effects: return .effects
-        case .capture: return .capture
-        case .react: return .react
-        case .recording: return .recording
-        }
-    }
-}
-
-/// Comment les actions déployées se dessinent.
-enum CallActionsPresentation: Equatable, Sendable {
-    /// `(…)` replié : la pilule seule.
-    case hidden
-    /// Les familles empilées au-dessus de la rangée de base, et le sous-menu
-    /// ouvert au-dessus d'elles.
-    case rows(panel: CallControlsPanel?)
-}
-
-/// L'état du `(…)` — replié par défaut : l'écran d'appel s'ouvre sur l'image
-/// et les quatre commandes essentielles.
-struct CallControlsDisclosure: Equatable, Sendable {
-    enum AccessibilityState: Equatable, Sendable {
-        case collapsed
-        case expanded
-    }
-
-    let isExpanded: Bool
-    let openPanel: CallControlsPanel?
-
-    init(isExpanded: Bool = false, openPanel: CallControlsPanel? = nil) {
-        self.isExpanded = isExpanded
-        self.openPanel = isExpanded ? openPanel : nil
-    }
-
-    func toggled() -> CallControlsDisclosure {
-        CallControlsDisclosure(isExpanded: !isExpanded)
-    }
-
-    func toggling(_ panel: CallControlsPanel) -> CallControlsDisclosure {
-        CallControlsDisclosure(isExpanded: true, openPanel: openPanel == panel ? nil : panel)
-    }
-
-    func closingPanel() -> CallControlsDisclosure {
-        CallControlsDisclosure(isExpanded: isExpanded)
-    }
-
-    func isOpen(_ panel: CallControlsPanel) -> Bool {
-        openPanel == panel
-    }
-
-    func reconciled(with actions: CallActionSet) -> CallControlsDisclosure {
-        guard let openPanel, !actions.contains(openPanel.action) else { return self }
-        return closingPanel()
-    }
-
-    var presentation: CallActionsPresentation {
-        isExpanded ? .rows(panel: openPanel) : .hidden
-    }
-
-    var accessibilityState: AccessibilityState {
-        isExpanded ? .expanded : .collapsed
+        return [.captions, .journal] + together + capture + recording + pip
     }
 }

@@ -4,7 +4,7 @@ import MeeshyUI
 
 extension CallView {
     var chromeVisibility: CallChromeVisibility {
-        CallChromeVisibility(isRevealed: showControls, isStageFullScreen: isStageFullScreen)
+        CallChromeVisibility(isRevealed: showControls, isStageFullScreen: isStageFullScreen, isModeActive: layer.freesTheScreen)
     }
 
     var showsConnectedLayout: Bool {
@@ -25,43 +25,56 @@ extension CallView {
     }
 
     func captureActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        let isOpen = controlsDisclosure.isOpen(.capture)
-        return CallPillButton(
+        CallPillButton(
             symbol: "camera.aperture",
-            kind: isOpen ? .active : .normal,
+            kind: .normal,
             label: CallCaptureCopy.control,
             caption: captioned ? CallCaptureCopy.controlCaption : nil,
-            toggleState: isOpen,
+            hint: CallCaptureCopy.controlHint,
             diameter: diameter
         ) {
-            togglePanel(.capture)
+            enterMode(.montage)
         }
     }
 
-    func togglePanel(_ panel: CallControlsPanel) {
+    func togglePanel(_ panel: CallScreenPanel) {
         withAnimation(disclosureAnimation) {
-            controlsDisclosure = controlsDisclosure.toggling(panel)
+            layer = layer.opening(panel)
         }
         HapticFeedback.light()
     }
 
     func closePanel() {
         withAnimation(disclosureAnimation) {
-            controlsDisclosure = controlsDisclosure.closingPanel()
+            layer = layer.closed()
         }
     }
 
+    func backToMenu() {
+        withAnimation(disclosureAnimation) {
+            layer = layer.backToMenu()
+        }
+    }
+
+    func panelSheet(_ panel: CallScreenPanel) -> Binding<Bool> {
+        Binding(
+            get: { layer.openPanel == panel },
+            set: { isShown in
+                guard !isShown, layer.openPanel == panel else { return }
+                layer = layer.backToMenu()
+            }
+        )
+    }
+
     @ViewBuilder
-    func panelRows(_ panel: CallControlsPanel) -> some View {
+    func panelRows(_ panel: CallScreenPanel) -> some View {
         switch panel {
-        case .effects:
-            CallEffectsPanel(callManager: callManager, onClose: closePanel)
-        case .capture:
-            CallCapturePanel(capture: capture, subjects: captureSubjects, tracks: captureTracks, onClose: closePanel)
         case .react:
             reactionPanelRows
-        case .recording:
+        case .record:
             recordingPanelRows
+        case .people, .journal:
+            EmptyView()
         }
     }
 

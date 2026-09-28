@@ -110,4 +110,20 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertEqual(GroupCallSpotlight.clampedZoom(2.5), 2.5)
         XCTAssertEqual(GroupCallSpotlight.clampedZoom(9), GroupCallSpotlight.maxZoom)
     }
+
+    // MARK: - Mon image à la une (#8576)
+
+    func test_featuresLocal_myTileAtTheFront_isTrue() {
+        XCTAssertTrue(GroupCallSpotlight.featuresLocal(.spotlight(tileId: GroupCallStage.localTileId, isScreenShare: false)))
+    }
+
+    func test_featuresLocal_gridOrAMember_isFalse() {
+        XCTAssertFalse(GroupCallSpotlight.featuresLocal(.grid))
+        XCTAssertFalse(GroupCallSpotlight.featuresLocal(.spotlight(tileId: "b", isScreenShare: false)))
+    }
+
+    func test_featuresLocal_tappingMyTile_putsMyImageAtTheFront() {
+        let focus = GroupCallSpotlight.focus(tiles: tiles(), choice: .tile(GroupCallStage.localTileId))
+        XCTAssertTrue(GroupCallSpotlight.featuresLocal(focus))
+    }
 }

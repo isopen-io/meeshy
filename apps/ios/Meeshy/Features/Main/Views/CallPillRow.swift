@@ -4,31 +4,36 @@ import MeeshyUI
 
 struct CallPanelHeader: View {
     let title: String
+    let onBack: () -> Void
     let onClose: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
+            headerButton(symbol: "chevron.left", label: CallControlsCopy.backToMenu, action: onBack)
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.footnote.weight(.bold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(CallButtonFill.color(for: .normal)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(CallControlsCopy.closePanel)
+            headerButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 6)
+        .padding(.horizontal, 6)
         .padding(.top, 2)
+    }
+
+    private func headerButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundColor(.white.opacity(0.9))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(CallButtonFill.color(for: .normal)))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -101,8 +106,7 @@ struct CallPillChip: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)

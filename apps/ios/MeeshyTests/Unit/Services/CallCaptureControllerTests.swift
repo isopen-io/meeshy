@@ -79,6 +79,37 @@ final class CallCaptureControllerTests: XCTestCase {
         XCTAssertEqual(grabber.requestedDimensions, [CallCaptureController.previewMaxDimension])
     }
 
+    /// #8578 — l'aperçu plein écran suit l'appel en direct ; les vignettes du
+    /// carrousel, treize rendus, ne se refont qu'environ une fois par seconde.
+    func test_refreshPreviews_betweenThumbnailRounds_keepsTheThumbnails_refreshesThePreview() async {
+        let (sut, _, _) = makeSUT()
+        await sut.refreshPreviews()
+        let firstThumbnail = sut.thumbnails[.grid]
+        XCTAssertNotNil(firstThumbnail)
+        let firstPreview = sut.preview
+        await sut.refreshPreviews()
+        XCTAssertTrue(sut.thumbnails[.grid] === firstThumbnail)
+        XCTAssertFalse(sut.preview === firstPreview)
+    }
+
+    func test_rendersThumbnails_noneYet_rendersAtOnce() {
+        XCTAssertTrue(CallCaptureController.rendersThumbnails(hasThumbnails: false, previewsSinceThumbnails: 1))
+    }
+
+    func test_rendersThumbnails_everyFewPreviews() {
+        let every = CallCaptureController.thumbnailEveryPreviews
+        XCTAssertFalse(CallCaptureController.rendersThumbnails(hasThumbnails: true, previewsSinceThumbnails: every - 1))
+        XCTAssertTrue(CallCaptureController.rendersThumbnails(hasThumbnails: true, previewsSinceThumbnails: every))
+    }
+
+    func test_renderPreviews_withoutThumbnails_rendersOnlyThePreview() {
+        let portraits = [CallMontagePortrait(id: "a", name: "Awa", image: makeImage())]
+        let caption = CallMontageCaption(title: "Meeshy", subtitle: "")
+        let rendered = CallCaptureController.renderPreviews(portraits: portraits, selected: .grid, caption: caption, includesThumbnails: false)
+        XCTAssertTrue(rendered.thumbnails.isEmpty)
+        XCTAssertNotNil(rendered.preview)
+    }
+
     func test_select_changesTheStyle() {
         let (sut, _, _) = makeSUT()
         sut.select(.polaroid)

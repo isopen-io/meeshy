@@ -6,15 +6,13 @@ import MeeshyUI
 // #8394 — la pilule du bas, identique en audio, en vidéo et en groupe :
 // (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel.
 // #8550 — le (…) empile au-dessus de la rangée de base une rangée par
-// famille (« Mon image », « L'appel »), défilant à l'horizontale, et un
-// sous-menu s'ouvre DANS ce même bloc, au-dessus des familles. La
-// conversation n'est pas une action : sa seule porte est l'en-tête (#8436).
+// famille (« Mon image », « L'appel »). #8578 — un panneau REMPLACE les
+// rangées, jamais empilé. La conversation n'est pas une action : sa seule
+// porte est l'en-tête (#8436).
 
-/// Ré-arme l'auto-masquage (§7.3) à chaque révélation ET à chaque usage du (…).
 struct AutoHideKey: Equatable {
     let isVisible: Bool
-    let isExpanded: Bool
-    let openPanel: CallControlsPanel?
+    let layer: CallScreenLayer
 }
 
 enum CallControlsCopy {
@@ -60,6 +58,22 @@ enum CallControlsCopy {
         String(localized: "call.panel.close", defaultValue: "Fermer", bundle: .main)
     }
 
+    static var backToMenu: String {
+        String(localized: "call.panel.back", defaultValue: "Retour aux actions", bundle: .main)
+    }
+
+    static var effects: String {
+        String(localized: "call.control.effects", defaultValue: "Effets de ma caméra", bundle: .main)
+    }
+
+    static var effectsHint: String {
+        String(localized: "call.control.effects.hint", defaultValue: "Libère l'écran pour choisir un effet, un à la fois", bundle: .main)
+    }
+
+    static var cameraRail: String {
+        String(localized: "call.control.cameraRail", defaultValue: "Options de ma caméra", bundle: .main)
+    }
+
     static func familyTitle(_ family: CallActionFamily) -> String {
         switch family {
         case .myImage: return myImage
@@ -94,10 +108,6 @@ extension CallView {
         CallActionSet.resolve(actionContext)
     }
 
-    var actionsPresentation: CallActionsPresentation {
-        controlsDisclosure.presentation
-    }
-
     /// Le déploiement du (…) : un ressort, ou un simple fondu avec Réduire
     /// les animations — jamais une bascule sèche.
     var disclosureAnimation: Animation {
@@ -116,20 +126,20 @@ extension CallView {
             : .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))
     }
 
-    /// UN bloc de verre : le sous-menu ouvert, PUIS les familles, PUIS (en
-    /// groupe) les sous-titres, PUIS la rangée de base. Le verre enveloppe le
-    /// tout et grandit avec lui (#8459, #8550).
+    /// UN bloc de verre : le panneau ouvert OU les familles, PUIS (en groupe)
+    /// les sous-titres, PUIS la rangée de base. Le verre enveloppe le tout et
+    /// grandit avec lui (#8459, #8550, #8578).
     var callControlsPill: some View {
         let actions = currentActionSet
         return VStack(spacing: 0) {
-            if case .rows(let panel) = actionsPresentation {
+            if layer.isExpanded {
                 VStack(spacing: 0) {
                     unfoldedRows {
-                        if let panel {
+                        if let panel = layer.pillPanel {
                             panelRows(panel)
-                            pillHairline
+                        } else {
+                            familyRows(actions)
                         }
-                        familyRows(actions)
                     }
                     pillHairline
                 }
@@ -147,10 +157,7 @@ extension CallView {
         .clipShape(Self.pillShape)
         .callControlsGlass(in: Self.pillShape)
         .frame(maxWidth: 440)
-        .animation(disclosureAnimation, value: controlsDisclosure)
-        .adaptiveOnChange(of: actions) { _, newActions in
-            controlsDisclosure = controlsDisclosure.reconciled(with: newActions)
-        }
+        .animation(disclosureAnimation, value: layer)
     }
 
     var pillHairline: some View {
@@ -172,7 +179,7 @@ extension CallView {
     /// Les mêmes quatre boutons partout, légendés dès que les rangées
     /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
-        let captioned = controlsDisclosure.isExpanded
+        let captioned = layer.isExpanded
         return HStack(alignment: .top, spacing: 0) {
             moreButton(captioned: captioned)
                 .frame(maxWidth: .infinity)
@@ -206,10 +213,10 @@ extension CallView {
     }
 
     private func moreButton(captioned: Bool) -> some View {
-        let isExpanded = controlsDisclosure.isExpanded
+        let isExpanded = layer.isExpanded
         return Button {
             withAnimation(disclosureAnimation) {
-                controlsDisclosure = controlsDisclosure.toggled()
+                layer = layer.togglingMenu()
             }
             HapticFeedback.light()
         } label: {
@@ -220,8 +227,7 @@ extension CallView {
                 diameter: Self.pillGlyphDiameter
             )
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(CallControlsCopy.more)
         .accessibilityHint(CallControlsCopy.moreHint)
         .accessibilityValue(CallControlsCopy.moreValue(isExpanded: isExpanded))
@@ -266,6 +272,10 @@ extension CallView {
         actionButtonBody(action, captioned: true)
     }
 
+    func railActionButton(_ action: CallAction) -> some View {
+        actionButtonBody(action, captioned: false)
+    }
+
     @ViewBuilder
     private func actionButtonBody(_ action: CallAction, captioned: Bool) -> some View {
         let diameter = Self.rowGlyphDiameter
@@ -289,14 +299,13 @@ extension CallView {
         case .effects:
             CallPillButton(
                 symbol: "camera.filters",
-                kind: controlsDisclosure.isOpen(.effects) || hasActiveEffects ? .active : .normal,
-                label: String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main),
+                kind: hasActiveEffects ? .active : .normal,
+                label: CallControlsCopy.effects,
                 caption: captioned ? CallControlsCopy.effectsCaption : nil,
-                hint: String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main),
-                toggleState: controlsDisclosure.isOpen(.effects),
+                hint: CallControlsCopy.effectsHint,
                 diameter: diameter
             ) {
-                togglePanel(.effects)
+                enterMode(.effects)
             }
         case .screenShare:
             CallPillButton(
@@ -322,6 +331,8 @@ extension CallView {
             reactActionButton(captioned: captioned, diameter: diameter)
         case .capture:
             captureActionButton(captioned: captioned, diameter: diameter)
+        case .journal:
+            journalActionButton(captioned: captioned, diameter: diameter)
         }
     }
 
