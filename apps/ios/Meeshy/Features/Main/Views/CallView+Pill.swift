@@ -225,21 +225,29 @@ extension CallView {
     /// le bloc, au-dessus de la rangée de base.
     private func groupActionRows(_ actions: CallActionSet) -> some View {
         VStack(spacing: 0) {
-            actionRow(title: CallControlsCopy.myImage, actions: actions.myImage)
-            pillHairline
-            actionRow(title: CallControlsCopy.theCall, actions: actions.theCall)
+            ForEach(Array(actions.groupSections.enumerated()), id: \.offset) { index, section in
+                if index > 0 { pillHairline }
+                ForEach(Array(section.rows.enumerated()), id: \.offset) { rowIndex, row in
+                    actionRow(
+                        title: rowIndex == 0 ? (section.group == .myImage ? CallControlsCopy.myImage : CallControlsCopy.theCall) : nil,
+                        actions: row
+                    )
+                }
+            }
         }
     }
 
     /// Une rangée légendée de quatre colonnes : les places vides gardent la
     /// grille, pour que « Micro » ne change pas de colonne d'un appel à l'autre.
-    func actionRow(title: String, actions: [CallAction]) -> some View {
+    func actionRow(title: String?, actions: [CallAction]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(.white.opacity(0.6))
-                .textCase(.uppercase)
-                .accessibilityAddTraits(.isHeader)
+            if let title {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                    .textCase(.uppercase)
+                    .accessibilityAddTraits(.isHeader)
+            }
             HStack(spacing: 0) {
                 ForEach(actions, id: \.self) { action in
                     actionButton(action, captioned: true)
@@ -341,6 +349,10 @@ extension CallView {
             recordingActionButton(captioned: captioned, diameter: diameter)
         case .pictureInPicture:
             pictureInPictureActionButton(captioned: captioned, diameter: diameter)
+        case .addPeople:
+            addPeopleActionButton(captioned: captioned, diameter: diameter)
+        case .react:
+            reactActionButton(captioned: captioned, diameter: diameter)
         }
     }
 

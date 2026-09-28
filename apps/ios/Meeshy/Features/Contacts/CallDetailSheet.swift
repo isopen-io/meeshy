@@ -148,6 +148,14 @@ struct CallDetailSheet: View {
                     value: phone
                 )
             }
+            // #8439 — les réactions envoyées pendant l'appel, « 👍 × 3 ».
+            if !record.reactionTally.isEmpty {
+                detailRow(
+                    icon: "face.smiling",
+                    label: CallControlsCopy.reactionsTitle,
+                    value: record.reactionTally.map { "\($0.emoji.rawValue) × \($0.count)" }.joined(separator: "  ")
+                )
+            }
         }
         .padding(.vertical, 4)
         .background(theme.backgroundSecondary)

@@ -87,6 +87,9 @@ struct CallView: View {
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
     @State var showCaptionsJournal = false
+    /// #8433 · #8439 — le sélecteur d'amis et la palette des réactions.
+    @State var showAddPeople = false
+    @State var showReactionPalette = false
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).

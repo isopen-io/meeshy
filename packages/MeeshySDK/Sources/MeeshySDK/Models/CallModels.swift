@@ -104,6 +104,8 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
     /// Who joined a group call, reader excluded, in join order; empty for a
     /// direct call and for a record cached before #8066.
     public let participants: [CallHistoryParticipant]
+    /// #8439 — les réactions envoyées pendant l'appel, comptées par emoji.
+    public let reactionCounts: [String: Int]
 
     public var id: String { callId }
 
@@ -111,7 +113,7 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
         case callId, conversationId, conversationType, conversationTitle, conversationAvatar
         case mode, status, endReason, direction, isVideo
         case startedAt, answeredAt, endedAt, durationSec, bytesSent, bytesReceived
-        case peer, participants
+        case peer, participants, reactionCounts
     }
 
     public init(
@@ -132,7 +134,8 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
         bytesSent: Int? = nil,
         bytesReceived: Int? = nil,
         peer: CallHistoryPeer? = nil,
-        participants: [CallHistoryParticipant] = []
+        participants: [CallHistoryParticipant] = [],
+        reactionCounts: [String: Int] = [:]
     ) {
         self.callId = callId
         self.conversationId = conversationId
@@ -152,6 +155,7 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
         self.bytesReceived = bytesReceived
         self.peer = peer
         self.participants = participants
+        self.reactionCounts = reactionCounts
     }
 
     public init(from decoder: Decoder) throws {
@@ -174,12 +178,26 @@ public struct APICallRecord: Codable, CacheIdentifiable, Identifiable, Sendable,
         bytesReceived = try container.decodeIfPresent(Int.self, forKey: .bytesReceived)
         peer = try container.decodeIfPresent(CallHistoryPeer.self, forKey: .peer)
         participants = (try? container.decodeIfPresent([CallHistoryParticipant].self, forKey: .participants)) ?? []
+        reactionCounts = (try? container.decodeIfPresent([String: Int].self, forKey: .reactionCounts)) ?? [:]
     }
 }
 
 // MARK: - Display Accessors (pure)
 
+public struct CallReactionTallyEntry: Equatable, Sendable {
+    public let emoji: CallReactionEmoji
+    public let count: Int
+}
+
 public extension APICallRecord {
+    /// Les comptes relus sans confiance, dans l'ordre de la palette.
+    var reactionTally: [CallReactionTallyEntry] {
+        CallReactionEmoji.allCases.compactMap { emoji in
+            guard let count = reactionCounts[emoji.rawValue], count > 0 else { return nil }
+            return CallReactionTallyEntry(emoji: emoji, count: count)
+        }
+    }
+
     var directionKind: CallDirection { CallDirection(raw: direction) }
     var isMissed: Bool { directionKind == .missed }
 

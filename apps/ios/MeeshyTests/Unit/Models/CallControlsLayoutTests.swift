@@ -86,18 +86,23 @@ final class CallControlsLayoutTests: XCTestCase {
 
     // MARK: - Groupe « l'appel »
 
-    func test_theCall_minimal_offersCaptionsOnly() {
-        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions])
+    func test_theCall_minimal_offersCaptionsAddPeopleAndReact() {
+        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .addPeople, .react])
     }
 
-    func test_theCall_everythingAvailable_ordersCaptionsRecordPip() {
+    /// #8433 · #8439 — ajouter et réagir n'ont de sens qu'une fois l'appel établi.
+    func test_theCall_notYetConnected_offersNeitherAddNorReact() {
+        XCTAssertEqual(CallActionSet.resolve(context(isConnected: false)).theCall, [.captions])
+    }
+
+    func test_theCall_everythingAvailable_ordersCaptionsAddReactRecordPip() {
         let actions = CallActionSet.resolve(context(mayRecord: true, canPictureInPicture: true))
-        XCTAssertEqual(actions.theCall, [.captions, .recording, .pictureInPicture])
+        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .react, .recording, .pictureInPicture])
     }
 
     func test_theCall_recordingNotAllowed_isAbsent() {
         let actions = CallActionSet.resolve(context(canPictureInPicture: true))
-        XCTAssertEqual(actions.theCall, [.captions, .pictureInPicture])
+        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .react, .pictureInPicture])
     }
 
     /// #8436 — « Messages » doublait le bouton Conversation de l'en-tête : la
@@ -109,15 +114,15 @@ final class CallControlsLayoutTests: XCTestCase {
     // MARK: - Duo : la rangée au-dessus de la pilule
 
     func test_duoRows_fewActions_joinsBothGroupsInOneRow() {
-        let actions = CallActionSet.resolve(context(canPictureInPicture: true))
-        XCTAssertEqual(actions.duoRows, [[.camera, .screenShare, .captions, .pictureInPicture]])
+        let actions = CallActionSet.resolve(context(isConnected: false))
+        XCTAssertEqual(actions.duoRows, [[.camera, .captions]])
     }
 
     func test_duoRows_tooManyForOneRow_splitsMyImageThenTheCall() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, canPictureInPicture: true))
         XCTAssertEqual(actions.duoRows, [
             [.camera, .flipCamera, .effects, .screenShare],
-            [.captions, .recording, .pictureInPicture]
+            [.captions, .addPeople, .react, .recording, .pictureInPicture]
         ])
     }
 
@@ -130,7 +135,14 @@ final class CallControlsLayoutTests: XCTestCase {
 
     func test_resolve_anyContext_neverExceedsFourPerRow() {
         let all = CallActionSet.resolve(context(isVideoEnabled: true, hasSelectableCameras: true, mayRecord: true, canPictureInPicture: true))
-        XCTAssertLessThanOrEqual(all.myImage.count, CallActionSet.maxPerRow)
-        XCTAssertLessThanOrEqual(all.theCall.count, CallActionSet.maxPerRow)
+        XCTAssertTrue(all.groupSections.flatMap(\.rows).allSatisfy { $0.count <= CallActionSet.maxPerRow })
+    }
+
+    /// Un groupe plus large que quatre colonnes continue sur une rangée de
+    /// plus, sous le même titre : la grille garde ses quatre colonnes.
+    func test_groupSections_overflowingGroup_continuesOnANewRow() {
+        let all = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, canPictureInPicture: true))
+        XCTAssertEqual(all.groupSections.map(\.group), [.myImage, .theCall])
+        XCTAssertEqual(all.groupSections.last?.rows, [[.captions, .addPeople, .react, .recording], [.pictureInPicture]])
     }
 }

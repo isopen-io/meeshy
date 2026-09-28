@@ -81,6 +81,9 @@ struct GroupCallStageView: View {
 
     /// Le choix LOCAL (jamais partagé) : une vignette épinglée, ou « Grille ».
     @State private var choice: GroupCallSpotlightChoice?
+    /// #8438 — la personne que l'admin s'apprête à retirer (confirmation).
+    @State var pendingRemoval: GroupCallStageTile?
+    @State var isRemovalPresented = false
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -107,6 +110,7 @@ struct GroupCallStageView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "call.group.stage", defaultValue: "Participants à l'appel", bundle: .main))
+        .removalConfirmation(pendingRemoval: pendingRemoval, isPresented: $isRemovalPresented, controls: callManager.controls)
     }
 
     private var tiles: [GroupCallStageTile] {
@@ -154,6 +158,7 @@ struct GroupCallStageView: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "call.group.spotlight.hint", defaultValue: "Touchez pour mettre à la une", bundle: .main))
             .accessibilityAction { choose(.tile(tile.id)) }
+            .moderationMenu(for: tile, controls: callManager.controls, pendingRemoval: $pendingRemoval, isRemovalPresented: $isRemovalPresented)
     }
 
     // MARK: - À la une

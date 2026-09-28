@@ -32,6 +32,8 @@ extension CallView {
                 if !isGroupStage {
                     duoOverlays
                 }
+
+                callControlsLayer
             }
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en

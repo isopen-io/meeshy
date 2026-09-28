@@ -13,7 +13,11 @@ extension CallManager {
         // porté par `type` ('audio' | 'video'). Absent (anciens builds
         // gateway) : repli sur `mode == "video"`.
         let isVideo = event.type.map { $0 == "video" } ?? (event.mode == "video")
-        let callerName = event.initiator.displayName ?? event.initiator.username
+        // #8433 — une invitation dit QUI m'invite, pas seulement qui a lancé l'appel.
+        let callerName = CallOfferPresentation.callerName(
+            initiator: event.initiator.displayName ?? event.initiator.username,
+            inviter: event.invitedBy.map { $0.displayName ?? $0.username }
+        )
         let dynamicIceServers = event.iceServers?.map { server in
             IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
         }
