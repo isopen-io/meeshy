@@ -261,6 +261,31 @@ final class MediaStageVeilTests: XCTestCase {
         }
     }
 
+    // MARK: - #8601 — la pastille « en pause » se tait sous le voile
+
+    /// Elle vit dans sa propre couche, au-dessus du plateau : le voile ne la
+    /// couvrait pas, et « En pause » restait au centre de ce qu'on commente.
+    func test_thePausedBadge_isVeiledByAnOverture() {
+        let réponse = MediaStageVeil.Overlays(reactionRow: false, replyBar: true)
+        let traînée = MediaStageVeil.Overlays(reactionRow: true, replyBar: false)
+
+        XCTAssertFalse(MediaStageVeil.showsPausedBadge(true, overlays: réponse))
+        XCTAssertFalse(MediaStageVeil.showsPausedBadge(true, overlays: traînée))
+        XCTAssertTrue(MediaStageVeil.showsPausedBadge(true, overlays: .closed),
+                      "sans ouverture, la pastille garde son propre verdict")
+        XCTAssertFalse(MediaStageVeil.showsPausedBadge(false, overlays: .closed))
+    }
+
+    func test_thePausedBadgeLayer_readsTheVeil() throws {
+        let code = try source(Self.gallery)
+        guard let couche = declarationBody(startingAt: "var pausedBadgeLayer", in: code) else {
+            return XCTFail("`pausedBadgeLayer` introuvable — la garde ne mesurerait rien.")
+        }
+
+        XCTAssertTrue(couche.contains("MediaStageVeil.showsPausedBadge("))
+        XCTAssertTrue(couche.contains("overlays: stageOverlays"))
+    }
+
     /// Le corps d'une déclaration, borné par SES accolades — jamais par un
     /// nombre de caractères : une fenêtre fixe se remplit des retraits laissés
     /// par les commentaires retirés et rougit sur un code juste.
