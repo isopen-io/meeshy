@@ -74,3 +74,15 @@ export function storyMediaCaptionPayload(
   });
   return pairs.length === 0 ? undefined : Object.fromEntries(pairs);
 }
+
+/**
+ * LA CARTE `{ postMediaId → texte alternatif }` que `POST posts.root` attend
+ * (`mediaAlt`, `routes/posts/types.ts:273`, #8518) — même contrat, même borne
+ * et même refus des entrées vides que la légende : `PostMedia.alt` est le
+ * troisième contenu d'un média, jamais affiché, dit par un lecteur d'écran.
+ */
+export function storyMediaAltPayload(
+  entries: readonly { readonly postMediaId?: string | undefined; readonly alt?: string | undefined }[],
+): Record<string, string> | undefined {
+  return storyMediaCaptionPayload(entries.map(({ postMediaId, alt }) => ({ postMediaId, caption: alt })));
+}

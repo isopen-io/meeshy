@@ -66,6 +66,8 @@ const enStudioChrome = {
   'story.studio.pose.up': 'Move up',
   'story.studio.pose.down': 'Move down',
   'story.studio.objects.edit': 'Edit {name}',
+  'story.studio.media.alt': 'Alt text',
+  'story.studio.media.alt.placeholder': 'Describe this media for screen readers',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

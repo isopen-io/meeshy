@@ -66,6 +66,8 @@ const itStudioChrome = {
   'story.studio.pose.up': 'In alto',
   'story.studio.pose.down': 'In basso',
   'story.studio.objects.edit': 'Modifica {name}',
+  'story.studio.media.alt': 'Testo alternativo',
+  'story.studio.media.alt.placeholder': 'Descrivi questo contenuto per i lettori di schermo',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

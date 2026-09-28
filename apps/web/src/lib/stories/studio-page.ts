@@ -53,6 +53,9 @@ export type StudioVisualAsset = {
   readonly durationMs?: number;
   /** LA LÉGENDE de CE média (#6944) — `PostMedia.caption`. */
   readonly caption: string;
+  /** LE TEXTE ALTERNATIF de CE média (#8518) — `PostMedia.alt`, ce qu'un
+   * lecteur d'écran dit de lui ; jamais affiché. Absent ⇒ aucun. */
+  readonly alt?: string;
   /** La pose du CALQUE. Le FOND n'en a pas d'utile (il remplit la scène). */
   readonly pose: StudioPose;
   /** LE CADRE du FOND (#8414) — Ajuster/Remplir et ce qui se peint autour.
@@ -209,6 +212,14 @@ export function pageWithVisualCaption(page: StudioPage, door: 'visual' | 'overla
 /** LE CADRE du fond de CETTE page (#8414) — sans fond, rien ne change. */
 export function pageWithBackgroundFrame(page: StudioPage, frame: StoryFrame): StudioPage {
   return page.background === null ? page : { ...page, background: { ...page.background, frame } };
+}
+
+/** LE TEXTE ALTERNATIF de CE média (#8518) — même borne que la légende
+ * (`CreatePostSchema.mediaAlt`, 1000 caractères). */
+export function pageWithVisualAlt(page: StudioPage, door: 'visual' | 'overlay', alt: string): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  return asset === null ? page : { ...page, [slot]: { ...asset, alt: alt.slice(0, MEDIA_CAPTION_MAX) } };
 }
 
 /** LE FILTRE de CE média (lot 7) — `null` le retire ; sans média, rien ne

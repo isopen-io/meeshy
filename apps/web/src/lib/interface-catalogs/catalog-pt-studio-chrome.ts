@@ -66,6 +66,8 @@ const ptStudioChrome = {
   'story.studio.pose.up': 'Para cima',
   'story.studio.pose.down': 'Para baixo',
   'story.studio.objects.edit': 'Editar {name}',
+  'story.studio.media.alt': 'Texto alternativo',
+  'story.studio.media.alt.placeholder': 'Descreva esta mídia para os leitores de tela',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

@@ -66,6 +66,8 @@ const deStudioChrome = {
   'story.studio.pose.up': 'Nach oben',
   'story.studio.pose.down': 'Nach unten',
   'story.studio.objects.edit': '{name} bearbeiten',
+  'story.studio.media.alt': 'Alternativtext',
+  'story.studio.media.alt.placeholder': 'Beschreibe dieses Medium für Screenreader',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

@@ -69,6 +69,8 @@ const frStudioChrome = {
   'story.studio.pose.up': 'Vers le haut',
   'story.studio.pose.down': 'Vers le bas',
   'story.studio.objects.edit': 'Modifier {name}',
+  'story.studio.media.alt': 'Texte alternatif',
+  'story.studio.media.alt.placeholder': 'Décrivez ce média pour les lecteurs d’écran',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

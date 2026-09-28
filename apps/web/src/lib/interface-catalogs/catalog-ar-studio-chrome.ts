@@ -66,6 +66,8 @@ const arStudioChrome = {
   'story.studio.pose.up': 'إلى الأعلى',
   'story.studio.pose.down': 'إلى الأسفل',
   'story.studio.objects.edit': 'تعديل {name}',
+  'story.studio.media.alt': 'النص البديل',
+  'story.studio.media.alt.placeholder': 'صِف هذه الوسائط لقارئات الشاشة',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

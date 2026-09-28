@@ -13,6 +13,7 @@ import { refreshFeedAction } from '@/lib/api/query';
 import { backgroundCss } from '@/lib/canvas/background';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { resolveSceneText } from '@/lib/canvas/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -74,6 +75,7 @@ import { studioPreviewDocument } from '@/lib/stories/studio-preview';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
+import { withVisualAlt } from '@/lib/stories/studio-media-alt';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
@@ -919,6 +921,7 @@ function StoryStudio({
                     lang={lang}
                     pose={page.overlay.pose}
                     caption={page.overlay.caption}
+                    {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onChange: (value: string) => edit((current) => withVisualAlt(current, 'overlay', value), 'alt:overlay') } })}
                     filter={page.overlay.filter ?? null}
                     onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
                     onPose={(pose) => commitPoseOf('overlay', pose)}
@@ -953,7 +956,11 @@ function StoryStudio({
                 onClose={() => setFrameOpen(false)}
                 {...(retouching
                   ? {}
-                  : { caption: { value: page.background.caption, onChange: (value: string) => edit((current) => withVisualCaption(current, 'visual', value), 'caption:visual') } })}
+                  : {
+                      caption: { value: page.background.caption, onChange: (value: string) => edit((current) => withVisualCaption(current, 'visual', value), 'caption:visual') },
+                      alt: { value: page.background.alt ?? '', onChange: (value: string) => edit((current) => withVisualAlt(current, 'visual', value), 'alt:visual') },
+                      filter: { value: page.background.filter ?? null, onChange: (filter: StoryFilterId | null) => edit((current) => withVisualFilter(current, 'visual', filter)) },
+                    })}
                 onRemove={() => {
                   setFrameOpen(false);
                   remove('visual');

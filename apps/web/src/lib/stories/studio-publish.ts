@@ -4,7 +4,7 @@ import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
-import { storyMediaCaptionPayload } from './media-caption';
+import { storyMediaAltPayload, storyMediaCaptionPayload } from './media-caption';
 import { PUBLICATION_CHANNEL } from './publication-kind';
 import type { PublishChoice } from './publication-layout';
 import { buildStoryCanvasEffectsPages, studioMediaIds, type StudioReadyAsset } from './story-document';
@@ -176,6 +176,8 @@ export type StudioPublication = {
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
   readonly mediaCaption?: Record<string, string>;
+  /** Le TEXTE ALTERNATIF de chaque média (#8518) — `PostMedia.alt`. */
+  readonly mediaAlt?: Record<string, string>;
 };
 
 /** `unresolved` ⇒ un média posé n'a pas d'identité serveur : rien ne part,
@@ -200,6 +202,12 @@ function publicationOf(group: readonly ResolvedPage[], layout: MosaicLayoutMode 
       { postMediaId: overlay?.postMediaId, caption: page.overlay?.caption },
     ]),
   );
+  const mediaAlt = storyMediaAltPayload(
+    group.flatMap(({ page, background, overlay }) => [
+      { postMediaId: background?.postMediaId, alt: page.background?.alt },
+      { postMediaId: overlay?.postMediaId, alt: page.overlay?.alt },
+    ]),
+  );
   return [
     {
       pageIds: group.map(({ page }) => page.id),
@@ -207,6 +215,7 @@ function publicationOf(group: readonly ResolvedPage[], layout: MosaicLayoutMode 
       storyEffects,
       mediaIds: studioMediaIds(group),
       ...(mediaCaption !== undefined ? { mediaCaption } : {}),
+      ...(mediaAlt !== undefined ? { mediaAlt } : {}),
     },
   ];
 }

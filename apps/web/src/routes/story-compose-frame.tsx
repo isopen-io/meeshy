@@ -7,11 +7,13 @@ import {
   type SceneBackdrop,
   type SceneFitMode,
 } from '@/lib/canvas/backdrop';
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryFrame } from '@/lib/stories/story-document';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
+import { StudioAltField, StudioFilterSection } from '@/routes/story-compose-media-fields';
 
 /**
  * **LE PANNEAU CADRE** (#8414, maquette `iPad.dc.html`, règle 4 : « chaque
@@ -83,6 +85,8 @@ export function StudioFramePanel({
   onChange,
   onClose,
   caption,
+  alt,
+  filter,
   onRemove,
 }: {
   readonly lang: InterfaceLanguage;
@@ -92,6 +96,10 @@ export function StudioFramePanel({
   /** LA LÉGENDE du média de fond (`PostMedia.caption`) — elle a quitté la
    * carte du socle (lot 6) : on l'écrit là où l'on règle le média. */
   readonly caption?: { readonly value: string; readonly onChange: (value: string) => void };
+  /** LE TEXTE ALTERNATIF du média de fond (`PostMedia.alt`, #8518). */
+  readonly alt?: { readonly value: string; readonly onChange: (value: string) => void };
+  /** LE FILTRE du média de fond (#8518) — `null` : aucun. */
+  readonly filter?: { readonly value: StoryFilterId | null; readonly onChange: (filter: StoryFilterId | null) => void };
   /** RETIRER le média de fond — sa ligne a quitté le socle (lot 6). */
   readonly onRemove?: () => void;
 }) {
@@ -119,6 +127,9 @@ export function StudioFramePanel({
           {translate(lang, 'story.studio.edit.done')}
         </button>
       </div>
+      {/* Le corps DÉFILE sous son titre (#8517) : le Cadre ne mange pas la
+          scène qu'il règle, au téléphone comme au bureau. */}
+      <div data-story-frame-body className="flex max-h-72 flex-col gap-2 overflow-y-auto">
       <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(lang, FIT_HINT_KEY[frame.fitMode])}
       </p>
@@ -144,6 +155,7 @@ export function StudioFramePanel({
           style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
         />
       ) : null}
+      {alt !== undefined ? <StudioAltField lang={lang} door="visual" value={alt.value} onChange={alt.onChange} /> : null}
       {/* Autour d'un média qui REMPLIT, il n'y a rien : les fonds ne se
           proposent qu'à un média ajusté — un choix sans effet n'est pas offert. */}
       {frame.fitMode === 'fit' ? (
@@ -165,6 +177,9 @@ export function StudioFramePanel({
           </div>
         </>
       ) : null}
+      {/* LE FILTRE DU FOND (#8518) — il ne peint que le média de fond, comme
+          celui d'un calque ne peint que le calque. */}
+      {filter !== undefined ? <StudioFilterSection lang={lang} filter={filter.value} onFilter={filter.onChange} /> : null}
       {onRemove !== undefined ? (
         <button
           type="button"
@@ -177,6 +192,7 @@ export function StudioFramePanel({
           {translate(lang, 'story.studio.background.remove')}
         </button>
       ) : null}
+      </div>
     </section>
   );
 }

@@ -80,6 +80,13 @@ export type PublishStoryParams = ConversationsDeps & {
    * main : la borne et le rejet des entrées vides y vivent une fois.
    */
   readonly mediaCaption?: Record<string, string>;
+  /**
+   * **LE TEXTE ALTERNATIF DE CHAQUE MÉDIA** (#8518) — `PostMedia.alt`, la
+   * carte `{ postMediaId → texte }` de `CreatePostSchema.mediaAlt`
+   * (`routes/posts/types.ts:273`), même contrat que {@link mediaCaption} ;
+   * composée par `storyMediaAltPayload`.
+   */
+  readonly mediaAlt?: Record<string, string>;
   readonly originalLanguage?: string;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
@@ -137,6 +144,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
       ...(params.content !== undefined && params.content !== '' ? { content: params.content } : {}),
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
       ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),
+      ...(params.mediaAlt !== undefined ? { mediaAlt: params.mediaAlt } : {}),
       storyEffects: params.storyEffects,
       mediaIds: params.mediaIds,
     },
