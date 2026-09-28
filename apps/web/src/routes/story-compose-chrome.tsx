@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useDecodedSwap, type ImageDecode } from '@/lib/media/decoded-swap';
 import type { StudioFloor } from '@/lib/stories/studio-floor';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
@@ -78,21 +79,27 @@ export function TextMark({ size = 20 }: { readonly size?: number }) {
  * basse résolution étirée ne tient que floutée ; le voile sombre garde le
  * verre des contrôles lisible sur un sol clair.
  */
-export function StudioFloorLayer({ floor }: { readonly floor: StudioFloor | null }) {
-  if (floor === null) return null;
-  if (floor.kind === 'tint') {
-    return <span aria-hidden="true" data-story-studio-floor="tint" className="pointer-events-none absolute inset-0 block" style={{ backgroundColor: floor.src }} />;
+export function StudioFloorLayer({ floor, decode }: { readonly floor: StudioFloor | null; readonly decode?: ImageDecode }) {
+  // LA BASCULE IMPERCEPTIBLE (#8534) : l'image locale floutée ne cède la place
+  // au thumbhash qu'une fois celui-ci DÉCODÉ, et reste dessous le temps d'un fondu.
+  const { shown, leaving } = useDecodedSwap(floor, decode);
+  if (shown === null) return null;
+  if (shown.kind === 'tint') {
+    return <span aria-hidden="true" data-story-studio-floor="tint" className="pointer-events-none absolute inset-0 block" style={{ backgroundColor: shown.src }} />;
   }
   return (
-    <span aria-hidden="true" data-story-studio-floor={floor.kind} className="pointer-events-none absolute inset-0 block overflow-hidden">
-      {/* eslint-disable-next-line jsx-a11y/alt-text */}
-      <img
-        src={floor.src}
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 size-full object-cover"
-        style={{ filter: floor.kind === 'hash' ? 'blur(18px)' : 'blur(36px) saturate(1.2)', transform: 'scale(1.2)' }}
-      />
+    <span aria-hidden="true" data-story-studio-floor={shown.kind} className="pointer-events-none absolute inset-0 block overflow-hidden">
+      {[...(leaving !== null && leaving.kind !== 'tint' && leaving.src !== shown.src ? [leaving] : []), shown].map((layer) => (
+        // eslint-disable-next-line jsx-a11y/alt-text
+        <img
+          key={layer.src}
+          src={layer.src}
+          alt=""
+          aria-hidden="true"
+          className={`absolute inset-0 size-full object-cover ${layer === shown && leaving !== null ? 'studio-floor-in' : ''}`}
+          style={{ filter: layer.kind === 'hash' ? 'blur(18px)' : 'blur(36px) saturate(1.2)', transform: 'scale(1.2)' }}
+        />
+      ))}
       <span className="absolute inset-0 block" style={{ backgroundColor: 'rgba(0,0,0,0.28)' }} />
     </span>
   );

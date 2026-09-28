@@ -64,3 +64,19 @@ describe('StoryComposeScreen — importer plusieurs médias d’un geste (#8533)
     expect(pageTiles(el)).toHaveLength(0);
   });
 });
+
+describe('StoryComposeScreen — la montée ne recharge jamais le média de la scène (#8534)', () => {
+  test('le média peint reste le MÊME élément, sur son URL locale, avant et après l’accusé de montée', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'POST');
+    selectFiles(el, [media('a.jpg')]);
+    await flush(() => el.querySelector('[data-scene-player] img') !== null);
+    const painted = el.querySelector<HTMLImageElement>('[data-scene-player] img')!;
+    const local = painted.getAttribute('src');
+    expect(local?.startsWith('blob:')).toBe(true);
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null || bench.uploadCreations() === 1);
+    await flush();
+    expect(el.querySelector('[data-scene-player] img')).toBe(painted);
+    expect(painted.getAttribute('src')).toBe(local);
+  });
+});
