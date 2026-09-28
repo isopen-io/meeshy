@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DECLINE_REPLY_KEYS, DECLINE_REPLY_MAX_LENGTH, declineWithReply, type DeclineReplyDeps } from '@/lib/calls/decline-reply';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
  * **REFUSER AVEC UN MESSAGE** (#8065) — la feuille qui monte de l'écran
@@ -30,6 +31,7 @@ export function CallDeclineSheet({
   readonly onClose: () => void;
 }) {
   const [draft, setDraft] = useState('');
+  useBackDismiss(onClose);
   const panel = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {

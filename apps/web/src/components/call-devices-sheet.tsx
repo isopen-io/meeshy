@@ -19,6 +19,7 @@ import type { ShellAudioRoute } from '@/lib/calls/shell-call';
 import type { ShellAudioRoutes } from '@/lib/calls/shell-call-runtime';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
  * **LES PÉRIPHÉRIQUES D'UN APPEL** (#8046, D5 · D6) — la feuille ouverte
@@ -152,6 +153,7 @@ export function CallDevicesSheet({ onClose }: { readonly onClose: () => void }) 
   const [preferences, setPreferences] = useState(() => readDevicePreferences(browserPreferenceStorage()));
   const [failed, setFailed] = useState(false);
   const sinkId = useStore(callOutputStore, (state) => state.sinkId);
+  useBackDismiss(onClose);
   const panel = useRef<HTMLDivElement | null>(null);
   const sinks = typeof HTMLMediaElement !== 'undefined' && sinkSelectionSupported(HTMLMediaElement);
 
