@@ -3171,6 +3171,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         registerCitedPostHandlers(on: socket)
         registerCallRecordingHandlers(on: socket)
         registerCallControlHandlers(on: socket)
+        registerCallPreviewHandlers(on: socket)
 
         // --- Conversation participation events ---
 
