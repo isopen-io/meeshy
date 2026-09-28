@@ -5,6 +5,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StudioTiming } from '@/lib/stories/studio-text';
 import { timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 import { draggedTiming, secondsForDelta, trackKeyStep, type TrackGrip } from '@/lib/stories/studio-track-drag';
 
 /**
@@ -180,7 +181,7 @@ export function StudioTimelinePanel({
   };
 
   return (
-    <section data-story-timeline aria-label={translate(lang, 'story.studio.timeline')} className="glass flex flex-col gap-1.5 rounded-[20px] px-3 py-2.5">
+    <section data-story-timeline aria-label={translate(lang, 'story.studio.timeline')} className={`${STUDIO_PLATE} glass flex flex-col gap-1.5 rounded-[20px] px-4 py-2.5`}>
       <div className="flex items-center gap-2">
         <button
           type="button"

@@ -5,6 +5,7 @@ import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
 
@@ -80,7 +81,7 @@ export function StudioPostTextPlaque({
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
       }}
-      className="glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5"
+      className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5`}
     >
       <div className="flex items-center gap-2">
         <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>

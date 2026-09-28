@@ -10,6 +10,7 @@ import {
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryFrame } from '@/lib/stories/story-document';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 
 /**
  * **LE PANNEAU CADRE** (#8414, maquette `iPad.dc.html`, règle 4 : « chaque
@@ -107,7 +108,7 @@ export function StudioFramePanel({
     <section
       data-story-frame-panel
       aria-label={title}
-      className="glass flex flex-col gap-2 rounded-[22px] p-3"
+      className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] p-3`}
       style={{ color: 'var(--color-ios-ink)' }}
     >
       <div className="flex items-center gap-2">
@@ -128,7 +129,7 @@ export function StudioFramePanel({
       <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(lang, 'story.studio.frame.media')}
       </p>
-      <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex gap-1.5">
+      <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex flex-wrap gap-1.5">
         {SCENE_FIT_MODES.map((mode) => (
           <Token key={mode} on={frame.fitMode === mode} probe={mode} onPress={() => setFit(mode)}>
             {translate(lang, FIT_KEY[mode])}

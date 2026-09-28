@@ -144,6 +144,11 @@ export function StudioTile({
  * prend la couleur de marque pleine, comme la puce pressée du studio. */
 const PRESSED_TILE = 'bg-[var(--color-ios-brand)]';
 
+/** **UNE PLAQUE DU SOCLE NE S'ÉTIRE JAMAIS** (#8482) — Cadre, édition, frise,
+ * texte du post : toute la largeur sur un téléphone (gouttières du socle),
+ * 36 rem au plus et centrée sur un grand écran. */
+export const STUDIO_PLATE = 'w-full max-w-xl min-w-0 self-center';
+
 /** Un bouton ROND en verre de la barre haute ou du socle — ✕, ⋯, texte du post. */
 export const ROUND_GLASS = 'glass grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2';
 
@@ -317,7 +322,7 @@ export function StudioEditPlaque({
   readonly children: ReactNode;
 }) {
   return (
-    <section data-story-edit-plaque aria-label={title} className="glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5">
+    <section data-story-edit-plaque aria-label={title} className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5`}>
       <div className="flex items-center gap-2">
         <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {title}

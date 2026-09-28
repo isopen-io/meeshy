@@ -753,8 +753,8 @@ function StoryStudio({
       }
     >
       {/* LA ZONE DE LA SCÈNE (#8413) — ENTRE la barre haute et le socle : ni ✕
-          ni ⋯ ni Publier ne se posent sur le dessin. La carte reste 9:16 et se
-          centre dans ce qui reste ; les deux rails flottent sur ses bords. */}
+          ni ⋯ ni Publier ne se posent sur le dessin. La carte reste 9:16, se
+          centre dans ce qui reste à 10 px des bords (#8482) ; les rails flottent dessus. */}
       <div data-story-studio-plateau className="relative z-10 min-h-0 flex-1">
         {!online ? (
           <p role="status" className="glass absolute inset-x-0 top-0 z-20 px-4 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
@@ -766,7 +766,7 @@ function StoryStudio({
           <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} sound={!retouching} />
         )}
 
-        <div className="absolute inset-0 grid place-items-center py-0.5" style={{ containerType: 'size' }}>
+        <div className="absolute inset-0 grid place-items-center px-2.5 py-0.5" style={{ containerType: 'size' }}>
           {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707) — le plan
               publié lit le brouillon tel qu'il était au premier clic sur
               Publier : un geste après coup ne changerait plus rien à ce qui
