@@ -5,6 +5,8 @@ import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
 
@@ -57,7 +59,7 @@ export function StudioPreviewSheet({
  * **LE TEXTE DU POST** (#8413) — `Post.content`, le corps de la publication :
  * distinct du texte posé sur la scène et de la légende d'un média. Écrire
  * applique sur-le-champ (le brouillon est persisté à chaque changement) ;
- * « Terminé » ne fait que fermer, comme Échap.
+ * « Terminé » ne fait que fermer, comme Échap et le retour matériel (#8517).
  *
  * **UN CADRE DE VERRE QUI MONTE DU BAS** (lot 7, directive porteur
  * 2026-09-28, miroir `ComposerSceneDescriptionEditor.swift`) — le même verre
@@ -79,6 +81,7 @@ export function StudioPostTextFrame({
   const frameRef = useRef<HTMLDivElement | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const label = translate(lang, 'story.studio.postText');
+  useBackDismiss(onClose, { escape: true });
 
   useEffect(() => {
     fieldRef.current?.focus();
@@ -100,12 +103,7 @@ export function StudioPostTextFrame({
       data-story-post-text-frame
       role="group"
       aria-label={label}
-      className="field-box glass flex items-end gap-2 rounded-[22px] px-3 py-2.5"
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return;
-        event.preventDefault();
-        onClose();
-      }}
+      className={`${STUDIO_PLATE} field-box glass flex items-end gap-2 rounded-[22px] px-3 py-2.5`}
     >
       <textarea
         ref={fieldRef}

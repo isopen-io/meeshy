@@ -95,8 +95,8 @@ describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () =
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     back();
     await flush(() => el.querySelector('[data-story-frame-panel]') === null);
-    expect(el.querySelector('[data-story-frame-panel]')).toBeNull();
-    expect(el.querySelector('[data-story-studio]')).not.toBeNull();
+    expect(el.querySelector('[data-story-frame-panel]') === null).toBe(true);
+    expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
   });
 
   test('plaque d’édition ouverte : le retour la ferme', async () => {
@@ -106,7 +106,7 @@ describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () =
     await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
     back();
     await flush(() => el.querySelector('[data-story-edit-plaque]') === null);
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    expect(el.querySelector('[data-story-edit-plaque]') === null).toBe(true);
   });
 
   test('frise ouverte : le retour la referme, la scène garde son texte', async () => {
@@ -116,7 +116,7 @@ describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () =
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     back();
     await flush(() => el.querySelector('[data-story-timeline]') === null);
-    expect(el.querySelector('[data-story-timeline]')).toBeNull();
+    expect(el.querySelector('[data-story-timeline]') === null).toBe(true);
     expect(el.querySelector('[data-story-animated]')?.getAttribute('data-story-animated')).toBe('off');
   });
 
@@ -127,7 +127,7 @@ describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () =
     await flush(() => el.querySelector('[data-story-post-text-frame]') !== null);
     back();
     await flush(() => el.querySelector('[data-story-post-text-frame]') === null);
-    expect(el.querySelector('[data-story-post-text-frame]')).toBeNull();
+    expect(el.querySelector('[data-story-post-text-frame]') === null).toBe(true);
   });
 
   test('menu d’un objet ouvert : le retour le ferme', async () => {
@@ -141,8 +141,8 @@ describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () =
     await flush(() => document.querySelector('[data-story-object-menu]') !== null);
     back();
     await flush(() => document.querySelector('[data-story-object-menu]') === null);
-    expect(document.querySelector('[data-story-object-menu]')).toBeNull();
-    expect(el.querySelector('[data-story-studio]')).not.toBeNull();
+    expect(document.querySelector('[data-story-object-menu]') === null).toBe(true);
+    expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
   });
 });
 
@@ -165,7 +165,7 @@ describe('Échap ferme la couche du DESSUS seule', () => {
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     escape();
     await flush(() => el.querySelector('[data-story-frame-panel]') === null);
-    expect(el.querySelector('[data-story-frame-panel]')).toBeNull();
+    expect(el.querySelector('[data-story-frame-panel]') === null).toBe(true);
     expect(cancels).toEqual([]);
     escape();
     expect(cancels).toEqual(['cancel']);
@@ -183,8 +183,8 @@ describe('Échap ferme la couche du DESSUS seule', () => {
     await flush(() => document.querySelector('[data-story-object-menu]') !== null);
     escape();
     await flush(() => document.querySelector('[data-story-object-menu]') === null);
-    expect(document.querySelector('[data-story-object-menu]')).toBeNull();
-    expect(el.querySelector('[data-story-edit-plaque]')).not.toBeNull();
+    expect(document.querySelector('[data-story-object-menu]') === null).toBe(true);
+    expect(el.querySelector('[data-story-edit-plaque]') !== null).toBe(true);
   });
 });
 

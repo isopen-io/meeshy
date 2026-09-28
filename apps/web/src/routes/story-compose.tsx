@@ -906,6 +906,7 @@ function StoryStudio({
               onEnter={(head) => moveSelectedEdge(head, timingEnteringAt)}
               onExit={(head) => moveSelectedEdge(head, timingExitingAt)}
               onTiming={(id, timing) => edit((current) => withTrackTiming(current, id, timing))}
+              onClose={toggleAnimated}
             />
           </Suspense>
         ) : null}

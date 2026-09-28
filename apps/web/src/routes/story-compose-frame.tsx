@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import {
   SCENE_BACKDROPS,
@@ -10,6 +10,8 @@ import {
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryFrame } from '@/lib/stories/story-document';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 
 /**
  * **LE PANNEAU CADRE** (#8414, maquette `iPad.dc.html`, règle 4 : « chaque
@@ -23,7 +25,8 @@ import type { StoryFrame } from '@/lib/stories/story-document';
  * secondaire ne tient pas AA sur ce verre en clair (3,58:1, #6308).
  *
  * Un choix s'APPLIQUE sur-le-champ (la scène le montre sous le panneau) et se
- * défait par l'historique comme tout geste sur la scène. Échap ferme.
+ * défait par l'historique comme tout geste sur la scène. Échap et le retour
+ * matériel le ferment, lui seul (#8517) : jamais la retouche qui le porte.
  */
 
 const FIT_KEY = { fit: 'story.studio.frame.fit', fill: 'story.studio.frame.fill' } as const;
@@ -92,13 +95,7 @@ export function StudioFramePanel({
   /** RETIRER le média de fond — sa ligne a quitté le socle (lot 6). */
   readonly onRemove?: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useBackDismiss(onClose, { escape: true });
 
   const title = translate(lang, 'story.studio.frame');
   const setFit = (fitMode: SceneFitMode) => onChange({ ...frame, fitMode });
@@ -107,7 +104,7 @@ export function StudioFramePanel({
     <section
       data-story-frame-panel
       aria-label={title}
-      className="glass flex flex-col gap-2 rounded-[22px] p-3"
+      className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] p-3`}
       style={{ color: 'var(--color-ios-ink)' }}
     >
       <div className="flex items-center gap-2">
@@ -128,7 +125,7 @@ export function StudioFramePanel({
       <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(lang, 'story.studio.frame.media')}
       </p>
-      <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex gap-1.5">
+      <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex flex-wrap gap-1.5">
         {SCENE_FIT_MODES.map((mode) => (
           <Token key={mode} on={frame.fitMode === mode} probe={mode} onPress={() => setFit(mode)}>
             {translate(lang, FIT_KEY[mode])}
