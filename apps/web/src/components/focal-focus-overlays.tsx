@@ -11,6 +11,7 @@ import { focusStampLabel } from '@/lib/reading-mode/stamp';
 import type { Delivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
 
 /**
  * LES SUPERPOSITIONS DE LA RANGÉE ÉLUE (#5648) — extraites de `focal-row.tsx`
@@ -135,6 +136,8 @@ export function FocusStrip({
   onToggleOriginal,
   onPickLanguage,
   reactions,
+  myReactions,
+  onToggleReaction,
 }: {
   readonly servedLanguage: string;
   readonly originalLanguage: string;
@@ -150,6 +153,16 @@ export function FocusStrip({
   readonly onToggleOriginal?: () => void;
   readonly onPickLanguage?: (code: string) => void;
   readonly reactions: readonly (readonly [string, number])[];
+  /** Les emojis que CE lecteur a posés sur ce message — la capsule `mine`. */
+  readonly myReactions?: readonly string[];
+  /**
+   * LA CAPSULE BASCULE (#8536, « l'idée est de rendre ces boutons d'action
+   * rapides et accessibles ») — sur l'élu, TOUTE capsule est un bouton : la
+   * mienne retire ma réaction, celle d'autrui y pose la mienne. Même loi que
+   * le menu du message (`useMessageMenu.onMenuReact` → `toggleReactionPlan`).
+   * Absente (hôte en lecture seule), la capsule reste inerte.
+   */
+  readonly onToggleReaction?: (emoji: string) => void;
 }) {
   /* `PrismPastille` rend `null` quand la langue servie EST la langue
      d'origine (rien à basculer) : sans cette garde, sa capsule restait
@@ -180,7 +193,12 @@ export function FocusStrip({
       ) : null}
       {reactions.map(([glyph, count]) => (
         <span key={glyph} className="focus-chip">
-          <ReactionChip glyph={glyph} count={count} />
+          <ReactionChip
+            glyph={glyph}
+            count={count}
+            mine={myReactions?.includes(glyph) ?? false}
+            {...(onToggleReaction === undefined ? {} : { onToggle: () => onToggleReaction(glyph) })}
+          />
         </span>
       ))}
     </div>
@@ -195,6 +213,7 @@ export function FocusStamp({
   delivery,
   isMine,
   sendStartedAt,
+  onOpen,
 }: {
   readonly sentAt: Date;
   readonly now: Date;
@@ -206,19 +225,42 @@ export function FocusStamp({
   readonly isMine: boolean;
   /** #5813, étape 9 — même horloge des 200 ms que la colonne méta ordinaire. */
   readonly sendStartedAt?: number;
+  /**
+   * OUVRE LA FICHE DU MESSAGE (#8536, « quand je touche la date : ça n'ouvre
+   * pas les détails du message ») — le même panneau que « Plus… » au menu du
+   * message. Présent, le tampon devient un BOUTON nommé comme la coche de la
+   * bulle (`message-detail.open`) ; l'heure reste dans son `<time>`.
+   */
+  readonly onOpen?: () => void;
 }) {
-  return (
-    <time
-      className="focus-stamp focus-chip text-time font-semibold tabular-nums"
-      dateTime={sentAt.toISOString()}
-      style={{ color: 'var(--color-ios-ink)' }}
-    >
+  const label = (
+    <>
       {focusStampLabel({ sentAt, now, timeString, locale })}
       {isMine && delivery !== null ? (
         <span className="ml-1 inline-flex align-middle">
           <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
         </span>
       ) : null}
-    </time>
+    </>
+  );
+  const className = 'focus-stamp focus-chip text-time font-semibold tabular-nums';
+  const style = { color: 'var(--color-ios-ink)' };
+  if (onOpen === undefined) {
+    return (
+      <time className={className} dateTime={sentAt.toISOString()} style={style}>
+        {label}
+      </time>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      aria-label={translate(currentInterfaceLanguage(), 'message-detail.open')}
+      onClick={onOpen}
+    >
+      <time dateTime={sentAt.toISOString()}>{label}</time>
+    </button>
   );
 }

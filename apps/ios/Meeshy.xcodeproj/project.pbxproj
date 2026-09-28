@@ -860,6 +860,7 @@
 		5CC848FC9C3D78DD8BDBBB43 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBD702F54691203FB7B02D5 /* WelcomeView.swift */; };
 		5D274BDE17A03F708B7AADCA /* PendingBannerDismissResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E019BD24EC2BE4D64FF582 /* PendingBannerDismissResolver.swift */; };
 		5D59D6C6A8ECA173F32436CF /* OutboxDispatcher+Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397070688CD8000FB7B89F36 /* OutboxDispatcher+Messages.swift */; };
+		5D64D7F4344C538277D1AA3F /* FocalElectedLoupeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67FB93CBFF4663FB75C28DE3 /* FocalElectedLoupeTests.swift */; };
 		5D6C70D16FC779863CF0DCD3 /* LocalizedNumber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0E572518B85B56D055F46A /* LocalizedNumber.swift */; };
 		5D83F7D362F13FA6CB3A047F /* PostDetailViewModel+CommentEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0A2391E71A24B8046264BE /* PostDetailViewModel+CommentEdit.swift */; };
 		5D98676C59FEB07596AC0AA8 /* StoryViewerCommentRealtimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13EB2F440260960BA0911D12 /* StoryViewerCommentRealtimeTests.swift */; };
@@ -3414,6 +3415,7 @@
 		67B04709990963E054A5E81E /* BubbleStickerRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleStickerRenderingTests.swift; sourceTree = "<group>"; };
 		67B942F953E501EC19D2A509 /* ConversationViewModel+Projections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewModel+Projections.swift"; sourceTree = "<group>"; };
 		67ED6D6105D12DB604B7734C /* SingleSourceOfTruthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleSourceOfTruthTests.swift; sourceTree = "<group>"; };
+		67FB93CBFF4663FB75C28DE3 /* FocalElectedLoupeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalElectedLoupeTests.swift; sourceTree = "<group>"; };
 		6800F8750E4B164B6D7B5EBE /* Logger+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Categories.swift"; sourceTree = "<group>"; };
 		68025CDF57252AFD88899B60 /* TrackingLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinkDetailView.swift; sourceTree = "<group>"; };
 		680D2847E92DC2B49F185335 /* MeeshyComposerHost+MountedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+MountedView.swift"; sourceTree = "<group>"; };
@@ -5786,6 +5788,7 @@
 				17E4C046D0E1B99A5E2D1133 /* FocalBetaPreviewNavigationSourceGuardTests.swift */,
 				5A14F8303E1CBB0454AF63FC /* FocalChromeReturnTests.swift */,
 				2D7F3EE837E4A3D737923109 /* FocalDynamicTypeTests.swift */,
+				67FB93CBFF4663FB75C28DE3 /* FocalElectedLoupeTests.swift */,
 				318EAC77E7DCEE1EB77751F1 /* FocalElectionClearanceTests.swift */,
 				ECCFA8D6C6A4A31F2D1D6548 /* FocalFocusDetailsMotionLawTests.swift */,
 				20B044E1B11A65B800CD010A /* FocalFocusedRowDetailsGuardTests.swift */,
@@ -9927,6 +9930,7 @@
 				46C3E578A207C4B28EF603EF /* FocalBetaPreviewNavigationSourceGuardTests.swift in Sources */,
 				0CFF43B5F358451E455A6144 /* FocalChromeReturnTests.swift in Sources */,
 				17C23D712553020C46551194 /* FocalDynamicTypeTests.swift in Sources */,
+				5D64D7F4344C538277D1AA3F /* FocalElectedLoupeTests.swift in Sources */,
 				9A3E4697FBEFAEED91F6A97B /* FocalElectionClearanceTests.swift in Sources */,
 				355FA7B0B5C62961DEE2DBEB /* FocalFocusDetailsMotionLawTests.swift in Sources */,
 				D8869D504E565556A03C7F99 /* FocalFocusTimestampTests.swift in Sources */,
