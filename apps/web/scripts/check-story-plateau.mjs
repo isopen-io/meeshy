@@ -178,6 +178,7 @@ check(
 /* « T+ » pose le texte ET ouvre sa saisie : on tape au CLAVIER, jamais par
    `page.fill`, qui écrivait sous le calque des gestes (#8515). */
 const tPlus = await addTextOnStage(page, 'Hello');
+if (tPlus !== null) console.error(`  « T+ » puis le clavier : ${tPlus}`);
 check(tPlus === null, `« T+ » puis le clavier : ${tPlus}`);
 await twoFrames();
 check(

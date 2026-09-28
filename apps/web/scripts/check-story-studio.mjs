@@ -97,6 +97,8 @@ const check = (ok, what) => {
 /** Écrire sur la scène par le clic et le clavier (#8515) — jamais `page.fill`. */
 const writeAsAuthor = async (page, text, tag) => {
   const why = await writeOnStage(page, text);
+  // Dit TOUT DE SUITE : l'attente suivante expirerait avant la liste des échecs.
+  if (why !== null) console.error(`  ${tag} « ${text.slice(0, 24)} » : ${why}`);
   check(why === null, `${tag} : ${why}`);
 };
 
