@@ -49,7 +49,8 @@ extension MeeshyComposerHost {
                 if !socleHasNothingToPublish { publishButton }
             }
         }
-        .padding(.horizontal, 14)
+        // Grand écran : la marge de la maquette iPad/Mac, alignée sur les rails.
+        .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
         // **Plus bas, sous la scène** (directive porteur 2026-09-27) : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
         .padding(.top, 4)

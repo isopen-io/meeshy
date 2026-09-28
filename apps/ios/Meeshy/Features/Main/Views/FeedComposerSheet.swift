@@ -38,7 +38,7 @@ struct FeedComposerSheet: View {
     @FocusState private var isFocused: Bool
     @State private var editingAttachmentId: String?
     @State private var videosToPreview: [URL] = []
-    @State private var editingVideoURL: URL?
+    @State private var editingVideo: PendingVideoEdit?
 
     @State private var pendingAttachments: [MessageAttachment] = []
     /// Lieu choisi via le picker, en attente d'envoi (Task 11/12,
@@ -538,15 +538,24 @@ struct FeedComposerSheet: View {
         }
         // Tap pending video → unified video editor
         .fullScreenCover(isPresented: Binding(
-            get: { editingVideoURL != nil },
-            set: { if !$0 { editingVideoURL = nil } }
+            get: { editingVideo != nil },
+            set: { if !$0 { editingVideo = nil } }
         )) {
-            if let url = editingVideoURL {
+            if let target = editingVideo {
                 MeeshyVideoEditorView(
-                    url: url,
+                    url: target.url,
                     context: .post,
-                    onComplete: { _ in editingVideoURL = nil },
-                    onCancel: { editingVideoURL = nil }
+                    onComplete: { result in
+                        // La vidéo éditée remplace la pièce jointe (#8523).
+                        let issue = PendingVideoEditReplacement.apply(result, to: target.id,
+                                                                      files: pendingMediaFiles,
+                                                                      attachments: pendingAttachments)
+                        pendingMediaFiles = issue.files
+                        pendingAttachments = issue.attachments
+                        if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
+                        editingVideo = nil
+                    },
+                    onCancel: { editingVideo = nil }
                 )
             }
         }
@@ -610,7 +619,7 @@ struct FeedComposerSheet: View {
                                 editingAttachmentId = attachment.id
                             } else if attachment.type == .video {
                                 if let url = pendingMediaFiles[attachment.id] {
-                                    editingVideoURL = url
+                                    editingVideo = PendingVideoEdit(id: attachment.id, url: url)
                                 }
                             }
                         }

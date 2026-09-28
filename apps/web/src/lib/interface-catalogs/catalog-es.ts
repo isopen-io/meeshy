@@ -859,6 +859,7 @@ const es = {
   'story.studio.refusal.door.visual': 'Elige una imagen o un vídeo.',
   'story.studio.refusal.door.sound': 'Elige un archivo de audio.',
   'story.studio.refusal.media-max': 'Esta publicación ya lleva diez medios: el límite de la pasarela.',
+  'story.studio.refusal.import-max': '{count} medio(s) no importado(s): una publicación lleva diez como máximo.',
   'story.studio.failure.network': 'Red no disponible.',
   'story.studio.failure.timeout': 'El servidor no respondió.',
   'story.studio.failure.session': 'Sesión caducada — vuelve a iniciar sesión.',

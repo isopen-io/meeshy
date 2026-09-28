@@ -859,6 +859,7 @@ const en = {
   'story.studio.refusal.door.visual': 'Choose an image or a video.',
   'story.studio.refusal.door.sound': 'Choose an audio file.',
   'story.studio.refusal.media-max': 'This publication already carries ten media — the gateway’s ceiling.',
+  'story.studio.refusal.import-max': '{count} media not imported: a publication carries ten at most.',
   'story.studio.failure.network': 'Network unavailable.',
   'story.studio.failure.timeout': 'The server did not respond.',
   'story.studio.failure.session': 'Session expired — please log in again.',
