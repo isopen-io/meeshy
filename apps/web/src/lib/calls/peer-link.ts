@@ -34,6 +34,8 @@ export type PeerLinkDeps = {
   readonly onState: (state: LinkState) => void;
   /** Le canal de données `transcription` (#8048) : créé avant l'offre par l'offrant (m=application), reçu par l'autre — comme iOS. */
   readonly onChannel?: (channel: RTCDataChannel) => void;
+  /** Le lien d'aperçu de l'appelé (#8480) : il ne fait que RECEVOIR, aucune piste ne s'y attache jamais. */
+  readonly receiveOnly?: boolean;
   readonly createConnection?: (config: RTCConfiguration) => RTCPeerConnection;
   readonly createStream?: () => MediaStream;
   readonly schedule?: (fn: () => void, ms: number) => unknown;
@@ -219,6 +221,10 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
 
   /** Le côté qui RÉPOND s'accroche aux lignes de l'offre plutôt que d'en ajouter. */
   const bindAnswererTracks = async (): Promise<void> => {
+    if (deps.receiveOnly === true) {
+      for (const transceiver of pc.getTransceivers()) transceiver.direction = 'recvonly';
+      return;
+    }
     for (const transceiver of pc.getTransceivers()) {
       const kind = kindOf(transceiver);
       if (kind === 'audio' && audioTransceiver === null) {
@@ -284,7 +290,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
     },
 
     setVideoTrack: async (track) => {
-      if (closed) return;
+      if (closed || deps.receiveOnly === true) return;
       if (videoTransceiver === null) {
         if (track === null) return;
         videoTransceiver = pc.addTransceiver(track, { direction: 'sendrecv', streams: [deps.localStream] });
@@ -295,7 +301,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
     },
 
     setAudioTrack: async (track) => {
-      if (closed || audioTransceiver === null) return;
+      if (closed || audioTransceiver === null || deps.receiveOnly === true) return;
       await audioTransceiver.sender.replaceTrack(track);
     },
 
