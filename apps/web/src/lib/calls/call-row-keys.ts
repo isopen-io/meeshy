@@ -11,14 +11,17 @@
  * rien de `call_overlay`.
  */
 
-type Step = { readonly key: string; readonly index: number; readonly count: number; readonly rtl: boolean };
+type Step = { readonly key: string; readonly index: number; readonly count: number; readonly rtl: boolean; readonly vertical?: boolean };
 
-export function rowStep({ key, index, count, rtl }: Step): number | null {
+const FORWARD = { horizontal: ['ArrowRight', 'ArrowLeft'], vertical: ['ArrowDown', 'ArrowUp'] } as const;
+
+export function rowStep({ key, index, count, rtl, vertical = false }: Step): number | null {
   if (count === 0) return null;
   if (key === 'Home') return 0;
   if (key === 'End') return count - 1;
-  if (key !== 'ArrowRight' && key !== 'ArrowLeft') return null;
-  const forward = (key === 'ArrowRight') !== rtl;
+  const [ahead, behind] = FORWARD[vertical ? 'vertical' : 'horizontal'];
+  if (key !== ahead && key !== behind) return null;
+  const forward = (key === ahead) !== (rtl && !vertical);
   if (index < 0) return forward ? 0 : count - 1;
   return (index + (forward ? 1 : -1) + count) % count;
 }
@@ -68,7 +71,7 @@ export const onRowKeyDown: RowKeyHandler = (event) => {
   if (focused instanceof HTMLInputElement && focused.type === 'range') return;
   const index = items.findIndex((item) => item === focused);
   const rtl = typeof getComputedStyle === 'function' && getComputedStyle(row).direction === 'rtl';
-  const next = rowStep({ key: event.key, index, count: items.length, rtl });
+  const next = rowStep({ key: event.key, index, count: items.length, rtl, vertical: row.getAttribute('aria-orientation') === 'vertical' });
   const target = next === null ? undefined : items[next];
   if (target === undefined) return;
   event.preventDefault();

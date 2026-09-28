@@ -6,12 +6,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 import { CallScreen } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
 
+/* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
+  await import('./call-control-actions');
+  await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
 /**
@@ -302,7 +307,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
   const settle = async (chunk: () => Promise<unknown>) => {
     await act(async () => {
       await chunk();
+      await loadCallStudioCatalog('fr');
     });
+    await act(async () => {});
     await act(async () => {});
   };
 
@@ -338,6 +345,24 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-mode="montage"]')).toBeNull();
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
+    view.done();
+  });
+
+  test('mon image en plein écran porte le rail de ma caméra ; « Effets » y entre dans le mode, qui le retire (#8576)', async () => {
+    const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } }, { color: true, blur: false });
+    expect(view.find('[data-call-self-rail]')).toBeNull();
+    view.press('[data-call-corner]');
+    await settle(() => import('./call-self-camera'));
+    const rail = view.find('[data-call-self-rail]');
+    expect(rail?.getAttribute('role')).toBe('toolbar');
+    expect(rail?.getAttribute('aria-orientation')).toBe('vertical');
+    expect(rail?.getAttribute('aria-label')).toBe('Options de ma caméra');
+    expect([...view.host.querySelectorAll('[data-call-rail]')].map((button) => button.getAttribute('data-call-rail'))).toEqual(['flip', 'camera', 'effects', 'screen']);
+    view.press('[data-call-rail="effects"]');
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
+    await settle(() => import('./call-effects-mode'));
+    expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
+    expect(view.find('[data-call-self-rail]')).toBeNull();
     view.done();
   });
 

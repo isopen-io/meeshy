@@ -1,15 +1,15 @@
 import { Fragment, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
-import { CallButton, type CallButtonTone } from '@/components/call-glass-button';
+import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
-import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import type { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
-import type { CallModeKind, CallPanelKind } from '@/lib/calls/call-screen-layer';
+import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
-import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
+import type { RowKeyHandler, RowWheelHandler } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -33,28 +33,35 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * (#8437), Ajouter (#8433) et Réagir (#8439) ouvrent un PANNEAU qui REMPLACE
  * les rangées dans le cadre ; Effets (#8442, #8551) et Capturer (#8552)
  * entrent dans un MODE qui libère tout l'écran.
+ *
+ * Chunk à part (`budgets.json` › `call_action_rows`) : les rangées ne se
+ * montrent qu'au `(…)`, et le rail qu'à mon image en plein écran ; l'écran
+ * d'appel le précharge dès que l'appel vit. Il n'importe RIEN de l'écran
+ * d'appel (`call_overlay`, `dynamic_only`) : le bouton de verre, les glyphes,
+ * les flèches et la molette d'une rangée, les identifiants lui sont remis
+ * (`CallRowsKit`).
  */
 
-export const CALL_ACTIONS_ID = 'call-actions';
+/** Ce que l'écran d'appel remet aux rangées et au rail. */
+export type CallRowsKit = {
+  readonly Button: typeof CallButton;
+  readonly glyphs: typeof CALL_VIEW_GLYPHS;
+  readonly onRowKeyDown: RowKeyHandler;
+  readonly onRowWheel: RowWheelHandler;
+  readonly rowItem: string;
+  readonly actionsId: string;
+  readonly panelIds: Readonly<Record<CallPanelKind, string>>;
+};
 
 const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.original', original: 'call.captions.off' } as const;
 
 const screenGlyph = (name: CallScreenGlyphName, size = 22) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
-/** Ce que les rangées ouvrent : un panneau (qui les remplace) ou un mode (qui libère l'écran). */
-export type CallPanels = { readonly open: CallPanelKind | null; readonly toggle: (panel: CallPanelKind) => void; readonly enter: (mode: CallModeKind) => void };
-
-export const CALL_PANEL_ID: Readonly<Record<CallPanelKind, string>> = {
-  people: 'call-people-panel',
-  react: 'call-react-panel',
-  record: 'call-record-panel',
-  journal: 'call-journal-panel',
-};
-
 type ActionContext = {
   readonly call: ActiveCall;
   readonly language: InterfaceLanguage;
   readonly panels: CallPanels;
+  readonly kit: CallRowsKit;
 };
 
 type ActionView = {
@@ -78,7 +85,7 @@ const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
   panel,
 });
 
-function mineAction(action: MineAction, { call, language, panels }: ActionContext): ActionView {
+function mineAction(action: MineAction, { call, language, panels, kit }: ActionContext): ActionView {
   switch (action) {
     case 'camera':
       return {
@@ -107,7 +114,7 @@ function mineAction(action: MineAction, { call, language, panels }: ActionContex
         key: action,
         label: translate(language, 'call.effects.open'),
         caption: translate(language, 'call.effects'),
-        glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.magicWand} size={22} />,
+        glyph: <GlyphSvg glyph={kit.glyphs.magicWand} size={22} />,
         onPress: () => panels.enter('effects'),
         tone: 'bare',
         data: { 'data-call-control': 'effects' },
@@ -127,13 +134,13 @@ function mineAction(action: MineAction, { call, language, panels }: ActionContex
 }
 
 function callAction(action: Exclude<CallAction, 'record'>, context: ActionContext): ActionView {
-  const { language, panels } = context;
+  const { language, panels, kit } = context;
   if (action === 'invite')
     return {
       key: action,
       label: translateCallControls(language, 'callControls.invite.label'),
       caption: translateCallControls(language, 'callControls.invite'),
-      glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.userPlus} size={22} />,
+      glyph: <GlyphSvg glyph={kit.glyphs.userPlus} size={22} />,
       ...panelView(panels, 'people'),
       data: { 'data-call-control': 'invite' },
     };
@@ -142,7 +149,7 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       key: action,
       label: translateCallControls(language, 'callControls.react.label'),
       caption: translateCallControls(language, 'callControls.react'),
-      glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.smiley} size={22} />,
+      glyph: <GlyphSvg glyph={kit.glyphs.smiley} size={22} />,
       ...panelView(panels, 'react'),
       data: { 'data-call-control': 'react' },
     };
@@ -151,7 +158,7 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       key: action,
       label: translateCallControls(language, 'callControls.capture.label'),
       caption: translateCallControls(language, 'callControls.capture'),
-      glyph: <GlyphSvg glyph={CALL_VIEW_GLYPHS.aperture} size={22} />,
+      glyph: <GlyphSvg glyph={kit.glyphs.aperture} size={22} />,
       onPress: () => panels.enter('montage'),
       tone: 'bare',
       data: { 'data-call-control': 'capture' },
@@ -178,20 +185,18 @@ function captionsAction({ call, language }: ActionContext): ActionView {
   };
 }
 
-const ROW_DATA = { [ROW_ITEM]: '' } as const;
-
-function ActionButton({ view }: { readonly view: ActionView }) {
+function ActionButton({ view, kit }: { readonly view: ActionView; readonly kit: CallRowsKit }) {
   return (
-    <CallButton
+    <kit.Button
       label={view.label}
       glyph={view.glyph}
       onPress={view.onPress}
       tone={view.tone}
       {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
-      {...(view.expanded === undefined || view.panel === undefined ? {} : { expanded: view.expanded, controls: CALL_PANEL_ID[view.panel], popup: true })}
+      {...(view.expanded === undefined || view.panel === undefined ? {} : { expanded: view.expanded, controls: kit.panelIds[view.panel], popup: true })}
       {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
       caption={view.caption}
-      data={{ ...view.data, ...ROW_DATA }}
+      data={{ ...view.data, [kit.rowItem]: '' }}
     />
   );
 }
@@ -202,20 +207,20 @@ function ActionButton({ view }: { readonly view: ActionView }) {
  * passerelle, qui recueille l'accord de tous — rien ne s'enregistre avant. Le
  * même bouton renonce à une demande ou arrête l'enregistrement en cours.
  */
-function RecordButton({ language, panels }: { readonly language: InterfaceLanguage; readonly panels: CallPanels }) {
+function RecordButton({ language, panels, kit }: { readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit }) {
   const kind = useStore(callRecordingStore, (state) => state.view.kind);
   const idle = kind === 'idle';
   const choosing = idle && panels.open === 'record';
   return (
-    <CallButton
+    <kit.Button
       label={translate(language, idle ? 'callRecording.start' : 'callRecording.stop')}
       glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px]'} style={idle ? undefined : { background: 'var(--ios-error-strong)' }} />}
       onPress={() => (idle ? panels.toggle('record') : void callRecording.stop())}
       tone={kind === 'recording' || choosing ? 'active' : 'bare'}
-      {...(idle ? { expanded: choosing, controls: CALL_PANEL_ID.record, popup: true } : { pressed: kind === 'recording' })}
+      {...(idle ? { expanded: choosing, controls: kit.panelIds.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
       caption={translate(language, 'call.record.short')}
-      data={{ 'data-call-record': kind, ...ROW_DATA }}
+      data={{ 'data-call-record': kind, [kit.rowItem]: '' }}
     />
   );
 }
@@ -226,11 +231,11 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
       {actions.map((action) => (
         <Fragment key={action}>
           {action === 'record' ? (
-            <RecordButton language={context.language} panels={context.panels} />
+            <RecordButton language={context.language} panels={context.panels} kit={context.kit} />
           ) : action === 'camera' || action === 'flip' || action === 'effects' || action === 'screen' ? (
-            <ActionButton view={mineAction(action, context)} />
+            <ActionButton view={mineAction(action, context)} kit={context.kit} />
           ) : (
-            <ActionButton view={callAction(action, context)} />
+            <ActionButton view={callAction(action, context)} kit={context.kit} />
           )}
         </Fragment>
       ))}
@@ -249,24 +254,57 @@ export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-contain px-1 
 /** La légende d'une rangée, en petites capitales. */
 export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
 
-type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels };
+type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit };
+
+const RAIL_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
+
+/**
+ * LE RAIL DE MA CAMÉRA (#8576) — quand mon image remplit l'écran, ses
+ * commandes se rangent en colonne sur le bord : Retourner, Couper la caméra,
+ * Effets (qui entre dans le mode), Partager l'écran. ↑ et ↓ y passent d'un
+ * bouton à l'autre.
+ */
+export function CallCameraRail({ call, set, language, panels, kit }: RowsProps) {
+  const context = { call, language, panels, kit };
+  const label = translateCallControls(language, 'callControls.camera.options');
+  return (
+    <div role="toolbar" aria-label={label} aria-orientation="vertical" onKeyDown={kit.onRowKeyDown} className="glass-call flex flex-col items-center gap-0.5 rounded-full p-0.5" data-call-self-rail="">
+      {RAIL_ORDER.filter((action) => set.mine.includes(action)).map((action) => {
+        const view = mineAction(action, context);
+        return (
+          <kit.Button
+            key={action}
+            label={view.label}
+            glyph={view.glyph}
+            onPress={view.onPress}
+            tone={view.tone}
+            {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
+            {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
+            size={44}
+            data={{ 'data-call-rail': action, [kit.rowItem]: '' }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 /** Les deux familles, une rangée chacune, dans la pilule qui a grandi. */
-export function CallActionRows({ call, set, language, panels }: RowsProps) {
-  const context = { call, language, panels };
+export function CallActionRows({ call, set, language, panels, kit }: RowsProps) {
+  const context = { call, language, panels, kit };
   const families = [
     ['mine', set.mine, 'call.section.mine'],
     ['call', set.call, 'call.section.call'],
   ] as const;
   return (
-    <div id={CALL_ACTIONS_ID} className="flex flex-col gap-2" data-call-actions="rows">
+    <div id={kit.actionsId} className="flex flex-col gap-2" data-call-actions="rows">
       {families.map(([side, actions, legend]) =>
         actions.length === 0 ? null : (
           <div key={side} role="group" aria-labelledby={`call-row-${side}`} className="flex min-w-0 flex-col gap-1" data-call-row={side}>
             <span id={`call-row-${side}`} className={ROW_TITLE} data-call-row-title="">
               {translate(language, legend)}
             </span>
-            <div role="toolbar" aria-labelledby={`call-row-${side}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
+            <div role="toolbar" aria-labelledby={`call-row-${side}`} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} onWheel={kit.onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
               <Family actions={actions} context={context} />
             </div>
           </div>

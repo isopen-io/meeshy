@@ -25,8 +25,12 @@ const GLYPHS = { more: '…', mute: 'm', remove: 'r' };
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
+/* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
+  await import('./call-control-actions');
+  await new Promise((resolve) => setTimeout(resolve, 0));
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });

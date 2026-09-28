@@ -34,6 +34,13 @@ describe('rowWheelDelta', () => {
  */
 
 describe('rowStep', () => {
+  test('une colonne (le rail de ma caméra, #8576) : ↓ au suivant, ↑ au précédent — ← et → n’y font rien, même en arabe', () => {
+    expect(rowStep({ key: 'ArrowDown', index: 0, count: 4, rtl: false, vertical: true })).toBe(1);
+    expect(rowStep({ key: 'ArrowUp', index: 0, count: 4, rtl: true, vertical: true })).toBe(3);
+    expect(rowStep({ key: 'ArrowRight', index: 0, count: 4, rtl: false, vertical: true })).toBeNull();
+    expect(rowStep({ key: 'ArrowDown', index: 0, count: 4, rtl: false })).toBeNull();
+  });
+
   test('→ passe au suivant, ← au précédent, et la rangée boucle', () => {
     expect(rowStep({ key: 'ArrowRight', index: 0, count: 4, rtl: false })).toBe(1);
     expect(rowStep({ key: 'ArrowLeft', index: 2, count: 4, rtl: false })).toBe(1);

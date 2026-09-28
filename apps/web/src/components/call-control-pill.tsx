@@ -1,11 +1,12 @@
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 
-import { CALL_ACTIONS_ID, CallActionRows, type CallPanels } from '@/components/call-control-actions';
 import { CallButton } from '@/components/call-glass-button';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
+import type { CallPanels } from '@/lib/calls/call-screen-layer';
+import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallControlSet } from '@/lib/calls/call-controls';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
@@ -24,6 +25,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
  */
 
+const CallActionRows = lazy(() => import('./call-control-actions').then((module) => ({ default: module.CallActionRows })));
+
 const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module) => ({ default: module.CallDevicesSheet })));
 
 type PillProps = {
@@ -36,11 +39,13 @@ type PillProps = {
   /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule a grandi. */
   readonly framedCaptions: ReactNode;
   readonly panels: CallPanels;
+  /** Ce que les rangées, chargées à part, reçoivent de l'écran d'appel. */
+  readonly kit: CallRowsKit;
   /** Le panneau ouvert, À LA PLACE des rangées. */
   readonly panel: ReactNode;
 };
 
-export function CallControlPill({ call, language, set, expanded, onToggle, prominent, framedCaptions, panels, panel }: PillProps) {
+export function CallControlPill({ call, language, set, expanded, onToggle, prominent, framedCaptions, panels, kit, panel }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
   return (
     <>
@@ -53,7 +58,11 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
           <>
             <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="">
               {framedCaptions}
-              {panel ?? <CallActionRows call={call} set={set} language={language} panels={panels} />}
+              {panel ?? (
+                <Suspense fallback={null}>
+                  <CallActionRows call={call} set={set} language={language} panels={panels} kit={kit} />
+                </Suspense>
+              )}
             </div>
             <hr className="mx-2 my-2 border-0 border-t border-white/20" />
           </>
@@ -65,7 +74,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
             onPress={onToggle}
             tone={expanded ? 'active' : 'bare'}
             expanded={expanded}
-            controls={CALL_ACTIONS_ID}
+            controls={kit.actionsId}
             data={{ 'data-call-more': '' }}
           />
           <CallButton

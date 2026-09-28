@@ -38,6 +38,20 @@ export type CallLayerEvent =
 
 export const IDLE: CallScreenLayer = { kind: 'idle' };
 
+/** L'identifiant des rangées d'actions, que le `(…)` contrôle (`aria-controls`). */
+export const CALL_ACTIONS_ID = 'call-actions';
+
+/** L'identifiant de chaque panneau, que son bouton contrôle. */
+export const CALL_PANEL_ID: Readonly<Record<CallPanelKind, string>> = {
+  people: 'call-people-panel',
+  react: 'call-react-panel',
+  record: 'call-record-panel',
+  journal: 'call-journal-panel',
+};
+
+/** Ce que les rangées ouvrent : un panneau (qui les remplace) ou un mode (qui libère l'écran). */
+export type CallPanels = { readonly open: CallPanelKind | null; readonly toggle: (panel: CallPanelKind) => void; readonly enter: (mode: CallModeKind) => void };
+
 const MENU: CallScreenLayer = { kind: 'menu' };
 
 export function nextLayer(layer: CallScreenLayer, event: CallLayerEvent): CallScreenLayer {

@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { CallGrid, Portrait } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
-import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { useTilePinch } from '@/components/use-tile-pinch';
 import type { CallModeration } from '@/lib/calls/call-moderation';
+import { selfTileScaleFor, selfTileSize, selfTileStore, setSelfTileScale, type SelfTileScale } from '@/lib/calls/call-self-tile';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
+import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -17,10 +20,34 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * **LA SCÈNE DE L'APPEL** (#6382, #8063, #8392) — ce que l'écran d'appel montre
  * sous ses commandes : la grille d'un groupe (et sa une), l'écran partagé d'un
  * pair en duo (ENTIER, `contain`), ou la vidéo plein cadre avec la vignette
- * locale en coin, qui s'inverse d'un toucher comme sur iOS. Là où ma caméra
- * propose un zoom (#8441), pincer ou faire rouler la molette sur MON image le
- * règle, et la capsule `−  1×  +` se pose sous la vignette.
+ * locale en coin, qui s'inverse d'un toucher comme sur iOS.
+ *
+ * - Ma vignette en coin se PINCE (#8577) : x1 · x2 · x3, accrochée, retenue
+ *   pour l'appel (`call-self-tile.ts`) ; Ctrl + molette de même.
+ * - Mon image en PLEIN ÉCRAN (#8576) porte seule le zoom de ma caméra et le
+ *   rail de ma caméra, chargés à part (`call-self-camera.tsx`) ; ils se
+ *   retirent dans un mode.
  */
+
+/** Ce que l'écran d'appel remet à la scène pour MON image. */
+export type SelfView = {
+  readonly full: boolean;
+  readonly onToggle: () => void;
+  /** Les commandes de ma caméra (rail, zoom) — retirées dans un mode. */
+  readonly controls: boolean;
+  /** La colonne du rail, qui range la capsule du zoom sous ses boutons. */
+  readonly column: (capsule: ReactNode) => ReactNode;
+};
+
+const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
+
+const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 'callControls.selfTile.medium' | 'callControls.selfTile.large'>> = {
+  1: 'callControls.selfTile.small',
+  2: 'callControls.selfTile.medium',
+  3: 'callControls.selfTile.large',
+};
+
+const viewport = () => (typeof window === 'undefined' ? { width: 390, height: 844 } : { width: window.innerWidth, height: window.innerHeight });
 
 const INK_2 = 'rgba(255,255,255,0.72)';
 
@@ -33,10 +60,10 @@ type StageProps = {
   readonly immersive: boolean;
   readonly onToggleImmersive: () => void;
   readonly moderation: CallModeration | null;
+  readonly self: SelfView;
 };
 
 const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
-const underCorner = { top: 'calc(env(safe-area-inset-top) + 15.5rem)' } as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -65,8 +92,15 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   );
 }
 
-function VideoDuo({ call, language }: Pick<StageProps, 'call' | 'language'>) {
-  const [swapped, setSwapped] = useState(false);
+function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language' | 'self'>) {
+  const swapped = self.full;
+  const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, call.callId ?? ''));
+  const [said, setSaid] = useState('');
+  const resize = (next: SelfTileScale): void => {
+    setSelfTileScale(call.callId ?? '', next);
+    setSaid(translateCallControls(language, TILE_SAID[next]));
+  };
+  const pinch = useTilePinch(scale, resize);
   const firstPeer = orderedMembers(call.members)[0];
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
@@ -75,13 +109,14 @@ function VideoDuo({ call, language }: Pick<StageProps, 'call' | 'language'>) {
   const main = swapped ? call.localStream : remoteStream;
   const corner = swapped ? remoteStream : call.localStream;
   const mainOn = swapped ? call.cameraOn : remoteVideoOn;
-  const cornerOn = swapped ? remoteVideoOn : call.cameraOn;
-  const zoom = useCameraZoom(call.cameraOn && !call.screenSharing ? call.localStream : null);
-  const gestures = useZoomGestures(zoom);
+  const cornerShown = swapped || call.cameraOn;
+  const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
+  const size = selfTileSize(scale, viewport());
+  const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
   return (
     <div className="absolute inset-0">
       {mainOn ? (
-        <div className="absolute inset-0" {...(swapped ? gestures : {})}>
+        <div className="absolute inset-0">
           <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
         </div>
       ) : (
@@ -94,25 +129,33 @@ function VideoDuo({ call, language }: Pick<StageProps, 'call' | 'language'>) {
           </div>
         </div>
       )}
-      {cornerOn ? (
+      {swapped ? (
+        <Suspense fallback={self.controls ? self.column(null) : null}>
+          <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} language={language} glyphs={glyphs} column={self.controls ? self.column : null} />
+        </Suspense>
+      ) : null}
+      {cornerShown ? (
         <button
           type="button"
           aria-label={translate(language, 'call.video.swap')}
-          onClick={() => setSwapped((value) => !value)}
-          className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg"
-          {...(swapped ? {} : gestures)}
-          style={swapped ? cornerTop : { ...cornerTop, ...gestures.style }}
+          onClick={self.onToggle}
+          className="absolute right-4 grid place-items-center overflow-hidden rounded-card shadow-lg transition-[width,height] duration-200 motion-reduce:transition-none"
+          {...(swapped ? {} : pinch)}
+          style={{ ...cornerTop, width: size.width, height: size.height, background: 'rgb(0 0 0 / 0.35)', ...(swapped ? {} : pinch.style) }}
           data-call-corner=""
+          data-call-self-tile={swapped ? undefined : String(scale)}
         >
-          <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" />
+          {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
         </button>
       ) : null}
-      {zoom === null ? null : <CallZoomControl zoom={zoom} language={language} className="absolute right-4 z-10" style={underCorner} />}
+      <span role="status" aria-live="polite" className="sr-only" data-call-self-tile-status="">
+        {said}
+      </span>
     </div>
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation }: StageProps) {
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self }: StageProps) {
   if (layout === 'grid') {
     return (
       <CallGrid
@@ -129,6 +172,6 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
     );
   }
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
-  if (layout === 'video-duo') return <VideoDuo call={call} language={language} />;
+  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} />;
   return null;
 }
