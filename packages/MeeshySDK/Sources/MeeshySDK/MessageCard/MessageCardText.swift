@@ -40,7 +40,7 @@ public enum MessageCardText {
     /// ligne de l'auteur sont gardés ; un mot plus large que la ligne (une URL,
     /// un mot allemand) est coupé par graphème plutôt que de déborder.
     public static func wrap(_ text: String, maxWidth: Double, font: MessageCardFont, measure: MessageCardMeasure) -> [String] {
-        let fits: (String) -> Bool = { measure($0, font) <= maxWidth }
+        func fits(_ candidate: String) -> Bool { measure(candidate, font) <= maxWidth }
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         var lines: [String] = []
         for paragraph in normalized.components(separatedBy: "\n") {
