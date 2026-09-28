@@ -56,11 +56,19 @@ export type FixtureCallPeerProbe = {
   readonly transcripts: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
   /** Chaque message BRUT reçu sur le canal de données `transcription` ouvert par le client (#8048). */
   readonly channelMessages: readonly unknown[];
+  /** Les contrôles émis par le client — invitation, coupure, réaction — dans l'ordre (#8433, #8438, #8439). */
+  readonly controls: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** Le pair, modérateur, coupe mon micro (`call:muted-by-moderator`, #8438). */
+  readonly muteMe: () => void;
+  /** Le pair réagit (`call:reaction-received`, #8439). */
+  readonly react: (emoji: string) => void;
 };
 
 export type FixtureCallPeer = {
   readonly initiated: (callId: string) => void;
   readonly emitted: (event: string, payload: unknown) => void;
+  /** Un contrôle demandé avec accusé : la passerelle diffuse l'invitation à tout l'appel (#8433). */
+  readonly controlled: (event: string, payload: unknown) => void;
   readonly probe: FixtureCallPeerProbe;
 };
 
@@ -76,6 +84,7 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   const reports: Array<{ readonly event: string; readonly payload: unknown }> = [];
   const transcripts: Array<{ readonly event: string; readonly payload: unknown }> = [];
   const channelMessages: unknown[] = [];
+  const controls: Array<{ readonly event: string; readonly payload: unknown }> = [];
 
   const signal = (payload: SignalOut): void => {
     if (callId === null || viewerId === null) return;
@@ -137,6 +146,7 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   const TOGGLES: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, CLIENT_EVENTS.CALL_TOGGLE_VIDEO, CLIENT_EVENTS.CALL_TOGGLE_AUDIO]);
   const REPORTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
   const TRANSCRIPTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]);
+  const CONTROLS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_INVITE_PARTICIPANT, CLIENT_EVENTS.CALL_MUTE_PARTICIPANT, CLIENT_EVENTS.CALL_REACTION]);
   let spoken = 0;
 
   const inbound = async (kind: 'audio' | 'video', field: 'framesDecoded' | 'packetsReceived'): Promise<number> => {
@@ -170,6 +180,12 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
       if (TOGGLES.has(event) && isRecord(payload) && typeof payload.enabled === 'boolean') toggles.push({ event, enabled: payload.enabled });
       if (REPORTS.has(event)) reports.push({ event, payload });
       if (TRANSCRIPTS.has(event)) transcripts.push({ event, payload });
+    },
+    controlled: (event, payload) => {
+      if (!CONTROLS.has(event)) return;
+      controls.push({ event, payload });
+      if (event !== CLIENT_EVENTS.CALL_INVITE_PARTICIPANT || callId === null || !isRecord(payload) || typeof payload.userId !== 'string') return;
+      deps.fire(SERVER_EVENTS.CALL_PARTICIPANT_INVITED, { callId, invitedBy: viewerId, invitee: { userId: payload.userId } });
     },
     probe: {
       toggles,
@@ -225,6 +241,13 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
       },
       transcripts,
       channelMessages,
+      controls,
+      muteMe: () => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_MUTED_BY_MODERATOR, { callId, byUserId: CALL_PEER_USER_ID });
+      },
+      react: (emoji) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_REACTION_RECEIVED, { callId, userId: CALL_PEER_USER_ID, emoji, timestamp: Date.now() });
+      },
     },
   };
 }

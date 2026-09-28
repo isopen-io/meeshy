@@ -1,3 +1,5 @@
+import { CALL_CONTROL_ERROR_CODES, isCallReactionEmoji, type CallControlErrorCode, type CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
+
 import type { CallEndReason, CallMedia } from './call-store';
 
 /**
@@ -62,6 +64,8 @@ export type DecodedInitiated = {
   readonly isGroup: boolean;
   readonly conversationTitle: string | null;
   readonly iceServers: readonly RTCIceServer[] | null;
+  /** Qui m'invite dans un appel DÉJÀ en cours (#8433) ; `null` pour un appel qu'on lance. */
+  readonly invitedBy: DecodedPerson | null;
 };
 
 export function decodeInitiated(payload: unknown): DecodedInitiated | null {
@@ -81,9 +85,10 @@ export function decodeInitiated(payload: unknown): DecodedInitiated | null {
     initiator,
     initiatorFlags: { cameraOn: media === 'video', ...(initiatorRow === undefined ? {} : mediaFlags(initiatorRow)) },
     participants,
-    isGroup: payload.conversationType === 'group',
+    isGroup: payload.conversationType === 'group' || payload.isGroup === true,
     conversationTitle: str(payload.conversationTitle),
     iceServers: decodeIceServers(payload.iceServers),
+    invitedBy: personOf(payload.invitedBy),
   };
 }
 
@@ -212,4 +217,43 @@ export function mapServerEndReason(raw: string): CallEndReason {
   if (reason === 'failed') return 'failed';
   if (reason === 'connectionlost' || reason === 'heartbeattimeout' || reason === 'connection_lost') return 'connectionLost';
   return 'remote';
+}
+
+/** L'initiateur d'une session rendue par `call:join` — l'admin de l'appel (#8438). */
+export function decodeSessionInitiator(session: unknown): string | null {
+  return isRecord(session) ? str(session.initiatorId) : null;
+}
+
+/** `call:participant-invited` (#8433) — l'invité sonne chez tous les participants. */
+export function decodeParticipantInvited(payload: unknown): { readonly callId: string; readonly invitedBy: string | null; readonly invitee: DecodedPerson } | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  const invitee = personOf(payload.invitee);
+  return callId === null || invitee === null ? null : { callId, invitedBy: str(payload.invitedBy), invitee };
+}
+
+/** `call:muted-by-moderator` (#8438) — adressé à la seule personne visée. */
+export function decodeMutedByModerator(payload: unknown): { readonly callId: string; readonly byUserId: string } | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  const byUserId = str(payload.byUserId);
+  return callId === null || byUserId === null ? null : { callId, byUserId };
+}
+
+/** `call:reaction-received` (#8439) — un emoji hors de la liste fermée est ignoré. */
+export function decodeReactionReceived(payload: unknown): { readonly callId: string; readonly userId: string; readonly emoji: CallReactionEmoji } | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  const userId = str(payload.userId);
+  const emoji = str(payload.emoji);
+  return callId === null || userId === null || emoji === null || !isCallReactionEmoji(emoji) ? null : { callId, userId, emoji };
+}
+
+const isControlCode = (value: unknown): value is CallControlErrorCode => CALL_CONTROL_ERROR_CODES.some((code) => code === value);
+
+/** L'accusé commun des contrôles (`CallControlAck`) ; sans accusé lisible, `INTERNAL_ERROR`. */
+export function decodeControlAck(value: unknown): { readonly ok: true } | { readonly ok: false; readonly code: CallControlErrorCode } {
+  if (isRecord(value) && value.success === true) return { ok: true };
+  const code = isRecord(value) ? value.code : undefined;
+  return { ok: false, code: isControlCode(code) ? code : 'INTERNAL_ERROR' };
 }

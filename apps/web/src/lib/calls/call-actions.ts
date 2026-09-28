@@ -1,5 +1,8 @@
 import { primeTones } from './call-tones';
 import type { CallFeedbackIssue, CallFeedbackRating } from './call-feedback';
+import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
+
+import type { DecodedPerson } from './call-decode';
 import type { CallEngine, JoinCallRequest, StartCallRequest } from './engine';
 
 /**
@@ -48,4 +51,10 @@ export const callActions = {
   /** La note d'après-appel (#8072). */
   rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]): void => run((engine) => engine.rate(rating, issues)),
   skipRating: (): void => run((engine) => engine.skipRating()),
+  /** Faire sonner un ami dans l'appel en cours (#8433). */
+  invite: (person: DecodedPerson): void => run((engine) => engine.invite(person)),
+  /** Couper le micro d'un participant (#8438). */
+  muteParticipant: (userId: string): void => run((engine) => engine.muteParticipant(userId)),
+  /** Réagir (#8439). */
+  react: (emoji: CallReactionEmoji): void => run((engine) => engine.react(emoji)),
 };

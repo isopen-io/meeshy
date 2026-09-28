@@ -5,6 +5,7 @@ const es = {
   'callRecording.active': 'Grabación en curso',
   'callRecording.waiting': 'Esperando el consentimiento de todos…',
   'callRecording.ask': '{name} quiere grabar la llamada',
+  'callRecording.askVideo': '{name} quiere grabar la llamada en vídeo',
   'callRecording.askDetail': 'La grabación solo empieza si todos aceptan, y luego se añade a la conversación.',
   'callRecording.accept': 'Aceptar',
   'callRecording.refuse': 'Rechazar',

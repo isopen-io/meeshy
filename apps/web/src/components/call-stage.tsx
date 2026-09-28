@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
 import { CallButton } from '@/components/call-glass-button';
-import { CallGrid, Portrait, type CallRemoval } from '@/components/call-grid';
+import { CallGrid, Portrait } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
 import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
@@ -31,7 +32,7 @@ type StageProps = {
   readonly onChoose: (choice: SpotlightChoice) => void;
   readonly immersive: boolean;
   readonly onToggleImmersive: () => void;
-  readonly removal: CallRemoval | null;
+  readonly moderation: CallModeration | null;
 };
 
 const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
@@ -111,7 +112,7 @@ function VideoDuo({ call, language }: Pick<StageProps, 'call' | 'language'>) {
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, removal }: StageProps) {
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation }: StageProps) {
   if (layout === 'grid') {
     return (
       <CallGrid
@@ -122,7 +123,7 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
         onChoose={onChoose}
         immersive={immersive}
         onToggleImmersive={onToggleImmersive}
-        removal={removal}
+        moderation={moderation}
         language={language}
       />
     );

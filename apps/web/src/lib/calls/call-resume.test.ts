@@ -21,6 +21,7 @@ const session = (overrides: Partial<CallSession> = {}): CallSession => ({
   answered: true,
   startedAt: '2026-09-26T09:00:00.000Z',
   durationSec: 0,
+  reactionCounts: {},
   participants: [
     { userId: 'u-ada', name: 'Ada Lovelace', avatar: 'a.jpg' },
     { userId: 'u-me', name: 'Moi', avatar: null },

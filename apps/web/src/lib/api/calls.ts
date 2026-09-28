@@ -1,3 +1,4 @@
+import { parseCallReactionCounts, type CallReactionCounts } from '@meeshy/shared/types/call-control-law';
 import type { QueryClient } from '@tanstack/react-query';
 import * as z from 'zod/mini';
 import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
@@ -65,6 +66,8 @@ export type CallRecord = {
   readonly peer: CallPeer | null;
   /** Les participants d'un appel de groupe, lecteur exclu ; vide pour un appel direct. */
   readonly participants: readonly CallParticipantName[];
+  /** Les réactions envoyées pendant l'appel (#8439), relues sans confiance. */
+  readonly reactionCounts: CallReactionCounts;
 };
 
 export type CallHistoryPage = { readonly records: readonly CallRecord[]; readonly nextCursor: string | null };
@@ -124,6 +127,7 @@ const WireRecord = z.object({
   bytesReceived: z.optional(z.nullable(z.number())),
   peer: z.optional(z.unknown()),
   participants: z.optional(z.unknown()),
+  reactionCounts: z.optional(z.unknown()),
 });
 
 const textOrNull = (value: string | null | undefined): string | null =>
@@ -176,6 +180,7 @@ export function decodeCallRecord(raw: unknown): CallRecord | null {
     bytes: bytesOf(wire.bytesSent, wire.bytesReceived),
     peer: decodePeer(wire.peer),
     participants: decodeParticipants(wire.participants),
+    reactionCounts: parseCallReactionCounts(wire.reactionCounts),
   };
 }
 

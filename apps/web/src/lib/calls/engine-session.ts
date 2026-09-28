@@ -58,6 +58,8 @@ export function baseCall(request: StartCallRequest, direction: ActiveCall['direc
     title: request.title,
     avatar: request.avatar,
     callerName: null,
+    initiatorId: null,
+    invitedBy: null,
     phase,
     connectedAt: null,
     endedDurationSec: null,

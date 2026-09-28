@@ -564,6 +564,7 @@ export const createFixturesSocketClient: SocketFactory = () => {
       const ack = fixtureCallAck(event, payload);
       const callId = event === CLIENT_EVENTS.CALL_INITIATE ? (ack as { readonly data?: { readonly callId?: unknown } }).data?.callId : undefined;
       if (typeof callId === 'string') void peer()?.then((armed) => armed.initiated(callId));
+      else void peer()?.then((armed) => armed.controlled(event, payload));
       return Promise.resolve(ack);
     },
   };

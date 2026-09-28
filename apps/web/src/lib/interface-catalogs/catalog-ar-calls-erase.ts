@@ -17,6 +17,7 @@ const arCallsErase = {
   'calls.participants.more': '{names} +{count}',
   'calls.participants.a11y': 'مع {names}',
   'callJoin.detail.participants': 'المشاركون',
+  'callJoin.detail.reactions': 'التفاعلات',
   'calls.filter.videoOnly': 'مكالمات الفيديو فقط',
 } as const;
 

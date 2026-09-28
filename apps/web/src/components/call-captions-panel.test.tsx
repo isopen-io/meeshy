@@ -57,6 +57,8 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   captionsMode: 'translated',
   captionPeers: [],
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
   ...overrides,
 });
