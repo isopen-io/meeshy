@@ -437,7 +437,7 @@ final class ComposerObjectEditorTests: XCTestCase {
             .replacingOccurrences(of: "\n", with: "")
         XCTAssertTrue(verre.contains(".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
                       "La carte d'un rail en colonne est le verre teinté du plateau.")
-        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:tint??plateauTint.opacity(0.55))"),
                       "Un bouton séparé porte le MÊME verre teinté, en disque.")
         for (nom, source, attendu, air) in [
             ("le couloir d'OUTILS", editeur,
