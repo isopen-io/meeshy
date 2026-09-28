@@ -1011,9 +1011,18 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             return XCTFail("`publishBlockedHint` est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
+        // **La légende « ajoutez au moins un élément… » est partie**
+        // (directive porteur 2026-09-27 : « c'est un fait connu de tous », et
+        // le bouton Publier disparaît quand rien n'est à publier). L'indice ne
+        // parle plus que de l'AUDIENCE, la seule cause que rien d'autre à
+        // l'écran ne signale.
         XCTAssertTrue(
-            compacte.contains(compact("ComposerSocleCopy.publishBlockedHint(")),
+            compacte.contains(compact("ComposerSocleCopy.publishBlockedAudienceHint")),
             "Le bloc lu n'est pas celui de l'indice."
+        )
+        XCTAssertFalse(
+            compacte.contains(compact("ComposerSocleCopy.publishBlockedHint(")),
+            "La légende « ajoutez au moins un élément » est revenue."
         )
         XCTAssertTrue(
             compacte.contains(compact("ComposerDocumentPublishGate.audienceIsComplete(")),

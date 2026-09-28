@@ -204,8 +204,12 @@ final class ComposerRailGeometryTests: XCTestCase {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
         XCTAssertTrue(surface.contains("EmbeddedSceneCanvas"), "Ce n'est pas la surface de scène.")
-        XCTAssertTrue(surface.contains("descriptionPanel.padding(.leading,ComposerRailGeometry.lane).padding(.trailing,ComposerRailGeometry.tileLane)"),
-                      "Le volet de la scène doit se retirer du rail de portes à gauche et du rail de tuiles à droite.")
+        // Les deux rails sont désormais de petits boutons SÉPARÉS, de même
+        // largeur (directive porteur 2026-09-27) : la tuile libellée de droite
+        // et son couloir `tileLane` sont partis, le volet se retire de `lane`
+        // des deux côtés.
+        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.lane)"),
+                      "Le volet de la scène doit se retirer de la largeur d'un rail de chaque côté.")
         XCTAssertFalse(surface.contains("sceneInset(railsShown:true)+10"),
                        "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
     }
@@ -238,7 +242,10 @@ final class ComposerRailGeometryTests: XCTestCase {
             return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
         }
         let scene = surface[debut.upperBound..<fin.lowerBound]
-        XCTAssertTrue(scene.contains(".padding(.top,ComposerTopBar.height+4)"),
+        // `- chromeLift` : la barre haute MONTE dans la rangée de la Dynamic
+        // Island (« remonte encore le bouton X et … », 2026-09-27) — la scène
+        // la suit, elle reste dessous, jamais sous la croix.
+        XCTAssertTrue(scene.contains(".padding(.top,ComposerTopBar.height+4-chromeLift)"),
                       "La scène se pose sous la barre haute, jamais sous la croix (directive 2026-09-27).")
         XCTAssertTrue(scene.contains(".ignoresSafeArea(.keyboard)"),
                       "Le clavier ne pousse pas la scène.")
@@ -248,8 +255,8 @@ final class ComposerRailGeometryTests: XCTestCase {
                        "Aucun chrome ne se loge dans le calque de la scène.")
         XCTAssertFalse(surface.contains("pushesToThumb:true"),
                        "Aucun rail de la scène ne s'étire sur sa hauteur.")
-        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false,labeledTiles:true)"),
-                      "Le rail droit flotte sans ressort, en tuiles libellées comme la création de post.")
+        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false,separateButtons:true,"),
+                      "Le rail droit flotte sans ressort, en petits boutons séparés sans légende (directive 2026-09-27).")
     }
 
     // MARK: - Ce qu'une rangée requiert, et ce qui déborde (#4582)

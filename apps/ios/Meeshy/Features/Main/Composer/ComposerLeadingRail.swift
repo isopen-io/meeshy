@@ -108,6 +108,10 @@ struct ComposerLeadingRail: View {
     /// pourrait oublier.
     var badges: [ComposerRailDoor: Int] = [:]
 
+    /// **Des boutons séparés, sans colonne** (directive porteur 2026-09-27) —
+    /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
+    var separateButtons: Bool = false
+
     @State private var lastTapped: String?
 
     private var isEmpty: Bool {
@@ -243,9 +247,9 @@ struct ComposerLeadingRail: View {
             .frame(width: axis == .vertical ? ComposerRailGeometry.railWidth : nil,
                    height: axis == .horizontal ? ComposerRailGeometry.railWidth : nil)
             .padding(axis == .vertical ? .vertical : .horizontal, 8)
-            // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370).
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2, style: .continuous),
-                           tint: plateauTint.opacity(0.55))
+            // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370) —
+            // une carte-colonne, ou rien quand chaque bouton porte le sien.
+            .modifier(ComposerRailCard(separate: separateButtons, plateauTint: plateauTint))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerRailCopy.railLabel))
         }
@@ -312,6 +316,7 @@ struct ComposerLeadingRail: View {
                 // **La pastille est posée SUR le glyphe, hors du flux** : dans
                 // le flux elle décalerait l'icône, et la position qu'un doigt
                 // apprend ne doit pas dépendre de ce que la scène porte.
+                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint))
                 .overlay(alignment: .topTrailing) { badgeBubble(badge) }
                 .contentShape(Rectangle())
         }

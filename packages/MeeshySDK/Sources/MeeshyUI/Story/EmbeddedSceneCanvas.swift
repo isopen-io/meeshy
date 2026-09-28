@@ -168,6 +168,8 @@ public struct EmbeddedSceneCanvas: View {
     /// incrustée sert `[.text]` tant qu'aucun éditeur média n'y est monté, pour
     /// que « Modifier » ne soit jamais offert sur un objet qu'elle ignore.
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// « Rogner » dans l'appui long (#8370, lot 6).
+    public var onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind>
 
     public init(
@@ -194,9 +196,11 @@ public struct EmbeddedSceneCanvas: View {
         selectedItemId: String? = nil,
         selectionBadge: String? = nil,
         referenceViewport: CGSize = CGSize(width: 402, height: 874),
-        timelineBridge: StoryCanvasTimelineBridge? = nil
+        timelineBridge: StoryCanvasTimelineBridge? = nil,
+        onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
     ) {
         self.timelineBridge = timelineBridge
+        self.onItemTrimRequested = onItemTrimRequested
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
@@ -254,6 +258,7 @@ public struct EmbeddedSceneCanvas: View {
                 onItemTapped: onItemTapped,
                 onItemDoubleTapped: onItemDoubleTapped,
                 editableKinds: editableKinds,
+                onItemTrimRequested: onItemTrimRequested,
                 editingTextId: editingTextId,
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,

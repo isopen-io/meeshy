@@ -69,12 +69,19 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
     /// toujours — les jetons et le rail *trailing* le lisent — et c'est
     /// précisément ce qui rend l'absence si discrète : rien ne manquait en
     /// amont, seul le dernier maillon n'était pas posé.
+    ///
+    /// **Depuis le 2026-09-27, la scène plein écran ne PEINT plus la
+    /// sélection** (directive porteur : « il ne faut plus l'entourer sur la
+    /// scène ni afficher sa configuration par des détails en bas »). Le meuble
+    /// garde l'id pour l'appui long et le double-tap, et descend `nil` : la
+    /// chaîne reste câblée jusqu'au calque — les témoins suivants la tiennent —
+    /// pour les hôtes qui encadrent encore.
     func test_leMeuble_descendLaSelectionJusquALaSurface() throws {
         let source = compact(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(source.contains("selectedItemId:selectedSceneItemId"),
-                      "le meuble ne dit pas au canvas quel objet est sélectionné")
-        XCTAssertTrue(source.contains("selectionBadge:ComposerObjectChips.badge(forSelected:"),
-                      "le badge n'est pas composé par la règle")
+        XCTAssertTrue(source.contains("selectedItemId:nil,selectionBadge:nil,"),
+                      "la scène plein écran ne doit ni entourer l'objet choisi ni badger sa configuration")
+        XCTAssertFalse(source.contains("selectedItemId:selectedSceneItemId"),
+                       "un cadre de sélection est revenu sur la scène plein écran")
     }
 
     /// **La surface fait suivre, elle ne re-décide pas.** Même contrat que pour

@@ -199,7 +199,9 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 isBackground: isBackgroundItem(id: id),
                 sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
                 hasEditor: hasEditor(for: kind),
-                canLeaveScene: canLeaveScene
+                canLeaveScene: canLeaveScene,
+                hasTrimmableSource: onItemTrimRequested != nil
+                    && StorySceneObjectPredicates.hasTrimmableSource(slide: slide, id: id)
             )
             .map { action in
                 UIAction(title: action.title,
@@ -256,16 +258,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // post ». Il rend l'objet à l'hôte, qui décide de son sort.
         case .leaveScene:   onItemLeftScene?(id, kind)
         case .delete:       contextDelete(id: id)
-        case .trim:
-            // INJOIGNABLE depuis CE menu, et c'est la loi 4 qui le tient : ce
-            // site n'appelle pas `offered(hasTrimmableSource:)`, dont le défaut
-            // FERME — l'entrée ne peut donc pas y paraître. Rogner ouvre une
-            // bande SOUS la scène, une place que le menu d'appui long n'a pas
-            // et ne peut pas emprunter ; le chemin est le rail des contrôleurs
-            // (#4082). Le `switch` reste exhaustif pour que servir un jour le
-            // rognage ici oblige à passer par cette ligne plutôt qu'à hériter
-            // d'un `default` silencieux.
-            break
+        // DÉLÉGUÉE comme la sortie : rogner ouvre l'éditeur de l'hôte sur les
+        // bornes de la source. Offerte seulement quand l'hôte l'a câblée ET
+        // que l'objet a une source à rogner (loi 4).
+        case .trim:         onItemTrimRequested?(id, kind)
         }
     }
 

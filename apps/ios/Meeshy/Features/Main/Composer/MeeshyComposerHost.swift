@@ -199,6 +199,9 @@ struct MeeshyComposerHost: View {
     /// #4057 — le socle lit la taille de texte pour décider s'il MONTRE ses
     /// libellés. Lue ici, sur le meuble, parce que c'est lui qui peint le socle.
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
+    /// Téléphone ou tablette : sur mobile, un panneau ouvert en bas efface le
+    /// socle (`ComposerChromeOwnership.socleZones`, `panelIsOpen`).
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
 
     @State var documentText = ""
 
@@ -613,6 +616,16 @@ struct MeeshyComposerHost: View {
     /// séparés est ce qui empêche une bande vide d'occuper les ≈ 170 pt que
     /// l'encastrement vient de libérer.
     @State var requestedSceneBand: ComposerSceneBand?
+    /// **La scène est ANIMÉE** (#8370, lot 6 — maquette : la bascule « Animé »
+    /// fait de chaque objet une piste, le bouton « Temps » montre ou range la
+    /// frise). Deux états, pas un : ranger la frise ne rend pas la scène
+    /// statique.
+    @State var sceneIsAnimated = false
+    /// Ce que la scène animée POSAIT déjà, slide par slide : un id qui n'y est
+    /// pas est un objet qu'on vient d'ajouter, et il entre à la tête
+    /// (`SceneEntryWindow`). Une slide jamais vue n'a rien de NEUF — changer de
+    /// slide n'est pas poser ses objets.
+    @State var sceneAnimatedKnownIds: [String: Set<String>] = [:]
     // **`trimSourceDurations` est parti avec la bande de rognage**
     // (2026-09-05). Il indexait, par objet, la durée MESURÉE du fichier source
     // — la seule valeur qui laisse un rognage se défaire. Son unique écrivain

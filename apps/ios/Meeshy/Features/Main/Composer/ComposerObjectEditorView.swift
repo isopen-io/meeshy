@@ -500,7 +500,7 @@ struct ComposerObjectEditorView: View {
     /// > geste.
     private var toolRail: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 ForEach(ComposerObjectEditorRail.entries(for: family), id: \.self) { entree in
                     Button {
                         // **La bascule vit dans la RÈGLE** (#5098) : retaper
@@ -527,17 +527,23 @@ struct ComposerObjectEditorView: View {
                         }
                     } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
-                            .font(.title3)
+                            .font(.body.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
-                                             ? MeeshyColors.brandPrimary
-                                             : Color.white.opacity(0.55))
+                            .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                             // 44 pt de CIBLE quel que soit le glyphe
                             // (dimension 5) : dessiné à sa taille naturelle, un
                             // `clock` donnerait 17 pt que personne n'atteint du
                             // pouce.
-                            .frame(width: ComposerObjectEditorRail.railWidth, height: 44)
-                            .contentShape(Rectangle())
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                            // **Un petit bouton SÉPARÉ, dans son disque de verre**
+                            // (directive porteur 2026-09-27 : « pas de long
+                            // bandeau de contrôleur à gauche ou à droite, juste
+                            // des petits boutons »). L'outil ouvert passe à
+                            // l'indigo.
+                            .adaptiveGlass(in: Circle(),
+                                           tint: ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
+                                               ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))
@@ -548,29 +554,12 @@ struct ComposerObjectEditorView: View {
             .padding(.vertical, 4)
         }
         .frame(width: ComposerObjectEditorRail.railWidth)
-        // **La CARTE, et c'est tout le correctif du #5097.**
-        //
-        // Le rail était déjà à gauche (#5026) et déjà défilable ; ce qui lui
-        // manquait n'était ni la place ni la course, c'était une FRONTIÈRE.
-        // Posé nu, il se terminait au contact de la zone d'options — deux jeux
-        // de glyphes contigus sur le même fond, et rien ne disait où l'un
-        // finissait. Clavier levé, ce qui reste au `HStack` se réduit d'autant
-        // et les deux se touchent.
-        //
-        // > Directive porteur 2026-09-04 : « la liste des tools à gauche […]
-        // > toujours être au dessus des options qui apparaissent en base et non
-        // > pas se confondre avec les option lorsqu'on a le clavier qui
-        // > s'affiche. »
-        //
-        // Le dessin n'est pas inventé : c'est EXACTEMENT celui du couloir droit
-        // (`ComposerTrailingRail`) — même rayon, même teinte, même respiration.
-        // C'est la dimension 6 prise au mot : les deux couloirs du même écran
-        // portent la même pièce, et l'auteur n'a rien à réapprendre en passant
-        // de l'un à l'autre.
+        // **Plus de CARTE depuis le 2026-09-27** : le #5097 l'avait posée pour
+        // que le rail ne se confonde pas avec les options, clavier levé. Chaque
+        // bouton porte désormais son propre disque de verre — la frontière est
+        // tenue bouton par bouton, et la bande que le porteur a retirée ne
+        // revient pas.
         .padding(.vertical, 8)
-        // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370).
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: ComposerObjectEditorRail.railWidth / 2, style: .continuous),
-                       tint: plateauTint.opacity(0.55))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
     }
@@ -622,13 +611,12 @@ struct ComposerObjectEditorView: View {
             onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil,
             // **Plus de colonne vide** (directive porteur 2026-09-27 : « pas de
             // barre d'action qui se prolonge sans action »). Le ressort étirait
-            // le verre sur toute la hauteur au-dessus d'un seul bouton ; les
-            // TUILES de la scène, posées au bas, n'occupent que ce qu'elles
-            // portent.
+            // le verre sur toute la hauteur au-dessus d'un seul bouton ; des
+            // boutons SÉPARÉS, posés au bas, n'occupent que ce qu'ils portent.
             pushesToThumb: false,
-            labeledTiles: true
+            separateButtons: true
         )
-        .frame(width: ComposerRailGeometry.tileWidth + 8)
+        .frame(width: ComposerRailGeometry.railWidth)
         .frame(maxHeight: .infinity, alignment: .bottom)
     }
 
@@ -753,6 +741,14 @@ struct ComposerObjectEditorView: View {
             optionsContentHeight = $0
         }
         .scrollDisabled(scrollDisabled)
+        // **La plaque de VERRE du bas** (directive porteur 2026-09-27 : « en bas
+        // une plaque de verre dans laquelle apparaissent les options des
+        // différents outils d'édition, le tout en adaptive glass »).
+        .padding(.vertical, 10)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
+        .padding(.horizontal, 8)
+        .padding(.bottom, 4)
     }
 
     /// Les options d'un objet TEXTE, dans l'ordre que la rangée du SDK a fixé —
@@ -956,15 +952,17 @@ struct ComposerObjectEditorView: View {
                                         _ id: ComposerObjectEditorSection,
                                         @ViewBuilder content: () -> Content) -> some View {
         if ComposerObjectEditorRail.isSelected(id, selected: selectedTool) {
+            // **Aucune légende visible** (directive porteur 2026-09-27 :
+            // « enlève les captions partout ») : le bouton allumé du rail dit
+            // déjà quel outil est ouvert. Le titre reste celui que VoiceOver
+            // annonce pour le groupe (dimension 5).
             VStack(alignment: .leading, spacing: 10) {
-                Text(titre)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .tracking(0.8)
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(titre)
         }
     }
 

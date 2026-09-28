@@ -47,6 +47,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media]
     /// #4046 — l'objet SORT de la scène ; l'hôte décide ce qu'il devient.
     public var onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// « Rogner » dans l'appui long — voir `StoryCanvasUIView.onItemTrimRequested`.
+    public var onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
@@ -150,6 +152,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
                 onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
@@ -181,6 +184,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onItemDoubleTapped = onItemDoubleTapped
         self.editableKinds = editableKinds
         self.onItemLeftScene = onItemLeftScene
+        self.onItemTrimRequested = onItemTrimRequested
         self.onItemDuplicated = onItemDuplicated
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
@@ -250,6 +254,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemDoubleTapped = onItemDoubleTapped
         view.editableKinds = editableKinds
         view.onItemLeftScene = onItemLeftScene
+        view.onItemTrimRequested = onItemTrimRequested
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
@@ -295,6 +300,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        uiView.onItemTrimRequested = onItemTrimRequested
         // **Remis à jour à CHAQUE passe**, comme `onItemDoubleTapped` juste
         // au-dessus : une closure posée au seul `makeUIView` capture l'état de
         // la première composition. L'hôte qui présente le menu de fond lit le

@@ -394,9 +394,15 @@ nonisolated enum ComposerChromeOwnership {
         /// aux tests, et c'est ainsi qu'une règle produit se met à exister en
         /// deux exemplaires. Défaut `false` — un appelant qui l'ignore obtient
         /// le comportement d'avant, exactement.
-        writesText: Bool = false
+        writesText: Bool = false,
+        /// **Un panneau ouvert en bas efface le socle** (directive porteur
+        /// 2026-09-27 : « sur mobile, quand un panneau comme Cadre s'ouvre en
+        /// bas, la barre du bas disparaît le temps du panneau »). Le panneau a la
+        /// largeur et la place ; le socle revient à sa fermeture. Défaut
+        /// `false` : un appelant qui l'ignore garde le comportement d'avant.
+        panelIsOpen: Bool = false
     ) -> [ComposerTopBarControl] {
-        guard !writesText else { return [] }
+        guard !writesText, !panelIsOpen else { return [] }
         switch surface {
         case .scene:
             // **RETOURNÉ au #4135** : le socle y peignait RIEN, l'atelier

@@ -19,8 +19,11 @@ extension MeeshyComposerHost {
         let offertes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                 format: selectedFormat,
                                                 allowsCapture: profile.allowsCapture)
-        guard returnsImageToConversation else { return offertes }
-        return offertes.filter(ComposerReturnImage.paintingDoors.contains)
+        // La porte « Fond » peint une COULEUR : sous un média de fond, elle
+        // n'a plus d'objet — le Cadre du rail droit prend le relais.
+        let utiles = sceneHasBackgroundMedia ? offertes.filter { $0 != .background } : offertes
+        guard returnsImageToConversation else { return utiles }
+        return utiles.filter(ComposerReturnImage.paintingDoors.contains)
     }
 
     var returnImageButton: some View {

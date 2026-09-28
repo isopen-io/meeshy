@@ -18,6 +18,19 @@ extension MeeshyComposerHost {
         ComposerFraming.backdrop(of: viewModel.currentSlide.effects.backgroundTransform)
     }
 
+    /// Le bouton Cadre du rail droit : le même geste ouvre et referme la bande.
+    func toggleFrameBand() {
+        requestedSceneBand = requestedSceneBand == .frame ? nil : .frame
+    }
+
+    /// **Un panneau occupe le bas de la scène** — une bande (Cadre, palette)
+    /// ou les réglages du dessin. Le socle et la rangée basse s'effacent le
+    /// temps du panneau (directive porteur 2026-09-27).
+    var sceneBottomPanelIsOpen: Bool {
+        ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil
+            || viewModel.isDrawingActive
+    }
+
     func applySceneFitMode(_ mode: String) {
         var slide = viewModel.currentSlide
         slide.effects.backgroundTransform = ComposerFraming.applying(

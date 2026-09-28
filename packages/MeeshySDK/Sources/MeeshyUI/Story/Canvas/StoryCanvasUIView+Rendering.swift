@@ -175,7 +175,8 @@ extension StoryCanvasUIView {
                                             backdropProvider: { [weak backdropCapture] frame in
                                                 backdropCapture?.cropRegion(frame)
                                             },
-                                            suppressDrawingOverlay: isDrawingOverlayActive)
+                                            suppressDrawingOverlay: isDrawingOverlayActive,
+                                            outOfWindowGhostOpacity: timelineGhostOpacity)
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
         }
