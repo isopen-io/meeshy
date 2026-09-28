@@ -165,7 +165,8 @@ describe('le sol du COMPOSITE (#8425)', () => {
     const bench = harness({ drafts });
     const el = mount({ ...bench.deps, composite: { createCanvas: redCanvas, loadImage: async () => ({}) as CanvasImageSource } });
     await flush(() => el.querySelector('[data-story-studio-floor="hash"]') !== null);
-    expect(el.querySelector('[data-story-studio-floor] img')?.getAttribute('src')).toMatch(/^data:image\/bmp;base64,/);
+    // Pendant le fondu (#8534), l'image qui part reste DESSOUS : le sol peint la DERNIÈRE.
+    expect(el.querySelector('[data-story-studio-floor] img:last-of-type')?.getAttribute('src')).toMatch(/^data:image\/bmp;base64,/);
   });
 
   test('sans canvas (rendu impossible), le repli : l’image de fond elle-même', async () => {

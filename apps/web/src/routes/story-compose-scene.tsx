@@ -136,6 +136,7 @@ export function StudioScene({
               onCommit={objects.onCommit}
               onMenu={objects.onMenu}
               onWrite={objects.onWrite}
+              editing={objects.editing ?? null}
             />
             {/* La voie du CLAVIER et du lecteur d'écran : un bouton par objet. */}
             {objects.items.map((object) => (

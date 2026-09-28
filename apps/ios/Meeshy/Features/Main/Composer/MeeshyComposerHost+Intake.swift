@@ -162,6 +162,9 @@ extension MeeshyComposerHost {
                     viewModel.applyContentMedia([media], intoSlideId: target)
                 ) { _, neuf in neuf }
                 slideIdByMediaURL[media.sourceURL] = target
+                // En retouche, l'image posée EST l'état de départ (#8524) : ce
+                // qui reste annulable ensuite est ce que l'auteur a fait.
+                if returnsImageToConversation { viewModel.seedHistory() }
             }
         }
 

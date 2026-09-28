@@ -863,6 +863,7 @@ const pt = {
   'story.studio.refusal.door.visual': 'Escolha uma imagem ou um vídeo.',
   'story.studio.refusal.door.sound': 'Escolha um ficheiro de áudio.',
   'story.studio.refusal.media-max': 'Esta publicação já traz dez mídias — o limite da passarela.',
+  'story.studio.refusal.import-max': '{count} mídia(s) não importada(s): uma publicação traz no máximo dez.',
   'story.studio.failure.network': 'Rede indisponível.',
   'story.studio.failure.timeout': 'O servidor não respondeu.',
   'story.studio.failure.session': 'Sessão expirada — inicie sessão novamente.',

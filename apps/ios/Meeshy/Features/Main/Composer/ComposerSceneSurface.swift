@@ -426,6 +426,16 @@ struct ComposerSceneSurface: View {
     /// au lieu de le travestir. C'est ce qui rend la place signifiante — le
     /// doigt apprend qu'à gauche on OUVRE, en bas on RÈGLE, et une place qui
     /// change de sens selon l'état n'apprend rien.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// **L'écran LARGE** — iPad plein écran et Mac (maquette `iPad.dc.html`) :
+    /// marges de 24 pt, rails centrés en hauteur plutôt que posés au pouce, et
+    /// un volet de texte qui ne déborde pas de la carte. Le téléphone, et un
+    /// iPad en écran partagé étroit (classe compacte), gardent la disposition
+    /// du pouce.
+    private var isRoomy: Bool { horizontalSizeClass == .regular }
+    private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
+
     private var floatingRail: AnyView {
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
@@ -443,7 +453,7 @@ struct ComposerSceneSurface: View {
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
                 // `outerMargin` du bord.
-                .padding(.leading, ComposerRailGeometry.outerMargin)
+                .padding(.leading, edge)
                 .padding(.bottom, ComposerRailGeometry.gutter)
         )
     }
@@ -499,7 +509,8 @@ struct ComposerSceneSurface: View {
     private var descriptionOverlay: some View {
         if let descriptionPanel {
             descriptionPanel
-                .padding(.horizontal, ComposerRailGeometry.lane)
+                .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
+                                                                             cardLeading: sceneCardLeading))
                 .padding(.bottom, 10)
         }
     }
@@ -673,7 +684,7 @@ struct ComposerSceneSurface: View {
         // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
         // que la mesure du bord gauche ci-dessous lit : les deux ne peuvent pas
         // diverger.
-        .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+        .padding(.horizontal, edge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
         // (#4080, directive porteur 2026-09-04). Le meuble le monte une seule
@@ -684,7 +695,7 @@ struct ComposerSceneSurface: View {
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self,
                                   value: .bounds) { $0 }
-                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+                .padding(.horizontal, edge)
                 .allowsHitTesting(false)
         }
         // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011) : la
@@ -699,7 +710,7 @@ struct ComposerSceneSurface: View {
                         value: ComposerRailGeometry.sceneLeadingInset(
                             overlay: geo.size,
                             ratio: aspectRatio,
-                            horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                            horizontalInset: edge))
             }
         }
         // **La scène se pose ENTRE la barre haute et le socle** (directive
@@ -721,7 +732,8 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 plateauTint: plateauTint,
-                trailingAccessory: animatedToggle
+                trailingAccessory: animatedToggle,
+                edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
             )
             .padding(.top, -chromeLift)
 
@@ -784,16 +796,9 @@ struct ComposerSceneSurface: View {
                         .padding(.bottom, 6)
                 }
             case .band(let ouverte):
-                ComposerSceneBandView(band: ouverte,
-                                      colors: bandColors,
-                                      onPickColor: onPickBandColor,
-                                      openingEffect: bandOpeningEffect,
-                                      onPickOpening: onPickBandOpening,
-                                      fitMode: bandFitMode,
-                                      backdrop: bandBackdrop,
-                                      plateauTint: plateauTint,
-                                      onPickFitMode: onPickBandFitMode,
-                                      onPickBackdrop: onPickBandBackdrop)
+                // Sur grand écran, la bande flotte en CARTE à côté du rail droit
+                // (`roomyBandCard`) ; elle ne prend le bas que sur téléphone.
+                if !isRoomy { bandView(ouverte) }
             case .nothing:
                 EmptyView()
             }
@@ -848,7 +853,9 @@ struct ComposerSceneSurface: View {
     @ViewBuilder
     private var composingFloors: some View {
         ZStack(alignment: .bottom) {
-            HStack(alignment: .bottom, spacing: 0) {
+            // Sur grand écran, les rails se CENTRENT en hauteur (maquette
+            // iPad : ils ne descendent pas au pouce, qui n'y tient pas l'écran).
+            HStack(alignment: isRoomy ? .center : .bottom, spacing: 0) {
                 floatingRail
                 Spacer(minLength: 0)
                 ComposerTrailingRail(actions: trailingActions,
@@ -863,9 +870,10 @@ struct ComposerSceneSurface: View {
                                      frameIsOpen: frameIsOpen,
                                      onTime: onTimeButton,
                                      timeIsOpen: timeIsOpen)
-                    .padding(.trailing, ComposerRailGeometry.outerMargin)
+                    .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.gutter)
             }
+            .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
             // **Le volet CÈDE au viseur** (#4080) : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
             // **Un outil ou une bande ouverts prennent le bas pour eux seuls**
@@ -874,8 +882,35 @@ struct ComposerSceneSurface: View {
             if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage), !toolIsOpen, band == nil {
                 descriptionOverlay
             }
+            roomyBandCard
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private func bandView(_ ouverte: ComposerSceneBand) -> some View {
+        ComposerSceneBandView(band: ouverte,
+                              colors: bandColors,
+                              onPickColor: onPickBandColor,
+                              openingEffect: bandOpeningEffect,
+                              onPickOpening: onPickBandOpening,
+                              fitMode: bandFitMode,
+                              backdrop: bandBackdrop,
+                              plateauTint: plateauTint,
+                              onPickFitMode: onPickBandFitMode,
+                              onPickBackdrop: onPickBandBackdrop)
+    }
+
+    /// **La bande en CARTE flottante, sur grand écran** (maquette
+    /// `iPad.dc.html` : le panneau Cadre se pose à côté du rail droit, 250 pt
+    /// de large, sans quitter la scène des yeux). Le téléphone la garde en bas.
+    @ViewBuilder
+    private var roomyBandCard: some View {
+        if isRoomy, case .band(let ouverte) = ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
+            bandView(ouverte)
+                .frame(width: ComposerRailGeometry.roomyPanelWidth)
+                .padding(.trailing, ComposerRailGeometry.roomyPanelTrailing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        }
     }
 
     // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :
