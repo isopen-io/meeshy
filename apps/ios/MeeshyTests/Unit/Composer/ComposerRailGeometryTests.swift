@@ -215,8 +215,14 @@ final class ComposerRailGeometryTests: XCTestCase {
         // largeur (directive porteur 2026-09-27) : la tuile libellée de droite
         // et son couloir `tileLane` sont partis, le volet se retire de `lane`
         // des deux côtés.
-        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.lane)"),
-                      "Le volet de la scène doit se retirer de la largeur d'un rail de chaque côté.")
+        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.descriptionInset(roomy:isRoomy,cardLeading:sceneCardLeading))"),
+                      "Le volet de la scène lit sa marge de la règle : un rail sur téléphone, la carte sur grand écran.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: false, cardLeading: 300),
+                       ComposerRailGeometry.lane, "Sur téléphone, la marge reste celle d'un rail.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: true, cardLeading: 300), 300,
+                       "Sur grand écran, le volet ne dépasse pas la carte.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: true, cardLeading: 10),
+                       ComposerRailGeometry.lane, "…et ne recouvre jamais un rail.")
         XCTAssertFalse(surface.contains("sceneInset(railsShown:true)+10"),
                        "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
     }

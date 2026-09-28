@@ -426,6 +426,16 @@ struct ComposerSceneSurface: View {
     /// au lieu de le travestir. C'est ce qui rend la place signifiante — le
     /// doigt apprend qu'à gauche on OUVRE, en bas on RÈGLE, et une place qui
     /// change de sens selon l'état n'apprend rien.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// **L'écran LARGE** — iPad plein écran et Mac (maquette `iPad.dc.html`) :
+    /// marges de 24 pt, rails centrés en hauteur plutôt que posés au pouce, et
+    /// un volet de texte qui ne déborde pas de la carte. Le téléphone, et un
+    /// iPad en écran partagé étroit (classe compacte), gardent la disposition
+    /// du pouce.
+    private var isRoomy: Bool { horizontalSizeClass == .regular }
+    private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
+
     private var floatingRail: AnyView {
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
@@ -443,7 +453,7 @@ struct ComposerSceneSurface: View {
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
                 // `outerMargin` du bord.
-                .padding(.leading, ComposerRailGeometry.outerMargin)
+                .padding(.leading, edge)
                 .padding(.bottom, ComposerRailGeometry.gutter)
         )
     }
@@ -499,7 +509,8 @@ struct ComposerSceneSurface: View {
     private var descriptionOverlay: some View {
         if let descriptionPanel {
             descriptionPanel
-                .padding(.horizontal, ComposerRailGeometry.lane)
+                .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
+                                                                             cardLeading: sceneCardLeading))
                 .padding(.bottom, 10)
         }
     }
@@ -673,7 +684,7 @@ struct ComposerSceneSurface: View {
         // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
         // que la mesure du bord gauche ci-dessous lit : les deux ne peuvent pas
         // diverger.
-        .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+        .padding(.horizontal, edge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
         // (#4080, directive porteur 2026-09-04). Le meuble le monte une seule
@@ -684,7 +695,7 @@ struct ComposerSceneSurface: View {
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self,
                                   value: .bounds) { $0 }
-                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+                .padding(.horizontal, edge)
                 .allowsHitTesting(false)
         }
         // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011) : la
@@ -699,7 +710,7 @@ struct ComposerSceneSurface: View {
                         value: ComposerRailGeometry.sceneLeadingInset(
                             overlay: geo.size,
                             ratio: aspectRatio,
-                            horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                            horizontalInset: edge))
             }
         }
         // **La scène se pose ENTRE la barre haute et le socle** (directive
@@ -721,7 +732,8 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 plateauTint: plateauTint,
-                trailingAccessory: animatedToggle
+                trailingAccessory: animatedToggle,
+                edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
             )
             .padding(.top, -chromeLift)
 
@@ -848,7 +860,9 @@ struct ComposerSceneSurface: View {
     @ViewBuilder
     private var composingFloors: some View {
         ZStack(alignment: .bottom) {
-            HStack(alignment: .bottom, spacing: 0) {
+            // Sur grand écran, les rails se CENTRENT en hauteur (maquette
+            // iPad : ils ne descendent pas au pouce, qui n'y tient pas l'écran).
+            HStack(alignment: isRoomy ? .center : .bottom, spacing: 0) {
                 floatingRail
                 Spacer(minLength: 0)
                 ComposerTrailingRail(actions: trailingActions,
@@ -863,9 +877,10 @@ struct ComposerSceneSurface: View {
                                      frameIsOpen: frameIsOpen,
                                      onTime: onTimeButton,
                                      timeIsOpen: timeIsOpen)
-                    .padding(.trailing, ComposerRailGeometry.outerMargin)
+                    .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.gutter)
             }
+            .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
             // **Le volet CÈDE au viseur** (#4080) : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
             // **Un outil ou une bande ouverts prennent le bas pour eux seuls**
