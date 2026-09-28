@@ -523,6 +523,24 @@ try {
         .catch(() => undefined);
       const seededComments = await page.$$eval('[data-comment-list] [data-comment-row]', (els) => els.length).catch(() => 0);
       check(seededComments > 0, `${label} : le fil du réel montre les commentaires déjà semés (${seededComments})`);
+
+      // #8601 — FEUILLE OUVERTE, LE CHROME DU RÉEL CÈDE : « Retour »,
+      // identité, légende et rail s'effacent, inertes (`chromeYields`).
+      await page
+        .waitForFunction(() => getComputedStyle(document.querySelector('[data-reels-back]')).opacity === '0', null, { timeout: 1500 })
+        .catch(() => undefined);
+      const chromeCede = await page.evaluate(() => {
+        const back = document.querySelector('[data-reels-back]');
+        const chrome = document.querySelector('[data-reel-index="0"] [data-reel-chrome]');
+        return {
+          retour: back === null ? null : { opacite: getComputedStyle(back).opacity, inerte: back.inert },
+          chrome: chrome === null ? null : { opacite: getComputedStyle(chrome).opacity, inerte: chrome.inert },
+        };
+      });
+      check(
+        chromeCede.retour?.opacite === '0' && chromeCede.retour.inerte && chromeCede.chrome?.opacite === '0' && chromeCede.chrome.inerte,
+        `${label} : feuille ouverte, « Retour » et le chrome du réel s'effacent, inertes (#8601) — ${JSON.stringify(chromeCede)}`,
+      );
       await capture(page, `reels-commentaires-${slug}`);
 
       // RIEN DU RÉEL NE SE PEINT PAR-DESSUS LA FEUILLE (revue-correction
@@ -625,7 +643,9 @@ try {
         sheet: document.querySelector('[data-story-comments-sheet]') !== null,
         inert: document.querySelector('[data-reels-pager]')?.inert === true,
         focus: document.activeElement?.getAttribute('data-reel-gesture') ?? null,
+        chromeRendu: document.querySelector('[data-reels-back]')?.inert === false && document.querySelector('[data-reel-index="0"] [data-reel-chrome]')?.inert === false,
       }));
+      check(afterEscape.chromeRendu, `${label} : feuille fermée, « Retour » et le chrome du réel reviennent atteignables (#8601)`);
       const urlAfter = new URL(page.url());
       check(
         !afterEscape.sheet && !afterEscape.inert && afterEscape.focus === 'comment' && urlAfter.pathname + urlAfter.search === urlBefore.pathname + urlBefore.search,
