@@ -623,10 +623,12 @@ extension MeeshyComposerHost {
     /// offrir, la capsule reste entière. Les deux passent par le MÊME habillage,
     /// qui porte le gate.
     var publishButton: some View {
-        publishCapsule(
+        reelOfferPresented(publishCapsule(
             HStack(spacing: 0) {
                 Button {
-                    performSoclePublish(armedChoice)
+                    // Un post à une seule vidéo demande d'abord « Publier en
+                    // réel ? » (#8603) ; tout le reste part comme avant.
+                    requestSoclePublish(armedChoice)
                 } label: {
                     publishCapsuleLabel
                 }
@@ -647,7 +649,7 @@ extension MeeshyComposerHost {
                 }
             }
             .accessibilityElement(children: .contain)
-        )
+        ))
     }
 
     /// **Ce que la partie principale publie** — la lecture de
