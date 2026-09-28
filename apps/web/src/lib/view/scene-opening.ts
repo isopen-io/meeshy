@@ -86,7 +86,3 @@ export function openingFrame({
 
 export const SCENE_OPENING_MS = 320;
 export const SCENE_OPENING_EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
-
-export function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
