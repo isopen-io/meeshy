@@ -113,7 +113,7 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
     <div className="relative grid min-h-0">
       <Tile {...tile} />
       {moderated ? (
-        <div className="absolute right-1.5 top-1.5 z-10">
+        <div className="absolute right-1.5 top-1.5 z-10" data-call-chrome-fade="">
           <CallModerationSlot member={tile.member} language={tile.language} moderation={moderation} />
         </div>
       ) : null}
@@ -180,7 +180,7 @@ export function CallGrid({ members, remoteStreams, self, choice, onChoose, immer
             <Tile member={featured} stream={remoteStreams[featured.userId]} language={language} onPress={null} label={featured.name} portrait={96} />
           </div>
         )}
-        <div className="absolute right-2 top-2 flex flex-col items-end gap-2">
+        <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
           <div className="flex gap-2">
             {screen ? (
               <CallButton

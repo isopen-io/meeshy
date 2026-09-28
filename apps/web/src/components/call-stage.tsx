@@ -50,7 +50,7 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
           <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" />
         </div>
       ) : null}
-      <div className="absolute bottom-4 right-4 z-20" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }}>
+      <div className="absolute bottom-4 right-4 z-20" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }} data-call-chrome-fade="">
         <CallButton
           label={translate(language, immersive ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
           glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[immersive ? 'cornersIn' : 'cornersOut']} size={20} />}

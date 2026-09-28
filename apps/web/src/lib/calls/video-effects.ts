@@ -10,6 +10,12 @@ import { createStore } from 'zustand/vanilla';
  * luminosité (±50 %). Les effets s'appliquent à la piste ENVOYÉE : ce que je
  * vois dans ma vignette est ce que l'autre voit.
  *
+ * Les EFFETS DE VISAGE (#8551) — lissage de peau, crapaud, ange, démon,
+ * éruption volcanique — se choisissent un à la fois, par-dessus la couleur :
+ * ils demandent le même traitement d'images, même quand la couleur est
+ * naturelle (`needsFramePipeline`). Leur dessin vit avec le traitement
+ * (`face-effects.ts`), jamais ici.
+ *
  * Le flou d'arrière-plan est celui du NAVIGATEUR (contrainte `backgroundBlur`,
  * là où la caméra l'offre — Chrome sur ChromeOS, Windows et macOS récents,
  * Safari sur macOS) : aucune segmentation n'est téléchargée. Là où la caméra
@@ -20,9 +26,14 @@ export const VIDEO_PRESETS = ['natural', 'warm', 'cool', 'vivid', 'muted'] as co
 
 export type VideoPreset = (typeof VIDEO_PRESETS)[number];
 
-export type VideoEffects = { readonly preset: VideoPreset; readonly brightness: number; readonly blur: boolean };
+/** Les effets de visage, dans l'ordre partagé avec iOS (`CallFaceEffect`). */
+export const FACE_EFFECTS = ['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano'] as const;
 
-export const NO_EFFECTS: VideoEffects = { preset: 'natural', brightness: 0, blur: false };
+export type FaceEffect = (typeof FACE_EFFECTS)[number];
+
+export type VideoEffects = { readonly preset: VideoPreset; readonly brightness: number; readonly blur: boolean; readonly faceEffect: FaceEffect };
+
+export const NO_EFFECTS: VideoEffects = { preset: 'natural', brightness: 0, blur: false, faceEffect: 'none' };
 
 export const BRIGHTNESS_LIMIT = 0.5;
 
@@ -45,11 +56,11 @@ export function effectsFilter(effects: VideoEffects): string {
 }
 
 /** Faut-il traiter les images ? Le flou seul non : il se règle sur la caméra elle-même. */
-export const needsColorPipeline = (effects: VideoEffects): boolean => effectsFilter(effects) !== 'none';
+export const needsFramePipeline = (effects: VideoEffects): boolean => effectsFilter(effects) !== 'none' || effects.faceEffect !== 'none';
 
 /** Les noms que `call:analytics` retient (`effectsUsed`). */
 export function effectsUsedOf(effects: VideoEffects): readonly string[] {
-  return [...(effects.preset === 'natural' ? [] : [`filter:${effects.preset}`]), ...(clampBrightness(effects.brightness) === 0 ? [] : ['brightness']), ...(effects.blur ? ['background-blur'] : [])];
+  return [...(effects.preset === 'natural' ? [] : [`filter:${effects.preset}`]), ...(clampBrightness(effects.brightness) === 0 ? [] : ['brightness']), ...(effects.blur ? ['background-blur'] : []), ...(effects.faceEffect === 'none' ? [] : [`face:${effects.faceEffect}`])];
 }
 
 type CanvasProbe = { readonly getContext: (kind: '2d') => unknown; readonly captureStream?: unknown };

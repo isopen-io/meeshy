@@ -1,4 +1,4 @@
-import { blurCapable, cameraSourceOf, effectsUsedOf, forgetCameraSource, needsColorPipeline, registerCameraSource, type VideoEffects } from './video-effects';
+import { blurCapable, cameraSourceOf, effectsUsedOf, forgetCameraSource, needsFramePipeline, registerCameraSource, type VideoEffects } from './video-effects';
 import type { EffectsPipeline } from './video-effects-pipeline';
 
 /**
@@ -8,7 +8,7 @@ import type { EffectsPipeline } from './video-effects-pipeline';
  * une piste, `release`. Si la piste rendue change, il la remplace sur chaque
  * lien (`replaceTrack`) : pas de renégociation, pas d'image perdue.
  *
- * Le traitement n'est bâti qu'au PREMIER effet de couleur, puis réglé ; revenir
+ * Le traitement n'est bâti qu'au PREMIER effet de couleur ou de visage, puis réglé ; revenir
  * à « naturel » le garde (il laisse alors passer chaque image telle quelle) :
  * rebâtir coûterait un échange de piste à chaque hésitation.
  */
@@ -47,7 +47,7 @@ export function createCameraEffects(deps: CameraEffectsDeps): CameraEffectsPort 
   };
 
   const build = async (camera: MediaStreamTrack, effects: VideoEffects): Promise<MediaStreamTrack> => {
-    if (!needsColorPipeline(effects) || !deps.colorSupported()) return camera;
+    if (!needsFramePipeline(effects) || !deps.colorSupported()) return camera;
     const factory = await deps.loadPipeline().catch(() => null);
     if (factory === null || camera.readyState === 'ended') return camera;
     const pipeline = factory(camera, effects);

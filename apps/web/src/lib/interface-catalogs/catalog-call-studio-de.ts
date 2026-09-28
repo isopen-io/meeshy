@@ -1,0 +1,40 @@
+import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
+
+/** Le studio d'un appel vidéo — de (#8551, #8552). */
+const de = {
+  'callStudio.close': 'Schließen',
+  'callStudio.effects.faces': 'Effekte',
+  'callStudio.effects.color': 'Farbe',
+  'callStudio.effects.settings': 'Einstellungen',
+  'callStudio.face.none': 'Keiner',
+  'callStudio.face.smoothing': 'Hautglättung',
+  'callStudio.face.toad': 'Kröte',
+  'callStudio.face.angel': 'Engel',
+  'callStudio.face.demon': 'Dämon',
+  'callStudio.face.volcano': 'Vulkanausbruch',
+  'callStudio.capture.title': 'Schnappschuss',
+  'callStudio.capture.montage': 'Collage',
+  'callStudio.capture.actions': 'Aktionen',
+  'callStudio.montage.screen': 'Vollbild',
+  'callStudio.montage.grid': 'Mosaik',
+  'callStudio.montage.strip': 'Fotoautomat',
+  'callStudio.montage.polaroid': 'Polaroid',
+  'callStudio.montage.magazine': 'Magazin',
+  'callStudio.montage.comic': 'Comic',
+  'callStudio.montage.heart': 'Herz',
+  'callStudio.capture.preview': 'Vorschau der Collage {style}',
+  'callStudio.capture.shoot': 'Aufnehmen',
+  'callStudio.capture.shootLabel': 'Collage {style} aufnehmen',
+  'callStudio.capture.faces': 'Jedes Gesicht',
+  'callStudio.capture.facesLabel': 'Jedes Gesicht einzeln speichern',
+  'callStudio.capture.saved': 'Schnappschuss gespeichert',
+  'callStudio.capture.faceSaved': '1 Gesicht gespeichert',
+  'callStudio.capture.facesSaved': '{count} Gesichter gespeichert',
+  'callStudio.capture.failed': 'Der Schnappschuss konnte nicht gespeichert werden',
+  'callStudio.capture.cancelled': 'Speichern abgebrochen',
+  'callStudio.capture.empty': 'Nichts aufzunehmen: Es wird kein Bild angezeigt',
+  'callStudio.capture.busy': 'Wird aufgenommen…',
+  'callStudio.capture.bubble': 'Was für ein Anruf!',
+} satisfies CallStudioCatalog;
+
+export default de;

@@ -47,6 +47,8 @@ const ar = {
   'callControls.record.audioDetail': 'أصوات الجميع',
   'callControls.record.video': 'الصوت والفيديو',
   'callControls.record.videoDetail': 'الصور الظاهرة والأصوات',
+  'callControls.capture': 'التقاط',
+  'callControls.capture.label': 'التقاط صورة من المكالمة',
 } satisfies CallControlsCatalog;
 
 export default ar;
