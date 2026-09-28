@@ -796,16 +796,9 @@ struct ComposerSceneSurface: View {
                         .padding(.bottom, 6)
                 }
             case .band(let ouverte):
-                ComposerSceneBandView(band: ouverte,
-                                      colors: bandColors,
-                                      onPickColor: onPickBandColor,
-                                      openingEffect: bandOpeningEffect,
-                                      onPickOpening: onPickBandOpening,
-                                      fitMode: bandFitMode,
-                                      backdrop: bandBackdrop,
-                                      plateauTint: plateauTint,
-                                      onPickFitMode: onPickBandFitMode,
-                                      onPickBackdrop: onPickBandBackdrop)
+                // Sur grand écran, la bande flotte en CARTE à côté du rail droit
+                // (`roomyBandCard`) ; elle ne prend le bas que sur téléphone.
+                if !isRoomy { bandView(ouverte) }
             case .nothing:
                 EmptyView()
             }
@@ -889,8 +882,35 @@ struct ComposerSceneSurface: View {
             if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage), !toolIsOpen, band == nil {
                 descriptionOverlay
             }
+            roomyBandCard
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private func bandView(_ ouverte: ComposerSceneBand) -> some View {
+        ComposerSceneBandView(band: ouverte,
+                              colors: bandColors,
+                              onPickColor: onPickBandColor,
+                              openingEffect: bandOpeningEffect,
+                              onPickOpening: onPickBandOpening,
+                              fitMode: bandFitMode,
+                              backdrop: bandBackdrop,
+                              plateauTint: plateauTint,
+                              onPickFitMode: onPickBandFitMode,
+                              onPickBackdrop: onPickBandBackdrop)
+    }
+
+    /// **La bande en CARTE flottante, sur grand écran** (maquette
+    /// `iPad.dc.html` : le panneau Cadre se pose à côté du rail droit, 250 pt
+    /// de large, sans quitter la scène des yeux). Le téléphone la garde en bas.
+    @ViewBuilder
+    private var roomyBandCard: some View {
+        if isRoomy, case .band(let ouverte) = ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
+            bandView(ouverte)
+                .frame(width: ComposerRailGeometry.roomyPanelWidth)
+                .padding(.trailing, ComposerRailGeometry.roomyPanelTrailing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        }
     }
 
     // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :
