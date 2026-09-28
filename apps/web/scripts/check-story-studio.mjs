@@ -804,8 +804,15 @@ for (const [label, viewport] of [
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(String(e)));
+  /** Une capture attend que les plaques aient fini de MONTER (240 ms). */
   const shoot = async (name) => {
-    if (CAPTURE_DIR !== undefined) await page.screenshot({ path: join(CAPTURE_DIR, `web-${label}-lot7-${name}.png`) });
+    if (CAPTURE_DIR === undefined) return;
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.studio-plaque-rise')].every((el) => el.getAnimations().every((a) => a.playState !== 'running')),
+      undefined,
+      { timeout: 4000 },
+    );
+    await page.screenshot({ path: join(CAPTURE_DIR, `web-${label}-lot7-${name}.png`) });
   };
   /** Une plaque DANS l'écran : bornée, sans descendant qui la déborde. */
   const plateFits = async (selector, what) => {

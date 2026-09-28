@@ -216,6 +216,8 @@ describe('éditer un composant ne touche QUE lui (#8482)', () => {
     expect(plaque.querySelector('[data-story-object-editor]')).toBeNull();
     expect(plaque.querySelector('[data-story-option^="style:"], [data-story-option^="color:"]')).toBeNull();
     expect(el.querySelector('[data-story-frame-panel]')).toBeNull();
+    // Ni l'invite « Ajouter du texte » sur un calque : la saisie de texte n'a rien à dire d'une image.
+    expect(el.querySelector('#story-studio-text')?.getAttribute('placeholder') ?? null).toBeNull();
     // Le Cadre règle le FOND : il ne s'offre pas pendant qu'on édite le calque.
     expect(el.querySelector('[data-story-option="frame"]') === null).toBe(true);
     click(el.querySelector('[data-story-edit-done]'));
