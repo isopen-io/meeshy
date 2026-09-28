@@ -159,7 +159,7 @@ const StudioPageRail = lazy(() => import('@/routes/story-compose-pages').then((m
 /** L'APERÇU et le TEXTE DU POST (#8413), CHARGÉS À LA DEMANDE — ils ne pèsent
  * que si l'auteur ouvre ⋯ › Aperçu ou touche le bouton document du socle. */
 const StudioPreviewSheet = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPreviewSheet })));
-const StudioPostTextSheet = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPostTextSheet })));
+const StudioPostTextPlaque = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPostTextPlaque })));
 
 /** LA FRISE DU MODE ANIMÉ (#8415), CHARGÉE À LA DEMANDE — elle ne pèse que si
  * l'auteur ouvre Animé. */
@@ -684,7 +684,10 @@ function StoryStudio({
     edit,
     select: (id) => setDraft((current) => withSelected(current, id)),
     removeOverlay: () => remove('overlay'),
-    closeFrame: () => setFrameOpen(false),
+    closeFrame: () => {
+      setFrameOpen(false);
+      setPostTextOpen(false);
+    },
   });
 
   /** LE SOL (#8413) — le hash du COMPOSITE (#8425), sinon celui du fond ;
@@ -708,7 +711,8 @@ function StoryStudio({
   const showsSocleCard = !retouching && (studioAssetsShown(page) || studioFooterSpeaks({ kind, placeRefusal, kindRefusal, publishFailure }));
   /** UN PANNEAU OUVERT EN BAS (Cadre, édition) — sur mobile, le socle se
    * retire le temps du panneau (lot 6). */
-  const panelOpen = (frameOpen && page.background !== null) || editing !== null;
+  const postTextShown = postTextOpen && kind === 'POST' && !timelineOpen;
+  const panelOpen = (frameOpen && page.background !== null) || editing !== null || postTextShown;
   const trackLabel = (track: StudioTrack): string =>
     track.kind === 'overlay' ? translate(lang, 'story.studio.timeline.overlay') : (page.texts.find((layer) => layer.id === track.id)?.text.trim() ?? '');
   const history = historyRef.current;
@@ -930,6 +934,11 @@ function StoryStudio({
             />
           </Suspense>
         ) : null}
+        {postTextShown ? (
+          <Suspense fallback={null}>
+            <StudioPostTextPlaque lang={lang} value={draft.postText} onChange={(value) => setDraft((current) => withPostText(current, value))} onClose={() => setPostTextOpen(false)} />
+          </Suspense>
+        ) : null}
         {editing !== null ? (
           <StudioEditPlaque lang={lang} title={objectName(editing)} onDone={() => setEditingId(null)}>
             <div inert={publishing}>
@@ -1021,7 +1030,11 @@ function StoryStudio({
             <AudienceChip lang={lang} value={audienceValue} source={audienceSource} open={audienceOpen} onOpen={openAudience} disabled={publishing} />
             <span aria-hidden="true" className="flex-1" />
             {kind === 'POST' ? (
-              <StudioPostTextButton lang={lang} written={draft.postText.trim() !== ''} onOpen={() => setPostTextOpen(true)} disabled={publishing} />
+              <StudioPostTextButton lang={lang} written={draft.postText.trim() !== ''} onOpen={() => {
+                  setEditingId(null);
+                  setFrameOpen(false);
+                  setPostTextOpen(true);
+                }} disabled={publishing} />
             ) : null}
             {/* PAS de capsule tant qu'il n'y a rien à publier (lot 6) : ni
                 bouton grisé, ni phrase ; elle paraît dès le premier objet. */}
@@ -1078,16 +1091,6 @@ function StoryStudio({
             preferredLanguages={reader.languages}
             muted={soundMuted}
             onClose={() => setPreviewOpen(false)}
-          />
-        </Suspense>
-      ) : null}
-      {postTextOpen && kind === 'POST' ? (
-        <Suspense fallback={null}>
-          <StudioPostTextSheet
-            lang={lang}
-            value={draft.postText}
-            onChange={(value) => setDraft((current) => withPostText(current, value))}
-            onClose={() => setPostTextOpen(false)}
           />
         </Suspense>
       ) : null}

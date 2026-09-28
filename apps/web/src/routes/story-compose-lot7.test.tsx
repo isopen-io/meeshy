@@ -124,3 +124,51 @@ describe('la frise : une piste se choisit, se glisse et s’étire (#8482)', () 
     expect(windowOf(el, 'text-1')).toEqual([0, 6]);
   });
 });
+
+describe('le texte du post suit le format ARMÉ au chevron (#8482)', () => {
+  const arm = (el: HTMLElement, kind: 'STORY' | 'POST') => {
+    click(el.querySelector('[data-publish-kind-toggle]'));
+    click(document.querySelector(`[data-publish-kind-choice="${kind}"]`));
+  };
+
+  test('une story qui arme « Post » peint le bouton ; réarmer la story le retire', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'STORY');
+    typeText(el, 'Sur la scène');
+    expect(el.querySelector('[data-story-post-text]')).toBeNull();
+    arm(el, 'POST');
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+    expect(el.querySelector('[data-story-post-text]')).not.toBeNull();
+    arm(el, 'STORY');
+    await flush();
+    expect(el.querySelector('[data-story-post-text]')).toBeNull();
+  });
+
+  test('son éditeur MONTE du bas dans un cadre de verre, et le texte PART avec la scène', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'STORY');
+    typeText(el, 'Sur la scène');
+    arm(el, 'POST');
+    await flush();
+    click(el.querySelector('[data-story-post-text]'));
+    await flush(() => el.querySelector('[data-story-post-text-plaque]') !== null);
+    const plaque = el.querySelector<HTMLElement>('[data-story-post-text-plaque]')!;
+    expect(plaque.closest('[data-story-studio-bottom]')).not.toBeNull();
+    expect(plaque.className.split(' ')).toContain('glass');
+    expect(document.querySelector('dialog[open]')).toBeNull();
+    expect(el.querySelector('[data-story-socle-row]')?.className).toContain('max-md:hidden');
+    const field = plaque.querySelector<HTMLTextAreaElement>('#story-studio-post-text')!;
+    act(() => {
+      field.value = 'Le corps du post';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    click(plaque.querySelector('[data-story-post-text-done]'));
+    expect(el.querySelector('[data-story-post-text-plaque]')).toBeNull();
+    expect(el.querySelector('[data-story-post-text]')?.getAttribute('data-story-post-text')).toBe('written');
+    click(publishButton(el));
+    await flush(() => bench.posts.length === 1);
+    expect(bench.posts[0]?.type).toBe('POST');
+    expect(bench.posts[0]?.content).toBe('Le corps du post');
+  });
+});

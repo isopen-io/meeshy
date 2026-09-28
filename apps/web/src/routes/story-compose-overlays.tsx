@@ -54,11 +54,14 @@ export function StudioPreviewSheet({
 
 /**
  * **LE TEXTE DU POST** (#8413) — `Post.content`, le corps de la publication :
- * distinct du texte posé sur la scène et de la légende d'un média. Écrire
- * applique sur-le-champ (le brouillon est persisté à chaque changement) ;
- * « Terminé » ne fait que fermer.
+ * distinct du texte posé sur la scène et de la légende d'un média. Depuis le
+ * retour porteur du 2026-09-28 (#8482, miroir iOS #8473), son éditeur MONTE
+ * DU BAS dans un cadre de verre, comme la légende (plaque du Cadre, plaque
+ * d'édition) — plus de feuille centrée qui masquait la scène. Écrire applique
+ * sur-le-champ (le brouillon est persisté à chaque changement) ; « Terminé »
+ * ne fait que refermer. Échap referme aussi.
  */
-export function StudioPostTextSheet({
+export function StudioPostTextPlaque({
   lang,
   value,
   onChange,
@@ -71,28 +74,40 @@ export function StudioPostTextSheet({
 }) {
   const label = translate(lang, 'story.studio.postText');
   return (
-    <Sheet title={label} bodyAs="div" presentation="centered" onClose={onClose}>
-      <div className="flex flex-col gap-3 px-4 pb-2">
-        <textarea
-          id="story-studio-post-text"
-          aria-label={label}
-          value={value}
-          rows={6}
-          placeholder={translate(lang, 'story.studio.postText.placeholder')}
-          onInput={(event) => onChange(event.currentTarget.value)}
-          className="w-full resize-none rounded-[14px] px-4 py-3 text-body outline-none"
-          style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
-        />
+    <section
+      data-story-post-text-plaque
+      aria-label={label}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose();
+      }}
+      className="glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5"
+    >
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          {label}
+        </h2>
         <button
           type="button"
           data-story-post-text-done
           onClick={onClose}
-          className="self-end rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)', color: '#fff', outlineColor: 'var(--color-ios-brand)' }}
+          className="h-11 rounded-xl px-4 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
         >
           {translate(lang, 'story.studio.postText.done')}
         </button>
       </div>
-    </Sheet>
+      <textarea
+        id="story-studio-post-text"
+        aria-label={label}
+        value={value}
+        rows={4}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- l'éditeur s'ouvre POUR écrire : le clavier suit le geste.
+        autoFocus
+        placeholder={translate(lang, 'story.studio.postText.placeholder')}
+        onInput={(event) => onChange(event.currentTarget.value)}
+        className="max-h-52 w-full resize-none rounded-[14px] px-3 py-2 text-body outline-none"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
+      />
+    </section>
   );
 }

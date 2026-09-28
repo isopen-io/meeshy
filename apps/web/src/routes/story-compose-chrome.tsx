@@ -317,7 +317,7 @@ export function StudioEditPlaque({
   readonly children: ReactNode;
 }) {
   return (
-    <section data-story-edit-plaque aria-label={title} className="glass flex flex-col gap-2 rounded-[22px] px-3 py-2.5">
+    <section data-story-edit-plaque aria-label={title} className="glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5">
       <div className="flex items-center gap-2">
         <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {title}
