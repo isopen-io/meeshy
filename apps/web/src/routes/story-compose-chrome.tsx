@@ -5,7 +5,6 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StudioFloor } from '@/lib/stories/studio-floor';
 import { useRovingMenu } from '@/lib/view/roving-menu';
-import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
  * **LE CHROME DU COMPOSER PLEIN ÉCRAN** (#8413, maquette
@@ -308,43 +307,3 @@ export function StudioAnimatedToggle({
  * bloc comme dans la colonne du socle.
  */
 export const STUDIO_PLATE = 'mx-auto w-full min-w-0 max-w-xl';
-
-/**
- * **LA PLAQUE D'ÉDITION** (lot 6) — en ÉDITION d'un objet (double-tap,
- * « Modifier »), plus de longue bande de contrôleurs sur les côtés : une
- * plaque de verre EN BAS porte les options de l'outil courant (styles,
- * couleurs, taille…), et « OK » referme l'édition.
- */
-export function StudioEditPlaque({
-  lang,
-  title,
-  onDone,
-  children,
-}: {
-  readonly lang: InterfaceLanguage;
-  readonly title: string;
-  readonly onDone: () => void;
-  readonly children: ReactNode;
-}) {
-  // Une COUCHE (#8517) : le retour matériel et Échap la referment, elle seule.
-  useBackDismiss(onDone, { escape: true });
-  return (
-    <section data-story-edit-plaque aria-label={title} className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5`}>
-      <div className="flex items-center gap-2">
-        <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          {title}
-        </h2>
-        <button
-          type="button"
-          data-story-edit-done
-          onClick={onDone}
-          className="h-11 rounded-xl px-4 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          {translate(lang, 'story.studio.edit.done')}
-        </button>
-      </div>
-      <div className="max-h-52 overflow-y-auto">{children}</div>
-    </section>
-  );
-}

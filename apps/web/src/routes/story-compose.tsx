@@ -12,7 +12,6 @@ import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import { refreshFeedAction } from '@/lib/api/query';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
-import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { resolveSceneText } from '@/lib/canvas/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -74,7 +73,6 @@ import { studioPreviewDocument } from '@/lib/stories/studio-preview';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
-import { withVisualAlt } from '@/lib/stories/studio-media-alt';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
@@ -91,7 +89,7 @@ import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
 import { publicationRefusalText, studioAssetsShown, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
-import { StudioAnimatedToggle, StudioEditPlaque, StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
+import { StudioAnimatedToggle, StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
 import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
 import { StudioScene } from '@/routes/story-compose-scene';
@@ -140,6 +138,7 @@ import { useStudioTimeline } from '@/routes/use-studio-timeline';
  * `LanguageSheet`/`EffectsSheet` du composeur du fil : elle ne pèse sur le
  * chunk du studio que si l'auteur touche la pastille. */
 const StudioObjectEditor = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioObjectEditor })));
+const StudioEditPlaque = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioEditPlaque })));
 const StudioOverlayEditor = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioOverlayEditor })));
 /** Le menu d'un objet (appui long, clic droit), à la demande. */
 const StudioObjectMenu = lazy(() => import('@/routes/story-compose-object-menu').then((m) => ({ default: m.StudioObjectMenu })));
@@ -449,8 +448,10 @@ function StoryStudio({
    * VIDE de la page ; la saisie la cible et le doigt l'ouvre. Sans texte vide
    * ni sélection, elle ne s'affiche que sur une page sans aucun texte écrit :
    * la toucher y pose un texte neuf. */
-  const inviteLayer = selectedLayer ?? page.texts.find((layer) => layer.text.trim() === '') ?? null;
-  const inviteShown = inviteLayer !== null || page.texts.every((layer) => layer.text.trim() === '');
+  // Un MÉDIA sélectionné n'est pas un texte : aucune invite peinte dessus (#8517).
+  const mediaSelected = selectedId !== null && selectedLayer === null;
+  const inviteLayer = mediaSelected ? null : (selectedLayer ?? page.texts.find((layer) => layer.text.trim() === '') ?? null);
+  const inviteShown = !mediaSelected && (inviteLayer !== null || page.texts.every((layer) => layer.text.trim() === ''));
 
   function onTextChange(value: string) {
     const target = inviteLayer?.id;
@@ -842,38 +843,40 @@ function StoryStudio({
           </Suspense>
         ) : null}
         {editing !== null ? (
-          <StudioEditPlaque lang={lang} title={objectName(editing)} onDone={() => setEditingId(null)}>
-            <div inert={publishing}>
-              <Suspense fallback={null}>
-                {editing === 'overlay' && page.overlay !== null ? (
-                  <StudioOverlayEditor
-                    lang={lang}
-                    pose={page.overlay.pose}
-                    caption={page.overlay.caption}
-                    {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onChange: (value: string) => edit((current) => withVisualAlt(current, 'overlay', value), 'alt:overlay') } })}
-                    filter={page.overlay.filter ?? null}
-                    onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
-                    onPose={(pose) => commitPoseOf('overlay', pose)}
-                    onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
-                  />
-                ) : (
-                  <StudioObjectEditor
-                    lang={lang}
-                    layer={selectedLayer}
-                    onChange={changeLayer}
-                    onPose={commitPose}
-                    onRemove={() => {
-                      setEditingId(null);
-                      edit((current) => {
-                        const selected = currentStudioPage(current).selected;
-                        return selected === null ? current : withoutText(current, selected);
-                      });
-                    }}
-                  />
-                )}
-              </Suspense>
-            </div>
-          </StudioEditPlaque>
+          <Suspense fallback={null}>
+            <StudioEditPlaque lang={lang} title={objectName(editing)} onDone={() => setEditingId(null)}>
+              <div inert={publishing}>
+                <Suspense fallback={null}>
+                  {editing === 'overlay' && page.overlay !== null ? (
+                    <StudioOverlayEditor
+                      lang={lang}
+                      pose={page.overlay.pose}
+                      caption={page.overlay.caption}
+                      {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onDraft: edit } })}
+                      filter={page.overlay.filter ?? null}
+                      onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
+                      onPose={(pose) => commitPoseOf('overlay', pose)}
+                      onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
+                    />
+                  ) : (
+                    <StudioObjectEditor
+                      lang={lang}
+                      layer={selectedLayer}
+                      onChange={changeLayer}
+                      onPose={commitPose}
+                      onRemove={() => {
+                        setEditingId(null);
+                        edit((current) => {
+                          const selected = currentStudioPage(current).selected;
+                          return selected === null ? current : withoutText(current, selected);
+                        });
+                      }}
+                    />
+                  )}
+                </Suspense>
+              </div>
+            </StudioEditPlaque>
+          </Suspense>
         ) : null}
         {frameOpen && page.background !== null && editing === null && !timelineOpen ? (
           <div inert={publishing}>
@@ -887,8 +890,7 @@ function StoryStudio({
                   ? {}
                   : {
                       caption: { value: page.background.caption, onChange: (value: string) => edit((current) => withVisualCaption(current, 'visual', value), 'caption:visual') },
-                      alt: { value: page.background.alt ?? '', onChange: (value: string) => edit((current) => withVisualAlt(current, 'visual', value), 'alt:visual') },
-                      filter: { value: page.background.filter ?? null, onChange: (filter: StoryFilterId | null) => edit((current) => withVisualFilter(current, 'visual', filter)) },
+                      media: { alt: page.background.alt ?? '', filter: page.background.filter ?? null, onDraft: edit },
                     })}
                 onRemove={() => {
                   setFrameOpen(false);

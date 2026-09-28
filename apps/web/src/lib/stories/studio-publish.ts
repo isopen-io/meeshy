@@ -4,7 +4,7 @@ import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
-import { storyMediaAltPayload, storyMediaCaptionPayload } from './media-caption';
+import { storyMediaTextPayload } from './media-caption';
 import { PUBLICATION_CHANNEL } from './publication-kind';
 import type { PublishChoice } from './publication-layout';
 import { buildStoryCanvasEffectsPages, studioMediaIds, type StudioReadyAsset } from './story-document';
@@ -196,18 +196,14 @@ export type StudioPublishPlan =
 function publicationOf(group: readonly ResolvedPage[], layout: MosaicLayoutMode | null): readonly StudioPublication[] {
   const storyEffects = buildStoryCanvasEffectsPages(group.map(pageCompositionInput), layout);
   if (storyEffects === null) return [];
-  const mediaCaption = storyMediaCaptionPayload(
-    group.flatMap(({ page, background, overlay }) => [
-      { postMediaId: background?.postMediaId, caption: page.background?.caption },
-      { postMediaId: overlay?.postMediaId, caption: page.overlay?.caption },
-    ]),
-  );
-  const mediaAlt = storyMediaAltPayload(
-    group.flatMap(({ page, background, overlay }) => [
-      { postMediaId: background?.postMediaId, alt: page.background?.alt },
-      { postMediaId: overlay?.postMediaId, alt: page.overlay?.alt },
-    ]),
-  );
+  const media = group.flatMap(({ page, background, overlay }) => [
+    { postMediaId: background?.postMediaId, asset: page.background },
+    { postMediaId: overlay?.postMediaId, asset: page.overlay },
+  ]);
+  // La légende et le texte alternatif (#8518) : deux cartes de MÊME contrat.
+  const textsOf = (field: 'caption' | 'alt') => storyMediaTextPayload(media.map(({ postMediaId, asset }) => ({ postMediaId, text: asset?.[field] })));
+  const mediaCaption = textsOf('caption');
+  const mediaAlt = textsOf('alt');
   return [
     {
       pageIds: group.map(({ page }) => page.id),

@@ -1,10 +1,15 @@
+import type { ReactNode } from 'react';
+
 import { hexColorCss } from '@/lib/canvas/background';
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { SERVED_TEXT_STYLES, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { StudioDraftEdit } from '@/lib/stories/studio-media-alt';
 import type { StudioPose } from '@/lib/stories/studio-pose';
 import { STUDIO_TEXT_LANGUAGES, type StudioTextLayer } from '@/lib/stories/studio-text';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 
 import { StudioAltField, StudioFilterSection, StudioSection as Section } from './story-compose-media-fields';
 import { StudioChip } from './story-compose-parts';
@@ -301,7 +306,7 @@ export function StudioOverlayEditor({
   readonly pose: StudioPose;
   readonly caption: string;
   /** LE TEXTE ALTERNATIF — absent d'une retouche, qui ne publie rien. */
-  readonly alt?: { readonly value: string; readonly onChange: (value: string) => void };
+  readonly alt?: { readonly value: string; readonly onDraft: StudioDraftEdit };
   /** LE FILTRE de CE média (lot 7) — `null` : aucun. */
   readonly filter: StoryFilterId | null;
   readonly onFilter: (filter: StoryFilterId | null) => void;
@@ -320,9 +325,52 @@ export function StudioOverlayEditor({
         className="h-11 rounded-xl px-3 text-body outline-none"
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
       />
-      {alt !== undefined ? <StudioAltField lang={lang} door="overlay" value={alt.value} onChange={alt.onChange} /> : null}
+      {alt !== undefined ? <StudioAltField lang={lang} door="overlay" value={alt.value} onDraft={alt.onDraft} /> : null}
       <StudioFilterSection lang={lang} filter={filter} onFilter={onFilter} />
       <StudioPoseSection lang={lang} pose={pose} onPose={onPose} />
     </div>
+  );
+}
+
+/**
+ * **LA PLAQUE D'ÉDITION** (lot 6) — en ÉDITION d'un objet (double-tap,
+ * « Modifier »), plus de longue bande de contrôleurs sur les côtés : une
+ * plaque de verre EN BAS porte les options de l'outil courant (styles,
+ * couleurs, taille…), et « OK » referme l'édition.
+ *
+ * Elle vit dans le chunk des éditeurs qu'elle porte (#8517) : chargée avec
+ * eux, elle ne pèse pas sur le studio d'un auteur qui n'édite rien.
+ */
+export function StudioEditPlaque({
+  lang,
+  title,
+  onDone,
+  children,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly title: string;
+  readonly onDone: () => void;
+  readonly children: ReactNode;
+}) {
+  // Une COUCHE (#8517) : le retour matériel et Échap la referment, elle seule.
+  useBackDismiss(onDone, { escape: true });
+  return (
+    <section data-story-edit-plaque aria-label={title} className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] px-3 py-2.5`}>
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          {title}
+        </h2>
+        <button
+          type="button"
+          data-story-edit-done
+          onClick={onDone}
+          className="h-11 rounded-xl px-4 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(lang, 'story.studio.edit.done')}
+        </button>
+      </div>
+      <div className="max-h-52 overflow-y-auto">{children}</div>
+    </section>
   );
 }

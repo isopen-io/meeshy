@@ -99,8 +99,7 @@ export function StudioTextInput({
             onPublish();
           }
         }}
-        // Un calque sélectionné n'est pas un texte : aucune invite à écrire dessus (#8517).
-        {...(layer !== null ? { placeholder: translate(lang, 'story.studio.text.placeholder') } : {})}
+        placeholder={translate(lang, 'story.studio.text.placeholder')}
         rows={1}
         className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-semibold text-transparent caret-white outline-none placeholder:text-white placeholder:opacity-60"
         style={{

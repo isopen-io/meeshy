@@ -11,6 +11,8 @@ import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryFrame } from '@/lib/stories/story-document';
+import { withVisualFilter } from '@/lib/stories/studio';
+import type { StudioDraftEdit } from '@/lib/stories/studio-media-alt';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 import { StudioAltField, StudioFilterSection } from '@/routes/story-compose-media-fields';
@@ -85,8 +87,7 @@ export function StudioFramePanel({
   onChange,
   onClose,
   caption,
-  alt,
-  filter,
+  media,
   onRemove,
 }: {
   readonly lang: InterfaceLanguage;
@@ -96,10 +97,10 @@ export function StudioFramePanel({
   /** LA LÉGENDE du média de fond (`PostMedia.caption`) — elle a quitté la
    * carte du socle (lot 6) : on l'écrit là où l'on règle le média. */
   readonly caption?: { readonly value: string; readonly onChange: (value: string) => void };
-  /** LE TEXTE ALTERNATIF du média de fond (`PostMedia.alt`, #8518). */
-  readonly alt?: { readonly value: string; readonly onChange: (value: string) => void };
-  /** LE FILTRE du média de fond (#8518) — `null` : aucun. */
-  readonly filter?: { readonly value: StoryFilterId | null; readonly onChange: (filter: StoryFilterId | null) => void };
+  /** LE TEXTE ALTERNATIF (`PostMedia.alt`) et LE FILTRE du média de fond
+   * (#8518) — le panneau écrit le brouillon lui-même (`onDraft`), pour que
+   * leur câblage vive dans ce chunk à la demande, pas dans celui du studio. */
+  readonly media?: { readonly alt: string; readonly filter: StoryFilterId | null; readonly onDraft: StudioDraftEdit };
   /** RETIRER le média de fond — sa ligne a quitté le socle (lot 6). */
   readonly onRemove?: () => void;
 }) {
@@ -130,68 +131,70 @@ export function StudioFramePanel({
       {/* Le corps DÉFILE sous son titre (#8517) : le Cadre ne mange pas la
           scène qu'il règle, au téléphone comme au bureau. */}
       <div data-story-frame-body className="flex max-h-72 flex-col gap-2 overflow-y-auto">
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
-        {translate(lang, FIT_HINT_KEY[frame.fitMode])}
-      </p>
-      <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
-        {translate(lang, 'story.studio.frame.media')}
-      </p>
-      <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex flex-wrap gap-1.5">
-        {SCENE_FIT_MODES.map((mode) => (
-          <Token key={mode} on={frame.fitMode === mode} probe={mode} onPress={() => setFit(mode)}>
-            {translate(lang, FIT_KEY[mode])}
-          </Token>
-        ))}
-      </div>
-      {caption !== undefined ? (
-        <input
-          id="story-studio-caption-visual"
-          type="text"
-          value={caption.value}
-          aria-label={translate(lang, 'story.studio.caption.placeholder')}
-          placeholder={translate(lang, 'story.studio.caption.placeholder')}
-          onInput={(event) => caption.onChange(event.currentTarget.value)}
-          className="h-11 rounded-xl px-3 text-body outline-none"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
-        />
-      ) : null}
-      {alt !== undefined ? <StudioAltField lang={lang} door="visual" value={alt.value} onChange={alt.onChange} /> : null}
-      {/* Autour d'un média qui REMPLIT, il n'y a rien : les fonds ne se
-          proposent qu'à un média ajusté — un choix sans effet n'est pas offert. */}
-      {frame.fitMode === 'fit' ? (
-        <>
-          <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
-            {translate(lang, 'story.studio.frame.around')}
-          </p>
-          <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.around')} className="flex flex-wrap gap-1.5">
-            {SCENE_BACKDROPS.map((backdrop) => (
-              <Token key={backdrop} on={frame.backdrop === backdrop} probe={backdrop} onPress={() => setBackdrop(backdrop)}>
-                <span
-                  aria-hidden="true"
-                  className="size-3.5 rounded-full"
-                  style={{ background: swatchOf(backdrop), border: '1px solid rgba(255,255,255,0.4)' }}
-                />
-                {translate(lang, BACKDROP_KEY[backdrop])}
-              </Token>
-            ))}
-          </div>
-        </>
-      ) : null}
-      {/* LE FILTRE DU FOND (#8518) — il ne peint que le média de fond, comme
-          celui d'un calque ne peint que le calque. */}
-      {filter !== undefined ? <StudioFilterSection lang={lang} filter={filter.value} onFilter={filter.onChange} /> : null}
-      {onRemove !== undefined ? (
-        <button
-          type="button"
-          data-story-frame-remove
-          onClick={onRemove}
-          aria-label={translate(lang, 'story.studio.background.remove')}
-          className="h-11 self-start rounded-xl px-3 text-caption font-semibold"
-          style={{ color: 'var(--color-ios-ink)' }}
-        >
-          {translate(lang, 'story.studio.background.remove')}
-        </button>
-      ) : null}
+        <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
+          {translate(lang, FIT_HINT_KEY[frame.fitMode])}
+        </p>
+        <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
+          {translate(lang, 'story.studio.frame.media')}
+        </p>
+        <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.media')} className="flex flex-wrap gap-1.5">
+          {SCENE_FIT_MODES.map((mode) => (
+            <Token key={mode} on={frame.fitMode === mode} probe={mode} onPress={() => setFit(mode)}>
+              {translate(lang, FIT_KEY[mode])}
+            </Token>
+          ))}
+        </div>
+        {caption !== undefined ? (
+          <input
+            id="story-studio-caption-visual"
+            type="text"
+            value={caption.value}
+            aria-label={translate(lang, 'story.studio.caption.placeholder')}
+            placeholder={translate(lang, 'story.studio.caption.placeholder')}
+            onInput={(event) => caption.onChange(event.currentTarget.value)}
+            className="h-11 rounded-xl px-3 text-body outline-none"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
+          />
+        ) : null}
+        {media !== undefined ? <StudioAltField lang={lang} door="visual" value={media.alt} onDraft={media.onDraft} /> : null}
+        {/* Autour d'un média qui REMPLIT, il n'y a rien : les fonds ne se
+            proposent qu'à un média ajusté — un choix sans effet n'est pas offert. */}
+        {frame.fitMode === 'fit' ? (
+          <>
+            <p className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink)' }}>
+              {translate(lang, 'story.studio.frame.around')}
+            </p>
+            <div role="radiogroup" aria-label={translate(lang, 'story.studio.frame.around')} className="flex flex-wrap gap-1.5">
+              {SCENE_BACKDROPS.map((backdrop) => (
+                <Token key={backdrop} on={frame.backdrop === backdrop} probe={backdrop} onPress={() => setBackdrop(backdrop)}>
+                  <span
+                    aria-hidden="true"
+                    className="size-3.5 rounded-full"
+                    style={{ background: swatchOf(backdrop), border: '1px solid rgba(255,255,255,0.4)' }}
+                  />
+                  {translate(lang, BACKDROP_KEY[backdrop])}
+                </Token>
+              ))}
+            </div>
+          </>
+        ) : null}
+        {/* LE FILTRE DU FOND (#8518) — il ne peint que le média de fond, comme
+            celui d'un calque ne peint que le calque. */}
+        {media !== undefined ? (
+          <StudioFilterSection lang={lang} filter={media.filter} onFilter={(filter) => media.onDraft((draft) => withVisualFilter(draft, 'visual', filter))} />
+        ) : null}
+        {onRemove !== undefined ? (
+          <button
+            type="button"
+            data-story-frame-remove
+            onClick={onRemove}
+            aria-label={translate(lang, 'story.studio.background.remove')}
+            className="h-11 self-start rounded-xl px-3 text-caption font-semibold"
+            style={{ color: 'var(--color-ios-ink)' }}
+          >
+            {translate(lang, 'story.studio.background.remove')}
+          </button>
+        ) : null}
       </div>
     </section>
   );
