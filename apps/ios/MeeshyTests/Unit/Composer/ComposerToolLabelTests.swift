@@ -69,16 +69,20 @@ final class ComposerToolLabelTests: XCTestCase {
     // Garde POSITIVE, délibérément : elle rougit le jour où quelqu'un retire le
     // `Text`. Une garde négative (« ne contient pas … ») passerait au vert en
     // perdant sa protection, ce que le dépôt a déjà payé (leçon 464).
-    func test_chaqueEntree_rendSonLibelleVisible() throws {
+    // **RETOURNÉE le 2026-09-28** — directive porteur du 2026-09-27 :
+    // « enlève les captions partout ». Les outils sont de petits boutons de
+    // verre, comme les rails de la scène ; le nom n'est plus peint, il reste
+    // ANNONCÉ (garde nº2, inchangée).
+    func test_chaqueEntree_nePeintPlusDeLegende() throws {
         let src = withoutAccessibilityLabels(compact(try AppSourceGuard.composerSurfaceSource()))
-        XCTAssertTrue(
+        XCTAssertTrue(src.contains("Image(systemName:tool.symbolName)"),
+                      "La tuile d'outil est introuvable — la garde ne mesurerait rien.")
+        XCTAssertFalse(
             src.contains("Text(ComposerDocumentCopy.label(tool))"),
-            "La rangée doit RENDRE le libellé de chaque outil dans son corps "
-                + "(`Text(ComposerDocumentCopy.label(tool))`), étiquettes d'accessibilité retirées de "
-                + "la source avant de chercher. Le trouver uniquement en `accessibilityLabel` signifie "
-                + "qu'il est lu par VoiceOver et jamais vu à l'écran — exactement l'état mesuré sur "
-                + "`1a` le 2026-08-30."
+            "Une légende est revenue sous un outil du document (directive porteur 2026-09-27)."
         )
+        XCTAssertTrue(src.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+                      "L'outil porte le disque de verre teinté des rails.")
     }
 
     // 1 bis — le retrait fonctionne. Sans ce témoin, une régression du
@@ -127,15 +131,14 @@ final class ComposerToolLabelTests: XCTestCase {
     // 4 — le libellé suit Dynamic Type. Une taille en points figée le rendrait
     // illisible aux paliers accessibles, sur la seule surface où l'utilisateur
     // doit LIRE pour choisir sa porte.
-    func test_leLibelle_suitDynamicType() throws {
+    // Sans légende, c'est le GLYPHE qui doit suivre Dynamic Type : un style
+    // sémantique, jamais une taille figée en points.
+    func test_leGlyphe_suitDynamicType() throws {
         let src = withoutAccessibilityLabels(compact(try AppSourceGuard.composerSurfaceSource()))
         XCTAssertTrue(
-            src.contains("Text(ComposerDocumentCopy.label(tool)).font(.caption"),
-            "Le libellé doit porter un style de police SÉMANTIQUE (`.caption2`/`.caption`), qui "
-                + "échelonne avec Dynamic Type. Une taille en POINTS figée (`.font(.system(size: 10))`) "
-                + "l'ignore — sur la seule surface où l'utilisateur doit LIRE pour choisir sa porte. "
-                + "Garde POSITIVE : elle rougit si la police devient figée, là où un « ne contient pas "
-                + "…system(size:… » passerait au vert en ne protégeant plus rien."
+            src.contains("Image(systemName:tool.symbolName).font(.title3)"),
+            "Le glyphe de l'outil doit porter un style de police SÉMANTIQUE, qui échelonne avec "
+                + "Dynamic Type."
         )
     }
 
