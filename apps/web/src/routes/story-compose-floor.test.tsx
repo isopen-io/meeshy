@@ -6,7 +6,7 @@ import type { StudioFloor } from '@/lib/stories/studio-floor';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { StudioFloorLayer } from './story-compose-chrome';
+import { StudioFloorLayer } from './story-compose-floor';
 
 /**
  * LE SOL NE SCINTILLE PLUS (#8534) — l'image locale floutée cède la place au

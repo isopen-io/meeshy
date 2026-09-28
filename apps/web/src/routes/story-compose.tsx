@@ -77,7 +77,7 @@ import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
 import { publicationRefusalText, studioAssetsShown, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
-import { StudioAnimatedToggle, StudioFloorLayer, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
+import { StudioAnimatedToggle, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
 import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
 import { StudioScene } from '@/routes/story-compose-scene';
@@ -152,6 +152,9 @@ const StudioTimelinePanel = lazy(() => import('@/routes/story-compose-timeline')
 
 /** LE PANNEAU CADRE (#8414), CHARGÉ À LA DEMANDE — il ne pèse que si
  * l'auteur touche la tuile Cadre. */
+/** LE SOL (#8413), CHARGÉ À LA DEMANDE (#8534) — il n'existe qu'avec un média. */
+const StudioFloorLayer = lazy(() => import('@/routes/story-compose-floor').then((m) => ({ default: m.StudioFloorLayer })));
+
 const StudioFramePanel = lazy(() => import('@/routes/story-compose-frame').then((m) => ({ default: m.StudioFramePanel })));
 
 /** Le Cadre d'un fond qu'on n'a pas encore réglé — le contrat (#8414). */
@@ -676,7 +679,13 @@ function StoryStudio({
     <StudioShell
       kind={kind}
       origin={origin}
-      floor={<StudioFloorLayer floor={floor} />}
+      floor={
+        floor === null ? undefined : (
+          <Suspense fallback={null}>
+            <StudioFloorLayer floor={floor} />
+          </Suspense>
+        )
+      }
       {...(retouch !== undefined ? { onCancel: retouch.onCancel } : {})}
       menu={
         retouching ? undefined : (
@@ -752,6 +761,7 @@ function StoryStudio({
             onCommit: commitPoseOf,
             onMenu: (id, point) => setObjectMenu({ id, point }),
             onWrite: (id) => (id === null ? addTextAndWrite() : startEditing(id)),
+            editing,
           }}
         />
 

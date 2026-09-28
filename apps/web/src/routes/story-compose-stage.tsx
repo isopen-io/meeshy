@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 import { pinchPose, pointerFraction } from '@/lib/stories/studio-grip';
 import type { StudioPose } from '@/lib/stories/studio-pose';
@@ -65,7 +65,21 @@ type Press = {
   menu: boolean;
   pose: StudioPose | null;
   timer: ReturnType<typeof setTimeout> | null;
+  /** Né dans la SAISIE d'un texte en édition (#8535) : un toucher sans
+   * glissé y pose le curseur, rien d'autre. */
+  readonly inField?: boolean;
 };
+
+/** Un doigt, qu'il vienne du calque (React) ou de la saisie (natif). */
+type Finger = { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number; readonly capture: () => void };
+
+const fingerOf = (event: { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number; readonly currentTarget: EventTarget | null }): Finger => ({
+  pointerId: event.pointerId,
+  clientX: event.clientX,
+  clientY: event.clientY,
+  button: event.button,
+  capture: () => (event.currentTarget as Element | null)?.setPointerCapture?.(event.pointerId),
+});
 
 /** Un pincement en cours — l'objet, sa pose et les deux doigts au départ. */
 type Pinch = { readonly id: string; readonly origin: StudioPose; readonly from: readonly [Point, Point]; pose: StudioPose | null };
@@ -81,6 +95,7 @@ export function StudioStageGestures({
   onCommit,
   onMenu,
   onWrite,
+  editing = null,
 }: {
   readonly stageRef: { readonly current: HTMLElement | null };
   /** Les objets SAISISSABLES (textes écrits, calque), avec leur pose. */
@@ -92,6 +107,9 @@ export function StudioStageGestures({
   readonly onMenu: (id: string, point: { readonly x: number; readonly y: number }) => void;
   /** L'INVITE touchée — écrire le texte vide `id`, ou un texte neuf (`null`). */
   readonly onWrite: (id: string | null) => void;
+  /** Le texte EN ÉDITION (#8535) — sa saisie passe au-dessus du calque, et le
+   * doigt qui la touche le déplace, le pince et le tourne quand même. */
+  readonly editing?: string | null;
 }) {
   const press = useRef<Press | null>(null);
   const pinch = useRef<Pinch | null>(null);
@@ -145,7 +163,8 @@ export function StudioStageGestures({
     const [a, b] = [...pointers.current.values()];
     if (a === undefined || b === undefined) return;
     const held = press.current?.hit?.kind === 'object' ? press.current.hit.id : null;
-    const id = held ?? objectAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+    // En édition, deux doigts manipulent l'objet qu'on édite, où qu'ils se posent.
+    const id = (editing !== null && poseOf(editing) !== null ? editing : null) ?? held ?? objectAt((a.x + b.x) / 2, (a.y + b.y) / 2);
     clearPress();
     const origin = id === null ? null : poseOf(id);
     if (id === null || origin === null) return;
@@ -153,16 +172,16 @@ export function StudioStageGestures({
     setEngaged({ x: null, y: null });
   };
 
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (event: Finger, inField = false) => {
     if (locked || event.button !== 0) return;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.capture();
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size === 2) {
       startPinch();
       return;
     }
     if (pointers.current.size > 2) return;
-    const found = hit(event.clientX, event.clientY);
+    const found: Hit | null = inField && editing !== null ? { kind: 'object', id: editing } : hit(event.clientX, event.clientY);
     const origin = found?.kind === 'object' ? poseOf(found.id) : null;
     const current: Press = {
       hit: found,
@@ -174,8 +193,10 @@ export function StudioStageGestures({
       menu: false,
       pose: null,
       timer: null,
+      inField,
     };
-    if (found?.kind === 'object') {
+    // Dans la saisie, l'appui long appartient au champ (sélection, loupe).
+    if (found?.kind === 'object' && !inField) {
       current.timer = setTimeout(() => {
         current.menu = true;
         onMenu(found.id, { x: current.x, y: current.y });
@@ -192,7 +213,7 @@ export function StudioStageGestures({
     if (element !== null) paintPose(element, active.pose);
   };
 
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (event: Finger) => {
     if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pinch.current !== null) {
       movePinch(pinch.current);
@@ -205,6 +226,7 @@ export function StudioStageGestures({
       current.moved = true;
       if (current.timer !== null) clearTimeout(current.timer);
       setEngaged({ x: null, y: null });
+      if (current.inField) caretHidden(true);
     }
     const at = pointerFraction(stageBox(), event.clientX, event.clientY);
     const snapped = snapPose({
@@ -227,8 +249,9 @@ export function StudioStageGestures({
     if (active.pose !== null) onCommit(active.id, active.pose);
   };
 
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerUp = (event: Pick<Finger, 'pointerId'>) => {
     pointers.current.delete(event.pointerId);
+    caretHidden(false);
     if (pinch.current !== null) {
       endPinch(pinch.current);
       return;
@@ -240,6 +263,7 @@ export function StudioStageGestures({
     setEngaged(null);
     if (current.menu) return;
     const found = current.hit;
+    if (current.inField && !current.moved) return;
     if (found?.kind === 'invite') {
       lastTap.current = null;
       onWrite(found.id);
@@ -266,6 +290,45 @@ export function StudioStageGestures({
     onSelect(found.id);
   };
 
+  /** Pendant un geste né dans la saisie, le curseur ne reste pas à l'ancienne
+   * place : il se cache, et revient là où le texte est posé. */
+  const caretHidden = (hidden: boolean) => {
+    const field = stageRef.current?.querySelector<HTMLElement>('[data-story-text-input]');
+    if (field !== null && field !== undefined) field.style.caretColor = hidden ? 'transparent' : '';
+  };
+
+  /** LA SAISIE D'UN TEXTE EN ÉDITION se manipule au doigt (#8535) : ses
+   * pointeurs (tactiles et stylet — la souris y sélectionne, comme dans tout
+   * champ) nourrissent les MÊMES gestes que le calque, dont ils partagent les
+   * doigts : un pincement peut commencer sur le texte et finir sur la scène. */
+  const handlers = useRef({ onPointerDown, onPointerMove, onPointerUp });
+  handlers.current = { onPointerDown, onPointerMove, onPointerUp };
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (editing === null || stage === null) return;
+    const fromField = (event: PointerEvent): boolean =>
+      event.pointerType !== 'mouse' && event.target instanceof Element && event.target.closest('[data-story-text-input]') !== null;
+    const down = (event: PointerEvent) => {
+      if (fromField(event)) handlers.current.onPointerDown(fingerOf(event), true);
+    };
+    const move = (event: PointerEvent) => {
+      if (fromField(event)) handlers.current.onPointerMove(fingerOf(event));
+    };
+    const up = (event: PointerEvent) => {
+      if (fromField(event)) handlers.current.onPointerUp(event);
+    };
+    stage.addEventListener('pointerdown', down);
+    stage.addEventListener('pointermove', move);
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    return () => {
+      stage.removeEventListener('pointerdown', down);
+      stage.removeEventListener('pointermove', move);
+      stage.removeEventListener('pointerup', up);
+      stage.removeEventListener('pointercancel', up);
+    };
+  }, [editing, stageRef]);
+
   /** Le CLIC DROIT au bureau — le même menu que l'appui long. */
   const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
     const id = objectAt(event.clientX, event.clientY);
@@ -283,8 +346,8 @@ export function StudioStageGestures({
         data-story-stage-gestures
         className="absolute inset-0"
         style={{ zIndex: 3, touchAction: 'none' }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
+        onPointerDown={(event) => onPointerDown(fingerOf(event))}
+        onPointerMove={(event) => onPointerMove(fingerOf(event))}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onContextMenu={onContextMenu}
