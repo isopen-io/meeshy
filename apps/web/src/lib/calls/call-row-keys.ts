@@ -25,6 +25,37 @@ export function rowStep({ key, index, count, rtl }: Step): number | null {
 
 export const ROW_ITEM = 'data-row-item';
 
+type Wheel = { readonly deltaX: number; readonly deltaY: number; readonly scrollLeft: number; readonly maxScroll: number; readonly rtl: boolean };
+
+/**
+ * La molette d'une souris ne sait que le VERTICAL : sur une rangée qui
+ * déborde, elle la fait défiler à l'horizontale (#8575). Un geste déjà
+ * horizontal (pavé tactile, Maj+molette) reste au navigateur ; au bout de la
+ * rangée, la main revient au défilement vertical. En arabe, `scrollLeft` part
+ * de 0 vers le NÉGATIF.
+ */
+export function rowWheelDelta({ deltaX, deltaY, scrollLeft, maxScroll, rtl }: Wheel): number | null {
+  if (maxScroll <= 0 || Math.abs(deltaX) >= Math.abs(deltaY) || deltaY === 0) return null;
+  const travelled = rtl ? -scrollLeft : scrollLeft;
+  const forward = deltaY > 0;
+  if (forward ? travelled >= maxScroll - 1 : travelled <= 1) return null;
+  return rtl ? -deltaY : deltaY;
+}
+
+type RowWheelEvent = { readonly deltaX: number; readonly deltaY: number; readonly currentTarget: EventTarget; readonly preventDefault: () => void };
+
+export type RowWheelHandler = (event: RowWheelEvent) => void;
+
+export const onRowWheel: RowWheelHandler = (event) => {
+  const row = event.currentTarget;
+  if (!(row instanceof HTMLElement)) return;
+  const rtl = typeof getComputedStyle === 'function' && getComputedStyle(row).direction === 'rtl';
+  const delta = rowWheelDelta({ deltaX: event.deltaX, deltaY: event.deltaY, scrollLeft: row.scrollLeft, maxScroll: row.scrollWidth - row.clientWidth, rtl });
+  if (delta === null) return;
+  event.preventDefault();
+  row.scrollLeft += delta;
+};
+
 type RowKeyEvent = { readonly key: string; readonly currentTarget: EventTarget; readonly preventDefault: () => void };
 
 export type RowKeyHandler = (event: RowKeyEvent) => void;

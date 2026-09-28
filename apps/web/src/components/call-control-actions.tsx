@@ -8,7 +8,7 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
-import { onRowKeyDown, ROW_ITEM } from '@/lib/calls/call-row-keys';
+import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -240,8 +240,13 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
   );
 }
 
-/** Le défilement d'une rangée : horizontal, accroché aux boutons, sans barre visible. */
-export const ROW_SCROLL = 'flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 [&>*]:snap-start';
+/**
+ * Le défilement d'une rangée : horizontal, LIBRE, sans barre visible (#8575).
+ * Aucune accroche : `snap-start` sur chaque bouton ramenait à 0 toute rangée
+ * qui ne débordait que d'un bouton, dont le dernier restait hors d'atteinte
+ * au doigt.
+ */
+export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 /** La légende d'une rangée, en petites capitales. */
 export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
@@ -263,7 +268,7 @@ export function CallActionRows({ call, set, language, panels }: RowsProps) {
             <span id={`call-row-${side}`} className={ROW_TITLE} data-call-row-title="">
               {translate(language, legend)}
             </span>
-            <div role="toolbar" aria-labelledby={`call-row-${side}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} className={ROW_SCROLL} data-call-row-scroll="">
+            <div role="toolbar" aria-labelledby={`call-row-${side}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
               <Family actions={actions} context={context} />
             </div>
           </div>

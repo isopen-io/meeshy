@@ -244,7 +244,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       expect(scroller?.getAttribute('role')).toBe('toolbar');
       expect(scroller?.getAttribute('aria-orientation')).toBe('horizontal');
       expect(scroller?.className).toContain('overflow-x-auto');
-      expect(scroller?.className).toContain('snap-x');
+      expect(scroller?.className).not.toContain('snap-');
       expect(scroller?.className).not.toContain('flex-wrap');
       expect(rowLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
       expect(view.find('[data-call-row="call"] [data-call-captions]')).not.toBeNull();

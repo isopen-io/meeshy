@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
 /**
  * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550) — la forme
@@ -18,7 +18,9 @@ import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 export type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 
-export const PANEL_ROW_SCROLL = 'flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 [&>*]:snap-start';
+export type RowWheel = (event: WheelEvent<HTMLElement>) => void;
+
+export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
 
@@ -90,18 +92,19 @@ type RowProps = {
   readonly title: string;
   readonly role: 'toolbar' | 'radiogroup';
   readonly onRowKeyDown: RowKeyDown;
+  readonly onRowWheel?: RowWheel | undefined;
   readonly children: ReactNode;
   readonly data?: Readonly<Record<`data-${string}`, string>>;
 };
 
 /** Une rangée du panneau : sa légende, puis ses choix qui défilent à l'horizontale. */
-export function PanelRow({ title, role, onRowKeyDown, children, data = {} }: RowProps) {
+export function PanelRow({ title, role, onRowKeyDown, onRowWheel, children, data = {} }: RowProps) {
   return (
     <div className="flex min-w-0 flex-col gap-1" {...data}>
       <span aria-hidden className={PANEL_ROW_TITLE}>
         {title}
       </span>
-      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} className={PANEL_ROW_SCROLL} data-call-row-scroll="">
+      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} {...(onRowWheel === undefined ? {} : { onWheel: onRowWheel })} className={PANEL_ROW_SCROLL} data-call-row-scroll="">
         {children}
       </div>
     </div>
