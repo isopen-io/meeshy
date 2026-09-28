@@ -76085,6 +76085,53 @@
         }
       }
     },
+    "composer.publish.multiScene.mediaNotCarried": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحمل هذا المنشور متعدد المشاهد وسائط لا يمكن نشرها بعد في منشور واحد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Beitrag mit mehreren Szenen enthält Medien, die noch nicht in einer einzigen Veröffentlichung gesendet werden können"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This multi-scene post has media that can’t yet be sent as a single publication"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta publicación de varias escenas contiene medios que aún no pueden enviarse en una sola publicación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce post à plusieurs scènes porte des médias qui ne peuvent pas encore partir en une seule publication"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo post con più scene contiene contenuti multimediali che non possono ancora essere inviati in un'unica pubblicazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este post com várias cenas tem mídias que ainda não podem ser enviadas em uma única publicação"
+          }
+        }
+      }
+    },
     "composer.quickEmoji.label": {
       "extractionState": "manual",
       "localizations": {
@@ -135035,6 +135082,53 @@
         }
       }
     },
+    "post.publish.queue.enqueued": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حفظ المنشور — سيُنشر عند عودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitrag gespeichert — Veröffentlichung, sobald du wieder online bist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post saved — it will be published when you’re back online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicación guardada — se publicará al volver a estar en línea"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post enregistré — publication au retour en ligne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post salvato — verrà pubblicato quando tornerai online"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post salvo — será publicado quando você voltar a ficar online"
+          }
+        }
+      }
+    },
     "post.repost.error": {
       "extractionState": "manual",
       "localizations": {
@@ -142769,6 +142863,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível preparar %lld mídias — use toda a fototeca"
+          }
+        }
+      }
+    },
+    "reel.publish.queue.enqueued": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حفظ الريل — سيُنشر عند عودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel gespeichert — Veröffentlichung, sobald du wieder online bist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel saved — it will be published when you’re back online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel guardado — se publicará al volver a estar en línea"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réel enregistré — publication au retour en ligne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel salvato — verrà pubblicato quando tornerai online"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel salvo — será publicado quando você voltar a ficar online"
           }
         }
       }
