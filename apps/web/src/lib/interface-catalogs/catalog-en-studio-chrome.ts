@@ -69,6 +69,10 @@ const enStudioChrome = {
   'story.studio.objects.edit': 'Edit {name}',
   'story.studio.media.alt': 'Alt text',
   'story.studio.media.alt.placeholder': 'Describe this media for screen readers',
+  'composer.reelOffer.title': 'Publish as a reel?',
+  'composer.reelOffer.body': 'Your post has a single video: as a reel, it plays full screen in Reels.',
+  'composer.reelOffer.reel': 'It’s a Reel',
+  'composer.reelOffer.post': 'It’s a Post',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;
