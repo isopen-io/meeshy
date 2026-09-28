@@ -341,7 +341,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 281 → 280 (#8365) : la garde de l'e-mail (`EmailVerificationGate`) lit ses
 // routes dans le catalogue, dont `ConversationsEndpoint.byIdNewLink`, jamais
 // appelée jusque-là. Valeur MESURÉE le 2026-09-27.
-const BASELINE_DEAD_ENTRIES = 280;
+// 280 → 279 (#8438) : le retrait d'un participant d'appel appelle enfin
+// `DELETE /calls/:callId/participants/:participantId` depuis le catalogue.
+// Valeur MESURÉE le 2026-09-28.
+const BASELINE_DEAD_ENTRIES = 279;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
