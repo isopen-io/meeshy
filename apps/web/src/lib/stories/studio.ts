@@ -1,5 +1,6 @@
 import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
 import { sceneBackdropOf, sceneFitModeOf } from '@/lib/canvas/backdrop';
+import { isStoryFilter, type StoryFilterId } from '@/lib/canvas/media-filter';
 
 import type { StoryFrame, StudioPlane } from './story-document';
 import {
@@ -19,6 +20,7 @@ import {
   pageWithVisual,
   pageWithVisualAspectRatio,
   pageWithVisualCaption,
+  pageWithVisualFilter,
   pageWithVisualPose,
   pageWithVisualUpload,
   pageWithoutSound,
@@ -336,6 +338,14 @@ export function withPostText(draft: StudioDraft, postText: string): StudioDraft 
   return { ...draft, postText };
 }
 
+/** LE FILTRE d'UN média de la page courante (lot 7) — le MÊME brouillon quand
+ * rien ne change, pour qu'aucun pas d'historique ne s'écrive à vide. */
+export function withVisualFilter(draft: StudioDraft, door: 'visual' | 'overlay', filter: StoryFilterId | null): StudioDraft {
+  const page = currentStudioPage(draft);
+  const next = pageWithVisualFilter(page, door, filter);
+  return next === page ? draft : withCurrentPageChange(draft, () => next);
+}
+
 export function withVisualCaption(draft: StudioDraft, door: 'visual' | 'overlay', caption: string): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithVisualCaption(page, door, caption));
 }
@@ -437,6 +447,7 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
           pose: poseOf('pose' in ref ? ref.pose : undefined),
           ...('frame' in ref && ref.frame !== undefined ? { frame: frameOf(ref.frame) } : {}),
           ...('timing' in ref && timingOf(ref.timing) !== undefined ? { timing: timingOf(ref.timing)! } : {}),
+          ...(isStoryFilter(ref.filter) ? { filter: ref.filter } : {}),
           upload: {
             phase: 'ready',
             postMediaId: ref.postMediaId,
@@ -487,6 +498,7 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
       pose: asset.pose,
       ...(asset.frame !== undefined ? { frame: asset.frame } : {}),
       ...(asset.timing !== undefined ? { timing: asset.timing } : {}),
+      ...(asset.filter !== undefined ? { filter: asset.filter } : {}),
     };
   };
   const background = visual(page.background);

@@ -26,7 +26,7 @@ export function StudioLeadingRail({
   return (
     <div
       data-story-studio-rail="leading"
-      className="absolute start-2 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto p-0.5"
+      className="absolute start-2.5 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto p-0.5"
       style={{ maxHeight: 'calc(100% - 1rem)' }}
     >
       <StudioDoorButton
@@ -101,7 +101,7 @@ export function StudioTrailingRail({
       data-story-studio-rail="trailing"
       role="group"
       aria-label={translate(lang, 'story.studio.editor.label')}
-      className="absolute end-2 bottom-2 z-10 flex max-h-[calc(100%-1rem)] flex-col items-center gap-2 overflow-y-auto p-0.5"
+      className="absolute end-2.5 bottom-2 z-10 flex max-h-[calc(100%-1rem)] flex-col items-center gap-2 overflow-y-auto p-0.5"
     >
       {onAddPage !== null ? (
         <StudioTile label={translate(lang, 'story.studio.tile.page')} hint={translate(lang, 'story.studio.page.add')} probe="add-page" onPress={onAddPage} disabled={locked}>

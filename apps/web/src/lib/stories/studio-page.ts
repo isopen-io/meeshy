@@ -1,4 +1,5 @@
 import type { ApiFailure } from '@/lib/api/http';
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
 import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
@@ -59,6 +60,9 @@ export type StudioVisualAsset = {
   readonly frame?: StoryFrame;
   /** La fenêtre d'apparition du CALQUE en mode Animé (#8415). */
   readonly timing?: StudioTiming;
+  /** LE FILTRE de CE média (lot 7, `payload.filter`) — il ne peint que lui.
+   * Absent ⇒ aucun filtre. */
+  readonly filter?: StoryFilterId;
 };
 
 export type StudioSoundAsset = {
@@ -205,6 +209,16 @@ export function pageWithVisualCaption(page: StudioPage, door: 'visual' | 'overla
 /** LE CADRE du fond de CETTE page (#8414) — sans fond, rien ne change. */
 export function pageWithBackgroundFrame(page: StudioPage, frame: StoryFrame): StudioPage {
   return page.background === null ? page : { ...page, background: { ...page.background, frame } };
+}
+
+/** LE FILTRE de CE média (lot 7) — `null` le retire ; sans média, rien ne
+ * change. Le filtre d'un média ne touche jamais les autres. */
+export function pageWithVisualFilter(page: StudioPage, door: 'visual' | 'overlay', filter: StoryFilterId | null): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  if (asset === null || (asset.filter ?? null) === filter) return page;
+  const { filter: _previous, ...rest } = asset;
+  return { ...page, [slot]: filter === null ? rest : { ...rest, filter } };
 }
 
 export function pageWithVisualPose(page: StudioPage, door: 'visual' | 'overlay', pose: StudioPose): StudioPage {

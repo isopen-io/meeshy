@@ -22,7 +22,6 @@ import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudi
 import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import {
-  buildPreviewCanvasDocument,
   composeStoryCanvas,
   STORY_PLAIN_BACKGROUND,
   studioMediaKindOf,
@@ -61,6 +60,7 @@ import {
   withTextLayer,
   withTrackTiming,
   withVisualCaption,
+  withVisualFilter,
   withVisualPose,
   withoutPage,
   withoutPages,
@@ -70,6 +70,7 @@ import {
   type StudioDraft,
 } from '@/lib/stories/studio';
 import { takeStudioSeed } from '@/lib/stories/studio-seed';
+import { studioPreviewDocument } from '@/lib/stories/studio-preview';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
@@ -160,7 +161,7 @@ const StudioPageRail = lazy(() => import('@/routes/story-compose-pages').then((m
 /** L'APERÇU et le TEXTE DU POST (#8413), CHARGÉS À LA DEMANDE — ils ne pèsent
  * que si l'auteur ouvre ⋯ › Aperçu ou touche le bouton document du socle. */
 const StudioPreviewSheet = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPreviewSheet })));
-const StudioPostTextSheet = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPostTextSheet })));
+const StudioPostTextFrame = lazy(() => import('@/routes/story-compose-overlays').then((m) => ({ default: m.StudioPostTextFrame })));
 
 /** LA FRISE DU MODE ANIMÉ (#8415), CHARGÉE À LA DEMANDE — elle ne pèse que si
  * l'auteur ouvre Animé. */
@@ -598,40 +599,8 @@ function StoryStudio({
     void publishRef.current();
   }, [online, awaitingNetwork]);
 
-  /** LE DOCUMENT D'APERÇU — le moteur partagé (`ScenePlayer`) dessine ce que
-   * l'auteur publiera, au pixel près (mêmes styles, même largeur `cqw`) ;
-   * l'éditeur posé par-dessus n'est qu'une SAISIE transparente, jamais une
-   * SECONDE peinture qui pouvait couper ses lignes autrement. */
-  const previewDocument = useMemo(
-    () =>
-      buildPreviewCanvasDocument({
-        texts: page.texts,
-        ...(page.background !== null
-          ? {
-              background: {
-                source: page.background.previewUrl,
-                mediaType: page.background.mediaType,
-                ...(page.background.aspectRatio !== undefined ? { aspectRatio: page.background.aspectRatio } : {}),
-                ...(page.background.frame !== undefined ? { frame: page.background.frame } : {}),
-              },
-            }
-          : {}),
-        ...(page.overlay !== null
-          ? {
-              overlay: {
-                source: page.overlay.previewUrl,
-                mediaType: page.overlay.mediaType,
-                ...(page.overlay.aspectRatio !== undefined ? { aspectRatio: page.overlay.aspectRatio } : {}),
-                pose: page.overlay.pose,
-                ...(page.overlay.timing !== undefined ? { timing: page.overlay.timing } : {}),
-              },
-            }
-          : {}),
-        ...(page.sound !== null ? { sound: { source: page.sound.previewUrl, plane: page.sound.plane } } : {}),
-        ...(page.duration !== undefined ? { duration: page.duration } : {}),
-      }),
-    [page.texts, page.background, page.overlay, page.sound, page.duration],
-  );
+  /** LE DOCUMENT D'APERÇU (`studio-preview.ts`) — ce qui partira, adressé en local. */
+  const previewDocument = useMemo(() => studioPreviewDocument(page), [page.texts, page.background, page.overlay, page.sound, page.duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** La saisie se DESSINE par le résolveur du player (`resolveSceneText`) :
    * même couleur, même taille relative à la largeur de la carte (`cqw`) que
@@ -768,7 +737,9 @@ function StoryStudio({
           <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} sound={!retouching} />
         )}
 
-        <div className="absolute inset-0 grid place-items-center py-0.5" style={{ containerType: 'size' }}>
+        {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
+            la carte ne colle jamais au bord de l'écran. */}
+        <div className="absolute inset-0 grid place-items-center px-2.5 py-0.5" style={{ containerType: 'size' }}>
           {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707) — le plan
               publié lit le brouillon tel qu'il était au premier clic sur
               Publier : un geste après coup ne changerait plus rien à ce qui
@@ -934,6 +905,7 @@ function StoryStudio({
               onSelect={(id) => setDraft((current) => withSelected(current, id))}
               onEnter={(head) => moveSelectedEdge(head, timingEnteringAt)}
               onExit={(head) => moveSelectedEdge(head, timingExitingAt)}
+              onTiming={(id, timing) => edit((current) => withTrackTiming(current, id, timing))}
             />
           </Suspense>
         ) : null}
@@ -946,6 +918,8 @@ function StoryStudio({
                     lang={lang}
                     pose={page.overlay.pose}
                     caption={page.overlay.caption}
+                    filter={page.overlay.filter ?? null}
+                    onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
                     onPose={(pose) => commitPoseOf('overlay', pose)}
                     onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
                   />
@@ -1023,6 +997,12 @@ function StoryStudio({
               {translate(lang, 'story.studio.retouch.done')}
             </button>
           </div>
+        ) : postTextOpen && kind === 'POST' ? (
+          <div className="pb-3">
+            <Suspense fallback={null}>
+              <StudioPostTextFrame lang={lang} value={draft.postText} onChange={(value) => setDraft((current) => withPostText(current, value))} onClose={() => setPostTextOpen(false)} />
+            </Suspense>
+          </div>
         ) : (
           <div data-story-socle-row className={`flex items-center gap-2.5 pb-3 ${panelOpen ? 'max-md:hidden' : ''}`}>
             <AudienceChip lang={lang} value={audienceValue} source={audienceSource} open={audienceOpen} onOpen={openAudience} disabled={publishing} />
@@ -1085,16 +1065,6 @@ function StoryStudio({
             preferredLanguages={reader.languages}
             muted={soundMuted}
             onClose={() => setPreviewOpen(false)}
-          />
-        </Suspense>
-      ) : null}
-      {postTextOpen && kind === 'POST' ? (
-        <Suspense fallback={null}>
-          <StudioPostTextSheet
-            lang={lang}
-            value={draft.postText}
-            onChange={(value) => setDraft((current) => withPostText(current, value))}
-            onClose={() => setPostTextOpen(false)}
           />
         </Suspense>
       ) : null}
