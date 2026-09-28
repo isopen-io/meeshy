@@ -737,7 +737,9 @@ function StoryStudio({
           <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} sound={!retouching} />
         )}
 
-        <div className="absolute inset-0 grid place-items-center py-0.5" style={{ containerType: 'size' }}>
+        {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
+            la carte ne colle jamais au bord de l'écran. */}
+        <div className="absolute inset-0 grid place-items-center px-2.5 py-0.5" style={{ containerType: 'size' }}>
           {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707) — le plan
               publié lit le brouillon tel qu'il était au premier clic sur
               Publier : un geste après coup ne changerait plus rien à ce qui

@@ -772,6 +772,116 @@ for (const colorScheme of ['light', 'dark']) {
   await context.close();
 }
 
+/**
+ * ── 11. LA SCÈNE RESPIRE ET RESTE DANS L'ÉCRAN (lot 7, retour porteur
+ * 2026-09-28, miroir `ComposerRailGeometry.floatingInset = outerMargin`) ──
+ *
+ * La carte garde 10 px de chaque côté — la marge des rails, jamais collée au
+ * bord — et rien (sol flouté, image en cover) n'élargit la page au-delà de
+ * l'écran : aucun défilement horizontal, au repos comme frise ouverte, au
+ * téléphone (390) comme au bureau (1280).
+ */
+const SCENE_BREATH = 10;
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 1280, height: 800 },
+]) {
+  const tag = `[respiration ${viewport.width}×${viewport.height}]`;
+  const context = await browser.newContext({ colorScheme: 'dark', locale: 'fr-FR', viewport, serviceWorkers: 'block' });
+  await context.addInitScript((session) => localStorage.setItem('meeshy.session', session), seedSession('e'.repeat(24)));
+  const page = await context.newPage();
+  await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
+  await page.setInputFiles('input[data-door="visual"]', { name: 'fond.png', mimeType: 'image/png', buffer: icon });
+  await page.waitForSelector('[data-story-studio-floor] img', { timeout: 8000 });
+  await twoFrames(page);
+  const geometry = () =>
+    page.evaluate(() => {
+      const card = document.querySelector('[data-scene-stage]')?.getBoundingClientRect() ?? null;
+      return {
+        left: card === null ? null : card.left,
+        right: card === null ? null : innerWidth - card.right,
+        overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
+      };
+    });
+  const rest = await geometry();
+  check(
+    rest.left !== null && rest.right !== null && rest.left >= SCENE_BREATH - 0.5 && rest.right >= SCENE_BREATH - 0.5,
+    `${tag} : la carte doit garder ${SCENE_BREATH} px de chaque côté — ${JSON.stringify(rest)}`,
+  );
+  check(rest.overflow <= 0, `${tag} : la page déborde de ${rest.overflow} px au repos`);
+  const rails = await page.evaluate(() =>
+    ['leading', 'trailing'].map((side) => {
+      const box = document.querySelector(`[data-story-studio-rail="${side}"]`)?.getBoundingClientRect() ?? null;
+      return box === null ? null : side === 'leading' ? box.left : innerWidth - box.right;
+    }),
+  );
+  check(
+    rails.every((edge) => edge !== null && edge >= SCENE_BREATH - 0.5),
+    `${tag} : les rails partent du même bord que la carte (${SCENE_BREATH} px) — ${JSON.stringify(rails)}`,
+  );
+  await page.click('[data-story-option="frame"]');
+  await page.waitForSelector('[data-story-frame-panel]', { timeout: 8000 });
+  await twoFrames(page);
+  const framed = await geometry();
+  check(framed.overflow <= 0, `${tag} : la page déborde de ${framed.overflow} px panneau Cadre ouvert`);
+  await page.click('[data-story-frame-done]');
+  // Le calque se pose AVANT d'ouvrir Animé : la frise retire les couloirs.
+  await page.setInputFiles('input[data-door="overlay"]', { name: 'calque.png', mimeType: 'image/png', buffer: icon });
+  await page.waitForSelector('[data-scene-object-id="overlay"]', { timeout: 8000 });
+  await page.click('[data-story-animated]');
+  await page.waitForSelector('[data-story-timeline]', { timeout: 8000 });
+  await twoFrames(page);
+  const animated = await geometry();
+  check(animated.overflow <= 0, `${tag} : la page déborde de ${animated.overflow} px frise ouverte`);
+  /* LA FRISE SE RÈGLE À LA MAIN (lot 7) : la poignée de FIN tirée d'un quart
+     de piste raccourcit la fenêtre d'un quart de scène ; la barre glissée d'un
+     huitième la DÉPLACE d'un huitième, sa durée gardée. */
+  await page.click('[data-story-timeline-play]');
+  await page.waitForSelector('[data-story-track-bar="overlay"]', { timeout: 8000 });
+  const windowOf = () =>
+    page.evaluate(() => {
+      const track = document.querySelector('[data-story-track="overlay"]');
+      return { start: Number(track?.getAttribute('data-story-track-start')), end: Number(track?.getAttribute('data-story-track-end')) };
+    });
+  const centerOf = (selector) =>
+    page.evaluate((sel) => {
+      const box = document.querySelector(sel)?.getBoundingClientRect() ?? null;
+      return box === null ? null : { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    }, selector);
+  const laneWidth = await page.evaluate(() => document.querySelector('[data-story-track-lane]')?.getBoundingClientRect().width ?? 0);
+  const drag = async (from, dx) => {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx / 2, from.y, { steps: 4 });
+    await page.mouse.move(from.x + dx, from.y, { steps: 4 });
+    await page.mouse.up();
+    await twoFrames(page);
+  };
+  const barCenter = await centerOf('[data-story-track-bar="overlay"]');
+  check(barCenter !== null && laneWidth > 0, `${tag} : piste du calque introuvable`);
+  if (barCenter !== null && laneWidth > 0) {
+    await page.mouse.click(barCenter.x, barCenter.y);
+    await page.waitForSelector('[data-story-track-grip="end"]', { timeout: 8000 });
+    const before = await windowOf();
+    const endGrip = await centerOf('[data-story-track-grip="end"]');
+    if (endGrip !== null) await drag(endGrip, -laneWidth / 4);
+    const shortened = await windowOf();
+    check(
+      Math.abs(shortened.start - before.start) <= 0.02 && Math.abs(shortened.end - (before.end - 1.5)) <= 0.1,
+      `${tag} : la poignée de fin tirée d'un quart de piste doit ôter 1,5 s — avant ${JSON.stringify(before)}, après ${JSON.stringify(shortened)}`,
+    );
+    const bar = await centerOf('[data-story-track-bar="overlay"]');
+    if (bar !== null) await drag(bar, laneWidth / 8);
+    const moved = await windowOf();
+    check(
+      Math.abs(moved.start - (shortened.start + 0.75)) <= 0.1 && Math.abs(moved.end - moved.start - (shortened.end - shortened.start)) <= 0.02,
+      `${tag} : la barre glissée d'un huitième doit se décaler de 0,75 s, durée gardée — avant ${JSON.stringify(shortened)}, après ${JSON.stringify(moved)}`,
+    );
+  }
+  await context.close();
+}
+
 await browser.close();
 served.close();
 

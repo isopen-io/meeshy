@@ -100,7 +100,7 @@ export function StudioPostTextFrame({
       data-story-post-text-frame
       role="group"
       aria-label={label}
-      className="glass flex items-end gap-2 rounded-[22px] px-3 py-2.5"
+      className="field-box glass flex items-end gap-2 rounded-[22px] px-3 py-2.5"
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         event.preventDefault();
