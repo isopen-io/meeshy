@@ -1,0 +1,40 @@
+import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
+
+/** Le studio d'un appel vidéo — it (#8551, #8552). */
+const it = {
+  'callStudio.close': 'Chiudi',
+  'callStudio.effects.faces': 'Effetti',
+  'callStudio.effects.color': 'Colore',
+  'callStudio.effects.settings': 'Regolazioni',
+  'callStudio.face.none': 'Nessuno',
+  'callStudio.face.smoothing': 'Levigatura della pelle',
+  'callStudio.face.toad': 'Rospo',
+  'callStudio.face.angel': 'Angelo',
+  'callStudio.face.demon': 'Demone',
+  'callStudio.face.volcano': 'Eruzione',
+  'callStudio.capture.title': 'Cattura',
+  'callStudio.capture.montage': 'Montaggio',
+  'callStudio.capture.actions': 'Azioni',
+  'callStudio.montage.screen': 'Schermo intero',
+  'callStudio.montage.grid': 'Mosaico',
+  'callStudio.montage.strip': 'Cabina fototessere',
+  'callStudio.montage.polaroid': 'Polaroid',
+  'callStudio.montage.magazine': 'Rivista',
+  'callStudio.montage.comic': 'Fumetto',
+  'callStudio.montage.heart': 'Cuore',
+  'callStudio.capture.preview': 'Anteprima del montaggio {style}',
+  'callStudio.capture.shoot': 'Cattura',
+  'callStudio.capture.shootLabel': 'Cattura il montaggio {style}',
+  'callStudio.capture.faces': 'Ogni volto',
+  'callStudio.capture.facesLabel': 'Salva ogni volto separatamente',
+  'callStudio.capture.saved': 'Cattura salvata',
+  'callStudio.capture.faceSaved': '1 volto salvato',
+  'callStudio.capture.facesSaved': '{count} volti salvati',
+  'callStudio.capture.failed': 'Impossibile salvare la cattura',
+  'callStudio.capture.cancelled': 'Salvataggio annullato',
+  'callStudio.capture.empty': 'Niente da catturare: nessuna immagine visualizzata',
+  'callStudio.capture.busy': 'Cattura in corso…',
+  'callStudio.capture.bubble': 'Che chiamata!',
+} satisfies CallStudioCatalog;
+
+export default it;

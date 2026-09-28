@@ -1,0 +1,40 @@
+import type { CallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
+
+/** Le studio d'un appel vidéo — ar (#8551, #8552). */
+const ar = {
+  'callStudio.close': 'إغلاق',
+  'callStudio.effects.faces': 'المؤثرات',
+  'callStudio.effects.color': 'اللون',
+  'callStudio.effects.settings': 'الإعدادات',
+  'callStudio.face.none': 'بدون',
+  'callStudio.face.smoothing': 'تنعيم البشرة',
+  'callStudio.face.toad': 'ضفدع',
+  'callStudio.face.angel': 'ملاك',
+  'callStudio.face.demon': 'شيطان',
+  'callStudio.face.volcano': 'ثوران بركان',
+  'callStudio.capture.title': 'التقاط',
+  'callStudio.capture.montage': 'التركيب',
+  'callStudio.capture.actions': 'الإجراءات',
+  'callStudio.montage.screen': 'ملء الشاشة',
+  'callStudio.montage.grid': 'فسيفساء',
+  'callStudio.montage.strip': 'كشك الصور',
+  'callStudio.montage.polaroid': 'بولارويد',
+  'callStudio.montage.magazine': 'مجلة',
+  'callStudio.montage.comic': 'قصة مصورة',
+  'callStudio.montage.heart': 'قلب',
+  'callStudio.capture.preview': 'معاينة التركيب {style}',
+  'callStudio.capture.shoot': 'التقاط',
+  'callStudio.capture.shootLabel': 'التقاط التركيب {style}',
+  'callStudio.capture.faces': 'كل وجه',
+  'callStudio.capture.facesLabel': 'حفظ كل وجه على حدة',
+  'callStudio.capture.saved': 'تم حفظ اللقطة',
+  'callStudio.capture.faceSaved': 'تم حفظ وجه واحد',
+  'callStudio.capture.facesSaved': 'تم حفظ {count} وجوه',
+  'callStudio.capture.failed': 'تعذّر حفظ اللقطة',
+  'callStudio.capture.cancelled': 'أُلغي الحفظ',
+  'callStudio.capture.empty': 'لا شيء لالتقاطه: لا تُعرض أي صورة',
+  'callStudio.capture.busy': 'جارٍ الالتقاط…',
+  'callStudio.capture.bubble': 'يا لها من مكالمة!',
+} satisfies CallStudioCatalog;
+
+export default ar;
