@@ -3,11 +3,10 @@ import MeeshySDK
 @testable import Meeshy
 
 /// **Un refus `EMAIL_NOT_VERIFIED` mène à la validation, puis l'action repart**
-/// (#8365). La garde serveur de #6437 reste : `POST /posts`,
-/// `/posts/from-attachment`, `/invitations/email`, `/links`,
-/// `/conversations/:id/new-link`. `APIClient` — seul site par lequel ces cinq
-/// routes passent — ouvre la validation et REJOUE la même requête : rien du
-/// brouillon n'est perdu.
+/// (#8365). `APIClient` — seul site par lequel les cinq routes gardées
+/// passent — ouvre la validation et REJOUE la même requête : rien du brouillon
+/// n'est perdu. Publier n'est jamais retenu d'avance : la passerelle le permet
+/// pendant tout le délai de grâce de l'adresse (#8476).
 @MainActor
 final class EmailVerificationGateTests: XCTestCase {
 
@@ -127,7 +126,7 @@ final class EmailVerificationGateTests: XCTestCase {
         let requests = Requests([])
 
         do {
-            _ = try await EmailVerificationGate.run(method: "POST", path: "/api/v1/posts", body: Self.postBody, gate: gate) {
+            _ = try await EmailVerificationGate.run(method: "POST", path: "/api/v1/invitations/email", body: nil, gate: gate) {
                 try requests.perform()
             }
             XCTFail("aucun envoi sans adresse prouvée")
@@ -137,16 +136,19 @@ final class EmailVerificationGateTests: XCTestCase {
         XCTAssertEqual(requests.count, 0)
     }
 
-    func test_run_story_isNeverHeldBack_firstStoryStaysAllowed() async throws {
-        let gate = FakeGate(knownUnproven: true, answer: false)
-        let requests = Requests([.success("story")])
+    func test_run_publish_knownUnproven_isNeverHeldBack_withinTheActivationGrace() async throws {
+        for (path, body) in [("/api/v1/posts", Self.postBody), ("/api/v1/posts", Self.storyBody), ("/api/v1/posts/from-attachment", nil)] {
+            let gate = FakeGate(knownUnproven: true, answer: false)
+            let requests = Requests([.success("published")])
 
-        let result = try await EmailVerificationGate.run(method: "POST", path: "/api/v1/posts", body: Self.storyBody, gate: gate) {
-            try requests.perform()
+            let result = try await EmailVerificationGate.run(method: "POST", path: path, body: body, gate: gate) {
+                try requests.perform()
+            }
+
+            XCTAssertEqual(result, "published", path)
+            XCTAssertEqual(gate.asked, [], path)
+            XCTAssertEqual(requests.count, 1, path)
         }
-
-        XCTAssertEqual(result, "story")
-        XCTAssertEqual(gate.asked, [])
     }
 
     func test_run_withoutGate_passesThrough() async {

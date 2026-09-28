@@ -15,7 +15,7 @@ import {
   type OnboardingStepRewards,
   type OnboardingSuggestion,
 } from '@meeshy/shared/types/onboarding';
-import { hasAuthoredStory, storyPublishable } from '../posts/firstStory';
+import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from '../auth/account-activation';
 import { elanInputOf, onboardingStepRewards } from './onboardingRewards';
 
 /**
@@ -122,7 +122,7 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
-  emailVerifiedAt: true,
+  ...ACTIVATION_SELECT,
 } as const;
 
 const CANDIDATE_SELECT = {
@@ -148,6 +148,8 @@ type UserStateRow = {
   onboardingCompletedAt: Date | null;
   onboardingSteps: string[] | null;
   emailVerifiedAt: Date | null;
+  phoneNumber: string | null;
+  emailReleasedAt: Date | null;
 };
 
 type OnboardingPrisma = Pick<
@@ -194,12 +196,11 @@ export class OnboardingService {
     const protectedRegime = ageClass !== 'adult';
     const emailVerified = user.emailVerifiedAt !== null;
     const globalConversationId = await this.globalConversationId();
-    const [prefilledSteps, suggestions, storyAuthored, pendingFriendRequests, stepRewards] = await Promise.all([
+    const [prefilledSteps, suggestions, pendingFriendRequests, stepRewards] = await Promise.all([
       this.prefilledSteps(user.id, globalConversationId, emailVerified),
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
-      emailVerified ? Promise.resolve(false) : hasAuthoredStory(this.prisma, user.id),
       this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
       this.stepRewards(user.id, now),
     ]);
@@ -213,7 +214,7 @@ export class OnboardingService {
       storyDefaultVisibility: protectedRegime ? 'friends' : 'public',
       suggestions,
       emailVerified,
-      canPublishStory: storyPublishable({ emailVerified, hasAuthoredStory: storyAuthored }),
+      canPublishStory: mayPublish(resolveAccountActivation(user, now)),
       pendingFriendRequests,
       stepRewards,
     };

@@ -235,7 +235,7 @@ function ResendButton({ host, resend }: { readonly host: CardHost; readonly rese
 /**
  * **LA CARTE DU COURRIEL** — proposée au seul compte dont l'adresse n'est pas
  * vérifiée (`journey.ts § isOffered`). Elle ne bloque rien : « Plus tard »
- * passe, et la première story reste publiable sans vérification (#7907). Le
+ * passe, et publier reste permis pendant le délai de grâce (#8476). Le
  * clic sur le lien se fait AILLEURS (la boîte, un autre onglet) : l'écran
  * relit l'état au retour et cède la carte dès que l'adresse est vérifiée.
  */

@@ -11,7 +11,7 @@ import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
-import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
+import { ActivationBlockedError, mayPublish, resolveAccountActivation } from '../services/auth/account-activation';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
@@ -976,20 +976,49 @@ export async function requireEmailVerification(request: FastifyRequest, reply: F
 }
 
 /**
+ * **PUBLIER SUIT LE DÉLAI DE GRÂCE DE L'ADRESSE** (#8476) — la garde de
+ * `POST /posts` et `POST /posts/from-attachment`.
+ *
+ * Directive porteur 2026-09-28 : « tant qu'on n'a pas dépassé la limite dure
+ * de validation de son compte on doit pouvoir publier ». La loi est celle de
+ * #8238 (`services/auth/account-activation.ts`), servie sur
+ * `registeredUser.activation` : une adresse non prouvée ne retient rien tant
+ * que la phase n'est pas `blocked`. Elle REMPLACE, pour publier, la garde de
+ * #6437 et son exception « première story » (#7907), désormais subsumée.
+ *
+ * Fail-closed : une adresse non prouvée SANS activation servie est refusée —
+ * 403 `EMAIL_NOT_VERIFIED`, le refus que les clients savent mener à la
+ * validation.
+ */
+export async function requirePublishingGrace(request: FastifyRequest, reply: FastifyReply) {
+  const authContext = (request as UnifiedAuthRequest).authContext;
+
+  if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+    sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+    return;
+  }
+
+  const { emailVerifiedAt, activation } = authContext.registeredUser;
+  if (emailVerifiedAt || mayPublish(activation)) return;
+
+  sendForbidden(reply, 'Email verification required', { code: 'EMAIL_NOT_VERIFIED' });
+}
+
+/**
  * Routes qui exigent un e-mail CONFIRMÉ (#6437) — une constante, pas une
  * prose, comme l'exige le critère de fin de l'issue. Décision : ce qui SORT
- * du compte vers d'autres personnes — publier (posts ET stories, même route),
- * inviter par e-mail, créer un lien de partage. Tout le reste (lecture,
- * messagerie privée, réglages, rejoindre une conversation existante) reste
- * accessible à un compte non confirmé — la décision complète est sur #6437.
- * UNE exception (#7907) : la PREMIÈRE story d'un compte passe `POST /posts`
- * (`email-verification-first-story.ts`) ; tout le reste de cette liste est inchangé.
+ * du compte vers d'AUTRES ADRESSES — inviter par e-mail, créer un lien de
+ * partage. Publier n'y figure plus depuis #8476 : il suit le délai de grâce
+ * (`requirePublishingGrace` ci-dessus).
  */
 export const EMAIL_VERIFICATION_GATED_ROUTES = [
-  'POST /posts',
-  'POST /posts/from-attachment',
   'POST /invitations/email',
   'POST /links',
   'POST /conversations/:id/new-link',
+] as const;
+
+export const PUBLISHING_GRACE_GATED_ROUTES = [
+  'POST /posts',
+  'POST /posts/from-attachment',
 ] as const;
 
