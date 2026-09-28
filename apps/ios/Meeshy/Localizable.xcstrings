@@ -197027,6 +197027,198 @@
         }
       }
     },
+    "system.members.arrived.one": {
+      "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وصل {first} للتو — قل مرحبًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} ist gerade angekommen — sag hallo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} just arrived — say hi"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} acaba de llegar — salúdale"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} vient d’arriver — dis-lui salut"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuovo arrivo: {first} — fai un saluto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} acabou de chegar — diz olá"
+          }
+        }
+      }
+    },
+    "system.members.arrived.two": {
+      "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وصل {first} و{second} للتو — قل مرحبًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} und {second} sind gerade angekommen — sag hallo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} and {second} just arrived — say hi"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} y {second} acaban de llegar — salúdalos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} et {second} viennent d’arriver — dis-leur salut"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuovi arrivi: {first} e {second} — fai un saluto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first} e {second} acabaram de chegar — diz olá"
+          }
+        }
+      }
+    },
+    "system.members.arrived.three": {
+      "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وصل {first} و{second} و{third} للتو — قل مرحبًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} und {third} sind gerade angekommen — sag hallo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} and {third} just arrived — say hi"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} y {third} acaban de llegar — salúdalos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} et {third} viennent d’arriver — dis-leur salut"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuovi arrivi: {first}, {second} e {third} — fai un saluto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} e {third} acabaram de chegar — diz olá"
+          }
+        }
+      }
+    },
+    "system.members.arrived.many": {
+      "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وصل {first} و{second} و{others} آخرون للتو — قل مرحبًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} und {others} weitere sind gerade angekommen — sag hallo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} and {others} others just arrived — say hi"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} y {others} más acaban de llegar — salúdalos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} et {others} autres viennent d’arriver — dis-leur salut"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuovi arrivi: {first}, {second} e altri {others} — fai un saluto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{first}, {second} e mais {others} acabaram de chegar — diz olá"
+          }
+        }
+      }
+    },
     "system.conversation.renamed": {
       "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
       "extractionState": "manual",

@@ -238,6 +238,7 @@ public enum ConversationPreviewComposer {
     private static func systemKey(_ event: LastMessageSystemEvent) -> ConversationPreviewStringKey {
         switch event.key {
         case "system.member-joined": return .systemMemberJoined
+        case "system.members-arrived": return arrivalsKey(count: event.params["count"]?.rendered)
         case "system.encryption-enabled":
             return event.params["mode"]?.rendered == "e2ee" ? .systemEncryptionE2EE : .systemEncryptionEnabled
         case "system.member-added": return .systemMemberAdded
@@ -249,10 +250,23 @@ public enum ConversationPreviewComposer {
         }
     }
 
+    /// Miroir de `arrivalsLineKey` : trois arrivées au plus se nomment toutes.
+    private static func arrivalsKey(count rendered: String?) -> ConversationPreviewStringKey {
+        let count = rendered.map { Double($0) ?? .nan } ?? 1
+        if count <= 1 { return .systemMembersArrivedOne }
+        if count == 2 { return .systemMembersArrivedTwo }
+        if count == 3 { return .systemMembersArrivedThree }
+        return .systemMembersArrivedMany
+    }
+
+    /// `system.generic` : le serveur n'a pas su typer l'avis. Son texte est la
+    /// seule chose qu'il dise — celle que le fil affiche (#8561).
+    private static let untypedSystemKey = "system.generic"
+
     private static func systemLine(
         _ message: ConversationPreviewMessage, _ input: ConversationPreviewInput, _ strings: ConversationPreviewStrings
     ) -> ConversationPreview {
-        guard let event = message.systemEvent else {
+        guard let event = message.systemEvent, event.key != untypedSystemKey else {
             let text = ConversationPreviewBody.servedText(message, input) ?? .label(strings(.systemGeneric))
             return ConversationPreview(kind: .system, tone: .system, segments: [text])
         }

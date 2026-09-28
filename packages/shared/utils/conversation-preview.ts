@@ -593,9 +593,16 @@ const SYSTEM_KEYS: Readonly<Record<string, (params: Readonly<Record<string, stri
   'system.conversation-image': () => 'system.conversation.image',
 };
 
+/**
+ * `system.generic` est la clé d'un message que le SERVEUR ne sait pas typer
+ * (avis antérieur aux métadonnées) : son texte est alors la seule chose qu'il
+ * dise — celle que le fil affiche. Le libellé neutre ne vaut que sans texte (#8561).
+ */
+const UNTYPED_SYSTEM_KEY = 'system.generic';
+
 function systemLine(message: ConversationPreviewMessage, input: ConversationPreviewInput, str: Str): ConversationPreview {
   const event = message.systemEvent ?? null;
-  if (event) {
+  if (event && event.key !== UNTYPED_SYSTEM_KEY) {
     const raw = event.params ?? {};
     const key = SYSTEM_KEYS[event.key]?.(raw) ?? 'system.generic';
     const someone = str('message.author.unknown');
