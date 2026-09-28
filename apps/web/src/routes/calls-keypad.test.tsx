@@ -30,6 +30,7 @@ const detail = (overrides: Partial<CallDetail> = {}): CallDetail => ({
   startedAt: '2026-09-26T09:00:00.000Z',
   durationSec: 185,
   bytes: 46_400_000,
+  reactions: [],
   participants: [],
   live: false,
   ...overrides,
@@ -118,6 +119,14 @@ describe('la fiche d’un appel', () => {
   test('le numéro du pair n’y paraît jamais (D-129)', () => {
     const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />);
     expect(html).not.toMatch(/tel:|\+\d{6,}|Téléphone/);
+  });
+
+  test('les réactions de l’appel se lisent emoji × compte (#8439) ; sans réaction, pas de ligne', () => {
+    const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail({ reactions: [{ emoji: '👍', count: 3 }, { emoji: '🎉', count: 1 }] })} now={NOW} onCall={noop} />);
+    expect(html).toContain('data-call-detail-row="reactions"');
+    expect(html).toContain('Réactions');
+    expect(html).toMatch(/👍 × (<!-- -->)?3/);
+    expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-row="reactions"');
   });
 
   test('un appel de groupe nomme ses participants dans la fiche (#8066) ; un appel à deux, non', () => {

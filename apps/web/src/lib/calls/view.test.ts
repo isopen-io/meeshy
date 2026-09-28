@@ -30,6 +30,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   durationSec: 185,
   bytes: null,
   peer: { userId: 'u-amina', username: 'amina', displayName: 'Amina Diallo', avatar: null },
+  reactionCounts: {},
   participants: [],
   ...overrides,
 });

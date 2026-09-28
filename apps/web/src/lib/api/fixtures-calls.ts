@@ -42,6 +42,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 0,
     bytes: null,
     peer: peer('u-amina', 'amina', 'Amina Diallo'),
+    reactionCounts: {},
     participants: [],
   },
   {
@@ -56,6 +57,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 754,
     bytes: 48_620_000,
     peer: peer('u-kwame', 'kwame', 'Kwame Mensah'),
+    reactionCounts: { '👍': 3, '🎉': 1 },
     participants: [],
   },
   {
@@ -70,6 +72,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 3725,
     bytes: 18_400_000,
     peer: null,
+    reactionCounts: {},
     participants: [
       { participantId: 'p-kwame-annonces', username: 'kwame', displayName: 'Kwame Mensah', avatar: null },
       { participantId: 'p-fatou-annonces', username: 'fatou', displayName: 'Fatou Bâ', avatar: null },
@@ -88,6 +91,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 185,
     bytes: 2_310_000,
     peer: peer('u-amina', 'amina', 'Amina Diallo'),
+    reactionCounts: {},
     participants: [],
   },
   {
@@ -102,6 +106,7 @@ const records = (): readonly CallRecord[] => [
     durationSec: 0,
     bytes: null,
     peer: peer('u-fatou', 'fatou', 'Fatou Bâ'),
+    reactionCounts: {},
     participants: [],
   },
 ];
@@ -132,6 +137,7 @@ const liveSession = (): CallSession => ({
   answered: true,
   startedAt: ago(4),
   durationSec: 0,
+  reactionCounts: {},
   participants: [{ userId: 'u-kwame', name: 'Kwame Mensah', avatar: null }],
 });
 
@@ -191,6 +197,7 @@ export function fixtureCallSession(callId: string): CallSession | null {
     answered: record.direction !== 'missed',
     startedAt: record.startedAt,
     durationSec: record.durationSec,
+    reactionCounts: {},
     participants: record.peer === null ? [] : [{ userId: record.peer.userId, name: record.peer.displayName ?? record.peer.username, avatar: record.peer.avatar }],
   };
 }

@@ -9,6 +9,7 @@ const fr = {
   'callRecording.active': 'Enregistrement en cours',
   'callRecording.waiting': 'En attente de l’accord de tous…',
   'callRecording.ask': '{name} veut enregistrer l’appel',
+  'callRecording.askVideo': '{name} veut enregistrer l’appel en vidéo',
   'callRecording.askDetail': 'L’enregistrement ne commence que si tout le monde accepte, puis il est ajouté à la conversation.',
   'callRecording.accept': 'Accepter',
   'callRecording.refuse': 'Refuser',

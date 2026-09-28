@@ -50,12 +50,17 @@ describe('une session d’appel décodée est une PROJECTION', () => {
       initiatorId: 'u-ada',
       answered: true,
       startedAt: '2026-09-26T09:00:00.000Z',
+      reactionCounts: {},
       durationSec: 0,
       participants: [
         { userId: 'u-ada', name: 'Ada Lovelace', avatar: 'https://cdn.test/ada.jpg' },
         { userId: 'u-me', name: 'Moi', avatar: null },
       ],
     });
+  });
+
+  test('les réactions servies avec la session (#8439) sont relues', () => {
+    expect(decodeCallSession(wireSession({ reactionCounts: { '❤️': 2 } }))?.reactionCounts).toEqual({ '❤️': 2 });
   });
 
   test('un statut terminal n’est pas vivant ; une durée terminée se lit', () => {

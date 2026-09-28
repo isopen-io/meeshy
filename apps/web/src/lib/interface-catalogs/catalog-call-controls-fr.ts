@@ -1,0 +1,56 @@
+/**
+ * LES CONTRÔLES D'UN APPEL EN COURS, FRANÇAIS (#8433, #8438, #8439, #8437) —
+ * la SOURCE des clés : ajouter des personnes, modérer, réagir, choisir ce
+ * qu'on enregistre. Les six autres langues portent exactement ces clés
+ * (`satisfies CallControlsCatalog`, `i18n-call-controls-catalog.test.ts`).
+ */
+const fr = {
+  'callControls.invite': 'Ajouter',
+  'callControls.invite.label': 'Ajouter des personnes à l’appel',
+  'callControls.react': 'Réagir',
+  'callControls.react.label': 'Envoyer une réaction',
+  'callControls.react.palette': 'Réactions',
+  'callControls.react.send': 'Réagir avec {emoji}',
+  'callControls.react.from': '{name} a réagi {emoji}',
+  'callControls.react.mine': 'Vous avez réagi {emoji}',
+  'callControls.people.title': 'Participants',
+  'callControls.people.inCall': 'Dans l’appel',
+  'callControls.people.add': 'Ajouter des personnes',
+  'callControls.people.search': 'Rechercher un contact',
+  'callControls.people.empty': 'Tous vos contacts sont déjà dans l’appel',
+  'callControls.people.none': 'Aucun contact ne correspond',
+  'callControls.people.invite': 'Inviter',
+  'callControls.people.inviteNamed': 'Inviter {name}',
+  'callControls.people.loading': 'Chargement des contacts…',
+  'callControls.people.you': 'Vous',
+  'callControls.close': 'Fermer',
+  'callControls.ringing': 'Sonne…',
+  'callControls.moderate.menu': 'Options pour {name}',
+  'callControls.mute': 'Couper le micro',
+  'callControls.mute.done': 'Micro coupé',
+  'callControls.remove': 'Retirer de l’appel',
+  'callControls.remove.confirm': 'Retirer {name} de l’appel ?',
+  'callControls.remove.detail': 'L’appel se terminera aussitôt pour {name}.',
+  'callControls.remove.do': 'Retirer',
+  'callControls.cancel': 'Annuler',
+  'callControls.mutedBy': '{name} a coupé votre micro',
+  'callControls.someone': 'Un participant',
+  'callControls.incomingInvite': '{name} vous invite à un appel de groupe',
+  'callControls.error.invite': 'Impossible d’inviter {name}',
+  'callControls.error.mute': 'Impossible de couper le micro de {name}',
+  'callControls.error.remove': 'Impossible de retirer {name}',
+  'callControls.error.notContact': '{name} n’est pas dans vos contacts',
+  'callControls.error.alreadyIn': '{name} est déjà dans l’appel',
+  'callControls.error.full': 'L’appel est complet',
+  'callControls.error.rateLimited': 'Trop de tentatives : réessayez dans un instant',
+  'callControls.error.denied': 'Vous n’avez pas ce droit dans cet appel',
+  'callControls.error.notActive': 'L’appel n’est plus actif',
+  'callControls.error.gone': '{name} n’est plus dans l’appel',
+  'callControls.record.title': 'Que voulez-vous enregistrer ?',
+  'callControls.record.audio': 'Audio seul',
+  'callControls.record.audioDetail': 'Les voix de tous',
+  'callControls.record.video': 'Audio et vidéo',
+  'callControls.record.videoDetail': 'Les images visibles et les voix',
+} as const;
+
+export default fr;

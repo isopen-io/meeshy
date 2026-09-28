@@ -17,6 +17,7 @@ const deCallsErase = {
   'calls.participants.more': '{names} +{count}',
   'calls.participants.a11y': 'mit {names}',
   'callJoin.detail.participants': 'Teilnehmende',
+  'callJoin.detail.reactions': 'Reaktionen',
   'calls.filter.videoOnly': 'Nur Videoanrufe',
 } as const;
 
