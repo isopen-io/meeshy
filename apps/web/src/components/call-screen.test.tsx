@@ -43,6 +43,8 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   captions: [],
   captionsMode: 'off',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
   initiatorId: null,
   invitedBy: null,
@@ -385,6 +387,84 @@ describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
     expect(incoming).toMatch(/aria-label="Refuser avec un message"[^>]*class="glass-call/);
     expect(incoming).not.toMatch(/aria-label="Refuser"[^>]*class="glass-call/);
     expect(screen({ phase: { kind: 'ended', reason: 'missed', detail: null } })).toMatch(/aria-label="Fermer"[^>]*class="glass-call/);
+  });
+});
+
+describe('CallScreen — voir et entendre l’appelant avant de décrocher (#8480)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const previewStream = (kinds: ReadonlyArray<'audio' | 'video'>) => {
+    const tracks = kinds.map((kind) => ({ kind, readyState: 'live' }));
+    /* Une doublure qui PASSE pour un MediaStream (`srcObject` de happy-dom le vérifie). */
+    return Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getTracks: () => tracks, getVideoTracks: () => tracks.filter((t) => t.kind === 'video'), getAudioTracks: () => tracks.filter((t) => t.kind === 'audio') });
+  };
+  const ringing = (media: 'audio' | 'video', preview: MediaStream | null): Partial<ActiveCall> => ({ phase: { kind: 'incoming' }, media, direction: 'incoming', callerName: 'Amina Diallo', preview });
+
+  const mount = (overrides: Partial<ActiveCall>) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call(overrides)} />));
+    const find = (selector: string) => host.querySelector(selector);
+    const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { find, press, done };
+  };
+
+  test('la vidéo de l’appelant remplit l’écran de sonnerie, muette, sous les boutons de réponse', () => {
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    const video = view.find('[data-call-preview] video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.muted).toBe(true);
+    expect(view.find('[data-call-preview-audio] audio')).toBeNull();
+    expect(view.find('[data-call-screen="incoming"]')?.textContent).toContain('Accepter');
+    view.done();
+  });
+
+  test('« Activer le son » fait entendre l’appelant, « Couper le son » le fait taire', () => {
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    const toggle = () => view.find('[data-call-preview-sound]');
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle()?.getAttribute('aria-label')).toBe('Activer le son');
+    view.press('[data-call-preview-sound]');
+    expect(view.find('[data-call-preview-audio] audio')).not.toBeNull();
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle()?.getAttribute('aria-label')).toBe('Couper le son');
+    view.press('[data-call-preview-sound]');
+    expect(view.find('[data-call-preview-audio] audio')).toBeNull();
+    view.done();
+  });
+
+  test('un appel vocal qui sonne s’écoute aussi, sans vidéo', () => {
+    const view = mount(ringing('audio', previewStream(['audio'])));
+    expect(view.find('[data-call-preview] video')).toBeNull();
+    expect(view.find('[data-call-preview-sound]')).not.toBeNull();
+    view.done();
+  });
+
+  test('sans aperçu, ni vidéo ni bouton de son', () => {
+    const html = screen(ringing('video', null));
+    expect(html).not.toContain('data-call-preview');
+  });
+
+  test('l’appelant lit que l’appelé le voit, ou peut l’entendre en vocal', () => {
+    expect(screen({ phase: { kind: 'outgoing' }, media: 'video', previewed: true })).toContain('Amina Diallo vous voit avant de décrocher');
+    expect(screen({ phase: { kind: 'outgoing' }, media: 'audio', previewed: true })).toContain('Amina Diallo peut vous entendre avant de décrocher');
+    expect(screen({ phase: { kind: 'outgoing' }, media: 'video', previewed: false })).not.toContain('avant de décrocher');
   });
 });
 

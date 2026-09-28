@@ -129,6 +129,12 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 1000,
     keyPrefix: 'socket:call:reaction'
   },
+  /** #8480 — demander l'aperçu d'un appel qui sonne : une fois par sonnerie, plus les reprises de socket. */
+  CALL_PREVIEW_REQUEST: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:preview-request'
+  },
   CALL_SCREEN_CAPTURE: {
     maxRequests: 20,
     windowMs: 60000, // 1 minute — start/stop toggles only, not a steady stream

@@ -63,6 +63,10 @@ const esCall = {
   'call.spotlight.back': 'Volver a la cuadrícula',
   'call.remove.named': 'Retirar a {name} de la llamada',
   'call.remove.failed': 'No se pudo retirar a este participante',
+  'call.preview.soundOn': 'Activar el sonido',
+  'call.preview.soundOff': 'Silenciar',
+  'call.preview.seenBy': '{name} te ve antes de contestar',
+  'call.preview.heardBy': '{name} puede oírte antes de contestar',
 } as const;
 
 export default esCall;

@@ -63,6 +63,10 @@ const itCall = {
   'call.spotlight.back': 'Torna alla griglia',
   'call.remove.named': 'Rimuovi {name} dalla chiamata',
   'call.remove.failed': 'Impossibile rimuovere questo partecipante',
+  'call.preview.soundOn': 'Attiva l’audio',
+  'call.preview.soundOff': 'Disattiva l’audio',
+  'call.preview.seenBy': '{name} ti vede prima di rispondere',
+  'call.preview.heardBy': '{name} può sentirti prima di rispondere',
 } as const;
 
 export default itCall;

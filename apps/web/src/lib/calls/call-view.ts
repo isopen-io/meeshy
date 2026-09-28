@@ -11,7 +11,7 @@ import { type ActiveCall, type CallEndReason, type CallMember } from './call-sto
  */
 
 /** Les libellés d'appel SANS paramètre — ceux qu'un état choisit. */
-export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named' | 'call.screen.peerSharing' | 'call.screen.of' | 'call.quality.indicator' | 'call.alert.weakNetwork' | 'call.alert.capturing'>;
+export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named' | 'call.screen.peerSharing' | 'call.screen.of' | 'call.quality.indicator' | 'call.alert.weakNetwork' | 'call.alert.capturing' | 'call.preview.seenBy' | 'call.preview.heardBy'>;
 
 export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
   local: 'call.ended.local',

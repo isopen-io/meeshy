@@ -63,6 +63,10 @@ const enCall = {
   'call.spotlight.back': 'Back to grid',
   'call.remove.named': 'Remove {name} from the call',
   'call.remove.failed': 'Couldn’t remove this participant',
+  'call.preview.soundOn': 'Turn sound on',
+  'call.preview.soundOff': 'Turn sound off',
+  'call.preview.seenBy': '{name} can see you before answering',
+  'call.preview.heardBy': '{name} can hear you before answering',
 } as const;
 
 export default enCall;
