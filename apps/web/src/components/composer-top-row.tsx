@@ -6,6 +6,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { FlameEyeGlyph } from './flame-eye-glyph';
 import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
 import { SENTIMENT_EMOJI, type SentimentLevel } from '@/lib/send/sentiment';
+import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -34,6 +35,8 @@ const armedStyle = (color: string, fill = 15, ring = 30) => ({
   boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} ${ring}%, transparent)`,
   color: 'var(--color-ios-ink)',
 });
+
+const NO_LOCKS: ImposedLocks = { blurred: false, ephemeral: false };
 
 /**
  * LE LIBELLÉ FRANÇAIS DE CHAQUE NIVEAU — PROSE, jamais l'identifiant anglais
@@ -85,6 +88,7 @@ export function ComposerTopRow({
   onToggleBlur,
   viewOnce,
   onToggleViewOnce,
+  locks = NO_LOCKS,
   effectCount,
   effectsPanelOpen,
   onToggleEffects,
@@ -105,6 +109,9 @@ export function ComposerTopRow({
   readonly onToggleBlur: () => void;
   readonly viewOnce: boolean;
   readonly onToggleViewOnce: () => void;
+  /** CE QUE LA CITATION IMPOSE (#8557) — une bascule verrouillée reste
+   * armée, ne répond plus au tap et DIT pourquoi. */
+  readonly locks?: ImposedLocks;
   /** Nombre d'effets décoratifs actifs — la capsule affiche ce compte,
    * jamais un booléen (miroir `effectsToggleButton`, `+Toolbar.swift`). */
   readonly effectCount: number;
@@ -129,6 +136,7 @@ export function ComposerTopRow({
    * dette antérieure (#6310) que ce lot ne répand pas. */
   const language = currentInterfaceLanguage();
   const armedEphemeral = ephemeralSeconds === undefined ? undefined : ephemeralDurationLabelOf(ephemeralSeconds);
+  const ephemeralDuration = armedEphemeral === undefined ? '' : translate(language, armedEphemeral.displayKey);
 
   return (
     <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
@@ -141,17 +149,19 @@ export function ComposerTopRow({
         <button
           type="button"
           onClick={onToggleEphemeral}
+          disabled={locks.ephemeral}
           aria-pressed={ephemeralSeconds !== undefined}
           aria-expanded={ephemeralPickerOpen}
           data-composer-ephemeral
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
           style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={
-            ephemeralSeconds === undefined
-              ? translate(language, 'composer.ephemeral.activate')
-              : translate(language, 'composer.ephemeral.active', {
-                  duration: armedEphemeral === undefined ? '' : translate(language, armedEphemeral.displayKey),
-                })
+            locks.ephemeral
+              ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
+              : ephemeralSeconds === undefined
+                ? translate(language, 'composer.ephemeral.activate')
+                : translate(language, 'composer.ephemeral.active', { duration: ephemeralDuration })
           }
         >
           {/* LA FLAMME-ŒIL (#8304) n'a pas de libellé court : son
@@ -171,11 +181,19 @@ export function ComposerTopRow({
         <button
           type="button"
           onClick={onToggleBlur}
+          disabled={locks.blurred}
           aria-pressed={blurred}
           data-composer-blur
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          {...(locks.blurred ? { 'data-imposed': '' } : {})}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
           style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
-          aria-label={blurred ? 'Mode flou actif' : 'Activer le mode flou'}
+          aria-label={
+            locks.blurred
+              ? translate(language, 'composer.protection.imposed.blur')
+              : blurred
+                ? 'Mode flou actif'
+                : 'Activer le mode flou'
+          }
         >
           <Glyph name="eyeSlash" size={16} />
           {blurred ? <span className="text-title font-bold">Flou</span> : null}
