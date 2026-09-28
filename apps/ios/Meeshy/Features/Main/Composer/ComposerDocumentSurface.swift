@@ -785,11 +785,12 @@ struct ComposerDocumentSurface: View {
             Image(systemName: "paintpalette")
                 .font(.title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .foregroundColor(showColorPalette
+                    ? Color(hex: MeeshyColors.brandPrimaryHex)
+                    : MeeshyColors.textSecondary(isDark: true))
                 .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
                        height: ComposerDocumentToolRowFit.minimumTileWidth)
-                .adaptiveGlass(in: Circle(),
-                               tint: showColorPalette ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55))
+                .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
                 .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
