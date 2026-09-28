@@ -611,9 +611,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         } else {
             loaded = UIImage(contentsOfFile: candidate)
         }
-        guard let image = loaded else { return nil }
+        // Redressée UNE fois ici plutôt qu'à chaque frame par les peintres : un
+        // fond EXIF tourné coûterait sinon une passe de dessin plein cadre par
+        // frame exportée.
+        guard let image = loaded.flatMap(Self.upright) else { return nil }
         backgroundImageMemo = (candidate, image)
         return image
+    }
+
+    /// Le bitmap tel qu'il s'affiche, orientation `.up` — voir
+    /// `CanvasImageOrientation.displayCGImage` (#8600).
+    @MainActor
+    static func upright(_ image: UIImage) -> UIImage? {
+        guard image.imageOrientation != .up else { return image }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return nil }
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: .up)
     }
 
     /// Paints `image` in `cg` to fill `size`, preserving aspect ratio
@@ -621,7 +633,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// the slide's background image before the foreground tree renders on top.
     @MainActor
     private static func paintAspectFill(image: UIImage, in cg: CGContext, size: CGSize) {
-        guard let cgImage = image.cgImage else { return }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return }
         let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
         let imageAspect = imageSize.width / imageSize.height
         let targetAspect = size.width / size.height
@@ -673,7 +685,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// background color first so bands are coloured, not transparent.
     @MainActor
     private static func paintAspectFit(image: UIImage, in cg: CGContext, size: CGSize) {
-        guard let cgImage = image.cgImage else { return }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return }
         let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
         guard imageSize.width > 0, imageSize.height > 0 else { return }
         let scale = min(size.width / imageSize.width, size.height / imageSize.height)
@@ -702,15 +714,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                         slide: StorySlide,
                                         in cg: CGContext,
                                         size: CGSize) {
-        var ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        if !transform.isIdentity {
-            ciImage = ciImage.transformed(by: transform)
-            // Re-seat the extent at the origin after a rotating/translating
-            // preferredTransform so `createCGImage` captures the whole frame.
-            ciImage = ciImage.transformed(
-                by: CGAffineTransform(translationX: -ciImage.extent.origin.x,
-                                      y: -ciImage.extent.origin.y))
-        }
+        let ciImage = orientedFrame(CIImage(cvPixelBuffer: pixelBuffer), preferredTransform: transform)
         guard let cgImage = StoryRenderingContext.shared.ciContext.createCGImage(
             ciImage, from: ciImage.extent) else { return }
 
@@ -730,6 +734,29 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         } else {
             paintAspectFill(image: image, in: cg, size: size)
         }
+    }
+
+    /// **La frame redressée — `preferredTransform` appliquée dans SON repère**
+    /// (#8600).
+    ///
+    /// La transformation d'une piste est exprimée en repère IMAGE, Y vers le
+    /// BAS. Une `CIImage` vit en Y vers le HAUT : la poser telle quelle y
+    /// inverse le sens de chaque quart de tour, et un clip tourné en portrait
+    /// sortait retourné de 180°. On la conjugue donc par le retournement
+    /// vertical — vers le repère image avec la hauteur de STOCKAGE, retour
+    /// avec la hauteur AFFICHÉE — puis on reloge l'étendue à l'origine.
+    nonisolated static func orientedFrame(_ image: CIImage,
+                                          preferredTransform transform: CGAffineTransform) -> CIImage {
+        guard !transform.isIdentity else { return image }
+        let stored = image.extent
+        let displayed = stored.applying(transform)
+        let toImageSpace = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: stored.height)
+        let backToCoreImage = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: displayed.height)
+        let oriented = image.transformed(by: toImageSpace
+            .concatenating(transform)
+            .concatenating(backToCoreImage))
+        return oriented.transformed(by: CGAffineTransform(translationX: -oriented.extent.origin.x,
+                                                          y: -oriented.extent.origin.y))
     }
 }
 
