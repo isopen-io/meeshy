@@ -77,10 +77,11 @@ final class CallCaptureController: ObservableObject {
     private(set) var subjects: [CallCaptureSubject] = []
 
     nonisolated static let previewIntervalNanoseconds: UInt64 = 200_000_000
+    nonisolated static let thumbnailEveryPreviews = 5
     nonisolated static let statusDisplayNanoseconds: UInt64 = 2_500_000_000
-    nonisolated static let previewMaxDimension: CGFloat = 480
+    nonisolated static let previewMaxDimension: CGFloat = 640
     nonisolated static let thumbnailCanvas = CGSize(width: 108, height: 192)
-    nonisolated static let previewCanvas = CGSize(width: 360, height: 640)
+    nonisolated static let previewCanvas = CGSize(width: 540, height: 960)
     nonisolated static let brand = "Meeshy"
 
     private let grabber: any CallFrameGrabbing
@@ -89,6 +90,7 @@ final class CallCaptureController: ObservableObject {
     private let now: () -> Date
     private var previewTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
+    private var previewsSinceThumbnails = 0
 
     init(
         grabber: any CallFrameGrabbing = CallFrameGrabber(),
@@ -134,6 +136,7 @@ final class CallCaptureController: ObservableObject {
         grabber.detachAll()
         thumbnails = [:]
         preview = nil
+        previewsSinceThumbnails = 0
     }
 
     func select(_ newStyle: CallMontageStyle) {
@@ -147,12 +150,18 @@ final class CallCaptureController: ObservableObject {
         let portraits = portraits(from: snapshot)
         let selected = style
         let caption = caption
+        let includesThumbnails = Self.rendersThumbnails(hasThumbnails: !thumbnails.isEmpty, previewsSinceThumbnails: previewsSinceThumbnails)
+        previewsSinceThumbnails = includesThumbnails ? 1 : previewsSinceThumbnails + 1
         let rendered = await Task.detached(priority: .userInitiated) {
-            Self.renderPreviews(portraits: portraits, selected: selected, caption: caption)
+            Self.renderPreviews(portraits: portraits, selected: selected, caption: caption, includesThumbnails: includesThumbnails)
         }.value
         guard !Task.isCancelled else { return }
-        thumbnails = rendered.thumbnails
+        if includesThumbnails { thumbnails = rendered.thumbnails }
         preview = rendered.preview
+    }
+
+    nonisolated static func rendersThumbnails(hasThumbnails: Bool, previewsSinceThumbnails: Int) -> Bool {
+        !hasThumbnails || previewsSinceThumbnails >= thumbnailEveryPreviews
     }
 
     func capture() async {
@@ -199,9 +208,10 @@ final class CallCaptureController: ObservableObject {
         }
     }
 
-    nonisolated static func renderPreviews(portraits: [CallMontagePortrait], selected: CallMontageStyle, caption: CallMontageCaption) -> CallMontagePreviews {
+    nonisolated static func renderPreviews(portraits: [CallMontagePortrait], selected: CallMontageStyle, caption: CallMontageCaption, includesThumbnails: Bool = true) -> CallMontagePreviews {
         guard !portraits.isEmpty else { return CallMontagePreviews(thumbnails: [:], preview: nil) }
-        let thumbnails = CallMontageStyle.allCases.reduce(into: [CallMontageStyle: CGImage]()) { result, style in
+        let styles = includesThumbnails ? CallMontageStyle.allCases : []
+        let thumbnails = styles.reduce(into: [CallMontageStyle: CGImage]()) { result, style in
             result[style] = CallMontageRenderer.render(style: style, portraits: portraits, canvas: thumbnailCanvas, caption: caption)
         }
         let preview = CallMontageRenderer.render(style: selected, portraits: portraits, canvas: previewCanvas, caption: caption)

@@ -7,20 +7,12 @@ enum CallCaptureCopy {
         String(localized: "call.control.capture", defaultValue: "Capturer l'appel", bundle: .main)
     }
 
+    static var controlHint: String {
+        String(localized: "call.control.capture.hint", defaultValue: "Libère l'écran pour choisir un montage et capturer l'appel", bundle: .main)
+    }
+
     static var controlCaption: String {
         String(localized: "call.control.capture.caption", defaultValue: "Capture", bundle: .main)
-    }
-
-    static var title: String {
-        String(localized: "call.capture.title", defaultValue: "Capture", bundle: .main)
-    }
-
-    static var montageRow: String {
-        String(localized: "call.capture.row.montage", defaultValue: "Montage", bundle: .main)
-    }
-
-    static var actionsRow: String {
-        String(localized: "call.capture.row.actions", defaultValue: "Actions", bundle: .main)
     }
 
     static var shoot: String {
@@ -86,96 +78,6 @@ enum CallCaptureCopy {
         case .failed:
             return (String(localized: "call.capture.failed", defaultValue: "La capture n'a pas pu être enregistrée", bundle: .main), true)
         }
-    }
-}
-
-struct CallCapturePanel: View {
-    @ObservedObject var capture: CallCaptureController
-    let subjects: [CallCaptureSubject]
-    let tracks: [String: Any]
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            CallPanelHeader(title: CallCaptureCopy.title, onClose: onClose)
-            CallPillRow(title: CallCaptureCopy.montageRow) {
-                ForEach(CallMontageStyle.allCases, id: \.self) { style in
-                    CallPillChip(
-                        art: capture.thumbnails[style].map(CallPillChipArt.image) ?? .symbol(CallCaptureCopy.styleSymbol(style)),
-                        caption: CallCaptureCopy.styleName(style),
-                        label: CallCaptureCopy.styleName(style),
-                        isSelected: capture.style == style
-                    ) {
-                        HapticFeedback.light()
-                        capture.select(style)
-                    }
-                }
-            }
-            CallPillRow(title: CallCaptureCopy.actionsRow) {
-                preview
-                CallPillChip(
-                    art: .symbol("camera.fill"),
-                    caption: CallCaptureCopy.shoot,
-                    label: CallCaptureCopy.shoot,
-                    hint: CallCaptureCopy.shootHint
-                ) {
-                    Task { await capture.capture() }
-                }
-                .disabled(capture.status == .working)
-                CallPillChip(
-                    art: .symbol("person.crop.square"),
-                    caption: CallCaptureCopy.faces,
-                    label: CallCaptureCopy.faces,
-                    hint: CallCaptureCopy.facesHint
-                ) {
-                    Task { await capture.captureFaces() }
-                }
-                .disabled(capture.status == .working)
-            }
-        }
-        .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
-            capture.start(subjects: subjects, tracks: tracks)
-        }
-        .onDisappear { capture.stop() }
-        .adaptiveOnChange(of: capture.status) { _, status in
-            guard let outcome = CallCaptureCopy.outcome(status) else { return }
-            if outcome.isError {
-                FeedbackToastManager.shared.showError(outcome.message)
-            } else {
-                FeedbackToastManager.shared.showSuccess(outcome.message)
-            }
-            UIAccessibility.post(notification: .announcement, argument: outcome.message)
-        }
-    }
-
-    private var preview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-            if let image = capture.preview {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                ProgressView()
-                    .tint(.white)
-            }
-            if capture.status == .working {
-                Color.black.opacity(0.35)
-                ProgressView()
-                    .tint(.white)
-            }
-        }
-        .frame(width: 72, height: 128)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-        )
-        .padding(.horizontal, 6)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(CallCaptureCopy.preview)
-        .accessibilityValue(capture.status == .working ? CallCaptureCopy.working : CallCaptureCopy.styleName(capture.style))
     }
 }
 

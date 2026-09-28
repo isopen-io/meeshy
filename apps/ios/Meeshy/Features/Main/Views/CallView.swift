@@ -79,17 +79,12 @@ struct CallView: View {
     /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
     /// DANS l'écran d'appel, entre l'en-tête et la pilule.
     @ObservedObject var mesh: GroupCallMeshCoordinator
-    /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
-    @State var controlsDisclosure = CallControlsDisclosure()
+    @State var layer: CallScreenLayer = .idle
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
-    @State var showCaptionsJournal = false
-    /// #8433 — le sélecteur d'amis.
-    @State var showAddPeople = false
-    /// #8552 — la capture de l'appel, vivante tant que son panneau est ouvert.
     @StateObject var capture = CallCaptureController()
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton

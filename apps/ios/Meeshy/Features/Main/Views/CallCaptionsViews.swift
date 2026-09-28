@@ -108,7 +108,7 @@ struct CallCaptionsBand: View {
     let lines: [CallCaptionLine]
     let hasOwnGlass: Bool
     let onToggleOriginal: (UUID) -> Void
-    let onOpenJournal: () -> Void
+    let onOpenJournal: (() -> Void)?
 
     var body: some View {
         if hasOwnGlass {
@@ -137,16 +137,18 @@ struct CallCaptionsBand: View {
                 }
             }
             .padding(.vertical, 6)
-            Button(action: onOpenJournal) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(MeeshyFont.relative(17, weight: .semibold))
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+            if let onOpenJournal {
+                Button(action: onOpenJournal) {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(MeeshyFont.relative(17, weight: .semibold))
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(CallCaptionsCopy.journal)
+                .accessibilityHint(CallCaptionsCopy.journalHint)
             }
-            .accessibilityLabel(CallCaptionsCopy.journal)
-            .accessibilityHint(CallCaptionsCopy.journalHint)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallCaptionsCopy.title)

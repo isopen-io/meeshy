@@ -25,21 +25,21 @@ extension CallView {
         } else {
             CallPillButton(
                 symbol: "record.circle",
-                kind: controlsDisclosure.isOpen(.recording) ? .active : .normal,
+                kind: layer.openPanel == .record ? .active : .normal,
                 label: CallRecordingCopy.label(isActive: false),
                 caption: captioned ? CallRecordingCopy.caption : nil,
                 hint: CallRecordingCopy.kindHint,
-                toggleState: controlsDisclosure.isOpen(.recording),
+                toggleState: layer.openPanel == .record,
                 diameter: diameter
             ) {
-                togglePanel(.recording)
+                togglePanel(.record)
             }
         }
     }
 
     var recordingPanelRows: some View {
         VStack(spacing: 0) {
-            CallPanelHeader(title: CallRecordingCopy.label(isActive: false), onClose: closePanel)
+            CallPanelHeader(title: CallRecordingCopy.label(isActive: false), onBack: backToMenu, onClose: closePanel)
             CallPillRow {
                 ForEach([CallRecordingKind.audio, .video], id: \.self) { kind in
                     CallPillChip(

@@ -78,13 +78,26 @@ extension CallView {
 
     /// Le bandeau : les deux dernières phrases. Il reste quand les actions
     /// sont rangées ; en groupe il se pose dans le verre de la pilule.
-    func captionsBand(hasOwnGlass: Bool) -> some View {
+    func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
         CallCaptionsBand(
             lines: Array(captionLines.suffix(2)),
             hasOwnGlass: hasOwnGlass,
             onToggleOriginal: { toggleOriginal(of: $0) },
-            onOpenJournal: { showCaptionsJournal = true }
+            onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
         )
+    }
+
+    func journalActionButton(captioned: Bool, diameter: CGFloat) -> some View {
+        CallPillButton(
+            symbol: "list.bullet.rectangle",
+            kind: layer.openPanel == .journal ? .active : .normal,
+            label: CallCaptionsCopy.journalTitle,
+            caption: captioned ? CallCaptionsCopy.journal : nil,
+            hint: CallCaptionsCopy.journalHint,
+            diameter: diameter
+        ) {
+            togglePanel(.journal)
+        }
     }
 
     var captionsJournal: some View {

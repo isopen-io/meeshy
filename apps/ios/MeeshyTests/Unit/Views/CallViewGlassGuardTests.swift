@@ -38,8 +38,9 @@ final class CallViewGlassGuardTests: XCTestCase {
     }
 
     /// #8459 · #8550 — UN seul bloc de verre réel : la pilule ; les familles
-    /// ET le sous-menu ouvert s'y déploient, au-dessus de la rangée de base,
-    /// sans second bloc — en duo comme en groupe, par le MÊME chemin.
+    /// OU le panneau ouvert s'y déploient, au-dessus de la rangée de base,
+    /// sans second bloc — en duo comme en groupe, par le MÊME chemin. #8578 —
+    /// le panneau REMPLACE les rangées : jamais les deux à la fois.
     func test_actions_unfoldInsideTheSingleGlassBlock_aboveTheBaseRow() throws {
         let code = try callViewCode()
         let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: code)
@@ -48,7 +49,9 @@ final class CallViewGlassGuardTests: XCTestCase {
         let families = try XCTUnwrap(pill.range(of: "familyRows(actions)"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
-        XCTAssertLessThan(panel.lowerBound, families.lowerBound, "Le sous-menu s'ouvre AU-DESSUS des familles")
+        XCTAssertTrue(pill.contains("if let panel = layer.pillPanel {"), "Le panneau se lit dans CallScreenLayer")
+        let alternative = String(pill[panel.upperBound ..< families.lowerBound])
+        XCTAssertTrue(alternative.contains("} else {"), "Le panneau REMPLACE les familles, il ne s'empile pas (#8578)")
         XCTAssertLessThan(families.lowerBound, base.lowerBound)
         XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les rangées ET la rangée de base")
         XCTAssertFalse(pill.contains("isGroupStage ?"), "Duo et groupe partagent la même disposition")
@@ -88,7 +91,7 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// doigt avant le `ScrollView` : la rangée ne défile plus. L'enfoncement
     /// passe par un `ButtonStyle`, qui ne pose aucun geste.
     func test_rowButtons_carryNoDragGesture_soEveryRowScrolls() throws {
-        let rows = try ["Meeshy/Features/Main/Views/CallPillRow.swift"]
+        let rows = try ["Meeshy/Features/Main/Views/CallPillRow.swift", "Meeshy/Features/Main/Views/CallModeCarousel.swift"]
             .map { AppSourceGuard.stripComments(try AppSourceGuard.unit($0)) }
             .joined(separator: "\n")
         let code = try callViewCode() + rows
@@ -96,6 +99,33 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
         XCTAssertTrue(rows.contains(".buttonStyle(CallPressButtonStyle())"))
+    }
+
+    /// #8578 — un mode libère l'écran : le chrome d'appel se masque par la
+    /// MÊME règle que le toucher (`CallChromeVisibility`), et le mode ne pose
+    /// qu'UN carrousel, centré en bas, et sa barre d'action.
+    func test_mode_freesTheScreen_withASingleCarouselAndItsActionBar() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(code.contains("isModeActive: layer.freesTheScreen"))
+        XCTAssertTrue(code.contains("callModeLayer"))
+        XCTAssertFalse(code.contains("CallEffectsPanel("), "Le panneau Effets empilé a laissé place au mode")
+        XCTAssertFalse(code.contains("CallCapturePanel("), "Le panneau Capture empilé a laissé place au mode")
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeControls.swift")
+        )
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        XCTAssertTrue(effects.contains("if showsSettings {"), "Réglages REMPLACE le carrousel")
+        XCTAssertTrue(effects.contains("switch category {"), "Un seul carrousel, Visage OU Couleur")
+        XCTAssertEqual(effects.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        XCTAssertEqual(montage.components(separatedBy: "CallModeCarousel(").count - 1, 1)
+        XCTAssertEqual(montage.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        let carousel = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+        )
+        XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned)"), "Le carrousel s'accroche")
+        XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
+        XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
     }
 
     /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si

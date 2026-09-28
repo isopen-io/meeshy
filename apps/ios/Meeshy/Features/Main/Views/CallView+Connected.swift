@@ -27,14 +27,17 @@ extension CallView {
                 CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
                     .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
                     .callChromeVisibility(chromeVisibility.isVisible(.screenShareBanner))
-                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
-                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
-                if !isGroupStage {
+                if !isGroupStage && chromeVisibility.isVisible(.selfView) {
                     duoOverlays
                 }
 
                 callControlsLayer
+
+                callModeLayer
+
+                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
+                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
                 CallCaptureFlash(trigger: capture.flashCount, reduceMotion: reduceMotion)
             }
@@ -47,7 +50,7 @@ extension CallView {
         // video. Re-arms whenever showControls flips to true (a reveal tap)
         // or the (…) / a panel is used; never while a panel is open, on Mac,
         // under VoiceOver or without video (shouldAutoHideControls).
-        .task(id: AutoHideKey(isVisible: showControls, isExpanded: controlsDisclosure.isExpanded, openPanel: controlsDisclosure.openPanel)) {
+        .task(id: AutoHideKey(isVisible: showControls, layer: layer)) {
             guard showControls, shouldAutoHideControls else { return }
             try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
             if !Task.isCancelled {
@@ -60,7 +63,15 @@ extension CallView {
             if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
         }
         .onAppear { showEffectsToolbar = false }
-        .onDisappear { showControls = true }
+        .onDisappear {
+            showControls = true
+            layer = .idle
+        }
+        .adaptiveOnChange(of: currentActionSet) { _, actions in
+            let reconciled = layer.reconciled(with: actions)
+            guard reconciled != layer else { return }
+            withAnimation(disclosureAnimation) { layer = reconciled }
+        }
         .adaptiveOnChange(of: isGroupStage) { _, isGroup in
             if !isGroup { isStageFullScreen = false }
         }
@@ -89,7 +100,7 @@ extension CallView {
         .adaptiveOnChange(of: latestFinalRemoteSegmentId) { _, _ in
             announceLatestCaption()
         }
-        .sheet(isPresented: $showCaptionsJournal) {
+        .sheet(isPresented: panelSheet(.journal)) {
             captionsJournal
         }
     }
@@ -187,7 +198,7 @@ extension CallView {
                 swipeDownOffset = CallPiPPolicy.swipeDownOffset(
                     translation: value.translation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil
+                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide
                 )
             }
             .onEnded { value in
@@ -195,7 +206,7 @@ extension CallView {
                     translation: value.translation.height,
                     predictedTranslation: value.predictedEndTranslation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil,
+                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide,
                     canSystemPiP: callManager.canActivateSystemPiP
                 )
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -258,7 +269,7 @@ extension CallView {
     /// `CallChromeVisibility.mayAutoHide`.
     private var shouldAutoHideControls: Bool {
         CallChromeVisibility.mayAutoHide(
-            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || controlsDisclosure.openPanel != nil,
+            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
             isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
         )
     }

@@ -14,23 +14,27 @@ enum CallChromeElement: CaseIterable, Sendable {
 struct CallChromeVisibility: Equatable, Sendable {
     let isRevealed: Bool
     let isStageFullScreen: Bool
+    let isModeActive: Bool
 
-    init(isRevealed: Bool = true, isStageFullScreen: Bool = false) {
+    init(isRevealed: Bool = true, isStageFullScreen: Bool = false, isModeActive: Bool = false) {
         self.isRevealed = isRevealed
         self.isStageFullScreen = isStageFullScreen
+        self.isModeActive = isModeActive
     }
 
     func isVisible(_ element: CallChromeElement) -> Bool {
         switch element {
-        case .captions, .selfView, .recordingConsent:
+        case .captions, .recordingConsent:
             return true
+        case .selfView:
+            return !isModeActive
         case .header, .controls, .openPanel, .recordingStatus, .screenShareBanner:
-            return isRevealed && !isStageFullScreen
+            return isRevealed && !isStageFullScreen && !isModeActive
         }
     }
 
     func toggled() -> CallChromeVisibility {
-        CallChromeVisibility(isRevealed: !isRevealed, isStageFullScreen: isStageFullScreen)
+        CallChromeVisibility(isRevealed: !isRevealed, isStageFullScreen: isStageFullScreen, isModeActive: isModeActive)
     }
 
     static func mayToggleByTap(isVideoStage: Bool) -> Bool {
