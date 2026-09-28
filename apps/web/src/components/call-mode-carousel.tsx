@@ -160,7 +160,9 @@ type BarProps = {
   readonly options: ReactNode;
 };
 
-const SIDE = 'grid size-12 place-items-center rounded-full text-white transition-transform active:scale-95 motion-reduce:transition-none';
+const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none';
+
+const SIDE = `${SIDE_SHAPE} text-white`;
 
 /** La barre d'un mode : ✕ Quitter · le déclencheur · les options. */
 export function CallModeBar({ quit, shutter, options }: BarProps) {
@@ -196,8 +198,7 @@ export function ModeOption({ label, glyph, onPress, pressed, data = {} }: { read
       title={label}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={onPress}
-      className={`${pressed === true ? '' : 'glass-call '}${SIDE}`}
-      style={pressed === true ? { background: 'white', color: 'var(--ios-indigo-950)' } : undefined}
+      className={pressed === true ? `bg-white text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`}
       {...data}
     >
       {glyph}
