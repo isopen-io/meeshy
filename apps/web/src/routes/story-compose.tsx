@@ -78,8 +78,7 @@ import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
 import { keyboardPose } from '@/lib/stories/studio-grip';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
-import { studioPageDuration, studioTracks, timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
-import type { StudioTiming } from '@/lib/stories/studio-text';
+import { studioPageDuration, studioTracks, type StudioTrack } from '@/lib/stories/studio-timeline';
 import type { StoryFrame } from '@/lib/stories/story-document';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
@@ -710,11 +709,6 @@ function StoryStudio({
   /** UN PANNEAU OUVERT EN BAS (Cadre, édition) — sur mobile, le socle se
    * retire le temps du panneau (lot 6). */
   const panelOpen = (frameOpen && page.background !== null) || editing !== null;
-  /** « Entre ici » / « Sort ici » — la fenêtre de l'objet SÉLECTIONNÉ, à la tête. */
-  const moveSelectedEdge = (head: number, law: (timing: StudioTiming, head: number, duration: number) => StudioTiming) => {
-    const track = studioTracks(page).find((candidate) => candidate.id === selectedId);
-    if (track !== undefined) edit((current) => withTrackTiming(current, track.id, law(track.timing, head, studioPageDuration(page))));
-  };
   const trackLabel = (track: StudioTrack): string =>
     track.kind === 'overlay' ? translate(lang, 'story.studio.timeline.overlay') : (page.texts.find((layer) => layer.id === track.id)?.text.trim() ?? '');
   const history = historyRef.current;
@@ -932,8 +926,7 @@ function StoryStudio({
               playing={timelinePlaying}
               onPlayPause={playPause}
               onSelect={(id) => setDraft((current) => withSelected(current, id))}
-              onEnter={(head) => moveSelectedEdge(head, timingEnteringAt)}
-              onExit={(head) => moveSelectedEdge(head, timingExitingAt)}
+              onRetime={(id, timing, key) => edit((current) => withTrackTiming(current, id, timing), key)}
             />
           </Suspense>
         ) : null}

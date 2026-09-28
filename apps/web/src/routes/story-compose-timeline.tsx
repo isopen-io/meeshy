@@ -1,18 +1,27 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 
 import type { SceneClockHandle } from '@/components/scene-clock';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import type { StudioTrack } from '@/lib/stories/studio-timeline';
+import type { StudioTiming } from '@/lib/stories/studio-text';
+import { timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
+import { draggedTiming, secondsForDelta, trackKeyStep, type TrackGrip } from '@/lib/stories/studio-track-drag';
 
 /**
  * **LA FRISE DU MODE ANIMÉ, SELON LA MAQUETTE** (`Main.dc.html`, lot 6 ;
  * #8415) — une plaque de verre au-dessus du socle :
  *  - lecture / pause, disque blanc ; « 1,2 s / 6 s » ;
- *  - « Entre ici » / « Sort ici » quand un objet est sélectionné (à l'arrêt) ;
+ *  - « Entre ici » / « Sort ici » quand un objet est sélectionné, à l'arrêt
+ *    COMME en lecture (retour porteur 2026-09-28, #8482) ;
  *  - une RÈGLE qu'on touche pour placer la tête ;
  *  - une PISTE par objet (libellé à gauche, barre t0 → t1) ; toucher une piste
- *    sélectionne l'objet ET place la tête là où l'on a touché ;
+ *    sélectionne l'objet ET place la tête là où l'on a touché — pendant la
+ *    lecture aussi ;
+ *  - **la BARRE se GLISSE** : l'objet se déplace dans le temps, sa durée
+ *    gardée ; **deux ANCRES** à ses bouts règlent son entrée et sa sortie
+ *    (#8482, miroir iOS #8473). Les ancres ne paraissent que sur la piste
+ *    choisie, saisies sur 28 px ; pointeur, doigt et clavier (flèches : 0,1 s,
+ *    Maj : 1 s) font la même chose (`studio-track-drag.ts`) ;
  *  - la tête de lecture, ambrée (#fbbf24).
  *
  * **60 fps** : la tête et le compteur suivent l'horloge du MOTEUR
@@ -21,6 +30,10 @@ import type { StudioTrack } from '@/lib/stories/studio-timeline';
 
 const LABEL_COLUMN = 72;
 const HEAD_COLOR = '#fbbf24';
+/** La largeur SAISIE d'une ancre, bien plus large que son trait (iOS : 28 pt). */
+const HANDLE_HIT = 28;
+/** En deçà, un appui sur la barre est un TAP (placer la tête), pas un glisser. */
+const TAP_SLOP = 3;
 
 const secondsLabel = (lang: InterfaceLanguage, value: number, digits: number): string =>
   new Intl.NumberFormat(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
@@ -40,10 +53,30 @@ function PlayMark({ playing }: { readonly playing: boolean }) {
   );
 }
 
-/** La fraction touchée d'un élément — `0` quand il n'a pas de largeur. */
-const fractionAt = (event: ReactPointerEvent<HTMLElement>): number => {
-  const box = event.currentTarget.getBoundingClientRect();
-  return box.width > 0 ? Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) : 0;
+/** La fraction d'une abscisse sur une boîte — `0` quand elle n'a pas de largeur. */
+const fractionOf = (clientX: number, box: DOMRect): number =>
+  box.width > 0 ? Math.min(1, Math.max(0, (clientX - box.left) / box.width)) : 0;
+
+const fractionAt = (event: ReactPointerEvent<HTMLElement>): number => fractionOf(event.clientX, event.currentTarget.getBoundingClientRect());
+
+/** Le geste EN COURS sur une piste — mesuré depuis la fenêtre du DÉBUT du
+ * geste, jamais depuis celle déjà déplacée. `moved` dit s'il a quitté le tap. */
+type TrackGesture = {
+  readonly id: string;
+  readonly grip: TrackGrip;
+  readonly origin: StudioTiming;
+  readonly x0: number;
+  readonly lane: DOMRect;
+  readonly key: string;
+  readonly moved: boolean;
+};
+
+const capture = (event: ReactPointerEvent<HTMLElement>) => {
+  try {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  } catch {
+    // Un pointeur synthétique (témoin) ou déjà relâché ne se capture pas.
+  }
 };
 
 export function StudioTimelinePanel({
@@ -56,8 +89,7 @@ export function StudioTimelinePanel({
   playing,
   onPlayPause,
   onSelect,
-  onEnter,
-  onExit,
+  onRetime,
 }: {
   readonly lang: InterfaceLanguage;
   readonly tracks: readonly StudioTrack[];
@@ -69,12 +101,13 @@ export function StudioTimelinePanel({
   readonly playing: boolean;
   readonly onPlayPause: () => void;
   readonly onSelect: (id: string) => void;
-  /** « Entre ici » / « Sort ici » — à la tête (`clock.now()`), pour l'objet sélectionné. */
-  readonly onEnter: (head: number) => void;
-  readonly onExit: (head: number) => void;
+  /** La fenêtre d'une piste change — `key` coalise un même geste en UN pas d'historique. */
+  readonly onRetime: (id: string, timing: StudioTiming, key: string) => void;
 }) {
   const headRef = useRef<HTMLDivElement | null>(null);
   const nowRef = useRef<HTMLSpanElement | null>(null);
+  const gestureRef = useRef<TrackGesture | null>(null);
+  const gestureCount = useRef(0);
 
   useEffect(() => {
     if (clock === null) return;
@@ -89,7 +122,62 @@ export function StudioTimelinePanel({
 
   const seek = (fraction: number) => clock?.seek(fraction * duration);
   const head = (): number => clock?.now() ?? 0;
-  const selected = !playing && tracks.some((track) => track.id === selectedId);
+  const selectedTrack = tracks.find((track) => track.id === selectedId) ?? null;
+
+  const startGesture = (event: ReactPointerEvent<HTMLElement>, track: StudioTrack, grip: TrackGrip) => {
+    event.stopPropagation();
+    const lane = event.currentTarget.closest('[data-story-track]');
+    if (lane === null) return;
+    capture(event);
+    onSelect(track.id);
+    gestureCount.current += 1;
+    gestureRef.current = {
+      id: track.id,
+      grip,
+      origin: track.timing,
+      x0: event.clientX,
+      lane: lane.getBoundingClientRect(),
+      key: `timing:${track.id}:${gestureCount.current}`,
+      moved: false,
+    };
+  };
+
+  const moveGesture = (event: ReactPointerEvent<HTMLElement>) => {
+    const gesture = gestureRef.current;
+    if (gesture === null) return;
+    const dx = event.clientX - gesture.x0;
+    if (!gesture.moved && Math.abs(dx) < TAP_SLOP) return;
+    gestureRef.current = { ...gesture, moved: true };
+    const delta = secondsForDelta({ dx, width: gesture.lane.width, duration });
+    onRetime(gesture.id, draggedTiming({ origin: gesture.origin, grip: gesture.grip, delta, duration }), gesture.key);
+  };
+
+  /** Un appui sur la barre qui n'a pas glissé est un TAP : la tête va là. */
+  const endGesture = (event: ReactPointerEvent<HTMLElement>) => {
+    const gesture = gestureRef.current;
+    gestureRef.current = null;
+    if (gesture !== null && !gesture.moved && gesture.grip === 'bar') seek(fractionOf(event.clientX, gesture.lane));
+  };
+
+  const nudge = (event: ReactKeyboardEvent<HTMLElement>, track: StudioTrack, grip: TrackGrip) => {
+    const step = trackKeyStep(event.key, event.shiftKey);
+    if (step === null) return;
+    event.preventDefault();
+    onSelect(track.id);
+    onRetime(track.id, draggedTiming({ origin: track.timing, grip, delta: step, duration }), `timing:${track.id}:keys`);
+  };
+
+  const gripHandlers = (track: StudioTrack, grip: TrackGrip) => ({
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => startGesture(event, track, grip),
+    onPointerMove: moveGesture,
+    onPointerUp: endGesture,
+    onPointerCancel: endGesture,
+    onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => nudge(event, track, grip),
+  });
+
+  const retimeSelected = (law: (timing: StudioTiming, head: number, duration: number) => StudioTiming, edge: string) => {
+    if (selectedTrack !== null) onRetime(selectedTrack.id, law(selectedTrack.timing, head(), duration), `timing:${selectedTrack.id}:${edge}`);
+  };
 
   return (
     <section data-story-timeline aria-label={translate(lang, 'story.studio.timeline')} className="glass flex flex-col gap-1.5 rounded-[20px] px-3 py-2.5">
@@ -114,12 +202,12 @@ export function StudioTimelinePanel({
           <span data-story-timeline-duration>{secondsLabel(lang, duration, 0)}</span>
           {' s'}
         </p>
-        {selected ? (
+        {selectedTrack !== null ? (
           <>
-            <button type="button" data-story-timeline-enter onClick={() => onEnter(head())} className="glass h-11 rounded-xl px-3 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            <button type="button" data-story-timeline-enter onClick={() => retimeSelected(timingEnteringAt, 'enter')} className="glass h-11 rounded-xl px-3 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
               {translate(lang, 'story.studio.timeline.enter')}
             </button>
-            <button type="button" data-story-timeline-exit onClick={() => onExit(head())} className="glass h-11 rounded-xl px-3 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            <button type="button" data-story-timeline-exit onClick={() => retimeSelected(timingExitingAt, 'exit')} className="glass h-11 rounded-xl px-3 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
               {translate(lang, 'story.studio.timeline.exit')}
             </button>
           </>
@@ -142,40 +230,63 @@ export function StudioTimelinePanel({
           tracks.map((track) => {
             const label = labelOf(track);
             const on = track.id === selectedId;
+            const left = (track.timing.start / duration) * 100;
+            const right = (track.timing.end / duration) * 100;
             return (
               <div key={track.id} className="flex items-center gap-2">
                 <span className="w-16 shrink-0 truncate text-caption" style={{ color: 'var(--color-ios-ink)' }}>
                   {label}
                 </span>
-                <button
-                  type="button"
+                {/* LA VOIE — toucher hors de la barre choisit la piste et place la tête. */}
+                <div
                   data-story-track={track.id}
                   data-story-track-start={track.timing.start}
                   data-story-track-end={track.timing.end}
-                  aria-pressed={on}
-                  aria-label={translate(lang, 'story.studio.timeline.track', { name: label })}
                   onPointerDown={(event) => {
                     onSelect(track.id);
                     seek(fractionAt(event));
                   }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                    event.preventDefault();
-                    onSelect(track.id);
-                  }}
-                  className="relative h-7 flex-1 rounded-lg focus-visible:outline-2"
-                  style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', outlineColor: 'var(--color-ios-brand)' }}
+                  className="relative h-7 flex-1 rounded-lg"
+                  style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)' }}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-y-0 block rounded-lg"
+                  <button
+                    type="button"
+                    data-story-track-bar={track.id}
+                    aria-pressed={on}
+                    aria-label={translate(lang, 'story.studio.timeline.track', { name: label })}
+                    {...gripHandlers(track, 'bar')}
+                    onClick={() => onSelect(track.id)}
+                    className="absolute inset-y-0 block touch-none rounded-lg focus-visible:outline-2"
                     style={{
-                      left: `${(track.timing.start / duration) * 100}%`,
-                      width: `${((track.timing.end - track.timing.start) / duration) * 100}%`,
+                      left: `${left}%`,
+                      width: `${right - left}%`,
+                      cursor: 'grab',
+                      outlineColor: 'var(--color-ios-brand)',
                       backgroundColor: on ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-brand) 45%, transparent)',
                     }}
                   />
-                </button>
+                  {on
+                    ? (['start', 'end'] as const).map((grip) => (
+                        <button
+                          key={grip}
+                          type="button"
+                          data-story-track-handle={grip}
+                          aria-label={translate(lang, grip === 'start' ? 'story.studio.timeline.enter' : 'story.studio.timeline.exit')}
+                          {...gripHandlers(track, grip)}
+                          className="absolute inset-y-0 z-10 grid touch-none place-items-center focus-visible:outline-2"
+                          style={{
+                            left: `calc(${grip === 'start' ? left : right}% - ${HANDLE_HIT / 2}px)`,
+                            width: `${HANDLE_HIT}px`,
+                            minHeight: `${HANDLE_HIT}px`,
+                            cursor: 'ew-resize',
+                            outlineColor: 'var(--color-ios-brand)',
+                          }}
+                        >
+                          <span aria-hidden="true" className="block h-5 w-[5px] rounded-full" style={{ backgroundColor: '#fff', boxShadow: '0 0 3px rgba(0,0,0,0.45)' }} />
+                        </button>
+                      ))
+                    : null}
+                </div>
               </div>
             );
           })
