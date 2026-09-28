@@ -2,6 +2,8 @@ import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/
 
 import type { Transport } from '../net/transport';
 
+import { anySignal, timeoutSignal } from './abort';
+
 /**
  * LE CLIENT HTTP RÉEL (#5605, T2) — le transport que `apiConfig`/`session.ts`
  * cablent, `fetchImpl` INJECTABLE pour les témoins.
@@ -27,9 +29,10 @@ import type { Transport } from '../net/transport';
  * connexion puis se tait (redémarrage, réseau qui se dégrade sans se
  * couper) laissait sinon la requête pendue indéfiniment, ce que la
  * dimension 2 (« combien de temps avant que l'utilisateur VOIE quelque
- * chose ») interdit. `timeoutMs` compose un `AbortSignal.timeout()` AVEC le
- * `signal` de l'appelant (`AbortSignal.any`, jamais l'un À LA PLACE de
- * l'autre) et rend l'expiration comme `code: 'TIMEOUT'` — distinct de
+ * chose ») interdit. `timeoutMs` compose un délai (`timeoutSignal`) AVEC le
+ * `signal` de l'appelant (`anySignal`, jamais l'un À LA PLACE de l'autre —
+ * `./abort.ts`, avec repli pour une WebView antérieure à Chromium 116, #8481)
+ * et rend l'expiration comme `code: 'TIMEOUT'` — distinct de
  * `'ABORTED'`, pour qu'un écran propose « réessayer » sans le confondre
  * avec un départ volontaire. Distinguer les deux se fait en relisant l'état
  * des DEUX signaux sources après coup, jamais le nom de l'erreur : un
@@ -280,10 +283,10 @@ function composeSignal(
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
 ): { readonly signal: AbortSignal | undefined; readonly timeoutSignal: AbortSignal | undefined } {
-  const timeoutSignal = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
-  if (callerSignal === undefined) return { signal: timeoutSignal, timeoutSignal };
-  if (timeoutSignal === undefined) return { signal: callerSignal, timeoutSignal };
-  return { signal: AbortSignal.any([callerSignal, timeoutSignal]), timeoutSignal };
+  const deadline = timeoutMs > 0 ? timeoutSignal(timeoutMs) : undefined;
+  if (callerSignal === undefined) return { signal: deadline, timeoutSignal: deadline };
+  if (deadline === undefined) return { signal: callerSignal, timeoutSignal: deadline };
+  return { signal: anySignal([callerSignal, deadline]), timeoutSignal: deadline };
 }
 
 /**
