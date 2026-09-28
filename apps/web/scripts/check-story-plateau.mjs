@@ -365,40 +365,42 @@ check(
 await pick('style', 'typewriter');
 
 /* ── 4. DÉPLACER au POINTEUR, puis TOURNER et AGRANDIR au CLAVIER ────────── */
-const moveBox = await page.evaluate(() => {
-  const el = document.querySelector('[data-story-object-move]');
+/* LOT 6 : la sélection est SILENCIEUSE — aucun contour, aucune poignée. On
+   referme l'édition, puis on GLISSE l'objet lui-même ; le clavier passe par
+   le bouton de l'objet (flèches, `+`, `]`). */
+await page.click('[data-story-edit-done]');
+check(
+  (await page.evaluate(() => document.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]') === null)),
+  'la sélection ne doit plus entourer l’objet (ni contour, ni poignée)',
+);
+const objectBox = await page.evaluate(() => {
+  const el = document.querySelector('[data-scene-object-id="text-2"]');
   if (el === null) return null;
   const r = el.getBoundingClientRect();
-  return { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width, height: r.height };
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 });
-check(moveBox !== null, 'aucune poignée de déplacement sur l’objet sélectionné');
-check(moveBox !== null && moveBox.width >= 43.5 && moveBox.height >= 43.5, `poignée de déplacement trop petite — ${JSON.stringify(moveBox)}`);
-if (moveBox !== null) {
-  await page.mouse.move(moveBox.x, moveBox.y);
+check(objectBox !== null, 'le texte sélectionné n’est pas peint sur la scène');
+if (objectBox !== null) {
+  await page.mouse.move(objectBox.x, objectBox.y);
   await page.mouse.down();
-  await page.mouse.move(moveBox.x + 40, moveBox.y - 60, { steps: 8 });
+  await page.mouse.move(objectBox.x + 40, objectBox.y - 60, { steps: 8 });
   await page.mouse.up();
   await twoFrames();
 }
 
-const gripBox = await page.evaluate(() => {
-  const el = document.querySelector('[data-story-object-grip]');
-  if (el === null) return null;
-  const r = el.getBoundingClientRect();
-  return { width: r.width, height: r.height };
-});
-check(gripBox !== null && gripBox.width >= 43.5 && gripBox.height >= 43.5, `poignée d’échelle/rotation trop petite — ${JSON.stringify(gripBox)}`);
-
 // Le CLAVIER fait tout ce que le pointeur fait (dimension 5).
-await page.focus('[data-story-object-move]');
+await page.focus('[data-story-object-edit="text-2"]');
 for (let i = 0; i < 4; i += 1) await page.keyboard.press(']');
 for (let i = 0; i < 3; i += 1) await page.keyboard.press('+');
 await page.keyboard.press('ArrowDown');
 await twoFrames();
 
-/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit ─────────────────── */
+/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit au CADRE ─────────── */
 await page.click('[data-story-option="sound-plane:foreground"]');
+await page.click('[data-story-option="frame"]');
+await page.waitForSelector('#story-studio-caption-visual', { timeout: 8000 });
 await page.fill('#story-studio-caption-visual', 'Au lever du jour');
+await page.click('[data-story-frame-done]');
 await twoFrames();
 
 /* ── 6. PUBLIER, puis RELIRE le document qui part ────────────────────────── */

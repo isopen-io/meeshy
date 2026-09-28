@@ -5,7 +5,8 @@
  * `story-document.test.ts`, `studio.test.ts`) prouvent les LOIS ; ce gate
  * prouve que `/stories/new` les PEINT :
  *
- *  1. Publier est INERTE sur un brouillon vide (loi 4).
+ *  1. Sur un brouillon vide, AUCUNE capsule Publier (lot 6 : ni grisée, ni
+ *     phrase) — loi 4 tenue par l'absence.
  *  2. Poser un fond (image) ET un son ⇒ `[data-scene-player]` PEINT
  *     réellement — les pixels de la carte ne sont PAS uniformes (deux
  *     `requestAnimationFrame` après la pose, jamais `img.complete` seul).
@@ -202,8 +203,9 @@ async function runScheme(colorScheme) {
     await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
 
     /* ── 1. Publier INERTE sur un brouillon vide (loi 4) ────────────────── */
-    const publishDisabled = await page.evaluate(() => document.querySelector('[data-story-publish]')?.disabled ?? null);
-    check(publishDisabled === true, `${tag} : Publier doit être désactivé sur un brouillon vide — ${publishDisabled}`);
+    // LOT 6 : sur un brouillon vide, AUCUNE capsule Publier — ni grisée, ni phrase.
+    const publishPresent = await page.evaluate(() => document.querySelector('[data-story-publish]') !== null);
+    check(!publishPresent, `${tag} : aucune capsule Publier ne doit paraître sur un brouillon vide`);
     check(await page.evaluate(() => document.querySelector('[data-scene-player]') === null), `${tag} : aucune scène avant toute pose`);
 
     /* ── 2. poser un fond + un son ⇒ le moteur PEINT réellement ─────────── */
@@ -281,13 +283,19 @@ async function runScheme(colorScheme) {
     check(solHache, `${tag} : le sol doit être peint du thumbhash du COMPOSITE de la scène ([data-story-studio-floor="hash"])`);
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */
-    const tailles = await targetSizesOf(page, [
-      'input[data-door="visual"]',
-      'input[data-door="sound"]',
-      '[data-story-publish]',
-      'button[aria-label="Retirer le fond"]',
-      '[data-story-studio-sound-toggle]',
-    ]);
+    /* LOT 6 : « Retirer le fond » vit dans la plaque du Cadre (le média prêt
+       n'a plus de ligne visible en bas) — on l'ouvre pour mesurer. */
+    const avantCadre = await targetSizesOf(page, ['input[data-door="visual"]', 'input[data-door="sound"]', '[data-story-publish]', '[data-story-studio-sound-toggle]']);
+    await page.click('[data-story-option="frame"]');
+    await page.waitForSelector('[data-story-frame-remove]', { timeout: 8000 });
+    /* Plaque ouverte en bas, le SOCLE se retire sur mobile (lot 6). */
+    const socleRetire = await page.evaluate(() => {
+      const row = document.querySelector('[data-story-socle-row]');
+      return row === null || getComputedStyle(row).display === 'none';
+    });
+    check(socleRetire, `${tag} : plaque du Cadre ouverte, le socle doit se retirer sur mobile`);
+    const tailles = { ...avantCadre, ...(await targetSizesOf(page, ['[data-story-frame-remove]'])) };
+    await page.click('[data-story-frame-done]');
     for (const [selector, size] of Object.entries(tailles)) {
       // Les `<input type=file>` sont masqués (`sr-only`) : c'est leur `<label>`
       // englobant (`StudioDoorButton`) qui porte la cible visible et cliquable.
@@ -773,7 +781,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `check-story-studio : vert — ${invariants} invariants : Publier inerte sur un brouillon vide, un fond + un son posés font ` +
+  `check-story-studio : vert — ${invariants} invariants : aucune capsule Publier sur un brouillon vide, un fond + un son posés font ` +
     'PEINDRE le moteur partagé, la carte est 9:16 centrée dans son plateau aux deux gabarits, cinq cibles ≥ 44 px, la saisie ' +
     'est alignée au pixel près sur ce que le moteur peint (une ligne et un texte long, sans défilement interne), le texte ' +
     'tapé survit à un rechargement, l’audience se choisit et voyage (pastille ≥ 44 px sans débordement, défaut FRIENDS ' +
