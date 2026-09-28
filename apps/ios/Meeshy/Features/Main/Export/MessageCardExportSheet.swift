@@ -16,7 +16,7 @@ struct MessageCardExportRequest {
     let handle: String?
     /// `nil` quand la conversation n'en a pas : l'option ne s'offre alors pas.
     let conversationTitle: String?
-    let accentHex: String
+    let accentColor: String
     /// « Export rapide » : le format par défaut, enregistré dès que la carte est peinte.
     let quick: Bool
 }
@@ -69,7 +69,7 @@ struct MessageCardExportSheet: View {
 
     private static let popularCount = 6
 
-    private var accent: Color { Color(hex: request.accentHex) }
+    private var accent: Color { Color(hex: request.accentColor) }
 
     private var subject: MessageCardSubject {
         exportLanguage.flatMap(request.subjectIn) ?? request.subject

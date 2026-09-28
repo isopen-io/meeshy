@@ -36,7 +36,7 @@ extension ConversationView {
             },
             handle: user?.username,
             conversationTitle: conversation?.title,
-            accentHex: accentColor,
+            accentColor: accentColor,
             quick: quick
         ))
     }
