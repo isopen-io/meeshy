@@ -225,8 +225,19 @@ nonisolated public enum FocalMetrics {
         /// LOUPE du message élu (directive porteur 2026-09-15, #6586 : « même
         /// chose pour le mode focal ») : l'élu seul grandit de ce gain pendant
         /// la scène, ses voisins restent à plat (directive 2026-08-24).
-        /// `FocalScrollPerspective.loupeScale` l'écrête à la marge de la carte.
-        public static let loupeGain: CGFloat = 0.05
+        ///
+        /// 0,05 → 0,26 le 2026-09-28 (#8506 : « agrandis tout le contenu
+        /// intérieur par ×1,2 encore ») : 1,05 × 1,2 = 1,26. Même valeur que
+        /// `loupeGain` de `packages/shared/utils/focal-metrics.ts`, que le web
+        /// lit. `FocalScrollPerspective.electedScale` ne l'écrête plus qu'à la
+        /// LARGEUR de l'écran — plus jamais à la hauteur du message.
+        public static let loupeGain: CGFloat = 0.26
+
+        /// Loupe du message long DÉPLIÉ (#8147), dans tous les modes — le gain
+        /// d'avant #8506, que l'agrandissement de l'élu Focal ne vise pas.
+        /// `FocalScrollPerspective.loupeScale` l'écrête toujours à la marge de
+        /// la carte : un déplié est haut par définition.
+        public static let expandedLoupeGain: CGFloat = 0.05
 
         /// Durée du dépliage / repliage en place (animation de hauteur) —
         /// `expandDurationMs` de `packages/shared/utils/focal-metrics.ts`.
@@ -278,14 +289,8 @@ nonisolated public enum FocalMetrics {
         /// icônes en bas doivent être exactement comme ces chips »).
         public static let chipHeight: CGFloat = 24
         public static let chipMinWidth: CGFloat = 32
-        /// Inset des chips depuis le bord du bloc de contenu : le bloc est à
-        /// `Row.paddingHorizontal − focusCardHorizontalInset` (10 pt) du bord
-        /// de la carte, 4 pt de plus ⇒ 14 pt, comme l'encoche de la liste.
+        /// Retrait des réactions dans la bande basse.
         public static let chipInset: CGFloat = 4
-        /// Débord pour que le CENTRE des chips tombe sur la ligne de la
-        /// carte : la carte (fond SwiftUI de la rangée, même repère que les
-        /// chips) dépasse le bloc de contenu de `focusCardInnerMargin`.
-        public static let overhang: CGFloat = chipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
         /// L'identité du message magnifié est la SEULE chip à dépasser le
         /// gabarit commun — « en plus agrandi simplement » (directive
         /// 2026-08-24). Elle porte désormais tout ce que porte l'en-tête de
@@ -302,31 +307,27 @@ nonisolated public enum FocalMetrics {
         /// noyer sa propre ligne.
         public static let flagLimitPlain = 3
         public static let flagLimitMagnified = 5
-        /// Débord de l'identité — son centre tombe SUR la ligne haute de la
-        /// carte, comme les chips de la ligne basse. Elle avait été posée
-        /// entièrement au-dessus le 2026-08-24 ; l'utilisateur l'a voulue de
-        /// nouveau EN BORDURE le même jour.
-        public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
-
         /// **Ce dont le contenu d'une SUITE de groupe magnifiée descend sous sa
         /// pastille d'identité** (#7953) — en RENDU seulement (`offset`), jamais
         /// en hauteur : la rangée garde sa taille au basculement d'élection.
         ///
-        /// Une tête de groupe loge la moitié basse de la pastille dans son
-        /// en-tête, effacé en focus mais toujours réservé ; une suite n'a rien
-        /// sous la ligne haute de sa carte, et la pastille y mangeait la
-        /// première ligne du message. Son contenu descend donc de ce que la
-        /// pastille mord sous la ligne, plus la marge d'une rangée.
+        /// Depuis #8506 (directive porteur 2026-09-28 : « place les contrôleurs
+        /// et détails À L'INTÉRIEUR du cadre »), la pastille ne chevauche plus
+        /// la ligne haute du cadre : elle se pose ENTIÈRE en haut du bloc. Une
+        /// tête de groupe l'y loge sur son en-tête — effacé en focus, toujours
+        /// réservé, de la même hauteur (`Focus.avatarSize`) ; une suite n'a
+        /// rien sous elle, son contenu descend donc de la pastille entière,
+        /// plus l'espacement d'une rangée — celui qui sépare l'en-tête du texte.
         public static func contentLift(isFirstInGroup: Bool) -> CGFloat {
             guard !isFirstInGroup else { return 0 }
-            return identityChipHeight - identityOverhang + FocalMetrics.Row.paddingVertical
+            return identityChipHeight + FocalMetrics.Row.paddingVertical
         }
 
-        /// **Ce dont la carte magnifiée s'allonge sous son contenu** (#7953),
-        /// pour que la bande basse, centrée sur la ligne basse de la carte, ne
-        /// morde pas la dernière ligne du message. Rendu seul, comme
-        /// `contentLift`.
-        public static let stripDrop: CGFloat = chipHeight - overhang + FocalMetrics.Row.paddingVertical
+        /// **L'écart entre la dernière ligne du message et la bande basse**
+        /// (#8506). La bande ne chevauche plus la ligne basse du cadre : elle
+        /// se pose ENTIÈRE sous le contenu, à l'intérieur du cadre, et ne
+        /// réserve aucune hauteur de rangée — elle est une superposition.
+        public static let stripGap: CGFloat = FocalMetrics.Row.paddingVertical
     }
 
     nonisolated public enum HiddenChrome {

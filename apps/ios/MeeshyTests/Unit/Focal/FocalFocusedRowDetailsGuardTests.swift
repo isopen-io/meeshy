@@ -46,7 +46,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // Le haut ne porte plus que l'identité — plus de Spacer ni de chip de date.
         XCTAssertTrue(row.contains("if input.isFocused { focusIdentityChip"), "haut : l'identité seule")
         XCTAssertFalse(row.contains("focusIdentityChip Spacer(minLength: 4) focusStampChip"), "la chip de date a quitté la ligne du haut")
-        XCTAssertTrue(row.contains(".offset(y: -FocalMetrics.FocusStrip.identityOverhang)"))
+        // #8506 : en haut du bloc, dans le cadre — la descente d'une suite annulée pour elle seule.
+        XCTAssertTrue(row.contains("if input.isFocused { focusIdentityChip.offset(y: -focusLift) }"))
         // Le bas porte la bande ET la chip de date, sur la même ligne.
         XCTAssertTrue(
             row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
@@ -107,10 +108,17 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
         // #7953 : la carte s'allonge, en RENDU, sous le contenu d'une suite
         // descendu et sous la bande basse — jamais une hauteur de rangée.
-        // #8147 : le message long DÉPLIÉ reçoit le même bloc de verre que l'élu.
-        XCTAssertTrue(row.contains(".background { if input.isFocused || input.isExpanded { focusCardBackground.padding(.bottom, -focusDrop) } }"), "carte = fond SwiftUI du contenu")
+        // #8147 : le message long DÉPLIÉ reçoit un bloc de verre, à ses marges.
+        // #8506 : le cadre de l'élu est le fond de la COLONNE du message et
+        // englobe identité et bande, à `electedCardMargin`.
+        XCTAssertTrue(row.contains(".background(alignment: .top) { if input.isFocused { electedCardBackground } }"), "cadre de l'élu = fond SwiftUI de la colonne")
+        XCTAssertTrue(row.contains(".background { if input.isExpanded && !input.isFocused { focusCardBackground } }"), "le déplié garde son verre")
         XCTAssertTrue(row.contains(".offset(y: focusLift)"), "une suite magnifiée descend par offset, pas par hauteur")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
+        XCTAssertTrue(row.contains(".padding(.bottom, -(FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight + margin))"), "le cadre descend sous la bande, à sa marge")
+        // #8506 : plus aucune réserve de hauteur sous le texte d'un élu (#5718) —
+        // la bande se pose sous le contenu, la rangée ne change pas de taille.
+        XCTAssertFalse(row.contains("focusOverlayReserveHeight"), "aucune hauteur réservée à l'élection")
         // La colonne est MONTÉE en focus comme hors focus — elle s'efface par
         // opacité (voir le compte ci-dessus), jamais par démontage : c'est ce
         // qui garantit qu'aucune largeur ne change à l'élection.
@@ -139,8 +147,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// réactions ; ses coches (haut-droite) ouvrent les détails de lecture.
     func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition SUR la ligne basse, la date à sa droite")
-        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.overhang + focusDrop)"))
+        XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition sous le contenu, la date à sa droite")
+        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight)"), "#8506 : la bande entière sous le contenu, dans le cadre")
         XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")
@@ -281,22 +289,24 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(body.contains("onOpenProfile: actions.onOpenProfile"), "le routage de l'hôte, pas un second")
     }
 
-    /// **L'identité revient EN BORDURE** (directive 2026-08-24, seconde
-    /// passe) : sa chip est de nouveau posée à cheval sur la ligne haute de la
-    /// carte, comme celles de la ligne basse. Elle avait été sortie de la
-    /// carte le matin même ; c'est le placement d'avant qui est retenu.
+    /// **L'identité vit DANS le cadre** (#8506, directive porteur 2026-09-28,
+    /// qui supplante l'« en bordure » du 2026-08-24) : sa chip se pose entière
+    /// en haut du bloc, et une suite de groupe descend son contenu de la
+    /// pastille entière — plus rien ne chevauche la ligne haute du cadre.
     @MainActor
-    func test_theMagnifiedIdentity_sitsOnTheCardsEdge_inItsChip() throws {
+    func test_theMagnifiedIdentity_sitsInsideTheCard_inItsChip() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
         let body = String(row[chip.lowerBound...].prefix(1500))
         XCTAssertTrue(body.contains("focusChip(height: FocalMetrics.FocusStrip.identityChipHeight)"), "sa chip, à son gabarit")
         XCTAssertTrue(body.contains("FocalIdentityHeader("), "et l'en-tête complet dedans")
         XCTAssertEqual(
-            FocalMetrics.FocusStrip.identityOverhang,
-            FocalMetrics.FocusStrip.identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin,
-            "son centre tombe SUR la ligne de la carte"
+            FocalMetrics.FocusStrip.contentLift(isFirstInGroup: false),
+            FocalMetrics.FocusStrip.identityChipHeight + FocalMetrics.Row.paddingVertical,
+            "une suite descend sous la pastille ENTIÈRE"
         )
+        XCTAssertEqual(FocalMetrics.FocusStrip.contentLift(isFirstInGroup: true), 0, "une tête la loge sur son en-tête réservé")
+        XCTAssertEqual(FocalMetrics.FocusStrip.identityChipHeight, FocalMetrics.Focus.avatarSize, "la pastille a la hauteur de l'en-tête réservé")
     }
 
     /// « Juste la taille qui est maintenue » : l'auteur du message magnifié
