@@ -6,7 +6,10 @@ import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
  * **LE CARROUSEL UNIQUE D'UN MODE** (#8578) — en bas, au milieu, seul : les
  * effets (ou les montages) défilent à l'horizontale, et celui qui s'arrête au
  * centre est CHOISI, en direct, pendant le glissé (anneau, plus grand ; ses
- * voisins plus petits et atténués). Toucher un élément le centre ; les
+ * voisins plus petits et atténués). Toucher un élément le CHOISIT puis le
+ * centre : le glissé qui l'y amène ne choisit personne en chemin, jusqu'à ce
+ * qu'il soit au centre — un `scrollend` arrivé avant ne le libère pas, un
+ * doigt ou une molette posés sur la piste, si (ils reprennent la main). Les
  * flèches passent au voisin (sens inversé en arabe), Début et Fin aux bouts ;
  * la molette d'une souris le fait défiler (`onWheel`, remis par l'écran).
  *
@@ -28,6 +31,9 @@ type CarouselProps = {
 
 const ITEM = 64;
 
+/** Ce qui rend la main à l'utilisateur pendant qu'un toucher centre son élément. */
+const TAKE_OVER = ['pointerdown', 'wheel'] as const;
+
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function ModeCarousel({ label, items, selected, onSelect, onWheel }: CarouselProps) {
@@ -42,9 +48,9 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
     const item = row?.querySelector<HTMLElement>(`[data-carousel-item="${id}"]`);
     if (row == null || item == null) return;
     const shift = item.getBoundingClientRect().left + item.offsetWidth / 2 - (row.getBoundingClientRect().left + row.clientWidth / 2);
-    if (Math.abs(shift) < 1) return;
+    if (Math.abs(shift) < ITEM / 2) return;
     settling.current = id;
-    row.scrollBy({ left: shift, behavior: smooth && !reducedMotion() ? 'smooth' : 'auto' });
+    row.scrollTo({ left: Math.round(row.scrollLeft + shift), behavior: smooth && !reducedMotion() ? 'smooth' : 'auto' });
   };
 
   useLayoutEffect(() => {
@@ -55,16 +61,18 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
   useEffect(() => {
     const row = track.current;
     if (row === null) return undefined;
+    const centered = (): string | null => {
+      const box = row.getBoundingClientRect();
+      const centers = [...row.querySelectorAll<HTMLElement>('[data-carousel-item]')].map((item) => {
+        const rect = item.getBoundingClientRect();
+        return { id: item.getAttribute('data-carousel-item') ?? '', center: rect.left + rect.width / 2 };
+      });
+      return nearestToCenter(centers, box.left + box.width / 2);
+    };
     const onScroll = (): void => {
       cancelAnimationFrame(frame.current);
       frame.current = requestAnimationFrame(() => {
-        const box = row.getBoundingClientRect();
-        const middle = box.left + box.width / 2;
-        const centers = [...row.querySelectorAll<HTMLElement>('[data-carousel-item]')].map((item) => {
-          const rect = item.getBoundingClientRect();
-          return { id: item.getAttribute('data-carousel-item') ?? '', center: rect.left + rect.width / 2 };
-        });
-        const nearest = nearestToCenter(centers, middle);
+        const nearest = centered();
         if (nearest === null) return;
         if (settling.current !== null) {
           if (nearest === settling.current) settling.current = null;
@@ -73,13 +81,18 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
         choose.current(nearest);
       });
     };
-    const settle = (): void => void (settling.current = null);
+    const settle = (): void => {
+      if (settling.current !== null && centered() === settling.current) settling.current = null;
+    };
+    const takeOver = (): void => void (settling.current = null);
     row.addEventListener('scroll', onScroll, { passive: true });
     row.addEventListener('scrollend', settle);
+    TAKE_OVER.forEach((name) => row.addEventListener(name, takeOver, { passive: true }));
     return () => {
       cancelAnimationFrame(frame.current);
       row.removeEventListener('scroll', onScroll);
       row.removeEventListener('scrollend', settle);
+      TAKE_OVER.forEach((name) => row.removeEventListener(name, takeOver));
     };
   }, []);
 

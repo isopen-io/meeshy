@@ -286,7 +286,7 @@
       "kb": {
         "value": 4,
         "status": "CIBLE -- MESUREE PAR #8576, NON ARBITREE",
-        "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 2,05 Ko -- les RANGEES d actions que le `(…)` sort (`components/call-control-actions.tsx` : « Mon image », « L appel », Enregistrer, sous-titres) et le RAIL de ma camera en plein ecran (#8576). Sortis de `call_overlay` parce qu ils ne se montrent qu au `(…)` ou a mon image en plein ecran : l ecran d appel les PRECHARGE des que l appel vit (`call-screen.tsx`, `loadActions`), si bien que le premier `(…)` ne les attend pas. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+        "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 2,22 Ko -- les RANGEES d actions que le `(…)` sort (`components/call-control-actions.tsx` : « Mon image », « L appel » et son « Journal » (#8579), Enregistrer, sous-titres) et le RAIL de ma camera en plein ecran (#8576). Sortis de `call_overlay` parce qu ils ne se montrent qu au `(…)` ou a mon image en plein ecran : l ecran d appel les PRECHARGE des que l appel vit (`call-screen.tsx`, `loadActions`), si bien que le premier `(…)` ne les attend pas. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
     "call_self_camera": {
@@ -329,7 +329,7 @@
       "kb": {
         "value": 4,
         "status": "CIBLE -- MESUREE PAR #8578, NON ARBITREE",
-        "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 2,31 Ko -- le CARROUSEL unique d un mode d appel et sa barre (`components/call-mode-carousel.tsx` : elements accroches au centre, choix en direct pendant le glisse, fleches, Debut / Fin, sens inverse en arabe ; barre ✕ · declencheur · options) et sa loi pure (`lib/calls/call-mode-carousel.ts`). Rolldown le sort en chunk commun parce que DEUX chunks a la demande l importent statiquement : `call_effects_mode` et `call_montage_mode`. Pas `dynamic_only` pour cette seule raison. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+        "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 2,38 Ko -- le CARROUSEL unique d un mode d appel et sa barre (`components/call-mode-carousel.tsx` : elements accroches au centre, choix en direct pendant le glisse, fleches, Debut / Fin, sens inverse en arabe ; barre ✕ · declencheur · options) et sa loi pure (`lib/calls/call-mode-carousel.ts`). Rolldown le sort en chunk commun parce que DEUX chunks a la demande l importent statiquement : `call_effects_mode` et `call_montage_mode`. Pas `dynamic_only` pour cette seule raison. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
     "call_montage_mode": {
