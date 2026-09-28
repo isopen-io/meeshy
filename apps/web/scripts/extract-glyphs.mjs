@@ -855,11 +855,12 @@ emit({
  * | Ajouter des personnes (#8433) | `user-plus` |
  * | Reagir (#8439) | `smiley` |
  * | Retirer de l'appel (#8438) | `user-minus` |
+ * | Son de l'apercu avant decroche, coupe (#8480) | `speaker-slash` |
  *
  * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
  */
 emit({
-  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus'],
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash'],
   output: join(HERE, '../src/components/glyphs-call-view.ts'),
   constant: 'CALL_VIEW_GLYPHS',
   type: 'CallViewGlyphName',

@@ -63,6 +63,10 @@ const ptCall = {
   'call.spotlight.back': 'Voltar à grade',
   'call.remove.named': 'Remover {name} da chamada',
   'call.remove.failed': 'Não foi possível remover este participante',
+  'call.preview.soundOn': 'Ativar o som',
+  'call.preview.soundOff': 'Desativar o som',
+  'call.preview.seenBy': '{name} vê você antes de atender',
+  'call.preview.heardBy': '{name} pode ouvir você antes de atender',
 } as const;
 
 export default ptCall;
