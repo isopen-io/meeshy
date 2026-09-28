@@ -3,9 +3,16 @@ package me.meeshy.app;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
+import android.widget.FrameLayout;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.WebViewListener;
@@ -37,6 +44,16 @@ public class MainActivity extends BridgeActivity {
     /** #8564 — horloge monotone de la derniere reprise, gardee par le processus. */
     private static volatile long lastRendererRecovery = RendererRecovery.NEVER;
 
+    /**
+     * #8594 — la vue plein ecran que la WebView confie a son client. Capacitor
+     * la refermait aussitot accordee (`BridgeWebChromeClient.onShowCustomView`) :
+     * `requestFullscreen()` et le bouton plein ecran d'un `<video>` ne faisaient
+     * rien, la ou le web agrandit l'element.
+     */
+    private WebChromeClient chromeClient;
+    private View fullscreenView;
+    private WebChromeClient.CustomViewCallback fullscreenCallback;
+
     static boolean isInForeground() {
         return inForeground;
     }
@@ -67,17 +84,44 @@ public class MainActivity extends BridgeActivity {
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor
-        // (permissions, fichiers, plein ecran) et on ne change que l'apercu.
-        getBridge()
-            .getWebView()
-            .setWebChromeClient(
-                new BridgeWebChromeClient(getBridge()) {
-                    @Override
-                    public Bitmap getDefaultVideoPoster() {
-                        return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
-                    }
+        // (permissions, fichiers) et on remplace l'apercu et le plein ecran.
+        chromeClient = new BridgeWebChromeClient(getBridge()) {
+            @Override
+            public Bitmap getDefaultVideoPoster() {
+                return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (fullscreenView != null) {
+                    callback.onCustomViewHidden();
+                    return;
                 }
-            );
+                fullscreenView = view;
+                fullscreenCallback = callback;
+                ((ViewGroup) getWindow().getDecorView()).addView(
+                        view,
+                        new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    );
+                WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+                bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                bars.hide(WindowInsetsCompat.Type.systemBars());
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (fullscreenView == null) {
+                    return;
+                }
+                ((ViewGroup) getWindow().getDecorView()).removeView(fullscreenView);
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView()).show(WindowInsetsCompat.Type.systemBars());
+                WebChromeClient.CustomViewCallback callback = fullscreenCallback;
+                fullscreenView = null;
+                fullscreenCallback = null;
+                callback.onCustomViewHidden();
+            }
+        };
+        getBridge().getWebView().setWebChromeClient(chromeClient);
         getBridge()
             .addWebViewListener(
                 new WebViewListener() {
@@ -99,6 +143,10 @@ public class MainActivity extends BridgeActivity {
                 new OnBackPressedCallback(true) {
                     @Override
                     public void handleOnBackPressed() {
+                        if (fullscreenView != null) {
+                            chromeClient.onHideCustomView();
+                            return;
+                        }
                         WebView webView = getBridge().getWebView();
                         if (webView != null && webView.canGoBack()) {
                             webView.goBack();
