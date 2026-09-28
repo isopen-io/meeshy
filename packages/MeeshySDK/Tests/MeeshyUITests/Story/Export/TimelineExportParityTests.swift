@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import AVFoundation
 import CoreMedia
 import MeeshySDK
@@ -35,6 +36,28 @@ final class TimelineExportParityTests: XCTestCase {
 
     private func makeComposer() -> StoryComposerViewModel {
         StoryComposerViewModel()
+    }
+
+    /// **La timeline remet au moteur la MÊME richesse que le `⋯`** (#8599) :
+    /// un sticker collé ne vit qu'en mémoire, et l'export timeline ne passait
+    /// que l'audio — le sticker sortait sous son repli 🖼️.
+    func test_timelineExport_handsTheComposerInMemoryBitmapsToTheEngine() async {
+        let exporter = SpyTimelineStoryExporter()
+        let controller = TimelineExportController(exporter: exporter,
+                                                  usernameProvider: { nil },
+                                                  introProvider: { nil })
+        let composer = makeComposer()
+        var effects = composer.currentEffects
+        effects.stickerObjects = [StorySticker(id: "stk-colle", emoji: "🖼️")]
+        composer.currentEffects = effects
+        let bitmap = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }
+        composer.registerLoadedImage(bitmap, for: "stk-colle")
+
+        controller.start(composer: composer)
+        await exporter.waitForCall()
+
+        XCTAssertTrue(exporter.lastInputs?.images["stk-colle"] === bitmap,
+                      "le bitmap du sticker collé doit atteindre le moteur")
     }
 
     /// Le cœur de la garde : quand une identité est résolue, elle doit
@@ -302,6 +325,7 @@ private final class ManualIntroResolver {
 private final class SpyTimelineStoryExporter: TimelineStoryExporting {
     private(set) var lastWatermark: StoryExportWatermark?
     private(set) var lastIntro: StoryExportIntroContent?
+    private(set) var lastInputs: StoryExportInputs?
     private(set) var callCount = 0
     private var continuation: CheckedContinuation<Void, Never>?
 
@@ -310,11 +334,12 @@ private final class SpyTimelineStoryExporter: TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL {
         lastWatermark = watermark
         lastIntro = intro
+        lastInputs = inputs
         callCount += 1
         continuation?.resume()
         continuation = nil
@@ -391,7 +416,7 @@ final class SystemTimelineStoryExporterTests: XCTestCase {
             to: outputURL,
             watermark: watermark,
             intro: makeIntro(),
-            audioResolver: nil,
+            inputs: .none,
             progress: nil
         )
         defer { try? FileManager.default.removeItem(at: finalURL) }
@@ -423,7 +448,7 @@ final class SystemTimelineStoryExporterTests: XCTestCase {
             to: outputURL,
             watermark: nil,
             intro: nil,
-            audioResolver: nil,
+            inputs: .none,
             progress: nil
         )
         defer { try? FileManager.default.removeItem(at: finalURL) }
