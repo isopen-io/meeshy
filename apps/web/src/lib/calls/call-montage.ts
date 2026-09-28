@@ -1,7 +1,12 @@
+import { GLAMOUR_LAYOUTS } from './call-montage-glamour';
+import { gridRects, inset, plain, whole, type LayoutInput as ShapeInput, type MontageLayout, type Ornament, type Rect, type Size } from './call-montage-shapes';
+
+export { gridRects, type Background, type MontageCell, type MontageLayout, type Ornament, type Rect, type Size, type Stroke } from './call-montage-shapes';
+
 /**
  * **LES MONTAGES D'UNE CAPTURE D'APPEL, EN GÉOMÉTRIE** (#8552) — sans canevas :
  * où poser chaque visage, avec quel cadre, sous quel angle, pour chacun des
- * sept styles. Le rendu (`call-montage-render.ts`) ne fait que tracer ce que
+ * treize styles, dont six glamour (`call-montage-glamour.ts`, #8580). Le rendu (`call-montage-render.ts`) ne fait que tracer ce que
  * `montageLayout` rend, pour l'aperçu en direct comme pour la capture pleine
  * résolution : les deux sont la MÊME image, à deux tailles.
  *
@@ -11,84 +16,24 @@
  * petit.
  */
 
-export const MONTAGE_STYLES = ['screen', 'grid', 'strip', 'polaroid', 'magazine', 'comic', 'heart'] as const;
+export const MONTAGE_STYLES = ['screen', 'cover', 'gold', 'redcarpet', 'grid', 'strip', 'polaroid', 'magazine', 'film', 'neon', 'noir', 'comic', 'heart'] as const;
 
 export type MontageStyle = (typeof MONTAGE_STYLES)[number];
 
-export type Size = { readonly width: number; readonly height: number };
+type LayoutInput = ShapeInput & { readonly style: MontageStyle };
 
-export type Rect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
-
-export type Stroke = { readonly width: number; readonly color: string };
-
-/**
- * Une case du montage : `card` est le rectangle du cadre (son fond `cardColor`,
- * tourné de `rotation` degrés autour de son centre), `photo` celui de l'image,
- * dans le même repère.
- */
-export type MontageCell = {
-  readonly card: Rect;
-  readonly photo: Rect;
-  readonly rotation: number;
-  readonly cardColor: string | null;
-  readonly stroke: Stroke | null;
-  readonly radius: number;
-};
-
-export type Ornament =
-  | { readonly kind: 'masthead'; readonly rect: Rect; readonly text: string }
-  | { readonly kind: 'dateline'; readonly rect: Rect }
-  | { readonly kind: 'bubble'; readonly rect: Rect; readonly tail: { readonly x: number; readonly y: number } }
-  | { readonly kind: 'holes'; readonly rects: readonly Rect[] }
-  | { readonly kind: 'halftone'; readonly rect: Rect };
-
-export type Background = { readonly kind: 'solid'; readonly color: string } | { readonly kind: 'vertical'; readonly from: string; readonly to: string };
-
-export type MontageLayout = {
-  readonly size: Size;
-  readonly background: Background;
-  readonly cells: readonly MontageCell[];
-  readonly clip: { readonly shape: 'heart'; readonly box: Rect } | null;
-  readonly ornaments: readonly Ornament[];
-};
-
-type LayoutInput = { readonly style: MontageStyle; readonly count: number; readonly size: Size; readonly onScreen?: readonly Rect[] };
-
-const inset = (rect: Rect, by: number): Rect => ({ x: rect.x + by, y: rect.y + by, width: Math.max(0, rect.width - by * 2), height: Math.max(0, rect.height - by * 2) });
-
-const plain = (rect: Rect, extra: Partial<MontageCell> = {}): MontageCell => ({ card: rect, photo: rect, rotation: 0, cardColor: null, stroke: null, radius: 0, ...extra });
-
-/** Une grille de `count` cases dans `area` : autant de colonnes que la racine, l'orientation de l'aire décidant du sens. */
-export function gridRects(count: number, area: Rect, gap: number): readonly Rect[] {
-  if (count <= 0) return [];
-  const wide = area.width >= area.height;
-  const major = Math.ceil(Math.sqrt(count));
-  const minor = Math.ceil(count / major);
-  const [cols, rows] = wide ? [major, minor] : [minor, major];
-  const cellWidth = (area.width - gap * (cols - 1)) / cols;
-  const cellHeight = (area.height - gap * (rows - 1)) / rows;
-  return Array.from({ length: count }, (_, index) => {
-    const row = Math.floor(index / cols);
-    const inRow = row === rows - 1 ? count - row * cols : cols;
-    const offset = ((cols - inRow) * (cellWidth + gap)) / 2;
-    return { x: area.x + offset + (index % cols) * (cellWidth + gap), y: area.y + row * (cellHeight + gap), width: cellWidth, height: cellHeight };
-  });
-}
-
-const whole = (size: Size): Rect => ({ x: 0, y: 0, width: size.width, height: size.height });
-
-function screen({ count, size, onScreen }: LayoutInput): MontageLayout {
+function screen({ count, size, onScreen }: ShapeInput): MontageLayout {
   const placed = onScreen !== undefined && onScreen.length === count ? onScreen.map((rect) => ({ x: rect.x * size.width, y: rect.y * size.height, width: rect.width * size.width, height: rect.height * size.height })) : gridRects(count, whole(size), 0);
   return { size, background: { kind: 'solid', color: '#0b0a1f' }, cells: placed.map((rect) => plain(rect)), clip: null, ornaments: [] };
 }
 
-function grid({ count, size }: LayoutInput): MontageLayout {
+function grid({ count, size }: ShapeInput): MontageLayout {
   const unit = Math.min(size.width, size.height);
   const gap = unit * 0.02;
   return { size, background: { kind: 'solid', color: '#15123a' }, cells: gridRects(count, inset(whole(size), gap), gap).map((rect) => plain(rect, { radius: unit * 0.03 })), clip: null, ornaments: [] };
 }
 
-function strip({ count, size }: LayoutInput): MontageLayout {
+function strip({ count, size }: ShapeInput): MontageLayout {
   const unit = Math.min(size.width, size.height);
   const margin = unit * 0.1;
   const gap = unit * 0.03;
@@ -106,7 +51,7 @@ function strip({ count, size }: LayoutInput): MontageLayout {
 
 const POLAROID_TILT = [-6, 4, -3, 7, -5, 3, -7, 5, -2] as const;
 
-function polaroid({ count, size }: LayoutInput): MontageLayout {
+function polaroid({ count, size }: ShapeInput): MontageLayout {
   const unit = Math.min(size.width, size.height);
   const pad = unit * 0.06;
   const slots = gridRects(count, inset(whole(size), pad), pad);
@@ -121,12 +66,14 @@ function polaroid({ count, size }: LayoutInput): MontageLayout {
       cardColor: '#fbfaf5',
       stroke: null,
       radius: side * 0.01,
+      glow: null,
+      tone: 'color' as const,
     };
   });
   return { size, background: { kind: 'vertical', from: '#3b2a20', to: '#1e140f' }, cells, clip: null, ornaments: [] };
 }
 
-function magazine({ count, size }: LayoutInput): MontageLayout {
+function magazine({ count, size }: ShapeInput): MontageLayout {
   const unit = Math.min(size.width, size.height);
   const pad = unit * 0.04;
   const cover = plain(whole(size));
@@ -149,7 +96,7 @@ function magazine({ count, size }: LayoutInput): MontageLayout {
   };
 }
 
-function comic({ count, size }: LayoutInput): MontageLayout {
+function comic({ count, size }: ShapeInput): MontageLayout {
   const unit = Math.min(size.width, size.height);
   const gutter = unit * 0.025;
   const panels = gridRects(count, inset(whole(size), gutter), gutter);
@@ -175,12 +122,12 @@ export function heartBox(size: Size): Rect {
   return { x: (size.width - side) / 2, y: (size.height - side) / 2, width: side, height: side };
 }
 
-function heart({ count, size }: LayoutInput): MontageLayout {
+function heart({ count, size }: ShapeInput): MontageLayout {
   const box = heartBox(size);
   return { size, background: { kind: 'vertical', from: '#ff8fb1', to: '#b0306a' }, cells: gridRects(count, box, 0).map((rect) => plain(rect)), clip: { shape: 'heart', box }, ornaments: [] };
 }
 
-const LAYOUTS: Readonly<Record<MontageStyle, (input: LayoutInput) => MontageLayout>> = { screen, grid, strip, polaroid, magazine, comic, heart };
+const LAYOUTS: Readonly<Record<MontageStyle, (input: ShapeInput) => MontageLayout>> = { screen, grid, strip, polaroid, magazine, comic, heart, ...GLAMOUR_LAYOUTS };
 
 export function montageLayout(input: LayoutInput): MontageLayout {
   return LAYOUTS[input.style]({ ...input, count: Math.max(0, input.count) });

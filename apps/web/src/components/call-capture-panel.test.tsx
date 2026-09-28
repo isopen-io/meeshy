@@ -100,11 +100,11 @@ describe('CallCapturePanel', () => {
     view.done();
   });
 
-  test('sept montages en boutons radio, chacun sa vignette ; la rangée défile à l’horizontale', () => {
+  test('treize montages en boutons radio, chacun sa vignette ; la rangée défile à l’horizontale', () => {
     const view = mount();
     const radios = view.all('[data-call-capture-row="montage"] [role="radio"]');
-    expect(radios.map((radio) => radio.textContent)).toEqual(['Plein écran', 'Mosaïque', 'Photomaton', 'Polaroïd', 'Magazine', 'BD', 'Cœur']);
-    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false', 'false', 'false', 'false', 'false']);
+    expect(radios.map((radio) => radio.textContent)).toEqual(['Plein écran', 'Couverture', 'Doré', 'Tapis rouge', 'Mosaïque', 'Photomaton', 'Polaroïd', 'Magazine', 'Pellicule', 'Néon', 'Noir et blanc', 'BD', 'Cœur']);
+    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false']);
     expect(radios.every((radio) => radio.querySelector('canvas[data-call-capture-thumb]') !== null)).toBe(true);
     expect(view.find('[data-call-capture-row="montage"] [data-call-row-scroll]')?.className).toContain('overflow-x-auto');
     view.done();

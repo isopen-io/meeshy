@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { browserCanvas, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
 import { visibleTiles } from '@/lib/calls/call-capture-tiles';
 import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Size } from '@/lib/calls/call-montage';
-import { drawMontage } from '@/lib/calls/call-montage-render';
+import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -58,7 +58,7 @@ function scaledSize(full: Size, height: number): Size {
 }
 
 /** Dessine le montage `style` dans un canevas d'aperçu, à sa taille. Rien d'affiché : un fond sombre. */
-function paintPreview(canvas: HTMLCanvasElement | null, stage: Element | null, style: MontageStyle, text: { readonly bubble: string; readonly date: string }): void {
+function paintPreview(canvas: HTMLCanvasElement | null, stage: Element | null, style: MontageStyle, text: MontageText): void {
   const context = canvas?.getContext('2d') ?? null;
   if (canvas === null || context === null) return;
   const size = { width: canvas.width, height: canvas.height };
@@ -106,7 +106,7 @@ export function CallCapturePanel({ id, closeGlyph, language, onClose, onRowKeyDo
   const full = captureSize(viewport());
   const previewSize = scaledSize(full, full.height > full.width ? 320 : 216);
   const thumbSize = scaledSize(full, 80);
-  const text = { bubble: t(language, 'callStudio.capture.bubble'), date: MONTAGE_DATE(new Date(), language) };
+  const text: MontageText = { bubble: t(language, 'callStudio.capture.bubble'), date: MONTAGE_DATE(new Date(), language), coverlines: [t(language, 'callStudio.cover.line1'), t(language, 'callStudio.cover.line2'), t(language, 'callStudio.cover.line3')] };
   const textRef = useRef(text);
   textRef.current = text;
 

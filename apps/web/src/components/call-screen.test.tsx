@@ -331,7 +331,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(panel?.closest('[data-call-control-pill]')).not.toBeNull();
     expect(view.find('[data-call-control="capture"]')?.getAttribute('aria-expanded')).toBe('true');
     expect(view.find('[data-call-capture-preview]')?.tagName).toBe('CANVAS');
-    expect(view.host.querySelectorAll('[data-call-capture-style]')).toHaveLength(7);
+    expect(view.host.querySelectorAll('[data-call-capture-style]')).toHaveLength(13);
     expect(view.find('[data-call-capture-shoot]')).not.toBeNull();
     act(() => panel?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-capture-panel]')).toBeNull();
