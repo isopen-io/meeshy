@@ -43,6 +43,8 @@ const call = (phase: CallPhase, media: CallMedia = 'audio', callId: string | nul
   captionsMode: 'off',
   captionPeers: [],
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
 });
 

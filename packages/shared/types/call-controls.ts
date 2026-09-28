@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import { CALL_REACTION_EMOJIS, type CallControlErrorCode, type CallReactionEmoji } from './call-control-law.js';
+
+export * from './call-control-law.js';
+
 /**
  * Les contrôles d'un appel EN COURS — inviter une personne (#8433), couper le
  * micro d'un participant (#8438), réagir (#8439).
@@ -11,14 +15,6 @@ import { z } from 'zod';
  */
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
-
-/**
- * Les huit réactions d'un appel. Liste FERMÉE : un emoji hors liste est refusé
- * à la frontière, et un compte lu en base qui n'y figure pas est ignoré.
- */
-export const CALL_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥'] as const;
-
-export type CallReactionEmoji = typeof CALL_REACTION_EMOJIS[number];
 
 /** Client → serveur : inviter `userId` (un ami accepté) dans l'appel en cours. */
 export const callInviteParticipantSchema = z
@@ -44,22 +40,6 @@ export const callReactionSchema = z
   .strict();
 
 export type CallReactionEvent = z.infer<typeof callReactionSchema>;
-
-export const CALL_CONTROL_ERROR_CODES = [
-  'NOT_AUTHENTICATED',
-  'VALIDATION_ERROR',
-  'RATE_LIMITED',
-  'NOT_A_PARTICIPANT',
-  'CALL_NOT_ACTIVE',
-  'NOT_A_CONTACT',
-  'ALREADY_IN_CALL',
-  'MAX_PARTICIPANTS_REACHED',
-  'TARGET_NOT_IN_CALL',
-  'PERMISSION_DENIED',
-  'INTERNAL_ERROR',
-] as const;
-
-export type CallControlErrorCode = typeof CALL_CONTROL_ERROR_CODES[number];
 
 /** L'accusé commun aux trois verbes. */
 export type CallControlAck =
@@ -102,21 +82,3 @@ export type CallReactionReceivedEvent = {
   readonly emoji: CallReactionEmoji;
   readonly at: string;
 };
-
-export type CallReactionCounts = Partial<Record<CallReactionEmoji, number>>;
-
-const KNOWN_EMOJIS: ReadonlySet<string> = new Set(CALL_REACTION_EMOJIS);
-
-export const isCallReactionEmoji = (value: string): value is CallReactionEmoji => KNOWN_EMOJIS.has(value);
-
-/** Les comptes persistés (`CallSession.reactionCounts`), relus sans confiance. */
-export function parseCallReactionCounts(raw: unknown): CallReactionCounts {
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  return Object.entries(raw).reduce<CallReactionCounts>(
-    (counts, [emoji, count]) =>
-      isCallReactionEmoji(emoji) && typeof count === 'number' && Number.isInteger(count) && count > 0
-        ? { ...counts, [emoji]: count }
-        : counts,
-    {}
-  );
-}

@@ -33,6 +33,8 @@ const ringingCall = (callId: string, phase: CallPhase = { kind: 'incoming' }): A
   captionsMode: 'off',
   captionPeers: [],
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
 });
 

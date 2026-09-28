@@ -986,3 +986,46 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ effectsUsed: [], filtersUsed: false });
   });
 });
+
+describe('les contrôles d’un appel en cours passent par le moteur (#8433, #8438)', () => {
+  const connectedCall = async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    return h;
+  };
+
+  test('qui lance l’appel en est l’initiateur ; qui décroche lit l’initiateur de l’appel', async () => {
+    const h = await connectedCall();
+    expect(h.call()?.initiatorId).toBe(ME);
+    const joined = harness({ acks: { [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession: { initiatorId: PEER, participants: [] }, iceServers: [] } } } });
+    joined.engine.handle(SERVER_EVENTS.CALL_INITIATED, { callId: 'call-9', conversationId: 'c-1', type: 'audio', initiator: { userId: PEER, username: 'amina' }, participants: [] });
+    await joined.engine.accept();
+    expect(joined.call()?.initiatorId).toBe(PEER);
+  });
+
+  test('une invitation sonne « X vous invite à un appel de groupe » : qui invite, et un groupe', () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, { callId: 'call-9', conversationId: 'c-1', type: 'audio', conversationType: 'direct', initiator: { userId: PEER, username: 'amina', displayName: 'Amina' }, invitedBy: { userId: 'u-b', username: 'bruno', displayName: 'Bruno' }, isGroup: true, participants: [] });
+    expect(h.call()).toMatchObject({ phase: { kind: 'incoming' }, invitedBy: 'Bruno', callerName: 'Bruno', isGroup: true, initiatorId: PEER });
+  });
+
+  test('coupé par l’admin : la piste se coupe et les autres l’apprennent par call:toggle-audio', async () => {
+    const h = await connectedCall();
+    h.engine.handle(SERVER_EVENTS.CALL_MUTED_BY_MODERATOR, { callId: 'call-1', byUserId: PEER });
+    expect(h.call()?.micMuted).toBe(true);
+    expect(h.call()?.localStream?.getAudioTracks().every((audio) => !audio.enabled)).toBe(true);
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_TOGGLE_AUDIO)?.[1]).toEqual({ callId: 'call-1', enabled: false });
+    h.engine.toggleMic();
+    expect(h.call()?.micMuted).toBe(false);
+  });
+
+  test('l’invité d’un duo sonne chez moi, et le duo devient groupe', async () => {
+    const h = await connectedCall();
+    await h.engine.invite({ userId: 'u-b', name: 'Bruno', avatar: null });
+    expect(h.call()?.members['u-b']?.link).toBe('ringing');
+    expect(h.call()?.isGroup).toBe(true);
+    expect(h.call()?.phase.kind).toBe('connected');
+  });
+});

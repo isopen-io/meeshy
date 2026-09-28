@@ -1,3 +1,4 @@
+import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import {
@@ -13,6 +14,7 @@ import {
   decodeParticipantJoined,
   decodeParticipantLeft,
   decodeSessionMembers,
+  decodeSessionInitiator,
   decodeSignal,
   mapServerEndReason,
   type DecodedInitiated,
@@ -40,6 +42,8 @@ import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { listenCallEvents, type CallTransport } from './call-transport';
+import { callNoticeStore, callReactionStore, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
+import { createEngineControls } from './engine-controls';
 import { loadDefaultEngineDeps } from './engine-defaults';
 import { baseCall, emptySession } from './engine-session';
 import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-link';
@@ -111,6 +115,8 @@ export type CallEngineDeps = {
   readonly createCaptions: (ctx: CaptionsContext) => CaptionsPort;
   /** Les effets de ma vidéo (#8442) — la caméra passe par eux avant de partir. */
   readonly cameraEffects?: CameraEffectsPort;
+  /** Ce que montrent les contrôles d'un appel (#8433, #8438, #8439) — les magasins de l'application par défaut. */
+  readonly controlState?: { readonly reactions: CallReactionStoreApi; readonly notices: CallNoticeStoreApi };
 };
 
 export type CallEngine = {
@@ -137,6 +143,12 @@ export type CallEngine = {
   /** La note d'après-appel (#8072) : part par `call:quality-feedback` et ferme la demande. */
   readonly rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]) => void;
   readonly skipRating: () => void;
+  /** Faire sonner un ami dans l'appel en cours (#8433). */
+  readonly invite: (person: DecodedPerson) => Promise<void>;
+  /** Couper le micro d'un participant, quand on modère l'appel (#8438). */
+  readonly muteParticipant: (userId: string) => Promise<void>;
+  /** Envoyer une réaction (#8439) ; `false` quand le débit ou l'état l'interdit. */
+  readonly react: (emoji: CallReactionEmoji) => boolean;
   readonly handle: (event: string, payload: unknown) => void;
   readonly reauthenticated: () => void;
   readonly pageHidden: () => void;
@@ -187,6 +199,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.alertTimers.clear();
     session.captions?.stop(false);
     incomingTimer = clear(incomingTimer);
+    controls.reset();
   };
 
   const effects = deps.cameraEffects ?? PASSTHROUGH_EFFECTS;
@@ -441,6 +454,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
     for (const member of decodeSessionMembers(ack.data.callSession)) remember(member, member.participantId, member.flags);
+    const initiatorId = decodeSessionInitiator(ack.data.callSession);
+    if (initiatorId !== null) update((call) => ({ ...call, initiatorId }));
     return true;
   };
 
@@ -499,7 +514,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       return;
     }
     session.iceServers = decodeIceServers(ack.data.iceServers) ?? [];
-    update((call) => ({ ...call, callId }));
+    update((call) => ({ ...call, callId, initiatorId: deps.viewerId() }));
     deps.tones.start('ringback');
     startHeartbeat(callId);
     session.ringTimer = deps.schedule(() => {
@@ -554,7 +569,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     write({
       ...baseCall({ conversationId: event.conversationId, media: event.media, title, avatar: event.isGroup ? null : event.initiator.avatar, isGroup: event.isGroup }, 'incoming', { kind: 'incoming' }),
       callId: event.callId,
-      callerName: event.initiator.name,
+      callerName: event.invitedBy?.name ?? event.initiator.name,
+      initiatorId: event.initiator.userId,
+      invitedBy: event.invitedBy?.name ?? null,
     });
     remember(event.initiator, null, event.initiatorFlags);
     deps.tones.start('ring', { titleLabel: deps.ringLabel() });
@@ -721,6 +738,11 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       case SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT:
         onPeerAlert(event, payload);
         return;
+      case SERVER_EVENTS.CALL_PARTICIPANT_INVITED:
+      case SERVER_EVENTS.CALL_MUTED_BY_MODERATOR:
+      case SERVER_EVENTS.CALL_REACTION_RECEIVED:
+        controls.receive(event, payload);
+        return;
       default:
         return;
     }
@@ -734,6 +756,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     write({ ...call, micMuted: muted });
     if (call.callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId: call.callId, enabled: !muted });
   };
+
+  const controlState = deps.controlState ?? { reactions: callReactionStore, notices: callNoticeStore };
+  const controls = createEngineControls({ read, update, request, viewerId: deps.viewerId, now: deps.now, schedule: deps.schedule, cancel: deps.cancel, muteSelf: toggleMic, ...controlState });
 
   const setCamera = async (track: MediaStreamTrack | null, cameraOn: boolean = track !== null): Promise<void> => {
     const stream = localStream;
@@ -960,6 +985,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       store.setState({ feedback: null });
     },
     skipRating: () => store.setState({ feedback: null }),
+    invite: controls.invite,
+    muteParticipant: controls.muteParticipant,
+    react: controls.react,
     dismiss: () => {
       if (read()?.phase.kind === 'ended') resetToIdle();
       store.setState({ notice: null });

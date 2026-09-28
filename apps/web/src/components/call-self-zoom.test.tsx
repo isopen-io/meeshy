@@ -61,6 +61,8 @@ const call = (camera: ZoomCamera, overrides: Partial<ActiveCall> = {}): ActiveCa
   captionsMode: 'off',
   captionPeers: [],
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
   ...overrides,
 });
