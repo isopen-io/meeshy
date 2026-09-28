@@ -190,7 +190,7 @@ extension ConversationView {
             scrollState.editingPendingAttachmentId = attachment.id
         case .video:
             if let url = composerState.pendingMediaFiles[attachment.id] {
-                scrollState.videoToEdit = url
+                scrollState.videoToEdit = PendingVideoEdit(id: attachment.id, url: url)
             }
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {

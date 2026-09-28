@@ -389,12 +389,20 @@ extension ConversationView {
             get: { scrollState.videoToEdit != nil },
             set: { if !$0 { scrollState.videoToEdit = nil } }
         )) {
-            if let url = scrollState.videoToEdit {
+            if let target = scrollState.videoToEdit {
                 MeeshyVideoEditorView(
-                    url: url,
+                    url: target.url,
                     context: .message,
                     accentColor: accentColor,
-                    onComplete: { _ in scrollState.videoToEdit = nil },
+                    onComplete: { result in
+                        // La vidéo éditée remplace la pièce jointe (#8443),
+                        // comme `applyEditedAudio` pour l'audio.
+                        if let staleURL = composerState.applyEditedVideo(attachmentId: target.id,
+                                                                         result: result) {
+                            try? FileManager.default.removeItem(at: staleURL)
+                        }
+                        scrollState.videoToEdit = nil
+                    },
                     onCancel: { scrollState.videoToEdit = nil }
                 )
             }
