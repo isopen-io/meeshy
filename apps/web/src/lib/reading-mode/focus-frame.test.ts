@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
 
-import { focusFrame, type FocusFrameMeasure } from './focus-frame';
+import { focusFrame, inkRuns, type FocusFrameMeasure } from './focus-frame';
 import { FOCUS_CARD_INNER_MARGIN, FOCUS_NEIGHBOUR_CLEARANCE } from './metrics';
 
 /**
@@ -83,5 +83,28 @@ describe('focusFrame — les voisines s’écartent', () => {
     const frame = focusFrame({ ...measure({ cardTop: 50 }), reducedMotion: true });
     expect(frame.pushUp).toBe(50 + FOCUS_NEIGHBOUR_CLEARANCE);
     expect(frame.pushDown).toBe(0);
+  });
+});
+
+describe('inkRuns — l’encre d’un nœud texte', () => {
+  test('les espaces qui pendent en fin de ligne (pre-wrap) ne sont pas de l’encre', () => {
+    expect(inkRuns('Un aparté : le composeur grandit bien avec le texte long.')).toEqual([
+      [0, 2],
+      [3, 9],
+      [10, 11],
+      [12, 14],
+      [15, 24],
+      [25, 32],
+      [33, 37],
+      [38, 42],
+      [43, 45],
+      [46, 51],
+      [52, 57],
+    ]);
+  });
+
+  test('un texte blanc n’a aucune encre, les blancs de bord sont écartés', () => {
+    expect(inkRuns('   \n\t ')).toEqual([]);
+    expect(inkRuns('  mot  ')).toEqual([[2, 5]]);
   });
 });

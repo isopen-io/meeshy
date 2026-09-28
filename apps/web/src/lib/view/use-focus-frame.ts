@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { focusFrame, type FocusFrame, type FocusFrameMeasure } from '@/lib/reading-mode/focus-frame';
+import { focusFrame, inkRuns, type FocusFrame, type FocusFrameMeasure } from '@/lib/reading-mode/focus-frame';
 import { FOCUS_CHIP_INSET } from '@/lib/reading-mode/metrics';
 
 /**
@@ -35,10 +35,12 @@ const NOT_INK =
 
 function inkRects(node: Node, into: DOMRect[]): void {
   if (node.nodeType === Node.TEXT_NODE) {
-    if ((node.textContent ?? '').trim() === '') return;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    into.push(...Array.from(range.getClientRects()));
+    inkRuns(node.textContent ?? '').forEach(([start, end]) => {
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      into.push(...Array.from(range.getClientRects()));
+    });
     return;
   }
   if (!(node instanceof Element) || node.matches(NOT_INK)) return;
