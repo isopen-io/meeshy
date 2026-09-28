@@ -16,8 +16,11 @@ import { ACCEPTED, gatedCallControl, refused } from './call-control-gate';
  * Deux verbes, hors de `call:signal` : là-bas un `answer` décroche l'appel, et
  * l'appelé n'est pas encore participant. Ici la passerelle ne relaie qu'entre
  * l'INITIATEUR d'un appel 1:1 qui SONNE et un MEMBRE de sa conversation qui n'a
- * pas encore décroché. Au décroché, à la fin ou au refus, le statut quitte la
- * sonnerie et plus rien ne passe : l'aperçu n'a aucun état serveur à nettoyer.
+ * pas encore décroché. « Décroché » se lit au STATUT, jamais à la présence dans
+ * la salle : iOS la rejoint dès la sonnerie (l'offre doit y circuler), et le
+ * décroché seul fait passer l'appel à `active`. Au décroché, à la fin ou au
+ * refus, le statut quitte la sonnerie et plus rien ne passe : l'aperçu n'a
+ * aucun état serveur à nettoyer.
  * Que l'appelé n'envoie rien (réception seule) est la loi de ses clients — la
  * passerelle, elle, garantit qu'il ne peut viser que l'initiateur.
  */
@@ -29,7 +32,6 @@ export type PreviewCall = {
   readonly initiatorId: string;
   readonly conversationId: string;
   readonly conversationType: string;
-  readonly joinedUserIds: readonly string[];
 };
 
 export type CallPreviewEventDeps = {
@@ -57,9 +59,6 @@ export function callPreviewDependencies(input: {
         initiatorId: session.initiatorId,
         conversationId: session.conversationId,
         conversationType: session.conversation?.type ?? 'unknown',
-        joinedUserIds: session.participants
-          .filter((p) => !p.leftAt)
-          .map((p) => p.participant?.userId ?? p.participantId),
       };
     },
     isMember: async (conversationId, userId) =>
@@ -79,7 +78,6 @@ async function calleeRefusal(
   if (!RINGING.has(call.status)) return 'CALL_NOT_ACTIVE';
   if (call.conversationType !== 'direct') return 'PERMISSION_DENIED';
   if (calleeId === call.initiatorId) return 'PERMISSION_DENIED';
-  if (call.joinedUserIds.includes(calleeId)) return 'ALREADY_IN_CALL';
   if (!(await deps.isMember(call.conversationId, calleeId))) return 'NOT_A_PARTICIPANT';
   return null;
 }
