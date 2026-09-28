@@ -4470,3 +4470,15 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - Rail droit dans l'ordre d'iOS : annuler, rétablir, Temps, Cadre, nouvelle scène ; frise ouverte, seul Temps reste. Le Texte est une porte du couloir gauche (média, son, texte — `canonicalRail`). Réglages quitte le rail : l'édition d'un objet vit dans son appui long (« Modifier »), son double-tap et la voie du clavier. L'unité des secondes de la frise est une clé de catalogue.
 
 **Conséquences.** Les gates et le banc écrivent par le chemin de l'auteur (`scripts/lib/stage-typing.mjs`, `tapInvite` / `typeText`) ; rejoués sur dev, ils rougissent. Ouvrir l'écriture ouvre la plaque d'édition, qui retire le socle sur mobile : on referme par « Terminé » avant de publier. La scène sort de `story-compose.tsx` vers `story-compose-scene.tsx`. `story_studio` mesure 23,98 Ko sous son plafond de 24 : la marge est presque nulle.
+
+## D-151 — Les plaques du studio sont des couches : le retour matériel et Échap ferment la plus haute ; un média porte son texte alternatif, le fond choisit son filtre (2026-09-28, #8517, #8518)
+
+**Contexte.** Mesuré au bureau : le Cadre s'étirait sur 1264 px et la carte tombait à 170 px, les rails restaient au bord de la fenêtre, loin de la carte. Sur la coque Android, le retour avec le Cadre ouvert quittait le studio ; Échap dans le Cadre refermait aussi la retouche qui le portait (écouteurs `window` doublés). iOS écrit l'alt d'un média (`ComposerObjectEditorView+Media.swift`) ; le web n'en avait aucun.
+
+**Décision.**
+- `STUDIO_PLATE` : Cadre, plaque d'édition, frise et texte du post font toute la largeur d'un téléphone, 36 rem au plus et centrés au-delà. Au-delà de 768 px, la zone de la scène se borne à une carte 9:16 de la hauteur de l'écran plus un couloir de rail de chaque côté (`.studio-shell`, CSS) : les rails flottent à côté de la carte.
+- Chaque plaque appelle `useBackDismiss` pour elle-même ; `useBackDismiss(onClose, { escape: true })` fait répondre Échap à la seule couche MONTÉE la plus haute (une couche démontée qui attend son `popstate` ne compte plus). Plus aucun écouteur Échap sur `window` dans le studio.
+- La plaque d'édition vit dans le chunk des éditeurs. Le champ alt (`StudioAltField`) et le filtre du fond (`StudioFilterSection`, le même que celui du calque) vivent dans les chunks à la demande et écrivent la PAGE par `editPage` : un chunk à la demande n'importe jamais `studio.ts` (sinon `studio-page` et `studio-timeline` sortent en chunks partagés que `story_studio` ne mesure pas).
+- L'alt part en `mediaAlt` `{ postMediaId → texte }` (`storyMediaTextPayload`, même contrat que `mediaCaption`) ; aucun alt ⇒ aucune clé. Absent d'une retouche.
+
+**Conséquences.** Quitter le studio par le routeur (une entrée poussée) n'est pas défait par la plaque qui rend la sienne. `story_studio` : 24,04 Ko, plafond porté à 25. L'alt n'est pas encore persisté dans le brouillon relu (snapshot de `studio.ts`) : un rechargement le perd.

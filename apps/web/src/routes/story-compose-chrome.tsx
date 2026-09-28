@@ -300,39 +300,10 @@ export function StudioAnimatedToggle({
 }
 
 /**
- * **LA PLAQUE D'ÉDITION** (lot 6) — en ÉDITION d'un objet (double-tap,
- * « Modifier »), plus de longue bande de contrôleurs sur les côtés : une
- * plaque de verre EN BAS porte les options de l'outil courant (styles,
- * couleurs, taille…), et « OK » referme l'édition.
+ * **LA BORNE D'UNE PLAQUE DU BAS** (#8517) — Cadre, édition, frise et texte du
+ * post : toute la largeur sur un téléphone, 36 rem au plus et centrés au
+ * bureau. Sans elle, une plaque s'étirait sur 1264 px et, ses choix posés en
+ * une ligne, la scène retombait à 170 px. `mx-auto` centre dans un parent en
+ * bloc comme dans la colonne du socle.
  */
-export function StudioEditPlaque({
-  lang,
-  title,
-  onDone,
-  children,
-}: {
-  readonly lang: InterfaceLanguage;
-  readonly title: string;
-  readonly onDone: () => void;
-  readonly children: ReactNode;
-}) {
-  return (
-    <section data-story-edit-plaque aria-label={title} className="glass flex flex-col gap-2 rounded-[22px] px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          {title}
-        </h2>
-        <button
-          type="button"
-          data-story-edit-done
-          onClick={onDone}
-          className="h-11 rounded-xl px-4 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          {translate(lang, 'story.studio.edit.done')}
-        </button>
-      </div>
-      <div className="max-h-52 overflow-y-auto">{children}</div>
-    </section>
-  );
-}
+export const STUDIO_PLATE = 'mx-auto w-full min-w-0 max-w-xl';

@@ -42,7 +42,7 @@ export function StudioShell({
 }) {
   const lang = currentInterfaceLanguage();
   return (
-    <main data-story-studio className="relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
+    <main data-story-studio className="studio-shell relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
       {floor}
       {/* LA BARRE AU PLUS HAUT (lot 6) — ✕ et ⋯ suivent la zone sûre du haut
           (`pt-safe`), et la scène monte avec eux. Ils ne passent pas DANS la barre d'état : iOS

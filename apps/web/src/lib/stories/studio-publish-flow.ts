@@ -113,6 +113,7 @@ export function publishStudioPlan(params: {
         ...(publication.hasText || content !== undefined ? { originalLanguage: params.language } : {}),
         ...(content !== undefined ? { content } : {}),
         ...(publication.mediaCaption !== undefined ? { mediaCaption: publication.mediaCaption } : {}),
+        ...(publication.mediaAlt !== undefined ? { mediaAlt: publication.mediaAlt } : {}),
         storyEffects: publication.storyEffects,
         mediaIds: publication.mediaIds,
       }),
