@@ -113,7 +113,7 @@ struct DownloadBadgeView: View {
 
     private var idleBadge: some View {
         Button {
-            downloader.start(attachment: attachment, onShare: onShareFile)
+            downloader.start(attachment: attachment, origin: .manual, onShare: onShareFile)
         } label: {
             centredIdleBadge
         }
@@ -636,7 +636,7 @@ struct AudioMediaView: View, Equatable {
                 if MediaDownloadPolicyEngine.shouldAutoDownload(
                     kind: currentMediaKind, condition: condition, prefs: prefs
                 ) {
-                    triggerCurrentLanguageDownload()
+                    triggerCurrentLanguageDownload(origin: .automatic)
                 }
             }
         }
@@ -645,11 +645,11 @@ struct AudioMediaView: View, Equatable {
     /// Triggers the download for the currently selected language's URL.
     /// Routes to `startTranslatedAudio` when the URL points to a translated
     /// audio, otherwise the standard attachment download.
-    private func triggerCurrentLanguageDownload() {
+    private func triggerCurrentLanguageDownload(origin: MediaDownloadOrigin) {
         if currentMediaKind == .audioTranslation {
-            downloader.startTranslatedAudio(url: currentAudioUrl, fileSize: 0)
+            downloader.startTranslatedAudio(url: currentAudioUrl, fileSize: 0, origin: origin)
         } else {
-            downloader.start(attachment: attachment, onShare: nil)
+            downloader.start(attachment: attachment, origin: origin, onShare: nil)
         }
     }
 
@@ -782,7 +782,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { triggerCurrentLanguageDownload() },
+                onDownload: { triggerCurrentLanguageDownload(origin: .manual) },
                 topContent: AnyView(replyTopSlot),
                 bottomContent: AnyView(playerBottomContent),
                 onPlayRequest: { onPlayAudio?(attachment.id) }
@@ -817,7 +817,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { triggerCurrentLanguageDownload() },
+                onDownload: { triggerCurrentLanguageDownload(origin: .manual) },
                 bottomContent: AnyView(playerBottomContent),
                 onPlayRequest: { onPlayAudio?(attachment.id) }
             )
@@ -851,7 +851,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { triggerCurrentLanguageDownload() },
+                onDownload: { triggerCurrentLanguageDownload(origin: .manual) },
                 onPlayRequest: { onPlayAudio?(attachment.id) }
             )
         }
