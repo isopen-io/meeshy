@@ -25,6 +25,7 @@ const record = (callId: string, direction: CallRecord['direction']): CallRecord 
   durationSec: 0,
   bytes: null,
   peer: null,
+  reactionCounts: {},
   participants: [],
 });
 

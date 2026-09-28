@@ -3,13 +3,12 @@ import AVKit
 import UIKit
 import MeeshyUI
 
-// #8394 — les boutons de la vue d'appel « C adapté ». #8432 — chacun est un
-// bouton de VERRE interactif (`CallButtonGlass`) ; le groupe qui les porte
-// (la pilule, les actions déployées) n'a qu'un voile non vitré dessous : pas
-// de verre sur verre.
+// #8394 — les boutons de la vue d'appel « C adapté ». #8459 — ils vivent
+// DANS le bloc de verre de la pilule (`callControlsGlass`) : chacun est un
+// disque plat (`CallButtonFill`), jamais un verre posé sur le verre.
 
-/// L'état visuel d'un bouton de la pilule : actif = verre blanc plein et glyphe
-/// sombre, Fin = verre rouge, pause automatique = glyphe ambre.
+/// L'état visuel d'un bouton de la pilule : actif = disque blanc plein et
+/// glyphe sombre, Fin = disque rouge, pause automatique = glyphe ambre.
 enum CallPillButtonKind: Equatable {
     case normal
     case active
@@ -17,7 +16,7 @@ enum CallPillButtonKind: Equatable {
     case warning
 }
 
-/// Le glyphe rond d'un bouton de la pilule, dans son propre cercle de verre.
+/// Le glyphe rond d'un bouton de la pilule, sur son disque plat.
 /// Doctrine 86i : un glyphe dans un cercle de taille fixe garde une taille
 /// figée ; c'est la légende, dessous, qui porte le Dynamic Type.
 struct CallPillGlyph: View {
@@ -25,16 +24,12 @@ struct CallPillGlyph: View {
     let kind: CallPillButtonKind
     let diameter: CGFloat
 
-    @Environment(\.callGlassMorph) private var morph
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: diameter * 0.4, weight: .semibold))
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
-            .modifier(CallButtonGlass(kind: kind))
-            .modifier(CallGlassMorphModifier(tag: morph, reduceMotion: reduceMotion))
+            .background(Circle().fill(CallButtonFill.color(for: kind)))
             .accessibilityHidden(true)
     }
 

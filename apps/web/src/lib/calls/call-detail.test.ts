@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CallSession } from '@/lib/api/call-sessions';
 import type { CallRecord } from '@/lib/api/calls';
 
-import { callAbsoluteDate, callDataLabel, callDetailFromRecord, callDetailFromSession, deepLinkPlan, findCachedRecord } from './call-detail';
+import { callAbsoluteDate, callDataLabel, callDetailFromRecord, callDetailFromSession, deepLinkPlan, findCachedRecord, reactionTallies } from './call-detail';
 
 /**
  * LA FICHE D'UN APPEL (#6383) — miroir de `CallDetailSheet.swift` : nom,
@@ -23,6 +23,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   durationSec: 754,
   bytes: 48_620_000,
   peer: { userId: 'u-kwame', username: 'kwame', displayName: 'Kwame Mensah', avatar: 'k.jpg' },
+  reactionCounts: {},
   participants: [],
   ...overrides,
 });
@@ -36,6 +37,7 @@ const session = (overrides: Partial<CallSession> = {}): CallSession => ({
   answered: true,
   startedAt: '2026-09-13T09:00:00.000Z',
   durationSec: 60,
+  reactionCounts: {},
   participants: [
     { userId: 'u-ada', name: 'Ada', avatar: 'a.jpg' },
     { userId: 'u-me', name: 'Moi', avatar: null },
@@ -58,7 +60,16 @@ describe('une fiche depuis le journal en cache', () => {
       isGroup: false,
       participants: [],
       live: false,
+      reactions: [],
     });
+  });
+
+  test('les réactions de l’appel se lisent dans l’ordre de la palette, emoji × compte (#8439)', () => {
+    expect(callDetailFromRecord(record({ reactionCounts: { '🔥': 2, '👍': 5 } }), 'Inconnu').reactions).toEqual([
+      { emoji: '👍', count: 5 },
+      { emoji: '🔥', count: 2 },
+    ]);
+    expect(reactionTallies({})).toEqual([]);
   });
 
   test('aucune clé ne porte un numéro de téléphone', () => {

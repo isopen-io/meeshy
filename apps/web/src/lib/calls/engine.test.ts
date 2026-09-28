@@ -1,164 +1,21 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { DIRECT, flush, harness, ME, PEER, stream, track, type FakeLink, type FakeTrack } from '@/test-support/call-engine-harness';
+
 import type { CameraEffectsPort } from './camera-effects';
-import { createCaptions } from './call-captions-controller';
-import { createCallStore, type CallStoreApi } from './call-store';
 import { callLayout } from './call-view';
-import { bindCallTransport, resetCallTransportForTests, type CallTransport } from './call-transport';
+import { resetCallTransportForTests } from './call-transport';
 import type { QualityTick } from './call-quality-loop';
-import { createCallEngine, OUTGOING_RING_TIMEOUT_MS, QUALITY_INTERVAL_MS, type CallEngineDeps, type StartCallRequest } from './engine';
-import type { LinkState, PeerLink, PeerLinkDeps } from './peer-link';
+import { OUTGOING_RING_TIMEOUT_MS, type StartCallRequest } from './engine';
 
 /**
  * LE MOTEUR D'APPEL, DE BOUT EN BOUT SANS NAVIGATEUR (#6382, #8044) — la
  * passerelle, les liens WebRTC, les médias et l'horloge sont des doublures :
  * ces témoins prouvent le PROTOCOLE (qui émet quoi, dans quel ordre) et les
- * ÉTATS que l'écran lit, miroirs de `CallManager.swift`.
+ * ÉTATS que l'écran lit, miroirs de `CallManager.swift`. Le banc d'essai est
+ * `test-support/call-engine-harness.ts`.
  */
-
-const ME = 'u-me';
-const PEER = 'u-peer';
-
-type FakeTrack = { kind: 'audio' | 'video'; enabled: boolean; readyState: 'live' | 'ended'; onended: (() => void) | null; stop: () => void };
-
-const track = (kind: 'audio' | 'video'): FakeTrack => {
-  const self: FakeTrack = { kind, enabled: true, readyState: 'live', onended: null, stop: () => (self.readyState = 'ended') };
-  return self;
-};
-
-/* Doublure de `MediaStream` : happy-dom n'en fournit pas. */
-const stream = (tracks: readonly FakeTrack[]): MediaStream => {
-  let list = [...tracks];
-  const fake = {
-    getTracks: () => list,
-    getAudioTracks: () => list.filter((t) => t.kind === 'audio'),
-    getVideoTracks: () => list.filter((t) => t.kind === 'video'),
-    addTrack: (t: FakeTrack) => (list = [...list, t]),
-    removeTrack: (t: FakeTrack) => (list = list.filter((x) => x !== t)),
-  };
-  return fake as unknown as MediaStream;
-};
-
-type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
-
-function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort } = {}) {
-  resetCallTransportForTests();
-  const store: CallStoreApi = createCallStore();
-  const emitted: Array<readonly [string, unknown]> = [];
-  const requested: Array<readonly [string, unknown]> = [];
-  const links: FakeLink[] = [];
-  const timers = new Map<number, { fn: () => void; at: number }>();
-  const tones: string[] = [];
-  const displays: FakeTrack[] = [];
-  const cameras: FakeTrack[] = [];
-  const repeats: Array<{ readonly fn: () => void; readonly ms: number; stopped: boolean }> = [];
-  const networkListeners: Array<() => void> = [];
-  let clock = 1_000;
-  let nextTimer = 1;
-  const acks: Record<string, unknown> = { [CLIENT_EVENTS.CALL_INITIATE]: { success: true, data: { callId: 'call-1', mode: 'p2p', iceServers: [{ urls: 'stun:stun.example' }] } }, [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession: { participants: [] }, iceServers: [] } }, ...options.acks };
-
-  const transport: CallTransport = {
-    connected: () => true,
-    emit: (event, payload) => void emitted.push([event, payload]),
-    request: async (event, payload) => {
-      requested.push([event, payload]);
-      return acks[event] ?? { success: true, data: {} };
-    },
-  };
-  const binding = bindCallTransport(transport);
-
-  const deps: CallEngineDeps = {
-    store,
-    transport: () => transport,
-    viewerId: () => ME,
-    fetchActiveCallId: async () => options.activeCallId ?? null,
-    acquireMedia: async ({ video }) => {
-      if (options.mediaError !== undefined) throw options.mediaError;
-      return stream(video ? [track('audio'), track('video')] : [track('audio')]);
-    },
-    acquireCamera: async () => {
-      const camera = track('video');
-      cameras.push(camera);
-      return camera as unknown as MediaStreamTrack;
-    },
-    acquireDisplay: async () => {
-      if (options.displayError !== undefined) throw options.displayError;
-      const display = track('video');
-      displays.push(display);
-      return display as unknown as MediaStreamTrack;
-    },
-    createLink: (linkDeps) => {
-      const link: FakeLink = {
-        deps: linkDeps,
-        offers: 0,
-        closed: false,
-        received: [],
-        sent: [],
-        offer: async () => void (link.offers += 1),
-        receiveDescription: async (description) => void link.received.push(description.type),
-        receiveCandidate: async () => void link.received.push('candidate'),
-        setVideoTrack: async (sent) => void link.sent.push(sent),
-        setAudioTrack: async (sent) => void link.sent.push(sent),
-        setIceServers: () => undefined,
-        connection: () => ({}) as RTCPeerConnection,
-        close: () => void (link.closed = true),
-      };
-      links.push(link);
-      return link;
-    },
-    createStream: (tracks) => stream(tracks as unknown as FakeTrack[]),
-    now: () => clock,
-    schedule: (fn, ms) => {
-      const id = nextTimer++;
-      timers.set(id, { fn, at: clock + ms });
-      return id;
-    },
-    cancel: (handle) => void timers.delete(handle as number),
-    repeat: (fn, ms) => repeats.push({ fn, ms, stopped: false }) - 1,
-    stopRepeat: (handle) => {
-      const entry = repeats[handle as number];
-      if (entry !== undefined) entry.stopped = true;
-    },
-    createQualityLoop: () => ({ tick: async () => options.quality?.() ?? null }),
-    watchNetwork: (onChange) => {
-      networkListeners.push(onChange);
-      return () => void networkListeners.splice(networkListeners.indexOf(onChange), 1);
-    },
-    platform: () => 'web',
-    deviceModel: () => 'Chrome · Linux',
-    tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
-    ringLabel: () => 'Appel entrant',
-    random: () => options.random ?? 0.99,
-    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', viewerName: () => 'Moi', newId: () => 'w-1' }),
-    ...(options.cameraEffects === undefined ? {} : { cameraEffects: options.cameraEffects }),
-  };
-  const engine = createCallEngine(deps);
-
-  const advance = (ms: number): void => {
-    clock += ms;
-    for (const [id, timer] of [...timers.entries()].sort((a, b) => a[1].at - b[1].at)) {
-      if (timer.at <= clock) {
-        timers.delete(id);
-        timer.fn();
-      }
-    }
-  };
-  const call = () => store.getState().call;
-  const names = (list: ReadonlyArray<readonly [string, unknown]>) => list.map(([event]) => event);
-  const linkState = (link: FakeLink, state: LinkState) => link.deps.onState(state);
-  const sampleQuality = async (): Promise<void> => {
-    for (const entry of repeats.filter((candidate) => candidate.ms === QUALITY_INTERVAL_MS && !candidate.stopped)) entry.fn();
-    await flush();
-  };
-  const networkChanged = (): void => networkListeners.forEach((listener) => listener());
-
-  return { engine, store, emitted, requested, links, tones, displays, cameras, advance, call, names, linkState, binding, sampleQuality, networkChanged };
-}
-
-const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };
-
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 afterEach(() => resetCallTransportForTests());
 
@@ -984,5 +841,48 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     await h.engine.start(DIRECT);
     h.engine.hangup();
     expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ effectsUsed: [], filtersUsed: false });
+  });
+});
+
+describe('les contrôles d’un appel en cours passent par le moteur (#8433, #8438)', () => {
+  const connectedCall = async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    return h;
+  };
+
+  test('qui lance l’appel en est l’initiateur ; qui décroche lit l’initiateur de l’appel', async () => {
+    const h = await connectedCall();
+    expect(h.call()?.initiatorId).toBe(ME);
+    const joined = harness({ acks: { [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession: { initiatorId: PEER, participants: [] }, iceServers: [] } } } });
+    joined.engine.handle(SERVER_EVENTS.CALL_INITIATED, { callId: 'call-9', conversationId: 'c-1', type: 'audio', initiator: { userId: PEER, username: 'amina' }, participants: [] });
+    await joined.engine.accept();
+    expect(joined.call()?.initiatorId).toBe(PEER);
+  });
+
+  test('une invitation sonne « X vous invite à un appel de groupe » : qui invite, et un groupe', () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, { callId: 'call-9', conversationId: 'c-1', type: 'audio', conversationType: 'direct', initiator: { userId: PEER, username: 'amina', displayName: 'Amina' }, invitedBy: { userId: 'u-b', username: 'bruno', displayName: 'Bruno' }, isGroup: true, participants: [] });
+    expect(h.call()).toMatchObject({ phase: { kind: 'incoming' }, invitedBy: 'Bruno', callerName: 'Bruno', isGroup: true, initiatorId: PEER });
+  });
+
+  test('coupé par l’admin : la piste se coupe et les autres l’apprennent par call:toggle-audio', async () => {
+    const h = await connectedCall();
+    h.engine.handle(SERVER_EVENTS.CALL_MUTED_BY_MODERATOR, { callId: 'call-1', byUserId: PEER });
+    expect(h.call()?.micMuted).toBe(true);
+    expect(h.call()?.localStream?.getAudioTracks().every((audio) => !audio.enabled)).toBe(true);
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_TOGGLE_AUDIO)?.[1]).toEqual({ callId: 'call-1', enabled: false });
+    h.engine.toggleMic();
+    expect(h.call()?.micMuted).toBe(false);
+  });
+
+  test('l’invité d’un duo sonne chez moi, et le duo devient groupe', async () => {
+    const h = await connectedCall();
+    await h.engine.invite({ userId: 'u-b', name: 'Bruno', avatar: null });
+    expect(h.call()?.members['u-b']?.link).toBe('ringing');
+    expect(h.call()?.isGroup).toBe(true);
+    expect(h.call()?.phase.kind).toBe('connected');
   });
 });

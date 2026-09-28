@@ -402,7 +402,7 @@ describe('selectOnboardingSuggestions — la loi pure', () => {
   });
 });
 
-describe('OnboardingService.getState — le courriel et la story (#7907)', () => {
+describe('OnboardingService.getState — le courriel et la story (#7907, #8476)', () => {
   it('courriel non vérifié : `emailVerified` faux, étape `email` NON pré-cochée', async () => {
     const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
     expect(state?.emailVerified).toBe(false);
@@ -416,18 +416,21 @@ describe('OnboardingService.getState — le courriel et la story (#7907)', () =>
     expect(state?.prefilledSteps).toEqual(['email', 'story']);
   });
 
-  it('non vérifié, aucune story jamais écrite : la première story est publiable', async () => {
-    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
-    expect(state?.canPublishStory).toBe(true);
+  it('non vérifié, dans le délai de grâce (#8476) : publiable, même après une story déjà écrite', async () => {
+    const first = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    const second = await new OnboardingService(makePrisma({ authoredStories: [{ deletedAt: null }] })).getState(VIEWER, NOW);
+    expect(first?.canPublishStory).toBe(true);
+    expect(second?.canPublishStory).toBe(true);
   });
 
-  it('non vérifié, une story déjà écrite — même supprimée : plus publiable', async () => {
-    const live = await new OnboardingService(makePrisma({ authoredStories: [{ deletedAt: null }] })).getState(VIEWER, NOW);
-    const deleted = await new OnboardingService(
-      makePrisma({ authoredStories: [{ deletedAt: new Date('2026-09-25T11:00:00.000Z') }] }),
-    ).getState(VIEWER, NOW);
-    expect(live?.canPublishStory).toBe(false);
-    expect(deleted?.canPublishStory).toBe(false);
+  it('non vérifié, délai de grâce échu (#8476) : plus publiable', async () => {
+    const afterDeadline = new Date('2026-10-27T00:00:00.000Z');
+    expect((await new OnboardingService(makePrisma()).getState(VIEWER, afterDeadline))?.canPublishStory).toBe(false);
+  });
+
+  it('non vérifié mais porteur d\'un numéro, délai échu : publiable — le numéro n\'est jamais bloquant (#8055)', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ phoneNumber: '+33600000000' } as Partial<UserRow>) });
+    expect((await new OnboardingService(prisma).getState(VIEWER, new Date('2026-10-27T00:00:00.000Z')))?.canPublishStory).toBe(true);
   });
 
   it('vérifié : toujours publiable, quelles que soient ses stories', async () => {

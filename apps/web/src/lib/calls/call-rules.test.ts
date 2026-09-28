@@ -161,5 +161,10 @@ describe('la bulle d’appel', () => {
     expect(callNoticeTarget({ ...summary, attachments: [image] })?.recording).toBeNull();
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k' }, attachments: [recording] })?.recording).toBeNull();
   });
+
+  test('un enregistrement VIDÉO de l’appel se revoit aussi depuis la bulle (#8437)', () => {
+    const video = { id: 'att-vid', mimeType: 'video/webm', fileUrl: '/u/rec.webm' } as unknown as Attachment;
+    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k' }, attachments: [video] })?.recording?.attachment).toBe(video);
+  });
 });
 

@@ -24,13 +24,20 @@ export const publicationRefusalText = (lang: InterfaceLanguage, refusal: Publica
 
 export type StudioPlaceRefusalNotice = { readonly door: StudioDoor; readonly reason: 'door' | 'media-max' };
 
-/** Les médias de la page COURANTE — une ligne par porte occupée. */
+/** La carte des médias a-t-elle une ligne à montrer ? */
+export const studioAssetsShown = (page: StudioPage): boolean =>
+  page.sound !== null || [page.background, page.overlay].some((asset) => asset !== null && asset.upload.phase !== 'ready');
+
+/** Les médias de la page COURANTE — une ligne par porte occupée, SAUF un
+ * visuel PRÊT (lot 6, « plus de détails en bas ») : sa légende vit dans
+ * son panneau (Cadre pour le fond, édition pour le calque). Un visuel en
+ * montée ou en échec garde sa ligne — c'est là qu'on réessaie. Le son garde
+ * la sienne (il n'est pas un objet de la scène). */
 export function StudioPageAssets({
   lang,
   page,
   onRetry,
   onRemove,
-  onCaption,
   onSoundPlane,
   locked = false,
 }: {
@@ -38,7 +45,6 @@ export function StudioPageAssets({
   readonly page: StudioPage;
   readonly onRetry: (door: StudioDoor) => void;
   readonly onRemove: (door: StudioDoor) => void;
-  readonly onCaption: (door: 'visual' | 'overlay', value: string) => void;
   readonly onSoundPlane: (plane: StudioPlane) => void;
   /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — le plan que la
    * séquence publie est figé au premier clic sur Publier ; retirer, réessayer
@@ -59,9 +65,9 @@ export function StudioPageAssets({
             label={translate(lang, door === 'visual' ? 'story.studio.background.label' : 'story.studio.overlay.label')}
             removeLabel={translate(lang, door === 'visual' ? 'story.studio.background.remove' : 'story.studio.overlay.remove')}
             upload={asset.upload}
+            discreet={asset.upload.phase === 'ready'}
             onRetry={asset.file !== undefined ? () => onRetry(door) : undefined}
             onRemove={() => onRemove(door)}
-            caption={{ value: asset.caption, inputId: `story-studio-caption-${door}`, onChange: (value) => onCaption(door, value) }}
             locked={locked}
           />
         );

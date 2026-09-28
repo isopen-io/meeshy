@@ -50,3 +50,22 @@ describe('studioFloor — la source du sol, dans l’ordre de justesse', () => {
     expect(studioFloor({ page: page() })).toBeNull();
   });
 });
+
+/** LE SOL PREND LA TEINTE DU CADRE (lot 6) — noir, blanc, indigo ou sable
+ * s'appliquent aussi autour de la carte ; le flou garde le thumbhash. */
+describe('studioFloor — la teinte choisie au Cadre', () => {
+  test('un fond ajusté sur « sable » : le sol est sable', () => {
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', asset({ frame: { fitMode: 'fit', backdrop: 'sand' } }));
+    expect(studioFloor({ page, sceneHash: HASH })).toEqual({ kind: 'tint', src: '#FDE68A' });
+  });
+
+  test('flou (le défaut) : le thumbhash, comme avant', () => {
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', asset({ frame: { fitMode: 'fit', backdrop: 'blur' } }));
+    expect(studioFloor({ page, sceneHash: HASH })?.kind).toBe('hash');
+  });
+
+  test('un fond qui REMPLIT n’a pas de bandes : la teinte ne s’applique pas', () => {
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', asset({ frame: { fitMode: 'fill', backdrop: 'sand' } }));
+    expect(studioFloor({ page, sceneHash: HASH })?.kind).toBe('hash');
+  });
+});

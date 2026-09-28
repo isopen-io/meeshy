@@ -1,7 +1,9 @@
 import {
   CALL_RECORDING_ERROR_CODES,
   CALL_RECORDING_STOP_REASONS,
+  callRecordingKindOf,
   type CallRecordingErrorCode,
+  type CallRecordingKind,
   type CallRecordingStopReason,
 } from '@meeshy/shared/types/call-recording';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
@@ -22,10 +24,12 @@ import type { CallTransport } from './call-transport';
 
 export type CallRecordingView =
   | { readonly kind: 'idle' }
-  | { readonly kind: 'asking'; readonly callId: string }
+  | { readonly kind: 'asking'; readonly callId: string; readonly recordingKind: CallRecordingKind }
   | {
       readonly kind: 'pending';
       readonly callId: string;
+      /** L'audio seul, ou la vidéo avec son audio (#8437) : chacun consent en le sachant. */
+      readonly recordingKind: CallRecordingKind;
       readonly recordingId: string;
       readonly requesterId: string;
       readonly mine: boolean;
@@ -34,6 +38,7 @@ export type CallRecordingView =
   | {
       readonly kind: 'recording';
       readonly callId: string;
+      readonly recordingKind: CallRecordingKind;
       readonly recordingId: string;
       readonly recorderId: string;
       readonly mine: boolean;
@@ -53,7 +58,7 @@ export type CallRecordingOutcome = 'saved' | 'save-failed' | 'empty';
 
 export type CallRecorderHandle = { readonly stop: () => Promise<CallRecordingOutcome> };
 
-export type CallRecorderTarget = { readonly callId: string; readonly recordingId: string };
+export type CallRecorderTarget = { readonly callId: string; readonly recordingId: string; readonly kind: CallRecordingKind };
 
 export type CallRecorderStart = (target: CallRecorderTarget) => CallRecorderHandle;
 
@@ -120,6 +125,7 @@ export function createCallRecording(deps: CallRecordingDeps) {
       view: {
         kind: 'pending',
         callId: String(payload.callId),
+        recordingKind: callRecordingKindOf(text(payload, 'kind')),
         recordingId,
         requesterId,
         mine: requesterId === viewer,
@@ -134,7 +140,7 @@ export function createCallRecording(deps: CallRecordingDeps) {
     const recorderId = text(payload, 'recorderId');
     if (recordingId === null || recorderId === null) return;
     set({
-      view: { kind: 'recording', callId: String(payload.callId), recordingId, recorderId, mine: recorderId === deps.viewerId() },
+      view: { kind: 'recording', callId: String(payload.callId), recordingKind: callRecordingKindOf(text(payload, 'kind')), recordingId, recorderId, mine: recorderId === deps.viewerId() },
       notice: null,
     });
   };
@@ -153,16 +159,16 @@ export function createCallRecording(deps: CallRecordingDeps) {
     else if (event === SERVER_EVENTS.CALL_RECORDING_STOPPED) onStopped(payload);
   };
 
-  const request = async (): Promise<void> => {
+  const request = async (recordingKind: CallRecordingKind = 'audio'): Promise<void> => {
     const callId = liveCallId();
     const transport = deps.transport();
     if (callId === null || transport === null || store.getState().view.kind !== 'idle') return;
-    set({ view: { kind: 'asking', callId }, notice: null });
-    const ack = ackOf(await transport.request(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId }, ACK_TIMEOUT_MS).catch(() => null));
+    set({ view: { kind: 'asking', callId, recordingKind }, notice: null });
+    const ack = ackOf(await transport.request(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId, kind: recordingKind }, ACK_TIMEOUT_MS).catch(() => null));
     const view = store.getState().view;
     if (ack.ok) {
       if (view.kind === 'asking') {
-        set({ view: { kind: 'pending', callId, recordingId: ack.recordingId, requesterId: deps.viewerId(), mine: true, mustAnswer: false } });
+        set({ view: { kind: 'pending', callId, recordingKind, recordingId: ack.recordingId, requesterId: deps.viewerId(), mine: true, mustAnswer: false } });
       }
       return;
     }
@@ -210,7 +216,7 @@ export function createCallRecording(deps: CallRecordingDeps) {
       finish(active);
     }
     if (wanted === null || running !== null || view.kind !== 'recording') return;
-    const target = { callId: view.callId, recordingId: wanted };
+    const target = { callId: view.callId, recordingId: wanted, kind: view.recordingKind };
     running = { recordingId: wanted, handle: deps.loadRecorder().then((start) => start(target)) };
   };
 

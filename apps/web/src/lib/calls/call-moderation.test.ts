@@ -4,7 +4,7 @@ import type { ConversationMember } from '@/lib/api/conversation-members';
 
 import type { CallMember } from './call-store';
 import { spotlight } from './call-view';
-import { callRoles, canRemoveFromCall, removeFromCall } from './call-moderation';
+import { callRoles, canRemoveFromCall, mayModerateInCall, removeFromCall } from './call-moderation';
 
 /**
  * LA GRILLE D'UN APPEL DE GROUPE (#3721, parité I2 / I3) — mettre un
@@ -44,6 +44,42 @@ describe('qui peut retirer qui', () => {
 
   test('la casse du rang servi ne change rien', () => {
     expect(canRemoveFromCall('ADMIN', 'MEMBER')).toBe(true);
+  });
+});
+
+describe('qui modère un appel (#8438) — la loi de callModerationPolicy', () => {
+  const roles = new Map([
+    ['u-init', 'member'],
+    ['u-mod', 'moderator'],
+    ['u-mod2', 'moderator'],
+    ['u-mem', 'member'],
+    ['u-admin', 'admin'],
+  ]);
+  const as = (viewerId: string | null, initiatorId: string | null = 'u-init') => ({ viewerId, initiatorId, roles });
+
+  test('celui qui a lancé l’appel en est l’admin, quel que soit son rang', () => {
+    expect(mayModerateInCall(as('u-init'), 'u-admin')).toBe(true);
+    expect(mayModerateInCall(as('u-init'), 'u-mem')).toBe(true);
+  });
+
+  test('un modérateur de la conversation modère un rang inférieur, jamais un égal ni un supérieur', () => {
+    expect(mayModerateInCall(as('u-mod'), 'u-mem')).toBe(true);
+    expect(mayModerateInCall(as('u-mod'), 'u-mod2')).toBe(false);
+    expect(mayModerateInCall(as('u-mod'), 'u-admin')).toBe(false);
+  });
+
+  test('un invité de l’appel (aucun rang) et un simple membre ne modèrent personne', () => {
+    expect(mayModerateInCall(as('u-guest'), 'u-mem')).toBe(false);
+    expect(mayModerateInCall(as('u-mem'), 'u-guest')).toBe(false);
+  });
+
+  test('nul ne se modère soi-même, et un spectateur inconnu ne modère rien', () => {
+    expect(mayModerateInCall(as('u-init'), 'u-init')).toBe(false);
+    expect(mayModerateInCall(as(null), 'u-mem')).toBe(false);
+  });
+
+  test('un initiateur inconnu ne donne aucun droit', () => {
+    expect(mayModerateInCall(as('u-mem', null), 'u-guest')).toBe(false);
   });
 });
 

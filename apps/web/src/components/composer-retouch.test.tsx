@@ -117,3 +117,29 @@ describe('le studio en RETOUCHE — seulement ce qui peint', () => {
     expect(done).toBe(false);
   });
 });
+
+/**
+ * LE RETOUR ANDROID REFERME LE STUDIO, PAS LE FIL (#8460) — dans la coque,
+ * le bouton retour matériel est un `popstate`. Sans `useBackDismiss`, la
+ * couche n'en écoutait aucun : le retour quittait la conversation, studio
+ * ouvert, là où Échap le refermait sur le web.
+ */
+describe('le retour matériel', () => {
+  test('popstate ⇒ le studio se referme sans rien rendre', async () => {
+    let cancelled = false;
+    let done = false;
+    const el = mount(<ComposerRetouch attachment={photo()} onDone={() => (done = true)} onCancel={() => (cancelled = true)} render={fakeRender} />);
+    await flush(() => el.querySelector('[data-story-retouch-cancel]') !== null);
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(cancelled).toBe(true);
+    expect(done).toBe(false);
+  });
+
+  test('ouvert ⇒ pose UNE entrée d’historique que le retour consomme', () => {
+    const before = window.history.length;
+    mount(<ComposerRetouch attachment={photo()} onDone={() => undefined} onCancel={() => undefined} render={fakeRender} />);
+    expect(window.history.length).toBe(before + 1);
+  });
+});

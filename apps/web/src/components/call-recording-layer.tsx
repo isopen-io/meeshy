@@ -59,7 +59,7 @@ export function CallRecordingPanel({
 }) {
   const { view, notice } = state;
   if (view.kind === 'pending' && view.mustAnswer) {
-    const question = translate(language, 'callRecording.ask', { name: requesterName });
+    const question = translate(language, view.recordingKind === 'video' ? 'callRecording.askVideo' : 'callRecording.ask', { name: requesterName });
     return (
       <div
         role="alertdialog"

@@ -8,7 +8,13 @@ import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import type { CallMember } from '@/lib/calls/call-store';
 
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+
 import { CallGrid, type CallGridProps } from './call-grid';
+
+beforeAll(async () => {
+  await loadCallControlsCatalog('fr');
+});
 
 /**
  * LA GRILLE D'UN APPEL DE GROUPE (#3721, #8392, #8393) — une tuile par
@@ -41,7 +47,7 @@ const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
   onChoose: () => undefined,
   immersive: false,
   onToggleImmersive: () => undefined,
-  removal: null,
+  moderation: null,
   language: 'fr',
   ...overrides,
 });
@@ -101,16 +107,11 @@ describe('CallGrid', () => {
     expect(html).toContain('aria-label="Quitter le plein écran"');
   });
 
-  test('un modérateur trouve « Retirer » sur le participant en avant, pas un membre ordinaire', () => {
-    const removal = { canRemove: (userId: string) => userId === 'u-b', remove: () => undefined, failed: false };
-    expect(grid({ choice: { kind: 'member', userId: 'u-b' }, removal })).toContain('Retirer Bintou de l’appel');
-    expect(grid({ choice: { kind: 'member', userId: 'u-a' }, removal })).not.toContain('Retirer');
-    expect(grid({ choice: { kind: 'member', userId: 'u-b' } })).not.toContain('Retirer');
-  });
-
-  test('un retrait refusé le dit', () => {
-    const removal = { canRemove: () => true, remove: () => undefined, failed: true };
-    expect(grid({ choice: { kind: 'member', userId: 'u-b' }, removal })).toContain('Impossible de retirer ce participant');
+  test('une personne invitée sonne dans sa tuile, et sa tuile ne se met pas en avant', () => {
+    const html = grid({ members: [member('u-a', 'Awa'), member('u-r', 'Rémi', { link: 'ringing' })] });
+    expect(html).toContain('data-call-ringing=""');
+    expect(html).toContain('Sonne…');
+    expect(html).not.toContain('aria-label="Mettre Rémi en avant"');
   });
 });
 

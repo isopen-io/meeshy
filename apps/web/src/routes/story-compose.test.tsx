@@ -41,22 +41,23 @@ import {
 
 registerStudioBench();
 
-describe('StoryComposeScreen — le bouton Publier est INERTE sans contenu (loi 4)', () => {
-  test('brouillon vide : désactivé, et un clic n’envoie rien', async () => {
+/** LOT 6 (directive porteur 2026-09-27 soir) : PAS de capsule Publier tant
+ * qu'il n'y a rien à publier — ni bouton grisé, ni phrase. */
+describe('StoryComposeScreen — pas de Publier sans contenu (lot 6)', () => {
+  test('brouillon vide : aucune capsule, rien ne part', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
-    expect(publishButton(el)?.disabled).toBe(true);
-    act(() => publishButton(el)!.click());
+    expect(publishButton(el)).toBeNull();
     await flush();
     expect(bench.posts).toHaveLength(0);
   });
 
-  test('un texte l’ARME, le vider le désarme', () => {
+  test('un texte la fait paraître, le vider la retire', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
     expect(publishButton(el)?.disabled).toBe(false);
     typeText(el, '   ');
-    expect(publishButton(el)?.disabled).toBe(true);
+    expect(publishButton(el)).toBeNull();
   });
 });
 
@@ -360,7 +361,8 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
     });
     await flush();
     expect(bench.posts).toHaveLength(0);
-    expect(publishButton(el)?.textContent).toBe('Publier la story');
+    // Vidé, le brouillon n'a plus rien à publier : la capsule se retire (lot 6).
+    expect(publishButton(el)).toBeNull();
   });
 
   test('une image posée par la porte du SON est refusée, et rien ne part', async () => {
@@ -397,8 +399,8 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
   test('sans toucher au chevron, la story part comme indiqué — `type: STORY`, et la capsule le NOMME', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
-    expect(publishButton(el)?.textContent).toBe('Publier la story');
     typeText(el, 'Une story');
+    expect(publishButton(el)?.textContent).toBe('Publier la story');
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(bench.posts[0]?.type).toBe('STORY');
@@ -407,9 +409,9 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
   test('ouvert depuis la porte du fil, le studio publie un POST — le même canevas', async () => {
     const bench = harness({});
     const el = mount(bench.deps, 'POST');
-    expect(publishButton(el)?.textContent).toBe('Publier le post');
     expect(el.querySelector('h1')?.textContent).toBe('Nouvelle publication');
     typeText(el, 'Un post');
+    expect(publishButton(el)?.textContent).toBe('Publier le post');
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(bench.posts[0]?.type).toBe('POST');

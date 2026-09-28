@@ -60,7 +60,11 @@ const call = (camera: ZoomCamera, overrides: Partial<ActiveCall> = {}): ActiveCa
   captions: [],
   captionsMode: 'off',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
   ...overrides,
 });
@@ -83,7 +87,7 @@ describe('le zoom de ma caméra', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
-    act(() => root.render(<CallStage call={active} layout={layout} language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} removal={null} />));
+    act(() => root.render(<CallStage call={active} layout={layout} language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} />));
     const find = (selector: string) => host.querySelector(selector);
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const done = () => {

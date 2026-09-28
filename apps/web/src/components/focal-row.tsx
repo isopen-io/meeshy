@@ -27,7 +27,7 @@ import {
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
-import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
+import { useFocusFrame } from '@/lib/view/use-focus-frame';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { AuthorAvatar } from './author-avatar';
@@ -243,11 +243,12 @@ export const FocalRow = memo(function FocalRow({
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
 
-  /** LA LOUPE (#6586/#6588) — avant tout retour anticipé (règle des Hooks) :
-   * un message expiré/système/supprimé n'est jamais élu, la rangée n'y
-   * grandit donc jamais, mais le hook doit tourner sur CHAQUE rendu. */
+  /** LA LOUPE ET SON CADRE (#6586/#6588, #8506) — avant tout retour anticipé
+   * (règle des Hooks) : un message expiré/système/supprimé n'est jamais élu,
+   * la rangée n'y grandit donc jamais, mais le hook doit tourner sur CHAQUE
+   * rendu. */
   const rowRef = useRef<HTMLDivElement>(null);
-  useFocalLoupe(rowRef, elected);
+  useFocusFrame(rowRef, elected);
 
   // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
   // (`data-message`) pour que les gates puissent constater l'absence.
@@ -707,13 +708,15 @@ export const FocalRow = memo(function FocalRow({
           débordait DANS le texte du message plutôt que dans la zone
           RÉSERVÉE par l'en-tête d'identité (désormais invisible,
           `opacity:0`, mais toujours présente dans le flux — donc encore
-          « à elle » l'espace que la superposition vient occuper). Sur une
-          rangée de CONTINUATION (sans tête), le débordement reste possible
-          — écart hors périmètre de #5648, à suivre si mesuré. */}
+          « à elle » l'espace que la superposition vient occuper). Depuis
+          #8506, la pastille s'y pose ENTIÈRE (plus de débord) ; sur une
+          rangée de CONTINUATION (sans tête), elle se pose AU-DESSUS de la
+          première ligne et le cadre monte d'autant (`continuation`). */}
       <div className="min-w-0 relative isolate">
-        {elected ? <FocusCard /> : null}
+        {elected ? <FocusCard continuation={!head} /> : null}
         {elected ? (
           <FocusIdentity
+            continuation={!head}
             initials={initialsOf(senderAvatarName)}
             name={senderName}
             accent="var(--accent)"
@@ -835,9 +838,9 @@ export const FocalRow = memo(function FocalRow({
                 (correction de revue #5648, défaut bloquant 3) : la
                 DÉMONTER — comme une première version de ce lot le faisait —
                 réduit la rangée élue de la hauteur de cette ligne (26 px),
-                et fait remonter `.focus-strip`/`.focus-stamp`
-                (`bottom: calc(-1 * var(--focus-strip-overhang))`, ancrés au
-                bas du bloc de contenu) SUR la dernière ligne du texte que
+                et fait remonter `.focus-strip`/`.focus-stamp` (ancrés au
+                bas du bloc de contenu, sur cette ligne réservée depuis
+                #8506) SUR la dernière ligne du texte que
                 l'élection vient de mettre en avant. `FocalRow.swift:317-322`
                 fait l'INVERSE mot pour mot — `.opacity(input.isFocused ? 0
                 : 1)` — « la bande SUR la ligne basse remplace visuellement
@@ -853,6 +856,7 @@ export const FocalRow = memo(function FocalRow({
                 deux fois. */}
             {showsBottomLine ? (
               <div
+                data-row-bottom-line
                 className="flex items-center gap-1 pt-1"
                 style={{ color: 'var(--color-meta)', visibility: elected ? 'hidden' : 'visible' }}
               >
@@ -902,8 +906,7 @@ export const FocalRow = memo(function FocalRow({
                  réserve sa hauteur). Une rangée ÉLUE SANS ligne basse
                  (continuation `tail === false`, ou message sans traduction
                  ni réaction) ne réservait AUCUNE hauteur : `.focus-strip`/
-                 `.focus-stamp` (ancrés `bottom: calc(-1 *
-                 var(--focus-strip-overhang))` sur cette colonne) débordaient
+                 `.focus-stamp` (ancrés au bas de cette colonne) débordaient
                  alors de 9 px SUR la dernière ligne de texte qu'ils élisent
                  — mesuré sur `riv-19` (continuation) et reproductible sur
                  tout message sans traduction ni réaction

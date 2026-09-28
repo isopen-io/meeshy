@@ -80,6 +80,9 @@ export function TextMark({ size = 20 }: { readonly size?: number }) {
  */
 export function StudioFloorLayer({ floor }: { readonly floor: StudioFloor | null }) {
   if (floor === null) return null;
+  if (floor.kind === 'tint') {
+    return <span aria-hidden="true" data-story-studio-floor="tint" className="pointer-events-none absolute inset-0 block" style={{ backgroundColor: floor.src }} />;
+  }
   return (
     <span aria-hidden="true" data-story-studio-floor={floor.kind} className="pointer-events-none absolute inset-0 block overflow-hidden">
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
@@ -96,10 +99,10 @@ export function StudioFloorLayer({ floor }: { readonly floor: StudioFloor | null
 }
 
 /**
- * **UNE TUILE du rail droit** — icône au-dessus, libellé court dessous, carte
- * de 14 en verre : la tuile de la création de post, pour que le rail se lise
- * sans deviner ce que fait chaque icône. `probe` garde la prise de mesure des
- * gates (`data-story-option`), inchangée depuis les puces.
+ * **UN BOUTON DE RAIL** (lot 6, directive porteur 2026-09-27 soir) — plus de
+ * bande ni de libellé : un disque de verre séparé, cible de 44 px, icône de
+ * 20 px ; son NOM ne vit plus que pour le lecteur d'écran et l'infobulle.
+ * `probe` garde la prise de mesure des gates (`data-story-option`).
  */
 export function StudioTile({
   label,
@@ -111,8 +114,7 @@ export function StudioTile({
   children,
 }: {
   readonly label: string;
-  /** Le nom COMPLET pour le lecteur d'écran, quand le libellé visible est
-   * abrégé (« Scène » ⇒ « Créer une scène »). */
+  /** Le nom COMPLET, quand `label` est abrégé (« Scène » ⇒ « Créer une scène »). */
   readonly hint?: string;
   readonly probe: string;
   readonly onPress: () => void;
@@ -130,20 +132,10 @@ export function StudioTile({
       {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
       disabled={disabled}
       onClick={onPress}
-      className={`${pressed === true ? PRESSED_TILE : 'glass'} flex flex-col items-center justify-center gap-1 px-1 py-2 focus-visible:outline-2 focus-visible:outline-offset-2`}
-      style={{
-        width: 60,
-        minHeight: 56,
-        borderRadius: 14,
-        outlineColor: 'var(--color-ios-brand)',
-        color: pressed === true ? '#fff' : 'var(--color-ios-ink)',
-        opacity: disabled ? 0.4 : 1,
-      }}
+      className={`${pressed === true ? PRESSED_TILE : 'glass'} grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2`}
+      style={{ outlineColor: 'var(--color-ios-brand)', color: pressed === true ? '#fff' : 'var(--color-ios-ink)', opacity: disabled ? 0.4 : 1 }}
     >
       {children}
-      <span aria-hidden="true" className="max-w-full text-center font-semibold leading-tight" style={{ fontSize: 11 }}>
-        {label}
-      </span>
     </button>
   );
 }
@@ -273,8 +265,8 @@ function BoltMark({ size = 16 }: { readonly size?: number }) {
 }
 
 /**
- * **LA BASCULE « ANIMÉ »** (#8415, miroir `sceneAnimatedToggle` iOS) — une
- * pastille de verre dans la barre haute, avant ⋯ ; ACTIVE, elle prend la
+ * **LA BASCULE « ANIMÉ »** (#8415, miroir `sceneAnimatedToggle` iOS) — un
+ * disque de verre à icône éclair SEULE (lot 6), avant ⋯ ; ACTIF, il prend la
  * couleur de marque pleine (et n'est plus du verre). Elle ouvre ou referme la
  * frise ; la scène garde ses pistes quand on la referme.
  */
@@ -289,18 +281,58 @@ export function StudioAnimatedToggle({
   readonly onToggle: () => void;
   readonly disabled?: boolean;
 }) {
+  const label = translate(lang, 'story.studio.animated');
   return (
     <button
       type="button"
       data-story-animated={active ? 'on' : 'off'}
       aria-pressed={active}
+      aria-label={label}
+      title={label}
       disabled={disabled}
       onClick={onToggle}
-      className={`${active ? PRESSED_TILE : 'glass'} flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2`}
+      className={`${active ? PRESSED_TILE : 'glass'} grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2`}
       style={{ outlineColor: 'var(--color-ios-brand)', color: active ? '#fff' : 'var(--color-ios-ink)', opacity: disabled ? 0.4 : 1 }}
     >
-      <BoltMark />
-      {translate(lang, 'story.studio.animated')}
+      <BoltMark size={20} />
     </button>
+  );
+}
+
+/**
+ * **LA PLAQUE D'ÉDITION** (lot 6) — en ÉDITION d'un objet (double-tap,
+ * « Modifier »), plus de longue bande de contrôleurs sur les côtés : une
+ * plaque de verre EN BAS porte les options de l'outil courant (styles,
+ * couleurs, taille…), et « OK » referme l'édition.
+ */
+export function StudioEditPlaque({
+  lang,
+  title,
+  onDone,
+  children,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly title: string;
+  readonly onDone: () => void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section data-story-edit-plaque aria-label={title} className="glass flex flex-col gap-2 rounded-[22px] px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          {title}
+        </h2>
+        <button
+          type="button"
+          data-story-edit-done
+          onClick={onDone}
+          className="h-11 rounded-xl px-4 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(lang, 'story.studio.edit.done')}
+        </button>
+      </div>
+      <div className="max-h-52 overflow-y-auto">{children}</div>
+    </section>
   );
 }

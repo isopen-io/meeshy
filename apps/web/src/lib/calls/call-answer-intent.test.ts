@@ -32,7 +32,11 @@ const ringingCall = (callId: string, phase: CallPhase = { kind: 'incoming' }): A
   captions: [],
   captionsMode: 'off',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
 });
 

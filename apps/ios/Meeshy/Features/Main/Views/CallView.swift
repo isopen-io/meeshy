@@ -81,15 +81,15 @@ struct CallView: View {
     @ObservedObject var mesh: GroupCallMeshCoordinator
     /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
     @State var controlsDisclosure = CallControlsDisclosure()
-    /// #8432 — l'espace de noms du verre : sous iOS 26, les actions naissent
-    /// du `(…)` et y retournent (`glassEffectID`).
-    @Namespace var callGlassNamespace
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
     @State var showCaptionsJournal = false
+    /// #8433 · #8439 — le sélecteur d'amis et la palette des réactions.
+    @State var showAddPeople = false
+    @State var showReactionPalette = false
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).

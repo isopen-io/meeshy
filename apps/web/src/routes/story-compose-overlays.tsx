@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 
 import { Sheet } from '@/components/sheet';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
@@ -52,13 +52,20 @@ export function StudioPreviewSheet({
   );
 }
 
+
 /**
  * **LE TEXTE DU POST** (#8413) — `Post.content`, le corps de la publication :
  * distinct du texte posé sur la scène et de la légende d'un média. Écrire
  * applique sur-le-champ (le brouillon est persisté à chaque changement) ;
- * « Terminé » ne fait que fermer.
+ * « Terminé » ne fait que fermer, comme Échap.
+ *
+ * **UN CADRE DE VERRE QUI MONTE DU BAS** (lot 7, directive porteur
+ * 2026-09-28, miroir `ComposerSceneDescriptionEditor.swift`) — le même verre
+ * que les légendes et le socle, posé à la place de la rangée du socle, sur la
+ * scène : jamais une feuille opaque qui coupe l'écran. L'entrée glisse du bas
+ * (coupée par `prefers-reduced-motion`).
  */
-export function StudioPostTextSheet({
+export function StudioPostTextFrame({
   lang,
   value,
   onChange,
@@ -69,30 +76,60 @@ export function StudioPostTextSheet({
   readonly onChange: (value: string) => void;
   readonly onClose: () => void;
 }) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const label = translate(lang, 'story.studio.postText');
+
+  useEffect(() => {
+    fieldRef.current?.focus();
+    const frame = frameRef.current;
+    const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (frame === null || still || typeof frame.animate !== 'function') return;
+    frame.animate(
+      [
+        { transform: 'translateY(24px)', opacity: 0 },
+        { transform: 'none', opacity: 1 },
+      ],
+      { duration: 240, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' },
+    );
+  }, []);
+
   return (
-    <Sheet title={label} bodyAs="div" presentation="centered" onClose={onClose}>
-      <div className="flex flex-col gap-3 px-4 pb-2">
-        <textarea
-          id="story-studio-post-text"
-          aria-label={label}
-          value={value}
-          rows={6}
-          placeholder={translate(lang, 'story.studio.postText.placeholder')}
-          onInput={(event) => onChange(event.currentTarget.value)}
-          className="w-full resize-none rounded-[14px] px-4 py-3 text-body outline-none"
-          style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
-        />
-        <button
-          type="button"
-          data-story-post-text-done
-          onClick={onClose}
-          className="self-end rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)', color: '#fff', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          {translate(lang, 'story.studio.postText.done')}
-        </button>
-      </div>
-    </Sheet>
+    <div
+      ref={frameRef}
+      data-story-post-text-frame
+      role="group"
+      aria-label={label}
+      className="field-box glass flex items-end gap-2 rounded-[22px] px-3 py-2.5"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <textarea
+        ref={fieldRef}
+        id="story-studio-post-text"
+        aria-label={label}
+        value={value}
+        rows={3}
+        placeholder={translate(lang, 'story.studio.postText.placeholder')}
+        onInput={(event) => onChange(event.currentTarget.value)}
+        className="max-h-[40dvh] min-h-11 flex-1 resize-none bg-transparent py-2 text-body outline-none"
+        style={{ color: 'var(--color-ios-ink)' }}
+      />
+      <button
+        type="button"
+        data-story-post-text-done
+        aria-label={translate(lang, 'story.studio.postText.done')}
+        onClick={onClose}
+        className="grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <svg aria-hidden="true" width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+      </button>
+    </div>
   );
 }

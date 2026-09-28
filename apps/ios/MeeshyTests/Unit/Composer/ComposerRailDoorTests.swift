@@ -713,8 +713,13 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("served:ComposerSceneCapabilities.doors"),
                       "Le rail leading doit lire la capacité, pas un littéral.")
-        XCTAssertTrue(source.contains("served:ComposerSceneCapabilities.controllers"),
-                      "Le rail trailing doit lire la capacité, pas un littéral.")
+        // **Le rail droit ne porte plus les actions d'un objet** (directive
+        // porteur 2026-09-27 : « juste faire apparaître les actions possibles
+        // au long press ») : elles vivent dans le menu d'appui long du canvas,
+        // que `StoryCanvasContextAction.offered` compose. Le rail ne reçoit
+        // donc AUCUNE action — et aucun littéral ne peut s'y glisser.
+        XCTAssertTrue(source.contains("trailingActions:[],"),
+                      "Le rail trailing ne porte plus les actions d'objet : elles sont à l'appui long.")
     }
 
     /// **La garde NÉGATIVE** — et c'est elle qui tient dans le temps. Un `Set`

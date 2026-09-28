@@ -132,7 +132,7 @@ const MOCK_POST = {
 
 // ─── buildApp ─────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true, emailVerified = true, prisma = {} as unknown } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, emailVerified = true, activation = undefined as unknown, prisma = {} as unknown } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -144,7 +144,7 @@ async function buildApp({ authenticated = true, emailVerified = true, prisma = {
       type: 'user',
       isAnonymous: false,
       userId: USER_ID,
-      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER', activation },
     };
   };
 
@@ -182,40 +182,41 @@ describe('POST /posts — not authenticated', () => {
   });
 });
 
-// #6437 — publier (post ou story) sort du compte vers d'autres personnes.
-describe('POST /posts — email not verified', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp({ emailVerified: false }); });
-  afterAll(async () => { await app.close(); });
+// #8476 — publier suit la loi du délai de grâce (#8238) : une adresse non
+// prouvée n'empêche rien tant que la phase d'activation n'est pas `blocked`.
+const inGrace = (phase: 'quiet' | 'invite') => ({ phase, deadline: '2026-10-26T00:00:00.000Z', missing: ['email', 'phone'] });
 
-  it('returns 403 EMAIL_NOT_VERIFIED when the author has not confirmed their e-mail', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/posts',
-      payload: { content: 'Hello' },
-    });
-    expect(res.statusCode).toBe(403);
-    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
-  });
-});
-
-// #7907 — l'exception « première story » est MONTÉE sur la route réelle (sa loi
-// est témoignée par unit/middleware/email-verification-first-story.test.ts).
-describe('POST /posts — email not verified, first story', () => {
-  it('a first STORY reaches the creation instead of the e-mail gate', async () => {
-    mockCreatePost.mockResolvedValue({ ...MOCK_POST, type: 'STORY' });
-    const findFirst = jest.fn<any>().mockResolvedValue(null);
-    const app = await buildApp({ emailVerified: false, prisma: { post: { findFirst } } });
-    const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'STORY', content: 'Hello' } });
-    expect(res.json().code).not.toBe('EMAIL_NOT_VERIFIED');
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { authorId: USER_ID, type: 'STORY' } }));
+describe('POST /posts — email not verified, within the activation grace', () => {
+  it.each(['quiet', 'invite'] as const)('a POST reaches the creation in phase %s', async (phase) => {
+    mockCreatePost.mockResolvedValue(MOCK_POST);
+    const app = await buildApp({ emailVerified: false, activation: inGrace(phase) });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
+    expect(res.statusCode).toBe(201);
     await app.close();
   });
 
-  it('a second STORY is still refused', async () => {
+  it('a second STORY reaches the creation too — no first-story exception is needed any more', async () => {
+    mockCreatePost.mockResolvedValue({ ...MOCK_POST, type: 'STORY' });
     const findFirst = jest.fn<any>().mockResolvedValue({ id: 'story-0' });
-    const app = await buildApp({ emailVerified: false, prisma: { post: { findFirst } } });
+    const app = await buildApp({ emailVerified: false, activation: inGrace('invite'), prisma: { post: { findFirst } } });
     const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'STORY', content: 'Hello' } });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+});
+
+describe('POST /posts — email not verified, outside the activation grace', () => {
+  it('returns 403 EMAIL_NOT_VERIFIED once the phase is blocked', async () => {
+    const app = await buildApp({ emailVerified: false, activation: { phase: 'blocked', deadline: '2026-09-01T00:00:00.000Z', missing: ['email', 'phone'] } });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
+  });
+
+  it('returns 403 EMAIL_NOT_VERIFIED when no activation was served (fail-closed)', async () => {
+    const app = await buildApp({ emailVerified: false });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
     await app.close();

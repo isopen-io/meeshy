@@ -15,22 +15,26 @@ struct ComposerFrameBand: View {
     let onPickBackdrop: (StoryBackdrop) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(ComposerFrameCopy.title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .accessibilityAddTraits(.isHeader)
+        // **Sans libellé** (directive porteur 2026-09-27 : « enlève les captions
+        // partout ») : deux icônes de cadrage et cinq pastilles, chacune avec
+        // son nom ACCESSIBLE — la vue ne perd rien pour VoiceOver.
+        HStack(spacing: 12) {
             HStack(spacing: 8) {
                 fitChoice(StoryBackgroundFraming.fit, label: ComposerFrameCopy.fit, symbol: "rectangle.center.inset.filled")
                 fitChoice(StoryBackgroundFraming.fill, label: ComposerFrameCopy.fill, symbol: "rectangle.fill")
             }
-            HStack(spacing: 12) {
+            Divider()
+                .frame(height: 28)
+                .overlay(Color.white.opacity(0.25))
+            HStack(spacing: 10) {
                 ForEach(StoryBackdrop.allCases, id: \.self) { fond in
                     backdropChoice(fond)
                 }
             }
         }
-        .padding(12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(ComposerFrameCopy.title))
+        .padding(10)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous),
                        tint: plateauTint.opacity(0.55))
         .padding(.horizontal, ComposerRailGeometry.outerMargin)
@@ -42,14 +46,14 @@ struct ComposerFrameBand: View {
             HapticFeedback.light()
             onPickFitMode(mode)
         } label: {
-            Label(label, systemImage: symbol)
-                .font(.footnote.weight(.semibold))
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .padding(.horizontal, 14)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(choisi ? MeeshyColors.brandPrimary : Color.white.opacity(0.08)))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(choisi ? MeeshyColors.brandPrimary : Color.white.opacity(0.08)))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
         .accessibilityAddTraits(choisi ? .isSelected : [])
     }
 
@@ -59,19 +63,13 @@ struct ComposerFrameBand: View {
             HapticFeedback.light()
             onPickBackdrop(fond)
         } label: {
-            VStack(spacing: 4) {
-                Circle()
-                    .fill(swatch(fond))
-                    .frame(width: 32, height: 32)
-                    .overlay(Circle().strokeBorder(choisi ? MeeshyColors.brandPrimary : Color.white.opacity(0.35),
-                                                   lineWidth: choisi ? 3 : 1))
-                Text(ComposerFrameCopy.label(fond))
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            }
-            .frame(minWidth: 44, minHeight: 44)
+            Circle()
+                .fill(swatch(fond))
+                .frame(width: 30, height: 30)
+                .overlay(Circle().strokeBorder(choisi ? MeeshyColors.brandPrimary : Color.white.opacity(0.35),
+                                               lineWidth: choisi ? 3 : 1))
+                .frame(width: 36, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(ComposerFrameCopy.label(fond)))

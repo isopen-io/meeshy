@@ -42,7 +42,11 @@ const call = (phase: CallPhase, media: CallMedia = 'audio', callId: string | nul
   captions: [],
   captionsMode: 'off',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
 });
 

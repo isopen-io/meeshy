@@ -12,10 +12,10 @@ extension CallView {
 
     var connectedView: some View {
         // #8394 — UN conteneur de verre pour tout ce qui flotte au-dessus de
-        // l'appel établi : les boutons de verre de la pilule et des actions,
-        // le bandeau de sous-titres. Des verres voisins ne se superposent
-        // jamais (le verre ne peut pas échantillonner le verre) ; ils se
-        // fondent entre eux, et sous iOS 26 les actions naissent du (…) (#8432).
+        // l'appel établi : le bloc de verre de la pilule (qui porte les
+        // actions du (…), #8459), le bandeau de sous-titres, l'en-tête. Des
+        // verres voisins ne se superposent jamais (le verre ne peut pas
+        // échantillonner le verre) ; ils se fondent entre eux.
         AdaptiveGlassContainer(spacing: 12) {
             ZStack {
                 if isGroupStage {
@@ -26,12 +26,14 @@ extension CallView {
 
                 CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
                     .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
-                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
+                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice)
                     .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
                 if !isGroupStage {
                     duoOverlays
                 }
+
+                callControlsLayer
             }
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en

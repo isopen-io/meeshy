@@ -118,6 +118,24 @@ function ParticipantsRow({ label, names }: { readonly label: string; readonly na
   );
 }
 
+/** Les réactions de l'appel (#8439) : emoji × compte, lues d'une traite par le lecteur d'écran. */
+function ReactionsRow({ label, reactions }: { readonly label: string; readonly reactions: CallDetail['reactions'] }) {
+  return (
+    <div data-call-detail-row="reactions" className="grid gap-1 px-4 py-2.5" style={{ borderBottom: EDGE }}>
+      <dt className="text-body" style={{ color: INK_2 }}>
+        {label}
+      </dt>
+      <dd className="flex flex-wrap gap-x-3 gap-y-1 text-body font-medium tabular-nums" style={{ color: INK }}>
+        {reactions.map(({ emoji, count }) => (
+          <span key={emoji} data-call-detail-reaction={emoji}>
+            {emoji} × {count}
+          </span>
+        ))}
+      </dd>
+    </div>
+  );
+}
+
 const glyphOf = (name: CallsGlyphName) => <GlyphSvg glyph={CALLS_GLYPHS[name]} size={16} />;
 
 export function CallDetailCard({
@@ -165,6 +183,7 @@ export function CallDetailCard({
         {date === '' ? null : <DetailRow field="date" glyph={glyphOf('calendarBlank')} label={translate(language, 'callJoin.detail.date')} value={date} />}
         {duration === '' ? null : <DetailRow field="duration" glyph={<Glyph name="timer" size={16} />} label={translate(language, 'callJoin.detail.duration')} value={duration} />}
         {data === null ? null : <DetailRow field="data" glyph={glyphOf('arrowsDownUp')} label={translate(language, 'callJoin.detail.data')} value={data} />}
+        {detail.reactions.length === 0 ? null : <ReactionsRow label={translate(language, 'callJoin.detail.reactions')} reactions={detail.reactions} />}
       </dl>
       <Link
         to="thread"

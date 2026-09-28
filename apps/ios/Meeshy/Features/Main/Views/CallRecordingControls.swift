@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 // #8064 — ce que l'écran d'appel montre d'un enregistrement : la question
@@ -29,15 +30,31 @@ enum CallRecordingCopy {
         String(localized: "call.recording.waiting", defaultValue: "En attente de l’accord de tous…", bundle: .main)
     }
 
-    static func ask(name: String) -> String {
+    static func ask(name: String, kind: CallRecordingKind = .audio) -> String {
         let who = name.isEmpty
             ? String(localized: "call.recording.someone", defaultValue: "Un participant", bundle: .main)
             : name
-        return String(format: String(localized: "call.recording.ask", defaultValue: "%@ veut enregistrer l’appel", bundle: .main), who)
+        let format = kind == .video
+            ? String(localized: "call.recording.ask.video", defaultValue: "%@ veut enregistrer l’appel en vidéo", bundle: .main)
+            : String(localized: "call.recording.ask", defaultValue: "%@ veut enregistrer l’appel", bundle: .main)
+        return String(format: format, who)
     }
 
-    static var askDetail: String {
-        String(localized: "call.recording.askDetail", defaultValue: "L’enregistrement ne commence que si tout le monde accepte, puis il est ajouté à la conversation.", bundle: .main)
+    static func askDetail(kind: CallRecordingKind = .audio) -> String {
+        kind == .video
+            ? String(localized: "call.recording.askDetail.video", defaultValue: "L’écran de l’appel et tout son son ne sont enregistrés que si tout le monde accepte, puis ils sont ajoutés à la conversation.", bundle: .main)
+            : String(localized: "call.recording.askDetail", defaultValue: "L’enregistrement ne commence que si tout le monde accepte, puis il est ajouté à la conversation.", bundle: .main)
+    }
+
+    /// #8437 — les deux choix du bouton Enregistrer.
+    static func kindLabel(_ kind: CallRecordingKind) -> String {
+        kind == .video
+            ? String(localized: "call.recording.kind.video", defaultValue: "Audio et vidéo", bundle: .main)
+            : String(localized: "call.recording.kind.audio", defaultValue: "Audio seulement", bundle: .main)
+    }
+
+    static var kindHint: String {
+        String(localized: "call.recording.kind.hint", defaultValue: "Choisissez ce qui sera enregistré ; chaque participant doit ensuite accepter", bundle: .main)
     }
 
     static var accept: String {
@@ -88,13 +105,14 @@ enum CallRecordingCopy {
 struct CallRecordingOverlay: View, Equatable {
     let phase: CallRecordingPhase
     let notice: CallRecordingNotice?
+    let kind: CallRecordingKind
     let requesterName: String
     let onAnswer: (Bool) -> Void
     let onStop: () -> Void
     let onDismiss: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.phase == rhs.phase && lhs.notice == rhs.notice && lhs.requesterName == rhs.requesterName
+        lhs.phase == rhs.phase && lhs.notice == rhs.notice && lhs.kind == rhs.kind && lhs.requesterName == rhs.requesterName
     }
 
     var body: some View {
@@ -116,11 +134,11 @@ struct CallRecordingOverlay: View, Equatable {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 recordingDot
-                Text(CallRecordingCopy.ask(name: requesterName))
+                Text(CallRecordingCopy.ask(name: requesterName, kind: kind))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
             }
-            Text(CallRecordingCopy.askDetail)
+            Text(CallRecordingCopy.askDetail(kind: kind))
                 .font(.footnote)
                 .foregroundColor(.white.opacity(0.8))
                 .fixedSize(horizontal: false, vertical: true)
@@ -213,13 +231,33 @@ struct CallRecordingPlayback: View {
     let accentHex: String
 
     var body: some View {
-        AudioPlayerView(
-            attachment: recording.attachment,
-            context: .messageBubble,
-            accentColor: accentHex
-        )
-        .frame(maxWidth: 280)
+        media
+            .frame(maxWidth: 280)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallRecordingCopy.bubbleLabel)
+    }
+
+    @ViewBuilder
+    private var media: some View {
+        if recording.isVideo {
+            VideoAvailabilityResolver(attachment: recording.attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: recording.attachment,
+                    style: .inline,
+                    controls: .inlineMinimal,
+                    accentColor: accentHex,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload
+                )
+            }
+        } else {
+            AudioPlayerView(
+                attachment: recording.attachment,
+                context: .messageBubble,
+                accentColor: accentHex
+            )
+        }
     }
 }

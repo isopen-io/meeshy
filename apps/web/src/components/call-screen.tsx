@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { CALL_EFFECTS_PANEL_ID, CallRails } from '@/components/call-control-actions';
+import { CALL_PANEL_ID, CallRails, type CallPanel } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { Portrait } from '@/components/call-grid';
+import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
+import { CallPreview } from '@/components/call-preview';
 import { CallPeerAlerts } from '@/components/call-quality';
 import { CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage } from '@/components/call-stage';
@@ -16,7 +18,8 @@ import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlig
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
-import { useCallRemoval } from '@/lib/calls/use-call-removal';
+import { useCallModeration } from '@/lib/calls/use-call-moderation';
+import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from '@/lib/calls/video-effects';
@@ -40,6 +43,14 @@ import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from
  * panneau des effets AU-DESSUS de la pilule (`call-effects-panel.tsx`, chunk à
  * part) ; il n'existe que là où le navigateur sait traiter la vidéo ou que la
  * caméra offre son flou.
+ *
+ * Du même endroit montent, un seul à la fois (#8433, #8439, #8437) : les
+ * participants et qui y ajouter (« Ajouter »), la palette « Réagir », et le
+ * choix « Audio seul » · « Audio et vidéo » d'« Enregistrer » — chacun dans
+ * son chunk. Qui modère trouve sur chaque tuile d'un pair, et dans la liste,
+ * « Couper le micro » · « Retirer de l'appel » (#8438). Les réactions montent
+ * par-dessus la scène, et le mot d'un contrôle s'affiche en haut
+ * (`call-control-overlays.tsx`).
  *
  * L'appel entrant, l'écran de fin, la pastille, la bulle et la fenêtre PiP ne
  * changent pas.
@@ -118,6 +129,17 @@ const CallCaptionsPanel = lazy(() =>
 );
 
 const CallEffectsPanel = lazy(() => import('./call-effects-panel').then((module) => ({ default: module.CallEffectsPanel })));
+const CallReactionPalette = lazy(() => import('./call-control-panels').then((module) => ({ default: module.CallReactionPalette })));
+const CallRecordChoice = lazy(() => import('./call-control-panels').then((module) => ({ default: module.CallRecordChoice })));
+const CallPeopleSheet = lazy(() => import('./call-people-sheet').then((module) => ({ default: module.CallPeopleSheet })));
+
+/** Le bouton qui a ouvert chaque panneau : le focus y revient quand il se ferme. */
+const PANEL_OPENER: Readonly<Record<CallPanel, string>> = {
+  effects: '[data-call-control="effects"]',
+  people: '[data-call-control="invite"]',
+  react: '[data-call-control="react"]',
+  record: '[data-call-record]',
+};
 
 type EffectsSupport = { readonly color: boolean; readonly blur: boolean };
 
@@ -194,11 +216,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [declineOpen, setDeclineOpen] = useState(false);
-  const [effectsOpen, setEffectsOpen] = useState(false);
+  const [panel, setPanel] = useState<CallPanel | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const removal = useCallRemoval(call);
+  const moderation = useCallModeration(call);
   const now = useSecondTick(call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
   const phase = call.phase.kind;
   const joined = phase === 'connected' || phase === 'reconnecting';
@@ -226,12 +248,21 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const canFlip = useCanFlip(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip });
-  const effectsShown = effectsOpen && set.mine.includes('effects');
-  const effects = { open: effectsShown, onToggle: () => setEffectsOpen((open) => !open) };
-  const closeEffects = () => {
-    setEffectsOpen(false);
-    root.current?.querySelector<HTMLElement>('[data-call-control="effects"]')?.focus();
+  const offered: Readonly<Record<CallPanel, boolean>> = {
+    effects: set.mine.includes('effects'),
+    people: set.call.includes('invite'),
+    react: set.call.includes('react'),
+    record: set.call.includes('record'),
   };
+  const shownPanel = panel !== null && offered[panel] ? panel : null;
+  const panels = { open: shownPanel, toggle: (next: CallPanel) => setPanel((open) => (open === next ? null : next)) };
+  const closePanel = () => {
+    const closing = shownPanel;
+    setPanel(null);
+    if (closing !== null) root.current?.querySelector<HTMLElement>(PANEL_OPENER[closing])?.focus();
+  };
+  const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
+  const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const arrangement = controlsArrangement(call);
 
   useEffect(() => {
@@ -248,11 +279,20 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
         {call.title}
       </h2>
-      {phase === 'incoming' && call.isGroup && call.callerName !== null ? (
+      {phase === 'incoming' && call.invitedBy !== null && call.callerName !== null ? (
+        <p className="text-body" style={{ color: INK_2 }} data-call-invited-by="">
+          {translateCallControls(language, 'callControls.incomingInvite', { name: call.callerName })}
+        </p>
+      ) : phase === 'incoming' && call.isGroup && call.callerName !== null ? (
         <p className="text-body" style={{ color: INK_2 }}>
           {translate(language, 'call.incoming.group', {
             caller: call.callerName,
           })}
+        </p>
+      ) : null}
+      {phase === 'outgoing' && call.previewed ? (
+        <p className="glass-call rounded-full px-3 py-1 text-mini" data-call-previewed="">
+          {translate(language, call.media === 'video' ? 'call.preview.seenBy' : 'call.preview.heardBy', { name: call.title })}
         </p>
       ) : null}
       <p className="text-body" role="status" aria-live="polite" style={{ color: INK_2 }} data-call-status="">
@@ -278,7 +318,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </>
   ) : null;
 
-  const stage = <CallStage call={call} layout={layout} language={language} choice={choice} onChoose={setChoice} immersive={immersive} onToggleImmersive={toggleImmersive} removal={removal} />;
+  const stage = <CallStage call={call} layout={layout} language={language} choice={choice} onChoose={setChoice} immersive={immersive} onToggleImmersive={toggleImmersive} moderation={moderation} />;
 
   const incomingControls = (
     <div className="flex flex-col gap-6">
@@ -333,11 +373,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
     >
+      {call.preview === null ? null : <CallPreview stream={call.preview} language={language} />}
       {overlayVideo ? (
         <div ref={stageRef} className="absolute inset-0">
           {stage}
         </div>
       ) : null}
+      <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         <div className={fade} aria-hidden={hidden ? true : undefined}>
           <CallScreenHeader call={call} language={language} clock={joined ? clock : null} prominent={sharedScreenShown} />
@@ -371,19 +413,29 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           <div className="flex flex-col gap-3 pb-6">
             {captionsFramed ? null : captions}
             <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
-              {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} effects={effects} /> : null}
-              {effectsShown ? (
-                <Suspense fallback={null}>
-                  <CallEffectsPanel
-                    id={CALL_EFFECTS_PANEL_ID}
-                    closeGlyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />}
-                    language={language}
-                    colorAvailable={support.color}
-                    blurAvailable={support.blur}
-                    onClose={closeEffects}
-                  />
-                </Suspense>
-              ) : null}
+              {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} panels={panels} /> : null}
+              {shownPanel === null ? null : (
+                <div className="relative z-20">
+                  <Suspense fallback={null}>
+                    {shownPanel === 'effects' ? (
+                      <CallEffectsPanel id={CALL_PANEL_ID.effects} closeGlyph={closeGlyph} language={language} colorAvailable={support.color} blurAvailable={support.blur} onClose={closePanel} />
+                    ) : shownPanel === 'react' ? (
+                      <CallReactionPalette id={CALL_PANEL_ID.react} closeGlyph={closeGlyph} language={language} onClose={closePanel} />
+                    ) : shownPanel === 'record' ? (
+                      <CallRecordChoice id={CALL_PANEL_ID.record} closeGlyph={closeGlyph} language={language} onClose={closePanel} />
+                    ) : (
+                      <CallPeopleSheet
+                        id={CALL_PANEL_ID.people}
+                        closeGlyph={closeGlyph}
+                        language={language}
+                        members={orderedMembers(call.members)}
+                        onClose={closePanel}
+                        renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />}
+                      />
+                    )}
+                  </Suspense>
+                </div>
+              )}
               <CallControlPill
                 call={call}
                 language={language}
@@ -393,7 +445,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 onToggle={() => setExpanded((value) => !value)}
                 prominent={sharedScreenShown}
                 framedCaptions={captionsFramed ? captions : null}
-                effects={effects}
+                panels={panels}
               />
             </div>
           </div>

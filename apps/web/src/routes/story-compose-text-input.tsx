@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { translate } from '@/lib/i18n-catalog';
@@ -36,6 +36,7 @@ export function StudioTextInput({
   onText,
   onPublish,
   locked = false,
+  editing = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly targetId: string | null;
@@ -50,8 +51,15 @@ export function StudioTextInput({
    * après coup partirait dans l'ancienne version, ou serait perdue quand la
    * page quitte le brouillon dès sa story commise. */
   readonly locked?: boolean;
+  /** EN ÉDITION (lot 6, double-tap) — la saisie passe AU-DESSUS du calque
+   * des gestes et prend le focus : le curseur se pose au doigt. Hors
+   * édition, le calque des gestes la couvre (sélection silencieuse). */
+  readonly editing?: boolean;
 }) {
   const fieldRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (editing) fieldRef.current?.focus();
+  }, [editing, targetId]);
   const text = layer?.text ?? '';
   const source = useMentionSource(DIRECTORY);
   const mention = useMentionField({ text, fieldRef, onText, source });
@@ -93,14 +101,14 @@ export function StudioTextInput({
         }}
         placeholder={translate(lang, 'story.studio.text.placeholder')}
         rows={1}
-        className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-semibold text-transparent caret-white placeholder:text-white placeholder:opacity-60"
+        className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-semibold text-transparent caret-white outline-none placeholder:text-white placeholder:opacity-60"
         style={{
           ...(textBox !== null
             ? { top: textBox.top, left: textBox.left, width: textBox.width, height: textBox.height }
             : { top: '50%', left: '50%', width: '85%', transform: 'translate(-50%, -50%)' }),
           ...(fontSize !== null ? { fontSize } : {}),
           lineHeight: 1.2,
-          zIndex: 2,
+          zIndex: editing ? 5 : 2,
         }}
       />
     </>

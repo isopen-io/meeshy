@@ -4,7 +4,7 @@
   "glassVerticalInset": 3,
   "loupeMarginVertical": 8,
   "loupeMarginHorizontal": 16,
-  "loupeGain": 0.05,
+  "loupeGain": 0.26,
   "neighborOpacity": 0.62,
   "enterDurationMs": 250,
   "flattenDurationMs": 450,

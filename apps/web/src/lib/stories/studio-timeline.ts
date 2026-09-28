@@ -9,10 +9,17 @@ import type { StudioTiming } from './studio-text';
  * (`ObjectV3.timing`), exactement ce que le lecteur relit
  * (`lib/canvas/timeline.ts`, `visibilityWindow`).
  */
-export const STUDIO_ANIMATED_DEFAULT_DURATION = 5;
+export const STUDIO_ANIMATED_DEFAULT_DURATION = 6;
 
-/** Une fenêtre plus courte ne se voit ni ne se saisit. */
-export const STUDIO_TRACK_MIN = 0.2;
+/** L'écart minimal d'une fenêtre, en SECONDES — celui d'iOS
+ * (`ClipWindowResolver.minimumDuration`, lot 7) : deux poignées ne se
+ * croisent jamais, et ne se collent pas à moins de 0,05 s. */
+export const STUDIO_TRACK_MIN = 0.05;
+
+/** Un objet posé en mode animé n'entre pas plus tard qu'à 80 % de la scène. */
+const LATEST_ENTRY_FRACTION = 0.8;
+
+const minimumOf = (duration: number): number => Math.min(STUDIO_TRACK_MIN, Math.max(0, duration));
 
 export type StudioTrack = { readonly id: string; readonly kind: 'text' | 'overlay'; readonly timing: StudioTiming };
 
@@ -32,9 +39,27 @@ export function studioTracks(page: StudioPage): readonly StudioTrack[] {
 
 /** Une fenêtre bornée à la scène, jamais plus courte que `STUDIO_TRACK_MIN`. */
 export function clampTiming(timing: StudioTiming, duration: number): StudioTiming {
-  const start = Math.min(Math.max(0, timing.start), duration - STUDIO_TRACK_MIN);
-  const end = Math.max(Math.min(duration, timing.end), start + STUDIO_TRACK_MIN);
-  return { start: round(end - start < STUDIO_TRACK_MIN ? end - STUDIO_TRACK_MIN : start), end: round(end) };
+  const minimum = minimumOf(duration);
+  const start = Math.min(Math.max(0, timing.start), duration - minimum);
+  const end = Math.max(Math.min(duration, timing.end), start + minimum);
+  return { start: round(start), end: round(end) };
+}
+
+/** « ENTRE ICI » (maquette) — l'objet entre à la tête, jamais après sa sortie. */
+export function timingEnteringAt(timing: StudioTiming, head: number, duration: number): StudioTiming {
+  return clampTiming({ start: Math.min(head, timing.end - minimumOf(duration)), end: timing.end }, duration);
+}
+
+/** « SORT ICI » (maquette) — l'objet sort à la tête, jamais avant son entrée. */
+export function timingExitingAt(timing: StudioTiming, head: number, duration: number): StudioTiming {
+  return clampTiming({ start: timing.start, end: Math.max(head, timing.start + minimumOf(duration)) }, duration);
+}
+
+/** UN OBJET POSÉ en mode animé (maquette) — il entre à la tête, au plus tard à
+ * 80 % de la scène, et reste jusqu'au bout. */
+export function pagePlacedWhileAnimated(page: StudioPage, id: string, head: number): StudioPage {
+  const duration = studioPageDuration(page);
+  return pageWithTrackTiming(page, id, { start: Math.min(head, LATEST_ENTRY_FRACTION * duration), end: duration });
 }
 
 /** OUVRIR « Animé » — la scène prend sa durée, chaque piste sa fenêtre
@@ -61,4 +86,26 @@ export function pageWithTrackTiming(page: StudioPage, id: string, timing: Studio
   if (id === 'overlay') return page.overlay === null ? page : { ...page, duration, overlay: { ...page.overlay, timing: clamped } };
   if (!page.texts.some((layer) => layer.id === id)) return page;
   return { ...page, duration, texts: page.texts.map((layer) => (layer.id === id ? { ...layer, timing: clamped } : layer)) };
+}
+
+/** Ce que le doigt tient sur une piste : la barre entière, ou une poignée. */
+export type StudioTrackGrip = 'move' | 'start' | 'end';
+
+/**
+ * **LA FENÊTRE APRÈS UN GLISSEMENT de `delta` secondes** (lot 7, miroir
+ * `ComposerSceneFriseMetrics.dragged`) — déplacer garde la durée et reste dans
+ * la scène ; une poignée ne franchit jamais l'autre (écart `STUDIO_TRACK_MIN`)
+ * ni les bords.
+ */
+export function draggedTiming(timing: StudioTiming, grip: StudioTrackGrip, delta: number, duration: number): StudioTiming {
+  const total = Math.max(0, duration);
+  const step = Number.isFinite(delta) ? delta : 0;
+  const minimum = minimumOf(total);
+  if (grip === 'move') {
+    const length = timing.end - timing.start;
+    const start = Math.max(0, Math.min(timing.start + step, total - length));
+    return { start: round(start), end: round(start + length) };
+  }
+  if (grip === 'start') return { start: round(Math.max(0, Math.min(timing.start + step, timing.end - minimum))), end: timing.end };
+  return { start: timing.start, end: round(Math.min(total, Math.max(timing.end + step, timing.start + minimum))) };
 }

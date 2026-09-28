@@ -1023,45 +1023,6 @@ public struct CallIceServersRefreshedData: Decodable, Sendable {
     public let ttl: Int
 }
 
-public struct CallOfferData: Decodable, Sendable {
-    public let callId: String
-    public let conversationId: String
-    /// Architecture mode (`"p2p"` or `"sfu"`). NOT the media type — see `type`.
-    public let mode: String?
-    /// Media type (`"audio"` or `"video"`). Drives CallKit `hasVideo`.
-    /// Optional for backwards compatibility with older gateway builds that
-    /// did not include this field; absence is treated as audio call.
-    public let type: String?
-    public let initiator: CallInitiatorInfo
-    public let iceServers: [SocketIceServer]?
-    /// Audit P1-26 — initial participant list emitted by the gateway in
-    /// `call:initiated`. Optional for backwards compat with older builds.
-    /// Lets the iOS UI show all participants during the ringing phase
-    /// rather than waiting for `call:participant-joined` events.
-    public let participants: [CallParticipantInfo]?
-    /// `"direct"` | `"group"` (#3585) — absent d'une passerelle ancienne.
-    public let conversationType: String?
-    public let conversationTitle: String?
-
-    public struct CallInitiatorInfo: Decodable, Sendable {
-        public let userId: String
-        public let username: String
-        public let displayName: String?
-        public let avatar: String?
-    }
-
-    public struct CallParticipantInfo: Decodable, Sendable {
-        public let id: String
-        public let userId: String?
-        public let role: String?
-        public let isAudioEnabled: Bool?
-        public let isVideoEnabled: Bool?
-        public let username: String?
-        public let displayName: String?
-        public let avatar: String?
-    }
-}
-
 public struct CallAnswerData: Decodable, Sendable {
     public let callId: String
     public let signal: CallSignalPayload
@@ -3209,6 +3170,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         registerViewOnceHandlers(on: socket)
         registerCitedPostHandlers(on: socket)
         registerCallRecordingHandlers(on: socket)
+        registerCallControlHandlers(on: socket)
+        registerCallPreviewHandlers(on: socket)
 
         // --- Conversation participation events ---
 

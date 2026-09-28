@@ -1,3 +1,4 @@
+import { CALL_REACTION_EMOJIS, type CallReactionCounts, type CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import { formatPreviewFileSize } from '@meeshy/shared/utils/conversation-preview-strings';
 
 import type { CallSession } from '@/lib/api/call-sessions';
@@ -40,7 +41,18 @@ export type CallDetail = {
   /** Les autres participants d'un appel de groupe (#8066) ; vide pour un appel à deux. */
   readonly participants: readonly string[];
   readonly live: boolean;
+  /** Les réactions de l'appel (#8439), dans l'ordre de la palette, les absentes omises. */
+  readonly reactions: readonly CallReactionTally[];
 };
+
+export type CallReactionTally = { readonly emoji: CallReactionEmoji; readonly count: number };
+
+/** Les comptes servis, dans l'ordre de la palette ; un emoji à zéro n'apparaît pas. */
+export const reactionTallies = (counts: CallReactionCounts): readonly CallReactionTally[] =>
+  CALL_REACTION_EMOJIS.flatMap((emoji) => {
+    const count = counts[emoji] ?? 0;
+    return count > 0 ? [{ emoji, count }] : [];
+  });
 
 export function callDetailFromRecord(record: CallRecord, unknown: string): CallDetail {
   return {
@@ -56,6 +68,7 @@ export function callDetailFromRecord(record: CallRecord, unknown: string): CallD
     isGroup: record.conversationType !== 'direct',
     participants: record.participants.map((participant) => participant.displayName),
     live: false,
+    reactions: reactionTallies(record.reactionCounts),
   };
 }
 
@@ -89,6 +102,7 @@ export function callDetailFromSession(
     isGroup,
     participants: isGroup ? others.map((member) => member.name).filter((name) => name !== '') : [],
     live: session.live,
+    reactions: reactionTallies(session.reactionCounts),
   };
 }
 

@@ -852,11 +852,15 @@ emit({
  * | Plein ecran / le quitter | `corners-out` / `corners-in` |
  * | Effets de ma video (#8442) | `magic-wand` |
  * | Zoom de ma camera -, + (#8441) ; fermer un panneau | `minus`, `plus`, `x` |
+ * | Ajouter des personnes (#8433) | `user-plus` |
+ * | Reagir (#8439) | `smiley` |
+ * | Retirer de l'appel (#8438) | `user-minus` |
+ * | Son de l'apercu avant decroche, coupe (#8480) | `speaker-slash` |
  *
  * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
  */
 emit({
-  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x'],
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash'],
   output: join(HERE, '../src/components/glyphs-call-view.ts'),
   constant: 'CALL_VIEW_GLYPHS',
   type: 'CallViewGlyphName',

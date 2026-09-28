@@ -107,3 +107,25 @@ describe('CallDeclineSheet', () => {
     expect(closed()).toBe(1);
   });
 });
+
+/**
+ * LE RETOUR ANDROID REFERME LA FEUILLE (#8466) — dans la coque, le bouton
+ * retour est un `popstate`. Sans `useBackDismiss`, la feuille restait ouverte
+ * pendant que le retour faisait reculer la page sous l'écran d'appel.
+ */
+describe('CallDeclineSheet — le retour matériel', () => {
+  test('popstate ⇒ la feuille se ferme sans refuser', () => {
+    const { events, closed } = mount();
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(events).toEqual([]);
+    expect(closed()).toBe(1);
+  });
+
+  test('ouverte ⇒ pose une entrée d’historique que le retour consomme', () => {
+    mount();
+    expect(typeof (window.history.state as { backDismiss?: unknown } | null)?.backDismiss).toBe('string');
+  });
+});
+

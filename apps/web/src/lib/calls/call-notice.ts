@@ -18,7 +18,7 @@ export type CallNoticeTarget = {
   readonly live: boolean;
   /** Un appel TERMINÉ, identifié et qui a duré : sa transcription gravée peut se relire (#8048). */
   readonly transcript: boolean;
-  /** L'enregistrement consenti par tous et rattaché à la bulle d'un appel TERMINÉ (#8064) : il se réécoute ici. */
+  /** L'enregistrement consenti par tous et rattaché à la bulle d'un appel TERMINÉ (#8064) : il se réécoute (ou se revoit, #8437) ici. */
   readonly recording: CallNoticeRecording | null;
 };
 
@@ -27,7 +27,7 @@ export type CallNoticeRecording = { readonly attachment: Attachment; readonly la
 type CallNoticeSource = Pick<Message, 'conversationId' | 'metadata'> & Partial<Pick<Message, 'attachments' | 'originalLanguage'>>;
 
 const recordingOf = (message: CallNoticeSource): CallNoticeRecording | null => {
-  const attachment = (message.attachments ?? []).find((candidate) => kindOf(candidate) === 'audio');
+  const attachment = (message.attachments ?? []).find((candidate) => kindOf(candidate) === 'audio' || kindOf(candidate) === 'video');
   return attachment === undefined ? null : { attachment, language: message.originalLanguage ?? 'fr' };
 };
 

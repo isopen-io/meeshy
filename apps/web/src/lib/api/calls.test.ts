@@ -65,7 +65,13 @@ describe('un appel décodé est une PROJECTION', () => {
       bytes: 238000,
       peer: { userId: '64f0c0ffee0000000000abcd', username: 'ada', displayName: 'Ada Lovelace', avatar: 'https://cdn.test/ada.jpg' },
       participants: [],
+      reactionCounts: {},
     });
+  });
+
+  test('les réactions de l’appel (#8439) sont relues sans confiance : un emoji hors liste ou un compte faux tombe', () => {
+    expect(decodeCallRecord(wireRecord({ reactionCounts: { '👍': 3, '💩': 9, '🎉': 'x', '🔥': 0 } }))?.reactionCounts).toEqual({ '👍': 3 });
+    expect(decodeCallRecord(wireRecord({ reactionCounts: 'x' }))?.reactionCounts).toEqual({});
   });
 
   test('une direction inconnue se lit « reçu », comme `CallDirection(raw:)` d’iOS', () => {

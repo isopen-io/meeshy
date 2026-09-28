@@ -12,7 +12,11 @@ import { IDENTITY_POSE } from './studio-pose';
 import {
   STUDIO_ANIMATED_DEFAULT_DURATION,
   STUDIO_TRACK_MIN,
+  draggedTiming,
   pageAnimated,
+  pagePlacedWhileAnimated,
+  timingEnteringAt,
+  timingExitingAt,
   pageWithTrackTiming,
   studioPageDuration,
   studioTracks,
@@ -53,9 +57,11 @@ describe('pageWithTrackTiming — la fenêtre d’une piste, bornée', () => {
     const a = pageWithTrackTiming(page, 'text-1', { start: -1, end: 9 });
     expect(studioTracks(a)[0]?.timing).toEqual({ start: 0, end: STUDIO_ANIMATED_DEFAULT_DURATION });
     const b = pageWithTrackTiming(page, 'text-1', { start: 2, end: 2.05 });
-    expect(studioTracks(b)[0]?.timing).toEqual({ start: 2, end: 2 + STUDIO_TRACK_MIN });
-    const c = pageWithTrackTiming(page, 'text-1', { start: 4.95, end: 5 });
-    expect(studioTracks(c)[0]?.timing).toEqual({ start: 5 - STUDIO_TRACK_MIN, end: 5 });
+    expect(studioTracks(b)[0]?.timing).toEqual({ start: 2, end: 2.05 });
+    const d = pageWithTrackTiming(page, 'text-1', { start: 2, end: 2.01 });
+    expect(studioTracks(d)[0]?.timing).toEqual({ start: 2, end: 2.05 });
+    const c = pageWithTrackTiming(page, 'text-1', { start: 5.95, end: 6 });
+    expect(studioTracks(c)[0]?.timing).toEqual({ start: 6 - STUDIO_TRACK_MIN, end: 6 });
   });
 });
 
@@ -64,7 +70,7 @@ describe('ce que la frise écrit, le LECTEUR le relit', () => {
     const page = pageWithTrackTiming(pageAnimated(typed('Bonjour')), 'text-1', { start: 1, end: 3 });
     const document = buildPreviewCanvasDocument({ texts: page.texts, duration: studioPageDuration(page) })!;
     const scene = document.scenes[0]!;
-    expect(sceneDurationSeconds(scene)).toBe(5);
+    expect(sceneDurationSeconds(scene)).toBe(6);
     const text = scene.objects.find((object) => object.kind === 'text')!;
     expect(isWithinWindow(text, 0.5)).toBe(false);
     expect(isWithinWindow(text, 2)).toBe(true);
@@ -75,8 +81,62 @@ describe('ce que la frise écrit, le LECTEUR le relit', () => {
     const page = pageWithTrackTiming(pageAnimated(typed('Bonjour')), 'text-1', { start: 1, end: 3 });
     const effects = buildStoryCanvasEffects({ texts: page.texts, duration: studioPageDuration(page) })!;
     expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
-    expect(effects.scenes![0]!.timelineDuration).toBe(5);
+    expect(effects.scenes![0]!.timelineDuration).toBe(6);
     expect(effects.scenes![0]!.objects.find((o) => o.kind === 'text')!.timing).toEqual({ start: 1, end: 3 });
     expect(parseCanvasDocument(effects)!.scenes[0]!.objects.find((o) => o.kind === 'text')!.timing).toEqual({ start: 1, end: 3 });
+  });
+});
+
+/** LA MAQUETTE `Main.dc.html` (lot 6), écart minimal aligné sur iOS au lot 7 —
+ * durée 6 s, « Entre ici » / « Sort ici » à la tête (écart minimal 0,05 s,
+ * `ClipWindowResolver.minimumDuration`), et un objet posé en mode animé entre à
+ * la tête (au plus tard à 80 %) et reste jusqu'au bout. */
+describe('la frise de la maquette', () => {
+  test('6 s par défaut, écart minimal 0,05 s (iOS)', () => {
+    expect(STUDIO_ANIMATED_DEFAULT_DURATION).toBe(6);
+    expect(STUDIO_TRACK_MIN).toBeCloseTo(0.05, 5);
+  });
+
+  test('« Entre ici » : t0 = min(tête, t1 − 0,05 s)', () => {
+    expect(timingEnteringAt({ start: 0, end: 4 }, 1.5, 6)).toEqual({ start: 1.5, end: 4 });
+    expect(timingEnteringAt({ start: 0, end: 4 }, 5, 6)).toEqual({ start: 3.95, end: 4 });
+  });
+
+  test('« Sort ici » : t1 = max(tête, t0 + 0,05 s)', () => {
+    expect(timingExitingAt({ start: 2, end: 6 }, 4.5, 6)).toEqual({ start: 2, end: 4.5 });
+    expect(timingExitingAt({ start: 2, end: 6 }, 1, 6)).toEqual({ start: 2, end: 2.05 });
+  });
+
+  test('un objet posé en mode animé : t0 = min(tête, 80 %), t1 = fin', () => {
+    const page = pageAnimated(typed('Bonjour'));
+    expect(studioTracks(pagePlacedWhileAnimated(page, 'text-1', 2))[0]?.timing).toEqual({ start: 2, end: 6 });
+    expect(studioTracks(pagePlacedWhileAnimated(page, 'text-1', 5.9))[0]?.timing).toEqual({ start: 4.8, end: 6 });
+  });
+});
+
+/** LA FRISE SE RÈGLE À LA MAIN (lot 7, miroir `ComposerSceneFriseMetrics.dragged`) :
+ * glisser la barre la DÉPLACE (durée gardée, bornée à la scène) ; tirer une
+ * poignée l'allonge ou la raccourcit, sans jamais croiser l'autre. */
+describe('draggedTiming — la fenêtre après un glissement', () => {
+  test('déplacer garde la durée et reste dans la scène', () => {
+    expect(draggedTiming({ start: 1, end: 3 }, 'move', 1.5, 6)).toEqual({ start: 2.5, end: 4.5 });
+    expect(draggedTiming({ start: 1, end: 3 }, 'move', 9, 6)).toEqual({ start: 4, end: 6 });
+    expect(draggedTiming({ start: 1, end: 3 }, 'move', -9, 6)).toEqual({ start: 0, end: 2 });
+  });
+
+  test('la poignée de début ne franchit ni le bord ni la fin', () => {
+    expect(draggedTiming({ start: 1, end: 3 }, 'start', -0.5, 6)).toEqual({ start: 0.5, end: 3 });
+    expect(draggedTiming({ start: 1, end: 3 }, 'start', -5, 6)).toEqual({ start: 0, end: 3 });
+    expect(draggedTiming({ start: 1, end: 3 }, 'start', 5, 6)).toEqual({ start: 2.95, end: 3 });
+  });
+
+  test('la poignée de fin ne franchit ni le bord ni le début', () => {
+    expect(draggedTiming({ start: 1, end: 3 }, 'end', 1, 6)).toEqual({ start: 1, end: 4 });
+    expect(draggedTiming({ start: 1, end: 3 }, 'end', 9, 6)).toEqual({ start: 1, end: 6 });
+    expect(draggedTiming({ start: 1, end: 3 }, 'end', -9, 6)).toEqual({ start: 1, end: 1.05 });
+  });
+
+  test('un pas non fini ne bouge rien', () => {
+    expect(draggedTiming({ start: 1, end: 3 }, 'move', Number.NaN, 6)).toEqual({ start: 1, end: 3 });
   });
 });

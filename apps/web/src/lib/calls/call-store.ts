@@ -41,7 +41,8 @@ export type CallMember = {
   readonly weakNetwork: boolean;
   /** Il capture l'écran de l'appel (`call:screen-capture-alert`, #8047). */
   readonly capturing: boolean;
-  readonly link: 'waiting' | 'connecting' | 'connected' | 'reconnecting';
+  /** `ringing` : invité dans l'appel en cours (#8433), il sonne et n'a pas encore décroché. */
+  readonly link: 'ringing' | 'waiting' | 'connecting' | 'connected' | 'reconnecting';
 };
 
 /**
@@ -72,6 +73,10 @@ export type ActiveCall = {
   readonly avatar: string | null;
   /** Qui appelle, pour l'écran entrant d'un groupe (« Alice appelle… »). */
   readonly callerName: string | null;
+  /** Qui a lancé l'appel — son admin tant qu'il y est (#8438) ; `null` tant qu'on ne le sait pas. */
+  readonly initiatorId: string | null;
+  /** Le nom de qui m'invite dans un appel DÉJÀ en cours (#8433) : l'écran entrant le dit. */
+  readonly invitedBy: string | null;
   readonly phase: CallPhase;
   readonly connectedAt: number | null;
   readonly endedDurationSec: number | null;
@@ -91,6 +96,10 @@ export type ActiveCall = {
   readonly captionPeers: readonly string[];
   readonly transcription: TranscriptionState;
   readonly quality: CallQuality | null;
+  /** Appelé (#8480) : l'appelant tel qu'on le voit et l'entend AVANT de décrocher ; `null` sans aperçu. */
+  readonly preview: MediaStream | null;
+  /** Appelant (#8480) : l'appelé me voit et m'entend pendant que ça sonne. */
+  readonly previewed: boolean;
 };
 
 export type WaitingCall = {

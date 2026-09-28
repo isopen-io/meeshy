@@ -1,8 +1,8 @@
 import XCTest
 @testable import Meeshy
 
-/// #8432 — chaque bouton de l'écran d'appel est un bouton de VERRE, et les
-/// actions du `(…)` montent AU-DESSUS de la pilule, en duo comme en groupe.
+/// #8459 — la pilule est UN bloc de verre réel (iOS 26), et les actions du
+/// `(…)` s'y déploient au-dessus de la rangée de base, en duo comme en groupe.
 /// #8435 — le bouton PiP quitte le plein écran par le même chemin que le glissé.
 @MainActor
 final class CallViewGlassGuardTests: XCTestCase {
@@ -17,54 +17,62 @@ final class CallViewGlassGuardTests: XCTestCase {
         return String(code[from.upperBound ..< to.lowerBound])
     }
 
-    /// Le glyphe porte son propre verre ; plus aucun disque plat.
-    func test_pillGlyph_carriesItsOwnInteractiveGlass() throws {
+    /// #8459 — un bouton de la pilule est un disque PLAT dans le bloc de
+    /// verre : pas de verre sur verre, ni d'identité de morphing.
+    func test_pillGlyph_isAFlatDiscInsideTheGlassBlock() throws {
         let glyph = try block("struct CallPillGlyph: View {", until: "struct CallPillButtonLabel", in: try callViewCode())
-        XCTAssertTrue(glyph.contains(".modifier(CallButtonGlass(kind: kind))"))
-        XCTAssertTrue(glyph.contains("CallGlassMorphModifier"), "Le verre du bouton porte son identité de morphing")
-        XCTAssertFalse(glyph.contains("Circle().fill("), "Un disque plat sous le glyphe n'est pas du verre")
+        XCTAssertTrue(glyph.contains(".background(Circle().fill(CallButtonFill.color(for: kind)))"))
+        XCTAssertFalse(glyph.contains("CallButtonGlass"), "Un bouton de verre dans un bloc de verre, c'est du verre sur verre")
+        XCTAssertFalse(glyph.contains("adaptiveGlass"))
     }
 
-    func test_buttonGlass_activeIsFilled_endIsRedProminent_restIsInteractive() throws {
+    func test_buttonFill_activeIsWhite_endIsRed_restIsTranslucent() throws {
         let glass = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallControlGlass.swift")
         )
-        let modifier = try block("struct CallButtonGlass: ViewModifier {", until: "struct CallGlassMorphTag", in: glass)
-        XCTAssertTrue(modifier.contains("adaptiveGlass(in: Circle(), interactive: true)"))
-        XCTAssertTrue(modifier.contains("adaptiveGlassProminent(in: Circle(), tint: .white)"))
-        XCTAssertTrue(modifier.contains("adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)"))
+        let fill = try block("enum CallButtonFill {", until: "\n}\n", in: glass)
+        XCTAssertTrue(fill.contains("case .active: return .white"))
+        XCTAssertTrue(fill.contains("case .destructive: return MeeshyColors.error"))
+        XCTAssertTrue(fill.contains("Color.white.opacity("))
+        XCTAssertFalse(glass.contains("struct CallButtonGlass"), "Le verre par bouton a quitté l'écran d'appel")
     }
 
-    /// Pas de verre sur verre : la pilule et les actions ne posent qu'un voile.
-    func test_pillAndActions_carryNoGroupGlassUnderTheirGlassButtons() throws {
-        let pill = try block("var callControlsPill: some View {", until: "private var pillHairline", in: try callViewCode())
-        XCTAssertFalse(pill.contains("callChromeGlass"))
-        XCTAssertTrue(pill.contains("callLegibilityVeil"))
-        let rows = try block("private func groupActionRows(", until: "func actionRow(", in: try callViewCode())
-        XCTAssertFalse(rows.contains("callChromeGlass"))
-        let duo = try block("private func duoActionRows(", until: "func actionButton(", in: try callViewCode())
-        XCTAssertFalse(duo.contains("callChromeGlass"))
-    }
-
-    /// Les actions se posent AU-DESSUS de la pilule, en duo comme en groupe —
-    /// et plus aucun rail latéral.
-    func test_actions_stackAboveThePill_inDuoAndGroup() throws {
+    /// #8459 — UN seul bloc de verre réel : la pilule ; les actions du (…) s'y
+    /// déploient, au-dessus de la rangée de base, sans second bloc.
+    func test_actions_unfoldInsideTheSingleGlassBlock_aboveTheBaseRow() throws {
         let code = try callViewCode()
-        let pill = try block("var callControlsPill: some View {", until: "private var controlsPill: some View {", in: code)
+        let pill = try block("var callControlsPill: some View {", until: "private var pillHairline", in: code)
+        XCTAssertEqual(pill.components(separatedBy: ".callControlsGlass(in:").count - 1, 1, "Un seul verre pour tout le bloc")
         let duo = try XCTUnwrap(pill.range(of: "duoActionRows(actions)"))
         let group = try XCTUnwrap(pill.range(of: "groupActionRows(actions)"))
-        let base = try XCTUnwrap(pill.range(of: "controlsPill"))
+        let base = try XCTUnwrap(pill.range(of: "baseRow"))
+        let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
         XCTAssertLessThan(duo.lowerBound, base.lowerBound)
         XCTAssertLessThan(group.lowerBound, base.lowerBound)
+        XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les actions ET la rangée de base")
+        XCTAssertFalse(code.contains("callLegibilityVeil"), "Plus de voile non vitré : le bloc est du verre")
         XCTAssertFalse(code.contains("actionRails"), "Les rails latéraux ont quitté l'écran d'appel")
     }
 
-    /// Sous iOS 26 les actions naissent du verre du `(…)`.
-    func test_moreAndActions_shareTheGlassNamespace() throws {
+    /// Le bloc de verre est un verre RÉEL sous iOS 26 (`adaptiveGlass`, qui
+    /// porte le `glassEffect` et le repli matériau).
+    func test_controlsGlass_isRealAdaptiveGlass() throws {
+        let glass = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallControlGlass.swift")
+        )
+        let modifier = try block("func callControlsGlass<S: Shape>(in shape: S) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(modifier.contains(".adaptiveGlass(in: shape)"))
+    }
+
+    /// Les rangées d'actions ne portent plus aucun fond propre : elles sont
+    /// DANS le bloc.
+    func test_actionRows_carryNoBackgroundOfTheirOwn() throws {
         let code = try callViewCode()
-        XCTAssertTrue(code.contains(".callGlassMorph(id: \"call.more\", in: callGlassNamespace)"))
-        XCTAssertTrue(code.contains(".callGlassMorph(id: \"call.action.\\(action.rawValue)\", in: callGlassNamespace)"))
-        XCTAssertTrue(code.contains("@Namespace var callGlassNamespace"))
+        let rows = try block("private func groupActionRows(", until: "func actionRow(", in: code)
+        XCTAssertFalse(rows.contains("callChromeGlass"))
+        let duo = try block("private func duoActionRows(", until: "func actionButton(", in: code)
+        XCTAssertFalse(duo.contains("callChromeGlass"))
+        XCTAssertFalse(code.contains("glassEffectID"), "Plus de morphing : les actions naissent dans le bloc qui grandit")
     }
 
     /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si

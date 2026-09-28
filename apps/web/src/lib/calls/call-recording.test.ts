@@ -40,7 +40,11 @@ const activeCall = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   captions: [],
   captionsMode: 'off',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
   quality: null,
   ...overrides,
 });
@@ -96,7 +100,7 @@ describe('la demande — rien ne s’enregistre sans l’accord de tous', () => 
   test('demander émet `call:recording-request` et attend l’accord, sans rien enregistrer', async () => {
     const h = harness();
     await h.recording.request();
-    expect(h.sent[0]).toEqual({ event: CLIENT_EVENTS.CALL_RECORDING_REQUEST, payload: { callId: CALL } });
+    expect(h.sent[0]).toEqual({ event: CLIENT_EVENTS.CALL_RECORDING_REQUEST, payload: { callId: CALL, kind: 'audio' } });
     h.recording.receive(SERVER_EVENTS.CALL_RECORDING_REQUESTED, requested(ME));
     expect(h.view()).toMatchObject({ kind: 'pending', mine: true, mustAnswer: false });
     await flush();
@@ -142,6 +146,31 @@ describe('la demande — rien ne s’enregistre sans l’accord de tous', () => 
     h.recording.receive(SERVER_EVENTS.CALL_RECORDING_STARTED, { ...started(ME), callId: 'other-call' });
     h.recording.receive(SERVER_EVENTS.CALL_RECORDING_STOPPED, { ...stopped('stopped', true), reason: 'nope' });
     expect(h.view()).toEqual({ kind: 'idle' });
+  });
+});
+
+describe('ce qu’on enregistre — l’audio seul, ou la vidéo avec son audio (#8437)', () => {
+  test('la demande porte son type, et chacun consent en le sachant', async () => {
+    const h = harness();
+    await h.recording.request('video');
+    expect(h.sent[0]).toEqual({ event: CLIENT_EVENTS.CALL_RECORDING_REQUEST, payload: { callId: CALL, kind: 'video' } });
+    expect(h.view()).toMatchObject({ kind: 'pending', recordingKind: 'video' });
+    const theirs = harness();
+    theirs.recording.receive(SERVER_EVENTS.CALL_RECORDING_REQUESTED, { ...requested(PEER), kind: 'video' });
+    expect(theirs.view()).toMatchObject({ kind: 'pending', mustAnswer: true, recordingKind: 'video' });
+  });
+
+  test('une demande sans type (client antérieur) se lit « audio »', () => {
+    const h = harness();
+    h.recording.receive(SERVER_EVENTS.CALL_RECORDING_REQUESTED, requested(PEER));
+    expect(h.view()).toMatchObject({ recordingKind: 'audio' });
+  });
+
+  test('l’enregistreur reçoit le type accordé par la passerelle', async () => {
+    const h = harness();
+    h.recording.receive(SERVER_EVENTS.CALL_RECORDING_STARTED, { ...started(ME), kind: 'video' });
+    await flush();
+    expect(h.recorders[0]).toMatchObject({ callId: CALL, recordingId: REC, kind: 'video' });
   });
 });
 

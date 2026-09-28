@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 
-import { CALL_ACTIONS_ID, CallActionRows, type EffectsToggle } from '@/components/call-control-actions';
+import { CALL_ACTIONS_ID, CallActionRows, type CallPanels } from '@/components/call-control-actions';
 import { CallButton } from '@/components/call-glass-button';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
@@ -35,10 +35,10 @@ type PillProps = {
   readonly prominent: boolean;
   /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule d'un groupe a grandi. */
   readonly framedCaptions: ReactNode;
-  readonly effects: EffectsToggle;
+  readonly panels: CallPanels;
 };
 
-export function CallControlPill({ call, language, set, arrangement, expanded, onToggle, prominent, framedCaptions, effects }: PillProps) {
+export function CallControlPill({ call, language, set, arrangement, expanded, onToggle, prominent, framedCaptions, panels }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
   const grown = expanded && arrangement === 'rows';
   return (
@@ -47,7 +47,7 @@ export function CallControlPill({ call, language, set, arrangement, expanded, on
         {grown ? (
           <>
             {framedCaptions}
-            <CallActionRows call={call} set={set} language={language} effects={effects} />
+            <CallActionRows call={call} set={set} language={language} panels={panels} />
             <hr className="mx-2 my-2 border-0 border-t border-white/20" />
           </>
         ) : null}

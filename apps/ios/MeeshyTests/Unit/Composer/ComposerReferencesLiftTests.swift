@@ -31,7 +31,7 @@ final class ComposerReferencesLiftTests: XCTestCase {
         // pied reste leur PREMIER étage, juste sous la scène libre.
         XCTAssertTrue(code.contains("freeZoneiflettimelinePanel{timelinePanel}else{lowerFloors}"),
                       "Sous la scène libre : la frise, ou les étages du bas.")
-        XCTAssertTrue(code.contains("privatevarlowerFloors:someView{VStack(alignment:.leading,spacing:0){ifComposerCanonicalZone.isServed(.references,toolIsOpen:toolIsOpen){ComposerSceneReferenceFooter("),
+        XCTAssertTrue(code.contains("privatevarlowerFloors:someView{VStack(alignment:.leading,spacing:0){ifComposerCanonicalZone.isServed(.references,toolIsOpen:toolIsOpen),band==nil{ComposerSceneReferenceFooter("),
                       "Le pied des références doit être l'étage qui suit la scène libre.")
         XCTAssertFalse(code.contains("referencesLift"), "Aucune remontée : il n'y a plus de letterbox à combler.")
     }

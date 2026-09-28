@@ -368,6 +368,13 @@ extension MeeshyComposerHost {
                     HapticFeedback.medium()
                 }
             },
+            // **Rogner** ouvre l'éditeur sur les bornes de la source — le même
+            // site que le rail des contrôleurs servait (#4082), atteint
+            // désormais par l'appui long.
+            onItemTrim: { id, _ in
+                openObjectEditor(id, section: .media(.trim))
+                HapticFeedback.light()
+            },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
             // **Le geste de la scène EST celui de l'obturateur** (directive
@@ -461,13 +468,12 @@ extension MeeshyComposerHost {
             // en fait sur le MODÈLE (`StoryComposerViewModel+ZOrder`), et
             // persistent leur `zIndex` dans la slide — donc au reader et à la
             // publication, ce qu'un empilement de vue n'aurait jamais fait.
-            trailingActions: ComposerTrailingRailPolicy.actions(
-                slide: viewModel.currentSlide,
-                selectedId: selectedSceneItemId,
-                served: ComposerSceneCapabilities.controllers,
-                hasEditor: false,
-                canLeaveScene: selectedFormat != .story
-            ),
+            // **Les actions d'un objet ont quitté le rail** (directive porteur
+            // 2026-09-27 : « juste faire apparaître les actions possibles au
+            // long press »). Elles vivent dans le menu contextuel de l'objet
+            // (`UIContextMenuInteraction` du canvas) ; le rail droit ne porte
+            // plus que l'historique, le Cadre et la nouvelle slide.
+            trailingActions: [],
             onTrailingAction: { action in handleTrailingRailAction(action) },
             // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
             // d'où sa place tout en haut du rail et son séparateur.
@@ -481,33 +487,16 @@ extension MeeshyComposerHost {
                 ? { performHistoryUndo() } : nil,
             onRedo: composerServesHistory && viewModel.canRedoGlobal
                 ? { performHistoryRedo() } : nil,
-            // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`). La
-            // résolution par kind vit dans la RÈGLE, pas ici : le meuble ne
-            // tient qu'un id, c'est la slide qui sait de quel type il est.
-            objectChips: sceneObjectChips,
-            // **Le jeton ENCADRÉ, et le geste qui l'encadre** (#4073). Le
-            // contrat les portait depuis la livraison et AUCUN hôte ne les
-            // remplissait : six capsules qui s'annonçaient `.isButton` à
-            // VoiceOver, vibraient sous le doigt, et n'ouvraient rien. Suivre
-            // une donnée jusqu'à son consommateur s'arrête un cran trop tôt —
-            // il faut la suivre jusqu'au PIXEL, et demander ce que le doigt
-            // OBTIENT.
+            // **Une sélection SILENCIEUSE** (directive porteur 2026-09-27 :
+            // « il ne faut plus l'entourer sur la scène ni afficher sa
+            // configuration par des détails en bas »). Ni contour, ni badge, ni
+            // rangée de jetons : l'appui long montre ses actions, le double-tap
+            // ouvre son édition. Le meuble garde l'id sélectionné pour ces deux
+            // gestes, il ne le PEINT plus.
+            objectChips: [],
             onObjectChip: { id in handleObjectChip(id) },
-            // **Ce que le canvas ENCADRE** (#4073). Le meuble tient déjà l'id
-            // de l'objet sélectionné pour les jetons et pour le rail — le lui
-            // faire descendre jusqu'au canvas est ce qui manquait pour que
-            // « un seul objet à la fois » se VOIE.
-            selectedItemId: selectedSceneItemId,
-            // **L'état de la pré-montée s'ajoute au badge** (#5086, vue `4c`).
-            // Le registre est indexé par FICHIER ; l'objet sélectionné porte
-            // son URL locale tant qu'il n'est pas adopté, et l'URL distante
-            // ensuite — donc `state(for:)` rend `.idle` dès l'adoption, et le
-            // badge cesse de parler d'une montée finie. C'est le même fait qui
-            // rend le balayage idempotent : une seule valeur, deux usages.
-            selectionBadge: ComposerObjectChips.badge(
-                forSelected: selectedSceneItemId,
-                in: viewModel.currentSlide,
-                preUpload: selectedSceneItemPreUpload),
+            selectedItemId: nil,
+            selectionBadge: nil,
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -543,6 +532,10 @@ extension MeeshyComposerHost {
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
             animatedToggle: returnsImageToConversation ? nil : sceneAnimatedToggle,
+            onFrameButton: sceneHasBackgroundMedia ? { toggleFrameBand() } : nil,
+            frameIsOpen: requestedSceneBand == .frame,
+            onTimeButton: sceneIsAnimated && !returnsImageToConversation ? { toggleSceneFrise() } : nil,
+            timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
             timelineBridge: viewModel.canvasTimelineBridge,
             // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE

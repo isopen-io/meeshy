@@ -1,3 +1,4 @@
+import { parseCallReactionCounts, type CallReactionCounts } from '@meeshy/shared/types/call-control-law';
 import * as z from 'zod/mini';
 import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
@@ -40,6 +41,8 @@ export type CallSession = {
   readonly durationSec: number;
   /** Les membres encore présents (`leftAt` vide), lecteur compris. */
   readonly participants: readonly CallSessionMember[];
+  /** Les réactions envoyées pendant l'appel (#8439), relues sans confiance. */
+  readonly reactionCounts: CallReactionCounts;
 };
 
 export const ACTIVE_CALL_QUERY_KEY = ['calls', 'active'] as const;
@@ -64,6 +67,7 @@ const WireSession = z.object({
   answeredAt: optionalText,
   duration: z.optional(z.nullable(z.number())),
   participants: z.optional(z.nullable(z.array(z.unknown()))),
+  reactionCounts: z.optional(z.unknown()),
 });
 
 const filled = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value);
@@ -97,6 +101,7 @@ export function decodeCallSession(raw: unknown): CallSession | null {
     initiatorId: filled(wire.initiatorId),
     answered: filled(wire.answeredAt) !== null,
     startedAt: isoOrNull(wire.startedAt),
+    reactionCounts: parseCallReactionCounts(wire.reactionCounts),
     durationSec: typeof wire.duration === 'number' && Number.isFinite(wire.duration) && wire.duration > 0 ? Math.floor(wire.duration) : 0,
     participants: (wire.participants ?? []).flatMap((entry) => {
       const member = decodeMember(entry);

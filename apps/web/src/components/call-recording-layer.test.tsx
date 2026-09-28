@@ -25,7 +25,7 @@ const render = (state: CallRecordingState, requesterName = 'Nadia') =>
   );
 
 const pending = (mine: boolean, mustAnswer: boolean): CallRecordingState => ({
-  view: { kind: 'pending', callId: 'call-1', recordingId: 'rec-1', requesterId: mine ? 'u-me' : 'u-peer', mine, mustAnswer },
+  view: { kind: 'pending', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', requesterId: mine ? 'u-me' : 'u-peer', mine, mustAnswer },
   notice: null,
 });
 
@@ -39,6 +39,12 @@ describe('le panneau d’enregistrement d’appel (#8064)', () => {
     expect(html.match(/min-h-11/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
+  test('une demande VIDÉO le dit dans la question : chacun consent en le sachant (#8437)', () => {
+    const state = pending(false, true);
+    const html = render({ ...state, view: { ...state.view, recordingKind: 'video' } as CallRecordingState['view'] });
+    expect(html).toContain('Nadia veut enregistrer l’appel en vidéo');
+  });
+
   test('le demandeur attend l’accord, et peut renoncer', () => {
     const html = render(pending(true, false));
     expect(html).toContain('En attente de l’accord de tous…');
@@ -47,7 +53,7 @@ describe('le panneau d’enregistrement d’appel (#8064)', () => {
   });
 
   test('pendant l’enregistrement, l’indicateur est posé chez TOUS, avec « Arrêter »', () => {
-    const theirs = render({ view: { kind: 'recording', callId: 'call-1', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null });
+    const theirs = render({ view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null });
     expect(theirs).toContain('role="status"');
     expect(theirs).toContain('Enregistrement en cours');
     expect(theirs).toContain('aria-label="Arrêter l’enregistrement"');

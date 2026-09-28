@@ -114,12 +114,54 @@ main[data-scene='idle'] .focus-stamp {
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
   box-shadow: 0 8px 28px color-mix(in srgb, var(--color-ios-ink) 10%, transparent);
 }
+/* LE CADRE ENGLOBE TOUT (#8506, directive porteur 2026-09-28) — identité,
+   bande basse et tampon vivent DANS le verre, à `--focus-card-margin` de ses
+   quatre bords. En largeur, il garde sa place (la gouttière de la rangée
+   moins `--focus-card-inset-x`) ; en hauteur, il déborde du bloc de contenu
+   de sa marge, et une SUITE de groupe le fait monter de la pastille
+   d'identité posée au-dessus de sa première ligne.
+
+   La loupe grossit la RANGÉE entière (`use-focus-frame.ts`, origine au bord
+   de début du cadre) : le cadre grandit avec elle en HAUTEUR, et se
+   contre-échelonne en LARGEUR (`--loupe-s`) pour ne jamais dépasser la
+   colonne. */
 .focus-card {
   inset-inline-start: calc(-1 * (var(--focus-text-indent) + var(--focus-card-inset-x)));
   inset-inline-end: calc(-1 * var(--focus-card-inset-x));
-  inset-block: calc(-1 * var(--focus-card-inset-y));
+  top: calc(-1 * var(--focus-card-margin));
+  bottom: calc(-1 * var(--focus-card-margin));
   border-radius: var(--focus-card-radius);
   z-index: -1;
+  transform: scaleX(calc(1 / var(--loupe-s, 1)));
+  transform-origin: left center;
+}
+.focus-card:dir(rtl) {
+  transform-origin: right center;
+}
+.focus-card[data-continuation] {
+  top: calc(-1 * (var(--focus-identity-h) + var(--focus-identity-gap) + var(--focus-card-margin)));
+}
+
+/* LES VOISINES S'ÉCARTENT (#8506) — de ce que le cadre grossi déborde de sa
+   rangée (`--focus-push-up` / `--focus-push-down`, posées sur la liste par
+   `use-focus-frame.ts`). `translate` et non `transform` : il se COMPOSE avec
+   le `translateY` du virtualiseur sans le réécrire, et ne change aucune
+   hauteur — zéro relayout, rien à remesurer. Au-dessus : les rangées
+   précédentes ET ce qui précède l'élue dans son propre `li` (pilule de jour,
+   séparateur « non lus »). Sans transition, comme la loupe
+   (`use-focal-loupe.ts`). */
+ol > li:has(~ li [data-elected='true']),
+ol > li:has([data-elected='true']) > :not(:has([data-elected='true'])) {
+  translate: 0 calc(-1 * var(--focus-push-up, 0px));
+}
+ol > li:has([data-elected='true']) ~ li {
+  translate: 0 var(--focus-push-down, 0px);
+}
+/* Ce que la loupe pousse hors de la colonne (la colonne méta, INVISIBLE sur
+   l'élue) ne doit ouvrir aucun défilement horizontal : le cadre, lui, tient
+   toujours dans la rangée. */
+ol > li:has([data-elected='true']) {
+  overflow-x: clip;
 }
 
 /* LE MESSAGE LONG DÉPLIÉ (#8147, `unfold-stage.tsx`) reçoit le même verre ;
@@ -158,22 +200,32 @@ ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
   }
 }
 
+/* DANS le cadre, à sa marge (#8506) : l'identité sur la ligne d'identité
+   réservée (tête de groupe) ou au-dessus de la première ligne (suite) ; la
+   bande et le tampon sur la ligne basse réservée de l'élue
+   (`focal-row.tsx`, `visibility: hidden` ou `[data-focus-reserve]`). Le
+   tampon, ancré au bord de FIN, recule de `--loupe-end-shift` pour que la
+   loupe (origine au bord de DÉBUT) le laisse à la même marge grossie. */
 .focus-identity {
   position: absolute;
-  top: calc(-1 * var(--focus-identity-overhang));
-  inset-inline-start: calc(var(--focus-chip-inset) - var(--focus-text-indent));
+  top: 0;
+  inset-inline-start: calc(var(--focus-card-margin) - var(--focus-text-indent) - var(--focus-card-inset-x));
+}
+.focus-identity[data-continuation] {
+  top: calc(-1 * (var(--focus-identity-h) + var(--focus-identity-gap)));
 }
 
 .focus-strip {
   position: absolute;
-  bottom: calc(-1 * var(--focus-strip-overhang));
-  inset-inline-start: calc(var(--focus-chip-inset) - var(--focus-text-indent));
+  bottom: 0;
+  inset-inline-start: calc(var(--focus-card-margin) - var(--focus-text-indent) - var(--focus-card-inset-x));
 }
 
 .focus-stamp {
   position: absolute;
-  bottom: calc(-1 * var(--focus-strip-overhang));
-  inset-inline-end: var(--focus-chip-inset);
+  bottom: 0;
+  inset-inline-end: calc(var(--focus-card-margin) - var(--focus-card-inset-x));
+  translate: var(--loupe-end-shift, 0px) 0;
 }
 
 /* LA CAPSULE DE CHIP — opaque `--color-ios-card`, voilée par l'accent de la
