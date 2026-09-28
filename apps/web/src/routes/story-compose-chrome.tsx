@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import type { StudioFloor } from '@/lib/stories/studio-floor';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
 /**
@@ -69,32 +68,6 @@ export function TextMark({ size = 20 }: { readonly size?: number }) {
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...MARK}>
       <path d="M5 6V4h14v2M12 4v16M9 20h6" />
     </svg>
-  );
-}
-
-/**
- * **LE SOL** — peint SOUS tout le reste, sur l'écran entier : la carte se
- * pose dessus, la barre haute et le socle flottent au-dessus. Une image
- * basse résolution étirée ne tient que floutée ; le voile sombre garde le
- * verre des contrôles lisible sur un sol clair.
- */
-export function StudioFloorLayer({ floor }: { readonly floor: StudioFloor | null }) {
-  if (floor === null) return null;
-  if (floor.kind === 'tint') {
-    return <span aria-hidden="true" data-story-studio-floor="tint" className="pointer-events-none absolute inset-0 block" style={{ backgroundColor: floor.src }} />;
-  }
-  return (
-    <span aria-hidden="true" data-story-studio-floor={floor.kind} className="pointer-events-none absolute inset-0 block overflow-hidden">
-      {/* eslint-disable-next-line jsx-a11y/alt-text */}
-      <img
-        src={floor.src}
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 size-full object-cover"
-        style={{ filter: floor.kind === 'hash' ? 'blur(18px)' : 'blur(36px) saturate(1.2)', transform: 'scale(1.2)' }}
-      />
-      <span className="absolute inset-0 block" style={{ backgroundColor: 'rgba(0,0,0,0.28)' }} />
-    </span>
   );
 }
 

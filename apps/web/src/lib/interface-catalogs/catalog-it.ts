@@ -859,6 +859,7 @@ const it = {
   'story.studio.refusal.door.visual': 'Scegli un’immagine o un video.',
   'story.studio.refusal.door.sound': 'Scegli un file audio.',
   'story.studio.refusal.media-max': 'Questa pubblicazione porta già dieci contenuti multimediali — il limite della piattaforma.',
+  'story.studio.refusal.import-max': '{count} contenuti non importati: una pubblicazione ne porta al massimo dieci.',
   'story.studio.failure.network': 'Rete non disponibile.',
   'story.studio.failure.timeout': 'Il server non ha risposto.',
   'story.studio.failure.session': 'Sessione scaduta — accedi di nuovo.',

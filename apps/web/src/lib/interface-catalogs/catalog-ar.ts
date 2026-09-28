@@ -856,6 +856,7 @@ const ar = {
   'story.studio.refusal.door.visual': 'اختر صورة أو فيديو.',
   'story.studio.refusal.door.sound': 'اختر ملفًا صوتيًا.',
   'story.studio.refusal.media-max': 'هذا المنشور يحمل بالفعل عشرة عناصر وسائط — وهو الحد الأقصى للبوابة.',
+  'story.studio.refusal.import-max': 'لم يتم استيراد {count} من الوسائط: يحمل المنشور عشرة على الأكثر.',
   'story.studio.failure.network': 'الشبكة غير متاحة.',
   'story.studio.failure.timeout': 'لم يستجب الخادم.',
   'story.studio.failure.session': 'انتهت الجلسة — سجّل الدخول مجددًا.',

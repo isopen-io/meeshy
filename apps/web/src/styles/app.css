@@ -595,6 +595,28 @@
   }
 }
 
+/* LE SOL QUI CHANGE DE SOURCE (#8534) — l'image arrivee, deja decodee, se
+   leve en fondu sur celle qui part (gardee dessous par `useDecodedSwap`) :
+   aucune image perdue, aucun eclair de vide. */
+@keyframes studioFloorIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.studio-floor-in {
+  animation: studioFloorIn 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-floor-in {
+    animation: none;
+  }
+}
+
 /* LES RAILS AUTOUR DE LA CARTE, AU BUREAU (#8517) — la zone de la scene
    s'etirait sur tout l'ecran : les rails, poses a 10 px de ses bords, restaient
    colles au bord de la fenetre, a plusieurs centaines de pixels de la carte.
