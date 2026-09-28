@@ -42,6 +42,12 @@ enum CallCaptureCopy {
     static func styleName(_ style: CallMontageStyle) -> String {
         switch style {
         case .screen: return String(localized: "call.capture.style.screen", defaultValue: "Écran", bundle: .main)
+        case .cover: return String(localized: "call.capture.style.cover", defaultValue: "Couverture", bundle: .main)
+        case .gold: return String(localized: "call.capture.style.gold", defaultValue: "Or", bundle: .main)
+        case .redcarpet: return String(localized: "call.capture.style.redcarpet", defaultValue: "Tapis rouge", bundle: .main)
+        case .film: return String(localized: "call.capture.style.film", defaultValue: "Pellicule", bundle: .main)
+        case .neon: return String(localized: "call.capture.style.neon", defaultValue: "Néon", bundle: .main)
+        case .noir: return String(localized: "call.capture.style.noir", defaultValue: "Noir et blanc", bundle: .main)
         case .grid: return String(localized: "call.capture.style.grid", defaultValue: "Mosaïque", bundle: .main)
         case .strip: return String(localized: "call.capture.style.strip", defaultValue: "Photomaton", bundle: .main)
         case .polaroid: return String(localized: "call.capture.style.polaroid", defaultValue: "Polaroïd", bundle: .main)
@@ -54,6 +60,12 @@ enum CallCaptureCopy {
     static func styleSymbol(_ style: CallMontageStyle) -> String {
         switch style {
         case .screen: return "rectangle.inset.filled"
+        case .cover: return "newspaper"
+        case .gold: return "crown"
+        case .redcarpet: return "star"
+        case .film: return "film"
+        case .neon: return "lightbulb"
+        case .noir: return "camera.aperture"
         case .grid: return "square.grid.2x2"
         case .strip: return "rectangle.split.1x2"
         case .polaroid: return "photo"

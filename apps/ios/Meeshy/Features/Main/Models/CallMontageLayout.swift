@@ -3,10 +3,16 @@ import Foundation
 
 nonisolated enum CallMontageStyle: String, CaseIterable, Sendable {
     case screen
+    case cover
+    case gold
+    case redcarpet
     case grid
     case strip
     case polaroid
     case magazine
+    case film
+    case neon
+    case noir
     case comic
     case heart
 }
@@ -43,6 +49,12 @@ nonisolated enum CallMontageLayout {
         let bounds = CGRect(origin: .zero, size: canvas)
         switch style {
         case .screen: return screen(count: count, in: bounds)
+        case .cover: return cover(count: count, in: bounds)
+        case .gold: return gold(count: count, in: bounds)
+        case .redcarpet: return redCarpet(count: count, in: bounds)
+        case .film: return film(count: count, in: bounds)
+        case .neon: return neon(count: count, in: bounds)
+        case .noir: return noir(count: count, in: bounds)
         case .grid: return mosaic(count: count, in: bounds)
         case .strip: return strip(count: count, in: bounds)
         case .polaroid: return polaroid(count: count, in: bounds)
@@ -89,6 +101,7 @@ nonisolated enum CallMontageLayout {
         case .strip: return CGRect(x: 0, y: canvas.height * 0.86, width: canvas.width, height: canvas.height * 0.14)
         case .magazine: return CGRect(x: 0, y: canvas.height * 0.03, width: canvas.width, height: canvas.height * 0.13)
         case .heart: return CGRect(x: 0, y: canvas.height * 0.9, width: canvas.width, height: canvas.height * 0.08)
+        case .cover, .gold, .redcarpet, .film, .neon, .noir: return glamourCaptionBand(style: style, canvas: canvas)
         case .screen, .grid, .polaroid, .comic: return nil
         }
     }
