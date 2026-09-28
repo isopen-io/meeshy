@@ -55,6 +55,8 @@ const seeded = () => {
 };
 
 const tokens = (element: Element | null) => (element?.className ?? '').split(/\s+/);
+/** La borne commune des plaques (`STUDIO_PLATE`) : 36 rem au plus, centrée. */
+const bounded = (element: Element | null) => ['max-w-xl', 'mx-auto', 'w-full'].filter((token) => !tokens(element).includes(token));
 
 describe('au bureau, les plaques restent BORNÉES et centrées', () => {
   test('le Cadre, la plaque d’édition et la frise portent la même borne', async () => {
@@ -62,18 +64,18 @@ describe('au bureau, les plaques restent BORNÉES et centrées', () => {
     selectFile(el, 'visual', image());
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
-    expect(tokens(el.querySelector('[data-story-frame-panel]'))).toEqual(expect.arrayContaining(['max-w-xl', 'mx-auto', 'w-full']));
+    expect(bounded(el.querySelector('[data-story-frame-panel]'))).toEqual([]);
     click(el.querySelector('[data-story-frame-done]'));
 
     typeText(el, 'Bonjour');
     click(el.querySelector('[data-story-object-edit="text-1"]'));
     await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
-    expect(tokens(el.querySelector('[data-story-edit-plaque]'))).toEqual(expect.arrayContaining(['max-w-xl', 'mx-auto', 'w-full']));
+    expect(bounded(el.querySelector('[data-story-edit-plaque]'))).toEqual([]);
     click(el.querySelector('[data-story-edit-done]'));
 
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
-    expect(tokens(el.querySelector('[data-story-timeline]'))).toEqual(expect.arrayContaining(['max-w-xl', 'mx-auto', 'w-full']));
+    expect(bounded(el.querySelector('[data-story-timeline]'))).toEqual([]);
   });
 
   test('le texte du post aussi', async () => {
@@ -81,7 +83,7 @@ describe('au bureau, les plaques restent BORNÉES et centrées', () => {
     typeText(el, 'Sur la scène');
     click(el.querySelector('[data-story-post-text]'));
     await flush(() => el.querySelector('[data-story-post-text-frame]') !== null);
-    expect(tokens(el.querySelector('[data-story-post-text-frame]'))).toEqual(expect.arrayContaining(['max-w-xl', 'mx-auto', 'w-full']));
+    expect(bounded(el.querySelector('[data-story-post-text-frame]'))).toEqual([]);
   });
 });
 
