@@ -139,7 +139,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
           type="button"
           aria-label={translate(language, 'call.video.swap')}
           onClick={self.onToggle}
-          className="absolute right-4 grid place-items-center overflow-hidden rounded-card shadow-lg transition-[width,height] duration-200 motion-reduce:transition-none"
+          className="absolute right-4 z-10 grid place-items-center overflow-hidden rounded-card shadow-lg transition-[width,height] duration-200 motion-reduce:transition-none"
           {...(swapped ? {} : pinch)}
           style={{ ...cornerTop, width: size.width, height: size.height, background: 'rgb(0 0 0 / 0.35)', ...(swapped ? {} : pinch.style) }}
           data-call-corner=""

@@ -276,4 +276,35 @@ describe('ma vignette en coin se pince (#8577)', () => {
     expect(view.toggled).toEqual(['toggle']);
     view.done();
   });
+
+  /* Sur un écran tactile, deux doigts levés ne font AUCUN clic : le clic que
+     le pincement avale n'arrive jamais, et le toucher suivant — un geste neuf
+     — ne doit pas payer pour lui (mesuré dans Chromium, pincement CDP). */
+  test('après un pincement sans clic, le toucher suivant met mon image en plein écran', () => {
+    fresh();
+    const view = mount(call(zoomCamera()));
+    const pointer = (type: string, pointerId: number, clientX: number) => act(() => view.corner().dispatchEvent(new PointerEvent(type, { pointerId, clientX, clientY: 0, bubbles: true })));
+    pointer('pointerdown', 1, 0);
+    pointer('pointerdown', 2, 100);
+    pointer('pointermove', 2, 150);
+    pointer('pointerup', 2, 150);
+    pointer('pointerup', 1, 0);
+    expect(view.corner().getAttribute('data-call-self-tile')).toBe('3');
+    pointer('pointerdown', 3, 10);
+    pointer('pointerup', 3, 10);
+    act(() => view.corner().click());
+    expect(view.toggled).toEqual(['toggle']);
+    view.done();
+  });
+
+  /* La colonne de l'écran d'appel (en-tête, pilule, et l'espace vide qui les
+     sépare) est posée PAR-DESSUS la scène : sans son propre plan, la vignette
+     s'y voit mais ne reçoit ni toucher ni pincement (mesuré dans Chromium par
+     `check-calls-controls.mjs`, où son espaceur interceptait chaque appui). */
+  test('la vignette se pose au-dessus de la colonne de l’écran : le doigt l’atteint', () => {
+    fresh();
+    const view = mount(call(zoomCamera()));
+    expect(view.corner().className.split(' ')).toContain('z-10');
+    view.done();
+  });
 });

@@ -48,6 +48,7 @@ export function useTilePinch(scale: SelfTileScale, onScale: (scale: SelfTileScal
   return {
     onPointerDown: (event) => {
       pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.current.size === 1) pinched.current = false;
       if (pointers.current.size !== 2) return;
       start.current = gap([...pointers.current.values()]);
       ratio.current = 1;
