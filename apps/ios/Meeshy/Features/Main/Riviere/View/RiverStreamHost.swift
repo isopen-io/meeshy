@@ -584,7 +584,7 @@ struct RiverStreamHost: View {
                 onMediaTap: onMediaTap
             )
                 .equatable()
-                .longMessageFocus(expansion(for: bubble.messageId), accentHex: DynamicColorGenerator.colorForName(content.colorSeed))
+                .longMessageFocus(expansion(for: bubble.messageId))
                 .longMessageLoupe(isActive: expandedMessageId == bubble.messageId && !reduceMotion)
                 .opacity(LongMessageExpansionLaw.alpha(
                     isExpandedCell: expandedMessageId == bubble.messageId,

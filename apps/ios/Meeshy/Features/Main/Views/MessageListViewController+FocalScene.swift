@@ -187,12 +187,20 @@ extension MessageListViewController {
         // reconfiguration n'ait posé les pastilles sur la nouvelle rangée.
         let anchor = cells.first { FocalScrollPerspective.showsFocusDetails(cellTag: $0.tag) }
         let anchorMidY = anchor.flatMap { focalGeometry(of: $0)?.visualMidY }
-        let clearance = FocalScrollPerspective.electionClearance(isFirstInGroup: anchor.map { FocalScrollPerspective.isGroupHead(cellTag: $0.tag) } ?? false)
-        let growth = anchor.map { FocalScrollPerspective.loupeGrowth(of: $0.contentView.layer) } ?? 0
+        // #8506 — le passage mesure le CADRE entier de la rangée détaillée,
+        // agrandi par la loupe qu'elle porte : identité et bande vivent dans
+        // le cadre, et il grandit avec le contenu.
+        let anchorBounds = anchor?.contentView.layer.bounds ?? .zero
+        let clearance = FocalScrollPerspective.electionClearance(
+            isFirstInGroup: anchor.map { FocalScrollPerspective.isGroupHead(cellTag: $0.tag) } ?? false,
+            cellHeight: anchorBounds.height,
+            scale: FocalScrollPerspective.electedScale(reduceMotion: UIAccessibility.isReduceMotionEnabled, rowWidth: anchorBounds.width)
+        )
+        let isRightToLeft = collectionView.effectiveUserInterfaceLayoutDirection == .rightToLeft
         for cell in cells {
             let geometry = focalGeometry(of: cell)
-            let shift = geometry.map { FocalScrollPerspective.electionShift(cellMidY: $0.visualMidY, magnifiedMidY: anchorMidY, clearance: clearance, loupeGrowth: growth) } ?? 0
-            FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && geometry?.id == focused, shift: shift, animated: electionChanged)
+            let shift = geometry.map { FocalScrollPerspective.electionShift(cellMidY: $0.visualMidY, magnifiedMidY: anchorMidY, clearance: clearance) } ?? 0
+            FocalScrollPerspective.magnifyElected(cell.contentView.layer, isFocused: focused != nil && geometry?.id == focused, isRightToLeft: isRightToLeft, shift: shift, animated: electionChanged)
         }
         focalFocusedLocalId = focused
         // Les détails du message en focus apparaissent AVEC la carte, pas au

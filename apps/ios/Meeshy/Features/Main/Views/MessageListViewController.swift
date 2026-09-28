@@ -1838,7 +1838,7 @@ final class MessageListViewController: UIViewController {
                     if let focalRow {
                         focalRow.equatable()
                     } else {
-                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId), accentHex: accent)
+                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId))
                     }
                 }
                 .environmentObject(host)
