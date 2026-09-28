@@ -25,11 +25,15 @@ async function editing(text: string) {
   el.querySelector<HTMLElement>('[data-scene-object-id="text-1"]')!.getBoundingClientRect = () => fakeRect({ top: 180, left: 50, width: 100, height: 40 });
   const input = field(el)!;
   input.getBoundingClientRect = () => fakeRect({ top: 180, left: 50, width: 100, height: 40 });
-  input.setPointerCapture = () => undefined;
+  /** Qui garde le doigt — capturé par un ANCÊTRE, il quitterait la saisie et
+   * ses mouvements n'y arriveraient plus (relevé au navigateur). */
+  const holders: string[] = [];
+  input.setPointerCapture = () => void holders.push('saisie');
+  el.querySelector<HTMLElement>('[data-scene-stage]')!.setPointerCapture = () => void holders.push('scène');
   const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;
   layer.setPointerCapture = () => undefined;
   const pose = () => drafts.get(VIEWER_ID)?.pages[0]?.texts[0]?.pose as { x: number; y: number; scale: number; rotation: number } | undefined;
-  return { el, input, layer, pose };
+  return { el, input, layer, pose, holders };
 }
 
 const finger = (target: HTMLElement, type: string, pointerId: number, clientX: number, clientY: number, pointerType = 'touch') =>
@@ -37,7 +41,7 @@ const finger = (target: HTMLElement, type: string, pointerId: number, clientX: n
 
 describe('pendant l’édition d’un texte, le doigt le manipule sur la scène (#8535)', () => {
   test('glisser le texte en cours d’écriture le DÉPLACE, et l’édition continue', async () => {
-    const { el, input, pose } = await editing('Déplacé');
+    const { el, input, pose, holders } = await editing('Déplacé');
     expect(plaque(el)).not.toBeNull();
     finger(input, 'pointerdown', 1, 100, 200);
     finger(input, 'pointermove', 1, 130, 240);
@@ -49,6 +53,7 @@ describe('pendant l’édition d’un texte, le doigt le manipule sur la scène 
     expect(plaque(el)).not.toBeNull();
     expect(field(el)?.value).toBe('Déplacé');
     expect(document.activeElement).toBe(field(el));
+    expect(holders).toEqual(['saisie']);
   });
 
   test('deux doigts — l’un sur le texte, l’autre sur la scène — le pincent et le tournent sans fermer l’édition', async () => {

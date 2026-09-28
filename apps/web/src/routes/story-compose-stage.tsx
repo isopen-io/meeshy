@@ -73,12 +73,17 @@ type Press = {
 /** Un doigt, qu'il vienne du calque (React) ou de la saisie (natif). */
 type Finger = { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number; readonly capture: () => void };
 
-const fingerOf = (event: { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number; readonly currentTarget: EventTarget | null }): Finger => ({
+/** `holder` garde le doigt : le calque pour ses propres pointeurs, la SAISIE
+ * pour les siens — capturer sur un ancêtre les retirerait de la saisie. */
+const fingerOf = (
+  event: { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number },
+  holder: EventTarget | null,
+): Finger => ({
   pointerId: event.pointerId,
   clientX: event.clientX,
   clientY: event.clientY,
   button: event.button,
-  capture: () => (event.currentTarget as Element | null)?.setPointerCapture?.(event.pointerId),
+  capture: () => (holder as Element | null)?.setPointerCapture?.(event.pointerId),
 });
 
 /** Un pincement en cours — l'objet, sa pose et les deux doigts au départ. */
@@ -309,10 +314,10 @@ export function StudioStageGestures({
     const fromField = (event: PointerEvent): boolean =>
       event.pointerType !== 'mouse' && event.target instanceof Element && event.target.closest('[data-story-text-input]') !== null;
     const down = (event: PointerEvent) => {
-      if (fromField(event)) handlers.current.onPointerDown(fingerOf(event), true);
+      if (fromField(event)) handlers.current.onPointerDown(fingerOf(event, event.target), true);
     };
     const move = (event: PointerEvent) => {
-      if (fromField(event)) handlers.current.onPointerMove(fingerOf(event));
+      if (fromField(event)) handlers.current.onPointerMove(fingerOf(event, event.target));
     };
     const up = (event: PointerEvent) => {
       if (fromField(event)) handlers.current.onPointerUp(event);
@@ -346,8 +351,8 @@ export function StudioStageGestures({
         data-story-stage-gestures
         className="absolute inset-0"
         style={{ zIndex: 3, touchAction: 'none' }}
-        onPointerDown={(event) => onPointerDown(fingerOf(event))}
-        onPointerMove={(event) => onPointerMove(fingerOf(event))}
+        onPointerDown={(event) => onPointerDown(fingerOf(event, event.currentTarget))}
+        onPointerMove={(event) => onPointerMove(fingerOf(event, event.currentTarget))}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onContextMenu={onContextMenu}
