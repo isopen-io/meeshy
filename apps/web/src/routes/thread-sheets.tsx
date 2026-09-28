@@ -60,6 +60,7 @@ export function ThreadMessageSheets({
   conversationId,
   viewerId,
   viewerName,
+  viewerHandle,
   conversationTitle,
   announce,
 }: {
@@ -69,8 +70,10 @@ export function ThreadMessageSheets({
   readonly readerLocale: string;
   readonly conversationId: string;
   readonly viewerId: string;
-  /** Le nom de qui exporte : il signe la carte et son filigrane. */
+  /** Le nom de qui exporte : il nomme ses propres messages sur la carte. */
   readonly viewerName: string;
+  /** Le pseudo de qui exporte : il signe le filigrane, « Meeshy @pseudo ». */
+  readonly viewerHandle: string | null;
   /** Le titre du fil, qu'une carte d'export peut afficher. */
   readonly conversationTitle: string | null;
   readonly announce: (message: string) => void;
@@ -166,7 +169,7 @@ export function ThreadMessageSheets({
         return (
           <MessageExportSheet
             subject={subject}
-            exporter={viewerName.trim() === '' ? 'Meeshy' : viewerName.trim()}
+            handle={viewerHandle}
             conversationTitle={conversationTitle}
             quick={request.quick}
             announce={announce}

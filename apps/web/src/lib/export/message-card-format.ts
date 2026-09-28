@@ -1,12 +1,17 @@
 import type { SafeStorage } from '@/lib/storage';
 
-import { MESSAGE_CARD_STYLE_IDS, type MessageCardStyleId } from './message-card-style-ids';
+import { DEFAULT_TEMPLATE_ID, parseTemplateId, type MessageCardTemplateId } from './message-card-templates';
 
 /**
  * **LE FORMAT D'UNE CARTE D'EXPORT** — ce que l'exportateur choisit de
- * MONTRER, parmi ce qui existe déjà : le style, le titre de la conversation,
- * les noms des auteurs, la date. La feuille d'export est un composer
- * simplifié : elle ne crée aucun contenu, elle choisit l'affichage.
+ * MONTRER, parmi ce qui existe déjà : le template, le titre de la
+ * conversation, les noms des auteurs (ou leur anonymat), la date. La feuille
+ * d'export est un composer simplifié : elle ne crée aucun contenu, elle
+ * choisit l'affichage.
+ *
+ * L'ANONYMAT se choisit par bloc — l'auteur du message cité, celui de la
+ * réponse — et ne touche jamais au filigrane, qui signe toujours la carte du
+ * pseudo de qui l'exporte.
  *
  * UN FORMAT PAR DÉFAUT, ENREGISTRÉ SUR L'APPAREIL, sert l'« Export rapide » :
  * toute carte suivante part dans ce format, sans passer par les options. Il
@@ -16,33 +21,46 @@ import { MESSAGE_CARD_STYLE_IDS, type MessageCardStyleId } from './message-card-
  */
 
 export type MessageCardFormat = {
-  readonly style: MessageCardStyleId;
+  readonly template: MessageCardTemplateId;
   readonly showConversationTitle: boolean;
   readonly showAuthors: boolean;
   readonly showDate: boolean;
+  readonly anonymizeQuoted: boolean;
+  readonly anonymizeReply: boolean;
 };
 
+export type MessageCardToggle = Exclude<keyof MessageCardFormat, 'template'>;
+
+const TOGGLES: readonly MessageCardToggle[] = ['showConversationTitle', 'showAuthors', 'showDate', 'anonymizeQuoted', 'anonymizeReply'];
+
 export const INITIAL_MESSAGE_CARD_FORMAT: MessageCardFormat = {
-  style: 'aurore',
+  template: DEFAULT_TEMPLATE_ID,
   showConversationTitle: false,
   showAuthors: true,
   showDate: false,
+  anonymizeQuoted: false,
+  anonymizeReply: false,
 };
 
 export const MESSAGE_CARD_FORMAT_KEY = 'meeshy.export.message-card.default-format';
-
-const isStyle = (value: unknown): value is MessageCardStyleId =>
-  typeof value === 'string' && (MESSAGE_CARD_STYLE_IDS as readonly string[]).includes(value);
 
 export function parseMessageCardFormat(raw: string | null): MessageCardFormat | null {
   if (raw === null) return null;
   try {
     const value: unknown = JSON.parse(raw);
     if (typeof value !== 'object' || value === null) return null;
-    const { style, showConversationTitle, showAuthors, showDate } = value as Record<string, unknown>;
-    if (!isStyle(style)) return null;
-    if (typeof showConversationTitle !== 'boolean' || typeof showAuthors !== 'boolean' || typeof showDate !== 'boolean') return null;
-    return { style, showConversationTitle, showAuthors, showDate };
+    const record = value as Record<string, unknown>;
+    const template = parseTemplateId(record['template']);
+    if (template === null || !TOGGLES.every((toggle) => typeof record[toggle] === 'boolean')) return null;
+    const flag = (toggle: MessageCardToggle) => record[toggle] === true;
+    return {
+      template,
+      showConversationTitle: flag('showConversationTitle'),
+      showAuthors: flag('showAuthors'),
+      showDate: flag('showDate'),
+      anonymizeQuoted: flag('anonymizeQuoted'),
+      anonymizeReply: flag('anonymizeReply'),
+    };
   } catch {
     return null;
   }
@@ -57,8 +75,4 @@ export function writeDefaultMessageCardFormat(storage: Pick<SafeStorage, 'setIte
 }
 
 export const sameMessageCardFormat = (a: MessageCardFormat, b: MessageCardFormat | null): boolean =>
-  b !== null &&
-  a.style === b.style &&
-  a.showConversationTitle === b.showConversationTitle &&
-  a.showAuthors === b.showAuthors &&
-  a.showDate === b.showDate;
+  b !== null && a.template === b.template && TOGGLES.every((toggle) => a[toggle] === b[toggle]);

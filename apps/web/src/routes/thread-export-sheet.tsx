@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Sheet } from '@/components/sheet';
 import type { MessageCardDelivery } from '@/lib/export/deliver-message-card';
@@ -8,20 +8,38 @@ import {
   sameMessageCardFormat,
   writeDefaultMessageCardFormat,
   type MessageCardFormat,
+  type MessageCardToggle,
 } from '@/lib/export/message-card-format';
 import type { MessageCardInput } from '@/lib/export/message-card-layout';
-import { MESSAGE_CARD_STYLE_IDS, type MessageCardStyleId } from '@/lib/export/message-card-style-ids';
 import { messageCardFileName, type MessageCardSubject } from '@/lib/export/message-card-subject';
+import {
+  CARD_LINKS,
+  CARD_PALETTES,
+  CARD_PALETTE_IDS,
+  CARD_TYPEFACE_IDS,
+  randomTemplateId,
+  templateIdOf,
+  templateOf,
+  type CardLinkId,
+  type CardTypefaceId,
+  type MessageCardTemplateId,
+} from '@/lib/export/message-card-templates';
+import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 import { ActionButton } from '@/routes/link-page-parts';
 
 /**
  * **EXPORTER UN MESSAGE EN IMAGE — UN COMPOSER SIMPLIFIÉ.** La feuille ne
- * crée aucun contenu : elle choisit comment MONTRER ce qui existe (le style,
- * le titre de la conversation, les noms des auteurs, la date), montre la
- * carte telle qu'elle partira, et l'enregistre.
+ * crée aucun contenu : elle choisit comment MONTRER ce qui existe (le
+ * template, le titre de la conversation, les noms des auteurs ou leur
+ * anonymat, la date), montre la carte telle qu'elle partira, et l'enregistre.
+ *
+ * DES CENTAINES DE TEMPLATES (`message-card-templates.ts`) se choisissent
+ * par leurs trois dimensions — couleurs, typographie, liaison — ou d'un geste :
+ * les « Populaires » (les plus enregistrés sur l'appareil, puis la vitrine) et
+ * « Au hasard ». Chaque carte enregistrée compte pour son template.
  *
  * LE FORMAT PAR DÉFAUT (`message-card-format.ts`) ouvre la feuille déjà
  * réglée, et « Utiliser comme format par défaut » le remplace. L'« Export
@@ -34,11 +52,28 @@ import { ActionButton } from '@/routes/link-page-parts';
  * sont chargés À LA DEMANDE : le fil n'en paie rien.
  */
 
-const STYLE_LABEL = {
-  aurore: 'export.card.style.aurore',
-  editorial: 'export.card.style.editorial',
-  manuscrit: 'export.card.style.manuscrit',
-} as const satisfies Readonly<Record<MessageCardStyleId, InterfaceCatalogKey>>;
+const TYPEFACE_LABEL = {
+  rond: 'export.card.typeface.rond',
+  didone: 'export.card.typeface.didone',
+  plume: 'export.card.typeface.plume',
+  affiche: 'export.card.typeface.affiche',
+  futur: 'export.card.typeface.futur',
+  machine: 'export.card.typeface.machine',
+  marqueur: 'export.card.typeface.marqueur',
+  systeme: 'export.card.typeface.systeme',
+} as const satisfies Readonly<Record<CardTypefaceId, InterfaceCatalogKey>>;
+
+const LINK_LABEL = {
+  orbite: 'export.card.link.orbite',
+  filet: 'export.card.link.filet',
+  guillemets: 'export.card.link.guillemets',
+  fleche: 'export.card.link.fleche',
+  bulles: 'export.card.link.bulles',
+  fil: 'export.card.link.fil',
+  silence: 'export.card.link.silence',
+} as const satisfies Readonly<Record<CardLinkId, InterfaceCatalogKey>>;
+
+const POPULAR_COUNT = 6;
 
 const DELIVERY_ANNOUNCE = {
   gallery: 'export.announce.gallery',
@@ -48,13 +83,13 @@ const DELIVERY_ANNOUNCE = {
   unavailable: 'export.announce.unavailable',
 } as const satisfies Readonly<Record<MessageCardDelivery, InterfaceCatalogKey>>;
 
-type Option = 'showConversationTitle' | 'showAuthors' | 'showDate';
-
 const OPTION_LABEL = {
   showConversationTitle: 'export.card.option.title',
   showAuthors: 'export.card.option.authors',
   showDate: 'export.card.option.date',
-} as const satisfies Readonly<Record<Option, InterfaceCatalogKey>>;
+  anonymizeQuoted: 'export.card.option.anonymizeQuoted',
+  anonymizeReply: 'export.card.option.anonymizeReply',
+} as const satisfies Readonly<Record<MessageCardToggle, InterfaceCatalogKey>>;
 
 type Rendered = { readonly key: string; readonly blob: Blob; readonly url: string; readonly truncated: boolean };
 
@@ -68,27 +103,36 @@ const defaultPainter: Painter = async (input) => (await import('@/lib/export/mes
 const defaultDeliver = async (blob: Blob, fileName: string): Promise<MessageCardDelivery> =>
   (await import('@/lib/export/deliver-message-card')).deliverMessageCard(blob, fileName);
 
-/** La carte telle que le format la demande — un titre absent ou vide n'est jamais « affiché ». */
+/**
+ * La carte telle que le format la demande — un titre absent ou vide n'est
+ * jamais « affiché », et un auteur anonymisé cède son nom à `anonymousLabel`.
+ * Le filigrane, lui, garde toujours le pseudo de qui exporte.
+ */
 export function messageCardInputOf(params: {
   readonly subject: MessageCardSubject;
   readonly format: MessageCardFormat;
-  readonly exporter: string;
+  readonly handle: string | null;
   readonly conversationTitle: string | null;
-  readonly footerLabel: string;
+  readonly anonymousLabel: string;
   readonly formatDate: (date: Date) => string;
 }): MessageCardInput {
   const { subject, format } = params;
+  const quoted = subject.quoted;
   return {
-    quoted: subject.quoted,
-    reply: subject.reply,
-    exporter: params.exporter,
-    footerLabel: params.footerLabel,
-    style: format.style,
+    quoted: quoted === null || !format.anonymizeQuoted ? quoted : { ...quoted, author: params.anonymousLabel },
+    reply: format.anonymizeReply ? { ...subject.reply, author: params.anonymousLabel } : subject.reply,
+    handle: params.handle,
+    template: format.template,
     title: format.showConversationTitle ? params.conversationTitle : null,
     date: format.showDate ? params.formatDate(subject.sentAt) : null,
     showAuthors: format.showAuthors,
   };
 }
+
+const templateLabel = (language: InterfaceLanguage, id: MessageCardTemplateId): string => {
+  const template = templateOf(id);
+  return `${template.palette.name} · ${translate(language, TYPEFACE_LABEL[template.typefaceId])} · ${translate(language, LINK_LABEL[template.link])}`;
+};
 
 const formatKey = (format: MessageCardFormat): string => JSON.stringify(format);
 
@@ -97,11 +141,14 @@ function Chip({
   onClick,
   data,
   children,
+  swatch,
 }: {
   readonly pressed: boolean;
   readonly onClick: () => void;
   readonly data: Readonly<Record<`data-${string}`, string>>;
   readonly children: string;
+  /** Une pastille de la palette, devant le libellé. */
+  readonly swatch?: string;
 }) {
   return (
     <button
@@ -109,7 +156,7 @@ function Chip({
       type="button"
       aria-pressed={pressed}
       onClick={onClick}
-      className="shrink-0 rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="inline-flex shrink-0 items-center gap-2 rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{
         minHeight: 44,
         color: pressed ? 'white' : 'var(--color-ios-ink)',
@@ -118,14 +165,31 @@ function Chip({
         outlineColor: 'var(--accent, var(--color-ios-brand))',
       }}
     >
+      {swatch === undefined ? null : (
+        <span aria-hidden="true" className="inline-block shrink-0 rounded-full" style={{ width: 16, height: 16, background: swatch, border: '1px solid var(--color-edge)' }} />
+      )}
       {children}
     </button>
   );
 }
 
+function ChipRow({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+  return (
+    <div role="group" aria-label={label} className="grid gap-2">
+      <p className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {label}
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1">{children}</div>
+    </div>
+  );
+}
+
+const swatchOf = (palette: (typeof CARD_PALETTES)[keyof typeof CARD_PALETTES]): string =>
+  `linear-gradient(135deg, ${palette.background.map(([offset, color]) => `${color} ${Math.round(offset * 100)}%`).join(', ')})`;
+
 export function MessageExportSheet({
   subject,
-  exporter,
+  handle,
   conversationTitle,
   quick = false,
   onClose,
@@ -135,9 +199,11 @@ export function MessageExportSheet({
   deliver = defaultDeliver,
   createObjectURL = (blob) => URL.createObjectURL(blob),
   revokeObjectURL = (url) => URL.revokeObjectURL(url),
+  random = Math.random,
 }: {
   readonly subject: MessageCardSubject;
-  readonly exporter: string;
+  /** Le pseudo de qui exporte — il signe le filigrane, anonymat ou pas. */
+  readonly handle: string | null;
   /** Le titre de la conversation — `null` quand elle n'en a pas : l'option ne s'offre alors pas. */
   readonly conversationTitle: string | null;
   /** « Export rapide » : le format par défaut, enregistré dès que la carte est peinte. */
@@ -149,6 +215,7 @@ export function MessageExportSheet({
   readonly deliver?: (blob: Blob, fileName: string) => Promise<MessageCardDelivery>;
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
+  readonly random?: () => number;
 }) {
   const language = currentInterfaceLanguage();
   const [savedDefault, setSavedDefault] = useState<MessageCardFormat | null>(() => readDefaultMessageCardFormat(storage));
@@ -157,6 +224,7 @@ export function MessageExportSheet({
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const quickSent = useRef(false);
+  const [popular] = useState(() => popularTemplates(readTemplateUsage(storage), POPULAR_COUNT));
   const title = conversationTitle !== null && conversationTitle.trim() !== '' ? conversationTitle.trim() : null;
 
   /* Les portes sont PRÉCHARGÉES pendant que la carte se peint : sur iOS, le
@@ -176,9 +244,9 @@ export function MessageExportSheet({
     const input = messageCardInputOf({
       subject,
       format,
-      exporter,
+      handle,
       conversationTitle: title,
-      footerLabel: translate(language, 'export.card.footer', { name: exporter }),
+      anonymousLabel: translate(language, 'export.card.anonymous'),
       formatDate: (date) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date),
     });
     void paint(input)
@@ -197,7 +265,7 @@ export function MessageExportSheet({
       if (url !== null) revokeObjectURL(url);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, subject, exporter, title]);
+  }, [key, subject, handle, title]);
 
   const ready = rendered !== null && rendered.key === key;
 
@@ -207,7 +275,9 @@ export function MessageExportSheet({
     const outcome = await deliver(rendered.blob, messageCardFileName(new Date())).catch((): MessageCardDelivery => 'unavailable');
     setSaving(false);
     announce(translate(language, DELIVERY_ANNOUNCE[outcome]));
-    if (outcome === 'gallery' || outcome === 'shared') onClose();
+    if (outcome !== 'gallery' && outcome !== 'shared') return;
+    recordTemplateUse(storage, format.template);
+    onClose();
   };
 
   useEffect(() => {
@@ -217,7 +287,11 @@ export function MessageExportSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quick, ready]);
 
-  const toggle = (option: Option) => setFormat((current) => ({ ...current, [option]: !current[option] }));
+  const toggle = (option: MessageCardToggle) => setFormat((current) => ({ ...current, [option]: !current[option] }));
+  const pick = (template: MessageCardTemplateId) => setFormat((current) => ({ ...current, template }));
+  const current = templateOf(format.template);
+  const pickPart = (part: { readonly palette?: typeof current.paletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) =>
+    pick(templateIdOf({ palette: part.palette ?? current.paletteId, typeface: part.typeface ?? current.typefaceId, link: part.link ?? current.link }));
 
   const isDefault = sameMessageCardFormat(format, savedDefault);
   const useAsDefault = () => {
@@ -226,7 +300,14 @@ export function MessageExportSheet({
     announce(translate(language, 'export.announce.defaultSaved'));
   };
 
-  const options: readonly Option[] = title === null ? ['showAuthors', 'showDate'] : ['showConversationTitle', 'showAuthors', 'showDate'];
+  /* L'anonymat n'a de sens que pour un nom PEINT — et celui du message cité, que s'il y en a un. */
+  const options: readonly MessageCardToggle[] = [
+    ...(title === null ? [] : (['showConversationTitle'] as const)),
+    'showAuthors',
+    'showDate',
+    ...(format.showAuthors && subject.quoted !== null ? (['anonymizeQuoted'] as const) : []),
+    ...(format.showAuthors ? (['anonymizeReply'] as const) : []),
+  ];
 
   return (
     <Sheet title={translate(language, 'export.card.title')} presentation="centered" bodyAs="div" onClose={onClose}>
@@ -245,7 +326,7 @@ export function MessageExportSheet({
             <img
               src={rendered.url}
               alt={translate(language, 'export.card.preview')}
-              data-export-preview={format.style}
+              data-export-preview={format.template}
               className="block w-full"
               style={{ maxHeight: '50vh', objectFit: 'contain' }}
             />
@@ -262,18 +343,40 @@ export function MessageExportSheet({
           </p>
         ) : null}
 
-        <div role="group" aria-label={translate(language, 'export.card.styles')} className="flex gap-2 overflow-x-auto">
-          {MESSAGE_CARD_STYLE_IDS.map((candidate) => (
-            <Chip
-              key={candidate}
-              pressed={candidate === format.style}
-              onClick={() => setFormat((current) => ({ ...current, style: candidate }))}
-              data={{ 'data-export-style': candidate }}
-            >
-              {translate(language, STYLE_LABEL[candidate])}
+        <ChipRow label={translate(language, 'export.card.popular')}>
+          <Chip pressed={false} onClick={() => pick(randomTemplateId(random))} data={{ 'data-export-random': '' }}>
+            {translate(language, 'export.card.random')}
+          </Chip>
+          {popular.map((id) => (
+            <Chip key={id} pressed={id === format.template} onClick={() => pick(id)} data={{ 'data-export-template': id }} swatch={swatchOf(templateOf(id).palette)}>
+              {templateLabel(language, id)}
             </Chip>
           ))}
-        </div>
+        </ChipRow>
+
+        <ChipRow label={translate(language, 'export.card.palette')}>
+          {CARD_PALETTE_IDS.map((palette) => (
+            <Chip key={palette} pressed={palette === current.paletteId} onClick={() => pickPart({ palette })} data={{ 'data-export-palette': palette }} swatch={swatchOf(CARD_PALETTES[palette])}>
+              {CARD_PALETTES[palette].name}
+            </Chip>
+          ))}
+        </ChipRow>
+
+        <ChipRow label={translate(language, 'export.card.typeface')}>
+          {CARD_TYPEFACE_IDS.map((typeface) => (
+            <Chip key={typeface} pressed={typeface === current.typefaceId} onClick={() => pickPart({ typeface })} data={{ 'data-export-typeface': typeface }}>
+              {translate(language, TYPEFACE_LABEL[typeface])}
+            </Chip>
+          ))}
+        </ChipRow>
+
+        <ChipRow label={translate(language, 'export.card.link')}>
+          {CARD_LINKS.map((link) => (
+            <Chip key={link} pressed={link === current.link} onClick={() => pickPart({ link })} data={{ 'data-export-link': link }}>
+              {translate(language, LINK_LABEL[link])}
+            </Chip>
+          ))}
+        </ChipRow>
 
         <div role="group" aria-label={translate(language, 'export.card.options')} className="flex flex-wrap gap-2">
           {options.map((option) => (

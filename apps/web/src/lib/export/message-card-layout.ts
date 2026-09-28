@@ -1,4 +1,7 @@
-import { MESSAGE_CARD_STYLES, canvasFont, type MessageCardStyleId } from './message-card-styles';
+import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type MessageCardTemplateId } from './message-card-templates';
+import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
+
+export { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
 
 /**
  * **LA MISE EN PAGE D'UNE CARTE D'EXPORT** — LOI PURE : aucun canvas, aucun
@@ -7,11 +10,11 @@ import { MESSAGE_CARD_STYLES, canvasFont, type MessageCardStyleId } from './mess
  *
  * LA LECTURE DE HAUT EN BAS EST CELLE DU FIL :
  *  0. l'en-tête, si l'exportateur l'a voulu : titre de la conversation, date ;
- *  1. le message CITÉ — en entier, en taille RÉDUITE, sous un filet ;
- *  2. le séparateur « ——— ○ ——— » ;
- *  3. la RÉPONSE, en bas, dans la police du style et en grand ;
- *  4. le pied : la marque Meeshy et « Exporté par … ».
- * Un filigrane diagonal (Meeshy · l'exportateur) couvre le fond.
+ *  1. le message CITÉ — en entier, en taille RÉDUITE ;
+ *  2. la LIAISON du template, qui mène la question à la réponse ;
+ *  3. la RÉPONSE, en bas, dans la police du template et en grand.
+ * Aucun pied : la carte est signée par son seul filigrane diagonal,
+ * « Meeshy @pseudo », qui reste même quand les auteurs sont anonymisés.
  *
  * LA CARTE S'ADAPTE AU TEXTE, JAMAIS L'INVERSE : 1080 px de large (le format
  * des réseaux), une hauteur entre le carré (1080) et le format story (1920).
@@ -20,9 +23,8 @@ import { MESSAGE_CARD_STYLES, canvasFont, type MessageCardStyleId } from './mess
  * tronqué d'une ellipse — la citation d'abord, la réponse en dernier.
  */
 
-export type Measure = (text: string, font: string) => number;
-
 export type MessageCardPart = {
+  /** Le nom peint au-dessus du bloc — déjà anonymisé par l'appelant s'il l'a voulu. */
   readonly author: string;
   readonly text: string;
 };
@@ -31,11 +33,9 @@ export type MessageCardInput = {
   /** Le message auquel on répond — `null` pour un message isolé. */
   readonly quoted: MessageCardPart | null;
   readonly reply: MessageCardPart;
-  /** Le nom de qui exporte : il signe le pied et le filigrane. */
-  readonly exporter: string;
-  /** « Exporté par {name} », déjà dans la langue d'INTERFACE : cette loi n'en connaît aucune. */
-  readonly footerLabel: string;
-  readonly style: MessageCardStyleId;
+  readonly template: MessageCardTemplateId;
+  /** Le pseudo de qui exporte — il signe le filigrane ; `null` : la marque seule. */
+  readonly handle: string | null;
   /** L'en-tête optionnel : le titre de la conversation et/ou la date, déjà rédigés. */
   readonly title?: string | null;
   readonly date?: string | null;
@@ -64,6 +64,7 @@ export type CardBarOp = {
   readonly color: string;
 };
 
+/** Un trait horizontal — interrompu par un cercle au milieu quand `radius` > 0. */
 export type CardSeparatorOp = {
   readonly kind: 'separator';
   readonly x1: number;
@@ -72,9 +73,29 @@ export type CardSeparatorOp = {
   readonly radius: number;
   readonly color: string;
   readonly dash: readonly number[];
+  readonly lineWidth: number;
 };
 
-export type CardOp = CardTextOp | CardBarOp | CardSeparatorOp;
+/** Une bulle : un rectangle arrondi sous un bloc de texte. */
+export type CardPanelOp = {
+  readonly kind: 'panel';
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly radius: number;
+  readonly color: string;
+};
+
+export type CardDotOp = {
+  readonly kind: 'dot';
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly color: string;
+};
+
+export type CardOp = CardTextOp | CardBarOp | CardSeparatorOp | CardPanelOp | CardDotOp;
 
 export type CardLayout = {
   readonly width: number;
@@ -91,14 +112,12 @@ export const CARD_MIN_HEIGHT = 1080;
 export const CARD_MAX_HEIGHT = 1920;
 
 const PAD_X = 96;
-const PAD_TOP = 136;
-const FOOTER_HEIGHT = 176;
+const PAD_Y = 136;
 const QUOTE_INDENT = 40;
 const BAR_WIDTH = 6;
 const AUTHOR_SIZE = 30;
 const AUTHOR_LINE = 44;
 const AUTHOR_GAP = 14;
-const SEPARATOR_BLOCK = 132;
 const TITLE_SIZE = 34;
 const TITLE_LINE = 46;
 const DATE_SIZE = 26;
@@ -111,73 +130,26 @@ const QUOTE_FLOOR = 26;
 const REPLY_LEADING = 1.3;
 const QUOTE_LEADING = 1.38;
 const SHRINK = 0.92;
-const ELLIPSIS = '…';
-
-const RTL_STRONG = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
-const LTR_STRONG = /[A-Za-zÀ-ɏͰ-ϿЀ-ӿ]/;
-
-/** Le sens d'un texte — celui de son PREMIER caractère fort, comme `dir="auto"`. */
-export function textDirection(text: string): 'ltr' | 'rtl' {
-  for (const ch of text) {
-    if (RTL_STRONG.test(ch)) return 'rtl';
-    if (LTR_STRONG.test(ch)) return 'ltr';
-  }
-  return 'ltr';
-}
+const BUBBLE_OFFSET = 72;
+const BUBBLE_PAD_X = 40;
+const BUBBLE_PAD_Y = 34;
+const BUBBLE_RADIUS = 36;
 
 /**
- * Coupe un texte en lignes qui tiennent dans `maxWidth`. Les sauts de ligne
- * de l'auteur sont gardés ; un mot plus large que la ligne (une URL, un mot
- * allemand) est coupé par graphème plutôt que de déborder de la carte.
+ * La géométrie de chaque liaison : la hauteur du bloc qui sépare la citation
+ * de la réponse, et ce que la citation porte — son filet vertical, ou une bulle.
  */
-export function wrapText(text: string, maxWidth: number, font: string, measure: Measure): string[] {
-  const lines: string[] = [];
-  const fits = (candidate: string) => measure(candidate, font) <= maxWidth;
-  for (const paragraph of text.replace(/\r\n?/g, '\n').split('\n')) {
-    const words = paragraph.split(/\s+/).filter((word) => word !== '');
-    if (words.length === 0) {
-      lines.push('');
-      continue;
-    }
-    let current = '';
-    for (const word of words) {
-      const candidate = current === '' ? word : `${current} ${word}`;
-      if (fits(candidate)) {
-        current = candidate;
-        continue;
-      }
-      if (current !== '') lines.push(current);
-      current = '';
-      if (fits(word)) {
-        current = word;
-        continue;
-      }
-      for (const ch of Array.from(word)) {
-        if (current !== '' && !fits(current + ch)) {
-          lines.push(current);
-          current = ch;
-        } else {
-          current += ch;
-        }
-      }
-    }
-    if (current !== '') lines.push(current);
-  }
-  while (lines.length > 0 && lines[0] === '') lines.shift();
-  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-  /* Deux lignes vides d'affilée n'ajoutent rien à une image : une seule suffit. */
-  return lines.filter((line, i) => !(line === '' && lines[i - 1] === ''));
-}
+type LinkGeometry = { readonly block: number; readonly quoteBar: boolean; readonly bubbles: boolean };
 
-/** Garde `count` lignes et termine la dernière par une ellipse qui tient dans la ligne. */
-export function truncateLines(lines: readonly string[], count: number, maxWidth: number, font: string, measure: Measure): string[] {
-  if (lines.length <= count) return [...lines];
-  const kept = lines.slice(0, Math.max(1, count));
-  let last = Array.from(kept[kept.length - 1] ?? '');
-  while (last.length > 0 && measure(`${last.join('').trimEnd()}${ELLIPSIS}`, font) > maxWidth) last = last.slice(0, -1);
-  kept[kept.length - 1] = `${last.join('').trimEnd()}${ELLIPSIS}`;
-  return kept;
-}
+const LINK_GEOMETRY: Readonly<Record<CardLinkId, LinkGeometry>> = {
+  orbite: { block: 132, quoteBar: true, bubbles: false },
+  filet: { block: 104, quoteBar: true, bubbles: false },
+  guillemets: { block: 150, quoteBar: false, bubbles: false },
+  fleche: { block: 112, quoteBar: true, bubbles: false },
+  bulles: { block: 44, quoteBar: false, bubbles: true },
+  fil: { block: 120, quoteBar: true, bubbles: false },
+  silence: { block: 88, quoteBar: false, bubbles: false },
+};
 
 type Sized = {
   readonly replySize: number;
@@ -191,47 +163,60 @@ type Sized = {
 const replyLineHeight = (size: number) => Math.round(size * REPLY_LEADING);
 const quoteLineHeight = (size: number) => Math.round(size * QUOTE_LEADING);
 
-type Chrome = { readonly header: number; readonly author: number };
+type Chrome = { readonly header: number; readonly author: number; readonly bubble: number; readonly link: number };
 
 function contentHeight(sized: Sized, hasQuote: boolean, chrome: Chrome): number {
-  const quote = hasQuote ? chrome.author + sized.quoteLines.length * quoteLineHeight(sized.quoteSize) + SEPARATOR_BLOCK : 0;
-  return chrome.header + quote + chrome.author + sized.replyLines.length * replyLineHeight(sized.replySize);
+  const quote = hasQuote ? chrome.author + sized.quoteLines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble + chrome.link : 0;
+  return chrome.header + quote + chrome.author + sized.replyLines.length * replyLineHeight(sized.replySize) + chrome.bubble;
 }
 
 const nonBlank = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim());
 
+/** « Meeshy @pseudo » — le pseudo sans son éventuel « @ », la marque seule quand il manque. */
+export function watermarkOf(handle: string | null): string {
+  const bare = nonBlank(handle?.replace(/^@+/, ''));
+  return bare === null ? 'Meeshy' : `Meeshy @${bare}`;
+}
+
 export function layoutMessageCard(input: MessageCardInput, measure: Measure): CardLayout {
-  const style = MESSAGE_CARD_STYLES[input.style];
+  const template = templateOf(input.template);
+  const { palette, typeface } = template;
+  const geometry = LINK_GEOMETRY[template.link];
   const textWidth = CARD_WIDTH - 2 * PAD_X;
-  const quoteWidth = textWidth - QUOTE_INDENT;
+  const bubbleWidth = textWidth - BUBBLE_OFFSET;
+  const quoteWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth - QUOTE_INDENT;
+  const replyWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth;
   const hasQuote = input.quoted !== null && input.quoted.text.trim() !== '';
-  const budget = CARD_MAX_HEIGHT - PAD_TOP - FOOTER_HEIGHT;
+  const budget = CARD_MAX_HEIGHT - 2 * PAD_Y;
   const title = nonBlank(input.title);
   const date = nonBlank(input.date);
   const showAuthors = input.showAuthors !== false;
   const chrome: Chrome = {
     header: title === null && date === null ? 0 : (title === null ? 0 : TITLE_LINE) + (date === null ? 0 : DATE_LINE) + HEADER_GAP,
     author: showAuthors ? AUTHOR_LINE + AUTHOR_GAP : 0,
+    bubble: geometry.bubbles ? 2 * BUBBLE_PAD_Y : 0,
+    link: geometry.block,
   };
 
   const sizeAt = (step: number): Sized => {
-    const replySize = Math.max(REPLY_FLOOR, REPLY_START * SHRINK ** step);
+    const replySize = Math.max(REPLY_FLOOR * typeface.replyScale, REPLY_START * typeface.replyScale * SHRINK ** step);
     const quoteSize = Math.max(QUOTE_FLOOR, QUOTE_START * SHRINK ** step);
-    const replyFont = canvasFont(style.replyFont, replySize);
-    const quoteFont = canvasFont(style.quoteFont, quoteSize);
+    const replyFont = canvasFont(typeface.replyFont, replySize);
+    const quoteFont = canvasFont(typeface.quoteFont, quoteSize);
     return {
       replySize,
       quoteSize,
       replyFont,
       quoteFont,
-      replyLines: wrapText(input.reply.text, textWidth, replyFont, measure),
+      replyLines: wrapText(input.reply.text, replyWidth, replyFont, measure),
       quoteLines: hasQuote ? wrapText(input.quoted?.text ?? '', quoteWidth, quoteFont, measure) : [],
     };
   };
 
+  const atFloor = (sized: Sized) => sized.replySize <= REPLY_FLOOR * typeface.replyScale && sized.quoteSize <= QUOTE_FLOOR;
   let step = 0;
   let sized = sizeAt(step);
-  while (contentHeight(sized, hasQuote, chrome) > budget && (sized.replySize > REPLY_FLOOR || sized.quoteSize > QUOTE_FLOOR)) {
+  while (contentHeight(sized, hasQuote, chrome) > budget && !atFloor(sized)) {
     step += 1;
     sized = sizeAt(step);
   }
@@ -241,7 +226,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     truncated = true;
     const quoteLH = quoteLineHeight(sized.quoteSize);
     const replyLH = replyLineHeight(sized.replySize);
-    const fixed = chrome.header + (hasQuote ? chrome.author + SEPARATOR_BLOCK : 0) + chrome.author;
+    const fixed = contentHeight({ ...sized, quoteLines: [], replyLines: [] }, hasQuote, chrome);
     const room = budget - fixed;
     /* La citation cède d'abord : au plus un tiers de la place, deux lignes au moins. */
     const quoteKeep = hasQuote ? Math.min(sized.quoteLines.length, Math.max(2, Math.floor((room * 0.3) / quoteLH))) : 0;
@@ -249,64 +234,114 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     sized = {
       ...sized,
       quoteLines: truncateLines(sized.quoteLines, quoteKeep, quoteWidth, sized.quoteFont, measure),
-      replyLines: truncateLines(sized.replyLines, replyKeep, textWidth, sized.replyFont, measure),
+      replyLines: truncateLines(sized.replyLines, replyKeep, replyWidth, sized.replyFont, measure),
     };
   }
 
   const content = contentHeight(sized, hasQuote, chrome);
-  const height = truncated ? CARD_MAX_HEIGHT : Math.min(CARD_MAX_HEIGHT, Math.max(CARD_MIN_HEIGHT, PAD_TOP + content + FOOTER_HEIGHT));
+  const height = truncated ? CARD_MAX_HEIGHT : Math.min(CARD_MAX_HEIGHT, Math.max(CARD_MIN_HEIGHT, 2 * PAD_Y + content));
   /* Un texte court flotte au milieu de l'espace libre, jamais collé en haut. */
-  let y = PAD_TOP + Math.max(0, Math.floor((height - PAD_TOP - FOOTER_HEIGHT - content) / 2));
+  let y = PAD_Y + Math.max(0, Math.floor((height - 2 * PAD_Y - content) / 2));
 
   const ops: CardOp[] = [];
+  const start = (rtl: boolean, inset: number) => (rtl ? CARD_WIDTH - PAD_X - inset : PAD_X + inset);
+  const align = (rtl: boolean): 'left' | 'right' => (rtl ? 'right' : 'left');
   const authorFont = canvasFont({ family: null, weight: 600, style: 'normal' }, AUTHOR_SIZE);
+
   if (title !== null) {
     const direction = textDirection(title);
     const titleFont = canvasFont({ family: null, weight: 800, style: 'normal' }, TITLE_SIZE);
-    const [line = title] = truncateLines(wrapText(title, CARD_WIDTH - 2 * PAD_X, titleFont, measure), 1, CARD_WIDTH - 2 * PAD_X, titleFont, measure);
-    ops.push({ kind: 'text', text: line, x: direction === 'rtl' ? CARD_WIDTH - PAD_X : PAD_X, y: y + TITLE_SIZE, font: titleFont, color: style.replyInk, align: direction === 'rtl' ? 'right' : 'left', direction });
+    const [line = title] = truncateLines(wrapText(title, textWidth, titleFont, measure), 1, textWidth, titleFont, measure);
+    ops.push({ kind: 'text', text: line, x: start(direction === 'rtl', 0), y: y + TITLE_SIZE, font: titleFont, color: palette.replyInk, align: align(direction === 'rtl'), direction });
     y += TITLE_LINE;
   }
   if (date !== null) {
     const direction = textDirection(date);
-    ops.push({ kind: 'text', text: date, x: direction === 'rtl' ? CARD_WIDTH - PAD_X : PAD_X, y: y + DATE_SIZE, font: canvasFont({ family: null, weight: 500, style: 'normal' }, DATE_SIZE), color: style.quoteInk, align: direction === 'rtl' ? 'right' : 'left', direction });
+    const dateFont = canvasFont({ family: null, weight: 500, style: 'normal' }, DATE_SIZE);
+    ops.push({ kind: 'text', text: date, x: start(direction === 'rtl', 0), y: y + DATE_SIZE, font: dateFont, color: palette.quoteInk, align: align(direction === 'rtl'), direction });
     y += DATE_LINE;
   }
   if (chrome.header > 0) y += HEADER_GAP;
 
-  const author = (name: string, x: number, direction: 'ltr' | 'rtl') => {
+  const author = (name: string, x: number, rtl: boolean) => {
     if (!showAuthors) return;
-    ops.push({ kind: 'text', text: name, x, y: y + AUTHOR_SIZE, font: authorFont, color: style.authorInk, align: direction === 'rtl' ? 'right' : 'left', direction });
+    ops.push({ kind: 'text', text: name, x, y: y + AUTHOR_SIZE, font: authorFont, color: palette.authorInk, align: align(rtl), direction: textDirection(name) });
     y += AUTHOR_LINE + AUTHOR_GAP;
   };
 
-  if (hasQuote && input.quoted !== null) {
-    const direction = textDirection(input.quoted.text);
+  /** Un bloc : son nom, ses lignes — et, pour la liaison « bulles », la bulle qui les porte. */
+  const block = (part: MessageCardPart, lines: readonly string[], options: { readonly size: number; readonly lineHeight: number; readonly font: string; readonly ink: string; readonly inset: number; readonly bubble: { readonly offset: number; readonly color: string } | null }) => {
+    const direction = textDirection(part.text);
     const rtl = direction === 'rtl';
-    const lh = quoteLineHeight(sized.quoteSize);
     const top = y;
-    author(input.quoted.author, rtl ? CARD_WIDTH - PAD_X - QUOTE_INDENT : PAD_X + QUOTE_INDENT, textDirection(input.quoted.author));
-    for (const line of sized.quoteLines) {
-      ops.push({ kind: 'text', text: line, x: rtl ? CARD_WIDTH - PAD_X - QUOTE_INDENT : PAD_X + QUOTE_INDENT, y: y + Math.round(sized.quoteSize), font: sized.quoteFont, color: style.quoteInk, align: rtl ? 'right' : 'left', direction });
-      y += lh;
+    const panelIndex = ops.length;
+    const inset = options.bubble === null ? options.inset : options.bubble.offset + BUBBLE_PAD_X;
+    if (options.bubble !== null) y += BUBBLE_PAD_Y;
+    author(part.author, start(rtl, inset), rtl);
+    for (const line of lines) {
+      ops.push({ kind: 'text', text: line, x: start(rtl, inset), y: y + Math.round(options.size), font: options.font, color: options.ink, align: align(rtl), direction });
+      y += options.lineHeight;
     }
-    ops.push({ kind: 'bar', x: rtl ? CARD_WIDTH - PAD_X - BAR_WIDTH : PAD_X, y: top, width: BAR_WIDTH, height: y - top, color: style.accent });
-    ops.push({ kind: 'separator', x1: PAD_X, x2: CARD_WIDTH - PAD_X, y: y + SEPARATOR_BLOCK / 2, radius: 11, color: style.accent, dash: style.separatorDash });
-    y += SEPARATOR_BLOCK;
+    if (options.bubble !== null) {
+      y += BUBBLE_PAD_Y;
+      const x = rtl ? CARD_WIDTH - PAD_X - options.bubble.offset - bubbleWidth : PAD_X + options.bubble.offset;
+      ops.splice(panelIndex, 0, { kind: 'panel', x, y: top, width: bubbleWidth, height: y - top, radius: BUBBLE_RADIUS, color: options.bubble.color });
+    }
+    return { top, rtl };
+  };
+
+  if (hasQuote && input.quoted !== null) {
+    const quote = block(input.quoted, sized.quoteLines, {
+      size: sized.quoteSize,
+      lineHeight: quoteLineHeight(sized.quoteSize),
+      font: sized.quoteFont,
+      ink: palette.quoteInk,
+      inset: geometry.quoteBar ? QUOTE_INDENT : 0,
+      bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel } : null,
+    });
+    if (geometry.quoteBar) ops.push({ kind: 'bar', x: quote.rtl ? CARD_WIDTH - PAD_X - BAR_WIDTH : PAD_X, y: quote.top, width: BAR_WIDTH, height: y - quote.top, color: palette.accent });
+    ops.push(...linkOps(template.link, { y, rtl: quote.rtl, accent: palette.accent }));
+    y += geometry.block;
   }
 
-  const direction = textDirection(input.reply.text);
-  const rtl = direction === 'rtl';
-  author(input.reply.author, rtl ? CARD_WIDTH - PAD_X : PAD_X, textDirection(input.reply.author));
-  const lh = replyLineHeight(sized.replySize);
-  for (const line of sized.replyLines) {
-    ops.push({ kind: 'text', text: line, x: rtl ? CARD_WIDTH - PAD_X : PAD_X, y: y + Math.round(sized.replySize), font: sized.replyFont, color: style.replyInk, align: rtl ? 'right' : 'left', direction });
-    y += lh;
+  block(input.reply, sized.replyLines, {
+    size: sized.replySize,
+    lineHeight: replyLineHeight(sized.replySize),
+    font: sized.replyFont,
+    ink: palette.replyInk,
+    inset: 0,
+    bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET, color: palette.replyPanel } : null,
+  });
+
+  return { width: CARD_WIDTH, height, ops, watermark: watermarkOf(input.handle), truncated };
+}
+
+/** Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse. */
+function linkOps(link: CardLinkId, at: { readonly y: number; readonly rtl: boolean; readonly accent: string }): CardOp[] {
+  const { y, rtl, accent } = at;
+  const block = LINK_GEOMETRY[link].block;
+  const edge = rtl ? CARD_WIDTH - PAD_X : PAD_X;
+  const toward = rtl ? -1 : 1;
+  switch (link) {
+    case 'orbite':
+      return [{ kind: 'separator', x1: PAD_X, x2: CARD_WIDTH - PAD_X, y: y + block / 2, radius: 11, color: accent, dash: [2, 14], lineWidth: 3 }];
+    case 'filet': {
+      const [x1, x2] = [edge, edge + toward * 160].sort((a, b) => a - b) as [number, number];
+      return [{ kind: 'separator', x1, x2, y: y + block / 2, radius: 0, color: accent, dash: [], lineWidth: 5 }];
+    }
+    case 'guillemets':
+      return [{ kind: 'text', text: '“', x: edge - toward * 6, y: y + block - 8, font: canvasFont(GUILLEMET_FONT, 190), color: accent, align: rtl ? 'right' : 'left', direction: 'ltr' }];
+    case 'fleche':
+      return [{ kind: 'text', text: rtl ? '↲' : '↳', x: edge + toward * QUOTE_INDENT, y: y + Math.round(block * 0.7), font: canvasFont({ family: null, weight: 700, style: 'normal' }, 60), color: accent, align: rtl ? 'right' : 'left', direction: 'ltr' }];
+    case 'fil': {
+      const x = rtl ? CARD_WIDTH - PAD_X - BAR_WIDTH / 2 : PAD_X + BAR_WIDTH / 2;
+      return [
+        { kind: 'bar', x: x - 1.5, y: y + 10, width: 3, height: block - 44, color: accent },
+        { kind: 'dot', x, y: y + block - 26, radius: 10, color: accent },
+      ];
+    }
+    case 'bulles':
+    case 'silence':
+      return [];
   }
-
-  const footerY = height - Math.round(FOOTER_HEIGHT / 2) + 12;
-  ops.push({ kind: 'text', text: 'Meeshy', x: PAD_X, y: footerY, font: canvasFont({ family: null, weight: 800, style: 'normal' }, 40), color: style.footerInk, align: 'left', direction: 'ltr' });
-  ops.push({ kind: 'text', text: input.footerLabel, x: CARD_WIDTH - PAD_X, y: footerY, font: canvasFont({ family: null, weight: 500, style: 'normal' }, 26), color: style.footerInk, align: 'right', direction: textDirection(input.footerLabel) });
-
-  return { width: CARD_WIDTH, height, ops, watermark: `Meeshy · ${input.exporter}`, truncated };
 }

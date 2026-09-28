@@ -105,6 +105,7 @@ const mountSheets = async (menu: ThreadSheetsMenu, messages: readonly Message[])
         conversationId="c-deploiement"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
+        viewerHandle="jacques"
         conversationTitle="Déploiement"
         announce={() => {}}
       />
@@ -134,6 +135,7 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
+        viewerHandle="jacques"
         conversationTitle="Déploiement"
         announce={() => {}}
       />,
@@ -151,6 +153,7 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
+        viewerHandle="jacques"
         conversationTitle="Déploiement"
         announce={() => {}}
       />,
@@ -191,14 +194,14 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(journal).toEqual([`pick:${SERVER_MESSAGE_ID}:fr`, 'detail:null']);
   });
 
-  test('« Exporter en image » monte la carte d’un message ordinaire, avec ses trois styles', async () => {
+  test('« Exporter en image » monte la carte d’un message ordinaire, avec ses templates', async () => {
     const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ attachments: [] })]);
-    expect(host.querySelectorAll('[data-export-style]').length).toBe(3);
+    expect(host.querySelectorAll('[data-export-link]').length > 1).toBe(true);
   });
 
   test('un message protégé ne monte aucune carte, même ciblé', async () => {
     const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ isBlurred: true })]);
-    expect(has(host, '[data-export-style]')).toBe(false);
+    expect(has(host, '[data-export-link]')).toBe(false);
   });
 
   test('réagir depuis la feuille de réactions pose la réaction PUIS referme la feuille', async () => {
