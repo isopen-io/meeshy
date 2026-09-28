@@ -740,8 +740,13 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
     /// s'il a un effet.
     func test_lÉtatArmé_atteintLEnvoi() throws {
         let mount = try source(at: "Features/Main/Views/ConversationView+Composer.swift")
-        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.isViewOnceEnabled"),
+        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.composerViewOnceEnabled"),
                       "La bascule doit écrire dans l'état du ViewModel, pas dans un `@State` local.")
+        // #8557 — la bascule passe par la projection qui respecte la contagion
+        // d'une réponse ; la projection, elle, écrit l'état armé du ViewModel.
+        let projection = try source(at: "Features/Main/ViewModels/ConversationViewModel+ReplyContagion.swift")
+        XCTAssertTrue(projection.contains("isViewOnceEnabled = newValue"),
+                      "La projection du composeur doit écrire l'état armé du ViewModel.")
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
         XCTAssertTrue(send.contains("isViewOnceEnabled"),
                       "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
