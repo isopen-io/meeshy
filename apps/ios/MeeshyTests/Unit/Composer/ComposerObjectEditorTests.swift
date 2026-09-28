@@ -427,19 +427,36 @@ final class ComposerObjectEditorTests: XCTestCase {
         // (directive porteur 2026-09-05, `ComposerMentionStripContrastTests`).
         // Le rail des PORTES se couche aussi à l'horizontale (la rangée basse) :
         // son air suit l'axe, et vaut `.vertical, 8` debout comme ses jumeaux.
-        for (nom, source, largeur, air) in [
-            ("le couloir d'OUTILS", editeur, "ComposerObjectEditorRail.railWidth", ".padding(.vertical,8)"),
-            ("le couloir d'HISTORIQUE", trailing, "ComposerRailGeometry.railWidth", ".padding(.vertical,8)"),
-            ("le couloir des PORTES", leading, "ComposerRailGeometry.railWidth",
+        // **Depuis le 2026-09-27, les couloirs de la scène et de l'éditeur sont
+        // de petits boutons SÉPARÉS** (« pas de long bandeau de contrôleur à
+        // gauche ou à droite, juste des petits boutons ») : chaque bouton
+        // porte son disque de verre, TEINTÉ du même plateau. La carte ne
+        // survit qu'au mode colonne des rails, qu'un seul modificateur dessine
+        // (`ComposerRailCard`) — la cohérence se tient donc en un site.
+        let verre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerRailGlass.swift"))
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        XCTAssertTrue(verre.contains(".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
+                      "La carte d'un rail en colonne est le verre teinté du plateau.")
+        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+                      "Un bouton séparé porte le MÊME verre teinté, en disque.")
+        for (nom, source, attendu, air) in [
+            ("le couloir d'OUTILS", editeur,
+             ".adaptiveGlass(in:Circle(),tint:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)?MeeshyColors.brandPrimary:plateauTint.opacity(0.55))",
+             ".padding(.vertical,8)"),
+            ("le couloir d'HISTORIQUE", trailing,
+             ".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))",
+             ".padding(.vertical,8)"),
+            ("le couloir des PORTES", leading,
+             ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint))",
              ".padding(axis==.vertical?.vertical:.horizontal,8)")
         ] {
             let nu = AppSourceGuard.stripComments(source)
                 .replacingOccurrences(of: " ", with: "")
                 .replacingOccurrences(of: "\n", with: "")
-            XCTAssertTrue(
-                nu.contains(".adaptiveGlass(in:RoundedRectangle(cornerRadius:\(largeur)/2,style:.continuous),"
-                            + "tint:plateauTint.opacity(0.55))"),
-                "\(nom) doit porter la carte de verre teintée du plateau — la même que ses jumeaux")
+            XCTAssertTrue(nu.contains(attendu),
+                          "\(nom) doit porter le verre teinté du plateau — le même que ses jumeaux")
             XCTAssertFalse(
                 nu.contains(".fill(plateauTint.opacity(0.55))"),
                 "\(nom) ne doit plus peindre un aplat opaque sous son verre")

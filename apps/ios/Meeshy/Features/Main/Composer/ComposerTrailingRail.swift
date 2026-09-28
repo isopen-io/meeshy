@@ -66,12 +66,24 @@ struct ComposerTrailingRail: View {
     /// hauteur, colonne de verre vide au-dessus du `[+]`.
     var pushesToThumb: Bool = true
 
-    /// **Des TUILES libellées, comme la création de post** (directive porteur
-    /// 2026-09-27 : « la barre droite doit être similaire au mode pour la
-    /// création de post »). Chaque entrée devient une carte — icône, libellé
-    /// dessous, rayon 14 — portant son propre verre teinté, puisqu'elle flotte
-    /// sur la scène. La colonne nue reste le défaut, pour l'éditeur d'objet.
-    var labeledTiles: Bool = false
+    /// **Des boutons séparés, sans libellé** (directive porteur 2026-09-27 :
+    /// « fais des boutons séparés sans caption […] de petite taille »). Chaque
+    /// entrée porte son disque de verre ; l'ordre est celui de la maquette
+    /// (`Main.dc.html`) : annuler, rétablir, cadre, nouvelle slide. Les actions
+    /// d'un OBJET n'y sont pas — elles vivent dans son appui long.
+    var separateButtons: Bool = false
+
+    /// **Le Cadre**, présent seulement quand la scène a un média de fond : un
+    /// bouton sans objet n'est pas affiché (« n'afficher que les outils
+    /// utiles »). `frameIsOpen` le marque actif.
+    var onFrame: (() -> Void)? = nil
+    var frameIsOpen: Bool = false
+
+    /// **« Temps »** — présent seulement quand la scène est ANIMÉE (maquette
+    /// `Main.dc.html`, couloir droit : le bouton n'existe qu'en mode
+    /// dynamique). Il montre ou range la frise ; `timeIsOpen` le marque actif.
+    var onTime: (() -> Void)? = nil
+    var timeIsOpen: Bool = false
 
     @State private var lastTapped: String?
 
@@ -80,75 +92,72 @@ struct ComposerTrailingRail: View {
     /// suit ce que l'auteur FAIT, le droit ce que la SCÈNE offre — et créer une
     /// slide s'offre en permanence.
     private var isEmpty: Bool {
-        actions.isEmpty && onAddSlide == nil && onUndo == nil && onRedo == nil
+        actions.isEmpty && onAddSlide == nil && onUndo == nil && onRedo == nil && onFrame == nil
+            && onTime == nil
     }
 
     var body: some View {
         if !isEmpty {
-            if labeledTiles { tiles } else { column }
+            if separateButtons { tiles } else { column }
         }
     }
 
     private var tiles: some View {
-        VStack(spacing: 8) {
-            if let onAddSlide {
-                tile(symbol: "plus.rectangle.on.rectangle",
-                     label: ComposerTrailingRailCopy.addSlide,
-                     color: MeeshyColors.textPrimary(isDark: true),
-                     key: "slide.add") { onAddSlide() }
-            }
-            ForEach(actions, id: \.self) { action in
-                tile(symbol: action.systemImage,
-                     label: action.title,
-                     color: action == .delete ? MeeshyColors.error : MeeshyColors.textSecondary(isDark: true),
-                     key: String(describing: action)) { onAction?(action) }
-            }
+        VStack(spacing: 10) {
             if let onUndo {
                 tile(symbol: "arrow.uturn.backward", label: ComposerHistoryCopy.undo,
-                     color: MeeshyColors.textPrimary(isDark: true), key: "undo", action: onUndo)
+                     key: "undo", isOn: false, action: onUndo)
             }
             if let onRedo {
                 tile(symbol: "arrow.uturn.forward", label: ComposerHistoryCopy.redo,
-                     color: MeeshyColors.textPrimary(isDark: true), key: "redo", action: onRedo)
+                     key: "redo", isOn: false, action: onRedo)
+            }
+            if let onTime {
+                tile(symbol: "timeline.selection", label: ComposerSceneFriseCopy.timeButton,
+                     key: "time", isOn: timeIsOpen, action: onTime)
+            }
+            if let onFrame {
+                tile(symbol: "crop", label: ComposerFrameCopy.title,
+                     key: "frame", isOn: frameIsOpen, action: onFrame)
+            }
+            if let onAddSlide {
+                tile(symbol: "plus.rectangle.on.rectangle", label: ComposerTrailingRailCopy.addSlide,
+                     key: "slide.add", isOn: false, action: onAddSlide)
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(ComposerTrailingRailCopy.railLabel))
+        // Les boutons séparés sont ceux de la SCÈNE (historique, temps,
+        // cadre, slide) : aucun ne modifie « l'objet sélectionné », dont les
+        // actions vivent dans l'appui long.
+        .accessibilityLabel(Text(ComposerTrailingRailCopy.sceneRailLabel))
     }
 
-    /// La tuile de la création de post (`ComposerDocumentSurface.toolButton`) :
-    /// icône `.title3` hiérarchique, libellé `.caption2` dessous, carte de 14.
+    /// Un bouton SÉPARÉ : l'icône seule, petite, dans son disque de verre —
+    /// indigo quand l'outil qu'il ouvre est actif. Le libellé reste le nom
+    /// accessible.
     private func tile(symbol: String,
                       label: String,
-                      color: Color,
                       key: String,
+                      isOn: Bool,
                       action: @escaping () -> Void) -> some View {
         Button {
             lastTapped = key
             action()
             HapticFeedback.light()
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: symbol)
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .composerToolBounce(active: lastTapped == key)
-                Text(label)
-                    .font(.caption2)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(color)
-            .frame(width: ComposerRailGeometry.tileWidth)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 4)
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous),
-                           tint: plateauTint.opacity(0.55))
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .composerToolBounce(active: lastTapped == key)
+                .frame(width: ComposerRailGeometry.railWidth, height: ComposerRailGeometry.railWidth)
+                .contentShape(Circle())
+                .adaptiveGlass(in: Circle(),
+                               tint: isOn ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     private var column: some View {
@@ -276,6 +285,11 @@ nonisolated enum ComposerTrailingRailCopy {
     static var railLabel: String {
         String(localized: "composer.rail.trailing.label",
                defaultValue: "Modifier l'objet sélectionné", bundle: .main)
+    }
+
+    static var sceneRailLabel: String {
+        String(localized: "composer.rail.trailing.scene",
+               defaultValue: "Outils de la scène", bundle: .main)
     }
 
     static var addSlide: String {

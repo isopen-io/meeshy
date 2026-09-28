@@ -73,6 +73,9 @@ struct ComposerSceneSurface: View {
     /// média n'y est monté (#4082) — pour que « Modifier » ne paraisse jamais
     /// sur un objet que personne n'éditera.
     var onItemEdit: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// **« Rogner » dans l'appui long** (#8370, lot 6) : le rail des
+    /// contrôleurs qui le portait est parti avec la directive du 2026-09-27.
+    var onItemTrim: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
     /// **Les familles dont l'hôte sait ouvrir l'éditeur** (#4937).
     ///
     /// Elle valait `[.text]` tant que l'éditeur d'objet ne savait éditer qu'un
@@ -226,6 +229,11 @@ struct ComposerSceneSurface: View {
     /// prend le bas tant qu'elle est ouverte, et le pont qui la laisse piloter
     /// le canvas. Trois `nil` ⇒ une scène statique, comme avant.
     var animatedToggle: AnyView?
+    /// Le bouton Cadre du rail droit (#8414) — `nil` sans média de fond.
+    var onFrameButton: (() -> Void)?
+    var frameIsOpen: Bool = false
+    var onTimeButton: (() -> Void)? = nil
+    var timeIsOpen: Bool = false
     var timelinePanel: AnyView?
     var timelineBridge: StoryCanvasTimelineBridge?
 
@@ -430,7 +438,8 @@ struct ComposerSceneSurface: View {
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
                                 pushesToThumb: false,
-                                badges: railBadges)
+                                badges: railBadges,
+                                separateButtons: true)
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
                 // `outerMargin` du bord.
@@ -489,8 +498,7 @@ struct ComposerSceneSurface: View {
     private var descriptionOverlay: some View {
         if let descriptionPanel {
             descriptionPanel
-                .padding(.leading, ComposerRailGeometry.lane)
-                .padding(.trailing, ComposerRailGeometry.tileLane)
+                .padding(.horizontal, ComposerRailGeometry.lane)
                 .padding(.bottom, 10)
         }
     }
@@ -524,6 +532,12 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ComposerSafeTopKey.self, value: geo.safeAreaInsets.top)
+            }
+        }
+        .onPreferenceChange(ComposerSafeTopKey.self) { safeTop = $0 }
         // **La barre de statut s'efface** (directive porteur 2026-09-27 : la
         // croix et le `⋯` « un peu plus haut pour ne pas être sur la scène »).
         // Comme le lecteur de stories : la rangée de l'horloge rend sa hauteur,
@@ -545,7 +559,13 @@ struct ComposerSceneSurface: View {
     /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
     /// pendant un tracé, qui possède l'écran entier.
     private var sceneLetterbox: some View {
-        SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+        Group {
+            if let hex = floorBackdropHex {
+                Color(hex: hex)
+            } else {
+                SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
+            }
+        }
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture { onBackgroundTapped?() }
@@ -562,6 +582,27 @@ struct ComposerSceneSurface: View {
     }
 
     @State private var floorHash: String?
+
+    /// La zone sûre du haut, mesurée : la barre haute s'y LOGE (#8370, retour
+    /// porteur 2026-09-27 : « remonte encore le bouton X et ⋯ »).
+    @State private var safeTop: CGFloat = 0
+
+    /// **De combien la barre haute monte dans la zone sûre** : jusqu'à la
+    /// rangée de la Dynamic Island, où la barre de statut effacée a rendu la
+    /// place. Aux coins, la croix et le `⋯` ne croisent pas l'îlot, centré.
+    private var chromeLift: CGFloat {
+        max(0, safeTop - ComposerTopBar.islandRowTop)
+    }
+
+    /// Le fond choisi au Cadre, quand la scène AJUSTE un média : il s'applique
+    /// au sol aussi (directive porteur 2026-09-27). Le flou garde le hachage.
+    private var floorBackdropHex: String? {
+        let transform = slide.effects.backgroundTransform
+        guard !StoryBackgroundFraming.rendersFilled(transform?.videoFitMode),
+              slide.effects.mediaObjects?.contains(where: \.isBackground) == true
+        else { return nil }
+        return StoryBackdrop.resolve(transform?.backdrop).solidHex
+    }
 
     /// Ce qui change le RÉSULTAT au point de changer son hachage : la slide, son
     /// fond, sa matière, son cadrage et les bitmaps chargés. Une position ou une échelle ne
@@ -610,7 +651,8 @@ struct ComposerSceneSurface: View {
             // « Un seul objet à la fois » a son témoin sur la scène (#4073).
             selectedItemId: selectedItemId,
             selectionBadge: selectionBadge,
-            timelineBridge: timelineBridge
+            timelineBridge: timelineBridge,
+            onItemTrimRequested: onItemTrim
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
@@ -645,7 +687,7 @@ struct ComposerSceneSurface: View {
         // (`composerFloatingSocle`), celle du haut porte la barre, et la carte
         // se cadre dans ce qui reste. Le clavier, lui, ne la pousse pas — le
         // sol et le chrome montent, la scène reste où l'auteur la regarde.
-        .padding(.top, ComposerTopBar.height + 4)
+        .padding(.top, ComposerTopBar.height + 4 - chromeLift)
         .padding(.bottom, 4)
         .ignoresSafeArea(.keyboard)
         .allowsHitTesting(timelinePanel == nil)
@@ -660,6 +702,7 @@ struct ComposerSceneSurface: View {
                 plateauTint: plateauTint,
                 trailingAccessory: animatedToggle
             )
+            .padding(.top, -chromeLift)
 
             // **La trace du son de FOND, en tête** (#5001, #5017) : elle se lit
             // AVEC la scène, comme un titre avec ce qu'il titre. Aucun `tint:` —
@@ -693,7 +736,7 @@ struct ComposerSceneSurface: View {
             // mentions, juste sous la scène libre. Il CÈDE aux options d'un
             // outil (#5010), par `ComposerCanonicalZone`, jamais par un
             // `!toolIsOpen` écrit ici.
-            if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
+            if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen), band == nil {
                 ComposerSceneReferenceFooter(hashtags: sceneHashtags,
                                              references: sceneReferences,
                                              leadingInset: sceneCardLeading,
@@ -731,7 +774,11 @@ struct ComposerSceneSurface: View {
             // **La rangée basse — une PLACE permanente, un contenu qui change**
             // (#4072, #5010) : outil ouvert, ses contrôleurs ; sinon, les portes
             // qui font ENTRER de la matière ; viseur armé, ses commandes (#4080).
-            lowToolRow
+            // **Une bande ouverte prend le bas pour elle seule** (directive
+            // porteur 2026-09-27 : la mention, le hashtag et le lieu s'effacent
+            // aussi le temps du panneau). Un OUTIL ouvert garde la rangée : elle
+            // porte alors ses propres contrôleurs.
+            if band == nil || toolIsOpen { lowToolRow }
         }
     }
 
@@ -744,9 +791,26 @@ struct ComposerSceneSurface: View {
             // rails et le volet s'effacent, et le canvas ne prend plus de geste.
             // La frise réécrit la slide à sa fermeture ; une pose ou un
             // déplacement faits pendant qu'elle est ouverte seraient écrasés.
-            if timelinePanel == nil { composingFloors }
+            // Seul « Temps » y reste (maquette : le couloir droit ne part pas
+            // avec la frise) — le geste qui la RANGE doit rester là où il l'a
+            // ouverte.
+            if timelinePanel == nil { composingFloors } else { friseRail }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private var friseRail: some View {
+        HStack {
+            Spacer(minLength: 0)
+            ComposerTrailingRail(actions: [],
+                                 plateauTint: plateauTint,
+                                 pushesToThumb: false,
+                                 separateButtons: true,
+                                 onTime: onTimeButton,
+                                 timeIsOpen: timeIsOpen)
+                .padding(.trailing, ComposerRailGeometry.outerMargin)
+                .padding(.bottom, ComposerRailGeometry.gutter)
+        }
     }
 
     @ViewBuilder
@@ -762,7 +826,11 @@ struct ComposerSceneSurface: View {
                                      onUndo: onUndo,
                                      onRedo: onRedo,
                                      pushesToThumb: false,
-                                     labeledTiles: true)
+                                     separateButtons: true,
+                                     onFrame: onFrameButton,
+                                     frameIsOpen: frameIsOpen,
+                                     onTime: onTimeButton,
+                                     timeIsOpen: timeIsOpen)
                     .padding(.trailing, ComposerRailGeometry.outerMargin)
                     .padding(.bottom, ComposerRailGeometry.gutter)
             }
@@ -800,4 +868,12 @@ struct ComposerSceneFloorKey: Hashable {
     /// Le cadrage et le fond du panneau Cadre (#8414) : ils changent le composite.
     let framing: [String?]
     let imagesVersion: UInt64
+}
+
+/// La zone sûre du haut de la surface — la barre haute s'y loge (#8370).
+struct ComposerSafeTopKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }

@@ -131,15 +131,16 @@ public enum StoryRenderer {
                               mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale,
                               suppressDrawingOverlay: Bool = false,
-                              reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled) -> CALayer {
+                              reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled,
+                              outOfWindowGhostOpacity: Float? = nil) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
         root.contentsScale = contentsScale
 
-        let allItems = collectItems(from: slide)
-        for item in allItems.sorted(by: { $0.zIndex < $1.zIndex }) {
-            guard shouldRender(item: item, at: time, mode: mode) else { continue }
+        for item in collectItems(from: slide).sorted(by: { $0.zIndex < $1.zIndex }) {
+            let inWindow = shouldRender(item: item, at: time, mode: mode)
+            guard inWindow || outOfWindowGhostOpacity != nil else { continue }
             let layer: CALayer
             if let cache {
                 // The build closure inherits MainActor isolation from the
@@ -312,6 +313,7 @@ public enum StoryRenderer {
                 layer.opacity = Float(base * pose.opacity)
             }
 
+            applyGhost(outOfWindowGhostOpacity, inWindow: inWindow, to: layer)
             // A cached layer might still be attached to the previous frame's
             // root layer. addSublayer auto-detaches before re-attaching, so
             // this is safe and cheap (CALayer parenting is O(1) bookkeeping).

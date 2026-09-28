@@ -37,6 +37,16 @@ extension StoryCanvasUIView {
     /// timeline possède l'audio pendant la preview.
     var effectiveAudioMuted: Bool { isAudioMuted || isTimelinePreviewActive }
 
+    /// **À l'arrêt, la frise montre ce qui est HORS de sa fenêtre en fantôme**
+    /// (maquette `Main.dc.html` : caché en lecture, `.25` à l'arrêt) — l'auteur
+    /// voit ce qu'il règle sans croire qu'il l'a perdu. En lecture, rien : la
+    /// scène est ce que le lecteur montrera.
+    static let timelineGhostOpacity: Float = 0.25
+
+    var timelineGhostOpacity: Float? {
+        isTimelinePreviewActive && !timelinePreviewPlaying ? Self.timelineGhostOpacity : nil
+    }
+
     /// Entre en preview (seconds non-nil), met à jour le playhead, ou en sort
     /// (nil). No-op hors `.edit` — le reader/viewer ne preview jamais.
     public func setTimelinePreview(seconds: Double?) {
@@ -74,6 +84,9 @@ extension StoryCanvasUIView {
         backgroundLayer.isPlaybackActive = playing
         foregroundVideosPlaybackActive = playing
         if !playing {
+            // À l'arrêt, le fantôme revient : ce qui est hors fenêtre se
+            // redessine à .25 sans attendre le prochain déplacement de tête.
+            rebuildLayers()
             alignPreviewPlayersPaused()
         }
     }

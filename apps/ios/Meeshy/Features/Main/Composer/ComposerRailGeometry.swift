@@ -66,13 +66,6 @@ nonisolated enum ComposerRailGeometry {
     /// Ce qu'UN rail réserve au total, bord compris.
     static var lane: CGFloat { outerMargin + railWidth + gutter }
 
-    /// **La largeur utile d'une TUILE libellée** (#8370) — celle de la création
-    /// de post, un peu plus large que le rail pour loger un libellé court.
-    static let tileWidth: CGFloat = 52
-
-    /// Ce qu'un rail de TUILES réserve au total, bord et air de la carte compris.
-    static var tileLane: CGFloat { outerMargin + tileWidth + 8 + gutter }
-
     /// PLEIN ÉCRAN (#8370) : les rails flottent sur la scène, qui ne cède plus
     /// aucune largeur aux couloirs.
     static let floatingInset: CGFloat = 0

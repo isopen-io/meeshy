@@ -46,7 +46,7 @@ extension MeeshyComposerHost {
                 if paintedSocleZones.contains(.audience) { audienceChip }
                 Spacer()
                 if socleServesPostText { postTextButton }
-                publishButton
+                if !socleHasNothingToPublish { publishButton }
             }
         }
         .padding(.horizontal, 14)
@@ -817,6 +817,17 @@ extension MeeshyComposerHost {
     /// catalogue est à SEPT langues avec un cliquet français à zéro tolérance,
     /// et aucune phrase existante ne dit « nommez au moins une personne ». Elle
     /// s'écrira dans le lot qui possède le catalogue.
+    /// **Rien à publier ⇒ pas de bouton** (directive porteur 2026-09-27 : « n'affiche
+    /// pas le bouton si aucun élément à publier n'existe », et plus de phrase
+    /// « ajoutez au moins un élément » — c'est un fait connu de tous). Une
+    /// audience incomplète, elle, garde la capsule et son indice : rien d'autre
+    /// à l'écran ne la signale.
+    var socleHasNothingToPublish: Bool {
+        !canPublishDocument && !isPublishingDocument
+            && ComposerDocumentPublishGate.audienceIsComplete(composerVisibility,
+                                                              userIds: composerVisibilityUserIds)
+    }
+
     var publishBlockedHint: String {
         guard !canPublishDocument, !isPublishingDocument else { return "" }
         // L'audience passe AVANT la surface, et l'ordre porte la règle : les
@@ -827,8 +838,7 @@ extension MeeshyComposerHost {
             composerVisibility,
             userIds: composerVisibilityUserIds
         ) else { return ComposerSocleCopy.publishBlockedAudienceHint }
-        return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface,
-                                                    format: selectedFormat) ?? ""
+        return ""
     }
 
     /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint.

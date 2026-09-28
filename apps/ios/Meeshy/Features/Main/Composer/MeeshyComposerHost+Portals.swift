@@ -98,6 +98,9 @@ extension MeeshyComposerHost {
         // `historyTrigger` est déjà débouncé côté SDK ; la dédup du store fait
         // qu'un cycle sans changement réel des slides est un no-op.
         .onReceive(viewModel.historyTrigger) { _ in
+            // AVANT l'instantané : poser la fenêtre d'un objet neuf fait partie
+            // du geste qui l'a ajouté — un seul « annuler » les défait.
+            placeNewSceneObjectsAtPlayhead()
             viewModel.pushHistorySnapshot()
         }
         // La trajectoire part de l'état d'OUVERTURE : sans ce premier

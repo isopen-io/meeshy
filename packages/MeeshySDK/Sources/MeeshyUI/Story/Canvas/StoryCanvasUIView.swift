@@ -301,6 +301,12 @@ public final class StoryCanvasUIView: UIView {
     /// (en Post : une slide du carrousel). Non câblée, l'action n'est pas
     /// offerte : le SDK ne fabrique pas un geste sans destinataire.
     public var onItemLeftScene: ((String, CanvasItemKind) -> Void)?
+    /// **« Rogner » dans l'appui long** (#8370, lot 6) — la vidéo ou le son
+    /// choisi s'ouvre sur ses bornes chez l'hôte. Le rail des contrôleurs qui
+    /// portait ce geste est parti (directive porteur 2026-09-27 : « faire
+    /// apparaître les actions possibles au long press ») ; non câblée,
+    /// l'action n'est pas offerte.
+    public var onItemTrimRequested: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state

@@ -51,6 +51,10 @@ struct ComposerTopBar: View {
 
     static let topPadding: CGFloat = 12
 
+    /// Le haut de la rangée de la Dynamic Island : la barre de la scène plein
+    /// écran monte jusque-là (`ComposerSceneSurface.chromeLift`).
+    static let islandRowTop: CGFloat = 4
+
     /// **Ce que la barre occupe sous la zone sûre** — lu par la scène plein
     /// écran (#8370) pour se poser JUSTE SOUS la croix, jamais dessous.
     static var height: CGFloat { topPadding + ComposerControlMetrics.visualDiameter }
