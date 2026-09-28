@@ -42,6 +42,7 @@ import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
 import frContactCard from './catalog-fr-contact-card';
 import frQuote from './catalog-fr-quote';
+import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 
 const fr = {
@@ -1073,14 +1074,6 @@ const fr = {
   'comment.send.error': 'Le commentaire n’a pas pu être publié.',
   'comment.send.pending': 'Commentaire non confirmé — hors ligne',
   'comment.send.empty': 'Écrivez quelque chose avant d’envoyer.',
-  'comments.action.like': 'J’aime',
-  'comments.action.unlike': 'Je n’aime plus',
-  'comments.action.edit': 'Modifier',
-  'comments.action.delete': 'Supprimer',
-  'comments.action.delete.confirm': 'Confirmer',
-  'comments.edit.label': 'Modifier le commentaire',
-  'comments.edit.save': 'Enregistrer',
-  'comments.edit.cancel': 'Annuler',
   'comment.like.error': 'Le « j’aime » n’a pas été enregistré.',
   'comment.edit.error': 'La modification n’a pas été enregistrée.',
   'comment.delete.error': 'Le commentaire n’a pas pu être supprimé.',
@@ -1199,6 +1192,7 @@ const fr = {
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,
+  ...frCommentRow,
   ...frContactDiscovery,
 } as const;
 
