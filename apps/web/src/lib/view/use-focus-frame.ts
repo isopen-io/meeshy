@@ -30,7 +30,8 @@ import { FOCUS_CHIP_INSET } from '@/lib/reading-mode/metrics';
  */
 const owners = new WeakMap<HTMLElement, HTMLElement>();
 
-const NOT_INK = '.focal-meta, [data-identity], [data-row-bottom-line], [data-focus-reserve]';
+const NOT_INK =
+  '.focal-meta, .focus-strip, .focus-stamp, [data-identity], [data-row-bottom-line], [data-focus-reserve]';
 
 function inkRects(node: Node, into: DOMRect[]): void {
   if (node.nodeType === Node.TEXT_NODE) {

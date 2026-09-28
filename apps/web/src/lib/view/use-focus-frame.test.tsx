@@ -54,6 +54,7 @@ const boxed = (box: Box) => (node: HTMLElement | null) => {
 const ROW: Box = { top: 100, bottom: 160, left: 0, right: 390 };
 const CARD: Box = { top: 103, bottom: 157, left: 6, right: 376 };
 const INK: Box = { top: 120, bottom: 140, left: 57, right: 156 };
+const STAMP: Box = { top: 133, bottom: 157, left: 280, right: 366 };
 
 function Row({ focused }: { readonly focused: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -69,6 +70,9 @@ function Row({ focused }: { readonly focused: boolean }) {
       <div className="focus-card" ref={boxed(CARD)} />
       <div data-row-content>
         <span data-ink ref={boxed(INK)} />
+        {/* Le tampon est monté DANS le bloc de contenu, ancré au bord de fin :
+            ce n'est pas de l'encre qui grossit vers la droite. */}
+        <span className="focus-stamp" ref={boxed(STAMP)} />
       </div>
     </div>
   );
