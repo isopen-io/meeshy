@@ -2,7 +2,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from '@/components/avatar';
 import { CallButton } from '@/components/call-glass-button';
-import { CallModerationMenu } from '@/components/call-moderation-menu';
+import { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo } from '@/components/call-media-elements';
 import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
@@ -114,7 +114,7 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
       <Tile {...tile} />
       {moderated ? (
         <div className="absolute right-1.5 top-1.5 z-10">
-          <CallModerationMenu member={tile.member} language={tile.language} moderation={moderation} />
+          <CallModerationSlot member={tile.member} language={tile.language} moderation={moderation} />
         </div>
       ) : null}
     </div>
@@ -206,7 +206,7 @@ export function CallGrid({ members, remoteStreams, self, choice, onChoose, immer
               />
             )}
           </div>
-          {moderated && !fullscreen ? <CallModerationMenu member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
+          {moderated && !fullscreen ? <CallModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
         </div>
       </div>
       {fullscreen ? null : (

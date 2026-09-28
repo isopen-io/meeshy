@@ -1,10 +1,6 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-import { CallButton } from '@/components/call-glass-button';
-import { GlyphSvg } from '@/components/glyph';
-import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
-import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { CallMember } from '@/lib/calls/call-store';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
@@ -20,22 +16,31 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * dans une alerte modale. Échap ferme ce qui est ouvert et rend le focus au
  * bouton qui l'a ouvert ; les flèches parcourent le menu.
  *
+ * Chunk à part (`budgets.json` › `call_moderation_menu`), chargé seulement
+ * chez qui modère (`call-moderation-slot.tsx`) : il n'importe RIEN de
+ * `call_overlay` — ses glyphes lui sont remis.
+ *
  * Le menu et l'alerte se posent à la racine de l'écran d'appel (portail) : un verre
  * (`backdrop-filter`) ou une liste qui défile les couperaient sinon.
  */
 
 const MENU_HEIGHT = 112;
+const MENU_WIDTH = 224;
+const EDGE = 8;
 
 /** L'écran d'appel (une modale) quand il est là : ce qui en sort resterait hors de sa portée pour un lecteur d'écran. */
 const layer = (): HTMLElement => document.querySelector<HTMLElement>('[data-call-screen]') ?? document.body;
 
-/** Sous le bouton, aligné sur son bord ; au-dessus quand la place manque en bas. */
+/** Sous le bouton, aligné sur son bord sans jamais sortir de l'écran ; au-dessus quand la place manque en bas. */
 function menuPlacement(trigger: HTMLElement | null | undefined, align: 'left' | 'right'): CSSProperties {
   if (trigger === null || trigger === undefined || typeof window === 'undefined') return { top: 0, right: 0 };
   const rect = trigger.getBoundingClientRect();
-  const side = align === 'right' ? { right: Math.max(8, window.innerWidth - rect.right) } : { left: Math.max(8, rect.left) };
-  return rect.bottom + MENU_HEIGHT + 8 > window.innerHeight ? { ...side, bottom: window.innerHeight - rect.top + 4 } : { ...side, top: rect.bottom + 4 };
+  const wanted = align === 'right' ? rect.right - MENU_WIDTH : rect.left;
+  const side = { left: Math.min(Math.max(EDGE, wanted), window.innerWidth - MENU_WIDTH - EDGE) };
+  return rect.bottom + MENU_HEIGHT + EDGE > window.innerHeight ? { ...side, bottom: window.innerHeight - rect.top + 4 } : { ...side, top: rect.bottom + 4 };
 }
+
+export type CallModerationGlyphs = { readonly more: ReactNode; readonly mute: ReactNode; readonly remove: ReactNode };
 
 const ITEM = 'flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 text-left text-body font-semibold transition-colors hover:bg-white/10 focus-visible:bg-white/15 motion-reduce:transition-none';
 
@@ -43,9 +48,11 @@ export function CallModerationMenu({
   member,
   language,
   moderation,
+  glyphs,
   prominent = false,
   align = 'right',
 }: {
+  readonly glyphs: CallModerationGlyphs;
   readonly member: CallMember;
   readonly language: InterfaceLanguage;
   readonly moderation: CallModeration;
@@ -98,20 +105,22 @@ export function CallModerationMenu({
 
   return (
     <div ref={anchor} className="relative" data-call-moderation={member.userId}>
-      <CallButton
-        label={t(language, 'callControls.moderate.menu', { name: member.name })}
-        glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.dotsThree} size={20} />}
-        onPress={() => {
+      <button
+        type="button"
+        aria-label={t(language, 'callControls.moderate.menu', { name: member.name })}
+        title={t(language, 'callControls.moderate.menu', { name: member.name })}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => {
           setPlacement(menuPlacement(trigger(), align));
           setOpen((value) => !value);
         }}
-        tone="glass"
-        prominent={prominent}
-        size={44}
-        expanded={open}
-        controls={menuId}
-        data={{ 'data-call-moderate': member.userId }}
-      />
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} grid size-11 shrink-0 place-items-center rounded-full text-white transition-transform active:scale-95 motion-reduce:transition-none`}
+        data-call-moderate={member.userId}
+      >
+        {glyphs.more}
+      </button>
       {open && typeof document !== 'undefined' ? createPortal(
         <div
           ref={menu}
@@ -125,7 +134,7 @@ export function CallModerationMenu({
         >
           {member.micMuted ? (
             <div role="menuitem" aria-disabled="true" tabIndex={-1} className={`${ITEM} opacity-60`}>
-              <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} />
+              {glyphs.mute}
               {t(language, 'callControls.mute.done')}
             </div>
           ) : (
@@ -139,7 +148,7 @@ export function CallModerationMenu({
               }}
               data-call-mute={member.userId}
             >
-              <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} />
+              {glyphs.mute}
               {t(language, 'callControls.mute')}
             </button>
           )}
@@ -155,7 +164,7 @@ export function CallModerationMenu({
             aria-haspopup="dialog"
             data-call-remove={member.userId}
           >
-            <GlyphSvg glyph={CALL_VIEW_GLYPHS.userMinus} size={20} />
+            {glyphs.remove}
             {t(language, 'callControls.remove')}
           </button>
         </div>,

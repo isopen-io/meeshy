@@ -1,10 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { CALL_PANEL_ID, CallRails, type CallPanel } from '@/components/call-control-actions';
-import { CallControlToast, CallReactionBursts } from '@/components/call-control-overlays';
 import { CallControlPill } from '@/components/call-control-pill';
 import { Portrait } from '@/components/call-grid';
-import { CallModerationMenu } from '@/components/call-moderation-menu';
+import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CallPeerAlerts } from '@/components/call-quality';
 import { CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage } from '@/components/call-stage';
@@ -373,8 +372,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           {stage}
         </div>
       ) : null}
-      {live ? <CallReactionBursts language={language} nameOf={nameOf} /> : null}
-      <CallControlToast language={language} nameOf={nameOf} />
+      <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         <div className={fade} aria-hidden={hidden ? true : undefined}>
           <CallScreenHeader call={call} language={language} clock={joined ? clock : null} prominent={sharedScreenShown} />
@@ -410,24 +408,26 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
               {expanded && arrangement === 'rails' ? <CallRails call={call} set={set} language={language} prominent={sharedScreenShown} panels={panels} /> : null}
               {shownPanel === null ? null : (
-                <Suspense fallback={null}>
-                  {shownPanel === 'effects' ? (
-                    <CallEffectsPanel id={CALL_PANEL_ID.effects} closeGlyph={closeGlyph} language={language} colorAvailable={support.color} blurAvailable={support.blur} onClose={closePanel} />
-                  ) : shownPanel === 'react' ? (
-                    <CallReactionPalette id={CALL_PANEL_ID.react} closeGlyph={closeGlyph} language={language} onClose={closePanel} />
-                  ) : shownPanel === 'record' ? (
-                    <CallRecordChoice id={CALL_PANEL_ID.record} closeGlyph={closeGlyph} language={language} onClose={closePanel} />
-                  ) : (
-                    <CallPeopleSheet
-                      id={CALL_PANEL_ID.people}
-                      closeGlyph={closeGlyph}
-                      language={language}
-                      members={orderedMembers(call.members)}
-                      onClose={closePanel}
-                      renderModeration={(member) => (moderation !== null && moderation.canModerate(member.userId) ? <CallModerationMenu member={member} language={language} moderation={moderation} /> : null)}
-                    />
-                  )}
-                </Suspense>
+                <div className="relative z-20">
+                  <Suspense fallback={null}>
+                    {shownPanel === 'effects' ? (
+                      <CallEffectsPanel id={CALL_PANEL_ID.effects} closeGlyph={closeGlyph} language={language} colorAvailable={support.color} blurAvailable={support.blur} onClose={closePanel} />
+                    ) : shownPanel === 'react' ? (
+                      <CallReactionPalette id={CALL_PANEL_ID.react} closeGlyph={closeGlyph} language={language} onClose={closePanel} />
+                    ) : shownPanel === 'record' ? (
+                      <CallRecordChoice id={CALL_PANEL_ID.record} closeGlyph={closeGlyph} language={language} onClose={closePanel} />
+                    ) : (
+                      <CallPeopleSheet
+                        id={CALL_PANEL_ID.people}
+                        closeGlyph={closeGlyph}
+                        language={language}
+                        members={orderedMembers(call.members)}
+                        onClose={closePanel}
+                        renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />}
+                      />
+                    )}
+                  </Suspense>
+                </div>
               )}
               <CallControlPill
                 call={call}

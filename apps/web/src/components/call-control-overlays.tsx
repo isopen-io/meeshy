@@ -16,6 +16,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * affiché à la fois est borné par le magasin (`REACTION_MAX_SHOWN`). Chacune
  * est dite au lecteur d'écran (« Nadia a réagi 👍 ») par une région polie.
  * Le mot d'un contrôle s'efface seul après `NOTICE_MS`.
+ *
+ * Chunk à part (`budgets.json` › `call_control_feedback`), posé par
+ * `call-control-slots.tsx` ; il n'importe rien de `call_overlay`.
  */
 
 export const NOTICE_MS = 4_000;
@@ -62,5 +65,14 @@ export function CallControlToast({ language, nameOf }: { readonly language: Inte
         {controlNoticeText(language, notice, nameOf)}
       </p>
     </div>
+  );
+}
+
+export function CallControlFeedback({ language, nameOf, live }: { readonly language: InterfaceLanguage; readonly nameOf: NameOf; readonly live: boolean }) {
+  return (
+    <>
+      {live ? <CallReactionBursts language={language} nameOf={nameOf} /> : null}
+      <CallControlToast language={language} nameOf={nameOf} />
+    </>
   );
 }

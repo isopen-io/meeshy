@@ -829,6 +829,20 @@ jobs:
           cd apps/web
           node scripts/check-calls-effects.mjs
 
+      # #8433 / #8438 / #8439 / #8437 — les contrôles d'un appel en cours : le
+      # pair de fixtures enregistre chaque contrôle reçu. « Réagir » part
+      # (call:reaction) et monte aussitôt, la réaction du pair monte sous son
+      # nom (fondu seul sous prefers-reduced-motion) ; « Enregistrer » demande
+      # audio seul ou audio et vidéo ; « Ajouter » invite un contact accepté
+      # (call:invite-participant) qui sonne aussitôt ; le menu de modération
+      # coupe un micro (call:mute-participant) et confirme avant de retirer ;
+      # le pair coupe mon micro et le dit.
+      - name: Gate contrôles d'appel (ajouter, modérer, réagir, enregistrer)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-controls.mjs
+
       # #8048 — les sous-titres traduits d'un appel marchent dans les deux sens :
       # le pair de fixtures ouvre ses sous-titres et parle (call:translated-
       # segment) ; modes traduit / original / masqué, journal, aria-live. Une

@@ -149,7 +149,10 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
                     <button
                       type="button"
                       aria-label={t(language, 'callControls.people.inviteNamed', { name: person.name })}
-                      onClick={() => invite(person)}
+                      onClick={() => {
+                        invite(person);
+                        panel.current?.querySelector<HTMLElement>('[data-call-people-search]')?.focus();
+                      }}
                       className="min-h-11 shrink-0 rounded-full px-4 text-mini font-semibold transition-transform active:scale-95 motion-reduce:transition-none"
                       style={{ background: 'white', color: 'var(--ios-indigo-950)' }}
                       data-call-invite={friend.id}

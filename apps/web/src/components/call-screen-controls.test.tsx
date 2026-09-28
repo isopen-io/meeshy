@@ -21,6 +21,8 @@ import { CallScreen } from './call-screen';
  * part, jamais par la seule présence.
  */
 
+const GLYPHS = { more: '…', mute: 'm', remove: 'r' };
+
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
@@ -181,7 +183,7 @@ describe('le menu de modération', () => {
 
   test('« Couper le micro » part aussitôt ; un micro déjà coupé ne le propose plus', () => {
     const log: string[] = [];
-    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} />);
+    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} glyphs={GLYPHS} />);
     expect(view.find('[data-call-moderate]')?.getAttribute('aria-label')).toBe('Options pour Nadia');
     view.press('[data-call-moderate]');
     expect(view.find('[data-call-moderation-menu] [role="menuitem"]')?.textContent).toContain('Couper le micro');
@@ -189,16 +191,35 @@ describe('le menu de modération', () => {
     expect(log).toEqual(['mute:u-nadia']);
     expect(view.find('[data-call-moderation-menu]')).toBeNull();
     view.done();
-    const muted = mount(<CallModerationMenu member={member('u-nadia', 'Nadia', { micMuted: true })} language="fr" moderation={moderation(log)} />);
+    const muted = mount(<CallModerationMenu member={member('u-nadia', 'Nadia', { micMuted: true })} language="fr" moderation={moderation(log)} glyphs={GLYPHS} />);
     muted.press('[data-call-moderate]');
     expect(muted.find('[data-call-mute]')).toBeNull();
     expect(muted.find('[data-call-moderation-menu]')?.textContent).toContain('Micro coupé');
     muted.done();
   });
 
+  test('le menu n’est posé que chez qui modère, et pour les seuls pairs qu’il peut modérer', async () => {
+    const peers = { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno') };
+    const { CallGrid } = await import('./call-grid');
+    const only = (id: string): CallModeration => ({ canModerate: (userId) => userId === id, mute: () => undefined, remove: () => undefined });
+    const view = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
+    await settle(() => import('./call-moderation-menu'));
+    expect(view.find('[data-call-moderate="u-bruno"]')).not.toBeNull();
+    expect(view.find('[data-call-moderate="u-nadia"]')).toBeNull();
+    expect(view.find('[data-call-moderate="u-bruno"]')?.getAttribute('aria-label')).toBe('Options pour Bruno');
+    view.done();
+    const spotlight = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true }} choice={{ kind: 'member', userId: 'u-bruno' }} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
+    await settle(() => import('./call-moderation-menu'));
+    expect(spotlight.find('[data-call-spotlight] [data-call-moderate="u-bruno"]')).not.toBeNull();
+    spotlight.done();
+    const plain = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} language="fr" />);
+    expect(plain.find('[data-call-moderate]')).toBeNull();
+    plain.done();
+  });
+
   test('« Retirer de l’appel » demande confirmation ; Annuler ne retire personne', () => {
     const log: string[] = [];
-    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} />);
+    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} glyphs={GLYPHS} />);
     view.press('[data-call-moderate]');
     view.press('[data-call-remove]');
     expect(view.find('[role="alertdialog"]')?.textContent).toContain('Retirer Nadia de l’appel ?');
@@ -213,7 +234,7 @@ describe('le menu de modération', () => {
   });
 
   test('Échap referme le menu et rend le focus au bouton', () => {
-    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation([])} />);
+    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation([])} glyphs={GLYPHS} />);
     view.press('[data-call-moderate]');
     act(() => view.find('[data-call-moderation-menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-moderation-menu]')).toBeNull();
@@ -223,8 +244,9 @@ describe('le menu de modération', () => {
 });
 
 describe('les réactions qui montent et le mot d’un contrôle', () => {
-  test('une réaction reçue montre son émoji et le nom de qui l’a envoyée, et se dit au lecteur d’écran', () => {
+  test('une réaction reçue montre son émoji et le nom de qui l’a envoyée, et se dit au lecteur d’écran', async () => {
     const view = mount(<CallScreen call={call()} canShare />);
+    await settle(() => import('./call-control-overlays'));
     act(() => callReactionStore.setState({ bursts: [{ id: 1, emoji: '🔥', userId: 'u-nadia', lane: 0.5 }] }));
     expect(view.find('[data-call-reaction="🔥"]')?.textContent).toContain('Nadia');
     expect(view.find('[data-call-reactions] [role="status"]')?.textContent).toBe('Nadia a réagi 🔥');
@@ -233,8 +255,9 @@ describe('les réactions qui montent et le mot d’un contrôle', () => {
     view.done();
   });
 
-  test('« Nadia a coupé votre micro » s’affiche en statut ; un échec s’annonce en alerte', () => {
+  test('« Nadia a coupé votre micro » s’affiche en statut ; un échec s’annonce en alerte', async () => {
     const view = mount(<CallScreen call={call()} canShare />);
+    await settle(() => import('./call-control-overlays'));
     act(() => callNoticeStore.setState({ notice: { kind: 'muted-by', byUserId: 'u-nadia' }, seq: 1 }));
     expect(view.find('[data-call-control-notice="muted-by"]')?.textContent).toBe('Nadia a coupé votre micro');
     expect(view.find('[data-call-control-notice="muted-by"]')?.getAttribute('role')).toBe('status');

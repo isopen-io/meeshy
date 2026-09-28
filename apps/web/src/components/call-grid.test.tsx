@@ -107,16 +107,6 @@ describe('CallGrid', () => {
     expect(html).toContain('aria-label="Quitter le plein écran"');
   });
 
-  test('qui modère trouve le menu sur chaque pair modérable, en grille comme en une ; les autres jamais', () => {
-    const moderation = { canModerate: (userId: string) => userId === 'u-b', mute: () => undefined, remove: () => undefined };
-    const tiles = grid({ moderation });
-    expect(tiles).toContain('data-call-moderate="u-b"');
-    expect(tiles).not.toContain('data-call-moderate="u-a"');
-    expect(tiles).toContain('Options pour Bintou');
-    expect(grid({ choice: { kind: 'member', userId: 'u-b' }, moderation })).toContain('data-call-moderate="u-b"');
-    expect(grid({ choice: { kind: 'member', userId: 'u-b' } })).not.toContain('data-call-moderate');
-  });
-
   test('une personne invitée sonne dans sa tuile, et sa tuile ne se met pas en avant', () => {
     const html = grid({ members: [member('u-a', 'Awa'), member('u-r', 'Rémi', { link: 'ringing' })] });
     expect(html).toContain('data-call-ringing=""');
