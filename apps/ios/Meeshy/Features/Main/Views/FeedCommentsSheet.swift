@@ -21,7 +21,7 @@ struct CommentsSheetView: View {
     /// Commentaire auquel la feuille s'ouvre EN RÉPONSE — le glissé d'un
     /// commentaire de l'aperçu du fil (#8582). Consommé UNE fois, par le chemin
     /// unique de la réponse (`beginReply`) : bannière, focus, @mention.
-    var initialReplyTarget: FeedComment? = nil
+    let initialReplyTarget: FeedComment?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -118,13 +118,15 @@ struct CommentsSheetView: View {
         accentColor: String,
         targetCommentId: String? = nil,
         targetParentCommentId: String? = nil,
-        onCommentSent: ((_ postId: String) -> Void)? = nil
+        onCommentSent: ((_ postId: String) -> Void)? = nil,
+        initialReplyTarget: FeedComment? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
         self.targetCommentId = targetCommentId
         self.targetParentCommentId = targetParentCommentId
         self.onCommentSent = onCommentSent
+        self.initialReplyTarget = initialReplyTarget
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
         ))
