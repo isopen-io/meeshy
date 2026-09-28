@@ -176,21 +176,18 @@ struct FocalRow: View {
                 // du bloc, la bande et l'heure sous le contenu. Des
                 // superpositions et un fond : aucune hauteur réservée, tout
                 // apparaît AVEC le cadre, au tick d'élection.
-                .background(alignment: .top) {
-                    if input.isFocused { electedCardBackground }
+                //
+                // #8537 — seul le CONTENU grossit (`focalElectedLoupe`) : le
+                // cadre et la bande se posent sur sa mesure réelle, lue par
+                // préférence, et gardent leur échelle d'origine.
+                .backgroundPreferenceValue(FocalElectedContentKey.self) { elected in
+                    if input.isFocused { electedCardBackground(elected) }
                 }
                 .overlay(alignment: .topLeading) {
                     if input.isFocused { focusIdentityChip.offset(y: -focusLift) }
                 }
-                .overlay(alignment: .bottom) {
-                    if input.isFocused {
-                        HStack(alignment: .center, spacing: 4) {
-                            focusStrip
-                            Spacer(minLength: 4)
-                            focusStampChip
-                        }
-                        .offset(y: FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight)
-                    }
+                .overlayPreferenceValue(FocalElectedContentKey.self) { elected in
+                    if input.isFocused { electedStrip(elected) }
                 }
 
             // En focus, `focusStampChip` dit la même chose dans le cadre : la
@@ -229,7 +226,7 @@ struct FocalRow: View {
     }
 
     private var focusLift: CGFloat {
-        input.isFocused ? FocalMetrics.FocusStrip.contentLift(isFirstInGroup: input.isFirstInGroup) : 0
+        input.isFocused ? FocalScrollPerspective.electedContentLift(isFirstInGroup: input.isFirstInGroup) : 0
     }
 
     /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
@@ -300,22 +297,25 @@ struct FocalRow: View {
             // « Voir une fois » n'existait que sur les médias. Un message
             // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
             // jusqu'au toucher qui le consomme.
-            if let chip = content.viewOnceChipState {
-                ViewOnceChip(state: chip, isDark: input.isDark, hint: content.protectedTap().accessibilityHint) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
-            } else if content.requiresVeil {
-                FocalProtectedContent(
-                    isBlurred: true,
-                    isViewOnce: content.isViewOnce,
-                    isDark: input.isDark,
-                    messageId: content.messageId,
-                    onConsumeViewOnce: actions.onConsumeViewOnce,
-                    tap: content.protectedTap()
-                ) {
-                    contentSections
+            Group {
+                if let chip = content.viewOnceChipState {
+                    ViewOnceChip(state: chip, isDark: input.isDark, hint: content.protectedTap().accessibilityHint) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+                } else if content.requiresVeil {
+                    FocalProtectedContent(
+                        isBlurred: true,
+                        isViewOnce: content.isViewOnce,
+                        isDark: input.isDark,
+                        messageId: content.messageId,
+                        onConsumeViewOnce: actions.onConsumeViewOnce,
+                        tap: content.protectedTap()
+                    ) {
+                        contentSections
+                    }
+                } else {
+                    contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
-            } else {
-                contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
             }
+            .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection
 
@@ -1004,15 +1004,43 @@ struct FocalRow: View {
     }
 
     /// Le CADRE de l'élu Focal (#8506), fond de la colonne du message : il
-    /// l'englobe avec l'identité posée au-dessus du contenu descendu et la
-    /// bande posée dessous, à `electedCardMargin` de chacun. L'étendue est
-    /// celle que la passe mesure (`FocalScrollPerspective.electedCardExtent`).
-    private var electedCardBackground: some View {
-        let margin = FocalScrollPerspective.electedCardMargin
-        return FocalGlassBlock()
-            .padding(.horizontal, -margin)
-            .padding(.top, -(focusLift + margin))
-            .padding(.bottom, -(FocalMetrics.FocusStrip.stripGap + FocalMetrics.FocusStrip.chipHeight + margin))
+    /// englobe l'identité posée au-dessus du contenu descendu, le contenu
+    /// GROSSI (#8537) et la bande posée dessous, à `electedCardMargin` de
+    /// chacun — la disposition que la passe mesure (`electedGeometry`).
+    private func electedCardBackground(_ elected: FocalElectedContent?) -> some View {
+        GeometryReader { proxy in
+            let margin = FocalScrollPerspective.electedCardMargin
+            let span = electedSpan(elected, in: proxy)
+            FocalGlassBlock()
+                .padding(.leading, -margin)
+                .padding(.trailing, -(margin + span.extraWidth))
+                .padding(.top, -(focusLift + margin))
+                .padding(.bottom, -(span.stripTop + FocalMetrics.FocusStrip.chipHeight + margin - proxy.size.height))
+        }
+    }
+
+    /// La bande basse de l'élu — pastille de langue, drapeaux, réactions, date —
+    /// à l'échelle 1, sous le contenu grossi, sur toute la largeur du cadre.
+    private func electedStrip(_ elected: FocalElectedContent?) -> some View {
+        GeometryReader { proxy in
+            let span = electedSpan(elected, in: proxy)
+            HStack(alignment: .center, spacing: 4) {
+                focusStrip
+                Spacer(minLength: 4)
+                focusStampChip
+            }
+            .frame(width: proxy.size.width + span.extraWidth, height: FocalMetrics.FocusStrip.chipHeight)
+            .offset(y: span.stripTop)
+        }
+    }
+
+    private func electedSpan(_ elected: FocalElectedContent?, in proxy: GeometryProxy) -> (extraWidth: CGFloat, stripTop: CGFloat) {
+        let bounds = elected.map { proxy[$0.bounds] } ?? CGRect(x: 0, y: 0, width: 0, height: proxy.size.height)
+        let scale = elected?.scale ?? 1
+        return (
+            FocalScrollPerspective.electedExtraWidth(columnWidth: proxy.size.width, contentWidth: bounds.width, scale: scale),
+            FocalScrollPerspective.electedStripTop(columnHeight: proxy.size.height, contentMinY: bounds.minY, contentHeight: bounds.height, scale: scale)
+        )
     }
 
     /// HAUT-GAUCHE : l'auteur, en haut du cadre — pour TOUTES
@@ -1063,15 +1091,15 @@ struct FocalRow: View {
     }
 
     /// BAS-DROITE : date complète (pré-calculée) + coche d'état de réception
-    /// (mes messages), sur la ligne basse à côté de la bande — toucher =
-    /// détails de lecture. Elle a quitté la ligne du HAUT le 2026-08-23 : la
+    /// (mes messages), sur la ligne basse à côté de la bande — toucher = les
+    /// DÉTAILS du message, la feuille qu'ouvre « Infos » (#8537). Elle a quitté la ligne du HAUT le 2026-08-23 : la
     /// carte affichait alors sa date deux fois, en haut par cette chip et en
     /// bas par la méta.
     private var focusStampChip: some View {
         let metaTint: Color = input.isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
         let readTint: Color = input.isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
         return Button {
-            actions.onShowReadStatus?(content.messageId)
+            actions.onShowMessageInfo?(content.messageId)
         } label: {
             focusChip {
                 HStack(spacing: 4) {

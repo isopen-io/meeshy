@@ -31,13 +31,13 @@ final class FocalElectedLoupeTests: XCTestCase {
     /// Le calque de la cellule ne porte plus que le PASSAGE (translation) :
     /// l'échelle y agrandissait l'identité et les contrôles avec le contenu.
     @MainActor
-    func test_magnifyElected_whenFocused_neverScalesTheCellLayer() {
+    func test_poseElectionPassage_onTheElectedCell_neverScalesItsLayer() {
         let layer = CALayer()
         layer.bounds = CGRect(x: 0, y: 0, width: 390, height: 60)
-        FocalScrollPerspective.magnifyElected(layer, isFocused: true, isRightToLeft: false, shift: 0, animated: false)
+        FocalScrollPerspective.poseElectionPassage(layer, shift: 0, animated: false)
         XCTAssertEqual(layer.transform.m11, 1, accuracy: 0.0001, "la cellule élue ne grandit pas : seul son contenu le fait")
         XCTAssertEqual(layer.transform.m22, 1, accuracy: 0.0001)
-        FocalScrollPerspective.magnifyElected(layer, isFocused: true, isRightToLeft: false, shift: 14, animated: false)
+        FocalScrollPerspective.poseElectionPassage(layer, shift: 14, animated: false)
         XCTAssertEqual(layer.transform.m42, -14, accuracy: 0.0001, "le passage reste posé, dans le repère renversé")
     }
 

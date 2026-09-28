@@ -316,9 +316,10 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         let host = AppSourceGuard.stripComments(try controllerClusterSource())
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         guard let election = host.range(of: "let electionChanged = focalFocusedLocalId != focused"),
-              let loupe = host.range(of: "FocalScrollPerspective.magnifyElected(cell.contentView.layer, isFocused:")
-        else { return XCTFail("la passe doit élire PUIS poser la loupe sur la cellule élue") }
-        XCTAssertLessThan(election.lowerBound, loupe.lowerBound, "la loupe suit l'élection de la même frame")
+              let passage = host.range(of: "FocalScrollPerspective.poseElectionPassage(cell.contentView.layer, shift: shift, animated: electionChanged)")
+        else { return XCTFail("la passe doit élire PUIS poser le passage des voisines") }
+        XCTAssertLessThan(election.lowerBound, passage.lowerBound, "le passage suit l'élection de la même frame")
+        XCTAssertFalse(host.contains("magnifyElected"), "#8537 : plus aucune loupe sur le calque de la cellule — elle agrandissait l'identité et les contrôles")
     }
 
     // MARK: - Loupe de l'élu Focal (#8506 — « agrandis tout le contenu intérieur par ×1,2 encore »)
@@ -340,17 +341,20 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     }
 
     /// Le cadre agrandi ne sort JAMAIS de l'écran : il garde la gouttière du
-    /// cadre au repos de chaque côté. Au-delà, l'échelle se réduit pour tenir —
-    /// un texte ne se ré-enroule pas sans changer la hauteur de la rangée.
+    /// cadre au repos de chaque côté. Depuis #8537, seul le contenu grossit,
+    /// autour du bord d'attaque de la colonne ; le cadre l'entoure à sa marge.
     func test_electedScale_keepsTheScaledCardInsideTheScreen() {
         let inset = FocalScrollPerspective.focusCardHorizontalInset
+        let margin = FocalScrollPerspective.electedCardMargin
         for width: CGFloat in [320, 375, 390, 393, 430, 744, 1024] {
             for rtl in [false, true] {
                 let scale = FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: width)
                 let card = FocalScrollPerspective.electedCardFrame(rowWidth: width, isRightToLeft: rtl)
+                let column = card.width - 2 * margin
                 let pivot = FocalScrollPerspective.electedPivotX(rowWidth: width, isRightToLeft: rtl)
-                let left = pivot + scale * (card.minX - pivot)
-                let right = pivot + scale * (card.maxX - pivot)
+                let reach = scale * column + margin
+                let left = rtl ? pivot - reach : pivot - margin
+                let right = rtl ? pivot + margin : pivot + reach
                 XCTAssertGreaterThanOrEqual(left, inset - 0.001, "w=\(width), rtl=\(rtl) : le cadre sort à gauche")
                 XCTAssertLessThanOrEqual(right, width - inset + 0.001, "w=\(width), rtl=\(rtl) : le cadre sort à droite")
                 XCTAssertGreaterThanOrEqual(scale, 1)
@@ -376,20 +380,11 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         XCTAssertEqual(FocalScrollPerspective.electedScale(reduceMotion: true, rowWidth: 320), 1)
     }
 
-    /// La loupe se pose autour du bord d'ATTAQUE du cadre : il reste à sa
-    /// place, le message grandit vers le sens de lecture.
-    @MainActor
-    func test_magnifyElected_scalesAroundTheCardsLeadingEdge() {
-        let layer = CALayer()
-        layer.bounds = CGRect(x: 0, y: 0, width: 390, height: 60)
-        FocalScrollPerspective.magnifyElected(layer, isFocused: true, isRightToLeft: false, shift: 0, animated: false)
-        let scale = FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: 390)
-        XCTAssertEqual(layer.transform.m11, scale, accuracy: 0.0001)
-        XCTAssertEqual(layer.transform.m22, scale, accuracy: 0.0001, "une loupe, pas un étirement")
-        // Le point du bord d'attaque, exprimé depuis l'ancre (centre), est fixe.
-        let edge = FocalScrollPerspective.focusCardHorizontalInset - 195
-        XCTAssertEqual(layer.transform.m11 * edge + layer.transform.m41, edge, accuracy: 0.001)
-        FocalScrollPerspective.magnifyElected(layer, isFocused: false, isRightToLeft: false, shift: 0, animated: false)
-        XCTAssertTrue(CATransform3DIsIdentity(layer.transform))
+    /// La loupe du contenu se pose sur le bord d'ATTAQUE de la colonne : la
+    /// première lettre reste à sa place, le message grandit vers le sens de
+    /// lecture (#8537).
+    func test_electedPivotX_isTheColumnsLeadingEdge() {
+        XCTAssertEqual(FocalScrollPerspective.electedPivotX(rowWidth: 390, isRightToLeft: false), FocalMetrics.Row.paddingHorizontal)
+        XCTAssertEqual(FocalScrollPerspective.electedPivotX(rowWidth: 390, isRightToLeft: true), 390 - FocalMetrics.Row.paddingHorizontal)
     }
 }
