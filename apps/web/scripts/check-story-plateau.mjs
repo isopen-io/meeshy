@@ -462,6 +462,30 @@ if (published !== null) {
   );
 }
 
+/* ── 7. « POST » ARMÉ DEPUIS UNE SCÈNE : LE TEXTE DU POST PART AVEC ELLE (#8482) ──
+   Le même brouillon semé, rouvert : le chevron ARME « Post » sans publier, le
+   bouton du texte du post paraît au socle, son éditeur monte en verre, et le
+   corps écrit voyage en `content` à côté de la scène. */
+published = null;
+await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
+await page.waitForSelector('[data-scene-player]', { timeout: 15000 });
+await page.click('[data-publish-kind-toggle]');
+await page.click('[data-publish-kind-choice="POST"]');
+check(published === null, 'armer « Post » au chevron ne doit RIEN publier');
+await page.waitForSelector('[data-story-post-text]', { timeout: 8000 });
+await page.click('[data-story-post-text]');
+await page.waitForSelector('[data-story-post-text-plaque] #story-studio-post-text', { timeout: 8000 });
+await page.fill('#story-studio-post-text', 'Le corps du post');
+await page.click('[data-story-post-text-done]');
+await page.click('[data-story-publish]');
+for (let i = 0; i < 60 && published === null; i += 1) await page.waitForTimeout(150);
+check(published !== null, '« Post » armé : AUCUN POST /api/v1/posts n’est parti');
+if (published !== null) {
+  check(published.type === 'POST', `« Post » armé depuis une story : type publié ${published.type} — attendu POST`);
+  check(published.content === 'Le corps du post', `le texte du post armé depuis une scène ne part pas — content ${JSON.stringify(published.content)}`);
+  check((published.storyEffects?.scenes?.[0]?.objects ?? []).some((o) => o.kind === 'text'), 'la scène doit partir AVEC le texte du post');
+}
+
 check(pageErrors.length === 0, `erreurs de page — ${pageErrors.join(' | ')}`);
 
 await browser.close();
@@ -476,5 +500,6 @@ console.log(
   `check-story-plateau : vert — ${invariants} invariants : deux objets texte posés, celui-ci déplacé au POINTEUR puis tourné et ` +
     'agrandi au CLAVIER, sa langue et son style choisis ET PEINTS, les TREIZE familles à police embarquée peintes par leur ' +
     'propre fichier avec la pile native derrière elles (#6951), un son placé sur la scène, une légende écrite — et CHACUNE de ces ' +
-    'valeurs relue dans le corps de POST /api/v1/posts, un objet non sélectionné restant intact.',
+    'valeurs relue dans le corps de POST /api/v1/posts, un objet non sélectionné restant intact ; et « Post » armé depuis la ' +
+    'scène fait partir le texte du post en `content`, avec la scène (#8482).',
 );

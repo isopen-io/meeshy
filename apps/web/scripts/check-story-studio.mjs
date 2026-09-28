@@ -772,6 +772,191 @@ for (const colorScheme of ['light', 'dark']) {
   await context.close();
 }
 
+/**
+ * ── 11. LOT 7 — RETOUR PORTEUR DU 2026-09-28 (#8482, miroir iOS #8473) ──
+ *
+ * Aux DEUX gabarits (téléphone 390×844, bureau 1280×800) :
+ *  (a) la scène ne touche plus les bords : 10 px de marge de chaque côté, et
+ *      ✕ descend d'au moins 8 px sous la zone sûre, toujours AU-DESSUS de la
+ *      scène ;
+ *  (b) le Cadre (le rognage du fond : Ajuster / Remplir), la plaque
+ *      d'édition d'un composant, la frise et le texte du post restent DANS
+ *      l'écran — plaque bornée (≤ 600 px, jamais plus large que l'écran moins
+ *      ses gouttières), aucun descendant qui déborde, aucune page qui défile
+ *      de côté ;
+ *  (c) la frise : pendant la LECTURE, toucher une barre choisit la piste et
+ *      « Entre ici » / « Sort ici » restent ; deux ancres ≥ 28 px sur la seule
+ *      piste choisie ; tirer l'ancre de fin RACCOURCIT, glisser la barre
+ *      DÉPLACE durée gardée, la flèche droite sur l'ancre de début avance
+ *      l'entrée de 0,1 s ;
+ *  (d) une story qui ARME « Post » au chevron peint le bouton du texte du
+ *      post, dont l'éditeur monte en verre dans le socle.
+ * `CAPTURE_DIR` écrit les six captures `web-{mobile,bureau}-lot7-*.png`.
+ */
+const CAPTURE_DIR = process.env.CAPTURE_DIR;
+for (const [label, viewport] of [
+  ['mobile', { width: 390, height: 844 }],
+  ['bureau', { width: 1280, height: 800 }],
+]) {
+  const tag = `[lot 7 ${label} ${viewport.width}×${viewport.height}]`;
+  const context = await browser.newContext({ colorScheme: 'light', locale: 'fr-FR', viewport, serviceWorkers: 'block' });
+  await context.addInitScript((session) => localStorage.setItem('meeshy.session', session), seedSession('e'.repeat(24)));
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+  const shoot = async (name) => {
+    if (CAPTURE_DIR !== undefined) await page.screenshot({ path: join(CAPTURE_DIR, `web-${label}-lot7-${name}.png`) });
+  };
+  /** Une plaque DANS l'écran : bornée, sans descendant qui la déborde. */
+  const plateFits = async (selector, what) => {
+    const fit = await page.evaluate((sel) => {
+      const plate = document.querySelector(sel);
+      if (plate === null) return null;
+      const r = plate.getBoundingClientRect();
+      const overflow = [...plate.querySelectorAll('*')].reduce((worst, node) => {
+        const n = node.getBoundingClientRect();
+        return n.width === 0 ? worst : Math.max(worst, n.right - r.right, r.left - n.left);
+      }, 0);
+      return { left: r.left, right: r.right, width: r.width, overflow, scrollWidth: document.documentElement.scrollWidth, innerWidth };
+    }, selector);
+    check(
+      fit !== null && fit.left >= -0.5 && fit.right <= fit.innerWidth + 0.5 && fit.width <= Math.min(600, fit.innerWidth - 16) + 0.5,
+      `${tag} : ${what} doit tenir dans l'écran, bornée à 600 px — ${JSON.stringify(fit)}`,
+    );
+    check(fit !== null && fit.overflow <= 0.5 && fit.scrollWidth <= fit.innerWidth, `${tag} : ${what} ne déborde ni d'elle-même ni de l'écran — ${JSON.stringify(fit)}`);
+  };
+
+  await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
+  await page.setInputFiles('input[data-door="visual"]', { name: 'fond.png', mimeType: 'image/png', buffer: icon });
+  await page.fill('#story-studio-text', 'Bonjour');
+  await page.waitForSelector('[data-scene-player]', { timeout: 8000 });
+  await page.waitForSelector('[data-asset-phase="ready"]', { timeout: 8000 });
+  await twoFrames(page);
+
+  /* (a) les marges de la scène, ✕ et ⋯ descendus. */
+  const geo = await page.evaluate(() => {
+    const box = (el) => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };
+    };
+    return { card: box(document.querySelector('[data-scene-stage]')), close: box(document.querySelector('[data-story-studio-top] a')), innerWidth };
+  });
+  check(
+    geo.card !== null && geo.card.x >= 9.5 && geo.card.right <= geo.innerWidth - 9.5,
+    `${tag} : la scène garde 10 px de chaque côté de l'écran — ${JSON.stringify(geo)}`,
+  );
+  check(
+    geo.close !== null && geo.card !== null && geo.close.y >= 7.5 && geo.close.bottom <= geo.card.y + 0.5,
+    `${tag} : ✕ descend de 8 px sous la zone sûre, et reste au-dessus de la scène — ${JSON.stringify(geo)}`,
+  );
+  await shoot('scene');
+
+  /* (b) le Cadre (rognage du fond), borné. */
+  await page.click('[data-story-option="frame"]');
+  await page.waitForSelector('[data-story-frame-panel]', { timeout: 8000 });
+  await page.click('[data-story-frame-option="fill"]');
+  await plateFits('[data-story-frame-panel]', 'la plaque du Cadre');
+  await shoot('rognage');
+  await page.click('[data-story-frame-done]');
+
+  /* (b) l'édition d'un COMPOSANT (un calque image), bornée, ses seuls outils. */
+  await page.setInputFiles('input[data-door="overlay"]', { name: 'calque.png', mimeType: 'image/png', buffer: icon });
+  await page.waitForFunction(() => document.querySelector('[data-story-object-edit="overlay"]') !== null, undefined, { timeout: 8000 });
+  await page.evaluate(() => document.querySelector('[data-story-object-edit="overlay"]')?.click());
+  await page.waitForSelector('[data-story-edit-plaque] [data-story-overlay-editor]', { timeout: 8000 });
+  await plateFits('[data-story-edit-plaque]', "la plaque d'édition du calque");
+  check(
+    await page.evaluate(() => document.querySelector('[data-story-edit-plaque] [data-story-object-editor]') === null && document.querySelector('[data-story-option="frame"]') === null),
+    `${tag} : éditer le calque n'offre que SES outils — ni ceux d'un texte, ni le Cadre du fond`,
+  );
+  await shoot('edition');
+  await page.click('[data-story-edit-done]');
+
+  /* (c) la frise. */
+  await page.click('[data-story-animated]');
+  await page.waitForSelector('[data-story-track-bar="text-1"]', { timeout: 8000 });
+  await plateFits('[data-story-timeline]', 'la frise');
+  const barBox = await readBox(page, '[data-story-track-bar="text-1"]');
+  await page.mouse.click(barBox.x + barBox.width / 2, barBox.y + barBox.height / 2);
+  const choisie = await page.evaluate(() => ({
+    pressed: document.querySelector('[data-story-track-bar="text-1"]')?.getAttribute('aria-pressed'),
+    playing: document.querySelector('[data-story-timeline-play]')?.getAttribute('data-story-timeline-play'),
+    enter: document.querySelector('[data-story-timeline-enter]') !== null,
+    exit: document.querySelector('[data-story-timeline-exit]') !== null,
+  }));
+  check(
+    choisie.pressed === 'true' && choisie.playing === 'playing' && choisie.enter && choisie.exit,
+    `${tag} : pendant la lecture, toucher la barre choisit la piste et garde « Entre ici » / « Sort ici » — ${JSON.stringify(choisie)}`,
+  );
+  const handles = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-story-track-handle]')].map((h) => {
+      const r = h.getBoundingClientRect();
+      return { grip: h.getAttribute('data-story-track-handle'), lane: h.closest('[data-story-track]')?.getAttribute('data-story-track'), width: r.width, height: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }),
+  );
+  check(
+    handles.length === 2 && handles.every((h) => h.lane === 'text-1' && h.width >= 27.5 && h.height >= 27.5),
+    `${tag} : deux ancres ≥ 28 px sur la seule piste choisie — ${JSON.stringify(handles)}`,
+  );
+  const windowOf = () =>
+    page.evaluate(() => {
+      const lane = document.querySelector('[data-story-track="text-1"]');
+      return [Number(lane?.getAttribute('data-story-track-start')), Number(lane?.getAttribute('data-story-track-end'))];
+    });
+  const laneBox = await readBox(page, '[data-story-track="text-1"]');
+  const dragBy = async (x, y, dx) => {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx / 2, y, { steps: 4 });
+    await page.mouse.move(x + dx, y, { steps: 4 });
+    await page.mouse.up();
+  };
+  const endHandle = handles.find((h) => h.grip === 'end');
+  if (endHandle !== undefined) await dragBy(endHandle.x, endHandle.y, -laneBox.width / 2);
+  const shortened = await windowOf();
+  check(Math.abs(shortened[0]) < 0.05 && Math.abs(shortened[1] - 3) <= 0.15, `${tag} : tirer l'ancre de fin de la moitié de la voie raccourcit la fenêtre à ~3 s — ${JSON.stringify(shortened)}`);
+  const movedBar = await readBox(page, '[data-story-track-bar="text-1"]');
+  await dragBy(movedBar.x + movedBar.width / 2, movedBar.y + movedBar.height / 2, laneBox.width / 4);
+  const moved = await windowOf();
+  check(
+    Math.abs(moved[0] - 1.5) <= 0.15 && Math.abs(moved[1] - moved[0] - (shortened[1] - shortened[0])) <= 0.02,
+    `${tag} : glisser la barre d'un quart de voie la déplace de ~1,5 s, durée gardée — ${JSON.stringify({ shortened, moved })}`,
+  );
+  await page.focus('[data-story-track-handle="start"]');
+  await page.keyboard.press('ArrowRight');
+  const nudged = await windowOf();
+  check(Math.abs(nudged[0] - moved[0] - 0.1) <= 0.011 && nudged[1] === moved[1], `${tag} : la flèche droite sur l'ancre de début avance l'entrée de 0,1 s — ${JSON.stringify({ moved, nudged })}`);
+  await page.click('[data-story-timeline-play]');
+  await shoot('frise');
+  await page.click('[data-story-animated]');
+
+  /* (d) « Post » armé au chevron : le bouton du texte du post, son éditeur en verre. */
+  await page.click('[data-publish-kind-toggle]');
+  await page.click('[data-publish-kind-choice="POST"]');
+  await page.waitForSelector('[data-story-post-text]', { timeout: 4000 });
+  await page.click('[data-story-post-text]');
+  await page.waitForSelector('[data-story-post-text-plaque]', { timeout: 8000 });
+  await page.fill('#story-studio-post-text', 'Le corps du post');
+  // La plaque MONTE du bas (240 ms) : on mesure sa place d'arrivée, jamais un pas de l'animation.
+  await page.waitForFunction(() => (document.querySelector('[data-story-post-text-plaque]')?.getAnimations() ?? []).every((a) => a.playState !== 'running'), undefined, { timeout: 4000 });
+  const plaque = await page.evaluate(() => {
+    const el = document.querySelector('[data-story-post-text-plaque]');
+    const r = el?.getBoundingClientRect();
+    return r === undefined ? null : { inSocle: el.closest('[data-story-studio-bottom]') !== null, glass: el.classList.contains('glass'), bottom: r.bottom, innerHeight };
+  });
+  check(
+    plaque !== null && plaque.inSocle && plaque.glass && plaque.bottom <= plaque.innerHeight + 0.5,
+    `${tag} : « Post » armé, l'éditeur du texte du post monte en verre dans le socle — ${JSON.stringify(plaque)}`,
+  );
+  await plateFits('[data-story-post-text-plaque]', 'la plaque du texte du post');
+  await shoot('post');
+
+  check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
+  await context.close();
+}
+
 await browser.close();
 served.close();
 
@@ -790,5 +975,7 @@ console.log(
     'une page, trois images ⇒ trois tuiles 44×44 dans la barre haute, corbeille 44×44 hors des tuiles, le tap change la ' +
     'scène courante, Post déplie ses cinq agencements (ordre iOS, lignes ≥ 44 px, menu dans l’écran hors de sa capsule), ' +
     'le réel choisissable, le brouillon relu avec ses pages, publication — clair et sombre identiques, et une story de ' +
-    'plusieurs pages part en autant de stories (#7707), retrouvées dans « Mes stories ».',
+    'plusieurs pages part en autant de stories (#7707), retrouvées dans « Mes stories » ; et le lot 7 (#8482) : scène à 10 px ' +
+    'des bords, ✕ descendu, Cadre / édition / frise / texte du post bornés à l’écran, pistes qui se choisissent en ' +
+    'lecture, se glissent et s’étirent (ancres ≥ 28 px, clavier), « Post » armé qui peint le texte du post.',
 );
