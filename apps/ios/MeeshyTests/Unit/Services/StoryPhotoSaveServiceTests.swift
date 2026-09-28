@@ -63,6 +63,7 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastIntro: StoryExportIntroContent?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    private(set) var lastInputs: StoryExportInputs?
     /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
     /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
     /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
@@ -79,7 +80,7 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
@@ -89,7 +90,8 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
         lastSlide = slide
         lastLanguages = languages
         lastIntro = intro
-        lastStickerImageSources = stickerImageSources
+        lastStickerImageSources = inputs.stickerImageSources
+        lastInputs = inputs
         for fraction in progressScript { onProgress?(fraction) }
 
         switch outcome {
@@ -148,6 +150,7 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastBakedURL: URL?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    private(set) var lastInputs: StoryExportInputs?
     /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
     /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
     /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
@@ -160,12 +163,13 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
-        lastStickerImageSources = stickerImageSources
+        lastStickerImageSources = inputs.stickerImageSources
+        lastInputs = inputs
         lastAppendsBrandOutro = appendsBrandOutro
         return await withCheckedContinuation { continuation in
             pendingCalls.append(PendingCall(onProgress: onProgress, continuation: continuation))

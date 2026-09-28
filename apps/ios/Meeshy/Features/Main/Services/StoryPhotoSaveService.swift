@@ -236,8 +236,8 @@ final class StoryPhotoSaveService: ObservableObject {
                 // slide ET le média de son porteur — sans l'index, Photos
                 // recevait 🖼️. Le porteur diffère selon l'entrée (`story.media`
                 // ou `scene.carrier.media`, #7052), d'où le paramètre.
-                stickerImageSources: StoryExporter.stickerImageSources(
-                    for: slide.effects.stickerObjects, media: stickerMedia),
+                inputs: StoryExportInputs(stickerImageSources: StoryExporter.stickerImageSources(
+                    for: slide.effects.stickerObjects, media: stickerMedia)),
                 appendsBrandOutro: appendsBrandOutro,
                 onProgress: { [weak self] fraction in
                     guard let self, self.isCurrent(generation, for: storyId) else { return }
