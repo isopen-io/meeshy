@@ -4683,11 +4683,14 @@ final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
         let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("isVideoUIActive"),
-            "shouldAutoHideControls must gate on isVideoUIActive (local OR remote video, Fix 7) — " +
-            "controls must never auto-hide on a voice-only layout (no video surface to tap for " +
-            "recall), but must auto-hide once the video layout is active even when only the " +
-            "REMOTE camera is on."
+            body.contains("isVideoStage"),
+            "shouldAutoHideControls must gate on the video stage (#8550) — controls must never " +
+            "auto-hide on a voice-only layout (no video surface to tap for recall)."
+        )
+        XCTAssertTrue(
+            source.contains("isDuoVideoActive: callManager.isVideoUIActive"),
+            "The duo video stage stays isVideoUIActive (local OR remote video, Fix 7): controls " +
+            "must auto-hide once the video layout is active even when only the REMOTE camera is on."
         )
     }
 
