@@ -220,8 +220,7 @@ extension CallView {
                 diameter: Self.pillGlyphDiameter
             )
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(CallControlsCopy.more)
         .accessibilityHint(CallControlsCopy.moreHint)
         .accessibilityValue(CallControlsCopy.moreValue(isExpanded: isExpanded))

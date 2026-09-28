@@ -84,6 +84,20 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(row.contains("callChromeGlass"))
     }
 
+    /// #8575 — un geste de glissé posé sur les boutons d'une rangée capte le
+    /// doigt avant le `ScrollView` : la rangée ne défile plus. L'enfoncement
+    /// passe par un `ButtonStyle`, qui ne pose aucun geste.
+    func test_rowButtons_carryNoDragGesture_soEveryRowScrolls() throws {
+        let rows = try ["Meeshy/Features/Main/Views/CallPillRow.swift"]
+            .map { AppSourceGuard.stripComments(try AppSourceGuard.unit($0)) }
+            .joined(separator: "\n")
+        let code = try callViewCode() + rows
+        XCTAssertFalse(code.contains(".pressable()"), "pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
+        XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
+        XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
+        XCTAssertTrue(rows.contains(".buttonStyle(CallPressButtonStyle())"))
+    }
+
     /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si
     /// AVKit refuse), exactement comme le glissé.
     func test_pipButton_andSwipe_leaveFullScreenThroughTheSameEntry() throws {

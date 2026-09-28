@@ -101,8 +101,7 @@ struct CallPillChip: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)

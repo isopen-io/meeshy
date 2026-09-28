@@ -207,8 +207,7 @@ extension CallView {
                 }
             }
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         // Constant label (the feature's name) + a live value (its current
         // state) — NOT .toggleStateAccessibility: this is a 3-state cycle, not
         // a binary toggle. The default Button action already IS the
