@@ -15,6 +15,7 @@ final class CallRecordingControllerTests: XCTestCase {
     private final class MockSocket: CallRecordingSocketProviding, @unchecked Sendable {
         var requestResult: Result<String, CallRecordingRefusal> = .success("rec-1")
         var requests: [String] = []
+        var requestedKinds: [CallRecordingKind] = []
         var answers: [(callId: String, recordingId: String, accepted: Bool)] = []
         var stops: [(callId: String, recordingId: String)] = []
 
@@ -22,8 +23,9 @@ final class CallRecordingControllerTests: XCTestCase {
             Empty().eraseToAnyPublisher()
         }
 
-        func requestCallRecording(callId: String) async throws -> String {
+        func requestCallRecording(callId: String, kind: CallRecordingKind) async throws -> String {
             requests.append(callId)
+            requestedKinds.append(kind)
             return try requestResult.get()
         }
 
@@ -43,6 +45,7 @@ final class CallRecordingControllerTests: XCTestCase {
         var capturedFile: URL? = URL(fileURLWithPath: "/tmp/appel.m4a")
         var startedFiles: [URL] = []
         var stopCallCount = 0
+        var finishedFiles: [URL] = []
 
         func start(fileURL: URL) throws {
             if let startError { throw startError }
@@ -53,13 +56,20 @@ final class CallRecordingControllerTests: XCTestCase {
             stopCallCount += 1
             return capturedFile
         }
+
+        func finish(_ fileURL: URL) async throws -> URL {
+            finishedFiles.append(fileURL)
+            return fileURL
+        }
     }
 
     private final class MockUploader: CallRecordingUploading {
         var uploads: [URL] = []
+        var mimeTypes: [String] = []
 
-        func upload(fileURL: URL) async throws -> String {
+        func upload(fileURL: URL, mimeType: String) async throws -> String {
             uploads.append(fileURL)
+            mimeTypes.append(mimeType)
             return "att-1"
         }
     }
@@ -83,6 +93,7 @@ final class CallRecordingControllerTests: XCTestCase {
         let sut: CallRecordingController
         let socket: MockSocket
         let recorder: MockRecorder
+        let videoRecorder: MockRecorder
         let uploader: MockUploader
         let remote: MockRemote
         let host: MockHost
@@ -91,12 +102,15 @@ final class CallRecordingControllerTests: XCTestCase {
     private func makeSUT(viewerId: String = "u-me") -> SUT {
         let socket = MockSocket()
         let recorder = MockRecorder()
+        let videoRecorder = MockRecorder()
+        videoRecorder.capturedFile = URL(fileURLWithPath: "/tmp/appel.mp4")
         let uploader = MockUploader()
         let remote = MockRemote()
         let host = MockHost()
         let sut = CallRecordingController(
             socket: socket,
             recorder: recorder,
+            videoRecorder: videoRecorder,
             uploader: uploader,
             remote: remote,
             viewerId: { viewerId },
@@ -105,15 +119,15 @@ final class CallRecordingControllerTests: XCTestCase {
             events: Empty().eraseToAnyPublisher()
         )
         sut.host = host
-        return SUT(sut: sut, socket: socket, recorder: recorder, uploader: uploader, remote: remote, host: host)
+        return SUT(sut: sut, socket: socket, recorder: recorder, videoRecorder: videoRecorder, uploader: uploader, remote: remote, host: host)
     }
 
-    private func requested(callId: String = "call-1", requesterId: String = "u-peer", required: [String] = ["u-me"]) -> CallRecordingSocketEvent {
-        .requested(CallRecordingRequestedEvent(callId: callId, recordingId: "rec-1", requesterId: requesterId, requiredUserIds: required))
+    private func requested(callId: String = "call-1", requesterId: String = "u-peer", required: [String] = ["u-me"], kind: CallRecordingKind = .audio) -> CallRecordingSocketEvent {
+        .requested(CallRecordingRequestedEvent(callId: callId, recordingId: "rec-1", requesterId: requesterId, requiredUserIds: required, kind: kind))
     }
 
-    private func started(callId: String = "call-1", recorderId: String = "u-me") -> CallRecordingSocketEvent {
-        .started(CallRecordingStartedEvent(callId: callId, recordingId: "rec-1", recorderId: recorderId))
+    private func started(callId: String = "call-1", recorderId: String = "u-me", kind: CallRecordingKind = .audio) -> CallRecordingSocketEvent {
+        .started(CallRecordingStartedEvent(callId: callId, recordingId: "rec-1", recorderId: recorderId, kind: kind))
     }
 
     private func stopped(recordingId: String = "rec-1", reason: String, wasRecording: Bool) -> CallRecordingSocketEvent {
@@ -312,5 +326,66 @@ final class CallRecordingControllerTests: XCTestCase {
 
         XCTAssertEqual(env.remote.links.count, 1)
         XCTAssertEqual(env.sut.notice, .saveFailed)
+    }
+
+    // MARK: - Type d'enregistrement (#8437)
+
+    func test_request_video_asksForAVideoRecording() async {
+        let env = makeSUT()
+
+        await env.sut.request(kind: .video)?.value
+
+        XCTAssertEqual(env.socket.requestedKinds, [.video])
+        XCTAssertEqual(env.sut.kind, .video)
+    }
+
+    func test_request_default_asksForAudioOnly() async {
+        let env = makeSUT()
+
+        await env.sut.request()?.value
+
+        XCTAssertEqual(env.socket.requestedKinds, [.audio])
+        XCTAssertEqual(env.sut.kind, .audio)
+    }
+
+    func test_requested_video_tellsTheConsentingViewerItIsAVideo() {
+        let env = makeSUT()
+
+        env.sut.receive(requested(kind: .video))
+
+        XCTAssertEqual(env.sut.kind, .video)
+    }
+
+    func test_started_video_capturesWithTheVideoRecorder_intoAnMP4() {
+        let env = makeSUT()
+
+        env.sut.receive(started(kind: .video))
+
+        XCTAssertEqual(env.videoRecorder.startedFiles.map(\.lastPathComponent), ["appel-call-1-rec-1.mp4"])
+        XCTAssertTrue(env.recorder.startedFiles.isEmpty)
+    }
+
+    func test_video_isFinishedThenDepositedAsAVideo() async {
+        let env = makeSUT()
+        env.sut.receive(started(kind: .video))
+
+        env.sut.callEnded()
+        await env.sut.pendingSave?.value
+
+        XCTAssertEqual(env.videoRecorder.stopCallCount, 1)
+        XCTAssertEqual(env.videoRecorder.finishedFiles.map(\.lastPathComponent), ["appel.mp4"])
+        XCTAssertEqual(env.uploader.mimeTypes, ["video/mp4"])
+        XCTAssertEqual(env.sut.notice, .saved)
+    }
+
+    func test_audio_isDepositedAsAudio() async {
+        let env = makeSUT()
+        env.sut.receive(started())
+
+        env.sut.callEnded()
+        await env.sut.pendingSave?.value
+
+        XCTAssertEqual(env.recorder.finishedFiles.count, 1)
+        XCTAssertEqual(env.uploader.mimeTypes, ["audio/mp4"])
     }
 }

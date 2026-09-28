@@ -43,22 +43,28 @@ enum CallRecordingNotice: Equatable {
     case saveFailed
 }
 
+/// #8437 — le fichier et son type selon ce qu'on enregistre.
+extension CallRecordingKind {
+    var fileExtension: String { self == .video ? "mp4" : "m4a" }
+    var mimeType: String { self == .video ? "video/mp4" : "audio/mp4" }
+}
+
 /// Dépose le fichier capté par le chemin des pièces jointes et rend son id.
 protocol CallRecordingUploading: AnyObject {
-    func upload(fileURL: URL) async throws -> String
+    func upload(fileURL: URL, mimeType: String) async throws -> String
 }
 
 final class CallRecordingTusUploader: CallRecordingUploading {
     nonisolated deinit {}
 
-    func upload(fileURL: URL) async throws -> String {
+    func upload(fileURL: URL, mimeType: String) async throws -> String {
         guard let baseURL = URL(string: MeeshyConfig.shared.serverOrigin),
               let credential = APIClient.shared.requestCredential else {
             throw URLError(.userAuthenticationRequired)
         }
         let result = try await TusUploadManager(baseURL: baseURL).uploadFile(
             fileURL: fileURL,
-            mimeType: "audio/mp4",
+            mimeType: mimeType,
             credential: credential
         )
         return result.id
@@ -73,17 +79,21 @@ protocol CallRecordingHosting: AnyObject {
 final class CallRecordingController: ObservableObject {
     @Published private(set) var phase: CallRecordingPhase = .idle
     @Published private(set) var notice: CallRecordingNotice?
+    /// #8437 — le type de la demande en cours (ou de la dernière) : la carte
+    /// d'accord le dit, la capture le suit.
+    @Published private(set) var kind: CallRecordingKind = .audio
 
     weak var host: (any CallRecordingHosting)?
 
     private let socket: any CallRecordingSocketProviding
     private let recorder: any CallRecordingServiceProviding
+    private let videoRecorder: any CallRecordingServiceProviding
     private let uploader: any CallRecordingUploading
     private let remote: any CallRecordingRemoteServiceProviding
     private let viewerId: () -> String?
     private let wait: @MainActor (UInt64) async -> Void
     private let fileDirectory: URL
-    private var activeCapture: (callId: String, recordingId: String)?
+    private var activeCapture: (callId: String, recordingId: String, kind: CallRecordingKind)?
     private var subscription: AnyCancellable?
     private var changeForwarding: AnyCancellable?
     private(set) var pendingSave: Task<Void, Never>?
@@ -98,6 +108,7 @@ final class CallRecordingController: ObservableObject {
     init(
         socket: (any CallRecordingSocketProviding)? = nil,
         recorder: (any CallRecordingServiceProviding)? = nil,
+        videoRecorder: (any CallRecordingServiceProviding)? = nil,
         uploader: (any CallRecordingUploading)? = nil,
         remote: (any CallRecordingRemoteServiceProviding)? = nil,
         viewerId: (() -> String?)? = nil,
@@ -107,7 +118,8 @@ final class CallRecordingController: ObservableObject {
     ) {
         let resolvedSocket = socket ?? MessageSocketManager.shared
         self.socket = resolvedSocket
-        self.recorder = recorder ?? CallRecordingService()
+        self.recorder = recorder ?? CallScreenRecordingService(kind: .audio, fallback: CallRecordingService())
+        self.videoRecorder = videoRecorder ?? CallScreenRecordingService(kind: .video)
         self.uploader = uploader ?? CallRecordingTusUploader()
         self.remote = remote ?? CallRecordingRemoteService.shared
         self.viewerId = viewerId ?? { AuthManager.shared.currentUser?.id }
@@ -130,6 +142,7 @@ final class CallRecordingController: ObservableObject {
         case .requested(let requested):
             let viewer = viewerId()
             let mine = requested.requesterId == viewer
+            kind = requested.kind
             phase = .pending(
                 callId: callId,
                 recordingId: requested.recordingId,
@@ -139,8 +152,9 @@ final class CallRecordingController: ObservableObject {
             )
         case .started(let started):
             let mine = started.recorderId == viewerId()
+            kind = started.kind
             phase = .recording(callId: callId, recordingId: started.recordingId, recorderId: started.recorderId, mine: mine)
-            if mine { beginCapture(callId: callId, recordingId: started.recordingId) }
+            if mine { beginCapture(callId: callId, recordingId: started.recordingId, kind: started.kind) }
         case .stopped(let stopped):
             guard phase.recordingId == stopped.recordingId || activeCapture?.recordingId == stopped.recordingId else { return }
             finishCapture()
@@ -152,14 +166,15 @@ final class CallRecordingController: ObservableObject {
     // MARK: - Gestes
 
     @discardableResult
-    func request() -> Task<Void, Never>? {
+    func request(kind: CallRecordingKind = .audio) -> Task<Void, Never>? {
         guard phase == .idle, let callId = host?.recordingCallId else { return nil }
         phase = .asking(callId: callId)
+        self.kind = kind
         notice = nil
         return Task { [weak self] in
             guard let self else { return }
             do {
-                let recordingId = try await socket.requestCallRecording(callId: callId)
+                let recordingId = try await socket.requestCallRecording(callId: callId, kind: kind)
                 guard phase == .asking(callId: callId) else { return }
                 phase = .pending(
                     callId: callId,
@@ -219,12 +234,16 @@ final class CallRecordingController: ObservableObject {
 
     // MARK: - Capture
 
-    private func beginCapture(callId: String, recordingId: String) {
+    private func recorder(for kind: CallRecordingKind) -> any CallRecordingServiceProviding {
+        kind == .video ? videoRecorder : recorder
+    }
+
+    private func beginCapture(callId: String, recordingId: String, kind: CallRecordingKind) {
         guard activeCapture == nil else { return }
-        let fileURL = fileDirectory.appendingPathComponent("appel-\(callId)-\(recordingId).m4a")
+        let fileURL = fileDirectory.appendingPathComponent("appel-\(callId)-\(recordingId).\(kind.fileExtension)")
         do {
-            try recorder.start(fileURL: fileURL)
-            activeCapture = (callId, recordingId)
+            try recorder(for: kind).start(fileURL: fileURL)
+            activeCapture = (callId, recordingId, kind)
         } catch {
             logger.error("call recording capture failed: \(error.localizedDescription)")
             phase = .idle
@@ -238,16 +257,28 @@ final class CallRecordingController: ObservableObject {
     private func finishCapture() {
         guard let capture = activeCapture else { return }
         activeCapture = nil
-        guard let fileURL = recorder.stop() else { return }
+        let capturer = recorder(for: capture.kind)
+        guard let fileURL = capturer.stop() else { return }
         pendingSave = Task { [weak self] in
-            await self?.save(fileURL: fileURL, callId: capture.callId, recordingId: capture.recordingId)
+            await self?.save(capturer: capturer, fileURL: fileURL, capture: capture)
         }
     }
 
-    private func save(fileURL: URL, callId: String, recordingId: String) async {
-        defer { try? FileManager.default.removeItem(at: fileURL) }
+    private func save(
+        capturer: any CallRecordingServiceProviding,
+        fileURL: URL,
+        capture: (callId: String, recordingId: String, kind: CallRecordingKind)
+    ) async {
+        let callId = capture.callId
+        let recordingId = capture.recordingId
+        var deposited = fileURL
+        defer {
+            try? FileManager.default.removeItem(at: fileURL)
+            try? FileManager.default.removeItem(at: deposited)
+        }
         do {
-            let attachmentId = try await uploader.upload(fileURL: fileURL)
+            deposited = try await capturer.finish(fileURL)
+            let attachmentId = try await uploader.upload(fileURL: deposited, mimeType: capture.kind.mimeType)
             try await link(callId: callId, recordingId: recordingId, attachmentId: attachmentId, attempt: 1)
             notice = .saved
         } catch {
