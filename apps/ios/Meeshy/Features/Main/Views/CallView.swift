@@ -83,6 +83,9 @@ struct CallView: View {
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
     @State var isSelfFeatured = false
+    @State var selfTileScale: CallSelfTileScale = .standard
+    @State var selfTilePinch: CGFloat = 1
+    let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
@@ -104,10 +107,11 @@ struct CallView: View {
     /// racine ignore la safe area, la pilule la retrouve depuis la fenêtre.
     static var chromeBottomInset: CGFloat { DeviceLayout.safeAreaBottom + 12 }
 
-    init(callManager: CallManager, mesh: GroupCallMeshCoordinator) {
+    init(callManager: CallManager, mesh: GroupCallMeshCoordinator, selfTileMemory: (any CallSelfTileRemembering)? = nil) {
         self.callManager = callManager
         self.transcriptionService = callManager.transcriptionService
         self.mesh = mesh
+        self.selfTileMemory = selfTileMemory ?? CallSelfTileMemory.shared
     }
 
     /// #8276 — un appel de groupe (deux membres distants au moins) remplace la
