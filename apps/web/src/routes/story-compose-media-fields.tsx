@@ -16,10 +16,17 @@ import { StudioChip } from './story-compose-parts';
  * `ComposerObjectEditorView+Media.swift:88-92`).
  */
 
-export function StudioSection({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+/** `heading="plate"` : le titre d'une section du Cadre (capitales, encre pleine — l'encre
+ * secondaire ne tient pas AA sur son verre, #6308). */
+export type StudioSectionHeading = 'editor' | 'plate';
+
+export function StudioSection({ label, heading = 'editor', children }: { readonly label: string; readonly heading?: StudioSectionHeading; readonly children: ReactNode }) {
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-1">
-      <span className="text-check font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+      <span
+        className={heading === 'plate' ? 'text-caption font-bold uppercase tracking-wide' : 'text-check font-semibold'}
+        style={{ color: heading === 'plate' ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-2)' }}
+      >
         {label}
       </span>
       <div className="flex flex-wrap gap-1">{children}</div>
@@ -47,13 +54,15 @@ export function StudioFilterSection({
   lang,
   filter,
   onFilter,
+  heading,
 }: {
   readonly lang: InterfaceLanguage;
   readonly filter: StoryFilterId | null;
   readonly onFilter: (filter: StoryFilterId | null) => void;
+  readonly heading?: StudioSectionHeading;
 }) {
   return (
-    <StudioSection label={translate(lang, 'story.studio.editor.filter')}>
+    <StudioSection label={translate(lang, 'story.studio.editor.filter')} {...(heading !== undefined ? { heading } : {})}>
       <StudioChip label={translate(lang, 'story.studio.editor.none')} pressed={filter === null} onPress={() => onFilter(null)} probe="filter:none" />
       {STORY_FILTERS.map((id) => (
         <StudioChip key={id} label={translate(lang, STUDIO_FILTER_KEYS[id])} pressed={filter === id} onPress={() => onFilter(id)} probe={`filter:${id}`}>

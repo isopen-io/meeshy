@@ -130,7 +130,7 @@ export function StudioFramePanel({
       </div>
       {/* Le corps DÉFILE sous son titre (#8517) : le Cadre ne mange pas la
           scène qu'il règle, au téléphone comme au bureau. */}
-      <div data-story-frame-body className="flex max-h-72 flex-col gap-2 overflow-y-auto">
+      <div data-story-frame-body className="flex max-h-72 flex-col gap-2 overflow-y-auto [&>*]:shrink-0">
         <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
           {translate(lang, FIT_HINT_KEY[frame.fitMode])}
         </p>
@@ -181,7 +181,7 @@ export function StudioFramePanel({
         {/* LE FILTRE DU FOND (#8518) — il ne peint que le média de fond, comme
             celui d'un calque ne peint que le calque. */}
         {media !== undefined ? (
-          <StudioFilterSection lang={lang} filter={media.filter} onFilter={(filter) => media.onPage((page) => pageWithVisualFilter(page, 'visual', filter))} />
+          <StudioFilterSection lang={lang} heading="plate" filter={media.filter} onFilter={(filter) => media.onPage((page) => pageWithVisualFilter(page, 'visual', filter))} />
         ) : null}
         {onRemove !== undefined ? (
           <button
