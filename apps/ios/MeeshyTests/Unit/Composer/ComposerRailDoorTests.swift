@@ -1755,21 +1755,18 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
         XCTAssertEqual(controls.map(\.id).dropFirst().first, "text.effect")
     }
 
-    /// **Poser un texte OUVRE son éditeur, dans le même geste.** Une coquille
-    /// posée sans éditeur est invisible et ne se remplit jamais — un contrôle
-    /// sans effet.
-    ///
-    /// Ancre RELOCALISÉE le 2026-09-02 : depuis #4634, l'ouverture passe par le
-    /// site unique `openObjectEditor(_:)` — « LA façon d'éditer un texte, une
-    /// seule, quelle que soit la porte » — qui appelle `enterTextEditingMode`
-    /// avec l'identifiant reçu. La garde suit l'appel jusqu'à ce site plutôt
-    /// que d'exiger le littéral d'avant, qui n'existe plus nulle part.
-    func test_laPorteTexte_poseEtOuvreLEditeur() throws {
+    /// **La porte TEXTE écrit SUR LA SCÈNE** (directive porteur 2026-09-28) :
+    /// elle pose le texte et ouvre la saisie en ligne — le clavier monte, la
+    /// colonne d'options s'accroche à la porte. L'éditeur plein écran reste
+    /// l'affaire de l'appui long « Modifier ».
+    func test_laPorteTexte_poseEtSaisitSurLaScene() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("ifletobjet=viewModel.addText(){openObjectEditor(objet.id)}"),
-                      "Poser puis ouvrir, dans le même geste, par le site unique d'édition.")
+        XCTAssertTrue(source.contains("ifletobjet=viewModel.addText(){beginSceneTextEditing(objet.id)}"),
+                      "Poser puis saisir, dans le même geste, sur la scène.")
+        XCTAssertFalse(source.contains("ifletobjet=viewModel.addText(){openObjectEditor(objet.id)}"),
+                       "La porte n'ouvre plus l'éditeur plein écran.")
         XCTAssertTrue(source.contains("viewModel.enterTextEditingMode(textId:id)"),
-                      "`openObjectEditor` doit bien entrer en édition sur l'objet reçu.")
+                      "La saisie en ligne doit bien entrer en édition sur l'objet posé.")
     }
 
     /// **L'édition se fait EN LIGNE, sur la scène.** Sans ces trois relais, le

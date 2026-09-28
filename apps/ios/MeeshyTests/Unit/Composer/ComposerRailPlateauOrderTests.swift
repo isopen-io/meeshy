@@ -87,7 +87,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
         XCTAssertTrue(code.contains("privatevaredge:CGFloat{ComposerRailGeometry.edgeMargin(roomy:isRoomy)}"))
         XCTAssertTrue(code.contains(".padding(.leading,edge)"))
         XCTAssertTrue(code.contains(".padding(.trailing,edge)"))
-        XCTAssertTrue(code.contains(".padding(.bottom,ComposerRailGeometry.gutter)"),
+        XCTAssertTrue(code.contains(".padding(.bottom,ComposerRailGeometry.floatingBottomInset)"),
                       "Les marges se lisent de `ComposerRailGeometry`, jamais d'un littéral : "
                       + "un nombre recopié ferait diverger les deux rails en silence.")
     }

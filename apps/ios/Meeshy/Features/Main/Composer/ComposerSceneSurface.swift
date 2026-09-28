@@ -182,10 +182,7 @@ struct ComposerSceneSurface: View {
 
     /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
     /// SAIT — voir `ComposerObjectChips.isServed`.
-    private var toolIsOpen: Bool {
-        if case .tool = railMode { return true }
-        return false
-    }
+    private var toolIsOpen: Bool { railMode.opensTool }
 
     /// **Plus d'`activeObjectChipId`** (2026-09-05) : un jeton ouvrait une
     /// bande montée SOUS la scène, donc visible en même temps que lui — d'où un
@@ -440,11 +437,23 @@ struct ComposerSceneSurface: View {
     private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
 
     private var floatingRail: AnyView {
-        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
-        let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
-        guard !portes.isEmpty else { return AnyView(EmptyView()) }
+        let mode: ComposerRailMode
+        switch railMode {
+        case .doors(let servies):
+            mode = .doors(ComposerSceneFloatingRail.sideRow(from: servies, format: format))
+        case .flyout(let volet):
+            // La colonne s'accroche à une porte de CE rail : il garde les
+            // siennes, et `flyoutColumn` se pose à côté.
+            mode = .flyout(ComposerRailFlyout(
+                doors: ComposerSceneFloatingRail.sideRow(from: volet.doors, format: format),
+                anchor: volet.anchor,
+                controls: volet.controls))
+        case .tool:
+            return AnyView(EmptyView())
+        }
+        if case .doors(let portes) = mode, portes.isEmpty { return AnyView(EmptyView()) }
         return AnyView(
-            ComposerLeadingRail(mode: .doors(portes),
+            ComposerLeadingRail(mode: mode,
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
                                 // Il FLOTTE : pas de ressort, sinon son socle
@@ -455,10 +464,42 @@ struct ComposerSceneSurface: View {
                                 separateButtons: true)
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
-                // `outerMargin` du bord.
+                // `outerMargin` du bord — et d'un bouton plus haut que la
+                // gouttière (directive porteur 2026-09-28).
                 .padding(.leading, edge)
-                .padding(.bottom, ComposerRailGeometry.gutter)
+                .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
         )
+    }
+
+    /// **Les options de l'outil ouvert, en colonne À DROITE de sa porte**
+    /// (directive porteur 2026-09-28 : « affiche la liste des options
+    /// directement à droite du bouton en vertical scrollant »).
+    ///
+    /// Posée depuis le cadre que la porte publie, dans la zone ENTIÈRE des
+    /// rails : la colonne est souvent plus haute que le rail (neuf entrées pour
+    /// le texte), et bornée au rail elle serait coupée. Au-delà de la zone,
+    /// elle défile — `ComposerLeadingRail` le fait de lui-même.
+    @ViewBuilder
+    private func flyoutColumn(_ porte: Anchor<CGRect>?) -> some View {
+        if case .flyout(let volet) = railMode, let porte {
+            GeometryReader { geo in
+                let cadre = geo[porte]
+                let hauteur = min(ComposerRailGeometry.floatingColumnHeight(entries: volet.entryCount),
+                                  geo.size.height)
+                ComposerLeadingRail(mode: .tool(volet.controls),
+                                    plateauTint: plateauTint,
+                                    onToolControl: onRailToolControl,
+                                    onExitTool: onRailExitTool,
+                                    pushesToThumb: false,
+                                    separateButtons: true)
+                    .frame(height: hauteur)
+                    .offset(x: cadre.maxX + ComposerRailGeometry.flyoutGap,
+                            y: ComposerRailGeometry.flyoutTop(anchorTop: cadre.minY,
+                                                              columnHeight: hauteur,
+                                                              available: geo.size.height))
+            }
+            .transition(.opacity)
+        }
     }
 
     /// Ce qui FAIT ENTRER de la matière. Absente pendant qu'un outil est
@@ -850,7 +891,7 @@ struct ComposerSceneSurface: View {
                                  onTime: onTimeButton,
                                  timeIsOpen: timeIsOpen)
                 .padding(.trailing, ComposerRailGeometry.outerMargin)
-                .padding(.bottom, ComposerRailGeometry.gutter)
+                .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
         }
     }
 
@@ -875,9 +916,10 @@ struct ComposerSceneSurface: View {
                                      onTime: onTimeButton,
                                      timeIsOpen: timeIsOpen)
                     .padding(.trailing, edge)
-                    .padding(.bottom, ComposerRailGeometry.gutter)
+                    .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
             }
             .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
+            .overlayPreferenceValue(ComposerRailFlyoutAnchorKey.self) { flyoutColumn($0) }
             // **Le volet CÈDE au viseur** (#4080) : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
             // **Un outil ou une bande ouverts prennent le bas pour eux seuls**

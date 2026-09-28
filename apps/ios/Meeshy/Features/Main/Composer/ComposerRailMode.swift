@@ -39,6 +39,12 @@ nonisolated enum ComposerRailMode: Equatable {
     /// Un outil est ouvert : ses contrôleurs, puis `(x)`.
     case tool([ComposerToolControl])
 
+    /// **Un outil est ouvert, et ses contrôleurs se posent À DROITE de sa
+    /// porte** (directive porteur 2026-09-28 : « plutôt que d'ouvrir l'édition
+    /// de texte, affiche la liste des options directement à droite du bouton
+    /// en vertical scrollant »). Les portes restent ; la colonne s'y accroche.
+    case flyout(ComposerRailFlyout)
+
     /// - Parameter drawing: l'outil de dessin est-il actif ?
     /// - Parameter textEditing: un texte est-il en cours d'édition ?
     /// - Parameter doors: les portes SERVIES, déjà filtrées.
@@ -51,19 +57,41 @@ nonisolated enum ComposerRailMode: Equatable {
     /// isolés (leurs libellés lisent `Bundle.module`). Seul un corps de vue
     /// appelle cette résolution — le type reste `nonisolated` pour que ses
     /// VALEURS restent lisibles d'un test non isolé.
+    ///
+    /// - Parameter anchorsToDoor: la surface sait-elle poser les contrôleurs à
+    ///   côté de la porte de l'outil ? Faux ⇒ ils REMPLACENT les portes, comme
+    ///   avant. Même vrai, un outil dont la porte n'est pas servie retombe sur
+    ///   ce remplacement : une colonne sans bouton auquel s'accrocher n'aurait
+    ///   nulle part où paraître.
     @MainActor
     static func resolve(drawing: Bool,
                         textEditing: Bool,
                         expandedDrawingTool: DrawingEditTool?,
                         expandedTextTool: TextEditTool?,
-                        doors: [ComposerRailDoor]) -> ComposerRailMode {
+                        doors: [ComposerRailDoor],
+                        anchorsToDoor: Bool = false) -> ComposerRailMode {
+        let controls = toolControls(drawing: drawing,
+                                    textEditing: textEditing,
+                                    expandedDrawingTool: expandedDrawingTool,
+                                    expandedTextTool: expandedTextTool)
+        guard let controls else { return .doors(doors) }
+        let anchor: ComposerRailDoor = drawing ? .drawing : .text
+        guard anchorsToDoor, doors.contains(anchor) else { return .tool(controls) }
+        return .flyout(ComposerRailFlyout(doors: doors, anchor: anchor, controls: controls))
+    }
+
+    @MainActor
+    private static func toolControls(drawing: Bool,
+                                     textEditing: Bool,
+                                     expandedDrawingTool: DrawingEditTool?,
+                                     expandedTextTool: TextEditTool?) -> [ComposerToolControl]? {
         if drawing {
-            return .tool(DrawingEditTool.allCases.map {
+            return DrawingEditTool.allCases.map {
                 ComposerToolControl(id: "drawing.\($0.rawValue)",
                                     symbolName: $0.sfSymbol,
                                     label: $0.accessibilityLabel,
                                     isExpanded: expandedDrawingTool == $0)
-            })
+            }
         }
         if textEditing {
             // `TextEditTool.all`, jamais `allCases` : l'ordre des `case` porte
@@ -71,14 +99,44 @@ nonisolated enum ComposerRailMode: Equatable {
             // doigts — le même sur la rangée flottante et dans l'éditeur plein
             // écran. Les deux coïncidaient jusqu'à l'EFFET (#4870), ajouté en
             // queue de l'énuméré et deuxième sur la rangée.
-            return .tool(TextEditTool.all.map {
+            return TextEditTool.all.map {
                 ComposerToolControl(id: "text.\($0.rawValue)",
                                     symbolName: $0.sfSymbol,
                                     label: $0.accessibilityLabel,
                                     isExpanded: expandedTextTool == $0)
-            })
+            }
         }
-        return .doors(doors)
+        return nil
+    }
+
+    /// Un outil est-il ouvert — qu'il remplace les portes ou s'y accroche ?
+    var opensTool: Bool {
+        switch self {
+        case .doors:          return false
+        case .tool, .flyout:  return true
+        }
+    }
+}
+
+/// **La colonne d'options d'un outil, et la porte à laquelle elle s'accroche.**
+nonisolated struct ComposerRailFlyout: Equatable {
+    /// Les portes servies, INCHANGÉES — la colonne ne retire rien au rail.
+    let doors: [ComposerRailDoor]
+    /// La porte de l'outil ouvert : la colonne se pose à sa droite.
+    let anchor: ComposerRailDoor
+    /// Les contrôleurs de l'outil ; le `(x)` suit toujours le dernier.
+    let controls: [ComposerToolControl]
+
+    /// Ce que la colonne compte d'entrées, `(x)` compris.
+    var entryCount: Int { controls.count + 1 }
+}
+
+/// **Le cadre de la porte qui porte la colonne**, publié par le rail et lu par
+/// la surface — qui seule connaît la zone où la colonne a la place de défiler.
+struct ComposerRailFlyoutAnchorKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }
 

@@ -404,15 +404,21 @@ extension MeeshyComposerHost {
                 viewModel.setExpandedDrawingTool(.tool)
             }
         case .text:
-            // **Poser PUIS ouvrir l'éditeur, dans le même geste.** `addText()`
-            // crée une coquille vide : la laisser sans éditeur donnerait un
-            // objet invisible que rien ne remplit — un contrôle sans effet.
+            // **Poser PUIS saisir SUR LA SCÈNE, dans le même geste** (directive
+            // porteur 2026-09-28 : « plutôt que d'ouvrir l'édition de texte,
+            // affiche la liste des options directement à droite du bouton »).
+            // Le clavier monte sur le texte posé, et ses options s'accrochent à
+            // cette porte (`ComposerRailMode.flyout`). L'éditeur plein écran
+            // reste celui de l'appui long « Modifier ».
             //
-            // La coquille vide est supprimée si l'auteur referme sans écrire
-            // (`exitTextEditingMode`), donc « poser » n'engage à rien.
+            // La porte BASCULE, comme le dessin : retouchée pendant la saisie,
+            // elle la termine. La coquille restée vide est supprimée par
+            // `exitTextEditingMode`, donc « poser » n'engage à rien.
             HapticFeedback.light()
-            if let objet = viewModel.addText() {
-                openObjectEditor(objet.id)
+            if viewModel.textEditingMode.activeTextId != nil {
+                viewModel.exitTextEditingMode()
+            } else if let objet = viewModel.addText() {
+                beginSceneTextEditing(objet.id)
             }
         case .sticker:
             // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
@@ -702,6 +708,15 @@ extension MeeshyComposerHost {
     ///   « ALIGN ▭ » du doigt, l'écran ne doit pas lui demander de le
     ///   retrouver. Les autres portes — appui long, création, plan 2D — ne
     ///   désignent rien et passent `nil`.
+    /// **Saisir un texte SUR la scène**, sans l'éditeur plein écran : le canvas
+    /// ouvre sa saisie en ligne dès que `editingTextId` le désigne.
+    func beginSceneTextEditing(_ id: String) {
+        presentedPortal = nil
+        selectedSceneItemId = id
+        selectedSceneItemKind = .text
+        viewModel.enterTextEditingMode(textId: id)
+    }
+
     func openObjectEditor(_ id: String, section: ComposerObjectEditorSection? = nil) {
         presentedPortal = nil
         selectedSceneItemId = id
