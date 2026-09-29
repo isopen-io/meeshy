@@ -48,13 +48,55 @@ extension View {
 
     /// #8394 — le masquage automatique (vidéo, 4 s) retire ENSEMBLE la
     /// pilule, les actions et l'en-tête : invisibles, ils ne captent plus rien,
-    /// ni un toucher ni VoiceOver.
+    /// ni un toucher ni VoiceOver. #8735 — « invisibles » s'entend au terme du
+    /// fondu : tant qu'on les voit encore, ils répondent, et le toucher reçu
+    /// pendant le fondu les rallume.
     func callChromeVisibility(_ isVisible: Bool) -> some View {
-        self
+        modifier(CallChromeVisibilityModifier(isVisible: isVisible))
+    }
+}
+
+/// La grâce du fondu (`CallChromeVisibility.acceptsTouches`) : le toucher
+/// est coupé à la FIN de la disparition, jamais à son début — sinon le
+/// bouton encore visible laissait passer le doigt jusqu'à la vidéo, qui ne
+/// faisait que rallumer le chrome, et l'action ne partait jamais.
+private struct CallChromeVisibilityModifier: ViewModifier {
+    let isVisible: Bool
+
+    @State private var hiddenAt: Date?
+    @State private var clock = Date()
+    @Environment(\.callChromeInteraction) private var reportInteraction
+
+    private var acceptsTouches: Bool {
+        CallChromeVisibility.acceptsTouches(
+            isVisible: isVisible,
+            hiddenFor: hiddenAt.map { clock.timeIntervalSince($0) } ?? .infinity
+        )
+    }
+
+    func body(content: Content) -> some View {
+        let accepts = acceptsTouches
+        let isFadingOut = accepts && !isVisible
+        content
             .opacity(isVisible ? 1 : 0)
-            .allowsHitTesting(isVisible)
+            .simultaneousGesture(
+                TapGesture().onEnded { reportInteraction?(.revive) },
+                including: isFadingOut ? .all : .subviews
+            )
+            .allowsHitTesting(accepts)
             .accessibilityHidden(!isVisible)
-            .animation(.easeInOut(duration: 0.25), value: isVisible)
+            .animation(.easeInOut(duration: CallChromeVisibility.fadeDuration), value: isVisible)
+            .adaptiveOnChange(of: isVisible) { _, visible in
+                let now = Date()
+                hiddenAt = visible ? nil : now
+                clock = now
+            }
+            .task(id: hiddenAt) {
+                guard hiddenAt != nil else { return }
+                try? await Task.sleep(nanoseconds: CallChromeVisibility.fadeDurationNanoseconds)
+                guard !Task.isCancelled else { return }
+                clock = Date()
+            }
     }
 }
 
@@ -68,5 +110,11 @@ enum CallButtonFill {
         case .active: return .white
         case .destructive: return MeeshyColors.error
         }
+    }
+
+    /// #8735 — sous le doigt, le disque s'éclaircit (0,16 → ~0,34 sur un
+    /// disque neutre) : l'enfoncement se voit, même sans rétrécissement.
+    static func pressedHighlight(isPressed: Bool) -> Color {
+        Color.white.opacity(isPressed ? 0.22 : 0)
     }
 }

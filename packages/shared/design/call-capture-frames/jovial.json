@@ -1,0 +1,638 @@
+{
+  "mood": "jovial",
+  "motifs": [
+    {
+      "id": "jovial.fete",
+      "mood": "jovial",
+      "name": "Fête",
+      "base": {
+        "layout": {
+          "arrangement": "arch",
+          "margin": 0.06,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.14,
+          "stroke": {
+            "color": "#FFFFFF",
+            "width": 0.035
+          },
+          "shadow": true,
+          "tilt": "gentle",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#FFF8E7"
+        },
+        "pattern": {
+          "kind": "confetti",
+          "color": "#EF476F",
+          "opacity": 0.12
+        },
+        "ornaments": [
+          {
+            "kind": "confetti",
+            "color": "#FFD166",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "ribbon",
+            "color": "#06D6A0",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#EF476F",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#EF476F",
+          "size": "m",
+          "font": "bubble"
+        },
+        "names": {
+          "show": "name",
+          "style": "badge",
+          "font": "bubble",
+          "color": "#FFFFFF",
+          "fill": "#D6335A"
+        },
+        "title": {
+          "source": "group",
+          "font": "bubble",
+          "color": "#EF476F",
+          "place": "top",
+          "size": "l",
+          "effect": "shadow"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.16,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.04
+            },
+            "shadow": true,
+            "tilt": "wild",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "name",
+            "style": "bubble",
+            "font": "bubble",
+            "color": "#073B4C",
+            "fill": "#FFFFFF"
+          },
+          "title": {
+            "source": "names",
+            "font": "bubble",
+            "color": "#EF476F",
+            "place": "top",
+            "size": "l",
+            "effect": "shadow"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.05,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.1,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.03
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "warm"
+          },
+          "ornaments": [
+            {
+              "kind": "confetti",
+              "color": "#FFD166",
+              "density": "high",
+              "layer": "back"
+            },
+            {
+              "kind": "balloons",
+              "color": "#118AB2",
+              "density": "low",
+              "layer": "back"
+            },
+            {
+              "kind": "sparkles",
+              "color": "#EF476F",
+              "density": "low",
+              "layer": "front"
+            }
+          ],
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "bubble",
+            "color": "#073B4C",
+            "fill": "#FFD166"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.12,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.025
+            },
+            "tilt": "gentle",
+            "tone": "warm"
+          },
+          "ornaments": [
+            {
+              "kind": "confetti",
+              "color": "#FFD166",
+              "density": "high",
+              "layer": "back"
+            },
+            {
+              "kind": "ribbon",
+              "color": "#EF476F",
+              "density": "low",
+              "layer": "front"
+            }
+          ],
+          "brand": {
+            "mark": "both",
+            "place": "bottom",
+            "color": "#EF476F",
+            "size": "s",
+            "font": "bubble"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "fill": "#EF476F"
+          },
+          "title": {
+            "source": "group",
+            "font": "bubble",
+            "color": "#EF476F",
+            "place": "top",
+            "size": "m",
+            "effect": "shadow"
+          }
+        }
+      }
+    },
+    {
+      "id": "jovial.fanfare",
+      "mood": "jovial",
+      "name": "Fanfare",
+      "base": {
+        "layout": {
+          "arrangement": "orbit",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.17,
+          "bottom": 0.11
+        },
+        "slot": {
+          "shape": "ticket",
+          "radius": 0.08,
+          "stroke": {
+            "color": "#073B4C",
+            "width": 0.012
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#FFF4DC",
+            "#FFE3AE"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "stripes",
+          "color": "#EF476F",
+          "opacity": 0.14
+        },
+        "border": {
+          "kind": "ticket",
+          "color": "#EF476F",
+          "width": 0.012,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "notes",
+            "color": "#118AB2",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "stars",
+            "color": "#FFD166",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "top-right",
+          "color": "#073B4C",
+          "size": "s",
+          "font": "cartoon"
+        },
+        "names": {
+          "show": "handle",
+          "style": "ribbon",
+          "font": "cartoon",
+          "color": "#FFD166",
+          "fill": "#073B4C"
+        },
+        "title": {
+          "source": "group",
+          "font": "cartoon",
+          "color": "#073B4C",
+          "place": "top",
+          "size": "l",
+          "effect": "shadow",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "row",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.18,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "ticket",
+            "radius": 0.08,
+            "stroke": {
+              "color": "#073B4C",
+              "width": 0.014
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "warm"
+          },
+          "title": {
+            "source": "names",
+            "font": "cartoon",
+            "color": "#073B4C",
+            "place": "top",
+            "size": "l",
+            "effect": "shadow",
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "brush",
+            "color": "#B5294E",
+            "place": "top",
+            "size": "s"
+          }
+        },
+        "comite": {
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "cartoon",
+            "color": "#FFD166",
+            "fill": "#073B4C"
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.15,
+            "bottom": 0.16
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#073B4C",
+              "width": 0.01
+            },
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "handle",
+            "style": "list",
+            "font": "cartoon",
+            "color": "#073B4C"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.14
+          },
+          "slot": {
+            "shape": "ticket",
+            "radius": 0.06,
+            "stroke": {
+              "color": "#073B4C",
+              "width": 0.008
+            },
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "handle",
+            "style": "list",
+            "font": "cartoon",
+            "color": "#073B4C"
+          },
+          "title": {
+            "source": "group",
+            "font": "cartoon",
+            "color": "#073B4C",
+            "place": "top",
+            "size": "m",
+            "effect": "shadow",
+            "case": "upper"
+          }
+        }
+      }
+    },
+    {
+      "id": "jovial.ballons",
+      "mood": "jovial",
+      "name": "Ballons",
+      "base": {
+        "layout": {
+          "arrangement": "scatter",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.15,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "oval",
+          "stroke": {
+            "color": "#FFFFFF",
+            "width": 0.03
+          },
+          "glow": "#FFFFFFAA",
+          "tilt": "gentle",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#BDE8F5",
+            "#E8F7FB",
+            "#FFF8E7"
+          ],
+          "angle": 0
+        },
+        "ornaments": [
+          {
+            "kind": "balloons",
+            "color": "#EF476F",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "balloons",
+            "color": "#FFD166",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "clouds",
+            "color": "#FFFFFF",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-left",
+          "color": "#118AB2",
+          "size": "m"
+        },
+        "names": {
+          "show": "name",
+          "style": "tag",
+          "font": "brush",
+          "color": "#073B4C"
+        },
+        "title": {
+          "source": "group",
+          "font": "brush",
+          "color": "#118AB2",
+          "place": "top",
+          "size": "l"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.07,
+            "gap": 0.05,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "oval",
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.035
+            },
+            "glow": "#FFFFFFAA",
+            "tilt": "wild",
+            "tone": "color"
+          },
+          "title": {
+            "source": "names",
+            "font": "brush",
+            "color": "#118AB2",
+            "place": "top",
+            "size": "l"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "bubble",
+            "color": "#B5294E",
+            "place": "top",
+            "size": "s"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "circle",
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.03
+            },
+            "tilt": "wild",
+            "tone": "color"
+          },
+          "ornaments": [
+            {
+              "kind": "balloons",
+              "color": "#EF476F",
+              "density": "mid",
+              "layer": "back"
+            },
+            {
+              "kind": "balloons",
+              "color": "#06D6A0",
+              "density": "mid",
+              "layer": "back"
+            },
+            {
+              "kind": "balloons",
+              "color": "#FFD166",
+              "density": "low",
+              "layer": "back"
+            },
+            {
+              "kind": "clouds",
+              "color": "#FFFFFF",
+              "density": "low",
+              "layer": "back"
+            }
+          ],
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "fill": "#0B6E8F"
+          }
+        }
+      }
+    },
+    {
+      "id": "jovial.grimaces",
+      "mood": "jovial",
+      "name": "Grimaces",
+      "base": {
+        "layout": {
+          "arrangement": "split",
+          "margin": 0.08,
+          "gap": 0.04,
+          "top": 0.12,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "rect",
+          "card": {
+            "color": "#FFFFFF",
+            "pad": 0.05,
+            "foot": 0.16
+          },
+          "shadow": true,
+          "tilt": "wild",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#EF476F"
+        },
+        "pattern": {
+          "kind": "dots",
+          "color": "#FFFFFF",
+          "opacity": 0.18
+        },
+        "ornaments": [
+          {
+            "kind": "stars",
+            "color": "#FFD166",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "confetti",
+            "color": "#FFFFFF",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "bottom-right",
+          "color": "#FFFFFF",
+          "size": "m"
+        },
+        "names": {
+          "show": "both",
+          "style": "caption",
+          "font": "cartoon",
+          "color": "#073B4C"
+        },
+        "title": {
+          "source": "date",
+          "font": "cartoon",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "m",
+          "effect": "shadow",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
+}

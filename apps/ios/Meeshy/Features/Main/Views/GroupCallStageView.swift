@@ -93,6 +93,9 @@ struct GroupCallStageView: View {
     @ObservedObject var mesh: GroupCallMeshCoordinator
     @ObservedObject var callManager: CallManager
     @Binding var isFullScreen: Bool
+    /// #8735 — chrome masqué, toucher une vignette le RALLUME (comme partout
+    /// sur la scène) ; chrome visible, elle se met à la une.
+    var isChromeVisible = true
     var onStageTap: () -> Void = {}
     var onSelfFeaturedChange: (Bool) -> Void = { _ in }
 
@@ -173,10 +176,17 @@ struct GroupCallStageView: View {
             .accessibilityHidden(true)
     }
 
+    private func tapTile(_ tile: GroupCallStageTile) {
+        switch GroupStageTapRule.outcome(isChromeVisible: isChromeVisible) {
+        case .revealChrome: onStageTap()
+        case .spotlight: choose(.tile(tile.id))
+        }
+    }
+
     private func selectableTile(_ tile: GroupCallStageTile) -> some View {
         GroupCallTileView(tile: tile, track: track(for: tile), intendedFront: callManager.isUsingFrontCamera)
             .contentShape(Rectangle())
-            .onTapGesture { choose(.tile(tile.id)) }
+            .onTapGesture { tapTile(tile) }
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "call.group.spotlight.hint", defaultValue: "Touchez pour mettre à la une", bundle: .main))
             .accessibilityAction { choose(.tile(tile.id)) }
@@ -219,12 +229,18 @@ struct GroupCallStageView: View {
         )
         .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
         .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
-        .onTapGesture(count: 2) {
-            guard isScreenShare else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { zoom = 1 }
-        }
+        // #8735 — le double toucher n'existe que pour un écran partagé : posé
+        // partout, il faisait attendre CHAQUE toucher simple (rallumer les
+        // commandes) le délai d'un éventuel second toucher.
+        .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
         .onTapGesture { onStageTap() }
         .overlay(alignment: .topTrailing) { spotlightControls.padding(8) }
+    }
+
+    private var zoomResetTap: some Gesture {
+        TapGesture(count: 2).onEnded {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { zoom = 1 }
+        }
     }
 
     private var zoomGesture: some Gesture {

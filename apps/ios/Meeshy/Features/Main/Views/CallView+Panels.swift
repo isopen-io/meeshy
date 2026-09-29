@@ -102,6 +102,37 @@ extension CallView {
         }
     }
 
+    /// #8737 — les participants qui accompagnent mon image en mode Effets : la
+    /// grille en groupe, moi et l'autre en duo, dans la même forme de tuile.
+    var effectsCompanionTiles: [GroupCallStageTile] {
+        guard isGroupStage else {
+            return CallEffectsCompanionRule.duoTiles(
+                local: CallEffectsDuoPeer(
+                    userId: AuthManager.shared.currentUser?.id,
+                    name: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main),
+                    avatarURL: nil,
+                    isVideoOn: callManager.isVideoEnabled && callManager.hasLocalVideoTrack,
+                    isMicMuted: callManager.isMuted
+                ),
+                remote: CallEffectsDuoPeer(
+                    userId: callManager.remoteUserId,
+                    name: callManager.remoteUsername ?? remoteProfile?.displayName ?? "",
+                    avatarURL: remoteProfile?.avatar,
+                    isVideoOn: callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled,
+                    isMicMuted: !callManager.isRemoteAudioEnabled
+                )
+            )
+        }
+        return GroupCallStage.tiles(mesh: mesh, callManager: callManager)
+    }
+
+    func effectsTrack(for tile: GroupCallStageTile) -> Any? {
+        guard isGroupStage else {
+            return tile.isLocal ? callManager.localVideoTrack : callManager.remoteVideoTrack
+        }
+        return GroupCallStage.track(for: tile, mesh: mesh, callManager: callManager)
+    }
+
     var myImageCaptureSubjects: [CallCaptureSubject] { [myImageCaptureSubject] }
 
     var myImageCaptureTracks: [String: Any] {

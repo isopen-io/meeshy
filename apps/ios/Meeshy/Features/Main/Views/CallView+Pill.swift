@@ -10,11 +10,6 @@ import MeeshyUI
 // rangées, jamais empilé. La conversation n'est pas une action : sa seule
 // porte est l'en-tête (#8436).
 
-struct AutoHideKey: Equatable {
-    let isVisible: Bool
-    let layer: CallScreenLayer
-}
-
 enum CallControlsCopy {
     static var more: String {
         String(localized: "call.control.more", defaultValue: "Plus d'actions", bundle: .main)

@@ -14,6 +14,9 @@ extension CallView {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 VStack(spacing: 14) {
+                    if mode == .effects {
+                        effectsCompanions
+                    }
                     if showTranscript {
                         captionsBand(hasOwnGlass: true, opensJournal: false)
                             .padding(.horizontal, 16)
@@ -39,6 +42,17 @@ extension CallView {
         case .montage:
             CallMontageLiveStage(capture: capture)
         }
+    }
+
+    /// #8737 — les autres restent visibles pendant qu'on applique un effet. Posé
+    /// dans la pile des commandes, le bloc prend la bande libre au-dessus d'elles.
+    private var effectsCompanions: some View {
+        CallEffectsCompanionStrip(
+            tiles: effectsCompanionTiles,
+            track: { effectsTrack(for: $0) },
+            intendedFront: callManager.isUsingFrontCamera,
+            topInset: Self.chromeTopInset
+        )
     }
 
     @ViewBuilder
