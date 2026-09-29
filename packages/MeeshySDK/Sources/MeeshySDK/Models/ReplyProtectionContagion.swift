@@ -96,13 +96,12 @@ public extension MessageProtectionIntent {
     /// L'intention du composeur après contagion par le message cité.
     ///
     /// Même règle que `ReplyProtectionContagion.contaminate`, exprimée dans la
-    /// forme que le composeur manipule. Une seule différence, imposée par
-    /// l'invariant de l'intention (flou et vue unique EXCLUSIFS, #7667) : un
-    /// flou IMPOSÉ ne pouvant pas s'éteindre, c'est la vue unique demandée qui
-    /// tombe.
+    /// forme que le composeur manipule. Flou et vue unique, EXCLUSIFS au choix
+    /// de l'auteur (#7667), COHABITENT quand le flou est imposé : la vue unique
+    /// ne se transmet pas mais reste un choix libre de la réponse (#8567,
+    /// directive porteur 2026-09-29), et la réponse porte les deux bits.
     func contaminated(by imposed: ReplyProtectionContagion.Imposed) -> MessageProtectionIntent {
         guard !imposed.isEmpty else { return self }
-        let keepsViewOnce = isViewOnce && !imposed.blurred
         let durationSeconds: Int?
         let afterRead: Bool
         switch imposed.ephemeral {
@@ -120,8 +119,9 @@ public extension MessageProtectionIntent {
             ephemeralDurationSeconds: durationSeconds,
             ephemeralAfterRead: afterRead,
             isBlurred: isBlurred || imposed.blurred,
-            isViewOnce: keepsViewOnce,
-            maxViewOnceCount: keepsViewOnce ? maxViewOnceCount : nil
+            isViewOnce: isViewOnce,
+            maxViewOnceCount: isViewOnce ? maxViewOnceCount : nil,
+            veilsMayCombine: ()
         )
     }
 }

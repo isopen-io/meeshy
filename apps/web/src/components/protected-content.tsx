@@ -16,10 +16,11 @@ import {
   settleFog,
   showsAffordance,
   surrogateOf,
+  viewOnceOpeningOf,
   type ProtectionKind,
   type RevealPhase,
 } from '@/lib/reading-mode/protection';
-import { useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
+import { RevealPhaseChannel, useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
 import type { Attachment } from '@/lib/api/types';
 import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -53,6 +54,7 @@ export function ProtectedContent({
   messageId,
   kind,
   isViewOnce,
+  isBlurred = false,
   contentLength,
   attachments,
   surface,
@@ -66,6 +68,13 @@ export function ProtectedContent({
   readonly messageId: string;
   readonly kind: ProtectionKind;
   readonly isViewOnce: boolean;
+  /**
+   * LE FLOU D'UNE VUE UNIQUE (#8567) — lu à l'OUVERTURE seulement : au repos,
+   * la puce de la vue unique garde la priorité (`protectionOf`). Ouvert, un
+   * TEXTE flouté reste voilé ; une pièce s'ouvre en plein écran, en clair
+   * (`viewOnceOpeningOf`).
+   */
+  readonly isBlurred?: boolean;
   readonly contentLength: number;
   /**
    * LES PIÈCES DU MESSAGE — l'OBJET, plus seulement leur nombre (#7020).
@@ -147,9 +156,15 @@ export function ProtectedContent({
    * vue unique déjà ouverte annonce `consumed` sans qu’aucun geste n’ait eu lieu.
    */
   const publishPhase = useRevealPhasePublisher();
+  /* LE VOILE D'UNE VUE UNIQUE FLOUTÉE OUVERTE (#8567) tient sa propre phase ;
+     tant que la fenêtre est ouverte, c'est elle que la rangée dit — elle dit
+     « masqué » tant que le flou n'est pas levé. */
+  const [openedVeil, setOpenedVeil] = useState<RevealPhase | null>(null);
+  const publishOpenedVeil = useCallback((_messageId: string, veilPhase: RevealPhase) => setOpenedVeil(veilPhase), []);
+  const publishedPhase = phase.phase === 'revealed' && openedVeil !== null ? openedVeil : phase;
   useEffect(() => {
-    publishPhase(messageId, phase);
-  }, [publishPhase, messageId, phase]);
+    publishPhase(messageId, publishedPhase);
+  }, [publishPhase, messageId, publishedPhase]);
 
   const attachmentCount = attachments?.length ?? 0;
   const [pending, setPending] = useState(false);
@@ -229,6 +244,7 @@ export function ProtectedContent({
     if (phase.phase !== 'consumed' || frozen === null) return;
     void purgeViewOnceMedia(frozen.urls);
     setFrozen(null);
+    setOpenedVeil(null);
   }, [phase, frozen]);
 
   /**
@@ -335,7 +351,8 @@ export function ProtectedContent({
 
   if (isViewOnceKind(kind)) {
     if (rendersContent(kind, phase) && frozen !== null) {
-      if (frozen.media) {
+      const opening = viewOnceOpeningOf({ isBlurred, attachmentCount: frozen.media ? 1 : 0 });
+      if (opening === 'fullscreen') {
         return (
           <>
             <ViewOnceChip state="viewing" />
@@ -345,7 +362,24 @@ export function ProtectedContent({
       }
       return (
         <ViewOnceTextWindow fogging={phase.phase === 'fogging'} onClose={() => closeOpened(false)}>
-          {frozen.children}
+          {opening === 'veiled-text' ? (
+            <RevealPhaseChannel publish={publishOpenedVeil}>
+              <ProtectedContent
+                messageId={messageId}
+                kind="veiled"
+                isViewOnce={false}
+                contentLength={contentLength}
+                attachments={undefined}
+                surface={surface}
+                isMine={isMine}
+                now={now}
+              >
+                {frozen.children}
+              </ProtectedContent>
+            </RevealPhaseChannel>
+          ) : (
+            frozen.children
+          )}
           <ProtectedRest>
             <ViewOnceChip state="opened" />
           </ProtectedRest>
