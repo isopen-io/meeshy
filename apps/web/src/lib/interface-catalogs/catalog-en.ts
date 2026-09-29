@@ -31,6 +31,7 @@ import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
+import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 
 const en = {
@@ -1031,14 +1032,6 @@ const en = {
   'comment.send.error': 'Your comment couldn’t be posted.',
   'comment.send.pending': 'Comment not confirmed — offline',
   'comment.send.empty': 'Write something before sending.',
-  'comments.action.like': 'Like',
-  'comments.action.unlike': 'Unlike',
-  'comments.action.edit': 'Edit',
-  'comments.action.delete': 'Delete',
-  'comments.action.delete.confirm': 'Confirm',
-  'comments.edit.label': 'Edit comment',
-  'comments.edit.save': 'Save',
-  'comments.edit.cancel': 'Cancel',
   'comment.like.error': 'Your like wasn’t saved.',
   'comment.edit.error': 'Your edit wasn’t saved.',
   'comment.delete.error': 'The comment couldn’t be deleted.',
@@ -1171,6 +1164,7 @@ const en = {
   ...enStoriesMine,
   ...enContactCard,
   ...enQuote,
+  ...enCommentRow,
   ...enContactDiscovery,
 } satisfies InterfaceCatalog;
 
