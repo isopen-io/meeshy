@@ -221,6 +221,9 @@ extension AuthManager {
         // son cache et son point de reprise mis de côté jusqu'à son retour ;
         // un compte déconnecté (jetons effacés ci-dessus) les perd.
         await CacheAccountBinder.shared.bind(nil).value
+        // sync-04 — le point de reprise vient d'être mis de côté avec le cache
+        // (ou effacé avec lui) : plus rien du compte quitté ne reste global.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
 
         // T15b — seconde purge HTTP (un store disque bufferisé peut atterrir
         // après la première).
