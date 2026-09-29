@@ -17,7 +17,12 @@ final class CallWindowPresenterTests: XCTestCase {
     private final class RecordingHosting: CallWindowHosting {
         var shown = 0
         var hidden = 0
-        func show(_ manager: CallManager) { shown += 1 }
+        var hasForegroundScene = true
+        func show(_ manager: CallManager) -> Bool {
+            guard hasForegroundScene else { return false }
+            shown += 1
+            return true
+        }
         func hide() { hidden += 1 }
     }
 
@@ -99,6 +104,32 @@ final class CallWindowPresenterTests: XCTestCase {
         XCTAssertEqual(hosting.hidden, 1)
     }
 
+    func test_apply_withoutForegroundScene_showsTheWindowWhenTheSceneActivates() {
+        let (sut, hosting) = makeSUT()
+        hosting.hasForegroundScene = false
+
+        sut.apply(manager: CallManager.shared, visible: true)
+        XCTAssertFalse(sut.isShowing, "Sans scène au premier plan, aucune fenêtre ne peut se poser.")
+
+        hosting.hasForegroundScene = true
+        sut.retryPendingShow()
+
+        XCTAssertTrue(sut.isShowing, "L'appel qui sonnait en arrière-plan se montre au retour de l'app.")
+        XCTAssertEqual(hosting.shown, 1)
+    }
+
+    func test_retryPendingShow_afterTheCallWasReduced_showsNothing() {
+        let (sut, hosting) = makeSUT()
+        hosting.hasForegroundScene = false
+        sut.apply(manager: CallManager.shared, visible: true)
+        sut.apply(manager: CallManager.shared, visible: false)
+
+        hosting.hasForegroundScene = true
+        sut.retryPendingShow()
+
+        XCTAssertEqual(hosting.shown, 0)
+    }
+
     // MARK: - Le câblage
 
     func test_callPresentationLayer_neverPresentsTheCallAsAModalCover() throws {
@@ -114,6 +145,14 @@ final class CallWindowPresenterTests: XCTestCase {
         XCTAssertTrue(
             source.contains("CallPlaybackInterruptionBinding.shared.bind("),
             "La racine doit brancher le gel des lecteurs pendant l'appel."
+        )
+    }
+
+    func test_callWindow_passesTheObservedCallManagerIntoCallView() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootLayers/CallWindowPresenter.swift"))
+        XCTAssertTrue(
+            source.contains("CallView(callManager: manager, mesh: .shared)"),
+            "La fenêtre d'appel remet à `CallView` la pile qu'elle observe, jamais un défaut `.shared`."
         )
     }
 }
