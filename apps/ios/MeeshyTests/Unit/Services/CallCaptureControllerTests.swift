@@ -289,8 +289,10 @@ final class CallCaptureControllerTests: XCTestCase {
 
         for _ in 0 ..< 3 { await sut.recordFrame(style: nil) }
 
+        // La boucle lancée par `startRecording` enregistre aussi : le fil en
+        // reçoit AU MOINS trois, le contrôleur jamais aucune.
         XCTAssertEqual(controllerChanges, 0)
-        XCTAssertEqual(feedChanges, 3)
+        XCTAssertGreaterThanOrEqual(feedChanges, 3)
         controllerWatch.cancel()
         feedWatch.cancel()
         sut.stop()

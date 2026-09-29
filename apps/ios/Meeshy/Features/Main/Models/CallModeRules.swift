@@ -84,8 +84,7 @@ enum CallModeGestureRule {
         !hasSeenHint && !isRecording
     }
 
-    static func clock(_ elapsed: TimeInterval) -> String {
-        let seconds = elapsed.isFinite ? max(0, Int(elapsed)) : 0
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    static func clock(_ elapsed: TimeInterval, locale: Locale = .current) -> String {
+        LocalizedNumber.duration(seconds: elapsed, locale: locale)
     }
 }
