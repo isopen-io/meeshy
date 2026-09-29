@@ -58,6 +58,22 @@ const pt = {
   'callStudio.companions.label': 'Participantes da chamada',
   'callStudio.companions.more': 'Mais {count} participantes',
   'callStudio.companions.move': 'Mudar de lado',
+  'callStudio.frames.moods': 'Ambientes',
+  'callStudio.frames.mood.classics': 'Clássicos',
+  'callStudio.frames.mood.signature': 'Assinatura',
+  'callStudio.frames.mood.distingue': 'Distinto',
+  'callStudio.frames.mood.elegant': 'Elegante',
+  'callStudio.frames.mood.jovial': 'Alegre',
+  'callStudio.frames.mood.deconnecte': 'Desconectado',
+  'callStudio.frames.mood.corporate': 'Corporativo',
+  'callStudio.frames.mood.fantastique': 'Fantástico',
+  'callStudio.frames.mood.futuriste': 'Futurista',
+  'callStudio.frames.mood.glauque': 'Sombrio',
+  'callStudio.frames.mood.hors-norme': 'Fora do comum',
+  'callStudio.frames.mood.morbide': 'Macabro',
+  'callStudio.frames.mood.feerique': 'Encantado',
+  'callStudio.mode.pickFrame': 'Escolher uma moldura',
+  'callStudio.capture.framePreview': 'Pré-visualização da moldura {name}',
 } satisfies CallStudioCatalog;
 
 export default pt;

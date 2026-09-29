@@ -32,6 +32,8 @@ export function StreamVideo({
   fit = 'cover',
   zoom = 1,
   videoRef,
+  member,
+  self = false,
 }: {
   readonly stream: MediaStream | null;
   readonly mirrored: boolean;
@@ -42,6 +44,10 @@ export function StreamVideo({
   readonly zoom?: number;
   /** L'élément tenu par qui le NOMME (#8737) : la capture du mode Effets lit MA vidéo par lui, jamais en fouillant l'écran. */
   readonly videoRef?: MutableRefObject<HTMLVideoElement | null>;
+  /** À QUI est cette vidéo (#8743) : le membre montré — la capture pose chaque visage dans SA case d'un cadre. */
+  readonly member?: string | undefined;
+  /** Ma propre vidéo. */
+  readonly self?: boolean;
 }) {
   const ref = useSrcObject<HTMLVideoElement>(stream, videoRef);
   const transform = [mirrored ? 'scaleX(-1)' : '', zoom > 1 ? `scale(${zoom})` : ''].filter((part) => part !== '').join(' ');
@@ -55,6 +61,8 @@ export function StreamVideo({
       className={className}
       style={{ objectFit: fit, transform: transform === '' ? undefined : transform, backgroundColor: '#000' }}
       data-call-stream={fit}
+      data-call-member={member}
+      {...(self ? { 'data-call-self': '' } : {})}
       {...(mirrored ? { 'data-call-mirrored': '' } : {})}
     />
   );

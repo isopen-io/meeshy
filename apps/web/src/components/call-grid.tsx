@@ -86,7 +86,7 @@ function Tile({
   const link = member.link === 'connected' ? null : ringing ? translateCallControls(language, 'callControls.ringing') : translate(language, member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting');
   const body = (
     <>
-      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={ringing} />}
+      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} member={member.userId} /> : <Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={ringing} />}
       <NameLabel name={member.name} muted={member.micMuted} suffix={link} />
     </>
   );
@@ -124,7 +124,7 @@ function SelfTile({ self, language, portrait }: { readonly self: CallGridProps['
   const you = translate(language, 'call.you');
   return (
     <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2" style={{ background: TILE, borderColor: SELF_SPEAKER_COLOR }} data-call-tile-self="">
-      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} /> : <Portrait name={you} avatar={null} size={portrait} pulse={false} />}
+      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={you} avatar={null} size={portrait} pulse={false} />}
       <NameLabel name={you} muted={false} suffix={null} />
     </div>
   );
@@ -134,7 +134,7 @@ function SharedScreen({ member, stream, language }: { readonly member: CallMembe
   const title = translate(language, 'call.screen.of', { name: member.name });
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden rounded-card" data-call-shared-screen="">
-      <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={title} />
+      <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={title} member={member.userId} />
       <div className="absolute bottom-2 right-2 overflow-hidden rounded-full border-2" style={{ borderColor: speakerColor(member.userId) }} data-call-screen-medallion="">
         <Avatar initials={initialsOf(member.name)} color={colorForName(member.name)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
       </div>

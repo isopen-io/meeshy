@@ -163,6 +163,8 @@ const loadMontageMode = once(() =>
   }),
 );
 const CallMontageMode = lazy(loadMontageMode);
+/* L'atelier des cadres de capture (#8743) : son chunk à lui, que le mode Montage charge À SON ENTRÉE, jamais préchargé avec l'appel. */
+const loadFrameStudio = () => import('@/lib/calls/frames/frame-studio');
 const loadPanels = once(() => import('./call-control-panels'));
 const CallReactionPalette = lazy(() => loadPanels().then((module) => ({ default: module.CallReactionPalette })));
 const CallRecordChoice = lazy(() => loadPanels().then((module) => ({ default: module.CallRecordChoice })));
@@ -568,7 +570,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} />
     ) : null;
   /* Le fondu ne retire JAMAIS le doigt à un bouton encore visible (#8735) :
      rangées d'un toucher, les commandes deviennent `invisible` à la FIN du

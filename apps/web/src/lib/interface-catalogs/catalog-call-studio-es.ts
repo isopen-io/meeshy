@@ -58,6 +58,22 @@ const es = {
   'callStudio.companions.label': 'Participantes de la llamada',
   'callStudio.companions.more': '{count} participantes más',
   'callStudio.companions.move': 'Cambiar de lado',
+  'callStudio.frames.moods': 'Ambientes',
+  'callStudio.frames.mood.classics': 'Clásicos',
+  'callStudio.frames.mood.signature': 'Firma',
+  'callStudio.frames.mood.distingue': 'Distinguido',
+  'callStudio.frames.mood.elegant': 'Elegante',
+  'callStudio.frames.mood.jovial': 'Alegre',
+  'callStudio.frames.mood.deconnecte': 'Desconectado',
+  'callStudio.frames.mood.corporate': 'Corporativo',
+  'callStudio.frames.mood.fantastique': 'Fantástico',
+  'callStudio.frames.mood.futuriste': 'Futurista',
+  'callStudio.frames.mood.glauque': 'Siniestro',
+  'callStudio.frames.mood.hors-norme': 'Fuera de lo común',
+  'callStudio.frames.mood.morbide': 'Macabro',
+  'callStudio.frames.mood.feerique': 'Mágico',
+  'callStudio.mode.pickFrame': 'Elegir un marco',
+  'callStudio.capture.framePreview': 'Vista previa del marco {name}',
 } satisfies CallStudioCatalog;
 
 export default es;

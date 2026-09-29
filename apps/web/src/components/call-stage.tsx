@@ -108,10 +108,10 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   if (sharer === null) return null;
   return (
     <div className="absolute inset-0" data-call-shared-screen="">
-      <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} />
+      <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
       {call.cameraOn && !immersive ? (
         <div className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg" style={cornerTop} data-call-corner="">
-          <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" />
+          <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />
         </div>
       ) : null}
       <div className="absolute bottom-4 right-4 z-20" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }} data-call-chrome-fade="">
@@ -159,7 +159,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
     <div className="absolute inset-0">
       {mainOn ? (
         <div className="absolute inset-0 overflow-hidden">
-          <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? local.value : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
+          <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? local.value : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />
         </div>
       ) : (
         <div className="absolute inset-0 grid place-items-center">
@@ -198,7 +198,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
-            {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : local.value} className="size-full" /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+            {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : local.value} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
           </button>
           {rows?.camera ? (
             <SelfRowSlot group="camera" row={rows.camera} tile={tileBox}>

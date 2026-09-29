@@ -58,6 +58,22 @@ const it = {
   'callStudio.companions.label': 'Partecipanti alla chiamata',
   'callStudio.companions.more': 'Altri {count} partecipanti',
   'callStudio.companions.move': 'Sposta sull’altro lato',
+  'callStudio.frames.moods': 'Atmosfere',
+  'callStudio.frames.mood.classics': 'Classici',
+  'callStudio.frames.mood.signature': 'Firma',
+  'callStudio.frames.mood.distingue': 'Distinto',
+  'callStudio.frames.mood.elegant': 'Elegante',
+  'callStudio.frames.mood.jovial': 'Allegro',
+  'callStudio.frames.mood.deconnecte': 'Disconnesso',
+  'callStudio.frames.mood.corporate': 'Aziendale',
+  'callStudio.frames.mood.fantastique': 'Fantastico',
+  'callStudio.frames.mood.futuriste': 'Futuristico',
+  'callStudio.frames.mood.glauque': 'Cupo',
+  'callStudio.frames.mood.hors-norme': 'Fuori dal comune',
+  'callStudio.frames.mood.morbide': 'Macabro',
+  'callStudio.frames.mood.feerique': 'Fiabesco',
+  'callStudio.mode.pickFrame': 'Scegli una cornice',
+  'callStudio.capture.framePreview': 'Anteprima della cornice {name}',
 } satisfies CallStudioCatalog;
 
 export default it;

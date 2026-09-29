@@ -58,6 +58,22 @@ const en = {
   'callStudio.companions.label': 'Call participants',
   'callStudio.companions.more': '{count} more participants',
   'callStudio.companions.move': 'Move to the other side',
+  'callStudio.frames.moods': 'Moods',
+  'callStudio.frames.mood.classics': 'Classics',
+  'callStudio.frames.mood.signature': 'Signature',
+  'callStudio.frames.mood.distingue': 'Distinguished',
+  'callStudio.frames.mood.elegant': 'Elegant',
+  'callStudio.frames.mood.jovial': 'Cheerful',
+  'callStudio.frames.mood.deconnecte': 'Unplugged',
+  'callStudio.frames.mood.corporate': 'Corporate',
+  'callStudio.frames.mood.fantastique': 'Fantasy',
+  'callStudio.frames.mood.futuriste': 'Futuristic',
+  'callStudio.frames.mood.glauque': 'Eerie',
+  'callStudio.frames.mood.hors-norme': 'Offbeat',
+  'callStudio.frames.mood.morbide': 'Macabre',
+  'callStudio.frames.mood.feerique': 'Enchanted',
+  'callStudio.mode.pickFrame': 'Choose a frame',
+  'callStudio.capture.framePreview': 'Preview of the {name} frame',
 } satisfies CallStudioCatalog;
 
 export default en;

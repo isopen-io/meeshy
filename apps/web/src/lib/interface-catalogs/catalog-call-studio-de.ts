@@ -58,6 +58,22 @@ const de = {
   'callStudio.companions.label': 'Teilnehmende am Anruf',
   'callStudio.companions.more': '{count} weitere Teilnehmende',
   'callStudio.companions.move': 'Auf die andere Seite verschieben',
+  'callStudio.frames.moods': 'Stimmungen',
+  'callStudio.frames.mood.classics': 'Klassiker',
+  'callStudio.frames.mood.signature': 'Signatur',
+  'callStudio.frames.mood.distingue': 'Vornehm',
+  'callStudio.frames.mood.elegant': 'Elegant',
+  'callStudio.frames.mood.jovial': 'Fröhlich',
+  'callStudio.frames.mood.deconnecte': 'Abgeschaltet',
+  'callStudio.frames.mood.corporate': 'Business',
+  'callStudio.frames.mood.fantastique': 'Fantastisch',
+  'callStudio.frames.mood.futuriste': 'Futuristisch',
+  'callStudio.frames.mood.glauque': 'Düster',
+  'callStudio.frames.mood.hors-norme': 'Außergewöhnlich',
+  'callStudio.frames.mood.morbide': 'Makaber',
+  'callStudio.frames.mood.feerique': 'Märchenhaft',
+  'callStudio.mode.pickFrame': 'Rahmen wählen',
+  'callStudio.capture.framePreview': 'Vorschau des Rahmens {name}',
 } satisfies CallStudioCatalog;
 
 export default de;

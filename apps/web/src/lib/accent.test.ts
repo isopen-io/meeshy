@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { inkOnAccent, withAccent } from './accent';
+import type { Conversation } from '@/lib/api/types';
+
+import { accentOf, accentPaletteOf, inkOnAccent, withAccent } from './accent';
 
 /**
  * L'ENCRE LISIBLE SUR L'ACCENT (revue #5774) — le défaut mesuré : le bouton
@@ -66,5 +68,15 @@ describe('withAccent — l encre voyage AVEC l accent', () => {
     const style = withAccent('#0F0C29', { color: 'red' }) as Record<string, string>;
     expect(style.color).toBe('red');
     expect(style['--accent-ink']).toBe('#FFFFFF');
+  });
+});
+
+describe('accentPaletteOf — la palette ENTIÈRE de la conversation, dont `accentOf` est le primaire (#8743)', () => {
+  test('le primaire est celui que le reste de l’application peint ; le secondaire en découle', () => {
+    const conversation = { id: 'c1', title: 'Les Copains', type: 'group' } as unknown as Conversation;
+    const palette = accentPaletteOf(conversation);
+    expect(palette.primary).toBe(accentOf(conversation));
+    expect(palette.secondary).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    expect(palette.secondary).not.toBe(palette.primary);
   });
 });
