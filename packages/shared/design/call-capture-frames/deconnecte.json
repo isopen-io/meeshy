@@ -462,8 +462,8 @@
           "arrangement": "column",
           "margin": 0.07,
           "gap": 0.05,
-          "top": 0.18,
-          "bottom": 0.14
+          "top": 0.08,
+          "bottom": 0.2
         },
         "slot": {
           "shape": "arch",
@@ -507,22 +507,29 @@
           "show": "both",
           "style": "caption",
           "font": "handwriting",
-          "color": "#FFF8EE"
+          "color": "#FFF8EE",
+          "fill": "#3B2F2ACC"
         },
         "title": {
           "source": "names",
           "font": "handwriting",
           "color": "#3B2F2A",
-          "place": "top",
+          "place": "bottom",
           "size": "l"
         },
         "subtitle": {
           "source": "date",
           "font": "typewriter",
           "color": "#3B2F2A",
-          "place": "top",
+          "place": "bottom",
           "size": "s",
           "case": "upper"
+        },
+        "border": {
+          "kind": "polaroid",
+          "color": "#FFFDF7",
+          "width": 0.03,
+          "inset": 0
         }
       },
       "variants": {

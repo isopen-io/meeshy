@@ -431,7 +431,7 @@
           "show": "handle",
           "style": "caption",
           "font": "italic",
-          "color": "#F5F0E6"
+          "color": "#1B2A41"
         },
         "title": {
           "source": "date",

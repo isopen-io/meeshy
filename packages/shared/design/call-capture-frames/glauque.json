@@ -213,7 +213,7 @@
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "grid",
+            "arrangement": "hero",
             "margin": 0.035,
             "gap": 0.006,
             "top": 0.08,
@@ -378,7 +378,7 @@
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "scatter",
+            "arrangement": "tiers",
             "margin": 0.06,
             "gap": 0.02,
             "top": 0.12,
@@ -474,10 +474,18 @@
         }
       },
       "variants": {
-        "comite": {},
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.2,
+            "bottom": 0.12
+          }
+        },
         "groupe": {
           "layout": {
-            "arrangement": "tiers",
+            "arrangement": "grid",
             "margin": 0.07,
             "gap": 0.03,
             "top": 0.18,

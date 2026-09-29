@@ -187,7 +187,7 @@
             "#312E81",
             "#4338CA",
             "#6366F1",
-            "#22D3EE"
+            "#0E7490"
           ],
           "angle": 135
         },
@@ -235,7 +235,7 @@
         "subtitle": {
           "source": "date",
           "font": "bold",
-          "color": "#E0E7FFCC",
+          "color": "#E0E7FF",
           "place": "top",
           "size": "s"
         }
@@ -511,7 +511,7 @@
           "color": "#E0E7FF"
         },
         "title": {
-          "source": "names",
+          "source": "brand",
           "font": "bubble",
           "color": "#FFFFFF",
           "place": "top",

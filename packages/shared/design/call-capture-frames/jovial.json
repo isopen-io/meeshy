@@ -41,10 +41,10 @@
             "layer": "back"
           },
           {
-            "kind": "confetti",
+            "kind": "ribbon",
             "color": "#06D6A0",
             "density": "low",
-            "layer": "back"
+            "layer": "front"
           },
           {
             "kind": "sparkles",
@@ -65,7 +65,7 @@
           "style": "badge",
           "font": "bubble",
           "color": "#FFFFFF",
-          "fill": "#EF476F"
+          "fill": "#D6335A"
         },
         "title": {
           "source": "group",
@@ -186,10 +186,10 @@
               "layer": "back"
             },
             {
-              "kind": "confetti",
+              "kind": "ribbon",
               "color": "#EF476F",
-              "density": "mid",
-              "layer": "back"
+              "density": "low",
+              "layer": "front"
             }
           ],
           "brand": {
@@ -230,45 +230,45 @@
           "bottom": 0.11
         },
         "slot": {
-          "shape": "circle",
+          "shape": "ticket",
+          "radius": 0.08,
           "stroke": {
-            "color": "#EF476F",
-            "width": 0.04
+            "color": "#073B4C",
+            "width": 0.012
           },
-          "double": true,
           "shadow": true,
           "tilt": "none",
-          "tone": "color"
+          "tone": "warm"
         },
         "background": {
-          "kind": "radial",
+          "kind": "linear",
           "colors": [
-            "#FFE29A",
-            "#FFD166",
-            "#F6A33B"
-          ]
+            "#FFF4DC",
+            "#FFE3AE"
+          ],
+          "angle": 0
         },
         "pattern": {
-          "kind": "sunburst",
-          "color": "#FFFFFF",
-          "opacity": 0.28
+          "kind": "stripes",
+          "color": "#EF476F",
+          "opacity": 0.14
         },
         "border": {
-          "kind": "bulbs",
-          "color": "#FFF8E7",
-          "width": 0.03,
-          "inset": 0.02
+          "kind": "ticket",
+          "color": "#EF476F",
+          "width": 0.012,
+          "inset": 0.03
         },
         "ornaments": [
           {
             "kind": "notes",
-            "color": "#073B4C",
+            "color": "#118AB2",
             "density": "low",
             "layer": "back"
           },
           {
             "kind": "stars",
-            "color": "#FFFFFF",
+            "color": "#FFD166",
             "density": "low",
             "layer": "front"
           }
@@ -293,7 +293,7 @@
           "color": "#073B4C",
           "place": "top",
           "size": "l",
-          "effect": "outline",
+          "effect": "shadow",
           "case": "upper"
         }
       },
@@ -307,15 +307,15 @@
             "bottom": 0.12
           },
           "slot": {
-            "shape": "circle",
+            "shape": "ticket",
+            "radius": 0.08,
             "stroke": {
-              "color": "#EF476F",
-              "width": 0.045
+              "color": "#073B4C",
+              "width": 0.014
             },
-            "double": true,
             "shadow": true,
             "tilt": "gentle",
-            "tone": "color"
+            "tone": "warm"
           },
           "title": {
             "source": "names",
@@ -323,13 +323,13 @@
             "color": "#073B4C",
             "place": "top",
             "size": "l",
-            "effect": "outline",
+            "effect": "shadow",
             "case": "upper"
           },
           "subtitle": {
             "source": "date",
             "font": "brush",
-            "color": "#EF476F",
+            "color": "#B5294E",
             "place": "top",
             "size": "s"
           }
@@ -354,11 +354,11 @@
           "slot": {
             "shape": "hex",
             "stroke": {
-              "color": "#EF476F",
-              "width": 0.03
+              "color": "#073B4C",
+              "width": 0.01
             },
             "tilt": "none",
-            "tone": "color"
+            "tone": "warm"
           },
           "names": {
             "show": "handle",
@@ -376,13 +376,14 @@
             "bottom": 0.14
           },
           "slot": {
-            "shape": "circle",
+            "shape": "ticket",
+            "radius": 0.06,
             "stroke": {
-              "color": "#EF476F",
-              "width": 0.03
+              "color": "#073B4C",
+              "width": 0.008
             },
             "tilt": "none",
-            "tone": "color"
+            "tone": "warm"
           },
           "names": {
             "show": "handle",
@@ -396,7 +397,7 @@
             "color": "#073B4C",
             "place": "top",
             "size": "m",
-            "effect": "outline",
+            "effect": "shadow",
             "case": "upper"
           }
         }
@@ -502,7 +503,7 @@
           "subtitle": {
             "source": "date",
             "font": "bubble",
-            "color": "#EF476F",
+            "color": "#B5294E",
             "place": "top",
             "size": "s"
           }
@@ -556,7 +557,7 @@
             "style": "badge",
             "font": "bubble",
             "color": "#FFFFFF",
-            "fill": "#118AB2"
+            "fill": "#0B6E8F"
           }
         }
       }

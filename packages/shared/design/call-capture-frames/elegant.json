@@ -410,7 +410,21 @@
             "gap": 0.03,
             "top": 0.16,
             "bottom": 0.12
-          }
+          },
+          "ornaments": [
+            {
+              "kind": "candles",
+              "color": "#F3E3B5",
+              "density": "low",
+              "layer": "front"
+            },
+            {
+              "kind": "crown",
+              "color": "#D4AF37",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
         },
         "groupe": {
           "layout": {

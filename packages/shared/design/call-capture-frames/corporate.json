@@ -305,7 +305,7 @@
         "brand": {
           "mark": "logo",
           "place": "top-right",
-          "color": "#14B8A6",
+          "color": "#0F766E",
           "size": "m"
         },
         "names": {
@@ -351,7 +351,7 @@
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "grid",
+            "arrangement": "mosaic",
             "margin": 0.06,
             "gap": 0.025,
             "top": 0.14,
