@@ -44,7 +44,7 @@ import { verifierCible, type TypeSignale } from './target';
  */
 
 const creerSchema = z.object({
-  reportedType: z.enum(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound']),
+  reportedType: z.enum(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound', 'comment']),
   reportedEntityId: z.string().min(1, "ID de l'entite requis"),
   reportType: z.enum([
     'spam',

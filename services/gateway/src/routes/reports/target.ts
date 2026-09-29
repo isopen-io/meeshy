@@ -33,7 +33,8 @@ export type TypeSignale =
   | 'community'
   | 'post'
   | 'story'
-  | 'sound';
+  | 'sound'
+  | 'comment';
 
 export type VerdictCible = { atteignable: true } | { atteignable: false; raison: 'introuvable' | 'inaccessible' };
 
@@ -170,6 +171,21 @@ export async function verifierCible(options: {
         viewerId
       );
       return vu ? ATTEIGNABLE : INACCESSIBLE;
+    }
+
+    /**
+     * UN COMMENTAIRE (#8734, #8709) s'atteint par sa PUBLICATION : même loi
+     * de lecture que le post, rejouée sur son `postId` — jamais une seconde.
+     * Son propre commentaire ne se signale pas, comme son propre compte.
+     */
+    case 'comment': {
+      const commentaire = await prisma.postComment.findUnique({
+        where: { id: entityId },
+        select: { postId: true, authorId: true, deletedAt: true },
+      });
+      if (!commentaire || commentaire.deletedAt) return INTROUVABLE;
+      if (viewerId !== '' && commentaire.authorId === viewerId) return INACCESSIBLE;
+      return verifierCible({ prisma, signalant, type: 'post', entityId: commentaire.postId });
     }
 
     case 'community': {

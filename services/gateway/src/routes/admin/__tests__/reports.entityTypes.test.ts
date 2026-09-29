@@ -26,7 +26,7 @@ describe('les types signalables — un site, et un seul', () => {
 
   const ligne = siteUnique.split('\n').find((l) => l.includes('reportedType: z.enum'));
 
-  it.each(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound'])(
+  it.each(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound', 'comment'])(
     'test_createReportSchema_accepts_%s',
     (type) => {
       expect(ligne).toBeDefined();

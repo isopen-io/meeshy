@@ -57,6 +57,7 @@ const base = {
   participe: true,
   utilisateur: null as { id: string } | null,
   post: null as { authorId: string; visibility: string; visibilityUserIds: string[]; deletedAt: Date | null } | null,
+  commentaire: null as { postId: string; authorId: string; deletedAt: Date | null } | null,
   // Lignes `FriendRequest` pour la porte de signalement d'un post (#4866) —
   // le double HONORE le `where` réel d'`amitieAcceptee`, jamais un booléen.
   demandesAmitie: [] as ReadonlyArray<Record<string, unknown>>,
@@ -68,6 +69,7 @@ function prismaDouble() {
     participant: { findFirst: async () => (base.participe ? { id: 'p1' } : null) },
     user: { findUnique: async () => base.utilisateur },
     post: { findUnique: async () => base.post },
+    postComment: { findUnique: async () => base.commentaire },
     friendRequest: { findFirst: (args?: unknown) => findFirstHonouringWhere(base.demandesAmitie)(args) },
   } as any;
 }
@@ -289,6 +291,61 @@ describe("POST /reports — signaler un post FRIENDS respecte la loi d'amitié (
 
     expect(res.statusCode).toBe(201);
     expect(createReport).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+});
+
+describe('POST /reports — signaler un COMMENTAIRE (#8734, #8709)', () => {
+  const AUTHOR_ID = '507f1f77bcf86cd799439055';
+  const POST_ID = '507f1f77bcf86cd799439066';
+  const COMMENT_ID = '507f1f77bcf86cd799439088';
+  const CORPS_COMMENTAIRE = { reportedType: 'comment', reportedEntityId: COMMENT_ID, reportType: 'harassment' } as const;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    base.post = { authorId: AUTHOR_ID, visibility: 'PUBLIC', visibilityUserIds: [], deletedAt: null };
+    base.commentaire = { postId: POST_ID, authorId: AUTHOR_ID, deletedAt: null };
+    base.demandesAmitie = [];
+    createReport.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+  });
+
+  it('accepte le commentaire d’un autre sur une publication que le signalant peut lire', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS_COMMENTAIRE });
+
+    expect(res.statusCode).toBe(201);
+    expect(createReport).toHaveBeenCalledWith(expect.objectContaining({ reportedType: 'comment', reportedEntityId: COMMENT_ID }));
+
+    await app.close();
+  });
+
+  it('refuse un commentaire supprimé, ou dont la publication est hors de portée — même refus', async () => {
+    const app = await buildApp();
+
+    base.commentaire = { postId: POST_ID, authorId: AUTHOR_ID, deletedAt: new Date() };
+    const supprime = await app.inject({ method: 'POST', url: '/reports', payload: CORPS_COMMENTAIRE });
+
+    base.commentaire = { postId: POST_ID, authorId: AUTHOR_ID, deletedAt: null };
+    base.post = { authorId: AUTHOR_ID, visibility: 'FRIENDS', visibilityUserIds: [], deletedAt: null };
+    const horsDePortee = await app.inject({ method: 'POST', url: '/reports', payload: CORPS_COMMENTAIRE });
+
+    expect(supprime.statusCode).toBe(404);
+    expect(horsDePortee.statusCode).toBe(404);
+    expect(createReport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('refuse de signaler son PROPRE commentaire', async () => {
+    base.commentaire = { postId: POST_ID, authorId: USER_ID, deletedAt: null };
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS_COMMENTAIRE });
+
+    expect(res.statusCode).toBe(404);
+    expect(createReport).not.toHaveBeenCalled();
 
     await app.close();
   });
