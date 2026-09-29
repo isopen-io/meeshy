@@ -17,6 +17,12 @@ extension View {
             .adaptiveGlass(in: Circle(), tint: isActive ? tint.opacity(0.55) : nil, interactive: true)
     }
 
+    /// #8742 — une puce d'ambiance du Montage : la même capsule de verre
+    /// interactive, teintée quand elle est choisie.
+    func callChipGlass(isActive: Bool, tint: Color) -> some View {
+        adaptiveGlass(in: Capsule(), tint: isActive ? tint.opacity(0.55) : nil, interactive: true)
+    }
+
     /// Prominent red Liquid Glass circle for the hang-up button.
     func endCallGlass(diameter: CGFloat) -> some View {
         self
