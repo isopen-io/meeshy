@@ -350,7 +350,9 @@ export const callersIn = (contents, nsNames) => {
 // le catalogue ; passer ce site au catalogue ramène cette valeur à 333.
 // 333 → 332 (#8342, 2026-09-27) : `lib/api/after-read.ts` appelle désormais
 // `conversations.byIdMessagesAfterReadConsume` par le catalogue.
-const BASELINE_DEAD_ENTRIES = 332;
+// 332 → 331 (#8583, 2026-09-28) : les réponses d'un commentaire se chargent
+// par `posts.byPostIdCommentsByCommentIdReplies` (`lib/api/comment-replies.ts`).
+const BASELINE_DEAD_ENTRIES = 331;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

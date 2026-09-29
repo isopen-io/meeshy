@@ -531,7 +531,7 @@ emit({
  * miroir de `BackgroundSoundBadge.muteIconName` (`FeedSceneAutoplay.swift:186-200`)
  * -- jusqu'ici un trace RECOPIE a la main dans `scene-player.tsx`.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left'];
 
 emit({
   ids: FEED,

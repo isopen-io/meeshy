@@ -31,6 +31,7 @@ import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
+import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
 
 /**
@@ -1035,14 +1036,6 @@ const pt = {
   'comment.send.error': 'Não foi possível publicar o comentário.',
   'comment.send.pending': 'Comentário não confirmado — offline',
   'comment.send.empty': 'Escreva algo antes de enviar.',
-  'comments.action.like': 'Gostei',
-  'comments.action.unlike': 'Já não gosto',
-  'comments.action.edit': 'Editar',
-  'comments.action.delete': 'Eliminar',
-  'comments.action.delete.confirm': 'Confirmar',
-  'comments.edit.label': 'Editar comentário',
-  'comments.edit.save': 'Guardar',
-  'comments.edit.cancel': 'Cancelar',
   'comment.like.error': 'O «gostei» não foi guardado.',
   'comment.edit.error': 'A alteração não foi guardada.',
   'comment.delete.error': 'Não foi possível eliminar o comentário.',
@@ -1175,6 +1168,7 @@ const pt = {
   ...ptStoriesMine,
   ...ptContactCard,
   ...ptQuote,
+  ...ptCommentRow,
   ...ptContactDiscovery,
 } satisfies InterfaceCatalog;
 
