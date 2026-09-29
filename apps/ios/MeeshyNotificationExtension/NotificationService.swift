@@ -429,21 +429,34 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     ///
     /// This is a best-effort, fire-and-forget operation. Any failure is silently
     /// swallowed; the main app will fetch the message from the REST API on resume.
-    private static let sharedPool: DatabasePool? = {
-        guard let path = appGroupDatabasePath() else { return nil }
-        do {
-            // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
-            // the main app holds its own pool on this same file, and GRDB's
-            // default `.immediateError` busy mode would turn a cross-process
-            // write collision into an SQLITE_BUSY swallowed by the catch
-            // below (pre-persisted bubble silently lost).
-            var config = Configuration()
-            config.busyMode = .timeout(5)
-            let pool = try DatabasePool(path: path, configuration: config)
-            try MessageDatabaseMigrations.runAll(on: pool)
-            return pool
-        } catch { return nil }
-    }()
+    ///
+    /// #8656 — la base visée est celle du compte DESTINATAIRE (le compte actif
+    /// publié dans l'App Group, dans son environnement), jamais une base
+    /// commune : l'extension survit d'un push à l'autre, et un changement de
+    /// compte entre deux pushes doit la faire écrire ailleurs. Personne de
+    /// connecté ⇒ aucune base, aucune écriture.
+    private static let poolLock = NSLock()
+    nonisolated(unsafe) private static var poolsByPath: [String: DatabasePool] = [:]
+
+    private static func recipientPool() -> DatabasePool? {
+        guard let path = recipientDatabasePath() else { return nil }
+        return poolLock.withLock {
+            if let pool = poolsByPath[path] { return pool }
+            do {
+                // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
+                // the main app holds its own pool on this same file, and GRDB's
+                // default `.immediateError` busy mode would turn a cross-process
+                // write collision into an SQLITE_BUSY swallowed by the catch
+                // below (pre-persisted bubble silently lost).
+                var config = Configuration()
+                config.busyMode = .timeout(5)
+                let pool = try DatabasePool(path: path, configuration: config)
+                try MessageDatabaseMigrations.runAll(on: pool)
+                poolsByPath[path] = pool
+                return pool
+            } catch { return nil }
+        }
+    }
 
     /// Pré-enregistre la bulle d'un message qui ARRIVE, et rien d'autre.
     ///
@@ -505,7 +518,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                   userInfo: userInfo,
                   now: Date()
               ),
-              let pool = Self.sharedPool
+              let pool = Self.recipientPool()
         else { return }
 
         do {
@@ -583,13 +596,19 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// extension via EXC_BREAKPOINT on the very first push when the
     /// entitlement was absent — invisible to users, hard to diagnose
     /// without a sysdiagnose.
-    private static func appGroupDatabasePath() -> String? {
+    ///
+    /// #8656 — le fichier est celui du compte destinataire (utilisateur +
+    /// environnement, `MessageStoreAccountKey`), la même clé que l'app ouvre.
+    private static func recipientDatabasePath() -> String? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
+        ), let key = MessageStoreAccountKey.activeAccount(
+            appGroupDefaults: UserDefaults(suiteName: "group.me.meeshy.apps"),
+            serverOrigin: NSEDataSync.trustedApiBaseURL
         ) else { return nil }
         let dbDir = container.appendingPathComponent("Database")
         nseCreateDirectory(dbDir, context: "NSE database directory")
-        return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
+        return dbDir.appendingPathComponent(key.databaseFileName).path
     }
 
     // MARK: - Éphémère (#7453)

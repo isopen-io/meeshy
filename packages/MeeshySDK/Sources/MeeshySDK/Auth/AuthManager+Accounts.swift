@@ -67,6 +67,14 @@ extension AuthManager {
         return pendingKeepSignedIn
     }
 
+    // MARK: - Le compte actif
+
+    /// L'identifiant du compte ACTIF, posé AVANT `isAuthenticated = true` et
+    /// retiré avant `isAuthenticated = false`. C'est lui — et non
+    /// `currentUser`, absent quand le profil en cache est illisible — qui dit
+    /// à quelle base locale des messages la session appartient (#8656).
+    public var activeAccountId: String? { activeUserId }
+
     // MARK: - Ce que l'appareil garde
 
     /// Ce compte peut-il être repris sans mot de passe ?

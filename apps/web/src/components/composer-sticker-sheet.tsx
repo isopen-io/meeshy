@@ -20,6 +20,7 @@ import {
 } from '@/lib/api/stickers';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { appelNatifMethode, coqueCourante } from '@/lib/native-shell';
 import { stickerFileOf, stickerRefusalKey } from '@/lib/stickers/library-file';
 import { imageFilesOf, prepareStickerSource, readClipboardImages } from '@/lib/stickers/prepare';
 
@@ -29,7 +30,8 @@ import { imageFilesOf, prepareStickerSource, readClipboardImages } from '@/lib/s
  *
  * Trois façons d'en CRÉER, sans quitter la feuille :
  * - « Depuis une image » — un fichier de l'appareil (photo, capture, GIF) ;
- * - « Coller » — le presse-papier asynchrone, là où le navigateur le sert ;
+ * - « Coller » — le presse-papier asynchrone, là où le navigateur le sert, et
+ *   celui du système dans la coque Android (`MeeshyClipboard`, #8640) ;
  * - un collage (Ctrl+V / ⌘V) ou un dépôt sur la feuille — une image copiée
  *   depuis une page, un autre logiciel, une autre conversation.
  *
@@ -95,7 +97,7 @@ export function ComposerStickerSheet({
   };
 
   const pasteFromClipboard = async () => {
-    const images = await readClipboardImages(navigator.clipboard);
+    const images = await readClipboardImages(navigator.clipboard, appelNatifMethode(coqueCourante(), 'MeeshyClipboard', 'readImage'));
     if (images.length === 0) {
       setNotice(translate(language, 'composer.sticker.nothingToPaste'));
       return;

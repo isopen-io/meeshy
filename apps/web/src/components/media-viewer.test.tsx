@@ -901,6 +901,39 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
 });
 
 /**
+ * #8644 (part web) — ZOOMER, C'EST UNE OPÉRATION : LE CHROME CÈDE. Le double tap
+ * agrandit l'image ×2,5, mais les deux couloirs (fermer, enregistrer, légende,
+ * pellicule) restaient peints PAR-DESSUS l'image agrandie. Au navigateur, un
+ * double tap est aussi deux taps — la bascule plein cadre s'annule — : c'est
+ * donc l'état ZOOMÉ lui-même qui fait céder le chrome, invisible ET intouchable
+ * (#7040), et dézoomer le rend.
+ */
+describe('zoomer une image fait céder le chrome de la visionneuse', () => {
+  const chromes = (body: HTMLElement): readonly HTMLElement[] =>
+    Array.from(body.querySelectorAll<HTMLElement>('[data-media-viewer] .media-viewer-chrome'));
+  const doubleTap = (body: HTMLElement): void => {
+    act(() => {
+      currentPage(body).querySelector('img')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 200 }));
+    });
+  };
+
+  test('zoomée : les deux couloirs s’effacent, intouchables', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+    doubleTap(body);
+    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['0', '0']);
+    expect(chromes(body).map((c) => c.style.pointerEvents)).toEqual(['none', 'none']);
+  });
+
+  test('dézoomée : le chrome revient', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+    doubleTap(body);
+    doubleTap(body);
+    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
+    expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
+  });
+});
+
+/**
  * OUVRIR UNE IMAGE ÉMET (#7363, W6) — la page active rapporte "viewed" à
  * l'ouverture (`useAttachmentOpenReport`, patron `DocumentViewerView.
  * onAppear`), jamais pour sa propre pièce.

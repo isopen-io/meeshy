@@ -264,7 +264,10 @@ function ViewerImagePage({
   isMine,
   deps,
   language,
+  onZoomChange,
 }: {
+  /** ZOOMER FAIT CÉDER LE CHROME (#8644) : la visionneuse l'apprend d'ici. */
+  readonly onZoomChange?: (zoomed: boolean) => void;
   readonly attachment: Attachment;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
@@ -302,7 +305,9 @@ function ViewerImagePage({
       style={placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : undefined}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        setZoomed((z) => !z);
+        const next = !zoomed;
+        setZoomed(next);
+        onZoomChange?.(next);
       }}
     >
       <img
@@ -558,6 +563,7 @@ export default function MediaViewer({
     return taken === null ? null : { itemId: entry.id, opening: taken };
   });
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
+  const [zoomedId, setZoomedId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -707,7 +713,11 @@ export default function MediaViewer({
     else if (verdict === 'entersFull') setPresentation({ kind: 'full', pausedOnEntry: false });
   };
 
-  const isFull = presentation.kind === 'full';
+  /* LE CHROME CÈDE AU PLEIN CADRE ET AU ZOOM (#8644) : une image agrandie ne
+     se lit pas sous « Fermer », sa légende et la pellicule. Au navigateur, un
+     double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
+     l'état zoomé de la page COURANTE qui compte. */
+  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
   const page = actionsAt?.(index) ?? null;
   const columnOffers = page !== null && (page.offers.react || page.offers.reply || page.offers.compose);
 
@@ -737,8 +747,8 @@ export default function MediaViewer({
         style={{
           height: topCorridorHeight,
           paddingTop: insets.top,
-          opacity: isFull ? 0 : 1,
-          pointerEvents: isFull ? 'none' : 'auto',
+          opacity: chromeHidden ? 0 : 1,
+          pointerEvents: chromeHidden ? 'none' : 'auto',
           zIndex: 10,
         }}
       >
@@ -838,6 +848,7 @@ export default function MediaViewer({
                   isActive={i === index}
                   isMine={isMineAt?.(i) ?? isMine}
                   language={language}
+                  onZoomChange={(zoomed) => setZoomedId(zoomed ? attachment.id : null)}
                   {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                   {...(deps !== undefined ? { deps } : {})}
                 />
@@ -851,7 +862,7 @@ export default function MediaViewer({
              comme les couloirs (#7040 : cachée aux yeux ⇒ cachée au doigt). */
           <div
             className="absolute right-2 bottom-2"
-            style={{ zIndex: 10, opacity: isFull ? 0 : 1, pointerEvents: isFull ? 'none' : 'auto' }}
+            style={{ zIndex: 10, opacity: chromeHidden ? 0 : 1, pointerEvents: chromeHidden ? 'none' : 'auto' }}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onPointerUp={(event) => event.stopPropagation()}
@@ -867,14 +878,14 @@ export default function MediaViewer({
       <div
         className="media-viewer-chrome relative flex flex-col"
         style={{
-          opacity: isFull ? 0 : 1,
+          opacity: chromeHidden ? 0 : 1,
           /* Le JUMEAU du couloir haut (#7040) : même littéral, même défaut. Il
              ne figurait dans aucun signalement — il a été trouvé en posant au
              correctif la question que le dépôt pose aux siens, « qu'est-ce qui
              part À CÔTÉ de ce que je viens de garder ? ». Ce couloir porte la
              PELLICULE : sans cette ligne, ses vignettes se choisissaient à
              l'aveugle sous un doigt qui ne voit rien. */
-          pointerEvents: isFull ? 'none' : 'auto',
+          pointerEvents: chromeHidden ? 'none' : 'auto',
           paddingBottom: insets.bottom,
           zIndex: 10,
           /* LE VOILE BAS (revue-correction #6902) — une page SCÈNE prend le

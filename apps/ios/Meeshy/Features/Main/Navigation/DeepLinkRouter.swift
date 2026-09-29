@@ -456,12 +456,14 @@ final class DeepLinkRouter: ObservableObject {
     /// Le code d'invitation mémorisé jusqu'à l'inscription (#8075).
     private let referrals: PendingReferralStoreProviding
     private let isAuthenticated: @MainActor () -> Bool
+    private let hasResolvedSession: @MainActor () -> Bool
     private let dialConversationCall: @MainActor (String, Bool) -> Void
 
     init(
         drafts: DraftStore = .shared,
         referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
         isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
+        hasResolvedSession: @escaping @MainActor () -> Bool = { AuthManager.shared.hasResolvedStoredSession },
         dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
             Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
         }
@@ -469,6 +471,7 @@ final class DeepLinkRouter: ObservableObject {
         self.drafts = drafts
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
+        self.hasResolvedSession = hasResolvedSession
         self.dialConversationCall = dialConversationCall
     }
 
@@ -597,7 +600,10 @@ final class DeepLinkRouter: ObservableObject {
         case .referral(let code):
             return captureReferral(code)
         case .call(let conversationId, let isVideo):
-            guard isAuthenticated() else { return false }
+            guard CallDialReadinessSnapshot.mayQueueDial(
+                sessionResolved: hasResolvedSession(),
+                authenticated: isAuthenticated()
+            ) else { return false }
             dialConversationCall(conversationId, isVideo)
             return true
         case .share, .external:

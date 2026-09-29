@@ -19,8 +19,30 @@ export type CallBackIntentEnvironment = {
   readonly search: string;
   readonly forgetParams: () => void;
   readonly container: { addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void } | undefined;
+  /** Se résout quand la connexion peut porter l'appel (#8199). */
+  readonly ready: () => Promise<void>;
+  /** Le navigateur laisse-t-il partir la sonnerie et la voix sans geste ? */
+  readonly mayPlayAudio: () => boolean;
   readonly start: (request: StartCallRequest) => void;
+  /** Le geste manque : « Appeler » le demande, et c'est lui qui composera. */
+  readonly confirm: (request: StartCallRequest) => void;
 };
+
+/**
+ * Ce que le navigateur dit de sa politique d'autoplay. Un onglet ouvert par le
+ * worker n'a reçu aucun geste : Chrome, Safari et Firefox y bloquent le son
+ * (sonnerie Web Audio, voix distante) jusqu'au premier toucher (#8199).
+ */
+export type AutoplaySignals = {
+  readonly userActivation?: { readonly hasBeenActive: boolean };
+  readonly getAutoplayPolicy?: (type: 'audiocontext') => string;
+};
+
+export function audioAutoplayAllowed(signals: AutoplaySignals): boolean {
+  if (signals.userActivation?.hasBeenActive === true) return true;
+  if (typeof signals.getAutoplayPolicy === 'function') return signals.getAutoplayPolicy('audiocontext') === 'allowed';
+  return signals.userActivation === undefined;
+}
 
 const THREAD_PATH = /^\/c\/([^/?#]+)\/?$/;
 
@@ -70,19 +92,35 @@ const requestOf = (intent: CallBackIntent): StartCallRequest => ({
 });
 
 export function listenCallBackIntents(env: CallBackIntentEnvironment): void {
+  const deliver = (intent: CallBackIntent): void => {
+    void env.ready().then(() => {
+      const request = requestOf(intent);
+      if (!env.mayPlayAudio()) return env.confirm(request);
+      env.start(request);
+    });
+  };
   const fromSearch = callBackIntentFromSearch(env.path, env.search);
   if (fromSearch !== null) {
     env.forgetParams();
-    env.start(requestOf(fromSearch));
+    deliver(fromSearch);
   }
   env.container?.addEventListener('message', (event) => {
     const intent = callBackIntentFromMessage(event.data);
-    if (intent !== null) env.start(requestOf(intent));
+    if (intent !== null) deliver(intent);
   });
 }
 
 export async function listenCallBackIntentsInBrowser(): Promise<void> {
-  const [{ callActions }, { callIdentityOf }] = await Promise.all([import('./call-actions'), import('./call-notice')]);
+  const [{ callActions }, { callIdentityOf }, { whenCallTransportReady }, { callBackPromptStore }] = await Promise.all([
+    import('./call-actions'),
+    import('./call-notice'),
+    import('./call-transport'),
+    import('./call-back-prompt'),
+  ]);
+  const identified = (request: StartCallRequest): StartCallRequest => {
+    const known = callIdentityOf(request.conversationId);
+    return { ...request, title: request.title === '' ? known.title : request.title, avatar: known.avatar };
+  };
   const container = 'serviceWorker' in navigator ? navigator.serviceWorker : undefined;
   listenCallBackIntents({
     path: window.location.pathname,
@@ -93,13 +131,9 @@ export async function listenCallBackIntentsInBrowser(): Promise<void> {
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     },
     container: container as unknown as CallBackIntentEnvironment['container'],
-    start: (request) => {
-      const known = callIdentityOf(request.conversationId);
-      callActions.start({
-        ...request,
-        title: request.title === '' ? known.title : request.title,
-        avatar: known.avatar,
-      });
-    },
+    ready: whenCallTransportReady,
+    mayPlayAudio: () => audioAutoplayAllowed(navigator as unknown as AutoplaySignals),
+    start: (request) => callActions.start(identified(request)),
+    confirm: (request) => callBackPromptStore.setState({ request: identified(request) }),
   });
 }

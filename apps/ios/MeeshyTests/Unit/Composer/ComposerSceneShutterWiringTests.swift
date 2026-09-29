@@ -1,18 +1,15 @@
 import XCTest
 @testable import Meeshy
 
-/// **L'appui long sur la SCÈNE est un obturateur** (directive porteur
-/// 2026-09-04) :
+/// **L'appui long sur la SCÈNE ouvre ET filme ; le toucher ouvre ET photographie**
+/// (#8653, directive porteur 2026-09-29 : « par tap simple ça ouvre et prend
+/// la photo, longpress ouvre et lance la vidéo ! »).
 ///
-/// > « il faut que le simple longpress déclenche la photo et non pas juste
-/// > l'objectif, si on a un vrai longpress ça déclenche la capture vidéo avec
-/// > le chrono »
-///
-/// Le geste vit dans UIKit et sa levée dans un `@State` : rien de tout cela ne
-/// s'éprouve sans appareil. Ce qui est décidable, et ce que ces témoins
-/// tiennent, est que la LOI employée soit celle de la barre — un second seuil
-/// écrit pour la scène divergerait au premier réglage, et le porteur a déjà
-/// fait déplacer celui-ci une fois (0,35 s → 0,8 s).
+/// Le lot du 2026-09-04 faisait choisir la LEVÉE de l'appui long entre photo et
+/// vidéo, au seuil de l'obturateur. La directive sépare les deux intentions :
+/// chaque geste n'en porte plus qu'une, et `ComposerSceneQuickCapture` en est
+/// la loi. Le geste vit dans UIKit : ce qui est décidable, et ce que ces
+/// témoins tiennent, est que les sites appellent la loi et rien d'autre.
 @MainActor
 final class ComposerSceneShutterWiringTests: XCTestCase {
 
@@ -25,20 +22,21 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    /// **Une seule loi pour les deux obturateurs.** La barre et la scène
-    /// appellent `ComposerShutterGesture.outcome` ; aucune ne compare une durée
-    /// à un littéral.
-    func test_laLevéeSurLaScène_appliqueLaLoiDeLObturateur() throws {
+    /// **La levée CLÔT la prise, ou n'en prend aucune.** Plus de photo au
+    /// relâchement : un doigt parti avant que la caméra soit prête ne prend
+    /// RIEN — la photo a son propre geste, le toucher.
+    func test_laLevéeSurLaScène_clotLaPrise_sansJamaisPrendreDePhoto() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let début = code.range(of: "funchandleSceneCaptureLongPressEnded(){"),
-              let fin = code.range(of: "case.keepFilming:", range: début.upperBound..<code.endIndex)
+              let fin = code.range(of: "funcarmSceneCamera()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("la levée a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(corps.contains("ComposerShutterGesture.outcome("))
-        XCTAssertTrue(corps.contains("case.photo:takeScenePhoto()"))
-        XCTAssertTrue(corps.contains("case.closeTake:closeSceneTake()"))
-        XCTAssertFalse(corps.contains("ComposerShutterGesture.holdToFilm"),
-                       "la durée se compare DANS la loi, jamais chez son appelant")
+        XCTAssertTrue(corps.contains("ComposerCaptureHold.release("),
+                      "la levée se lit sur le cadenas (#8671) : tenu, verrouillé ou annulé")
+        XCTAssertTrue(corps.contains("case.closeTake:"))
+        XCTAssertTrue(corps.contains("closeSceneTake()"))
+        XCTAssertFalse(corps.contains("takeScenePhoto()"),
+                       "relâcher un appui long ne prend jamais de photo")
     }
 
     /// **Le verrou par glissement vient de la même loi, avec le même sens.**
@@ -51,26 +49,43 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
               let fin = code.range(of: "funchandleSceneCaptureLongPressEnded", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le glissement a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(corps.contains("ComposerShutterGesture.locks(translationX:translation.x)"))
+        XCTAssertTrue(corps.contains("ComposerCaptureHold.phase(translation:translation"),
+                      "le cadenas (#8671) lit la loi, qui garde le seuil et le sens de ComposerShutterGesture")
+        XCTAssertTrue(corps.contains("ComposerShutterGesture.lockProgress(translationX:translation.x)"))
         XCTAssertTrue(corps.contains("lockSceneTake()"))
+        XCTAssertTrue(corps.contains("dragSceneZoom(translationY:translation.y)"),
+                      "le glissé vertical zoome pendant la prise (#8671)")
     }
 
-    /// **La bascule en vidéo vient d'une HORLOGE, pas du geste.**
-    ///
-    /// Un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
-    /// MOUVEMENT. Le cas nominal — un doigt immobile pendant qu'on cadre — ne
-    /// réveille personne : sans minuterie, la vidéo ne partirait jamais tant
-    /// qu'on ne bouge pas, et le défaut passerait pour un seuil mal réglé.
-    func test_laBasculeEnVidéo_estPortéeParUneMinuterie() throws {
+    /// **L'appui long FILME dès que la session peut écrire** — sans seuil à
+    /// franchir en tenant. L'attente est celle de la caméra, pas du doigt.
+    func test_lAppuiLong_filmeDesQueLaCameraEstPrete() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let début = code.range(of: "funchandleSceneCaptureLongPress(){"),
-              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged", range: début.upperBound..<code.endIndex)
+              let fin = code.range(of: "funchandleSceneQuickTap()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le geste a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("sceneHoldTask=Task"))
-        XCTAssertTrue(corps.contains("ComposerShutterGesture.holdToFilm"),
-                      "le délai vient de la loi, pas d'un littéral")
+        XCTAssertTrue(corps.contains("sceneCamera.waitUntilCaptureReady("))
         XCTAssertTrue(corps.contains("startSceneFilming()"))
+        XCTAssertFalse(corps.contains("ComposerShutterGesture.holdToFilm"),
+                       "le seuil de l'obturateur n'appartient plus au geste de la scène")
+    }
+
+    /// **Le toucher d'une scène vide ouvre ET prend la photo**, et le tap du
+    /// fond le lui demande d'abord.
+    func test_leToucher_ouvreEtPhotographie_parLaLoi() throws {
+        let code = try source("MeeshyComposerHost+Viewfinder.swift")
+        guard let début = code.range(of: "funchandleSceneQuickTap()->Bool{"),
+              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le toucher a changé de forme") }
+        let corps = String(code[début.upperBound..<fin.lowerBound])
+        XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.offers("))
+        XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.tap(format:selectedFormat)"))
+        XCTAssertTrue(corps.contains("armSceneCamera()"))
+        XCTAssertTrue(corps.contains("takeScenePhoto()"))
+        let hote = try source("MeeshyComposerHost.swift")
+        XCTAssertTrue(hote.contains("funchandleSceneBackgroundTap(){ifhandleSceneQuickTap(){return}"))
     }
 
     /// **La levée sans début ne fait RIEN.** Le canvas émet sa fin même quand
@@ -81,10 +96,11 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     func test_uneLevéeSansDébut_neDéclencheRien() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let début = code.range(of: "funchandleSceneCaptureLongPressEnded(){"),
-              let fin = code.range(of: "switchComposerShutterGesture.outcome", range: début.upperBound..<code.endIndex)
+              let fin = code.range(of: "switchComposerCaptureHold.release", range: début.upperBound..<code.endIndex)
         else { return XCTFail("la levée a changé de forme") }
-        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
-            .contains("guardletdebut=sceneHoldStartedAt"))
+        let avant = String(code[début.upperBound..<fin.lowerBound])
+        XCTAssertTrue(avant.contains("guardsceneHoldStartedAt!=nilelse{"))
+        XCTAssertFalse(avant.contains("takeScenePhoto()"))
     }
 
     /// **Le meuble câble les DEUX bouts du geste.** Un début sans fin laisse le

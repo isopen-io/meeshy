@@ -388,7 +388,7 @@ emit({
  * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
  * premier tap sur le micro ou le "+".
  */
-const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x', 'user-circle'];
+const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x', 'user-circle', 'video-camera'];
 
 /* AVERTISSEMENT (#7280) — `glyphs-feed.ts` porte un `mapPin` AJOUTÉ À LA MAIN
    (#6901), que ce script ne connaît pas : le relancer le SUPPRIME. Avant de
@@ -1026,4 +1026,20 @@ emit({
   constant: 'STORIES_MINE_GLYPHS',
   type: 'StoriesMineGlyphName',
   role: 'LE JEU DE « MES STORIES » (#6149) : le bouton Supprimer du listing, charge avec /stories/mine.',
+});
+
+/**
+ * LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) — les onglets du plateau
+ * (Styles, Fond, Police, Liaison, Détails), « Au hasard », « Format par
+ * défaut » et « Partager ». Chargé avec la feuille d'export, elle-même montée
+ * à la demande depuis le menu du message : jamais dans le socle. `translate`
+ * (Langue), `download-simple` (Sauvegarder), `magnifying-glass` et `x`
+ * restent au socle, où ils vivent déjà.
+ */
+emit({
+  ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export'],
+  output: join(HERE, '../src/components/glyphs-export-card.ts'),
+  constant: 'EXPORT_CARD_GLYPHS',
+  type: 'ExportCardGlyphName',
+  role: "LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) : les onglets du plateau et les gestes de l'en-tete, charge avec la feuille d'export.",
 });

@@ -13,6 +13,7 @@ const esCommentRow = {
   'comments.action.reply': 'Responder',
   'comments.reply.to': 'Respondiendo a {name}',
   'comments.reply.cancel': 'Cancelar la respuesta',
+  'comments.composer.fold': 'Plegar el campo de comentario',
   'comments.replies.show': 'Ver respuestas ({count})',
   'comments.replies.hide': 'Ocultar respuestas',
   'comments.replies.more': 'Ver más respuestas',

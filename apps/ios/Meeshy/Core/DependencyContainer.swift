@@ -19,7 +19,7 @@ private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", cat
 /// lands in the app (in degraded mode) instead of a crash loop. This
 /// struct records what happened so the host app can surface the issue
 /// to the user and to Crashlytics.
-struct DatabaseInitDiagnostics: Sendable, Equatable {
+nonisolated struct DatabaseInitDiagnostics: Sendable, Equatable {
     var firstAttemptError: String?
     var recoveryAttempted: Bool = false
     var quarantinedFilePath: String?
@@ -36,9 +36,17 @@ final class DependencyContainer {
     nonisolated deinit {}
     static let shared = DependencyContainer()
 
-    let dbPool: DatabasePool
-    let messagePersistence: MessagePersistenceActor
-    let feedPersistence: FeedPersistenceActor
+    /// #8656 — la base locale des messages est celle du compte ACTIF. Les trois
+    /// accesseurs ci-dessous la relisent à chaque appel : un site qui les
+    /// consulte au moment d'écrire vise la bonne base, un site qui a capturé
+    /// une session garde celle du compte qui l'a ouverte.
+    let storeRouter: MessageStoreRouter
+    nonisolated var dbPool: DatabasePool { storeRouter.current.dbPool }
+    nonisolated var messagePersistence: MessagePersistenceActor { storeRouter.current.messagePersistence }
+    nonisolated var feedPersistence: FeedPersistenceActor { storeRouter.current.feedPersistence }
+    /// Sessions quittées dont la purge de sortie n'a pas encore tourné : la
+    /// bascule (synchrone) les dépose, `wireOutboxLogoutHook` les consomme.
+    private var sessionsAwaitingPurge: [MessageStoreSession] = []
     /// Pont de persistance GRDB du feed. Possédé par le container — donc par
     /// l'app — et non plus par `FeedView` : armé au montage de l'écran et
     /// désarmé à sa disparition, il ratait tout ce qui arrivait pendant que le
@@ -57,51 +65,33 @@ final class DependencyContainer {
     let initDiagnostics: DatabaseInitDiagnostics
 
     private init() {
-        let dbPath = Self.databasePath()
-        let config = Self.dbConfig()
-
-        var diagnostics = DatabaseInitDiagnostics()
-        let pool = Self.openWithRecovery(
-            dbPath: dbPath,
-            fallbackPath: Self.databasePath(groupContainer: nil),
-            config: config,
-            diagnostics: &diagnostics
-        )
-
-        // Migrations + tuning. If these fail on the recovered DB, we surface
-        // the diagnostic but still proceed — the alternative is crashing the
-        // user into a boot loop they can't escape from.
-        do {
-            try MessageDatabaseMigrations.runAll(on: pool)
-            try FeedDatabaseMigrations.runAll(on: pool)
-            // `applyTuning` a disparu d'ici (#6221) : ses PRAGMA sont désormais
-            // posés par connexion dans `dbConfig()`. C'était la SEULE écriture
-            // inconditionnelle du démarrage, et elle pouvait attendre jusqu'à
-            // cinq secondes la fin d'une écriture de la NSE sur le même fichier.
-        } catch {
-            containerLogger.fault("Database migrations failed after recovery: \(error.localizedDescription, privacy: .public)")
-            diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | migrations: \(error.localizedDescription)"
+        // #8656 — la base ouverte au démarrage est celle du compte du TROUSSEAU,
+        // lue en synchrone : un compte restauré se sert depuis SA base avant que
+        // `checkExistingSession()` n'ait fini, cache-first.
+        let directory = Self.databaseDirectory()
+        let fallbackDirectory = Self.databaseDirectory(groupContainer: nil)
+        let initialKey = Self.activeAccountStoreKey()
+        MessageStoreRouter.adoptLegacyStore(in: directory, for: initialKey)
+        Self.carryAutoVacuumFlag(to: initialKey)
+        let router = MessageStoreRouter(initialKey: initialKey) { key in
+            let session = MessageStoreSession.open(
+                key: key, directory: directory, fallbackDirectory: fallbackDirectory
+            )
+            Self.enableIncrementalAutoVacuumOnce(on: session)
+            return session
         }
-
-        self.dbPool = pool
-        let persistence = MessagePersistenceActor(dbWriter: pool)
-        self.messagePersistence = persistence
-        let feed = FeedPersistenceActor(dbWriter: pool)
-        self.feedPersistence = feed
-        self.feedSocketHandler = FeedSocketHandler(persistence: feed)
-        self.initDiagnostics = diagnostics
-
-        Task {
-            await messagePersistence.start()
-        }
+        self.storeRouter = router
+        self.storeDirectory = directory
+        self.feedSocketHandler = FeedSocketHandler(persistenceProvider: { router.current.feedPersistence })
+        self.initDiagnostics = router.current.diagnostics
 
         // Q3 (P1 hotfix) — au logout, purge TOUTES les tables messages
         // on-device. Sans ça, des messages enqueued par user A pourraient
         // être envoyés sous l'identité du user B après un logout+login rapide
         // sur le même device. Hook côté app car le SDK AuthManager ne connaît
         // pas DependencyContainer (qui est app-side).
+        wireAccountStoreSwitch()
         wireOutboxLogoutHook()
-        wireCurrentUserHook()
 
         // Mirror every API message the SyncEngine sees (global `message:new`
         // relay, push-driven `ensureMessages`, pagination) into the GRDB
@@ -109,14 +99,19 @@ final class DependencyContainer {
         // previews); the conversation timeline reads GRDB — without this hook
         // a message received while its conversation is closed shows in the
         // list preview but is missing when the conversation opens.
-        ConversationSyncEngine.shared.apiMessagePersistor = { [weak persistence] messages in
-            guard !messages.isEmpty else { return }
+        //
+        // #8656 — la page va dans la base du compte qui l'a DEMANDÉE
+        // (`currentSyncOwner`), et nulle part si ce compte n'est plus actif.
+        ConversationSyncEngine.shared.apiMessagePersistor = { [router] messages in
+            guard !messages.isEmpty,
+                  let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner)
+            else { return }
             // Le prisme du lecteur se résout ICI, à la MISE EN FILE : lu depuis
             // la boucle d'écriture sérielle de la persistance, il y faisait
             // attendre chaque lot que le MainActor — donc le RENDU — soit
             // libre, et les réconciliations en file derrière lui attendaient
             // avec.
-            await persistence?.bufferIncomingAPIMessages(
+            await session.messagePersistence.bufferIncomingAPIMessages(
                 messages, preferredLanguages: MessagePersistenceActor.readerPrism()
             )
         }
@@ -126,28 +121,106 @@ final class DependencyContainer {
         // `cache.messages`, que la timeline ne lit pas. Hors-ligne, rouvrir la
         // conversation affichait donc le texte d'avant l'édition, la bulle
         // supprimée et la réaction manquante jusqu'au prochain refetch REST.
-        ConversationSyncEngine.shared.realtimeMessagePersistor = { [weak persistence] mutation in
-            guard let persistence else { return }
-            await Self.persist(mutation, into: persistence)
+        ConversationSyncEngine.shared.realtimeMessagePersistor = { [router] mutation in
+            guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return }
+            await Self.persist(mutation, into: session.messagePersistence)
         }
+    }
 
-        // Skip the auto-vacuum tune when we're on the ephemeral fallback —
-        // the temp file dies with this launch and the next boot will retry
-        // against the real path anyway.
-        let autoVacuumKey = "meeshy.db.autoVacuumOneShotDone"
-        if !diagnostics.fellBackToEphemeralStorage,
-           !UserDefaults.standard.bool(forKey: autoVacuumKey) {
-            let pool = self.dbPool
-            Task.detached(priority: .background) {
-                do {
-                    try DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
-                } catch {
-                    containerLogger.error("Failed to enable incremental auto-vacuum: \(error.localizedDescription, privacy: .public)")
-                }
-                await MainActor.run {
-                    UserDefaults.standard.set(true, forKey: autoVacuumKey)
-                }
+    /// Le dossier des bases de compte (App Group, ou Application Support
+    /// quand l'entitlement manque).
+    let storeDirectory: URL
+
+    /// La base qui revient au compte ACTIF — utilisateur + environnement (#8657).
+    static func activeAccountStoreKey() -> MessageStoreAccountKey? {
+        MessageStoreAccountKey(
+            userId: AuthManager.shared.activeAccountId,
+            serverOrigin: MeeshyConfig.shared.persistedServerOrigin
+        )
+    }
+
+    // MARK: - #8656 — bascule SYNCHRONE de la base locale
+
+    /// Bascule la base AVANT que la session suivante ne lise quoi que ce soit.
+    ///
+    /// Aucun `receive(on:)` : un `@Published` émet dans son `willSet`, sur le
+    /// fil qui l'écrit — le principal pour `AuthManager`. Le sink tourne donc
+    /// DANS l'affectation de `isAuthenticated`, avant tout observateur
+    /// asynchrone et avant que SwiftUI ne remonte la racine. La purge de la
+    /// session quittée, elle, peut rester asynchrone : plus rien ne la lit.
+    private func wireAccountStoreSwitch() {
+        Publishers.CombineLatest(
+            AuthManager.shared.$hasResolvedStoredSession,
+            AuthManager.shared.$isAuthenticated
+        )
+        .sink { [weak self] resolved, isAuthenticated in
+            MainActor.assumeIsolated {
+                self?.applyAccountStore(sessionResolved: resolved, isAuthenticated: isAuthenticated)
             }
+        }
+        .store(in: &cancellables)
+    }
+
+    private func applyAccountStore(sessionResolved: Bool, isAuthenticated: Bool) {
+        let target = MessageStoreTarget.resolve(
+            sessionResolved: sessionResolved,
+            isAuthenticated: isAuthenticated,
+            activeKey: Self.activeAccountStoreKey()
+        )
+        guard case let .account(key) = target else { return }
+        let outgoing = storeRouter.activate(key)
+        if let outgoing, outgoing.key != nil {
+            sessionsAwaitingPurge.append(outgoing)
+        }
+        if key == nil {
+            MessageStoreRouter.sweepDormantAccountStores(
+                in: storeDirectory,
+                keeping: storeRouter.openAccountFileNames.union(sessionsAwaitingPurge.map(\.fileName))
+            )
+        }
+        guard outgoing != nil else { return }
+        // La NSE dérive la base du destinataire de l'environnement publié :
+        // un environnement changé à l'écran de connexion doit l'atteindre
+        // AVANT le premier push de la session (#8657).
+        if key != nil { WidgetDataManager.shared.publishAPIBaseURL() }
+        let incoming = storeRouter.current.dbPool
+        Task { await OfflineQueue.shared.configure(pool: incoming) }
+    }
+
+    private func takeSessionsAwaitingPurge() -> [MessageStoreSession] {
+        defer { sessionsAwaitingPurge = [] }
+        return sessionsAwaitingPurge
+    }
+
+    // MARK: - Auto-vacuum incrémental, une fois par base
+
+    private nonisolated static let legacyAutoVacuumKey = "meeshy.db.autoVacuumOneShotDone"
+
+    private nonisolated static func autoVacuumKey(for fileName: String) -> String {
+        "\(legacyAutoVacuumKey).\(fileName)"
+    }
+
+    /// L'ancienne base partagée, attribuée au compte actif, a déjà reçu son
+    /// réglage : ne pas le rejouer sur un fichier qui n'a pas changé.
+    private static func carryAutoVacuumFlag(to key: MessageStoreAccountKey?) {
+        guard let key, UserDefaults.standard.bool(forKey: legacyAutoVacuumKey) else { return }
+        UserDefaults.standard.set(true, forKey: autoVacuumKey(for: key.databaseFileName))
+    }
+
+    /// Skip the auto-vacuum tune on the signed-out store and on the ephemeral
+    /// fallback — the temp file dies with this launch.
+    private nonisolated static func enableIncrementalAutoVacuumOnce(on session: MessageStoreSession) {
+        guard session.key != nil, !session.diagnostics.fellBackToEphemeralStorage else { return }
+        let flag = autoVacuumKey(for: session.fileName)
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        let pool = session.dbPool
+        Task.detached(priority: .background) {
+            do {
+                try DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+            } catch {
+                containerLogger.error("Failed to enable incremental auto-vacuum: \(error.localizedDescription, privacy: .public)")
+            }
+            UserDefaults.standard.set(true, forKey: flag)
         }
     }
 
@@ -233,8 +306,6 @@ final class DependencyContainer {
     /// cross-compte Q3) ; quand elle suit une invalidation de session serveur
     /// avec des envois en attente, l'utilisateur en est informé par un toast.
     private func wireOutboxLogoutHook() {
-        let persistence = messagePersistence
-        let feed = feedPersistence
         AuthManager.shared.sessionInvalidated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.sessionWasInvalidated = true }
@@ -280,40 +351,54 @@ final class DependencyContainer {
             .sink { [weak self] _ in
                 let invalidated = self?.sessionWasInvalidated ?? false
                 self?.sessionWasInvalidated = false
+                // #8656 — la purge vise les bases QUITTÉES, que la bascule
+                // synchrone a déjà retirées de la lecture : la session suivante
+                // ne les voit plus, qu'elle démarre avant ou après ce nettoyage.
+                let outgoing = self?.takeSessionsAwaitingPurge() ?? []
+                let router = self?.storeRouter
                 Task {
-                    do {
-                        let pendingCount = try await persistence.pendingOutboxCount()
-                        try await persistence.clearAllMessagesForLogout()
-                        // #5913 — la purge SQL ci-dessus vide la TABLE ; l'acteur
-                        // `OfflineQueue` garde, lui, ses `items` et ses
-                        // `outcomeTombstones` EN MÉMOIRE. Sans cette ligne, le
-                        // bandeau continue d'afficher les lignes du compte sortant
-                        // et `retryAll()` — qui n'a aucun filtre de statut et se
-                        // déclenche au retour du réseau — peut encore les rejouer,
-                        // sous le jeton du compte SUIVANT. `clearAll()` fait les
-                        // trois (mémoire, tombstones, base) ; elle n'avait jusqu'ici
-                        // aucun appelant dans le dépôt.
-                        await OfflineQueue.shared.clearAll()
-                        if DependencyContainer.shouldSurfaceOutboxLossToast(
-                            sessionWasInvalidated: invalidated, pendingCount: pendingCount
-                        ) {
-                            await MainActor.run {
-                                FeedbackToastManager.shared.showError(
-                                    String(localized: "outbox.sessionInvalidated.pendingLost",
-                                           defaultValue: "Des messages non envoyés ont été annulés — reconnectez-vous.",
-                                           bundle: .main)
-                                )
-                            }
+                    var pendingCount = 0
+                    for session in outgoing {
+                        let persistence = session.messagePersistence
+                        let feed = session.feedPersistence
+                        do {
+                            pendingCount += try await persistence.pendingOutboxCount()
+                            try await persistence.clearAllMessagesForLogout()
+                        } catch {
+                            containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                         }
-                    } catch {
-                        containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
+                        // grdb-01 — purge feed indépendante : un échec d'un côté
+                        // ne doit pas empêcher l'autre purge.
+                        do {
+                            try await feed.clearAllForLogout()
+                        } catch {
+                            containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
+                        }
+                        // #8656 — purgée, la base quittée quitte aussi le disque :
+                        // un acteur encore capturé n'y réécrira jamais rien que
+                        // le compte retrouverait en revenant.
+                        router?.retire(session)
                     }
-                    // grdb-01 — purge feed indépendante : un échec d'un côté
-                    // ne doit pas empêcher l'autre purge.
-                    do {
-                        try await feed.clearAllForLogout()
-                    } catch {
-                        containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
+                    // #5913 — la purge SQL ci-dessus vide la TABLE ; l'acteur
+                    // `OfflineQueue` garde, lui, ses `items` et ses
+                    // `outcomeTombstones` EN MÉMOIRE. Sans cette ligne, le
+                    // bandeau continue d'afficher les lignes du compte sortant
+                    // et `retryAll()` — qui n'a aucun filtre de statut et se
+                    // déclenche au retour du réseau — peut encore les rejouer,
+                    // sous le jeton du compte SUIVANT. `clearAll()` fait les
+                    // trois (mémoire, tombstones, base) ; elle n'avait jusqu'ici
+                    // aucun appelant dans le dépôt.
+                    await OfflineQueue.shared.clearAll()
+                    if DependencyContainer.shouldSurfaceOutboxLossToast(
+                        sessionWasInvalidated: invalidated, pendingCount: pendingCount
+                    ) {
+                        await MainActor.run {
+                            FeedbackToastManager.shared.showError(
+                                String(localized: "outbox.sessionInvalidated.pendingLost",
+                                       defaultValue: "Des messages non envoyés ont été annulés — reconnectez-vous.",
+                                       bundle: .main)
+                            )
+                        }
                     }
                     // outbox-11 — résidus cross-compte hors messages/feed :
                     // impressions (UserDefaults standard, clés sans userId,
@@ -322,29 +407,11 @@ final class DependencyContainer {
                     // couvert par le wipe appgroup-01 — pas de doublon ici.)
                     ImpressionBatcher.purgeAllPendingImpressions()
                     await PendingStatusQueue.shared.clearAll()
+                    // #8656 — les brouillons de commentaire sont rangés par post,
+                    // sans compte : un post vu des deux comptes rendait au
+                    // second le brouillon du premier.
+                    await MainActor.run { CommentDraftStore.shared.clearAll() }
                 }
-            }
-            .store(in: &cancellables)
-    }
-
-    // MARK: - Current-user hook (T7 — reaction ownership)
-
-    /// Keep the persistence actor's `currentUserId` in sync with the
-    /// authenticated user. The on-device DB has no userId column and the
-    /// aggregated reaction payload only flags WHICH emojis the current user
-    /// reacted with, so the actor needs to know who "the current user" is to
-    /// tag their reconstructed reactions with the right owner (otherwise the
-    /// "I reacted" highlight is lost after a cache reload). `$currentUser`
-    /// replays its current value on subscription, so this both seeds and keeps
-    /// the value current across login / account switch / logout (nil).
-    private func wireCurrentUserHook() {
-        let persistence = messagePersistence
-        AuthManager.shared.$currentUser
-            .map { $0?.id }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { userId in
-                Task { await persistence.setCurrentUserId(userId) }
             }
             .store(in: &cancellables)
     }
@@ -370,7 +437,7 @@ final class DependencyContainer {
     ///
     /// Internal access for ``DependencyContainerTests`` to drive the
     /// corrupted-file and denied-path flows against tmp directories.
-    static func openWithRecovery(
+    nonisolated static func openWithRecovery(
         dbPath: String,
         fallbackPath: @autoclosure () -> String? = nil,
         config: Configuration,
@@ -431,7 +498,7 @@ final class DependencyContainer {
     /// puisse présenter une erreur EXACTE à la garde : une interruption ne se
     /// fabrique pas en ouvrant un vrai fichier, et un témoin qui n'y arrive pas
     /// serait vert par omission — la branche ne serait jamais jouée.
-    static func reopenReplacingCorruptFile(
+    nonisolated static func reopenReplacingCorruptFile(
         at path: String,
         after error: Error,
         config: Configuration,
@@ -475,7 +542,7 @@ final class DependencyContainer {
         }
     }
 
-    private static func isAccessDenied(_ error: Error) -> Bool {
+    private nonisolated static func isAccessDenied(_ error: Error) -> Bool {
         guard let dbError = error as? DatabaseError else { return false }
         let code = dbError.resultCode
         return code == .SQLITE_AUTH
@@ -488,7 +555,7 @@ final class DependencyContainer {
     /// out of the way so a fresh one can be created at the canonical path.
     /// Returns the new location of the quarantined main file, or `nil` when
     /// the move failed (in which case we delete instead).
-    static func quarantineCorruptDatabase(
+    nonisolated static func quarantineCorruptDatabase(
         at path: String,
         fileManager: FileManager = .default,
         clock: () -> Date = Date.init
@@ -535,21 +602,23 @@ final class DependencyContainer {
 
     // MARK: - App Group shared path (O6)
 
-    static func databasePath() -> String {
-        databasePath(
+    static func databaseDirectory() -> URL {
+        databaseDirectory(
             groupContainer: FileManager.default.containerURL(
                 forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
             )
         )
     }
 
+    /// Le dossier des bases de messages — une par compte depuis #8656.
+    ///
     /// `groupContainer` is `nil` when the signed binary lost the app-group
     /// entitlement (seen on Xcode Cloud distribution-signed TestFlight
     /// builds — launch crash-loop of build 1125, 2026-06-12). Trapping here
     /// boot-loops the app on EVERY launch; falling back to Application
     /// Support keeps the user in the app, merely without NSE/widget data
     /// sharing until the signing issue is fixed.
-    static func databasePath(groupContainer: URL?) -> String {
+    static func databaseDirectory(groupContainer: URL?) -> URL {
         if groupContainer == nil {
             containerLogger.fault("App-group container unavailable (missing entitlement?) — falling back to Application Support for the message store")
         }
@@ -562,32 +631,34 @@ final class DependencyContainer {
                 containerLogger.error("Failed to create database directory at \(dbDir.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
-        let dbPath = dbDir.appendingPathComponent("meeshy_messages.sqlite").path
-        applyMessageStoreFileProtection(directoryPath: dbDir.path, databasePath: dbPath)
-        return dbPath
+        applyFileProtection(to: [dbDir.path])
+        return dbDir
     }
 
-    /// N2 — pin `.completeUntilFirstUserAuthentication` on the shared message
-    /// store (directory + sqlite + WAL/SHM sidecars), mirroring
+    /// N2 — pin `.completeUntilFirstUserAuthentication` on a message store
+    /// (directory + sqlite + WAL/SHM sidecars), mirroring
     /// `AppDatabase.resolveDatabaseURL`. The main app's
     /// `default-data-protection = NSFileProtectionComplete` entitlement would
     /// otherwise make any file (re)created by the app unreadable to the NSE
     /// while the device is locked — silently disabling pre-persist.
-    private static func applyMessageStoreFileProtection(
+    nonisolated static func applyMessageStoreFileProtection(
         directoryPath: String,
         databasePath: String
     ) {
         let fileManager = FileManager.default
+        let sidecars = ["", "-wal", "-shm"]
+            .map { databasePath + $0 }
+            .filter { fileManager.fileExists(atPath: $0) }
+        applyFileProtection(to: [directoryPath] + sidecars)
+    }
+
+    private nonisolated static func applyFileProtection(to paths: [String]) {
         let protection: [FileAttributeKey: Any] = [
             .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
         ]
-        var paths = [directoryPath]
-        paths += ["", "-wal", "-shm"]
-            .map { databasePath + $0 }
-            .filter { fileManager.fileExists(atPath: $0) }
         for path in paths {
             do {
-                try fileManager.setAttributes(protection, ofItemAtPath: path)
+                try FileManager.default.setAttributes(protection, ofItemAtPath: path)
             } catch {
                 containerLogger.error("Failed to set file protection on \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }

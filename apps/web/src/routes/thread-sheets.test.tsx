@@ -6,6 +6,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { attachmentDefaults, message, translation } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -196,12 +197,14 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
 
   test('« Exporter en image » monte la carte d’un message ordinaire, avec ses templates', async () => {
     const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ attachments: [] })]);
-    expect(host.querySelectorAll('[data-export-link]').length > 1).toBe(true);
+    await loadExportCardCatalog('fr');
+    await mounter.settle();
+    expect(host.querySelectorAll('[data-export-tab]').length > 1).toBe(true);
   });
 
   test('un message protégé ne monte aucune carte, même ciblé', async () => {
     const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ isBlurred: true })]);
-    expect(has(host, '[data-export-link]')).toBe(false);
+    expect(has(host, '[data-export-tab]')).toBe(false);
   });
 
   test('réagir depuis la feuille de réactions pose la réaction PUIS referme la feuille', async () => {

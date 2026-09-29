@@ -46,6 +46,7 @@ export type LinkCallRecordingSuccess = {
   readonly conversationId: string;
   readonly consentedUserIds: readonly string[];
   readonly recordingKind: CallRecordingKind;
+  readonly mediaKind: CallRecordingKind;
 };
 
 export type LinkCallRecordingResult = LinkCallRecordingSuccess | LinkCallRecordingFailure;
@@ -157,5 +158,6 @@ export async function linkCallRecording(
     conversationId: call.conversationId,
     consentedUserIds: recording.consentedUserIds.filter((id) => id !== input.userId),
     recordingKind,
+    mediaKind: attachment.mimeType.startsWith('video/') ? 'video' : 'audio',
   };
 }

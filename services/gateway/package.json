@@ -30,7 +30,7 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.1",
-    "@fastify/jwt": "^10.2.1",
+    "@fastify/jwt": "^10.2.2",
     "@fastify/multipart": "^10.1.1",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/sensible": "^6.0.5",
@@ -71,7 +71,7 @@
     "speakeasy": "^2.0.0",
     "thumbhash": "^0.1.1",
     "ua-parser-js": "^2.0.10",
-    "undici": "^8.10.0",
+    "undici": "^8.11.2",
     "uuid": "^14.0.2",
     "winston": "^3.19.0",
     "zeromq": "^6.8.0",

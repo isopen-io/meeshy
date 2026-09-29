@@ -439,6 +439,7 @@ struct CommentsSheetView: View {
                     .adaptiveOnChange(of: topLevel.count) { _, _ in
                         attemptScrollToTargetComment(using: commentsProxy)
                     }
+                    .keepsReplyTargetInView(replyingTo?.id, proxy: commentsProxy)
                     } // ScrollViewReader
 
                     VStack(spacing: 0) {

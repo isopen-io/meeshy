@@ -63,9 +63,18 @@ extension ConversationSyncEngine {
 
     @discardableResult
     public func fullSync() async -> Bool {
-        guard !isSyncing else { return true }
-        isSyncing = true
-        defer { isSyncing = false }
+        // #8651 — la synchronisation appartient au compte qui la LANCE : celle
+        // du compte quitté ne bloque pas celle du suivant, et ne peut plus
+        // écrire dans son cache (`saveSorted` → `ownsSession`).
+        let owner = await currentUserId()
+        guard claimSync(for: owner) else { return true }
+        defer { releaseSync(for: owner) }
+        return await Self.$syncOwner.withValue(owner) {
+            await self.fullSyncForOwner()
+        }
+    }
+
+    private func fullSyncForOwner() async -> Bool {
 
         // LA VOIE `/sync` D'ABORD sur un cache CHAUD (#4172, seconde moitié du
         // critère 1) : la réconciliation en pages d'ancre au lieu de ≈ 100
@@ -117,7 +126,7 @@ extension ConversationSyncEngine {
             firstPage = (await Self.mapConversationsOffMain(response.data, userId: userId))
             firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
-            await saveSorted(firstPage, to: "list", baseline: baseline)
+            guard await saveSorted(firstPage, to: "list", baseline: baseline) else { return false }
             await SearchIndex.shared.indexConversations(firstPage)
             _conversationsDidChange.send()
         } catch {
@@ -167,6 +176,7 @@ extension ConversationSyncEngine {
         var succeeded = true
 
         if !remainingPages.isEmpty {
+            guard await ownsSession() else { return false }
             // Fan-out: fetch all remaining pages concurrently with a bounded
             // parallelism (4) so we don't hammer the backend on huge
             // accounts. Pages are sorted by offset before merging.
@@ -253,7 +263,7 @@ extension ConversationSyncEngine {
                 succeeded = recoveredAll
             }
 
-            await saveSorted(merged, to: "list", baseline: baseline)
+            guard await saveSorted(merged, to: "list", baseline: baseline) else { return false }
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
         }
@@ -277,6 +287,7 @@ extension ConversationSyncEngine {
         let maxTailIterations = 50
         while hasMore && tailIterations < maxTailIterations {
             tailIterations += 1
+            guard await ownsSession() else { return false }
             do {
                 let response = try await Self.fetchPageWithRetry(via: service, offset: offset, limit: pageSize)
                 let page = (await Self.mapConversationsOffMain(response.data, userId: userId))
@@ -284,7 +295,7 @@ extension ConversationSyncEngine {
                 let newItems = page.filter { !existingIds.contains($0.id) }
                 merged.append(contentsOf: newItems)
                 if !newItems.isEmpty {
-                    await saveSorted(merged, to: "list", baseline: baseline)
+                    guard await saveSorted(merged, to: "list", baseline: baseline) else { return false }
                     await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
                 }
@@ -324,6 +335,7 @@ extension ConversationSyncEngine {
             Self.logger.error("[SyncEngine] fullSync tail aborted after \(maxTailIterations) iterations — pagination likely stuck (offset=\(offset), merged=\(merged.count))")
         }
 
+        guard await ownsSession() else { return false }
         if succeeded {
             // Server time, not the device clock (R15b) — authoritative full fetch.
             lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: merged.map(\.updatedAt), fallback: lastSyncTimestamp)
@@ -488,7 +500,7 @@ extension ConversationSyncEngine {
                 // first-page-first du chemin historique : ~300 ms avant les
                 // lignes visibles, le reste en arrière-plan.
                 if pages == 1 && !servies.isEmpty {
-                    await saveSorted(servies, to: "list", baseline: baseline)
+                    guard await saveSorted(servies, to: "list", baseline: baseline) else { return .echouee }
                     await SearchIndex.shared.indexConversations(servies)
                     _conversationsDidChange.send()
                 }
@@ -521,7 +533,7 @@ extension ConversationSyncEngine {
         checkpoint: String?,
         rehydrater fenetre: Date?
     ) async -> IssueDuPleinParSync {
-        await saveSorted(servies, to: "list", baseline: baseline)
+        guard await saveSorted(servies, to: "list", baseline: baseline) else { return .echouee }
         await SearchIndex.shared.indexConversations(servies.filter(\.isActive))
         _conversationsDidChange.send()
         if let checkpoint,
@@ -554,7 +566,9 @@ extension ConversationSyncEngine {
     /// web. Fermer l'écart demande de faire voyager la frontière de lecture
     /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
     private func deltaSyncCore() async -> DeltaOutcome {
-        guard !isSyncing else { return .complete }
+        let owner = await currentUserId()
+        guard claimSync(for: owner) else { return .complete }
+        defer { releaseSync(for: owner) }
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
         // same window, only the first one hits the network. Returning
@@ -565,10 +579,10 @@ extension ConversationSyncEngine {
             return .complete
         }
         lastDeltaSyncAt = now
-        isSyncing = true
-        defer { isSyncing = false }
 
-        let outcome = await deltaSansGarde()
+        let outcome = await Self.$syncOwner.withValue(owner) {
+            await self.deltaSansGarde()
+        }
         // Un ÉCHEC ne compte pas dans l'anti-rafale : au réveil, le premier
         // essai tombe souvent sur un réseau pas encore rétabli, et le signal
         // suivant (reconnexion du socket, coordinateur de premier plan) doit
@@ -640,7 +654,7 @@ extension ConversationSyncEngine {
                 await SearchIndex.shared.removeConversation(id: removedId)
             }
 
-            await saveSorted(merged, to: "list", baseline: existing)
+            guard await saveSorted(merged, to: "list", baseline: existing) else { return .failed }
             // `removedSet` filtre ici aussi, et pas seulement par symétrie : une
             // conversation SERVIE par la page puis déclarée partie par les
             // tombstones du même lot est active dans `deltaConversations`. La
@@ -790,7 +804,9 @@ extension ConversationSyncEngine {
                 await cache.invalidateConversationMedia(conversationId: removedId)
                 await SearchIndex.shared.removeConversation(id: removedId)
             }
-            await saveSorted(merged, to: "list", baseline: existing)
+            guard await saveSorted(merged, to: "list", baseline: existing) else {
+                return .traite(.failed, rehydrater: nil)
+            }
             await SearchIndex.shared.indexConversations(
                 deltaConversations.filter { $0.isActive && !removedSet.contains($0.id) }
             )
@@ -907,55 +923,80 @@ extension ConversationSyncEngine {
             }
         }
 
+        // #8656 — la page appartient au compte qui l'a DEMANDÉE : lue sous son
+        // jeton, elle ne s'écrit ni dans le cache ni dans la base locale d'un
+        // compte arrivé pendant la requête.
+        let owner = await currentUserId()
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
-            let userId = await currentUserId(); let username = await currentUsername()
-            let preferredLanguages = await currentPreferredLanguages()
-            if let mentionedUsers = response.meta?.mentionedUsers {
-                UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+            await Self.$syncOwner.withValue(owner) {
+                await absorbFetchedWindow(response, into: conversationId)
             }
-            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
-            // Atomic merge: keep any messages that arrived via socket between the
-            // REST request and this write, so they are never silently overwritten.
-            await cache.messages.mergeUpdate(for: conversationId) { existing in
-                let freshIds = Set(freshMessages.map(\.id))
-                let fromCacheOnly = existing.filter { !freshIds.contains($0.id) }
-                return (freshMessages + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
-            }
-            // Mirror the fetched window into the app's on-device message store
-            // so the conversation timeline (GRDB-backed) is already current
-            // when the user opens it — the push-notification handler routes
-            // through here with `force: true` precisely for that purpose.
-            await apiMessagePersistor?(response.data)
-            _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] ensureMessages error: \(error.localizedDescription)")
         }
     }
 
+    private func absorbFetchedWindow(_ response: MessagesAPIResponse, into conversationId: String) async {
+        guard await ownsSession() else {
+            Self.logger.notice("[SyncEngine] fenêtre de messages refusée : le compte a changé pendant la requête")
+            return
+        }
+        let userId = await currentUserId(); let username = await currentUsername()
+        let preferredLanguages = await currentPreferredLanguages()
+        if let mentionedUsers = response.meta?.mentionedUsers {
+            UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+        }
+        let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
+        // Atomic merge: keep any messages that arrived via socket between the
+        // REST request and this write, so they are never silently overwritten.
+        await cache.messages.mergeUpdate(for: conversationId) { existing in
+            let freshIds = Set(freshMessages.map(\.id))
+            let fromCacheOnly = existing.filter { !freshIds.contains($0.id) }
+            return (freshMessages + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
+        }
+        // Mirror the fetched window into the app's on-device message store
+        // so the conversation timeline (GRDB-backed) is already current
+        // when the user opens it — the push-notification handler routes
+        // through here with `force: true` precisely for that purpose.
+        await apiMessagePersistor?(response.data)
+        _messagesDidChange.send(conversationId)
+    }
+
     public func fetchOlderMessages(for conversationId: String, before messageId: String) async {
+        let owner = await currentUserId()
         do {
             let response = try await messageService.listBefore(
                 conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
-            let userId = await currentUserId(); let username = await currentUsername()
-            let preferredLanguages = await currentPreferredLanguages()
-            let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
-
-            // Atomic merge: prepend older messages without overwriting any
-            // messages that arrived via socket between the REST fetch and now.
-            await cache.messages.mergeUpdate(for: conversationId) { existing in
-                let existingIds = Set(existing.map(\.id))
-                let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
-                return newOnly + existing
+            await Self.$syncOwner.withValue(owner) {
+                await absorbOlderWindow(response, into: conversationId)
             }
-            await apiMessagePersistor?(response.data)
-            _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] fetchOlderMessages error: \(error.localizedDescription)")
         }
+    }
+
+    private func absorbOlderWindow(_ response: MessagesAPIResponse, into conversationId: String) async {
+        guard await ownsSession() else {
+            Self.logger.notice("[SyncEngine] page ancienne refusée : le compte a changé pendant la requête")
+            return
+        }
+        let userId = await currentUserId(); let username = await currentUsername()
+        let preferredLanguages = await currentPreferredLanguages()
+        let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
+
+        // Atomic merge: prepend older messages without overwriting any
+        // messages that arrived via socket between the REST fetch and now.
+        await cache.messages.mergeUpdate(for: conversationId) { existing in
+            let existingIds = Set(existing.map(\.id))
+            let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
+            return newOnly + existing
+        }
+        await apiMessagePersistor?(response.data)
+        _messagesDidChange.send(conversationId)
     }
 
     // MARK: - Retention Cleanup
