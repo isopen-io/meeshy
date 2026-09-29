@@ -141,10 +141,28 @@ export async function loadEphemeralReaderDeadlines(
  * scelle à l'échéance de CE lecteur, que le message cité soit sur la page ou
  * non. Même lecture, même plafond — une seule requête.
  */
-export function withQuotedMessages<T extends EphemeralRow & { readonly replyTo?: EphemeralRow | null }>(
-  messages: readonly T[],
-): EphemeralRow[] {
-  return [...messages, ...messages.flatMap((message) => (message.replyTo ? [message.replyTo] : []))];
+export function withQuotedMessages(messages: ReadonlyArray<EphemeralRow & QuotingRow>): EphemeralRow[] {
+  return [...messages, ...quotedRowsOf(messages)];
+}
+
+type QuotingRow = { readonly replyTo?: (Omit<EphemeralRow, 'id'> & { readonly id?: string | null }) | null };
+
+const quotedRowsOf = (messages: ReadonlyArray<QuotingRow>): EphemeralRow[] =>
+  messages.flatMap(({ replyTo }) => (replyTo?.id ? [{ ...replyTo, id: replyTo.id }] : []));
+
+/**
+ * #8562 — les échéances des seuls messages CITÉS, pour une porte qui ne les
+ * charge pas déjà (fil de réponses, lien de partage). Le lecteur n'est résolu
+ * — une requête — que si une citation porte un éphémère.
+ */
+export async function loadQuotedEphemeralReaders(
+  prisma: EphemeralDeadlinesPrisma,
+  messages: ReadonlyArray<QuotingRow>,
+  readerParticipantId: () => Promise<string | undefined>,
+): Promise<Map<string, EphemeralReaderResolution>> {
+  const quoted = quotedRowsOf(messages).filter((row) => hasPerReaderEphemeralDeadline(row));
+  if (quoted.length === 0) return new Map();
+  return loadEphemeralReaderDeadlines(prisma, quoted, await readerParticipantId());
 }
 
 /**
