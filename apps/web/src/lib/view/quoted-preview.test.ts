@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { quotedPreviewOf } from './quoted-preview';
@@ -388,6 +389,39 @@ describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
     expect(shown.text).toBe('Message supprimé');
     expect(shown.media).toBeNull();
     expect(shown.inventory).toEqual([]);
+  });
+});
+
+/**
+ * #8631 — UNE CITATION SCELLÉE PARCE QUE L'ÉPHÉMÈRE A EXPIRÉ POUR SON LECTEUR
+ * n'a pas été SUPPRIMÉE. La passerelle la sert sous la forme d'une suppression
+ * datée de l'échéance du lecteur, et y joint `expiresAt` = cette même date
+ * (`sealedQuotedMessage`) ; le scellement local (`tombstoneQuotesOf`, à
+ * l'expiration ou à la consommation d'une flamme-œil) en fait autant.
+ */
+describe('quotedPreviewOf — un éphémère cité ÉCHU pour son lecteur', () => {
+  const sealedAt = '2026-09-25T10:00:00.000Z' as unknown as Date;
+  const lapsed = quoted({ content: '', translations: [], attachments: [], deletedAt: sealedAt, expiresAt: sealedAt });
+
+  test('dit « Message éphémère expiré », pas « Message supprimé »', () => {
+    expect(preview(lapsed).text).toBe('Message éphémère expiré');
+  });
+
+  test('dans la langue du lecteur', async () => {
+    await loadInterfaceCatalog('en');
+    expect(quotedPreviewOf({ quoted: lapsed, readerLanguages: ['en'], interfaceLanguage: 'en' }).text).toBe('Ephemeral message expired');
+  });
+
+  test('rien ne voyage, comme une suppression', () => {
+    const shown = preview(lapsed);
+    expect(shown.media).toBeNull();
+    expect(shown.inventory).toEqual([]);
+    expect(shown.isProtected).toBe(true);
+  });
+
+  test('une suppression AVANT l’échéance reste « Message supprimé »', () => {
+    const deletedEarly = quoted({ deletedAt: sealedAt, expiresAt: '2026-09-25T11:00:00.000Z' as unknown as Date });
+    expect(preview(deletedEarly).text).toBe('Message supprimé');
   });
 });
 

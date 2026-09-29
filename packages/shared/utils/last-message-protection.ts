@@ -5,18 +5,21 @@
  * (`packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageSummaryKind.swift`),
  * ordre des tests compris : la péremption se juge AVANT le flou (#6111).
  *
- * N'inspecte que les colonnes que le client décode (`isBlurred` / `isViewOnce`
- * / `expiresAt` / `ephemeralDuration`) — jamais `effectFlags`, qui est
- * un bitfield RECOMPOSÉ serveur depuis ces mêmes colonnes
- * (`packages/shared/types/api-schemas/message.ts`, doc-comment d'`effectFlags`)
- * et ne porte donc aucun signal que les trois n'auraient déjà.
+ * Inspecte les colonnes que le client décode (`isBlurred` / `isViewOnce`
+ * / `expiresAt` / `ephemeralDuration`) et, de `effectFlags`, le SEUL bit
+ * qu'aucune colonne ne porte : la flamme-œil (`EPHEMERAL_AFTER_READ`, #8302).
+ * Un message qui disparaît quand son lecteur l'a VU ne peut pas se lire dans
+ * la liste, où le lire ne le consomme pas (#8634).
  */
+
+import { hasPerReaderEphemeralDeadline, isAfterReadEphemeral } from './ephemeral-countdown.js';
 
 export type LastMessageSummaryKind =
   | 'standard'
   | 'hidden'
   | 'viewOnce'
   | 'expired'
+  | 'afterRead'
   | 'ephemeralActive';
 
 export interface LastMessageProtectionFlags {
@@ -39,12 +42,15 @@ export interface LastMessageProtectionFlags {
    * décompter depuis SA réception (ou depuis `message:countdown-started`).
    */
   ephemeralDuration?: number | null;
+  /** Porte la flamme-œil (`EPHEMERAL_AFTER_READ`), dont `expiresAt` est aussi l'heure interne de destruction. */
+  effectFlags?: number | null;
 }
 
 const PROTECTED_KINDS: ReadonlySet<LastMessageSummaryKind> = new Set([
   'hidden',
   'viewOnce',
-  'expired'
+  'expired',
+  'afterRead'
 ]);
 
 /**
@@ -57,12 +63,13 @@ export function resolveLastMessageSummaryKind(
 ): LastMessageSummaryKind {
   // #7451 — pour un éphémère, la colonne est l'heure interne de DESTRUCTION,
   // jamais l'échéance d'un lecteur : elle ne peut donc plus rendre de verdict.
-  const isEphemeral = typeof flags.ephemeralDuration === 'number' && flags.ephemeralDuration > 0;
+  const isEphemeral = hasPerReaderEphemeralDeadline(flags);
   const expiresAt = !isEphemeral && flags.expiresAt != null ? new Date(flags.expiresAt) : null;
 
   if (expiresAt && expiresAt.getTime() <= now.getTime()) return 'expired';
   if (flags.isBlurred === true) return 'hidden';
   if (flags.isViewOnce === true) return 'viewOnce';
+  if (isAfterReadEphemeral(flags.effectFlags)) return 'afterRead';
   if (isEphemeral) return 'ephemeralActive';
   if (expiresAt && expiresAt.getTime() > now.getTime()) return 'ephemeralActive';
   return 'standard';

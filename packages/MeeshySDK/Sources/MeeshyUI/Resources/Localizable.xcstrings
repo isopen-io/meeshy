@@ -32238,6 +32238,54 @@
         }
       }
     },
+    "protection.after_read.a11y": {
+      "comment": "VoiceOver — bulle flamme-œil (#8635) : le message disparaît quand le lecteur l'a vu puis quitte la conversation.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة مؤقتة، تختفي بعد القراءة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flüchtige Nachricht, verschwindet nach dem Lesen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ephemeral message, disappears after reading"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje efímero, desaparece tras leerlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message éphémère, disparaît après lecture"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggio effimero, scompare dopo la lettura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagem efêmera, desaparece após a leitura"
+          }
+        }
+      }
+    },
     "protection.blurred": {
       "extractionState": "manual",
       "localizations": {

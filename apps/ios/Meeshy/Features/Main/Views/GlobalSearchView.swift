@@ -670,6 +670,16 @@ struct GlobalSearchView: View {
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
 
+        case .afterRead:
+            HStack(spacing: 4) {
+                Image(systemName: "flame.fill")
+                    .font(MeeshyFont.relative(11, weight: .medium))
+                Text(String(localized: "protection.afterRead", defaultValue: "Disparaît après lecture"))
+                    .font(MeeshyFont.relative(13).italic())
+            }
+            .foregroundColor(theme.textSecondary)
+            .lineLimit(1)
+
         case .ephemeralActive, .standard:
             if let preview = result.lastMessagePreview, !preview.isEmpty {
                 Text(preview)
@@ -773,6 +783,8 @@ struct GlobalSearchView: View {
             parts.append("\(lastMessageLabel): vue unique")
         case .expired:
             parts.append("\(lastMessageLabel): expiré")
+        case .afterRead:
+            parts.append("\(lastMessageLabel): " + String(localized: "protection.afterRead", defaultValue: "Disparaît après lecture"))
         case .ephemeralActive, .standard:
             if let preview = result.lastMessagePreview, !preview.isEmpty {
                 parts.append("\(lastMessageLabel): \(preview)")

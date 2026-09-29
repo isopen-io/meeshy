@@ -15,6 +15,10 @@ const enEphemeral = {
   'composer.ephemeral.rail': 'Time before the message disappears',
   'composer.protection.imposed.blur': 'Blur required by the quoted message',
   'composer.protection.imposed.ephemeral': 'Ephemeral mode required by the quoted message: {duration}',
+  'message.afterRead.a11y': 'Ephemeral message, disappears after reading',
+  'message.ephemeral.label.a11y': 'Ephemeral message',
+  'message.blurred.a11y': 'Blurred',
+  'message.viewOnce.a11y': 'View once',
 } satisfies EphemeralCatalogSlice;
 
 export default enEphemeral;

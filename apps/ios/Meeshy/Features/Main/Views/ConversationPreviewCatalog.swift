@@ -67,6 +67,7 @@ nonisolated enum ConversationPreviewCatalog {
         case .protectionHidden: return String(localized: "protection.hidden", bundle: .main)
         case .protectionHiddenHint: return String(localized: "protection.hidden.hint", bundle: .main)
         case .protectionEncrypted: return String(localized: "protection.encrypted", bundle: .main)
+        case .protectionAfterRead: return String(localized: "protection.afterRead", bundle: .main)
         case .effectCount: return String(localized: "effect.count", bundle: .main)
         case .effectShake: return String(localized: "effect.shake", bundle: .main)
         case .effectZoom: return String(localized: "effect.zoom", bundle: .main)

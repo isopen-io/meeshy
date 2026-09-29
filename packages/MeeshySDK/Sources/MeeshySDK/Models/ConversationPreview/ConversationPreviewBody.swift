@@ -13,6 +13,9 @@ enum ConversationPreviewProtection: Equatable {
     case viewOnce
     case hidden
     case encrypted
+    /// La flamme-œil (#8634) : son lecteur la consomme en la VOYANT dans le
+    /// fil ; la liste la lui donnait à lire sans jamais la consommer.
+    case afterRead
     /// `expiresAt` : l'échéance connue (servie ou réception + durée) ;
     /// `durationSeconds` : l'expéditeur dont personne n'a encore reçu le
     /// message voit sa DURÉE, sans décompte (#7451).
@@ -83,6 +86,9 @@ enum ConversationPreviewProtection: Equatable {
         if flags.viewOnce || attachment.viewOnce { return .viewOnce }
         if flags.blurred || attachment.blurred { return .hidden }
         if flags.encrypted { return .encrypted }
+        if MessageEffectFlags(rawValue: UInt32(truncatingIfNeeded: message.effectFlags ?? 0)).contains(.ephemeralAfterRead) {
+            return .afterRead
+        }
         guard flags.ephemeral else { return .none }
         switch due {
         case .scheduled(let expiresAt): return .ephemeral(expiresAt: expiresAt, durationSeconds: nil)

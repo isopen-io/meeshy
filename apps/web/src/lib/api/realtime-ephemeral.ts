@@ -104,7 +104,7 @@ export function applyMessageExpired(
   /* LES CITATIONS SONT SCELLÉES SUR-LE-CHAMP (#7960) — une réponse gardait
      dans son `replyTo` embarqué le texte du message détruit ; même règle que
      `message:deleted` et que le relais iOS (`markDeleted` suit les citations). */
-  tombstoneQuotesOf(queryClient, { conversationId: data.conversationId, messageId: data.messageId, deletedAt: now.toISOString() });
+  tombstoneQuotesOf(queryClient, { conversationId: data.conversationId, messageId: data.messageId, deletedAt: now.toISOString(), expired: true });
   schedule(() => {
     forgetEphemeral(data.messageId);
     patchThreadMessages(queryClient, data.conversationId, (messages) =>

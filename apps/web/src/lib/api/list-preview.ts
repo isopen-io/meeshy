@@ -135,6 +135,7 @@ export function isListProtected(message: Message, now: Date = new Date()): boole
       isViewOnce: message.isViewOnce,
       expiresAt: message.expiresAt ?? null,
       ephemeralDuration: message.ephemeralDuration ?? null,
+      effectFlags: message.effectFlags ?? null,
     },
     now,
   );
