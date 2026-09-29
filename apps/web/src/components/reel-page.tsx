@@ -15,6 +15,8 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
+import { yieldingChrome } from '@/lib/view/chrome-yields';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -75,6 +77,9 @@ export type ReelPageProps = {
    * dépendances de `BackgroundTrackAudio` ; sans elle, « la piste protégée
    * est refusée » ne s'éprouve qu'en laissant partir un vrai `fetch`. */
   readonly mediaDeps?: ProtectedMediaDeps;
+  /** La feuille de commentaires est ouverte (`chromeYields`, #8601) : le
+   * chrome du réel s'efface, inerte ; le média reste. */
+  readonly chromeHidden?: boolean;
 };
 
 const TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.7)';
@@ -386,6 +391,7 @@ export function ReelPage(props: ReelPageProps) {
       ? sceneHasControllableSound({ document: stage.scene.document, sceneIndex: 0, carrier: stage.scene.carrier })
       : sceneHasAudibleBackgroundVideo({ document: stage.scene.document, sceneIndex: 0 }));
   const playable = stage.kind === 'video' || stage.kind === 'audio' || sceneSound;
+  const chrome = yieldingChrome({ hidden: props.chromeHidden === true, reducedMotion: prefersReducedMotion() });
 
   return (
     <article
@@ -407,64 +413,69 @@ export function ReelPage(props: ReelPageProps) {
         onSoundUnavailable={setSoundUnavailable}
         {...(props.mediaDeps !== undefined ? { mediaDeps: props.mediaDeps } : {})}
       />
-      {/* LE VOILE BAS tient le blanc de l'auteur, de la légende et des compteurs
-          au-dessus de AA sur la PIRE image (une mire blanche) : mesuré au pixel
-          par `scripts/check-reels.mjs`, jamais déduit d'une couleur calculée. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0"
-        style={{ height: '65%', background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.66) 40%, rgba(0,0,0,0) 100%)' }}
-      />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 ps-4 pe-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
-        <div className="flex min-w-0 flex-1 flex-col gap-2 pb-1">
-          {/* L'IDENTITÉ REPREND LE POINTEUR (#7241). Le scrim est
-              `pointer-events-none` pour que le pager garde ses gestes —
-              défilement vertical, tap pour le son ; seuls l'avatar et le nom le
-              REPRENNENT, sur leur propre surface. Le reste du bandeau continue
-              de laisser passer, donc aucun geste du lecteur n'est volé. */}
-          <div className="pointer-events-auto flex min-w-0 items-center gap-2">
-            <Avatar
-              initials={model.author.initials}
-              color={model.author.accentColor}
-              size={36}
-              name={model.author.name}
-              {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
-              {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
-            />
-            <PersonName
-              name={model.author.name}
-              username={model.author.username}
-              className="truncate text-body font-semibold text-white"
-              style={{ textShadow: TEXT_SHADOW }}
-            >
-              <span data-reel-author>{model.author.name}</span>
-            </PersonName>
-            <span className="shrink-0 text-check text-white" style={{ textShadow: TEXT_SHADOW }}>
-              {model.relativeTime}
-            </span>
-          </div>
-          {model.text !== undefined ? (
-            <p
-              data-reel-caption
-              {...(model.text.language !== '' ? { lang: model.text.language } : {})}
-              className="text-check text-white"
-              style={{ textShadow: TEXT_SHADOW, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-            >
-              {model.text.full}
-            </p>
-          ) : null}
-        </div>
-        <ReelRail
-          model={model}
-          playable={playable}
-          soundOn={props.soundOn}
-          language={language}
-          onToggleSound={props.onToggleSound}
-          onGesture={props.onGesture}
-          onShare={props.onShare}
-          {...(props.onComment !== undefined ? { onComment: props.onComment } : {})}
-          {...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {})}
+      {/* LE CHROME CÈDE À LA FEUILLE (#8601, `lib/view/chrome-yields.ts`) —
+          voile, identité, légende et rail s'effacent ENSEMBLE, inertes, quand
+          on commente ; le média reste. */}
+      <div data-reel-chrome="" className="pointer-events-none absolute inset-0" {...chrome}>
+        {/* LE VOILE BAS tient le blanc de l'auteur, de la légende et des compteurs
+            au-dessus de AA sur la PIRE image (une mire blanche) : mesuré au pixel
+            par `scripts/check-reels.mjs`, jamais déduit d'une couleur calculée. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0"
+          style={{ height: '65%', background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.66) 40%, rgba(0,0,0,0) 100%)' }}
         />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 ps-4 pe-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
+          <div className="flex min-w-0 flex-1 flex-col gap-2 pb-1">
+            {/* L'IDENTITÉ REPREND LE POINTEUR (#7241). Le scrim est
+                `pointer-events-none` pour que le pager garde ses gestes —
+                défilement vertical, tap pour le son ; seuls l'avatar et le nom le
+                REPRENNENT, sur leur propre surface. Le reste du bandeau continue
+                de laisser passer, donc aucun geste du lecteur n'est volé. */}
+            <div className="pointer-events-auto flex min-w-0 items-center gap-2">
+              <Avatar
+                initials={model.author.initials}
+                color={model.author.accentColor}
+                size={36}
+                name={model.author.name}
+                {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
+                {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
+              />
+              <PersonName
+                name={model.author.name}
+                username={model.author.username}
+                className="truncate text-body font-semibold text-white"
+                style={{ textShadow: TEXT_SHADOW }}
+              >
+                <span data-reel-author>{model.author.name}</span>
+              </PersonName>
+              <span className="shrink-0 text-check text-white" style={{ textShadow: TEXT_SHADOW }}>
+                {model.relativeTime}
+              </span>
+            </div>
+            {model.text !== undefined ? (
+              <p
+                data-reel-caption
+                {...(model.text.language !== '' ? { lang: model.text.language } : {})}
+                className="text-check text-white"
+                style={{ textShadow: TEXT_SHADOW, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+              >
+                {model.text.full}
+              </p>
+            ) : null}
+          </div>
+          <ReelRail
+            model={model}
+            playable={playable}
+            soundOn={props.soundOn}
+            language={language}
+            onToggleSound={props.onToggleSound}
+            onGesture={props.onGesture}
+            onShare={props.onShare}
+            {...(props.onComment !== undefined ? { onComment: props.onComment } : {})}
+            {...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {})}
+          />
+        </div>
       </div>
     </article>
   );

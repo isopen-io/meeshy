@@ -47,6 +47,18 @@ const en = {
   'callControls.record.audioDetail': 'Everyone’s voices',
   'callControls.record.video': 'Audio and video',
   'callControls.record.videoDetail': 'Visible video and voices',
+  'callControls.capture': 'Capture',
+  'callControls.capture.label': 'Capture the call',
+  'callControls.back': 'Back',
+  'callControls.journal': 'Transcript',
+  'callControls.journal.label': 'Open the call transcript',
+  'callControls.journal.live': 'Back to live',
+  'callControls.journal.empty': 'Nothing transcribed yet. Turn on captions: every sentence spoken appears here with its translation, for the whole call.',
+  'callControls.journal.original': 'Original',
+  'callControls.camera.options': 'My camera options',
+  'callControls.selfTile.small': 'My thumbnail: small',
+  'callControls.selfTile.medium': 'My thumbnail: medium',
+  'callControls.selfTile.large': 'My thumbnail: large',
 } satisfies CallControlsCatalog;
 
 export default en;

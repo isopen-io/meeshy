@@ -8,6 +8,7 @@ import type { RowActionId } from '@/lib/view/row-actions';
 import { cachedCardSeed } from './card-caches';
 import { ApiError } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
+import { repliesInfiniteOptions } from './comment-replies';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
@@ -460,6 +461,14 @@ export function useComments(postId: string, options?: { readonly enabled?: boole
 }
 
 /**
+ * `useCommentReplies` (#8583) — les réponses d'UNE racine, chargées quand son
+ * fil est DÉPLIÉ seulement : un fil replié ne coûte aucune requête.
+ */
+export function useCommentReplies(postId: string, parentId: string, options: { readonly enabled: boolean }) {
+  return useInfiniteQuery({ ...repliesInfiniteOptions({ ...apiDeps, postId, parentId }), enabled: options.enabled });
+}
+
+/**
  * `commentAction` — RÉFÉRENCE DE MODULE STABLE (motif `reactAction`) : le
  * SITE UNIQUE d'envoi d'un commentaire, lié à l'instance PARTAGÉE
  * `appQueryClient`. La liste de `/post/$post` et le panneau du lecteur de
@@ -471,12 +480,15 @@ export function commentAction(params: {
   readonly content: string;
   readonly author: FeedAuthor;
   readonly originalLanguage?: string | undefined;
+  /** La RACINE de la réponse (#8583) — absent ⇒ premier niveau. */
+  readonly parentId?: string | undefined;
 }): Promise<CommentResult> {
   return performComment({
     postId: params.postId,
     content: params.content,
     author: params.author,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   });
 }

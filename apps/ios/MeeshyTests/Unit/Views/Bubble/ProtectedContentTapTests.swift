@@ -173,7 +173,11 @@ final class ProtectedContentTapTests: XCTestCase {
         let cell = try body(of: "struct FocalGridCell: View",
                             in: "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
         XCTAssertTrue(cell.contains("isRevealed: isRevealed"), "l'état de protection lit la révélation de la case")
-        XCTAssertTrue(cell.contains("case .revealInPlace"), cell)
+        XCTAssertTrue(cell.contains("FocalMediaProtection.tap(on: attachment"), cell)
+        let law = try body(of: "static func tap(on attachment: MessageAttachment",
+                           in: "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        XCTAssertTrue(law.contains("ProtectedContentTap.resolve(cell: attachment)"), "la décision unique du toucher protégé (#8009)")
+        XCTAssertTrue(law.contains("case .revealInPlace"), law)
     }
 
     func test_wiring_riverVeil_opensTheMediaOnlyAfterReveal() throws {

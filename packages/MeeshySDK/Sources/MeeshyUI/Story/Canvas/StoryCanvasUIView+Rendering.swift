@@ -46,8 +46,8 @@ extension StoryCanvasUIView {
         defer { CATransaction.commit() }
 
         // Background layer
-        let bgKind = StoryRenderer.renderBackground(slide: slide,
-                                                    languages: readerContext.preferredLanguages)
+        let bgKind = readerContext.aliasingLocalMedia(
+            StoryRenderer.renderBackground(slide: slide, languages: readerContext.preferredLanguages))
         // BG transform : priorité à `mediaObjects[bg]` (source de vérité
         // unifiée avec les items FG depuis 2026-05-29). Fallback sur le
         // champ legacy `slide.effects.backgroundTransform.scale/offset/rotation`

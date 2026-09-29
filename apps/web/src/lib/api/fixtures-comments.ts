@@ -1,3 +1,5 @@
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import type { FeedAuthor } from './feed-pages';
 import { VIEWER_HANDLE, VIEWER_ID, minutesAgo } from './fixtures-base';
 import type { ApiResult } from './http';
@@ -101,6 +103,28 @@ const FILS: Readonly<Record<string, readonly PostComment[]>> = {
   ],
 };
 
+/**
+ * LES RÉPONSES DU CORPUS (#8583) — `cm-r2-3` annonce `replyCount: 2`, et ses
+ * deux réponses portent chacune un EFFET : l'une un halo (persistant), l'autre
+ * le FLOU (voilée jusqu'au toucher). Sans elles, ni la lecture d'un fil à deux
+ * niveaux ni les effets d'un commentaire ne seraient atteignables en recette.
+ * Servies `createdAt ASC`, comme `PostCommentService.getReplies`.
+ */
+const REPONSES: Readonly<Record<string, readonly PostComment[]>> = {
+  'cm-r2-3': [
+    comment('cm-r2-3-a', NOA, 'Le guide officiel est très bien fait.', 80, {
+      originalLanguage: 'fr',
+      parentId: 'cm-r2-3',
+      effectFlags: MESSAGE_EFFECT_FLAGS.GLOW,
+    }),
+    comment('cm-r2-3-b', INES, 'Je t’envoie le lien en privé.', 70, {
+      originalLanguage: 'fr',
+      parentId: 'cm-r2-3',
+      effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED,
+    }),
+  ],
+};
+
 const EMPTY_PAGE: CommentPage = {
   comments: [],
   pagination: { limit: COMMENTS_PAGE_SIZE, hasMore: false, nextCursor: null },
@@ -111,17 +135,27 @@ const EMPTY_PAGE: CommentPage = {
  * processus, remise à zéro explicite pour qu'aucun fichier de test ne dépende
  * de l'ordre d'exécution. */
 const ajoutes = new Map<string, PostComment[]>();
+const reponsesAjoutees = new Map<string, PostComment[]>();
 let compteur = 0;
 
 export function resetFixtureCommentsForTests(): void {
   ajoutes.clear();
+  reponsesAjoutees.clear();
   compteur = 0;
 }
 
 const filOf = (postId: string): readonly PostComment[] => [...(ajoutes.get(postId) ?? []), ...(FILS[postId] ?? [])];
 
 export function pageOfComments(postId: string, cursor: string | undefined): CommentPage {
-  const fil = filOf(postId);
+  return pageOf(filOf(postId), cursor);
+}
+
+/** Miroir `GET …/comments/:commentId/replies` — ordre ASC, les ajoutées en queue. */
+export function pageOfReplies(parentId: string, cursor: string | undefined): CommentPage {
+  return pageOf([...(REPONSES[parentId] ?? []), ...(reponsesAjoutees.get(parentId) ?? [])], cursor);
+}
+
+function pageOf(fil: readonly PostComment[], cursor: string | undefined): CommentPage {
   if (fil.length === 0) return EMPTY_PAGE;
   const start = cursor === undefined ? 0 : Number.parseInt(cursor, 10);
   if (!Number.isFinite(start) || start < 0) return EMPTY_PAGE;
@@ -149,7 +183,12 @@ export function fixtureAddComment(postId: string, body: Readonly<Record<string, 
     likeCount: 0,
     replyCount: 0,
     ...(typeof body.originalLanguage === 'string' ? { originalLanguage: body.originalLanguage } : {}),
+    ...(typeof body.parentId === 'string' ? { parentId: body.parentId } : {}),
   };
+  if (typeof body.parentId === 'string') {
+    reponsesAjoutees.set(body.parentId, [...(reponsesAjoutees.get(body.parentId) ?? []), created]);
+    return { ok: true, status: 201, data: created };
+  }
   ajoutes.set(postId, [created, ...(ajoutes.get(postId) ?? [])]);
   return { ok: true, status: 201, data: created };
 }

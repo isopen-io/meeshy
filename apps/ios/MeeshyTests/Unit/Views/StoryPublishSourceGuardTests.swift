@@ -58,7 +58,9 @@ final class StoryPublishSourceGuardTests: XCTestCase {
             .joined(separator: "\n")
         guard let start = source.range(of: "func enqueueStoryForOfflinePublish("),
               let rows = source.range(of: "insertOptimisticOfflineStories(", range: start.upperBound..<source.endIndex),
-              let toast = source.range(of: "story.publish.queue.enqueued", range: rows.upperBound..<source.endIndex),
+              // Le toast nomme désormais le type publié (#8522) : l'ancre est
+              // son site d'appel, plus la clé de la story seule.
+              let toast = source.range(of: "StoryPublishCopy.queuedForOffline(", range: rows.upperBound..<source.endIndex),
               let enrich = source.range(of: "enrichSlidesWithThumbHashes(", range: start.upperBound..<source.endIndex) else {
             XCTFail("Séquence hors-ligne introuvable dans StoryViewModel.swift")
             return

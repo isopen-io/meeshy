@@ -1061,7 +1061,7 @@ final class MessageListViewController: UIViewController {
         // comportement historique (auto-scroll RC2.1 compris).
         layout.nearBottomThreshold = Self.nearBottomFollowThreshold
 
-        collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
+        collectionView = MessageListCollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.backgroundColor = .clear
         // La liste est inversée (transform ci-dessous) : l'ajustement
@@ -1723,6 +1723,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onOpenParticipantProfile = openParticipantProfileHandler
                 focalActions.onShowReactions = showReactionsHandler
                 focalActions.onShowReadStatus = showReadStatusHandler
+                focalActions.onShowMessageInfo = showInfoHandler
                 focalActions.onRetry = retryHandler
                 focalActions.onReplyTap = scrollHandler
                 focalActions.onStoryReplyTap = storyReplyHandler
@@ -1784,9 +1785,8 @@ final class MessageListViewController: UIViewController {
                 focalRow = nil
             }
 
-            // Chips du message en focus SUR la ligne de la carte : elles
-            // débordent du bas de la cellule — jamais rognées, et la cellule
-            // passe au-dessus de ses voisines le temps du focus.
+            // Le cadre de l'élu déborde de la cellule : jamais rogné, dessiné au-dessus
+            // des voisines, et touchable (`touchOverflow`, posé par la passe Focal).
             let isFocusedCell = (self.readingMode.usesFlatRow && self.focalDetailedLocalId == localId) || self.expandedLongMessageLocalId == localId
             cell.clipsToBounds = false
             cell.contentView.clipsToBounds = false
@@ -1838,7 +1838,7 @@ final class MessageListViewController: UIViewController {
                     if let focalRow {
                         focalRow.equatable()
                     } else {
-                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId), accentHex: accent)
+                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId))
                     }
                 }
                 .environmentObject(host)

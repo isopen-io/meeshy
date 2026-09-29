@@ -96,6 +96,10 @@ export type ActiveCall = {
   readonly captionPeers: readonly string[];
   readonly transcription: TranscriptionState;
   readonly quality: CallQuality | null;
+  /** Appelé (#8480) : l'appelant tel qu'on le voit et l'entend AVANT de décrocher ; `null` sans aperçu. */
+  readonly preview: MediaStream | null;
+  /** Appelant (#8480) : l'appelé me voit et m'entend pendant que ça sonne. */
+  readonly previewed: boolean;
 };
 
 export type WaitingCall = {

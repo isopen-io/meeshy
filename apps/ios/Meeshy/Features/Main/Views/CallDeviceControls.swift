@@ -81,10 +81,30 @@ struct CallPillButton: View {
         Button(action: action) {
             CallPillButtonLabel(symbol: symbol, kind: kind, caption: caption, diameter: diameter)
         }
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
         .toggleStateAccessibility(isToggle: toggleState != nil, isActive: toggleState ?? false)
+    }
+}
+
+struct CallPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        CallPressLabel(isPressed: configuration.isPressed) { configuration.label }
+    }
+}
+
+private struct CallPressLabel<Content: View>: View {
+    let isPressed: Bool
+    @ViewBuilder let label: () -> Content
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        label()
+            .scaleEffect(isPressed && !reduceMotion ? 0.93 : 1)
+            .brightness(isPressed ? -0.05 : 0)
+            .animation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
     }
 }
 

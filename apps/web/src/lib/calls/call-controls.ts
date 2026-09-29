@@ -16,22 +16,21 @@ import { callLayout, type CallLayout } from './call-view';
  *   partage d'écran, là où le navigateur sait les faire — #8442), Écran (là où
  *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde : Sous-titres, Enregistrer
- *   (appel connecté et identifié), Ajouter des personnes (#8433) et Réagir
- *   (#8439), en duo comme en groupe dès qu'un appel identifié est rejoint. La
- *   conversation de l'appel n'est PAS une action : un seul chemin y mène,
- *   « Conversation » dans l'en-tête (#8436).
+ *   (appel connecté et identifié), Capturer (une vidéo connectée — #8552),
+ *   Ajouter des personnes (#8433) et Réagir (#8439), en duo comme en groupe
+ *   dès qu'un appel identifié est rejoint. La conversation de l'appel n'est
+ *   PAS une action : un seul chemin y mène, « Conversation » dans l'en-tête
+ *   (#8436).
  *
- * En duo, les deux familles sortent en RAILS vers les bords ; en groupe, la
- * pilule grandit et les monte en RANGÉES légendées.
+ * En duo comme en groupe, la pilule GRANDIT vers le haut et monte chaque
+ * famille en une RANGÉE légendée qui défile à l'horizontale (#8550).
  */
 
 export type MineAction = 'camera' | 'flip' | 'effects' | 'screen';
 
-export type CallAction = 'captions' | 'record' | 'invite' | 'react';
+export type CallAction = 'captions' | 'journal' | 'record' | 'capture' | 'invite' | 'react';
 
 export type CallControlSet = { readonly mine: readonly MineAction[]; readonly call: readonly CallAction[] };
-
-export type ControlsArrangement = 'rails' | 'rows';
 
 type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'screenSharing'> & {
   /** Le navigateur sait émettre un écran (`getDisplayMedia`). */
@@ -40,6 +39,8 @@ type ControlsContext = Pick<ActiveCall, 'phase' | 'callId' | 'cameraOn' | 'scree
   readonly canEffect: boolean;
   /** L'appareil a une autre caméra où se retourner. */
   readonly canFlip: boolean;
+  /** La scène montre au moins une image (`isVideoScene`). */
+  readonly videoScene: boolean;
 };
 
 const joined = (phase: ActiveCall['phase']['kind']): boolean => phase === 'connected' || phase === 'reconnecting';
@@ -54,8 +55,9 @@ export function callControlSet(context: ControlsContext): CallControlSet {
     ...((context.canShare && inCall) || context.screenSharing ? (['screen'] as const) : []),
   ];
   const call: readonly CallAction[] = [
-    ...(inCall ? (['captions'] as const) : []),
+    ...(inCall ? (['captions', 'journal'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
+    ...(context.videoScene && context.phase.kind === 'connected' ? (['capture'] as const) : []),
     ...(context.callId !== null && inCall ? (['invite', 'react'] as const) : []),
   ];
   return { mine, call };
@@ -66,11 +68,6 @@ export function callControlSet(context: ControlsContext): CallControlSet {
  * rendue) ne retire rien : seule UNE caméra connue le fait.
  */
 export const flipOffered = (devices: readonly Pick<MediaDeviceInfo, 'kind'>[]): boolean => devices.filter((device) => device.kind === 'videoinput').length !== 1;
-
-/** Rails vers les bords en duo, rangées dans la pilule en groupe. */
-export function controlsArrangement(call: Pick<ActiveCall, 'isGroup'>): ControlsArrangement {
-  return call.isGroup ? 'rows' : 'rails';
-}
 
 /**
  * La scène est-elle VIDÉO ? Seule une scène vidéo efface ses commandes : en
@@ -95,4 +92,22 @@ export const CHROME_IDLE_MS = 4000;
  */
 export function chromeHidden(state: { readonly videoScene: boolean; readonly idleMs: number; readonly keyboardInside: boolean; readonly reducedMotion: boolean }): boolean {
   return state.videoScene && !state.keyboardInside && !state.reducedMotion && state.idleMs >= CHROME_IDLE_MS;
+}
+
+/**
+ * Ce que montrent les commandes d'une vidéo (#8550) : `shown`, `resting`
+ * (effacées par l'attente) ou `dismissed` (rangées d'un toucher). Toucher la
+ * scène les efface ou les rend, TOUTES ; bouger la souris ne rend que ce que
+ * l'attente a effacé — sans quoi la souris qui a cliqué les ferait revenir au
+ * pixel suivant ; le clavier rend toujours.
+ */
+export type ChromeVisibility = 'shown' | 'resting' | 'dismissed';
+
+export type ChromeCue = 'tap' | 'stir' | 'key' | 'rest';
+
+export function chromeAfter(current: ChromeVisibility, cue: ChromeCue): ChromeVisibility {
+  if (cue === 'tap') return current === 'shown' ? 'dismissed' : 'shown';
+  if (cue === 'key') return 'shown';
+  if (cue === 'stir') return current === 'resting' ? 'shown' : current;
+  return current === 'shown' ? 'resting' : current;
 }

@@ -1,0 +1,211 @@
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
+
+import { browserCanvas, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
+import type { ClipEnv } from '@/lib/calls/call-capture-live';
+import { visibleTiles } from '@/lib/calls/call-capture-tiles';
+import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Size } from '@/lib/calls/call-montage';
+import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
+import { browserFaceDetector } from '@/lib/calls/face-tracker';
+import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
+import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
+
+/**
+ * **LE MODE MONTAGE** (#8552, #8578, #8580) — « Capturer » (rangée L'appel)
+ * LIBÈRE l'écran : la scène montre, en plein écran et en direct, le montage
+ * choisi — couverture de magazine, doré, tapis rouge, mosaïque, photomaton,
+ * polaroïd, magazine, pellicule, néon, noir et blanc, BD, cœur —, composé
+ * avec tous les visages affichés. En bas, seul, le carrousel des styles
+ * (chaque vignette vivante, à faible fréquence). Plus de déclencheur (#8625) :
+ * DEUX TAPES sur le style choisi le capturent (un éclair, une vibration, un
+ * mot bref) dans la photothèque ; un APPUI LONG le FILME, rendu en direct et
+ * avec le son de l'appel, jusqu'au stop posé au centre du gabarit
+ * (`call-capture-studio.tsx`). À droite, « Chaque visage » (un portrait par
+ * participant) ; ✕ ou Échap quittent.
+ *
+ * Chunk à part (`budgets.json` › `call_montage_mode`) qui n'importe rien de
+ * l'écran d'appel ; son catalogue se charge avec lui (`loadMontageModeText`).
+ */
+
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => loadCallStudioCatalog(language);
+
+export const MONTAGE_PREVIEW_FPS = 5;
+
+export const MONTAGE_THUMB_FPS = 1;
+
+/** Pendant une vidéo, l'aperçu — qui EST ce qu'on filme — se repeint à la cadence d'un film. */
+export const MONTAGE_RECORD_FPS = 30;
+
+type ModeProps = {
+  readonly language: InterfaceLanguage;
+  readonly quitGlyph: ReactNode;
+  readonly onExit: () => void;
+  /** La scène : l'écran d'appel dont on capture les vidéos affichées. */
+  readonly stage: () => Element | null;
+  readonly onWheel?: ((event: WheelEvent<HTMLElement>) => void) | undefined;
+  /** Le son de l'appel : mon micro et les voix des autres. */
+  readonly audio?: () => readonly MediaStream[];
+  readonly env?: CaptureEnv;
+  readonly save?: (files: readonly CaptureFile[]) => Promise<SaveOutcome>;
+  readonly clipEnv?: () => ClipEnv;
+  readonly viewport?: () => Size;
+};
+
+const NO_AUDIO = (): readonly MediaStream[] => [];
+
+const browserEnv = (): CaptureEnv => ({ canvas: browserCanvas, detector: browserFaceDetector(), now: () => new Date() });
+
+const windowViewport = (): Size => (typeof window === 'undefined' ? { width: 1080, height: 1920 } : { width: window.innerWidth, height: window.innerHeight });
+
+const scaledSize = (full: Size, height: number): Size => ({ width: Math.round((full.width / full.height) * height), height });
+
+/** Dessine le montage `style` dans un canevas, à sa taille. Rien d'affiché : un fond sombre. */
+function paint(canvas: HTMLCanvasElement | null, stage: Element | null, style: MontageStyle, text: MontageText): void {
+  const context = canvas?.getContext('2d') ?? null;
+  if (canvas === null || context === null) return;
+  const size = { width: canvas.width, height: canvas.height };
+  const tiles = stage === null ? [] : visibleTiles(stage);
+  context.clearRect(0, 0, size.width, size.height);
+  drawMontage(context, montageLayout({ style, count: tiles.length, size, onScreen: tiles.map((tile) => tile.onScreen) }), tiles, text);
+}
+
+const facesGlyph = (
+  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="8" cy="9" r="3" />
+    <circle cx="16.5" cy="9" r="3" />
+    <path d="M3 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5M11.5 19c.8-3 2.8-4.5 5-4.5s4.2 1.5 5 4.5" />
+  </svg>
+);
+
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport }: ModeProps) {
+  const [style, setStyle] = useState<MontageStyle>('grid');
+  const root = useRef<HTMLDivElement>(null);
+  const preview = useRef<HTMLCanvasElement>(null);
+  const thumbs = useRef(new Map<MontageStyle, HTMLCanvasElement>());
+  const current = useRef(style);
+  current.current = style;
+  const scene = useRef(stage);
+  scene.current = stage;
+  const full = captureSize(viewport());
+  const previewSize = scaledSize(full, 960);
+  const thumbSize = scaledSize(full, 96);
+  const text: MontageText = {
+    bubble: t(language, 'callStudio.capture.bubble'),
+    date: MONTAGE_DATE(new Date(), language),
+    coverlines: [t(language, 'callStudio.cover.line1'), t(language, 'callStudio.cover.line2'), t(language, 'callStudio.cover.line3')],
+  };
+  const textRef = useRef(text);
+  textRef.current = text;
+  const captureEnv = (): CaptureEnv => env ?? browserEnv();
+  const filmed = (): StudioVideo | null => {
+    const track = preview.current?.captureStream?.(MONTAGE_RECORD_FPS).getVideoTracks()[0];
+    return track === undefined ? null : { track, release: () => track.stop() };
+  };
+  const studio = useCaptureStudio({
+    language,
+    still: async () => {
+      const shown = scene.current();
+      return shown === null ? null : captureMontage({ stage: shown, style: current.current, text: textRef.current, viewport: viewport(), env: captureEnv() });
+    },
+    video: filmed,
+    audio,
+    style: () => current.current,
+    save,
+    ...(clipEnv === undefined ? {} : { clipEnv }),
+  });
+
+  useEffect(() => {
+    const big = (): void => paint(preview.current, scene.current(), current.current, textRef.current);
+    const small = (): void => thumbs.current.forEach((canvas, thumbStyle) => paint(canvas, scene.current(), thumbStyle, textRef.current));
+    big();
+    small();
+    const bigTimer = setInterval(big, 1000 / (studio.recording ? MONTAGE_RECORD_FPS : MONTAGE_PREVIEW_FPS));
+    const smallTimer = setInterval(small, 1000 / MONTAGE_THUMB_FPS);
+    return () => {
+      clearInterval(bigTimer);
+      clearInterval(smallTimer);
+    };
+  }, [studio.recording]);
+
+  useEffect(() => {
+    paint(preview.current, scene.current(), style, textRef.current);
+  }, [style]);
+
+  useEffect(() => {
+    root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus();
+  }, []);
+
+  const faces = async (): Promise<void> => {
+    const shown = scene.current();
+    if (studio.busy || studio.recording || shown === null) return;
+    studio.setStatus({ text: t(language, 'callStudio.capture.busy'), tone: 'busy' });
+    const files = await captureFaces({ stage: shown, env: captureEnv() });
+    if (files.length === 0) {
+      studio.setStatus({ text: t(language, 'callStudio.capture.empty'), tone: 'error' });
+      return;
+    }
+    const outcome = await save(files);
+    if (outcome.saved > 0) studio.setStatus({ text: outcome.saved === 1 ? t(language, 'callStudio.capture.faceSaved') : t(language, 'callStudio.capture.facesSaved', { count: String(outcome.saved) }), tone: 'ok' });
+    else if (outcome.cancelled > 0 && outcome.failed === 0) studio.setStatus({ text: t(language, 'callStudio.capture.cancelled'), tone: 'ok' });
+    else studio.setStatus({ text: t(language, 'callStudio.capture.failed'), tone: 'error' });
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    onExit();
+  };
+
+  const styleName = t(language, `callStudio.montage.${style}`);
+  const items: readonly CarouselItem[] = MONTAGE_STYLES.map((option) => ({
+    id: option,
+    label: t(language, `callStudio.montage.${option}`),
+    visual: (
+      <canvas
+        ref={(canvas) => void (canvas === null ? thumbs.current.delete(option) : thumbs.current.set(option, canvas))}
+        aria-hidden
+        width={thumbSize.width}
+        height={thumbSize.height}
+        className="size-full object-cover"
+        data-call-capture-thumb={option}
+      />
+    ),
+  }));
+
+  return (
+    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage">
+      <div className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-black" data-call-mode-preview="montage">
+        <canvas
+          ref={preview}
+          width={previewSize.width}
+          height={previewSize.height}
+          role="img"
+          aria-label={t(language, 'callStudio.capture.preview', { style: styleName })}
+          className="size-full object-contain"
+          data-call-capture-preview={style}
+        />
+      </div>
+      {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
+      <div className="relative z-10 flex w-full flex-col items-center gap-3">
+        <CaptureStatus status={studio.status} />
+        <CaptureHint language={language} />
+        <ModeCarousel
+          label={t(language, 'callStudio.mode.pickMontage')}
+          items={items}
+          selected={style}
+          onSelect={(id) => setStyle(MONTAGE_STYLES.find((option) => option === id) ?? style)}
+          onWheel={onWheel}
+          capture={{ recording: studio.recording, onCapture: studio.capture, hint: t(language, 'callStudio.capture.gestures') }}
+        />
+        <CallModeBar
+          quit={{ label: t(language, 'callStudio.mode.quit'), glyph: quitGlyph, onPress: onExit, data: { 'data-call-mode-quit': '' } }}
+          center={<KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />}
+          options={<ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} />}
+        />
+      </div>
+      {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}
+    </div>
+  );
+}

@@ -1,10 +1,11 @@
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 
@@ -44,15 +45,45 @@ export type CommentComposerProps = {
   /** LE CONTEXTE DES MENTIONS (#7846) — la publication commentée
    * (`useMentionSource`) ; `null` : aucune liste ne s'ouvre. */
   readonly mentionSource?: MentionSource | null;
+  /**
+   * **LA CIBLE D'UNE RÉPONSE** (#8583) — posée par le glissé d'une rangée ou
+   * son bouton « Répondre ». Le composeur l'ANNONCE (bandeau « Répondre à X »
+   * et son ×), prend le FOCUS, et préremplit la @mention d'une réponse à une
+   * réponse — miroir de `commentReplyBanner` et `beginReply(to:)`
+   * (`FeedCommentsSheet.swift`). C'est l'hôte qui tient la cible et l'envoie
+   * avec le texte : le composeur ne connaît ni la racine ni le réseau.
+   */
+  readonly replyTo?: CommentReplyTarget | null;
+  readonly onCancelReply?: () => void;
 };
 
-export function CommentComposer({ language, onSend, canWrite, mentionSource = null }: CommentComposerProps) {
+export function CommentComposer({
+  language,
+  onSend,
+  canWrite,
+  mentionSource = null,
+  replyTo = null,
+  onCancelReply,
+}: CommentComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
   const mention = useMentionField({ text, fieldRef, onText: setText, source: mentionSource });
+
+  /* LA MENTION PRÉREMPLIE SUIT LA CIBLE — posée pour une réponse à une
+     réponse, retirée quand la cible change ou disparaît, jamais cumulée
+     (`withReplyMention`). Et le focus va au champ : glisser un commentaire,
+     c'est demander à écrire. */
+  const appliedMention = useRef<string | null>(null);
+  useEffect(() => {
+    const next = replyTo?.mention ?? null;
+    const previous = appliedMention.current;
+    appliedMention.current = next;
+    if (previous !== next) setText((current) => withReplyMention(current, previous, next));
+    if (replyTo !== null) fieldRef.current?.focus();
+  }, [replyTo]);
 
   const submit = useCallback(async () => {
     const content = text.trim();
@@ -95,6 +126,36 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
         void submit();
       }}
     >
+      {replyTo === null ? null : (
+        <div data-comment-reply-banner={replyTo.commentId} className="flex items-center gap-2 pb-1">
+          <span aria-hidden className="shrink-0 rounded-full" style={{ width: 3, height: 32, background: 'var(--color-ios-brand)' }} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-check font-semibold" style={{ color: 'var(--color-ios-brand)' }}>
+              {translate(language, 'comments.reply.to', { name: replyTo.authorName })}
+            </p>
+            {replyTo.excerpt === null ? null : (
+              <p className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {replyTo.excerpt}
+              </p>
+            )}
+          </div>
+          {onCancelReply === undefined ? null : (
+            <button
+              type="button"
+              data-comment-reply-cancel
+              aria-label={translate(language, 'comments.reply.cancel')}
+              onClick={() => {
+                onCancelReply();
+                fieldRef.current?.focus();
+              }}
+              className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ width: 44, height: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+            >
+              <Glyph name="x" size={16} />
+            </button>
+          )}
+        </div>
+      )}
       <div className="relative flex items-end gap-2">
       <MentionFieldPanel field={mention} language={language} />
       <label className="sr-only" htmlFor={fieldId}>

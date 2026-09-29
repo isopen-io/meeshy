@@ -728,6 +728,7 @@ export function ThreadModes({
                         {...(rowSelected === undefined || onRowTap === undefined
                           ? {}
                           : { selected: rowSelected, onToggleSelect: onRowTap })}
+                        {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
                         {...sendProps}
                       />
                     ) : (

@@ -23,6 +23,7 @@ import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
 import deGallery from './catalog-de-gallery';
+import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
@@ -30,6 +31,7 @@ import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
+import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
 
 const de = {
@@ -859,6 +861,7 @@ const de = {
   'story.studio.refusal.door.visual': 'Wähle ein Bild oder ein Video.',
   'story.studio.refusal.door.sound': 'Wähle eine Audiodatei.',
   'story.studio.refusal.media-max': 'Diese Veröffentlichung trägt bereits zehn Medien – die Obergrenze der Plattform.',
+  'story.studio.refusal.import-max': '{count} Medien nicht importiert: Eine Veröffentlichung trägt höchstens zehn.',
   'story.studio.failure.network': 'Netzwerk nicht verfügbar.',
   'story.studio.failure.timeout': 'Der Server hat nicht geantwortet.',
   'story.studio.failure.session': 'Sitzung abgelaufen — bitte erneut anmelden.',
@@ -1029,14 +1032,6 @@ const de = {
   'comment.send.error': 'Der Kommentar konnte nicht veröffentlicht werden.',
   'comment.send.pending': 'Kommentar nicht bestätigt — offline',
   'comment.send.empty': 'Schreiben Sie etwas, bevor Sie senden.',
-  'comments.action.like': 'Gefällt mir',
-  'comments.action.unlike': 'Gefällt mir nicht mehr',
-  'comments.action.edit': 'Bearbeiten',
-  'comments.action.delete': 'Löschen',
-  'comments.action.delete.confirm': 'Bestätigen',
-  'comments.edit.label': 'Kommentar bearbeiten',
-  'comments.edit.save': 'Speichern',
-  'comments.edit.cancel': 'Abbrechen',
   'comment.like.error': 'Ihr „Gefällt mir“ wurde nicht gespeichert.',
   'comment.edit.error': 'Die Änderung wurde nicht gespeichert.',
   'comment.delete.error': 'Der Kommentar konnte nicht gelöscht werden.',
@@ -1164,10 +1159,12 @@ const de = {
   ...deStudioChrome,
   ...deEphemeral,
   ...deGallery,
+  ...deMessageCard,
   ...deConversationCard,
   ...deStoriesMine,
   ...deContactCard,
   ...deQuote,
+  ...deCommentRow,
   ...deContactDiscovery,
 } satisfies InterfaceCatalog;
 

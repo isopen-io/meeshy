@@ -63,6 +63,10 @@ const arCall = {
   'call.spotlight.back': 'العودة إلى الشبكة',
   'call.remove.named': 'إزالة {name} من المكالمة',
   'call.remove.failed': 'تعذّرت إزالة هذا المشارك',
+  'call.preview.soundOn': 'تشغيل الصوت',
+  'call.preview.soundOff': 'كتم الصوت',
+  'call.preview.seenBy': 'يراك {name} قبل الرد',
+  'call.preview.heardBy': 'يمكن لـ{name} سماعك قبل الرد',
 } as const;
 
 export default arCall;

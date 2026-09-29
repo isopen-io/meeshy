@@ -580,8 +580,33 @@ async function runScheme(colorScheme) {
        clic sur « muet » — un raccourci mort, pour corriger un vol de frappe.
        Un bouton ne réclame qu'Espace et Entrée ; les flèches restent à
        l'écran. */
+    /* ── 7 quater. #8601 — FEUILLE OUVERTE, LE CHROME CÈDE ─────────────────
+       L'en-tête (barres, auteur, fermer) restait peint au-dessus de la
+       feuille pendant qu'on écrivait. Une loi (`chromeYields`) : en-tête,
+       légende et rail s'effacent ENSEMBLE, inertes ; la feuille reste. */
+    await page
+      .waitForFunction(() => getComputedStyle(document.querySelector('[data-story-header]')).opacity === '0', null, { timeout: 1500 })
+      .catch(() => undefined);
+    const chromeOuvert = await page.evaluate(() => {
+      const header = document.querySelector('[data-story-header]');
+      const rail = document.querySelector('[data-story-action-rail]');
+      return {
+        opacite: header === null ? null : getComputedStyle(header).opacity,
+        inerte: header?.inert === true,
+        rail: rail === null || rail.inert === true,
+        feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+      };
+    });
+    check(
+      chromeOuvert.opacite === '0' && chromeOuvert.inerte && chromeOuvert.rail && chromeOuvert.feuille,
+      `${tag} st-amie-2 : feuille ouverte, l'en-tête et le rail doivent s'effacer, inertes, la feuille restant — ${JSON.stringify(chromeOuvert)}`,
+    );
     await page.click('[data-story-comments-close]');
-    await page.waitForTimeout(250);
+    await page
+      .waitForFunction(() => getComputedStyle(document.querySelector('[data-story-header]')).opacity === '1', null, { timeout: 1500 })
+      .catch(() => undefined);
+    const chromeRendu = await page.evaluate(() => document.querySelector('[data-story-header]')?.inert === false);
+    check(chromeRendu, `${tag} st-amie-2 : feuille fermée, l'en-tête doit revenir atteignable`);
     /* LA FEUILLE REND LE FOCUS PAR OÙ IL EST ENTRÉ — elle le PREND au montage
        (sinon la touche suivante irait au plateau, qui navigue) ; ne pas le
        rendre le laisse tomber sur `<body>`, et au clavier on repart du haut

@@ -47,6 +47,18 @@ const pt = {
   'callControls.record.audioDetail': 'As vozes de todos',
   'callControls.record.video': 'Áudio e vídeo',
   'callControls.record.videoDetail': 'As imagens visíveis e as vozes',
+  'callControls.capture': 'Capturar',
+  'callControls.capture.label': 'Capturar a chamada',
+  'callControls.back': 'Voltar',
+  'callControls.journal': 'Diário',
+  'callControls.journal.label': 'Abrir o diário da chamada',
+  'callControls.journal.live': 'Voltar ao direto',
+  'callControls.journal.empty': 'Ainda nada foi transcrito. Ative as legendas: cada frase dita aparece aqui com a sua tradução, durante toda a chamada.',
+  'callControls.journal.original': 'Original',
+  'callControls.camera.options': 'Opções da minha câmara',
+  'callControls.selfTile.small': 'A minha miniatura: pequena',
+  'callControls.selfTile.medium': 'A minha miniatura: média',
+  'callControls.selfTile.large': 'A minha miniatura: grande',
 } satisfies CallControlsCatalog;
 
 export default pt;

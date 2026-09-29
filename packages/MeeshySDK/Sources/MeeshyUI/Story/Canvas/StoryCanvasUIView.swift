@@ -748,6 +748,10 @@ public final class StoryCanvasUIView: UIView {
     var inlineEditor: StoryInlineTextEditor?
     /// Id du texte en cours d'édition en place (nil hors édition).
     public internal(set) var inlineEditingTextId: String?
+    /// Voir `StoryCanvasUIView+InlineEditYield.swift`.
+    public var inlineEditYieldsToManipulation = false
+    public internal(set) var suspendedInlineEditId: String?
+    var parkedInlineEditor: StoryInlineTextEditor?
     /// Notifié à chaque frappe : (textId, nouvelle chaîne).
     public var onInlineTextChanged: ((String, String) -> Void)?
     /// Notifié quand l'édition se termine (textId).
