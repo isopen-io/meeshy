@@ -44,6 +44,12 @@ import MeeshyUI
 /// est un Status, pas un livrable.
 extension ComposerObjectEditorView {
 
+    /// Ce que l'OBJET admet, lu une fois pour le rail et pour la sélection :
+    /// « Rogner » borne une source qui a une durée, le filtre se cuit dans une
+    /// image (retour porteur 2026-09-28).
+    var objectHasTrimmableSource: Bool { viewModel.sourceTrim(id: objectId) != nil }
+    var objectOffersFilter: Bool { mediaObject?.kind != .video }
+
     var mediaObject: StoryMediaObject? {
         viewModel.currentEffects.mediaObjects?.first { $0.id == objectId }
     }
@@ -72,10 +78,17 @@ extension ComposerObjectEditorView {
                 // comme chez `EmbeddedSceneInspector` : le filtre est un réglage
                 // de SLIDE, et lui donner la vignette de l'objet aurait montré
                 // un aperçu qui ne correspond pas à ce qui change.
+                // **Le filtre de CET objet** (retour porteur 2026-09-28 : « les
+                // modifications impactent cet objet-là et non toute la scène »).
+                // Un média POSÉ règle son propre `filter`, prévisualisé sur sa
+                // propre image ; seul le FOND garde le filtre de slide.
                 section(ComposerObjectEditorCopy.media(.filter), .media(.filter)) {
                     StoryFilterGridView(
                         viewModel: viewModel,
-                        previewImage: viewModel.currentSlideBackgroundImage)
+                        previewImage: media.isBackground
+                            ? viewModel.currentSlideBackgroundImage
+                            : viewModel.loadedImages[media.id],
+                        objectId: media.isBackground ? nil : media.id)
                 }
                 if let source = viewModel.sourceTrim(id: objectId) {
                     section(ComposerObjectEditorCopy.trim, .media(.trim)) {

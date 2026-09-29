@@ -1,5 +1,6 @@
 import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
 import { sceneBackdropOf, sceneFitModeOf } from '@/lib/canvas/backdrop';
+import { isStoryFilter, type StoryFilterId } from '@/lib/canvas/media-filter';
 
 import type { StoryFrame, StudioPlane } from './story-document';
 import {
@@ -19,6 +20,7 @@ import {
   pageWithVisual,
   pageWithVisualAspectRatio,
   pageWithVisualCaption,
+  pageWithVisualFilter,
   pageWithVisualPose,
   pageWithVisualUpload,
   pageWithoutSound,
@@ -47,7 +49,7 @@ import {
   type StudioTextLayer,
   type StudioTiming,
 } from './studio-text';
-import { pageAnimated, pagePlacedWhileAnimated, pageWithTrackTiming } from './studio-timeline';
+import { pageAnimated, pagePlacedWhileAnimated, pageStatic, pageWithTrackTiming } from './studio-timeline';
 
 /**
  * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943, #6944 puis #7684) —
@@ -321,6 +323,13 @@ export function withAnimated(draft: StudioDraft): StudioDraft {
   return pageAnimated(page) === page ? draft : withCurrentPageChange(draft, pageAnimated);
 }
 
+/** ÉTEINDRE « Animé » sur la page courante (#8516, `pageStatic`) — un pas
+ * d'historique ; une page déjà statique laisse le brouillon identique. */
+export function withStatic(draft: StudioDraft): StudioDraft {
+  const page = currentStudioPage(draft);
+  return pageStatic(page) === page ? draft : withCurrentPageChange(draft, pageStatic);
+}
+
 export function withTrackTiming(draft: StudioDraft, id: string, timing: StudioTiming): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithTrackTiming(page, id, timing));
 }
@@ -334,6 +343,14 @@ export function withPlacedWhileAnimated(draft: StudioDraft, id: string, head: nu
 
 export function withPostText(draft: StudioDraft, postText: string): StudioDraft {
   return { ...draft, postText };
+}
+
+/** LE FILTRE d'UN média de la page courante (lot 7) — le MÊME brouillon quand
+ * rien ne change, pour qu'aucun pas d'historique ne s'écrive à vide. */
+export function withVisualFilter(draft: StudioDraft, door: 'visual' | 'overlay', filter: StoryFilterId | null): StudioDraft {
+  const page = currentStudioPage(draft);
+  const next = pageWithVisualFilter(page, door, filter);
+  return next === page ? draft : withCurrentPageChange(draft, () => next);
 }
 
 export function withVisualCaption(draft: StudioDraft, door: 'visual' | 'overlay', caption: string): StudioDraft {
@@ -437,6 +454,7 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
           pose: poseOf('pose' in ref ? ref.pose : undefined),
           ...('frame' in ref && ref.frame !== undefined ? { frame: frameOf(ref.frame) } : {}),
           ...('timing' in ref && timingOf(ref.timing) !== undefined ? { timing: timingOf(ref.timing)! } : {}),
+          ...(isStoryFilter(ref.filter) ? { filter: ref.filter } : {}),
           upload: {
             phase: 'ready',
             postMediaId: ref.postMediaId,
@@ -487,6 +505,7 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
       pose: asset.pose,
       ...(asset.frame !== undefined ? { frame: asset.frame } : {}),
       ...(asset.timing !== undefined ? { timing: asset.timing } : {}),
+      ...(asset.filter !== undefined ? { filter: asset.filter } : {}),
     };
   };
   const background = visual(page.background);

@@ -64,6 +64,7 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { agentSenderIdentity } from './agentSenderIdentity.js';
 import {
   resolveForwardSourceBroadcastPayload,
   withoutForwardSourceOrItsPath,
@@ -427,8 +428,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
+          ...agentSenderIdentity(message.sender),
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
@@ -653,8 +653,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
+          ...agentSenderIdentity(message.sender),
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,

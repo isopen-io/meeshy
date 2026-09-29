@@ -13,6 +13,8 @@ const deEphemeral = {
   'composer.ephemeral.active': 'Ephemerer Modus aktiv: {duration}',
   'composer.ephemeral.off': 'Aus',
   'composer.ephemeral.rail': 'Zeit, bis die Nachricht verschwindet',
+  'composer.protection.imposed.blur': 'Unschärfe durch die zitierte Nachricht vorgegeben',
+  'composer.protection.imposed.ephemeral': 'Ephemerer Modus durch die zitierte Nachricht vorgegeben: {duration}',
 } satisfies EphemeralCatalogSlice;
 
 export default deEphemeral;

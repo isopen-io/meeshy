@@ -199,6 +199,7 @@ enum ConversationFirstRenderWarmup {
         _ = vm.isSearchingQuotedMessage
         _ = vm.isSending
         _ = vm.isViewOnceEnabled
+        _ = vm.armedReplyContagion
         _ = vm.lastUnreadMessage
         _ = vm.listenedAttachmentIds
         _ = vm.mentionController

@@ -578,7 +578,10 @@ jobs:
     name: Peaux web (institutionnel, Lentille, états et virtualisation du fil)
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 25
+    # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
+    # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
+    # d'appel ont gagné leurs témoins. Le plafond suit la charge mesurée.
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v7

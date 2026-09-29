@@ -11,15 +11,15 @@ import type { StudioTiming } from './studio-text';
  */
 export const STUDIO_ANIMATED_DEFAULT_DURATION = 6;
 
-/** L'écart minimal d'une fenêtre : 5 % de la scène (maquette : `0.05` en
- * fraction de la durée). */
-export const STUDIO_TRACK_MIN_FRACTION = 0.05;
-export const STUDIO_TRACK_MIN = STUDIO_TRACK_MIN_FRACTION * STUDIO_ANIMATED_DEFAULT_DURATION;
+/** L'écart minimal d'une fenêtre, en SECONDES — celui d'iOS
+ * (`ClipWindowResolver.minimumDuration`, lot 7) : deux poignées ne se
+ * croisent jamais, et ne se collent pas à moins de 0,05 s. */
+export const STUDIO_TRACK_MIN = 0.05;
 
 /** Un objet posé en mode animé n'entre pas plus tard qu'à 80 % de la scène. */
 const LATEST_ENTRY_FRACTION = 0.8;
 
-const minimumOf = (duration: number): number => STUDIO_TRACK_MIN_FRACTION * duration;
+const minimumOf = (duration: number): number => Math.min(STUDIO_TRACK_MIN, Math.max(0, duration));
 
 export type StudioTrack = { readonly id: string; readonly kind: 'text' | 'overlay'; readonly timing: StudioTiming };
 
@@ -80,10 +80,53 @@ export function pageAnimated(page: StudioPage): StudioPage {
   };
 }
 
+/** Une scène est ANIMÉE quand elle porte une durée — le document le dit, pas
+ * la frise ouverte ou fermée. */
+export const pageIsAnimated = (page: StudioPage): boolean => page.duration !== undefined;
+
+/** Un objet sans fenêtre — la clé `timing` absente, jamais `undefined` posé. */
+function untimed<T extends { readonly timing?: StudioTiming }>(object: T): T {
+  if (object.timing === undefined) return object;
+  const { timing: _timing, ...rest } = object;
+  return rest as T;
+}
+
+/** ÉTEINDRE « Animé » (#8516, maquette `toggleDynamic`) — la scène redevient
+ * STATIQUE : sa durée et CHAQUE fenêtre s'effacent, rien d'animé ne part. Une
+ * scène déjà statique reste le MÊME objet. */
+export function pageStatic(page: StudioPage): StudioPage {
+  const timed = page.texts.some((layer) => layer.timing !== undefined) || page.overlay?.timing !== undefined;
+  if (!pageIsAnimated(page) && !timed) return page;
+  const { duration: _duration, ...rest } = page;
+  return { ...rest, texts: page.texts.map(untimed), overlay: page.overlay === null ? null : untimed(page.overlay) };
+}
+
 export function pageWithTrackTiming(page: StudioPage, id: string, timing: StudioTiming): StudioPage {
   const clamped = clampTiming(timing, studioPageDuration(page));
   const duration = studioPageDuration(page);
   if (id === 'overlay') return page.overlay === null ? page : { ...page, duration, overlay: { ...page.overlay, timing: clamped } };
   if (!page.texts.some((layer) => layer.id === id)) return page;
   return { ...page, duration, texts: page.texts.map((layer) => (layer.id === id ? { ...layer, timing: clamped } : layer)) };
+}
+
+/** Ce que le doigt tient sur une piste : la barre entière, ou une poignée. */
+export type StudioTrackGrip = 'move' | 'start' | 'end';
+
+/**
+ * **LA FENÊTRE APRÈS UN GLISSEMENT de `delta` secondes** (lot 7, miroir
+ * `ComposerSceneFriseMetrics.dragged`) — déplacer garde la durée et reste dans
+ * la scène ; une poignée ne franchit jamais l'autre (écart `STUDIO_TRACK_MIN`)
+ * ni les bords.
+ */
+export function draggedTiming(timing: StudioTiming, grip: StudioTrackGrip, delta: number, duration: number): StudioTiming {
+  const total = Math.max(0, duration);
+  const step = Number.isFinite(delta) ? delta : 0;
+  const minimum = minimumOf(total);
+  if (grip === 'move') {
+    const length = timing.end - timing.start;
+    const start = Math.max(0, Math.min(timing.start + step, total - length));
+    return { start: round(start), end: round(start + length) };
+  }
+  if (grip === 'start') return { start: round(Math.max(0, Math.min(timing.start + step, timing.end - minimum))), end: timing.end };
+  return { start: timing.start, end: round(Math.min(total, Math.max(timing.end + step, timing.start + minimum))) };
 }

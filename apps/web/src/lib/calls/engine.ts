@@ -37,13 +37,14 @@ import {
 } from './call-store';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { PASSTHROUGH_EFFECTS, type CameraEffectsPort } from './camera-effects';
-import { feedbackPayload, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
+import { feedbackActions, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
 import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { listenCallEvents, type CallTransport } from './call-transport';
 import { callNoticeStore, callReactionStore, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
 import { createEngineControls } from './engine-controls';
+import { createEnginePreview } from './engine-preview';
 import { loadDefaultEngineDeps } from './engine-defaults';
 import { baseCall, emptySession } from './engine-session';
 import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-link';
@@ -143,6 +144,8 @@ export type CallEngine = {
   /** La note d'après-appel (#8072) : part par `call:quality-feedback` et ferme la demande. */
   readonly rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]) => void;
   readonly skipRating: () => void;
+  /** L'appelé active le son de l'aperçu (#8627) : la sonnerie se tait. */
+  readonly hearPreview: () => void;
   /** Faire sonner un ami dans l'appel en cours (#8433). */
   readonly invite: (person: DecodedPerson) => Promise<void>;
   /** Couper le micro d'un participant, quand on modère l'appel (#8438). */
@@ -216,6 +219,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   };
 
   const teardownMedia = (): void => {
+    preview.close();
     for (const link of session.links.values()) link.close();
     session.links.clear();
     for (const track of localStream?.getVideoTracks() ?? []) effects.release(track);
@@ -270,6 +274,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       if (call.connectedAt === null) deps.tones.cue('connected');
       session.ringTimer = clear(session.ringTimer);
       write({ ...call, phase: { kind: 'connected' }, connectedAt: call.connectedAt ?? deps.now() });
+      preview.close();
+      if (session.mutedWhileRinging && call.micMuted) toggleMic();
+      session.mutedWhileRinging = false;
       session.telemetry = markConnected(session.telemetry, deps.now());
       startQuality();
       return;
@@ -361,6 +368,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.links.set(userId, link);
     return link;
   };
+
+  const preview = createEnginePreview({ read, update, emit, viewerId: deps.viewerId, createLink: deps.createLink, createStream: deps.createStream, localStream: () => localStream, iceServers: () => session.iceServers, silenceRing: deps.tones.stop });
 
   const leaveServer = (reason?: string): void => {
     const callId = read()?.callId ?? null;
@@ -574,6 +583,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       invitedBy: event.invitedBy?.name ?? null,
     });
     remember(event.initiator, null, event.initiatorFlags);
+    preview.ringing();
     deps.tones.start('ring', { titleLabel: deps.ringLabel() });
     incomingTimer = deps.schedule(() => {
       incomingTimer = null;
@@ -743,6 +753,10 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       case SERVER_EVENTS.CALL_REACTION_RECEIVED:
         controls.receive(event, payload);
         return;
+      case SERVER_EVENTS.CALL_PREVIEW_REQUESTED:
+      case SERVER_EVENTS.CALL_PREVIEW_SIGNAL:
+        preview.receive(event, payload);
+        return;
       default:
         return;
     }
@@ -754,6 +768,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const muted = !call.micMuted;
     for (const track of localStream?.getAudioTracks() ?? []) track.enabled = !muted;
     write({ ...call, micMuted: muted });
+    if (call.phase.kind === 'outgoing') session.mutedWhileRinging = muted;
+    session.captions?.micChanged();
     if (call.callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId: call.callId, enabled: !muted });
   };
 
@@ -770,6 +786,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     if (sent !== null) stream.addTrack(sent);
     await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(sent).catch(() => undefined)));
+    preview.setVideoTrack(sent);
     update((call) => ({ ...call, cameraOn, localStream: deps.createStream(stream.getTracks()) }));
   };
 
@@ -978,13 +995,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       resetToIdle();
       await start(retry);
     },
-    rate: (rating, issues) => {
-      const prompt = store.getState().feedback;
-      if (prompt === null) return;
-      emit(CLIENT_EVENTS.CALL_QUALITY_FEEDBACK, feedbackPayload({ callId: prompt.callId, rating, issues }));
-      store.setState({ feedback: null });
-    },
-    skipRating: () => store.setState({ feedback: null }),
+    ...feedbackActions({ store, emit }),
+    hearPreview: preview.hear,
     invite: controls.invite,
     muteParticipant: controls.muteParticipant,
     react: controls.react,

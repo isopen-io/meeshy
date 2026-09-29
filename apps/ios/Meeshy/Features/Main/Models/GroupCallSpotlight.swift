@@ -53,6 +53,11 @@ enum GroupCallSpotlight {
         return nil
     }
 
+    static func featuresLocal(_ focus: GroupCallStageFocus) -> Bool {
+        guard case .spotlight(let tileId, _) = focus else { return false }
+        return tileId == GroupCallStage.localTileId
+    }
+
     static func clampedZoom(_ scale: CGFloat) -> CGFloat {
         min(max(scale, 1), maxZoom)
     }

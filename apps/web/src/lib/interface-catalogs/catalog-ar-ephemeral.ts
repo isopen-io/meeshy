@@ -13,6 +13,8 @@ const arEphemeral = {
   'composer.ephemeral.active': 'الوضع المؤقت مفعّل: {duration}',
   'composer.ephemeral.off': 'معطّل',
   'composer.ephemeral.rail': 'المدة قبل اختفاء الرسالة',
+  'composer.protection.imposed.blur': 'التمويه مفروض بسبب الرسالة المقتبسة',
+  'composer.protection.imposed.ephemeral': 'الوضع المؤقت مفروض بسبب الرسالة المقتبسة: {duration}',
 } satisfies EphemeralCatalogSlice;
 
 export default arEphemeral;

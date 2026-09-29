@@ -95,6 +95,7 @@ extension MessageListViewController {
         focalFocusedLocalId = nil
         guard isViewLoaded else { return }
         let cells = collectionView.visibleCells
+        for case let cell as MessageListCell in cells { cell.touchOverflow = .zero }
         let flatten = {
             for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
         }
@@ -146,7 +147,10 @@ extension MessageListViewController {
         // règle : la réduction et la compaction sont, elles aussi, des
         // fonctions du mode, pas un décor neutre.
         guard focalMagnificationArmed else {
-            for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
+            for cell in cells {
+                FocalScrollPerspective.reset(cell.contentView.layer)
+                (cell as? MessageListCell)?.touchOverflow = .zero
+            }
             if focalFocusedLocalId != nil {
                 focalFocusedLocalId = nil
                 syncFocalFocusDetails()
@@ -187,12 +191,23 @@ extension MessageListViewController {
         // reconfiguration n'ait posé les pastilles sur la nouvelle rangée.
         let anchor = cells.first { FocalScrollPerspective.showsFocusDetails(cellTag: $0.tag) }
         let anchorMidY = anchor.flatMap { focalGeometry(of: $0)?.visualMidY }
-        let clearance = FocalScrollPerspective.electionClearance(isFirstInGroup: anchor.map { FocalScrollPerspective.isGroupHead(cellTag: $0.tag) } ?? false)
-        let growth = anchor.map { FocalScrollPerspective.loupeGrowth(of: $0.contentView.layer) } ?? 0
+        // #8506 — le passage mesure le CADRE entier de la rangée détaillée :
+        // identité et bande vivent dans le cadre, qui grandit avec le contenu
+        // grossi (#8537 : la loupe ne porte plus que le contenu, dans la rangée).
+        let anchorBounds = anchor?.contentView.layer.bounds ?? .zero
+        let anchorIsGroupHead = anchor.map { FocalScrollPerspective.isGroupHead(cellTag: $0.tag) } ?? false
+        let contentScale = FocalScrollPerspective.electedScale(reduceMotion: UIAccessibility.isReduceMotionEnabled, rowWidth: anchorBounds.width)
+        let clearance = FocalScrollPerspective.electionClearance(isFirstInGroup: anchorIsGroupHead, cellHeight: anchorBounds.height, scale: contentScale)
+        let anchorOverflow = FocalScrollPerspective.electedTouchOverflow(
+            geometry: FocalScrollPerspective.electedGeometry(isFirstInGroup: anchorIsGroupHead, cellHeight: anchorBounds.height, contentScale: contentScale),
+            cellHeight: anchorBounds.height
+        )
         for cell in cells {
             let geometry = focalGeometry(of: cell)
-            let shift = geometry.map { FocalScrollPerspective.electionShift(cellMidY: $0.visualMidY, magnifiedMidY: anchorMidY, clearance: clearance, loupeGrowth: growth) } ?? 0
-            FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && geometry?.id == focused, shift: shift, animated: electionChanged)
+            let shift = geometry.map { FocalScrollPerspective.electionShift(cellMidY: $0.visualMidY, magnifiedMidY: anchorMidY, clearance: clearance) } ?? 0
+            FocalScrollPerspective.poseElectionPassage(cell.contentView.layer, shift: shift, animated: electionChanged)
+            // #8537 — les contrôles du cadre, posés sous la rangée, reçoivent le toucher.
+            (cell as? MessageListCell)?.touchOverflow = cell === anchor ? anchorOverflow : .zero
         }
         focalFocusedLocalId = focused
         // Les détails du message en focus apparaissent AVEC la carte, pas au

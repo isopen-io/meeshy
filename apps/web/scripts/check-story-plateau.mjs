@@ -36,6 +36,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { addTextOnStage } from './lib/stage-typing.mjs';
 
 const ROOT = new URL('../', import.meta.url).pathname;
 const DIST = join(ROOT, 'dist-gateway');
@@ -174,8 +175,11 @@ check(
   (await page.evaluate(() => document.querySelectorAll('[data-story-option]').length)) > 0,
   'aucun contrôle du rail n’est rendu',
 );
-await page.click('[data-story-option="add-text"]');
-await page.fill('#story-studio-text', 'Hello');
+/* « T+ » pose le texte ET ouvre sa saisie : on tape au CLAVIER, jamais par
+   `page.fill`, qui écrivait sous le calque des gestes (#8515). */
+const tPlus = await addTextOnStage(page, 'Hello');
+if (tPlus !== null) console.error(`  « T+ » puis le clavier : ${tPlus}`);
+check(tPlus === null, `« T+ » puis le clavier : ${tPlus}`);
 await twoFrames();
 check(
   (await page.evaluate(() => document.querySelectorAll('[data-scene-object="text"]').length)) === 2,
@@ -187,7 +191,7 @@ check(
 );
 
 /* ── 3. les RÉGLAGES de l'objet — langue, police, effet, couleur, alignement ── */
-await page.click('[data-story-option="editor-toggle"]');
+/* « T+ » a ouvert l'ÉDITION du texte posé : ses réglages sont déjà là. */
 await page.waitForSelector('[data-story-object-editor="text-2"]', { timeout: 8000 });
 const pick = async (section, value) => {
   const selector = `[data-story-option="${section}:${value}"]`;

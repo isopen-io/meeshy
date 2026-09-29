@@ -13,6 +13,8 @@ const enEphemeral = {
   'composer.ephemeral.active': 'Ephemeral mode active: {duration}',
   'composer.ephemeral.off': 'Off',
   'composer.ephemeral.rail': 'Time before the message disappears',
+  'composer.protection.imposed.blur': 'Blur required by the quoted message',
+  'composer.protection.imposed.ephemeral': 'Ephemeral mode required by the quoted message: {duration}',
 } satisfies EphemeralCatalogSlice;
 
 export default enEphemeral;

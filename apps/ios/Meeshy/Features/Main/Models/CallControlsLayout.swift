@@ -1,9 +1,10 @@
 import Foundation
 
 /// #8394 — la vue d'appel « C adapté ». La pilule du bas porte toujours
-/// `(…) · Micro · Sortie · Fin` ; le `(…)` déploie les autres actions
-/// AU-DESSUS de la pilule (#8432) : une rangée de boutons de verre en duo, deux
-/// rangées légendées en groupe. La conversation n'est PAS une action : sa
+/// `(…) · Micro · Sortie · Fin`. #8550 — le `(…)` empile AU-DESSUS de la
+/// rangée de base une rangée PAR FAMILLE (« Mon image », « L'appel »), chacune
+/// défilant à l'horizontale, en duo comme en groupe. #8578 — une seule chose à
+/// la fois : `CallScreenLayer`. La conversation n'est PAS une action : sa
 /// seule porte est le bouton de l'en-tête (#8436). Ce fichier tient les RÈGLES
 /// (quelles actions, où, quand) ; les vues ne font que les dessiner.
 
@@ -21,6 +22,9 @@ enum CallAction: String, CaseIterable, Sendable {
     case addPeople
     /// #8439 — envoyer une réaction à tout l'appel.
     case react
+    /// #8552 — capturer l'appel en une image montée, ou chaque visage.
+    case capture
+    case journal
 }
 
 /// Ce que l'appel permet, lu une fois par rendu depuis `CallManager`.
@@ -33,33 +37,54 @@ struct CallActionContext: Equatable, Sendable {
     let isConnected: Bool
     let mayRecord: Bool
     let canPictureInPicture: Bool
+    let showsVideo: Bool
+
+    init(
+        isOnMac: Bool,
+        isVideoEnabled: Bool,
+        hasSelectableCameras: Bool,
+        isConnected: Bool,
+        mayRecord: Bool,
+        canPictureInPicture: Bool,
+        showsVideo: Bool? = nil
+    ) {
+        self.isOnMac = isOnMac
+        self.isVideoEnabled = isVideoEnabled
+        self.hasSelectableCameras = hasSelectableCameras
+        self.isConnected = isConnected
+        self.mayRecord = mayRecord
+        self.canPictureInPicture = canPictureInPicture
+        self.showsVideo = showsVideo ?? isVideoEnabled
+    }
 }
 
-/// Les deux groupes d'actions : le premier agit sur « mon image », le second
-/// sur « l'appel ». En groupe, ce sont les deux rangées légendées, dans cet
-/// ordre ; en duo, la rangée les enchaîne.
-struct CallActionSet: Equatable, Sendable {
-    static let maxPerRow = 4
+/// Une famille d'actions : « mon image » agit sur ce que j'envoie, « l'appel »
+/// sur l'appel lui-même.
+enum CallActionFamily: String, CaseIterable, Sendable {
+    case myImage
+    case theCall
+}
 
+/// Une rangée de la pilule : une famille, ses actions dans l'ordre, défilant
+/// à l'horizontale.
+struct CallActionFamilyRow: Equatable, Identifiable, Sendable {
+    let family: CallActionFamily
+    let actions: [CallAction]
+
+    var id: CallActionFamily { family }
+}
+
+struct CallActionSet: Equatable, Sendable {
     let myImage: [CallAction]
     let theCall: [CallAction]
 
-    /// Duo (#8432) : les actions tiennent sur UNE rangée au-dessus de la
-    /// pilule tant qu'elle ne dépasse pas cinq boutons de 44 pt (l'écran le
-    /// plus étroit, marges comprises) ; au-delà, « mon image » puis « l'appel ».
-    static let maxPerDuoRow = 5
-
-    var duoRows: [[CallAction]] {
-        let all = myImage + theCall
-        guard all.count > Self.maxPerDuoRow else { return [all] }
-        return [myImage, theCall].filter { !$0.isEmpty }
+    var familyRows: [CallActionFamilyRow] {
+        [CallActionFamilyRow(family: .myImage, actions: myImage), CallActionFamilyRow(family: .theCall, actions: theCall)]
+            .filter { !$0.actions.isEmpty }
     }
 
-    /// Groupe : chaque groupe légendé se coupe en rangées de quatre colonnes
-    /// au plus ; une rangée de trop continue sous le même titre.
-    var groupSections: [CallActionSection] {
-        [CallActionSection(group: .myImage, actions: myImage), CallActionSection(group: .theCall, actions: theCall)]
-            .filter { !$0.rows.isEmpty }
+    func contains(_ action: CallAction) -> Bool {
+        myImage.contains(action) || theCall.contains(action)
     }
 
     static func resolve(_ context: CallActionContext) -> CallActionSet {
@@ -79,64 +104,10 @@ struct CallActionSet: Equatable, Sendable {
     }
 
     private static func theCallActions(_ context: CallActionContext) -> [CallAction] {
+        let together: [CallAction] = context.isConnected ? [.addPeople, .react] : []
+        let capture: [CallAction] = context.isConnected && context.showsVideo ? [.capture] : []
         let recording: [CallAction] = context.mayRecord ? [.recording] : []
         let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
-        let together: [CallAction] = context.isConnected ? [.addPeople, .react] : []
-        return [.captions] + together + recording + pip
-    }
-}
-
-struct CallActionSection: Equatable, Sendable {
-    enum Group: Equatable, Sendable {
-        case myImage
-        case theCall
-    }
-
-    let group: Group
-    let rows: [[CallAction]]
-
-    init(group: Group, actions: [CallAction]) {
-        self.group = group
-        rows = stride(from: 0, to: actions.count, by: CallActionSet.maxPerRow).map {
-            Array(actions[$0 ..< min($0 + CallActionSet.maxPerRow, actions.count)])
-        }
-    }
-}
-
-/// Comment les actions déployées se dessinent.
-enum CallActionsPresentation: Equatable, Sendable {
-    /// `(…)` replié : la pilule seule.
-    case hidden
-    /// Duo : une rangée de boutons de verre au-dessus de la pilule.
-    case row
-    /// Groupe : deux rangées légendées au-dessus de la pilule.
-    case rows
-}
-
-/// L'état du `(…)` — replié par défaut : l'écran d'appel s'ouvre sur l'image
-/// et les quatre commandes essentielles.
-struct CallControlsDisclosure: Equatable, Sendable {
-    enum AccessibilityState: Equatable, Sendable {
-        case collapsed
-        case expanded
-    }
-
-    let isExpanded: Bool
-
-    init(isExpanded: Bool = false) {
-        self.isExpanded = isExpanded
-    }
-
-    func toggled() -> CallControlsDisclosure {
-        CallControlsDisclosure(isExpanded: !isExpanded)
-    }
-
-    func presentation(isGroup: Bool) -> CallActionsPresentation {
-        guard isExpanded else { return .hidden }
-        return isGroup ? .rows : .row
-    }
-
-    var accessibilityState: AccessibilityState {
-        isExpanded ? .expanded : .collapsed
+        return [.captions, .journal] + together + capture + recording + pip
     }
 }
