@@ -94,12 +94,62 @@ extension MeeshyComposerHost {
 
     var sceneTrailingOptions: [ComposerTrailingColumn.Entry] {
         ComposerTrailingColumn.options(for: ComposerTrailingColumn.focus(
-            railMode: sceneRailMode, selection: sceneSelectionInventory))
+            railMode: sceneRailMode,
+            selection: sceneSelectionInventory,
+            effects: sceneEffects,
+            openEffect: activeSceneEffect))
+    }
+
+    // MARK: - Les effets d'une scène à fond média (#8712)
+
+    /// Le fond MÉDIA de la slide — image ou vidéo. Une couleur n'en est pas un.
+    var sceneEffectBackground: ComposerSceneEffects.Background? {
+        guard let fond = viewModel.currentSlide.effects.mediaObjects?.first(where: \.isBackground) else {
+            return nil
+        }
+        return fond.kind == .video ? .video : .image
+    }
+
+    var sceneEffects: [ComposerSceneEffect] {
+        ComposerSceneEffects.served(background: sceneEffectBackground)
+    }
+
+    /// Le carrousel RÉELLEMENT ouvert — la règle le referme dès que la scène
+    /// cesse de le servir.
+    var activeSceneEffect: ComposerSceneEffect? {
+        guard mountedComposerView == .scene else { return nil }
+        return ComposerSceneEffects.carousel(open: openSceneEffect,
+                                             served: sceneEffects,
+                                             objectSelected: sceneSelectionInventory != nil,
+                                             toolIsOpen: sceneToolOwnsScreen)
+    }
+
+    /// **Le carrousel, en bas, à la place de l'audience et de Publier.** Les
+    /// deux contenus sont les briques du SDK qui existaient : la grille de
+    /// filtres (avec son intensité) et les puces d'ouverture.
+    func sceneEffectCarousel(_ effet: ComposerSceneEffect) -> some View {
+        ComposerSceneEffectCarousel(effect: effet,
+                                    plateauTint: tint.color,
+                                    onClose: { openSceneEffect = nil }) {
+            switch effet {
+            case .filter:
+                StoryFilterGridView(viewModel: viewModel,
+                                    previewImage: viewModel.currentSlideBackgroundImage)
+            case .opening:
+                OpeningEffectChips(selection: viewModel.openingEffect,
+                                   onDarkSurface: true) { choix in
+                    viewModel.openingEffect = choix
+                    HapticFeedback.light()
+                }
+            }
+        }
     }
 
     /// **Chaque entrée retombe sur la primitive qui existait déjà.**
     func handleSceneTrailingOption(_ entry: ComposerTrailingColumn.Entry) {
         switch entry {
+        case .sceneEffect(let effet, _):
+            openSceneEffect = ComposerSceneEffects.toggled(effet, open: activeSceneEffect)
         case .toolControl(let control):
             handleRailToolControl(control)
         case .exitTool:

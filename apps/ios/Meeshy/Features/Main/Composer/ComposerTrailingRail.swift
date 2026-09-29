@@ -139,7 +139,7 @@ struct ComposerTrailingRail: View {
             }
             .frame(maxHeight: .infinity, alignment: .top)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerTrailingRailCopy.railLabel))
+            .accessibilityLabel(Text(ComposerTrailingColumnPaint.groupLabel(options)))
         }
     }
 
@@ -359,6 +359,30 @@ nonisolated enum ComposerTrailingRailCopy {
     }
 }
 
+/// Les mots des EFFETS de la scène (#8712). Le filtre garde le mot de
+/// l'éditeur d'objet : deux libellés pour une seule grille se contrediraient.
+nonisolated enum ComposerSceneEffectCopy {
+    static func label(_ effect: ComposerSceneEffect) -> String {
+        switch effect {
+        case .filter:
+            return ComposerObjectEditorCopy.media(.filter)
+        case .opening:
+            return String(localized: "composer.scene.effect.opening",
+                          defaultValue: "Effet d'ouverture", bundle: .main)
+        }
+    }
+
+    static var column: String {
+        String(localized: "composer.scene.effects",
+               defaultValue: "Effets de la scène", bundle: .main)
+    }
+
+    static var close: String {
+        String(localized: "composer.scene.effect.close",
+               defaultValue: "Fermer les effets", bundle: .main)
+    }
+}
+
 /// **Ce qu'une entrée de la colonne PEINT** — glyphe, nom, état, teinte — lu
 /// des inventaires qui la décrivent déjà : le contrôleur de l'outil, la table
 /// de l'éditeur d'objet, l'action du SDK. Aucun libellé n'est réécrit ici.
@@ -368,6 +392,16 @@ struct ComposerTrailingColumnPaint {
     let isOn: Bool
     let tint: Color
 
+    /// Ce que VoiceOver annonce en entrant dans la colonne : les effets de la
+    /// scène, les réglages d'un outil, ou l'objet touché.
+    static func groupLabel(_ options: [ComposerTrailingColumn.Entry]) -> String {
+        if options.contains(where: { if case .sceneEffect = $0 { return true }; return false }) {
+            return ComposerSceneEffectCopy.column
+        }
+        if options.contains(.exitTool) { return ComposerRailCopy.toolRailLabel }
+        return ComposerTrailingRailCopy.railLabel
+    }
+
     init(_ entry: ComposerTrailingColumn.Entry) {
         let neutre = MeeshyColors.textPrimary(isDark: true)
         switch entry {
@@ -375,6 +409,11 @@ struct ComposerTrailingColumnPaint {
             symbol = control.symbolName
             label = control.label
             isOn = control.isExpanded
+            tint = neutre
+        case .sceneEffect(let effet, let ouvert):
+            symbol = effet.symbol
+            label = ComposerSceneEffectCopy.label(effet)
+            isOn = ouvert
             tint = neutre
         case .editorSection(let section):
             symbol = ComposerObjectEditorRail.symbolName(section)

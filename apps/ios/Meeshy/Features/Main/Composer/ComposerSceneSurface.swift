@@ -532,6 +532,19 @@ struct ComposerSceneSurface: View {
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
 
+    /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
+    /// ouvert y occupe, et donc de combien la scène doit REMONTER.
+    @State private var lowerFloorsHeight: CGFloat = 0
+
+    private var sceneLiftInset: CGFloat {
+        ComposerSceneLift.bottomInset(
+            panelIsOpen: ComposerSceneLift.panelIsOpen(
+                lowZone: ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band),
+                toolOptionsServed: toolOptions != nil,
+                roomy: isRoomy),
+            panelHeight: lowerFloorsHeight)
+    }
+
     // MARK: - La scène PREND LE VIEWPORT, le chrome flotte dessus (#8370)
 
     /// **Deux calques, et c'est toute la disposition** (directive porteur
@@ -557,6 +570,7 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
         // curseur rejoint le rail qui porte désormais les réglages et le `(x)`.
@@ -744,7 +758,10 @@ struct ComposerSceneSurface: View {
         // se cadre dans ce qui reste. Le clavier, lui, ne la pousse pas — le
         // sol et le chrome montent, la scène reste où l'auteur la regarde.
         .padding(.top, ComposerTopBar.height + 4 - chromeLift)
-        .padding(.bottom, 4)
+        // **Un panneau ouvert en bas fait REMONTER la scène** (#8712) : la
+        // carte se cadre au-dessus de lui, le haut ne bouge pas.
+        .padding(.bottom, sceneLiftInset)
+        .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: sceneLiftInset)
         .ignoresSafeArea(.keyboard)
         .allowsHitTesting(timelinePanel == nil)
     }
@@ -789,6 +806,12 @@ struct ComposerSceneSurface: View {
                 timelinePanel
             } else {
                 lowerFloors
+                    .background {
+                        GeometryReader { geo in
+                            Color.clear.preference(key: ComposerLowerFloorsHeightKey.self,
+                                                   value: geo.size.height)
+                        }
+                    }
             }
         }
     }
@@ -985,6 +1008,14 @@ struct ComposerSceneFloorKey: Hashable {
 
 /// La zone sûre du haut de la surface — la barre haute s'y loge (#8370).
 struct ComposerSafeTopKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// La hauteur des étages du bas de la scène (#8712).
+struct ComposerLowerFloorsHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())

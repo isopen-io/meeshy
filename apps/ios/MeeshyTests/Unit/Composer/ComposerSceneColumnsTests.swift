@@ -47,8 +47,8 @@ final class ComposerSceneColumnsTests: XCTestCase {
     }
 
     func test_foot_sceneAnimee_tempsAuDessusDeLHistorique() {
-        XCTAssertEqual(ComposerTrailingColumn.foot(for: .scene, timeServed: true), [.time, .undo, .redo])
-        XCTAssertEqual(ComposerTrailingColumn.foot(for: .scene, timeServed: false), [.undo, .redo])
+        XCTAssertEqual(ComposerTrailingColumn.foot(for: .scene(effects: [], open: nil), timeServed: true), [.time, .undo, .redo])
+        XCTAssertEqual(ComposerTrailingColumn.foot(for: .scene(effects: [], open: nil), timeServed: false), [.undo, .redo])
     }
 
     func test_options_outilOuvert_sesControleursPuisSaSortie() {
@@ -58,7 +58,7 @@ final class ComposerSceneColumnsTests: XCTestCase {
     }
 
     func test_options_sceneAuRepos_aucuneOption() {
-        XCTAssertEqual(ComposerTrailingColumn.options(for: .scene), [])
+        XCTAssertEqual(ComposerTrailingColumn.options(for: .scene(effects: [], open: nil)), [])
     }
 
     func test_toolFocus_outilOuvert_leRailDroitResteLesPortesSEffacent() {
@@ -88,7 +88,7 @@ final class ComposerSceneColumnsTests: XCTestCase {
         let focus = ComposerTrailingColumn.focus(railMode: .doors([.media]),
                                                  selection: (sections: [.timing], actions: [.delete]))
         XCTAssertEqual(focus, .object(sections: [.timing], actions: [.delete]))
-        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil), .scene)
+        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil), .scene(effects: [], open: nil))
     }
 
     func test_options_objet_modifierPuisSectionsPuisActionsPuisSortie() {
@@ -143,5 +143,87 @@ final class ComposerSceneColumnsTests: XCTestCase {
             sections: ComposerObjectEditorRail.entries(for: .text),
             actions: [.edit, .duplicate, .bringForward, .sendBackward, .delete]))
         XCTAssertEqual(Set(options.map(\.id)).count, options.count)
+    }
+
+    // MARK: - Les effets d'une scène à fond média (#8712)
+
+    func test_served_fondImage_filtresPuisOuverture() {
+        XCTAssertEqual(ComposerSceneEffects.served(background: .image), [.filter, .opening])
+    }
+
+    func test_served_fondVideo_sansFiltre() {
+        XCTAssertEqual(ComposerSceneEffects.served(background: .video), [.opening],
+                       "le filtre ne se cuit que dans une image : sur une vidéo il serait inerte")
+    }
+
+    func test_served_sansFondMedia_aucuneColonne() {
+        XCTAssertEqual(ComposerSceneEffects.served(background: nil), [])
+    }
+
+    func test_options_sceneAFondMedia_effetsDeHautEnBas_ouvertMarque() {
+        let options = ComposerTrailingColumn.options(for: ComposerTrailingColumn.focus(
+            railMode: .doors([]), selection: nil,
+            effects: [.filter, .opening], openEffect: .opening))
+        XCTAssertEqual(options, [.sceneEffect(.filter, isOpen: false), .sceneEffect(.opening, isOpen: true)])
+        XCTAssertFalse(options.contains(where: \.isExit), "la scène n'a pas de mode à quitter")
+    }
+
+    func test_focus_effetOuvertNonServi_nEstPasMarque() {
+        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil,
+                                                    effects: [.opening], openEffect: .filter),
+                       .scene(effects: [.opening], open: nil))
+    }
+
+    func test_focus_objetTouche_remplaceLesEffets() {
+        let focus = ComposerTrailingColumn.focus(railMode: .doors([]),
+                                                 selection: (sections: [.timing], actions: [.delete]),
+                                                 effects: [.filter], openEffect: .filter)
+        XCTAssertEqual(focus, .object(sections: [.timing], actions: [.delete]))
+    }
+
+    func test_toggled_retoucherLEffetOuvert_leReferme() {
+        XCTAssertEqual(ComposerSceneEffects.toggled(.filter, open: nil), .filter)
+        XCTAssertNil(ComposerSceneEffects.toggled(.filter, open: .filter))
+        XCTAssertEqual(ComposerSceneEffects.toggled(.opening, open: .filter), .opening)
+    }
+
+    func test_carousel_neVitQueSurUneSceneLibre() {
+        XCTAssertEqual(ComposerSceneEffects.carousel(open: .filter, served: [.filter],
+                                                     objectSelected: false, toolIsOpen: false), .filter)
+        XCTAssertNil(ComposerSceneEffects.carousel(open: .filter, served: [.opening],
+                                                   objectSelected: false, toolIsOpen: false),
+                     "un fond devenu vidéo referme le carrousel des filtres")
+        XCTAssertNil(ComposerSceneEffects.carousel(open: .filter, served: [.filter],
+                                                   objectSelected: true, toolIsOpen: false))
+        XCTAssertNil(ComposerSceneEffects.carousel(open: .filter, served: [.filter],
+                                                   objectSelected: false, toolIsOpen: true))
+    }
+
+    // MARK: - La scène REMONTE, jamais ne descend (#8712)
+
+    func test_bottomInset_panneauOuvert_remonteDeSaHauteur() {
+        XCTAssertEqual(ComposerSceneLift.bottomInset(panelIsOpen: true, panelHeight: 96), 96)
+    }
+
+    func test_bottomInset_auRepos_garderSaMarge() {
+        XCTAssertEqual(ComposerSceneLift.bottomInset(panelIsOpen: false, panelHeight: 96),
+                       ComposerSceneLift.restingInset)
+    }
+
+    func test_panelIsOpen_reglagesDeLOutilOuBandeSurTelephone() {
+        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: true, roomy: false))
+        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: false, roomy: false),
+                       "un outil sans panneau (le texte) ne pousse rien")
+        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .band(.frame), toolOptionsServed: false, roomy: false))
+        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .band(.frame), toolOptionsServed: false, roomy: true),
+                       "sur grand écran la bande flotte en carte, à côté du rail")
+        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .nothing, toolOptionsServed: true, roomy: false))
+    }
+
+    func test_bottomInset_neDescendJamaisSousLeRepos() {
+        for hauteur in [-20.0, 0, 1, 3, 250] as [CGFloat] {
+            XCTAssertGreaterThanOrEqual(ComposerSceneLift.bottomInset(panelIsOpen: true, panelHeight: hauteur),
+                                        ComposerSceneLift.restingInset)
+        }
     }
 }

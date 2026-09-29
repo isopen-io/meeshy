@@ -995,7 +995,11 @@ extension MeeshyComposerHost {
             // écrit, et publier en plein tracé n'est pas un geste à offrir.
             // Par l'OPACITÉ : l'encart garde sa hauteur, donc la scène ne
             // grandit pas sous le doigt au moment où l'outil s'ouvre.
-            if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+            // **Le carrousel d'effets PREND la place du socle** (#8712) : la
+            // scène se recadre au-dessus de lui par la zone sûre du bas.
+            if let effet = activeSceneEffect {
+                sceneEffectCarousel(effet)
+            } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
                 let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
                 socle
                     .opacity(servi ? 1 : 0)
