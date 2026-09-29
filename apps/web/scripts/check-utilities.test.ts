@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
 // interroge son API publique exactement comme le pilote le fait.
-import { findRuleBody, sizelessTextClasses, textSizeRoles, usedClasses } from './check-utilities.mjs';
+import { escapeForCss, findRuleBody, sizelessTextClasses, textSizeRoles, usedClasses } from './check-utilities.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { unlinkSync, writeFileSync } from 'node:fs';
@@ -91,6 +91,18 @@ describe('textSizeRoles — les rôles de taille déclarés par une source de th
 
   test('une source sans déclaration `--text-` rend un ensemble vide', () => {
     expect(textSizeRoles('@theme inline {\n  --color-brand: #000;\n}')).toEqual(new Set());
+  });
+});
+
+describe('escapeForCss — le sélecteur que Tailwind émet réellement', () => {
+  test('une apostrophe se protège comme Tailwind la protège : `content-[\'\']` a sa règle', () => {
+    const emitted = ".before\\:content-\\[\\'\\'\\]:before{--tw-content:\"\";content:var(--tw-content)}";
+    expect(emitted.includes(`.${escapeForCss("before:content-['']")}`)).toBe(true);
+  });
+
+  test('un guillemet double aussi : `content-["→"]`', () => {
+    const emitted = '.after\\:content-\\[\\"→\\"\\]:after{--tw-content:"→";content:var(--tw-content)}';
+    expect(emitted.includes(`.${escapeForCss('after:content-["→"]')}`)).toBe(true);
   });
 });
 
