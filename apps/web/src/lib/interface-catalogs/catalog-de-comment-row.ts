@@ -13,6 +13,7 @@ const deCommentRow = {
   'comments.action.reply': 'Antworten',
   'comments.reply.to': 'Antwort an {name}',
   'comments.reply.cancel': 'Antwort abbrechen',
+  'comments.composer.fold': 'Kommentarfeld einklappen',
   'comments.replies.show': 'Antworten ansehen ({count})',
   'comments.replies.hide': 'Antworten ausblenden',
   'comments.replies.more': 'Weitere Antworten ansehen',

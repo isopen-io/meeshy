@@ -29,6 +29,45 @@ import { useMentionField } from '@/lib/view/use-mention-field';
  * `X-Client-Mutation-Id` garde un REJEU, pas deux intentions distinctes).
  */
 
+/** La cible du ⌄ : 44 px, la taille minimale d'un contrôle au doigt. */
+const FOLD_TARGET_PX = 44;
+
+/**
+ * LE FOCUS EST-IL DANS LE COMPOSEUR ? — écouté sur `focusin`/`focusout` de la
+ * forme (ils bouillonnent, `focus`/`blur` non), et annoncé à l'hôte à chaque
+ * changement. Une sortie vers un élément ENCORE dans la forme (champ → ⌄ →
+ * envoi, à la tabulation) n'est pas une sortie.
+ */
+function useComposerWriting(
+  formRef: { readonly current: HTMLFormElement | null },
+  onWritingChange: ((writing: boolean) => void) | undefined,
+  mounted: boolean,
+): boolean {
+  const [writing, setWriting] = useState(false);
+  const report = useRef(onWritingChange);
+  report.current = onWritingChange;
+  useEffect(() => {
+    const form = formRef.current;
+    if (form === null) return;
+    const onIn = () => setWriting(true);
+    const onOut = (e: FocusEvent) => {
+      if (e.relatedTarget instanceof Node && form.contains(e.relatedTarget)) return;
+      setWriting(false);
+    };
+    form.addEventListener('focusin', onIn);
+    form.addEventListener('focusout', onOut);
+    return () => {
+      form.removeEventListener('focusin', onIn);
+      form.removeEventListener('focusout', onOut);
+    };
+  }, [formRef, mounted]);
+  useEffect(() => {
+    report.current?.(writing);
+  }, [writing]);
+  useEffect(() => () => report.current?.(false), []);
+  return writing;
+}
+
 export type CommentComposerResult = { readonly ok: boolean; readonly message?: InterfaceCatalogKey | undefined };
 
 /** CE QUE LE COMPOSEUR A À DIRE, et de quelle encre — `refused` a perdu le
@@ -55,6 +94,15 @@ export type CommentComposerProps = {
    */
   readonly replyTo?: CommentReplyTarget | null;
   readonly onCancelReply?: () => void;
+  /**
+   * **ON ÉCRIT** (#8643) — vrai tant que le focus est DANS le composeur (champ,
+   * ⌄, envoi). L'hôte d'un lecteur plein écran en fait réduire la scène
+   * au-dessus de la barre (`lib/view/scene-yields.ts`).
+   */
+  readonly onWritingChange?: (writing: boolean) => void;
+  /** Un envoi RÉUSSI replie la saisie (lecteur de story ou de réel : on
+   * revient à la lecture, la scène reprend sa taille). Absent : on enchaîne. */
+  readonly foldOnSend?: boolean;
 };
 
 export function CommentComposer({
@@ -64,6 +112,8 @@ export function CommentComposer({
   mentionSource = null,
   replyTo = null,
   onCancelReply,
+  onWritingChange,
+  foldOnSend = false,
 }: CommentComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -71,6 +121,17 @@ export function CommentComposer({
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
   const mention = useMentionField({ text, fieldRef, onText: setText, source: mentionSource });
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const writing = useComposerWriting(formRef, onWritingChange, canWrite);
+
+  /* REPLIER (⌄, ou un envoi réussi chez un hôte `foldOnSend`) : le focus
+     quitte le composeur pour le FIL qui le porte (sa racine `tabIndex=-1`),
+     jamais pour `<body>` — au clavier, on repartirait du haut du document. */
+  const fold = useCallback(() => {
+    const thread = formRef.current?.parentElement?.closest<HTMLElement>('[tabindex="-1"]') ?? null;
+    if (thread !== null) thread.focus();
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, []);
 
   /* LA MENTION PRÉREMPLIE SUIT LA CIBLE — posée pour une réponse à une
      réponse, retirée quand la cible change ou disparaît, jamais cumulée
@@ -104,8 +165,10 @@ export function CommentComposer({
     if (!result.ok) {
       setText(content);
       fieldRef.current?.focus();
+      return;
     }
-  }, [text, sending, onSend, language]);
+    if (foldOnSend) fold();
+  }, [text, sending, onSend, language, foldOnSend, fold]);
 
   if (!canWrite) {
     return (
@@ -119,7 +182,9 @@ export function CommentComposer({
 
   return (
     <form
+      ref={formRef}
       data-comment-composer
+      data-comment-writing={writing ? '' : undefined}
       className="flex flex-col gap-1 px-3 py-2"
       onSubmit={(e) => {
         e.preventDefault();
@@ -161,6 +226,10 @@ export function CommentComposer({
       <label className="sr-only" htmlFor={fieldId}>
         {translate(language, 'comments.placeholder')}
       </label>
+      {/* LA PLAQUE DU CHAMP (#8643) — le ⌄ vit DEDANS, à l'angle haut-droit
+          (haut-gauche en RTL : `insetInlineEnd`), et n'existe qu'en rédaction
+          (`StoryComposerFold.offersFoldButton` côté iOS). */}
+      <div data-comment-plate="" className="relative flex min-w-0 flex-1">
       <textarea
         id={fieldId}
         ref={fieldRef}
@@ -198,8 +267,27 @@ export function CommentComposer({
           background: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-ios-brand)',
+          ...(writing ? { paddingInlineEnd: FOLD_TARGET_PX } : {}),
         }}
       />
+      {writing ? (
+        <button
+          type="button"
+          data-comment-fold=""
+          aria-label={translate(language, 'comments.composer.fold')}
+          /* Le doigt ne VOLE pas le focus au champ avant le clic : sans cela,
+             le champ perdrait la rédaction au `pointerdown` et le ⌄ se
+             démonterait avant de recevoir son propre clic. */
+          onPointerDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={fold}
+          className="absolute grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+          style={{ top: 0, insetInlineEnd: '0px', width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <Glyph name="caretDown" size={14} />
+        </button>
+      ) : null}
+      </div>
       <button
         type="submit"
         data-comment-send

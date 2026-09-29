@@ -541,6 +541,43 @@ try {
         chromeCede.retour?.opacite === '0' && chromeCede.retour.inerte && chromeCede.chrome?.opacite === '0' && chromeCede.chrome.inerte,
         `${label} : feuille ouverte, « Retour » et le chrome du réel s'effacent, inertes (#8601) — ${JSON.stringify(chromeCede)}`,
       );
+
+      // #8643 — LIRE FLOUTE LE RÉEL ; ÉCRIRE LE RÉDUIT, NET, AU-DESSUS DE LA
+      // FEUILLE ; replier (⌄) rend la lecture. Même loi que la story.
+      const pagerYield = () =>
+        page.evaluate(() => {
+          const pager = document.querySelector('[data-reels-pager]');
+          const sheet = document.querySelector('[data-story-comments-sheet]');
+          if (pager === null || sheet === null) return null;
+          return {
+            etat: pager.getAttribute('data-scene-yields'),
+            filtre: getComputedStyle(pager).filter,
+            basPager: Math.round(pager.getBoundingClientRect().bottom),
+            hautFeuille: Math.round(sheet.getBoundingClientRect().top),
+          };
+        });
+      await page.waitForTimeout(300);
+      const lu = await pagerYield();
+      check(lu?.etat === 'reading' && /blur\(/.test(lu.filtre), `${label} : feuille ouverte, le réel se floute pour laisser lire le fil (#8643) — ${JSON.stringify(lu)}`);
+      if ((await page.$('[data-comment-field]')) !== null) {
+        await page.click('[data-comment-field]');
+        await page
+          .waitForFunction(() => document.querySelector('[data-reels-pager]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
+          .catch(() => undefined);
+        await page.waitForTimeout(350);
+        const ecrit = await pagerYield();
+        check(
+          ecrit?.etat === 'writing' && ecrit.filtre === 'none' && ecrit.basPager <= ecrit.hautFeuille,
+          `${label} : champ pris, le réel revient net et tient ENTIER au-dessus de la feuille (#8643) — ${JSON.stringify(ecrit)}`,
+        );
+        await capture(page, `reels-ecrire-${slug}`);
+        await page.click('[data-comment-fold]');
+        await page
+          .waitForFunction(() => document.querySelector('[data-reels-pager]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
+          .catch(() => undefined);
+        const replie = await pagerYield();
+        check(replie?.etat === 'reading', `${label} : le repli ⌄ rend la lecture (#8643) — ${JSON.stringify(replie)}`);
+      }
       await capture(page, `reels-commentaires-${slug}`);
 
       // RIEN DU RÉEL NE SE PEINT PAR-DESSUS LA FEUILLE (revue-correction

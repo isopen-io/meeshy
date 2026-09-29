@@ -19,6 +19,7 @@ import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields, yieldingChrome } from '@/lib/view/chrome-yields';
+import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
@@ -250,6 +251,14 @@ export default function ReelsScreen() {
   /* Commenter fait céder le chrome — retour, identité, légende, rail —
      par la loi unique du lecteur (#8601, `lib/view/chrome-yields.ts`). */
   const chromeYielded = chromeYields({ sheetOpen });
+  /* Et le réel lui-même cède (#8643, même loi que la story) : flouté quand on
+     lit le fil, net et réduit au-dessus de la barre quand on écrit. */
+  const scene = yieldingScene({
+    yieldTo: sceneYieldOf({ sheetOpen, writing: comments.writing !== null }),
+    scale: comments.writing === null ? 1 : writingSceneScale({ ...comments.writing, anchorTop: 0 }),
+    anchorTop: 0,
+    reducedMotion: prefersReducedMotion(),
+  });
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -338,6 +347,7 @@ export default function ReelsScreen() {
            doigt ni le clavier : sans elle, un balayage sous la feuille
            ferait avancer le pager derrière le fil qu'on lit. */
         inert={sheetOpen}
+        {...scene}
         /* `isolate` (revue-correction #6484) : un contexte d'empilement PROPRE
            au pager. La barre de progression d'un réel est en `z-10` pour
            passer au-dessus de son voile (#6903) ; sans lui, elle passait

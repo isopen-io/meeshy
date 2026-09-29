@@ -28,7 +28,20 @@ export type CommentsSheetHost = {
   readonly postId: string | null;
   readonly open: (postId: string) => void;
   readonly close: () => void;
+  /**
+   * **ON ÉCRIT, ET LA BARRE EST LÀ** (#8643) — rapporté par la feuille tant que
+   * son champ a le focus : le haut de la feuille et la hauteur du cadre qui la
+   * porte, en px. `null` ⇒ on lit (ou la feuille est fermée). L'hôte en fait
+   * réduire sa scène (`lib/view/scene-yields.ts`).
+   */
+  readonly writing: WritingBar | null;
+  readonly reportWriting: (bar: WritingBar | null) => void;
 };
+
+export type WritingBar = { readonly barTop: number; readonly frameHeight: number };
+
+const sameBar = (a: WritingBar | null, b: WritingBar | null): boolean =>
+  a === b || (a !== null && b !== null && a.barTop === b.barTop && a.frameHeight === b.frameHeight);
 
 /* `open`, `close` et l'hôte lui-même GARDENT LEUR IDENTITÉ tant que l'état ne
  * change pas (revue-correction #6484). Ils sont lus en aval par des
@@ -41,6 +54,7 @@ export type CommentsSheetHost = {
 export function useCommentsSheetHost(closeWhenChanges: unknown): CommentsSheetHost {
   const [postId, setPostId] = useState<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const [reported, setReported] = useState<WritingBar | null>(null);
 
   useEffect(() => {
     if (postId !== null) return;
@@ -58,9 +72,14 @@ export function useCommentsSheetHost(closeWhenChanges: unknown): CommentsSheetHo
 
   const open = useCallback((id: string) => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setReported(null);
     setPostId(id);
   }, []);
   const close = useCallback(() => setPostId(null), []);
+  const reportWriting = useCallback((bar: WritingBar | null) => setReported((current) => (sameBar(current, bar) ? current : bar)), []);
+  /* Fermée, la feuille n'écrit plus : la mesure qu'elle n'a pas eu le temps
+     de retirer (démontage, changement de story) ne réduit plus rien. */
+  const writing = postId === null ? null : reported;
 
-  return useMemo(() => ({ postId, open, close }), [postId, open, close]);
+  return useMemo(() => ({ postId, open, close, writing, reportWriting }), [postId, open, close, writing, reportWriting]);
 }
