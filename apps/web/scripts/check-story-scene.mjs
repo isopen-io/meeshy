@@ -660,6 +660,21 @@ async function runScheme(colorScheme) {
        reste — et rend le focus au « … ». « Signaler » ouvre les motifs, et
        Échap les referme sans rien envoyer ni fermer le fil. */
     const plus = '[data-comment-row="cm-st-2"] [data-comment-gesture="more"]';
+    /* Un FAIT attendu, et son absence est un VERDICT qui dit ce qu'il a vu —
+       jamais un `page.click` qui meurt en 30 s sans rien dire. */
+    const declencheurPresent = await page
+      .waitForSelector(plus, { state: 'visible', timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+    const etatFeuille = await page.evaluate(() => ({
+      story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+      feuille: document.querySelector('[data-story-comments-sheet]')?.getAttribute('data-story-comments-sheet') ?? null,
+      listeCachee: document.querySelector('[data-comment-thread-list]')?.hidden ?? null,
+      rangees: [...document.querySelectorAll('[data-comment-row]')].map((r) => r.getAttribute('data-comment-row')),
+      plus: document.querySelectorAll('[data-comment-gesture="more"]').length,
+    }));
+    check(declencheurPresent, `${tag} st-amie-2 : le « … » du commentaire cm-st-2 doit être visible dans la feuille (#8734) — ${JSON.stringify(etatFeuille)}`);
+    if (declencheurPresent) {
     await page.click(plus);
     await page.waitForSelector('[data-comment-menu]', { timeout: 3000 }).catch(() => undefined);
     const menu = await page.evaluate((selecteur) => {
@@ -709,6 +724,7 @@ async function runScheme(colorScheme) {
       motifs === 8 && apresMotifs.motifs === 0 && apresMotifs.feuille,
       `${tag} st-amie-2 : « Signaler » ouvre les huit motifs, et Échap les referme sans fermer le fil (#8734) — ${motifs} ${JSON.stringify(apresMotifs)}`,
     );
+    }
 
     /* ── 7 quater. #8601 — FEUILLE OUVERTE, LE CHROME CÈDE ─────────────────
        L'en-tête (barres, auteur, fermer) restait peint au-dessus de la

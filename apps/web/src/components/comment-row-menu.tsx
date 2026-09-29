@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ReportReason } from '@/lib/api/reports';
@@ -84,7 +84,8 @@ export function CommentRowMenu({
     onResize: () => setOpen(false),
   });
 
-  useEffect(() => {
+  /* POSÉES DANS LE COMMIT QUI OUVRE LE MENU (#7293, `roving-menu.ts`) : un effet passif, différé d'une image sous Preact, laissait un Échap précoce à la feuille, qui se fermait avec le menu. */
+  useLayoutEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
