@@ -2990,6 +2990,70 @@ describe('MessageHandler — branch coverage boosters', () => {
     expect(calls[0][0].senderDisplayName).toBe('Alice Display');
   });
 
+  // #8604 — `?? user.username` SAUTAIT le `displayName` du COMPTE : l'ordre
+  // canonique est participation → compte → (dernier recours) pseudo. La SSOT
+  // `resolveParticipantDisplayName` porte les deux premiers maillons.
+  it('handleMessageSend: _notifyAgent sans displayName local prend celui du COMPTE, pas le pseudo', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+
+    const agentSendEvent: any = jest.fn(async () => {});
+    const agentClient = { sendEvent: agentSendEvent };
+
+    const messagingService = makeMockMessagingService({
+      sender: {
+        id: 'p1', userId: 'user-1', displayName: null, username: 'alice_acct', avatar: null,
+        user: { username: 'alice_acct', displayName: 'Alice Account' },
+      },
+    });
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => []) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, agentClient, messagingService, prisma });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    const calls: any[] = agentSendEvent.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0][0].senderDisplayName).toBe('Alice Account');
+    expect(calls[0][0].senderUsername).toBe('alice_acct');
+  });
+
+  // #8604 — `??` ne garde que `null`/`undefined` : un `displayName` BLANC
+  // traversait tel quel et l'agent recevait un nom vide.
+  it('handleMessageSend: _notifyAgent avec un displayName blanc retombe sur le COMPTE, jamais sur du vide', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+
+    const agentSendEvent: any = jest.fn(async () => {});
+    const agentClient = { sendEvent: agentSendEvent };
+
+    const messagingService = makeMockMessagingService({
+      sender: {
+        id: 'p1', userId: 'user-1', displayName: '   ', username: 'bob_acct', avatar: null,
+        user: { username: 'bob_acct', displayName: 'Bob Account' },
+      },
+    });
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => []) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, agentClient, messagingService, prisma });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    const calls: any[] = agentSendEvent.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0][0].senderDisplayName).toBe('Bob Account');
+  });
+
   // Cover branch 10 (line 160): validation.error fallback to 'Message invalide'
   it('handleMessageSend: message length error with no error message → fallback to Message invalide', async () => {
     mockValidateMessageLength.mockReturnValue({ isValid: false, error: undefined });
@@ -3604,6 +3668,54 @@ describe('MessageHandler — branch coverage boosters', () => {
     const calls: any[] = agentSendEvent.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     expect(calls[0][0].senderDisplayName).toBeUndefined();
+  });
+
+  // #8604 — le SECOND site `_notifyAgent`. Les deux tuyaux d'envoi doivent
+  // nommer l'auteur de la même façon : une loi écrite à deux endroits est une
+  // loi dont la version la plus pauvre décide.
+  it('handleMessageSendWithAttachments: _notifyAgent sans displayName local prend celui du COMPTE', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const data = {
+      conversationId: 'conv-abc', content: 'hi', clientMessageId: VALID_CID,
+      attachmentIds: ['61a41a4b5c5e4f4a5c5e4f4a'],
+    };
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+
+    const agentSendEvent: any = jest.fn(async () => {});
+    const agentClient = { sendEvent: agentSendEvent };
+
+    const attachmentService = makeMockAttachmentService([
+      { id: '61a41a4b5c5e4f4a5c5e4f4a', uploadedBy: 'user-1', mimeType: 'image/jpeg' },
+    ]);
+    const messagingService = makeMockMessagingService({
+      sender: {
+        id: 'p1', userId: 'user-1', displayName: null, username: 'carol_acct', avatar: null,
+        user: { username: 'carol_acct', displayName: 'Carol Account' },
+      },
+      senderId: 'p1',
+      content: 'hi',
+      attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }],
+    });
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => []) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      attachmentService,
+      messagingService,
+      prisma,
+      agentClient,
+    });
+    await handler.handleMessageSendWithAttachments(socket, data as any, cb);
+
+    const calls: any[] = agentSendEvent.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0][0].senderDisplayName).toBe('Carol Account');
   });
 
   // Cover branch in sendWithAttachments when originalMsg is null (forwardedFromId set but message not found)
