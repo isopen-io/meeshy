@@ -1672,13 +1672,19 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
 
     func reset() {
         listCallCount = 0
+        listResponder = nil
         listResultsByOffset = [:]
         listResult = .success(OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil))
         markAsReceivedLock.withLock { _markAsReceivedCounts = [:] }
     }
 
+    /// Répondeur prioritaire — permet à un témoin de SUSPENDRE une page ou de
+    /// changer de compte PENDANT la requête (#8651).
+    var listResponder: (@Sendable (Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>)?
+
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         listCallCount += 1
+        if let listResponder { return try await listResponder(offset) }
         if let scoped = listResultsByOffset[offset] { return try scoped.get() }
         return try listResult.get()
     }
