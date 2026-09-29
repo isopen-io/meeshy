@@ -1,9 +1,11 @@
 import type { MessageCardCatalogSlice } from './catalog-fr-message-card';
 
-/** Message export as image — see `catalog-fr-message-card.ts`. */
+/** «Imager» رسالة أو تعليق — راجع `catalog-fr-message-card.ts`. */
 const arMessageCard = {
-  'message.menu.export': 'تصدير كصورة',
-  'message.menu.exportQuick': 'تصدير سريع',
+  'message.menu.export': 'تحويل إلى صورة',
+  'message.menu.exportQuick': 'صورة سريعة',
+  'message.menu.compose': 'إنشاء',
+  'comments.action.image': 'تحويل إلى صورة',
 } satisfies MessageCardCatalogSlice;
 
 export default arMessageCard;
