@@ -328,6 +328,28 @@ struct MessageCardImagineTests {
         #expect(MessageCardSubject.of(comment: blurred, viewer: Self.viewer) == nil)
     }
 
+    @Test func subject_aReplyCarriesItsRootAsItsQuote_servedByThePrism() throws {
+        let root = FeedComment(id: "root", author: "Awa", authorId: "u-awa", authorUsername: "awa", content: "Bonjour", timestamp: Date(timeIntervalSince1970: 100),
+                               originalLanguage: "fr", translatedContent: "Hello")
+        let reply = FeedComment(id: "r1", author: "Bob", authorId: "u-bob", authorUsername: "bob", content: "Salut", timestamp: Date(timeIntervalSince1970: 200), parentId: "root")
+        let subject = try #require(MessageCardSubject.of(comment: reply, viewer: Self.viewer, quoting: root))
+        #expect(subject.quoted == MessageCardPart(author: "Awa", text: "Hello", handle: "awa"))
+        #expect(subject.quotedAt == Date(timeIntervalSince1970: 100))
+        #expect(subject.reply.text == "Salut")
+    }
+
+    @Test func subject_aProtectedOrEmptyRootIsNeverQuoted_theReplyStillLeaves() throws {
+        let reply = FeedComment(id: "r1", author: "Bob", content: "Salut", parentId: "root")
+        let blurredRoot = FeedComment(id: "root", author: "Awa", content: "Secret", effectFlags: Int(MessageEffectFlags.blurred.rawValue))
+        let viewOnceRoot = FeedComment(id: "root", author: "Awa", content: "Secret", effectFlags: Int(MessageEffectFlags.viewOnce.rawValue))
+        let emptyRoot = FeedComment(id: "root", author: "Awa", content: "  ")
+        for root in [blurredRoot, viewOnceRoot, emptyRoot] {
+            let subject = try #require(MessageCardSubject.of(comment: reply, viewer: Self.viewer, quoting: root))
+            #expect(subject.quoted == nil)
+            #expect(subject.quotedAt == nil)
+        }
+    }
+
     @Test func fileName_takesTheExtensionOfItsOutput() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!

@@ -147,21 +147,36 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// **Un COMMENTAIRE devient une carte** (#8692) — le texte servi par le
     /// Prisme (`displayContent`), son auteur et ses médias. Un commentaire
     /// éphémère, flouté ou à vue unique ne part jamais en image.
-    public static func of(comment: FeedComment, viewer: Viewer, showOriginal: Bool = false) -> MessageCardSubject? {
+    ///
+    /// **L'arbre de réponses** (#8709) : une réponse emporte sa RACINE en
+    /// citation (`quoting`), dans le texte que le Prisme sert au lecteur. Une
+    /// racine protégée ou vide ne se cite pas — la réponse part seule.
+    public static func of(comment: FeedComment, viewer: Viewer, showOriginal: Bool = false, quoting root: FeedComment? = nil) -> MessageCardSubject? {
         guard !comment.effects.flags.hasLifecycleEffect else { return nil }
         let media = paintableMedia(of: comment)
         let text = MessageCardText.nonBlank(showOriginal ? comment.content : comment.displayContent)
         guard text != nil || !media.isEmpty else { return nil }
-        let isViewer = !viewer.id.isEmpty && comment.authorId == viewer.id
+        let quoted = root.flatMap { quote(comment: $0, viewer: viewer) }
         return MessageCardSubject(
-            quoted: nil,
-            reply: MessageCardPart(
-                author: author(isViewer: isViewer, names: [comment.author, comment.authorUsername], viewer: viewer),
-                text: text ?? "",
-                handle: comment.authorUsername
-            ),
+            quoted: quoted,
+            reply: part(of: comment, text: text ?? "", viewer: viewer),
             sentAt: comment.timestamp,
+            quotedAt: quoted == nil ? nil : root?.timestamp,
             media: media
+        )
+    }
+
+    private static func quote(comment root: FeedComment, viewer: Viewer) -> MessageCardPart? {
+        guard !root.effects.flags.hasLifecycleEffect, let text = MessageCardText.nonBlank(root.displayContent) else { return nil }
+        return part(of: root, text: text, viewer: viewer)
+    }
+
+    private static func part(of comment: FeedComment, text: String, viewer: Viewer) -> MessageCardPart {
+        let isViewer = !viewer.id.isEmpty && comment.authorId == viewer.id
+        return MessageCardPart(
+            author: author(isViewer: isViewer, names: [comment.author, comment.authorUsername], viewer: viewer),
+            text: text,
+            handle: comment.authorUsername
         )
     }
 

@@ -101,7 +101,8 @@ struct ThreadedCommentSection: View {
                 onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
                 storyState: storyState,
-                presenceState: presenceState
+                presenceState: presenceState,
+                threadReplies: replies
             )
                 .equatable()
 
@@ -122,7 +123,8 @@ struct ThreadedCommentSection: View {
                         onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
+                        threadRoot: comment
                     )
                         .equatable()
                     .padding(.leading, 36)
@@ -161,7 +163,8 @@ struct ThreadedCommentSection: View {
                         onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
+                        threadRoot: comment
                     )
                         .equatable()
                     .padding(.leading, 36)
