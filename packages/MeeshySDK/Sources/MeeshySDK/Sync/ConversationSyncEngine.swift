@@ -200,6 +200,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// chacune doit juger ses propres écritures.
     @TaskLocal static var syncOwner: String?
 
+    /// Le compte pour lequel la tâche courante écrit — lu par les persisteurs
+    /// de l'app (`apiMessagePersistor`) pour viser la base locale de CE compte
+    /// et aucune autre (#8656). `nil` hors d'une écriture attribuée.
+    public static var currentSyncOwner: String? { syncOwner }
+
     /// La tâche courante synchronise-t-elle toujours pour le compte ACTIF ?
     /// Vrai hors synchronisation (aucun propriétaire déclaré).
     /* partagé entre les fichiers du moteur (#4172) */ func ownsSession() async -> Bool {

@@ -319,7 +319,10 @@ extension ConversationSyncEngine {
         // buffering the same payload stays idempotent — and an own-echo
         // arriving after the user navigated away still flips its optimistic
         // `.sending` row to `.sent` instead of leaving the clock forever.
-        await apiMessagePersistor?([apiMessage])
+        // #8656 — reçu pour `userId`, il ne s'écrit que dans SA base.
+        await Self.$syncOwner.withValue(userId) {
+            await apiMessagePersistor?([apiMessage])
+        }
         _messagesDidChange.send(msg.conversationId)
 
         // Facette COMPLÈTE du nouveau dernier message. Les onze champs

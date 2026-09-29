@@ -923,55 +923,80 @@ extension ConversationSyncEngine {
             }
         }
 
+        // #8656 — la page appartient au compte qui l'a DEMANDÉE : lue sous son
+        // jeton, elle ne s'écrit ni dans le cache ni dans la base locale d'un
+        // compte arrivé pendant la requête.
+        let owner = await currentUserId()
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
-            let userId = await currentUserId(); let username = await currentUsername()
-            let preferredLanguages = await currentPreferredLanguages()
-            if let mentionedUsers = response.meta?.mentionedUsers {
-                UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+            await Self.$syncOwner.withValue(owner) {
+                await absorbFetchedWindow(response, into: conversationId)
             }
-            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
-            // Atomic merge: keep any messages that arrived via socket between the
-            // REST request and this write, so they are never silently overwritten.
-            await cache.messages.mergeUpdate(for: conversationId) { existing in
-                let freshIds = Set(freshMessages.map(\.id))
-                let fromCacheOnly = existing.filter { !freshIds.contains($0.id) }
-                return (freshMessages + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
-            }
-            // Mirror the fetched window into the app's on-device message store
-            // so the conversation timeline (GRDB-backed) is already current
-            // when the user opens it — the push-notification handler routes
-            // through here with `force: true` precisely for that purpose.
-            await apiMessagePersistor?(response.data)
-            _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] ensureMessages error: \(error.localizedDescription)")
         }
     }
 
+    private func absorbFetchedWindow(_ response: MessagesAPIResponse, into conversationId: String) async {
+        guard await ownsSession() else {
+            Self.logger.notice("[SyncEngine] fenêtre de messages refusée : le compte a changé pendant la requête")
+            return
+        }
+        let userId = await currentUserId(); let username = await currentUsername()
+        let preferredLanguages = await currentPreferredLanguages()
+        if let mentionedUsers = response.meta?.mentionedUsers {
+            UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+        }
+        let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
+        // Atomic merge: keep any messages that arrived via socket between the
+        // REST request and this write, so they are never silently overwritten.
+        await cache.messages.mergeUpdate(for: conversationId) { existing in
+            let freshIds = Set(freshMessages.map(\.id))
+            let fromCacheOnly = existing.filter { !freshIds.contains($0.id) }
+            return (freshMessages + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
+        }
+        // Mirror the fetched window into the app's on-device message store
+        // so the conversation timeline (GRDB-backed) is already current
+        // when the user opens it — the push-notification handler routes
+        // through here with `force: true` precisely for that purpose.
+        await apiMessagePersistor?(response.data)
+        _messagesDidChange.send(conversationId)
+    }
+
     public func fetchOlderMessages(for conversationId: String, before messageId: String) async {
+        let owner = await currentUserId()
         do {
             let response = try await messageService.listBefore(
                 conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
-            let userId = await currentUserId(); let username = await currentUsername()
-            let preferredLanguages = await currentPreferredLanguages()
-            let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
-
-            // Atomic merge: prepend older messages without overwriting any
-            // messages that arrived via socket between the REST fetch and now.
-            await cache.messages.mergeUpdate(for: conversationId) { existing in
-                let existingIds = Set(existing.map(\.id))
-                let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
-                return newOnly + existing
+            await Self.$syncOwner.withValue(owner) {
+                await absorbOlderWindow(response, into: conversationId)
             }
-            await apiMessagePersistor?(response.data)
-            _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] fetchOlderMessages error: \(error.localizedDescription)")
         }
+    }
+
+    private func absorbOlderWindow(_ response: MessagesAPIResponse, into conversationId: String) async {
+        guard await ownsSession() else {
+            Self.logger.notice("[SyncEngine] page ancienne refusée : le compte a changé pendant la requête")
+            return
+        }
+        let userId = await currentUserId(); let username = await currentUsername()
+        let preferredLanguages = await currentPreferredLanguages()
+        let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
+
+        // Atomic merge: prepend older messages without overwriting any
+        // messages that arrived via socket between the REST fetch and now.
+        await cache.messages.mergeUpdate(for: conversationId) { existing in
+            let existingIds = Set(existing.map(\.id))
+            let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
+            return newOnly + existing
+        }
+        await apiMessagePersistor?(response.data)
+        _messagesDidChange.send(conversationId)
     }
 
     // MARK: - Retention Cleanup

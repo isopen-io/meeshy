@@ -247,6 +247,17 @@ public final class MeeshyConfig: @unchecked Sendable {
         set { UserDefaults.standard.set(newValue, forKey: Self.customHostKey) }
     }
 
+    /// L'origine de l'environnement SÉLECTIONNÉ, lue dans la préférence
+    /// persistée — pas dans `apiBaseURL`, que `restoreEnvironment()` ne pose
+    /// qu'au premier `.task` de l'app, APRÈS l'ouverture de la base locale.
+    /// C'est elle qui cloisonne la base des messages par environnement (#8657).
+    public var persistedServerOrigin: String {
+        let env = selectedEnvironment
+        guard env == .custom else { return env.origin }
+        let host = customHost
+        return host.hasPrefix("http") ? host : "https://\(host)"
+    }
+
     /// Apply the selected environment, updating apiBaseURL
     public func applyEnvironment(_ env: ServerEnvironment, customHost: String? = nil) {
         selectedEnvironment = env
