@@ -46,7 +46,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: code)
         XCTAssertEqual(pill.components(separatedBy: ".callControlsGlass(in:").count - 1, 1, "Un seul verre pour tout le bloc")
         let panel = try XCTUnwrap(pill.range(of: "panelRows(panel)"))
-        let families = try XCTUnwrap(pill.range(of: "familyRows(actions)"))
+        let families = try XCTUnwrap(pill.range(of: "familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
         XCTAssertTrue(pill.contains("if let panel = layer.pillPanel {"), "Le panneau se lit dans CallScreenLayer")
@@ -129,17 +129,21 @@ final class CallViewGlassGuardTests: XCTestCase {
     }
 
     /// #8576 — le zoom caméra suit MON image en plein écran, jamais la
-    /// vignette ; les options caméra s'y posent en rail vertical, visibles
-    /// avec le chrome.
+    /// vignette. #8626 — les commandes de ma caméra vivent dans ma vignette,
+    /// et en haut au centre quand mon image est en plein écran, visibles avec
+    /// le chrome.
     func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
         XCTAssertFalse(pip.contains("callCameraZoom"), "Pincer la vignette la redimensionne, il ne zoome pas")
+        XCTAssertTrue(pip.contains("selfTileCameraControls(tileSize: size)"), "Les commandes de ma caméra vivent dans ma vignette")
         XCTAssertTrue(code.contains(".callCameraZoom(isEnabled: effectiveSwapStreams)"))
         let rail = try block("var cameraRail: some View {", until: "\n    }\n}", in: code)
         XCTAssertTrue(rail.contains("CallCameraRail.actions(from: currentActionSet)"))
         XCTAssertTrue(rail.contains("CallCameraRail.isShown("))
         XCTAssertTrue(rail.contains("CallCameraZoomAccessibilityElement()"))
+        XCTAssertTrue(rail.contains("alignment: .top"), "Mon image en plein écran : les commandes en haut au centre")
+        XCTAssertFalse(rail.contains("alignment: .trailing"), "Le rail vertical de droite a laissé place à la rangée du haut")
         XCTAssertTrue(code.contains("cameraRail\n"), "Le rail est monté dans l'appel établi")
         let stage = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/GroupCallStageView.swift")

@@ -45,8 +45,8 @@ extension CallView {
             }
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en
-        // permanence, et en UN seul endroit : le bouton « Écran » n'existe que
-        // (…) déployé, dans la rangée du duo ou celle du groupe.
+        // permanence, et en UN seul endroit : le bouton « Écran » vit avec les
+        // commandes de ma caméra (vignette, haut de l'écran ou (…), #8626).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
         // §7.3 — auto-hide after 4s of no interaction, in duo AND group
         // video. Re-arms whenever showControls flips to true (a reveal tap)

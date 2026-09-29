@@ -138,7 +138,7 @@ extension CallView {
                         if let panel = layer.pillPanel {
                             panelRows(panel)
                         } else {
-                            familyRows(actions)
+                            familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))
                         }
                     }
                     pillHairline
@@ -251,9 +251,9 @@ extension CallView {
 
     // MARK: - Family rows
 
-    private func familyRows(_ actions: CallActionSet) -> some View {
+    private func familyRows(_ rows: [CallActionFamilyRow]) -> some View {
         VStack(spacing: 0) {
-            ForEach(actions.familyRows) { row in
+            ForEach(rows) { row in
                 CallPillRow(title: CallControlsCopy.familyTitle(row.family)) {
                     ForEach(row.actions, id: \.self) { action in
                         actionButton(action)

@@ -72,6 +72,7 @@ extension CallView {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.white.opacity(0.3), lineWidth: 1)
                 )
+                .overlay(alignment: .bottom) { selfTileCameraControls(tileSize: size) }
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                 .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                 .gesture(
@@ -90,9 +91,9 @@ extension CallView {
                 )
                 .simultaneousGesture(selfTilePinchGesture)
                 // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
-                // Retourner et Effets ont quitté la vignette pour le rail
-                // « mon image » (#8394) : la vignette ne fait plus que se
-                // déplacer et permuter.
+                // #8626 — les commandes de ma caméra vivent en bas de la
+                // vignette quand elle porte mon image ; leurs boutons gagnent
+                // le toucher, le reste de la vignette permute.
                 .onTapGesture {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
                         swapStreams.toggle()
