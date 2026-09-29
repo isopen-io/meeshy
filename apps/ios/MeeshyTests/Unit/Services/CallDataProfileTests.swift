@@ -128,6 +128,18 @@ final class CallDataProfileTests: XCTestCase {
         XCTAssertTrue(params.contains("maxplaybackrate=\(QualityThresholds.opusFmtpMaxPlaybackRate)"))
     }
 
+    func test_opusMunger_spacedExistingParams_areOverriddenNotDuplicated() {
+        let sdp = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10; stereo=1; useinbandfec=1\r\n"
+
+        let munged = OpusFmtpMunger.munge(sdp, audio: CallDataProfile.wifi.budget.audio)
+        let fmtp = munged.components(separatedBy: "\r\n").first { $0.hasPrefix("a=fmtp:111 ") } ?? ""
+
+        XCTAssertFalse(fmtp.contains("stereo=1"), "a spaced remote hint must not survive next to ours")
+        XCTAssertEqual(fmtp.components(separatedBy: "useinbandfec=").count, 2)
+        XCTAssertTrue(fmtp.contains("minptime=10"))
+        XCTAssertFalse(fmtp.contains(" ;") || fmtp.contains("; "))
+    }
+
     // MARK: - Label
 
     func test_label_isLocalizedForEveryProfile() {

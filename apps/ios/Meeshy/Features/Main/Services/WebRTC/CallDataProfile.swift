@@ -143,8 +143,8 @@ enum OpusFmtpMunger {
             found = true
             let kept = line.dropFirst(fmtpPrefix.count)
                 .split(separator: ";")
-                .map { String($0) }
-                .filter { !overriddenKeys.contains(key(of: $0)) }
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !overriddenKeys.contains(key(of: $0)) }
             return fmtpPrefix + (kept + opusParams).joined(separator: ";")
         }
 
