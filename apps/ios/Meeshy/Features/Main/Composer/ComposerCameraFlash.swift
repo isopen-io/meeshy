@@ -74,9 +74,17 @@ final class ComposerScreenFlash {
 
     nonisolated deinit {}
 
-    func light() {
+    /// `level` vient du curseur d'intensité (#8671) ; rallumer à un autre
+    /// niveau le RÈGLE sans oublier la luminosité d'avant.
+    func light(level: Double = ComposerFlashIntensity.defaultLevel) {
         if before == nil { before = screen.brightness }
-        screen.brightness = 1
+        screen.brightness = CGFloat(ComposerFlashIntensity.clamped(level))
+    }
+
+    /// Règle un écran DÉJÀ allumé ; n'allume rien.
+    func adjust(level: Double) {
+        guard before != nil else { return }
+        screen.brightness = CGFloat(ComposerFlashIntensity.clamped(level))
     }
 
     func restore() {
@@ -134,5 +142,70 @@ nonisolated enum ComposerCameraFlash {
             return String(localized: "camera.flash.off",
                           defaultValue: "Flash désactivé", bundle: .main)
         }
+    }
+}
+
+/// **L'intensité du flash — un curseur de verre collé au bouton** (#8671,
+/// directive porteur 2026-09-29 : « quand le flash est activé, une slide
+/// liquid glass s'allonge à droite, collée au bouton, pour décider de
+/// l'intensité du blanc du sol du composeur »).
+///
+/// Une seule valeur, deux lumières : le BLANC du sol et la luminosité de
+/// l'écran à l'avant, la puissance de la torche à l'arrière. Elle est
+/// mémorisée d'une ouverture du viseur à l'autre — un réglage qu'on refait à
+/// chaque prise n'est pas un réglage.
+nonisolated enum ComposerFlashIntensity {
+
+    /// Le plancher : en dessous, le « blanc » serait un gris qui n'éclaire
+    /// plus rien, et le flash mentirait sur ce qu'il fait.
+    static let range: ClosedRange<Double> = 0.3...1
+    static let defaultLevel: Double = 1
+    static let storageKey = "composer.camera.flashIntensity"
+
+    /// Le curseur ne s'allonge que flash actif : sans lumière, il n'y a pas
+    /// d'intensité à régler.
+    static func showsSlider(flash: AVCaptureDevice.FlashMode) -> Bool {
+        flash != .off
+    }
+
+    static func clamped(_ level: Double) -> Double {
+        guard level.isFinite else { return defaultLevel }
+        return min(range.upperBound, max(range.lowerBound, level))
+    }
+
+    /// Le doigt posé à `x` sur une piste de `width` points.
+    static func level(atX x: CGFloat, width: CGFloat) -> Double {
+        guard width > 0 else { return defaultLevel }
+        let part = Double(min(max(x / width, 0), 1))
+        return range.lowerBound + part * (range.upperBound - range.lowerBound)
+    }
+
+    /// Ce que la piste REMPLIT pour un niveau — l'inverse de `level(atX:)`.
+    static func fill(_ level: Double) -> Double {
+        (clamped(level) - range.lowerBound) / (range.upperBound - range.lowerBound)
+    }
+
+    /// Le blanc du sol : le niveau lui-même, en luminance.
+    static func floorWhite(_ level: Double) -> Double {
+        clamped(level)
+    }
+
+    /// La puissance de la torche, bornée à ce que l'appareil sert et jamais
+    /// nulle (`setTorchModeOn(level:)` refuse 0).
+    static func torchLevel(_ level: Double, maxAvailable: Float) -> Float {
+        let plafond = max(0.05, min(1, maxAvailable))
+        return min(plafond, max(0.05, Float(clamped(level))))
+    }
+
+    /// Le pas d'un balayage VoiceOver.
+    static let accessibilityStep: Double = 0.1
+
+    static func stepped(_ level: Double, up: Bool) -> Double {
+        clamped(level + (up ? accessibilityStep : -accessibilityStep))
+    }
+
+    /// La valeur dite par VoiceOver : un pourcentage.
+    static func percent(_ level: Double) -> Int {
+        Int((clamped(level) * 100).rounded())
     }
 }

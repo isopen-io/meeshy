@@ -66,11 +66,13 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
         XCTAssertNil(ComposerSceneQuickCapture.tap(format: .status))
     }
 
+    /// La levée d'un appui long se lit désormais sur le cadenas (#8671) —
+    /// `ComposerCaptureHold.release`, éprouvée par `ComposerCaptureLockZoomFlashTests`.
     func test_release_clotLaPrise_ouAnnuleCeQuiNAPasDemarre() {
-        XCTAssertEqual(ComposerSceneQuickCapture.release(isRecording: true, locked: false), .closeTake)
-        XCTAssertEqual(ComposerSceneQuickCapture.release(isRecording: true, locked: true), .keepFilming,
+        XCTAssertEqual(ComposerCaptureHold.release(isRecording: true, phase: .holding), .closeTake)
+        XCTAssertEqual(ComposerCaptureHold.release(isRecording: true, phase: .locked), .keepFilming,
                        "une prise verrouillée survit au relâchement")
-        XCTAssertEqual(ComposerSceneQuickCapture.release(isRecording: false, locked: false), .cancelPending,
+        XCTAssertEqual(ComposerCaptureHold.release(isRecording: false, phase: .holding), .cancelPending,
                        "relâcher avant que la caméra soit prête ne prend RIEN — jamais une photo imprévue")
     }
 

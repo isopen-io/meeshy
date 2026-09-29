@@ -64,6 +64,26 @@ struct ComposerSceneCameraBar: View {
     /// le « + » écrit ici n'aurait été éprouvable qu'en montant une vue.
     var liveDuration: TimeInterval = 0
 
+    /// **Ce que l'HÔTE sait du doigt et de la lumière** (#8671) : l'appui long
+    /// de la scène commence AVANT que cette barre existe, donc son cadenas,
+    /// son zoom et l'intensité du flash lui sont remis d'en haut.
+    struct Capture: Equatable {
+        var holding = false
+        var lockProgress: Double = 0
+        var locked = false
+        var zoomFactor: CGFloat = 1
+        var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
+    }
+
+    var capture = Capture()
+    /// La course verticale du doigt pendant une prise — le zoom.
+    var onZoomDrag: (CGFloat) -> Void = { _ in }
+    var onZoomDragEnded: () -> Void = {}
+    /// Un pas de zoom VoiceOver : `true` rapproche.
+    var onZoomStep: (Bool) -> Void = { _ in }
+    var onFlashIntensity: (Double) -> Void = { _ in }
+    var onShutterTouched: () -> Void = {}
+
     /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
     /// différence entre une photo et une prise, et il ne peut pas vivre
     /// ailleurs : la vue est le seul endroit qui voit le doigt.
@@ -105,10 +125,7 @@ struct ComposerSceneCameraBar: View {
 
     private var topControls: some View {
         HStack(spacing: 8) {
-            glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
-                         label: ComposerCameraFlash.label(for: flashMode),
-                         tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
-                         action: onCycleFlash)
+            flashCluster
             Spacer(minLength: 0)
             // **La croix est TOUJOURS là** (#8653, directive porteur
             // 2026-09-29 : « permettre de quitter à tout moment »), en carte
@@ -126,6 +143,35 @@ struct ComposerSceneCameraBar: View {
                          tint: .white,
                          action: onFlipCamera)
         }
+    }
+
+    /// **Le flash et son curseur, dans UNE capsule de verre** (#8671). Le
+    /// curseur s'allonge à droite, collé au bouton, quand le flash s'allume, et
+    /// se replie quand il s'éteint — la capsule grandit avec lui.
+    private var flashCluster: some View {
+        HStack(spacing: 0) {
+            Button {
+                onCycleFlash()
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: ComposerCameraFlash.symbol(for: flashMode))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .foregroundStyle(flashMode == .off ? .white.opacity(0.75) : .yellow)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(ComposerCameraFlash.label(for: flashMode))
+            if ComposerFlashIntensity.showsSlider(flash: flashMode) {
+                ComposerFlashIntensitySlider(level: capture.flashIntensity,
+                                             onChange: onFlashIntensity)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .adaptiveGlass(in: Capsule())
+        .clipShape(Capsule())
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82),
+                   value: ComposerFlashIntensity.showsSlider(flash: flashMode))
     }
 
     /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que
@@ -227,42 +273,71 @@ struct ComposerSceneCameraBar: View {
     /// La piste ne paraît que pendant une prise non verrouillée — hors de ce
     /// moment elle n'a rien à dire, et un rail permanent laisserait croire à
     /// une commande qu'on peut presser.
-    private var shutterRow: some View {
-        HStack(spacing: 10) {
-            shutter
-            if stage == .recording && !locked { lockTrack }
-        }
+    /// Verrouillée par ce déclencheur OU par l'appui long de la scène (#8671).
+    private var isLocked: Bool { locked || capture.locked }
+
+    private var showsLock: Bool {
+        ComposerCaptureHold.showsLock(stage: stage, holding: capture.holding, locked: isLocked)
     }
 
-    /// La cible du verrou, avec la progression du doigt. Le cadenas se
-    /// remplit ; à 1, le geste bascule.
+    /// Le déclencheur au CENTRE, fixe : le zoom à sa gauche, le cadenas à sa
+    /// droite, chacun dans un emplacement réservé — un cadenas qui paraît ne
+    /// déplace pas le bouton sous le doigt.
+    private var shutterRow: some View {
+        HStack(spacing: 10) {
+            ZStack(alignment: .trailing) {
+                Color.clear
+                if stage == .recording || ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
+                    ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: onZoomStep)
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: Self.sideSlot, height: 44)
+            shutter
+            ZStack(alignment: .leading) {
+                Color.clear
+                if showsLock { lockTrack }
+            }
+            .frame(width: Self.sideSlot, height: 44)
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
+    }
+
+    private static let sideSlot: CGFloat = 84
+
+    /// **La clé du verrou** (#8671, directive porteur 2026-09-29 : « ajouter
+    /// une clé pour la vidéo permettant de lock la vidéo »). Elle paraît dès
+    /// que le doigt tient pour filmer, et se remplit pendant qu'il glisse ; à
+    /// 1, le geste bascule et le déclencheur devient le bouton stop.
     private var lockTrack: some View {
-        HStack(spacing: 6) {
+        let progres = max(lockProgress, capture.lockProgress)
+        return HStack(spacing: 6) {
             // `forward`, jamais `right` : ce chevron montre la direction du
-            // GESTE — remonter vers le cadenas pour verrouiller la prise — et
+            // GESTE — glisser vers le cadenas pour verrouiller la prise — et
             // en arabe la piste part de l'autre bord. Un côté physique y
             // pointerait à l'opposé du doigt.
             Image(systemName: "chevron.forward")
-                .font(MeeshyFont.relative(11, weight: .bold))
-                .foregroundStyle(.white.opacity(0.35 + 0.65 * lockProgress))
-            Image(systemName: "lock.fill")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4 + 0.6 * lockProgress))
+                .font(MeeshyFont.relative(12, weight: .bold))
+                .foregroundStyle(.white.opacity(0.45 + 0.55 * progres))
+            Image(systemName: progres >= 1 ? "lock.fill" : "lock.open.fill")
+                .font(MeeshyFont.relative(17, weight: .semibold))
+                .foregroundStyle(.white)
+                .scaleEffect(reduceMotion ? 1 : 1 + 0.15 * progres)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 34)
+        .padding(.horizontal, 14)
+        .frame(height: 44)
         .adaptiveGlass(in: Capsule())
         .overlay(
-            Capsule().strokeBorder(.white.opacity(0.25 * lockProgress), lineWidth: 2)
+            Capsule().strokeBorder(.white.opacity(0.3 + 0.5 * progres), lineWidth: 2)
         )
         .accessibilityHidden(true)
-        .transition(.opacity)
+        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
     }
 
     private var shutter: some View {
         ZStack {
             Circle()
-                .stroke(locked ? MeeshyColors.error : .white, lineWidth: 4)
+                .stroke(isLocked ? MeeshyColors.error : .white, lineWidth: 4)
                 .frame(width: 76, height: 76)
             if stage == .recording {
                 RoundedRectangle(cornerRadius: 7)
@@ -283,6 +358,14 @@ struct ComposerSceneCameraBar: View {
         .accessibilityAction(named: Text(ComposerSceneCameraCopy.filmActionLabel)) {
             stage == .recording ? onCloseTake() : onStartFilming()
         }
+        // Le verrou, offert à la voix pendant une prise tenue (#8671).
+        .accessibilityAction(named: Text(ComposerSceneCameraCopy.lockHint)) {
+            guard stage == .recording, !isLocked else { return }
+            locked = true
+            onLock()
+            UIAccessibility.post(notification: .announcement,
+                                 argument: ComposerSceneCameraCopy.lockedAnnouncement)
+        }
     }
 
     private var shutterGesture: some Gesture {
@@ -291,22 +374,33 @@ struct ComposerSceneCameraBar: View {
                 if pressedAt == nil {
                     pressedAt = Date()
                     locked = false
+                    // Un doigt sur le déclencheur n'est plus sur la scène :
+                    // un appui long dont la levée s'est perdue se clôt ici.
+                    onShutterTouched()
                     armHold()
                 }
-                guard stage == .recording, !locked else { return }
+                guard stage == .recording else { return }
+                // **Glisser vers le haut zoome, vers le bas dézoome** (#8671),
+                // tenu comme verrouillé.
+                onZoomDrag(valeur.translation.height)
+                guard !locked else { return }
                 // **Le geste se montre pendant qu'il se fait** — et revenir en
                 // arrière l'annule, ce que la progression rend tout seul en
                 // retombant à zéro.
                 lockProgress = ComposerShutterGesture.lockProgress(
                     translationX: valeur.translation.width)
-                guard ComposerShutterGesture.locks(
-                    translationX: valeur.translation.width) else { return }
+                guard ComposerCaptureHold.phase(
+                    translation: CGPoint(x: valeur.translation.width, y: valeur.translation.height),
+                    wasLocked: false) == .locked else { return }
                 locked = true
                 lockProgress = 1
                 onLock()
                 HapticFeedback.medium()
+                UIAccessibility.post(notification: .announcement,
+                                     argument: ComposerSceneCameraCopy.lockedAnnouncement)
             }
             .onEnded { _ in
+                onZoomDragEnded()
                 holdTask?.cancel()
                 holdTask = nil
                 let tenu = pressedAt.map { Date().timeIntervalSince($0) } ?? 0
@@ -344,7 +438,9 @@ struct ComposerSceneCameraBar: View {
     // MARK: - La phrase
 
     private var hint: some View {
-        Text(ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
+        // Pendant que le doigt tient, la phrase dit le cadenas (#8671).
+        Text(showsLock ? ComposerSceneCameraCopy.lockHint
+                       : ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
             .font(MeeshyFont.relative(11, design: .monospaced))
             .foregroundStyle(.white.opacity(0.85))
             .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
@@ -353,5 +449,91 @@ struct ComposerSceneCameraBar: View {
             .minimumScaleFactor(0.75)
             .padding(.top, 10)
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Le curseur d'intensité du flash (#8671)
+
+/// **Le curseur de verre** : une piste que le doigt règle d'un glissé, et que
+/// VoiceOver règle d'un balayage — un élément AJUSTABLE, jamais une piste
+/// muette. La loi (`ComposerFlashIntensity`) convertit la position en niveau.
+struct ComposerFlashIntensitySlider: View {
+    let level: Double
+    let onChange: (Double) -> Void
+
+    private static let trackWidth: CGFloat = 96
+    private static let thumb: CGFloat = 18
+
+    var body: some View {
+        let remplissage = CGFloat(ComposerFlashIntensity.fill(level))
+        return ZStack(alignment: .leading) {
+            Capsule()
+                .fill(.white.opacity(0.28))
+                .frame(height: 4)
+            Capsule()
+                .fill(Color.yellow)
+                .frame(width: max(Self.thumb / 2, Self.trackWidth * remplissage), height: 4)
+            Circle()
+                .fill(Color.white)
+                .frame(width: Self.thumb, height: Self.thumb)
+                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                .offset(x: (Self.trackWidth - Self.thumb) * remplissage)
+        }
+        .frame(width: Self.trackWidth, height: 44)
+        // La piste se lit toujours du faible au fort dans le sens de la
+        // position du doigt : sa géométrie ne se retourne pas en arabe, la
+        // capsule qui la porte, si.
+        .environment(\.layoutDirection, .leftToRight)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { valeur in
+                    onChange(ComposerFlashIntensity.level(atX: valeur.location.x,
+                                                          width: Self.trackWidth))
+                }
+        )
+        .padding(.trailing, 14)
+        .accessibilityElement()
+        .accessibilityLabel(ComposerSceneCameraCopy.flashIntensityLabel)
+        .accessibilityValue(ComposerSceneCameraCopy.flashIntensityValue(level))
+        .accessibilityAdjustableAction { sens in
+            switch sens {
+            case .increment: onChange(ComposerFlashIntensity.stepped(level, up: true))
+            case .decrement: onChange(ComposerFlashIntensity.stepped(level, up: false))
+            @unknown default: break
+            }
+        }
+    }
+}
+
+// MARK: - Le badge du zoom (#8671)
+
+/// Le facteur courant, avec la flèche du geste qui le change. Ajustable à la
+/// voix : un lecteur d'écran ne glisse pas.
+struct ComposerCaptureZoomChip: View {
+    let factor: CGFloat
+    let onStep: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.up.and.down")
+                .font(MeeshyFont.relative(10, weight: .bold))
+            Text(ComposerSceneCameraCopy.zoomValue(factor))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
+        }
+        .foregroundStyle(ComposerCaptureZoom.showsBadge(factor) ? Color.yellow : .white)
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .adaptiveGlass(in: Capsule())
+        .accessibilityElement()
+        .accessibilityLabel(ComposerSceneCameraCopy.zoomLabel)
+        .accessibilityValue(ComposerSceneCameraCopy.zoomValue(factor))
+        .accessibilityAdjustableAction { sens in
+            switch sens {
+            case .increment: onStep(true)
+            case .decrement: onStep(false)
+            @unknown default: break
+            }
+        }
     }
 }
