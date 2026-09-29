@@ -148,7 +148,8 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         "composer.camera.lock.done",
         "composer.camera.zoom",
         "composer.camera.flashIntensity",
-        "composer.camera.gesture.tapPhoto",
+        "composer.camera.gesture.tapArm",
+        "composer.camera.gesture.tapAgainPhoto",
         "composer.camera.gesture.holdFilm",
     ]
 
