@@ -35,14 +35,14 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * entrent dans un MODE qui libère tout l'écran.
  *
  * Chunk à part (`budgets.json` › `call_action_rows`) : les rangées ne se
- * montrent qu'au `(…)`, et le rail qu'à mon image en plein écran ; l'écran
+ * montrent qu'au `(…)`, et les commandes de ma caméra qu'avec ma vignette ; l'écran
  * d'appel le précharge dès que l'appel vit. Il n'importe RIEN de l'écran
  * d'appel (`call_overlay`, `dynamic_only`) : le bouton de verre, les glyphes,
  * les flèches et la molette d'une rangée, les identifiants lui sont remis
  * (`CallRowsKit`).
  */
 
-/** Ce que l'écran d'appel remet aux rangées et au rail. */
+/** Ce que l'écran d'appel remet aux rangées et aux commandes de ma caméra. */
 export type CallRowsKit = {
   readonly Button: typeof CallButton;
   readonly glyphs: typeof CALL_VIEW_GLYPHS;
@@ -273,20 +273,20 @@ export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/
 
 type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit };
 
-const RAIL_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
+const CAMERA_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
 
 /**
- * LE RAIL DE MA CAMÉRA (#8576) — quand mon image remplit l'écran, ses
- * commandes se rangent en colonne sur le bord : Retourner, Couper la caméra,
- * Effets (qui entre dans le mode), Partager l'écran. ↑ et ↓ y passent d'un
- * bouton à l'autre.
+ * LES COMMANDES DE MA CAMÉRA (#8576, #8626) — Retourner, Couper la caméra,
+ * Effets (qui entre dans le mode), Partager l'écran, en une rangée compacte :
+ * en bas de ma vignette (`tile`), ou en haut au centre quand mon image
+ * remplit l'écran (`top`). ← et → y passent d'un bouton à l'autre.
  */
-export function CallCameraRail({ call, set, language, panels, kit }: RowsProps) {
+export function CallCameraControls({ call, set, language, panels, kit, place }: RowsProps & { readonly place: 'tile' | 'top' }) {
   const context = { call, language, panels, kit };
   const label = translateCallControls(language, 'callControls.camera.options');
   return (
-    <div role="toolbar" aria-label={label} aria-orientation="vertical" onKeyDown={kit.onRowKeyDown} className="glass-call flex flex-col items-center gap-0.5 rounded-full p-0.5" data-call-self-rail="">
-      {RAIL_ORDER.filter((action) => set.mine.includes(action)).map((action) => {
+    <div role="toolbar" aria-label={label} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} className="glass-call flex w-max items-center gap-0.5 rounded-full p-0.5" data-call-self-controls={place}>
+      {CAMERA_ORDER.filter((action) => set.mine.includes(action)).map((action) => {
         const view = mineAction(action, context);
         return (
           <kit.Button
@@ -298,7 +298,7 @@ export function CallCameraRail({ call, set, language, panels, kit }: RowsProps) 
             {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
             {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
             size={44}
-            data={{ 'data-call-rail': action, [kit.rowItem]: '' }}
+            data={{ ...view.data, 'data-call-self-control': action, [kit.rowItem]: '' }}
           />
         );
       })}

@@ -298,6 +298,15 @@
         "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 1,46 Ko -- ma camera en PLEIN ECRAN (`components/call-self-camera.tsx` : le zoom de la camera -- pincement, molette, capsule `+ 1× -` rangee sous le rail -- et sa loi `lib/calls/camera-zoom.ts`). Charge quand mon image passe en plein ecran, et la seulement (#8576) : le zoom n est plus offert sur la vignette en coin ni sur ma tuile de groupe. Il n importe rien de `call_overlay`, qui lui remet ses glyphes et la colonne du rail. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
+    "call_preview": {
+      "pattern": "^assets/call-preview-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #8627, NON ARBITREE",
+        "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 0,67 Ko -- l APERCU avant decroche (`components/call-preview.tsx` : la video de l appelant voilee derriere la sonnerie et le bouton « Activer le son », en haut au centre et en toutes lettres, qui fait taire la sonnerie, #8627). Sorti de `call_overlay` (15,99 Ko mesures avec lui, plafond 16) : il ne se charge que quand un apercu arrive. Il n importe rien de `call_overlay`, qui lui remet ses elements video et audio et ses glyphes (`CallPreviewKit`). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+      }
+    },
     "call_control_panels": {
       "pattern": "^assets/call-control-panels-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,

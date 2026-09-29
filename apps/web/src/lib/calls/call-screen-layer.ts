@@ -78,7 +78,7 @@ export type LayerChrome = {
   readonly rows: boolean;
   readonly panel: CallPanelKind | null;
   readonly mode: CallModeKind | null;
-  /** Les commandes de ma caméra (rail plein écran, capsule du zoom). */
+  /** Les commandes de ma caméra (rangée de ma vignette ou du haut, capsule du zoom). */
   readonly selfControls: boolean;
   readonly autoHide: boolean;
 };

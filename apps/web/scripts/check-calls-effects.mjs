@@ -15,8 +15,9 @@
  *  1. un appel vocal se connecte, la caméra s'allume ;
  *  2. l'en-tête porte Réduire puis « Conversation » (verre isolé, 44 px), et
  *     « Messages » a quitté les actions (#8436) ;
- *  3. la rangée « Mon image » : Caméra, (Retourner), Effets, Écran — chaque
- *     bouton fait 44, sans verre à lui (#8432, #8550) ;
+ *  3. les commandes de ma caméra, dans ma vignette : Caméra, (Retourner),
+ *     Effets, Écran — chaque bouton fait 44, sans verre à lui, et le (…) ne
+ *     les double pas (#8432, #8550, #8626) ;
  *  4. « Effets » entre dans le MODE Effets (#8578) : l'en-tête, la pilule et
  *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
  *     au-dessus d'UN carrousel centré en bas ; « Chaud » remplace la piste
@@ -225,10 +226,11 @@ try {
       check((await page.$('[data-call-control="messages"]')) === null, `${label} : « Messages » a quitté les actions`);
 
       // ------------------------------------------------ 3. la rangée de mon image
-      const mine = await page.$$eval('[data-call-row="mine"] [data-call-row-scroll] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
+      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
       check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran']), `${label} : mon image — ${mine.map((b) => b.label).join(' · ')}`);
-      check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée font ${TAP_FLOOR} et n'ont pas de verre à eux`);
+      check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
       await page.click('[data-call-screen] button[aria-label="Couper le micro"]');
@@ -402,7 +404,7 @@ try {
     check(await startConnectedVideoCall(page), 'zoom : l’appel se connecte et la caméra s’allume');
     check((await page.$('[data-call-zoom]')) === null, 'zoom : pas de capsule sur ma vignette en coin');
     await page.click('[data-call-corner]');
-    check(await appears(page, '[data-call-zoom]'), 'zoom : mon image en plein écran montre la capsule, sous le rail');
+    check(await appears(page, '[data-call-zoom]'), 'zoom : mon image en plein écran montre la capsule, sur le bord');
     const value = () => page.$eval('[data-call-zoom-value]', (el) => el.textContent ?? '');
     check((await value()) === '1×', `zoom : l’indicateur dit « ${await value()} »`);
     const plus = await page.locator('[data-call-zoom-in]').boundingBox();

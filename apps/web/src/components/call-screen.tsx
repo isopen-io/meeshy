@@ -5,9 +5,8 @@ import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
-import { CallPreview } from '@/components/call-preview';
 import { CallPeerAlerts } from '@/components/call-quality';
-import { StreamVideo } from '@/components/call-media-elements';
+import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -17,6 +16,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
+import { mineInMenu, selfControlsPlace } from '@/lib/calls/call-self-controls';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
@@ -136,9 +136,13 @@ const CallCaptionsPanel = lazy(() =>
 
 const loadActions = () => import('./call-control-actions');
 
+const CallPreview = lazy(() => import('./call-preview').then((module) => ({ default: module.CallPreview })));
+
+const PREVIEW_KIT = { Video: StreamVideo, Audio: StreamAudio, soundOn: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={22} />, soundOff: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerSlash} size={22} /> };
+
 const ROWS_KIT: CallRowsKit = { Button: CallButton, glyphs: CALL_VIEW_GLYPHS, onRowKeyDown, onRowWheel, rowItem: ROW_ITEM, actionsId: CALL_ACTIONS_ID, panelIds: CALL_PANEL_ID };
 
-const CallCameraRail = lazy(() => loadActions().then((module) => ({ default: module.CallCameraRail })));
+const CallCameraControls = lazy(() => loadActions().then((module) => ({ default: module.CallCameraControls })));
 
 const CallEffectsMode = lazy(() =>
   import('./call-effects-mode').then(async (module) => {
@@ -279,6 +283,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const canFlip = useCanFlip(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip, videoScene });
+  const place = selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
     montage: set.call.includes('capture'),
@@ -373,14 +378,20 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     full: selfFull,
     onToggle: () => setSelfFull((full) => !full),
     controls: chrome.selfControls,
-    column: (capsule) => (
-      <div className={`absolute left-3 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-2 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-self-column="">
-        <Suspense fallback={null}>
-          <CallCameraRail call={call} set={set} language={language} panels={panels} kit={ROWS_KIT} />
-        </Suspense>
-        {capsule}
-      </div>
-    ),
+    row: () =>
+      place === 'menu' ? null : (
+        <div className={fade} aria-hidden={hidden ? true : undefined} data-call-self-controls-holder={place}>
+          <Suspense fallback={null}>
+            <CallCameraControls call={call} set={set} language={language} panels={panels} kit={ROWS_KIT} place={place} />
+          </Suspense>
+        </div>
+      ),
+    column: (capsule) =>
+      capsule === null ? null : (
+        <div className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-self-column="">
+          {capsule}
+        </div>
+      ),
   };
   const stage = <CallStage call={call} layout={layout} language={language} choice={choice} onChoose={setChoice} immersive={immersive} onToggleImmersive={toggleImmersive} moderation={moderation} self={self} />;
 
@@ -473,7 +484,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       data-call-chrome={hidden ? 'hidden' : 'shown'}
       data-call-layer={shown.kind}
     >
-      {call.preview === null ? null : <CallPreview stream={call.preview} language={language} />}
+      {call.preview === null ? null : (
+        <Suspense fallback={null}>
+          <CallPreview stream={call.preview} language={language} kit={PREVIEW_KIT} />
+        </Suspense>
+      )}
       {overlayVideo ? (
         <div ref={stageRef} className="absolute inset-0" data-call-stage-surface="">
           {stage}
@@ -523,7 +538,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 <CallControlPill
                   call={call}
                   language={language}
-                  set={set}
+                  set={mineInMenu(set, place)}
                   expanded={expanded}
                   onToggle={() => send({ type: 'toggle-menu' })}
                   prominent={sharedScreenShown}

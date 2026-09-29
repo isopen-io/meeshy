@@ -24,18 +24,22 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * - Ma vignette en coin se PINCE (#8577) : x1 · x2 · x3, accrochée, retenue
  *   pour l'appel (`call-self-tile.ts`) ; Ctrl + molette de même.
- * - Mon image en PLEIN ÉCRAN (#8576) porte seule le zoom de ma caméra et le
- *   rail de ma caméra, chargés à part (`call-self-camera.tsx`) ; ils se
- *   retirent dans un mode.
+ * - Les commandes de MA caméra (#8626) vivent en bas de ma vignette ; quand
+ *   mon image passe en PLEIN ÉCRAN, elles montent en haut au centre, et la
+ *   vignette (le pair) descend d'un cran pour leur laisser la place.
+ * - Mon image en plein écran porte seule le zoom de ma caméra, chargé à part
+ *   (`call-self-camera.tsx`). Tout se retire dans un mode.
  */
 
 /** Ce que l'écran d'appel remet à la scène pour MON image. */
 export type SelfView = {
   readonly full: boolean;
   readonly onToggle: () => void;
-  /** Les commandes de ma caméra (rail, zoom) — retirées dans un mode. */
+  /** Les commandes de ma caméra (rangée, zoom) — retirées dans un mode. */
   readonly controls: boolean;
-  /** La colonne du rail, qui range la capsule du zoom sous ses boutons. */
+  /** La rangée des commandes de ma caméra (#8626) : dans ma vignette, ou en haut au centre en plein écran. */
+  readonly row: () => ReactNode;
+  /** La colonne de la capsule du zoom, sur le bord. */
   readonly column: (capsule: ReactNode) => ReactNode;
 };
 
@@ -64,6 +68,10 @@ type StageProps = {
 };
 
 const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
+
+const cornerBelowControls = { top: 'calc(env(safe-area-inset-top) + 8rem)' } as const;
+
+const controlsTop = { top: 'calc(env(safe-area-inset-top) + 3.5rem)' } as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -134,19 +142,27 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
           <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} language={language} glyphs={glyphs} column={self.controls ? self.column : null} />
         </Suspense>
       ) : null}
+      {swapped && self.controls ? (
+        <div className="absolute left-1/2 z-20 -translate-x-1/2" style={controlsTop}>
+          {self.row()}
+        </div>
+      ) : null}
       {cornerShown ? (
-        <button
-          type="button"
-          aria-label={translate(language, 'call.video.swap')}
-          onClick={self.onToggle}
-          className="absolute right-4 z-10 grid place-items-center overflow-hidden rounded-card shadow-lg transition-[width,height] duration-200 motion-reduce:transition-none"
-          {...(swapped ? {} : pinch)}
-          style={{ ...cornerTop, width: size.width, height: size.height, background: 'rgb(0 0 0 / 0.35)', ...(swapped ? {} : pinch.style) }}
-          data-call-corner=""
-          data-call-self-tile={swapped ? undefined : String(scale)}
-        >
-          {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
-        </button>
+        <div className="absolute right-4 z-10 transition-[width,height] duration-200 motion-reduce:transition-none" style={{ ...(swapped ? cornerBelowControls : cornerTop), width: size.width, height: size.height }} data-call-corner-frame="">
+          <button
+            type="button"
+            aria-label={translate(language, 'call.video.swap')}
+            onClick={self.onToggle}
+            className="relative z-10 grid size-full place-items-center overflow-hidden rounded-card shadow-lg"
+            {...(swapped ? {} : pinch)}
+            style={{ background: 'rgb(0 0 0 / 0.35)', ...(swapped ? {} : pinch.style) }}
+            data-call-corner=""
+            data-call-self-tile={swapped ? undefined : String(scale)}
+          >
+            {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+          </button>
+          {swapped || !self.controls ? null : <div className="absolute bottom-1.5 right-1.5 z-20">{self.row()}</div>}
+        </div>
       ) : null}
       <span role="status" aria-live="polite" className="sr-only" data-call-self-tile-status="">
         {said}
