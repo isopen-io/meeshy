@@ -64,4 +64,19 @@ describe('le réglage Opus de la description envoyée (#8697)', () => {
     expect(shaped.includes('\r')).toBe(false);
     expect(shaped).toContain('a=fmtp:111 minptime=10;useinbandfec=1;maxaveragebitrate=24000;usedtx=1;stereo=0;sprop-stereo=0');
   });
+
+  test('seule la section audio est réglée : une section vidéo au même numéro de charge reste intacte', () => {
+    const clash = OFFER.replace('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtpmap:96 VP8/90000', 'm=video 9 UDP/TLS/RTP/SAVPF 96 111\r\na=rtpmap:96 VP8/90000\r\na=rtpmap:111 rtx/90000\r\na=fmtp:111 apt=96');
+    const shaped = shapeOpusSdp(clash, { maxAverageBitrate: 24_000 });
+    expect(shaped).toContain('\r\na=fmtp:111 apt=96\r\n');
+    expect(fmtpOf(shaped, '111')).toBe('a=fmtp:111 minptime=10;useinbandfec=1;maxaveragebitrate=24000;usedtx=1;stereo=0;sprop-stereo=0');
+  });
+
+  test('un Opus sans fmtp en reçoit une même quand une autre section porte une fmtp au même numéro', () => {
+    const clash = OFFER.replace('a=fmtp:111 minptime=10;useinbandfec=1\r\n', '').replace('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtpmap:96 VP8/90000', 'm=video 9 UDP/TLS/RTP/SAVPF 96 111\r\na=rtpmap:96 VP8/90000\r\na=rtpmap:111 rtx/90000\r\na=fmtp:111 apt=96');
+    const lines = shapeOpusSdp(clash, { maxAverageBitrate: 24_000 }).split('\r\n');
+    expect(lines[lines.indexOf('a=rtpmap:111 opus/48000/2') + 1]).toBe('a=fmtp:111 maxaveragebitrate=24000;usedtx=1;useinbandfec=1;stereo=0;sprop-stereo=0');
+    expect(lines).toContain('a=fmtp:111 apt=96');
+  });
 });
+
