@@ -88,18 +88,28 @@ enum CallCameraRail {
         placement == site && chrome.isVisible(.controls)
     }
 
-    static func zoomControl(profile: CameraZoomProfile?, placement: CallCameraControlsPlacement, tileSize: CGSize?) -> CallZoomControl? {
+    static func zoomControl(profile: CameraZoomProfile?, placement: CallCameraControlsPlacement, tileSize: CGSize?, actionCount: Int) -> CallZoomControl? {
         guard let profile, profile.quickStops.count > 1 else { return nil }
         switch placement {
         case .topCenter:
             return .lensChips(profile.quickStops)
         case .selfTile:
-            guard let tileSize,
-                  tileSize.width >= targetSide + 2 * tileInset,
-                  tileSize.height >= 2 * targetSide + 2 * tileInset else { return nil }
+            guard let tileSize else { return nil }
+            let occupiedRows = tileOccupiedRows(tileSize: tileSize, count: actionCount)
+            guard tileSize.width >= targetSide + 2 * tileInset,
+                  tileSize.height >= CGFloat(occupiedRows + 1) * targetSide + 2 * tileInset else { return nil }
             return .cycleButton
         case .menu:
             return nil
+        }
+    }
+
+    /// Les rangées de 44 pt que les commandes posent en bas de la vignette.
+    private static func tileOccupiedRows(tileSize: CGSize, count: Int) -> Int {
+        switch tileLayout(tileSize: tileSize, count: count) {
+        case .grid(let grid)?: return grid.rows
+        case .folded?: return 1
+        case nil: return 0
         }
     }
 

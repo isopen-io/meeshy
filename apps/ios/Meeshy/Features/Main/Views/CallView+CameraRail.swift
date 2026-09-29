@@ -39,7 +39,7 @@ extension CallView {
                         railActionButton(action)
                     }
                 }
-                CallZoomRailSlot(placement: .topCenter)
+                CallZoomRailSlot(placement: .topCenter, actionCount: actions.count)
             }
             .background(CallCameraZoomAccessibilityElement())
             .padding(.vertical, 6)
@@ -82,7 +82,7 @@ extension CallView {
             }
             .overlay(alignment: .topTrailing) {
                 if !isCameraMenuUnfolded {
-                    CallZoomRailSlot(placement: .selfTile, tileSize: tileSize)
+                    CallZoomRailSlot(placement: .selfTile, tileSize: tileSize, actionCount: actions.count)
                 }
             }
             .callChromeVisibility(CallCameraRail.isShown(.selfTile, at: cameraControlsPlacement, chrome: chromeVisibility))
