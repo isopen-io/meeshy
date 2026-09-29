@@ -56,8 +56,8 @@ function fakeEngine({
     setTorch: async (_stream, on) => {
       journal.push(`torch:${on}`);
     },
-    photo: async (_video, mirrored) => {
-      journal.push(`photo:${mirrored ? 'mirrored' : 'plain'}`);
+    photo: async (_video, digitalZoom) => {
+      journal.push(`photo:${digitalZoom}`);
       return new File(['jpg'], 'photo.jpg', { type: 'image/jpeg' });
     },
     setZoom: async (_stream, value) => {
@@ -161,7 +161,7 @@ describe('StudioCamera — la capture rapide', () => {
     const taken: File[] = [];
     await mounter.mount(camera({ engine, intent: 'photo', taken }));
     await settle();
-    expect(journal).toEqual(['open:environment', 'live', 'photo:plain', 'release']);
+    expect(journal).toEqual(['open:environment', 'live', 'photo:1', 'release']);
     expect(taken.map((file) => file.type)).toEqual(['image/jpeg']);
   });
 
@@ -257,12 +257,13 @@ describe('StudioCamera — le flash éclaire vraiment', () => {
     await settle();
     await act(async () => host.querySelector<HTMLButtonElement>('[data-story-camera-flip]')?.click());
     await settle();
+    expect(host.querySelector<HTMLVideoElement>('[data-story-camera-preview]')?.style.transform).toContain('scaleX(-1)');
     await act(async () => shutter(host)?.click());
     await settle();
     expect(whiteDuringLight).toBe(true);
-    expect(journal).toContain('photo:mirrored');
-    expect(journal.indexOf('brightness:max')).toBeLessThan(journal.indexOf('photo:mirrored'));
-    expect(journal.indexOf('brightness:restore')).toBeGreaterThan(journal.indexOf('photo:mirrored'));
+    expect(journal).toContain('photo:1');
+    expect(journal.indexOf('brightness:max')).toBeLessThan(journal.indexOf('photo:1'));
+    expect(journal.indexOf('brightness:restore')).toBeGreaterThan(journal.indexOf('photo:1'));
     expect(host.querySelector('[data-story-camera-screen-flash]')).toBeNull();
     expect(taken).toHaveLength(1);
   });
@@ -277,7 +278,7 @@ describe('StudioCamera — le flash éclaire vraiment', () => {
     });
     await mounter.mount(camera({ engine, intent: 'photo', flash: true }));
     await settle();
-    expect(journal).toEqual(['open:environment', 'live', 'torch:true', 'lit', 'photo:plain', 'torch:false', 'release']);
+    expect(journal).toEqual(['open:environment', 'live', 'torch:true', 'lit', 'photo:1', 'torch:false', 'release']);
     expect(white).toBe(false);
   });
 

@@ -6,6 +6,7 @@ import { COMPOSER_GLYPHS } from '@/components/glyphs-composer';
 import { GLYPHS } from '@/components/glyphs';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { cameraMirrored } from '@/lib/media/camera-mirror';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { captureLock, flashFloorColor, flashSliderShown, zoomAfterDrag, type CameraZoomRange, type LayoutDirection } from '@/lib/stories/studio-capture-gestures';
 import { createBrowserCameraEngine, type CameraEngine } from '@/lib/stories/studio-camera-engine';
@@ -241,7 +242,7 @@ export function StudioCamera({
     busyRef.current = true;
     await lightOn('full');
     if (plan() !== 'off') await engine.lit();
-    const file = await engine.photo(video, facing === 'user');
+    const file = await engine.photo(video, zoomRangeRef.current.mode === 'hardware' ? 1 : zoomRef.current);
     await lightOff();
     busyRef.current = false;
     finish(file);
@@ -336,7 +337,7 @@ export function StudioCamera({
   /** Le zoom de l'APERÇU : numérique (`recorded`, `preview`) — la piste
    * matérielle zoome elle-même, l'aperçu ne grandit pas en plus. */
   const previewScale = zoomRangeRef.current.mode === 'hardware' ? 1 : zoom;
-  const transforms = [facing === 'user' ? 'scaleX(-1)' : '', previewScale > 1 ? `scale(${previewScale})` : ''].filter((part) => part !== '');
+  const transforms = [cameraMirrored({ facing, role: 'preview' }) ? 'scaleX(-1)' : '', previewScale > 1 ? `scale(${previewScale})` : ''].filter((part) => part !== '');
 
   /* LE VISEUR, PENDANT UN FILM MAINS LIBRES : glisser vers le haut zoome,
      vers le bas dézoome. Les boutons gardent leurs propres gestes. */

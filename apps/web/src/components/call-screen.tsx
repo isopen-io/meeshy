@@ -8,7 +8,7 @@ import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-c
 import { CallPeerAlerts } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, type SelfView } from '@/components/call-stage';
+import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -16,12 +16,13 @@ import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
-import { mineInMenu, selfControlsPlace } from '@/lib/calls/call-self-controls';
+import { mineInMenu, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -284,6 +285,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const canFlip = useCanFlip(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip, videoScene });
   const place = selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
+  const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
     montage: set.call.includes('capture'),
@@ -382,7 +384,15 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       place === 'menu' ? null : (
         <div className={fade} aria-hidden={hidden ? true : undefined} data-call-self-controls-holder={place}>
           <Suspense fallback={null}>
-            <CallCameraControls call={call} set={set} language={language} panels={panels} kit={ROWS_KIT} place={place} />
+            <CallCameraControls
+              call={call}
+              set={set}
+              language={language}
+              panels={panels}
+              kit={ROWS_KIT}
+              place={place}
+              local={zoomControlIn(place) === 'step' ? local : null}
+            />
           </Suspense>
         </div>
       ),
@@ -463,7 +473,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         language={language}
         colorAvailable={support.color}
         blurAvailable={support.blur}
-        preview={<StreamVideo stream={call.localStream} mirrored={call.facing === 'user' && !call.screenSharing} className="size-full" />}
+        preview={<StreamVideo stream={call.localStream} mirrored={selfPreviewMirrored(call)} className="size-full" />}
         quitGlyph={closeGlyph}
         onExit={exitMode}
         onWheel={onRowWheel}

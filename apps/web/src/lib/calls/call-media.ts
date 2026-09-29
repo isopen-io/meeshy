@@ -70,10 +70,13 @@ export async function acquireCallMedia(options: { readonly video: boolean; reado
   }
 }
 
-export async function acquireCamera(options: { readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null; readonly cameraId?: string | null }): Promise<MediaStreamTrack> {
+type CameraRequest = { readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null; readonly cameraId?: string | null; readonly video?: MediaTrackConstraints };
+
+/** `video` : des contraintes déjà choisies (la caméra arrière qui zoome le plus loin, `rear-camera.ts`). */
+export async function acquireCamera(options: CameraRequest): Promise<MediaStreamTrack> {
   const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
   if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
-  const stream = await source.getUserMedia({ audio: false, video: videoInputConstraints(options.facing, options.cameraId ?? null) });
+  const stream = await source.getUserMedia({ audio: false, video: options.video ?? videoInputConstraints(options.facing, options.cameraId ?? null) });
   const track = stream.getVideoTracks()[0];
   if (track === undefined) throw Object.assign(new Error('no-camera'), { name: 'NotFoundError' });
   return track;

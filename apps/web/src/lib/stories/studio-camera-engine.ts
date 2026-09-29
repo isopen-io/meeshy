@@ -1,3 +1,4 @@
+import { developPhoto, PHOTO_MIME } from '@/lib/media/photo-develop';
 import { appelNatifMethode, coqueCourante } from '@/lib/native-shell';
 import { digitalZoomCrop, zoomRangeOf, type CameraZoomRange } from '@/lib/stories/studio-capture-gestures';
 import { cameraVideoMime, type CameraFacing } from '@/lib/stories/studio-quick-capture';
@@ -25,7 +26,9 @@ export type CameraEngine = {
    * capteur — deux images peintes, puis un court palier d'exposition. */
   readonly lit: () => Promise<void>;
   readonly setTorch: (stream: MediaStream, on: boolean) => Promise<void>;
-  readonly photo: (video: HTMLVideoElement, mirrored: boolean) => Promise<File | null>;
+  /** La photo, à l'endroit (#8696), recadrée au zoom NUMÉRIQUE (`1` : aucun),
+   * par le développement unique des photos (`developPhoto`, #8695). */
+  readonly photo: (video: HTMLVideoElement, digitalZoom: number) => Promise<File | null>;
   /** Zoom MATÉRIEL (`applyConstraints({ advanced: [{ zoom }] })`) ; les
    * réglages rapprochés se fondent — seul le dernier part à la piste. */
   readonly setZoom: (stream: MediaStream, zoom: number) => Promise<void>;
@@ -149,22 +152,13 @@ export function createBrowserCameraEngine(): CameraEngine {
       const torch: TorchConstraint = { torch: on };
       await track?.applyConstraints({ advanced: [torch] }).catch(() => undefined);
     },
-    async photo(video, mirrored) {
+    async photo(video, digitalZoom) {
       const width = video.videoWidth;
       const height = video.videoHeight;
       if (width === 0 || height === 0) return null;
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
-      if (context === null) return null;
-      if (mirrored) {
-        context.translate(width, 0);
-        context.scale(-1, 1);
-      }
-      context.drawImage(video, 0, 0, width, height);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-      return blob === null ? null : new File([blob], `photo-${stamp()}.jpg`, { type: 'image/jpeg' });
+      const crop = digitalZoomCrop({ width, height, zoom: digitalZoom });
+      const blob = await developPhoto({ image: video, size: { width, height }, crop: { x: crop.sx, y: crop.sy, width: crop.sw, height: crop.sh } });
+      return blob === null ? null : new File([blob], `photo-${stamp()}.jpg`, { type: blob.type || PHOTO_MIME });
     },
     async setZoom(stream, zoom) {
       zoomTarget = zoom;

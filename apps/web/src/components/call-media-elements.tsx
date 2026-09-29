@@ -29,14 +29,18 @@ export function StreamVideo({
   className,
   label,
   fit = 'cover',
+  zoom = 1,
 }: {
   readonly stream: MediaStream | null;
   readonly mirrored: boolean;
   readonly className?: string;
   readonly label?: string;
   readonly fit?: 'cover' | 'contain';
+  /** Le zoom numérique de MON aperçu (#8441) : à l'écran seulement, jamais dans ce qui part. */
+  readonly zoom?: number;
 }) {
   const ref = useSrcObject<HTMLVideoElement>(stream);
+  const transform = [mirrored ? 'scaleX(-1)' : '', zoom > 1 ? `scale(${zoom})` : ''].filter((part) => part !== '').join(' ');
   return (
     <video
       ref={ref}
@@ -45,7 +49,7 @@ export function StreamVideo({
       muted
       aria-label={label}
       className={className}
-      style={{ objectFit: fit, transform: mirrored ? 'scaleX(-1)' : undefined, backgroundColor: '#000' }}
+      style={{ objectFit: fit, transform: transform === '' ? undefined : transform, backgroundColor: '#000' }}
       data-call-stream={fit}
       {...(mirrored ? { 'data-call-mirrored': '' } : {})}
     />

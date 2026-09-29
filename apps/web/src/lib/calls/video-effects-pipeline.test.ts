@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createEffectsPipeline, type FaceLayer, type PipelineEnv } from './video-effects-pipeline';
+import { lookFilter } from '@/lib/media/photo-develop';
+
 import { NO_EFFECTS, type VideoEffects } from './video-effects';
 
 /**
@@ -77,6 +79,14 @@ describe('les images traitables (MediaStreamTrackProcessor)', () => {
     pipeline.stop();
   });
 
+  test('une image déjà repeinte reçoit le look léger des photos, en tête du filtre (#8695)', async () => {
+    const h = framesHarness();
+    const pipeline = createEffectsPipeline(fakeTrack() as unknown as MediaStreamTrack, warm, h.env);
+    await h.send(5);
+    expect(h.draws[0]?.startsWith(lookFilter())).toBe(true);
+    pipeline.stop();
+  });
+
   test('changer d’effet change l’image SUIVANTE, sans rebâtir la piste', async () => {
     const h = framesHarness();
     const pipeline = createEffectsPipeline(fakeTrack() as unknown as MediaStreamTrack, warm, h.env);
@@ -84,7 +94,7 @@ describe('les images traitables (MediaStreamTrackProcessor)', () => {
     pipeline.update({ ...NO_EFFECTS, brightness: 0.2 });
     await h.send(2);
     expect(h.draws[0]).toContain('sepia');
-    expect(h.draws[1]).toBe('brightness(1.2)');
+    expect(h.draws[1]).toBe(`${lookFilter()} brightness(1.2)`);
     expect(pipeline.output).toBe(h.output as unknown as MediaStreamTrack);
     pipeline.stop();
   });
@@ -120,7 +130,7 @@ describe('les effets de visage (#8551)', () => {
     const h = framesHarness({ face: log.face });
     const pipeline = createEffectsPipeline(fakeTrack() as unknown as MediaStreamTrack, { ...NO_EFFECTS, faceEffect: 'toad' }, h.env);
     const sent = await h.send(5);
-    expect(h.draws).toEqual(['none']);
+    expect(h.draws).toEqual([lookFilter()]);
     expect(log.calls).toEqual([{ effect: 'toad', t: 5, width: 640, height: 480 }]);
     expect(h.written).toEqual([{ derived: true, timestamp: 5000 }]);
     expect(sent.closed).toBe(true);
