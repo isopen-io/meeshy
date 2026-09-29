@@ -79,7 +79,10 @@ nonisolated extension CallFrameRenderer {
         let reach = hypot(size.width, size.height)
         let rays = count(7, density)
         (0 ..< rays).forEach { index in
-            let angle = CGFloat.pi / 2 + (CGFloat(index) - CGFloat(rays - 1) / 2) * (1.4 / CGFloat(rays)) + (rand(seed, Double(index)) - 0.5) * 0.08
+            let centred: CGFloat = CGFloat(index) - CGFloat(rays - 1) / 2
+            let fan: CGFloat = centred * (1.4 / CGFloat(rays))
+            let jitter: CGFloat = (rand(seed, Double(index)) - 0.5) * 0.08
+            let angle: CGFloat = CGFloat.pi / 2 + fan + jitter
             let spread = 0.035 + rand(seed + 1, Double(index)) * 0.05
             let beam = polygon([
                 origin,

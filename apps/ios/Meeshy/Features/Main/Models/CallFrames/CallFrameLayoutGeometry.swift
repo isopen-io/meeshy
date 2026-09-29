@@ -159,29 +159,56 @@ nonisolated enum CallFrameLayoutGeometry {
 
     static func orbit(_ count: Int, _ area: CGRect, _ gap: CGFloat) -> [CGRect] {
         let middle = CGPoint(x: area.midX, y: area.midY)
-        let reach = min(area.width, area.height)
-        let core = reach * orbitCenterShare
+        let reach: CGFloat = min(area.width, area.height)
+        let core: CGFloat = reach * orbitCenterShare
         let satellites = count - 1
         guard satellites > 0 else { return [square(middle.x, middle.y, core)] }
-        let angles = (0 ..< satellites).map { -CGFloat.pi / 2 + (2 * CGFloat.pi * CGFloat($0)) / CGFloat(satellites) }
-        let radial = angles.map { axisReach($0) }.min() ?? 1
-        let ring: CGFloat = satellites > 1
-            ? 2 * sin(CGFloat.pi / CGFloat(satellites)) * neighbourReach(angles + [angles[0] + 2 * CGFloat.pi])
-            : .infinity
-        let fits = angles.flatMap { angle -> [CGFloat] in
-            let axes: [(CGFloat, CGFloat)] = [(abs(cos(angle)), area.width / 2), (abs(sin(angle)), area.height / 2)]
-            return axes.flatMap { axis -> [CGFloat] in
-                let (onAxis, halfAxis) = axis
-                return [
-                    (halfAxis - (onAxis * (core / 2 + gap)) / radial) / (onAxis / (2 * radial) + 0.5),
-                    (halfAxis - (onAxis * gap) / ring) / (onAxis / ring + 0.5),
-                ]
-            }
+        let step: CGFloat = 2 * CGFloat.pi / CGFloat(satellites)
+        let start: CGFloat = -CGFloat.pi / 2
+        let angles: [CGFloat] = (0 ..< satellites).map { (index: Int) -> CGFloat in
+            let offset: CGFloat = step * CGFloat(index)
+            return start + offset
         }
-        let side = max(0, min(core, fits.min() ?? core))
-        let radius = max((core / 2 + side / 2 + gap) / radial, (side + gap) / ring)
-        let ringRects = angles.map { square(middle.x + cos($0) * radius, middle.y + sin($0) * radius, side) }
+        let radial: CGFloat = angles.map { axisReach($0) }.min() ?? 1
+        let ring = orbitRing(satellites: satellites, angles: angles)
+        let fits: [CGFloat] = angles.flatMap { (angle: CGFloat) -> [CGFloat] in
+            orbitFits(angle: angle, area: area, core: core, gap: gap, radial: radial, ring: ring)
+        }
+        let side: CGFloat = max(0, min(core, fits.min() ?? core))
+        let fromCore: CGFloat = (core / 2 + side / 2 + gap) / radial
+        let fromRing: CGFloat = (side + gap) / ring
+        let radius: CGFloat = max(fromCore, fromRing)
+        let ringRects: [CGRect] = angles.map { (angle: CGFloat) -> CGRect in
+            let x: CGFloat = middle.x + cos(angle) * radius
+            let y: CGFloat = middle.y + sin(angle) * radius
+            return square(x, y, side)
+        }
         return [square(middle.x, middle.y, core)] + ringRects
+    }
+
+    /// La corde entre deux satellites voisins, rapportée à l'axe qui les sépare (∞ pour un seul satellite).
+    private static func orbitRing(satellites: Int, angles: [CGFloat]) -> CGFloat {
+        guard satellites > 1, let first = angles.first else { return .infinity }
+        let closed: [CGFloat] = angles + [first + 2 * CGFloat.pi]
+        let chord: CGFloat = 2 * sin(CGFloat.pi / CGFloat(satellites))
+        return chord * neighbourReach(closed)
+    }
+
+    /// Les côtés qui tiennent encore dans `area` pour un satellite posé selon `angle`, axe par axe.
+    private static func orbitFits(angle: CGFloat, area: CGRect, core: CGFloat, gap: CGFloat, radial: CGFloat, ring: CGFloat) -> [CGFloat] {
+        let axes: [(onAxis: CGFloat, halfAxis: CGFloat)] = [
+            (onAxis: abs(cos(angle)), halfAxis: area.width / 2),
+            (onAxis: abs(sin(angle)), halfAxis: area.height / 2),
+        ]
+        return axes.flatMap { (axis: (onAxis: CGFloat, halfAxis: CGFloat)) -> [CGFloat] in
+            let onAxis = axis.onAxis
+            let halfAxis = axis.halfAxis
+            let coreSpan: CGFloat = onAxis * (core / 2 + gap) / radial
+            let coreShare: CGFloat = onAxis / (2 * radial) + 0.5
+            let ringSpan: CGFloat = onAxis * gap / ring
+            let ringShare: CGFloat = onAxis / ring + 0.5
+            return [(halfAxis - coreSpan) / coreShare, (halfAxis - ringSpan) / ringShare]
+        }
     }
 
     static func scattered(_ count: Int, _ area: CGRect, _ gap: CGFloat) -> [CGRect] {
@@ -216,11 +243,21 @@ nonisolated enum CallFrameLayoutGeometry {
     static func tiers(_ count: Int, _ area: CGRect, _ gap: CGFloat) -> [CGRect] {
         func plan(_ rows: Int) -> TiersPlan {
             let counts = rowCounts(count, rows)
-            let scales = counts.indices.map { pow(tiersBackShare, CGFloat($0)) }
-            let shifts = rowShifts(counts)
-            let rightSlope = counts.indices.map { scales[$0] * (CGFloat(counts[$0]) / 2 + shifts[$0]) }
-            let leftSlope = counts.indices.map { scales[$0] * (shifts[$0] - CGFloat(counts[$0]) / 2) }
-            let gaps = counts.map { gap * CGFloat($0 - 1) / 2 }
+            let scales: [CGFloat] = counts.indices.map { (row: Int) -> CGFloat in pow(tiersBackShare, CGFloat(row)) }
+            let shifts: [CGFloat] = rowShifts(counts)
+            let halves: [CGFloat] = counts.map { (inRow: Int) -> CGFloat in CGFloat(inRow) / 2 }
+            let rightSlope: [CGFloat] = counts.indices.map { (row: Int) -> CGFloat in
+                let reach: CGFloat = halves[row] + shifts[row]
+                return scales[row] * reach
+            }
+            let leftSlope: [CGFloat] = counts.indices.map { (row: Int) -> CGFloat in
+                let reach: CGFloat = shifts[row] - halves[row]
+                return scales[row] * reach
+            }
+            let gaps: [CGFloat] = counts.map { (inRow: Int) -> CGFloat in
+                let spaces: CGFloat = CGFloat(inRow - 1)
+                return gap * spaces / 2
+            }
             let widthFit = counts.indices.flatMap { i in
                 counts.indices.map { j in (area.width - gaps[i] - gaps[j]) / (rightSlope[i] - leftSlope[j]) }
             }.min() ?? .infinity

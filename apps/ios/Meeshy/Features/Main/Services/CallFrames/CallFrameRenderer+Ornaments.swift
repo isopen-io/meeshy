@@ -404,7 +404,9 @@ nonisolated extension CallFrameRenderer {
                 let bolt = CGMutablePath()
                 (0 ..< 6).forEach { index in
                     let side: CGFloat = index % 2 == 0 ? -1 : 1
-                    let point = CGPoint(x: x + side * r * 0.25 * (0.5 + rand(seed + 9, Double(spot.draw * 6 + index))), y: y - r + CGFloat(index) * r * 2 / 5)
+                    let swing: CGFloat = 0.5 + rand(seed + 9, Double(spot.draw * 6 + index))
+                    let drop: CGFloat = CGFloat(index) * r * 2 / 5
+                    let point = CGPoint(x: x + side * r * 0.25 * swing, y: y - r + drop)
                     if index == 0 { bolt.move(to: point) } else { bolt.addLine(to: point) }
                 }
                 context.saveGState()
