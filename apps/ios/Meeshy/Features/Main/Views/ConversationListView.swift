@@ -366,25 +366,8 @@ struct ConversationListView: View {
     // The filtered and grouped conversations are now calculated on a background queue
     // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
 
-    // MARK: - Empty Branch Resolution
-
-    nonisolated static func emptyBranch(
-        loadState: LoadState,
-        loadFailed: Bool,
-        searchTextIsEmpty: Bool
-    ) -> ConversationListEmptyBranch {
-        switch loadState {
-        case .idle, .loading:
-            // Cold, cache-less first fetch still in flight: a still-loading
-            // state is never a definitive result, so this wins over an
-            // active search — never show "no results" while we don't yet
-            // know whether the cache is genuinely empty (fix 2026-07-21).
-            return .skeleton
-        default:
-            guard searchTextIsEmpty else { return .searchNoResults }
-            return loadFailed ? .syncError : .createFirstConversation
-        }
-    }
+    // Empty Branch Resolution: `emptyBranch` / `currentEmptyBranch` live in
+    // `ConversationListView+SectionRules.swift` (#8759).
 
     // MARK: - Preview Auto-Load Eligibility
     //
@@ -1557,7 +1540,9 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private var listTail: some View {
-        if LentilleFeatureFlag.isLentilleListEnabled {
+        // Sous un squelette, la queue attend la liste (#8759) : posée sous
+        // lui, elle était repoussée par les rangées réelles.
+        if LentilleFeatureFlag.isLentilleListEnabled, Self.showsQuickActionsTail(emptyBranch: currentEmptyBranch) {
             // UNIQUE montage des accès rapides (2026-09-09). `listTail` vit
             // HORS du `if groupedConversations.isEmpty` : il se rend dans
             // toutes les branches. Le titre suit donc le VIDE plutôt que le
@@ -1655,12 +1640,8 @@ struct ConversationListView: View {
                     // even flips `loadState` to `.loading`) from an ACTIVE
                     // search with zero matches (dedicated "no results" state,
                     // never the misleading "you have no conversations" CTA).
-                    if conversationViewModel.groupedConversations.isEmpty {
-                        switch Self.emptyBranch(
-                            loadState: conversationViewModel.loadState,
-                            loadFailed: conversationViewModel.loadFailed,
-                            searchTextIsEmpty: conversationViewModel.searchText.isEmpty
-                        ) {
+                    if let emptyBranch = currentEmptyBranch {
+                        switch emptyBranch {
                         case .skeleton:
                             // Mux de squelette sous drapeau (contrat LWS-7,
                             // workshop I-067bis — exception de périmètre

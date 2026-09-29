@@ -563,22 +563,30 @@ struct ConversationPaginationFooter: View {
     }
 }
 
+/// Le pied occupe UNE hauteur dans tous ses états (#8759). Le bloc « Et
+/// maintenant ? » est posé juste dessous : quand le pied passait de 1 pt
+/// (sentinelle) à 52 pt (spinner), 0 pt, 46 pt (« tout chargé ») ou 67 pt
+/// (erreur), le bloc descendait puis remontait à chaque page chargée.
 struct ConversationPaginationFooterContent: View {
     let state: PaginationState
     let hasMore: Bool
     let conversationCount: Int
     let onLoadMore: () -> Void
 
+    @ScaledMetric(relativeTo: .caption) private var slotHeight: CGFloat = 52
+
     var body: some View {
+        stateContent
+            .frame(maxWidth: .infinity)
+            .frame(height: slotHeight)
+    }
+
+    @ViewBuilder
+    private var stateContent: some View {
         switch state {
         case .loadingMore:
-            HStack {
-                Spacer()
-                ProgressView()
-                    .tint(MeeshyColors.indigo400)
-                Spacer()
-            }
-            .padding(.vertical, 16)
+            ProgressView()
+                .tint(MeeshyColors.indigo400)
         case .exhausted:
             // Show the "all loaded" hint only on lists that actually
             // had to paginate -- avoids cluttering empty/small lists.
@@ -589,8 +597,6 @@ struct ConversationPaginationFooterContent: View {
                 ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
             }
         case .error:
             VStack(spacing: 6) {
@@ -611,8 +617,6 @@ struct ConversationPaginationFooterContent: View {
                     .foregroundStyle(MeeshyColors.indigo400)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
         case .idle:
             // Invisible sentinel: when the user scrolls deep enough to
             // reveal this row, fire `loadMore`. The ViewModel guards
