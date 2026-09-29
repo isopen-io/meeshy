@@ -437,7 +437,9 @@ struct MessageCardExportSheet: View {
             size: CGSize(width: card.width, height: card.height),
             regions: card.regions
         )
-        if request.quick && !quickSent {
+        // L'export rapide attend les pixels des médias : il ne part jamais
+        // avec leurs couleurs d'attente.
+        if request.quick && !quickSent && (request.subject.media.isEmpty || mediaVersion > 0) {
             quickSent = true
             save()
         }
