@@ -390,3 +390,46 @@ describe('GET /links/:identifier/messages — plancher d’historique du lecteur
     await app.close();
   });
 });
+
+describe('GET /links/:identifier/messages — une réponse meurt avec la flamme-œil qu’elle cite (#8630)', () => {
+  const ANON = '507f1f77bcf86cd799439077';
+  const FLAMME = '507f1f77bcf86cd799439201';
+  const flammeRow = { id: FLAMME, replyToId: null, senderId: 'author', ephemeralDuration: null, effectFlags: 9, expiresAt: null };
+  const reponse = { id: 'reply-1', content: 'je réponds', replyToId: FLAMME, senderId: 'other', createdAt: new Date() };
+  const autre = { id: 'msg-2', content: 'World', createdAt: new Date() };
+
+  const appFor = (consumedAt: Date) => {
+    mockGetConversationMessagesWithDetails.mockResolvedValue([reponse, autre]);
+    return buildApp(
+      { isAuthenticated: false, isAnonymous: true, anonymousParticipant: { id: ANON, shareLinkId: LINK_DB_ID } },
+      {
+        message: {
+          findMany: jest.fn<any>(async ({ where }: any) => (where?.id?.in?.includes(FLAMME) ? [flammeRow] : [])),
+        },
+        messageStatusEntry: {
+          findMany: jest.fn<any>().mockResolvedValue([{ messageId: FLAMME, participantId: ANON, ephemeralExpiresAt: consumedAt }]),
+        },
+      }
+    );
+  };
+
+  afterAll(() => {
+    mockGetConversationMessagesWithDetails.mockResolvedValue([]);
+  });
+
+  it('ne sert plus la réponse à l’invité pour qui la flamme-œil est consommée depuis plus d’une heure', async () => {
+    const app = await appFor(new Date(Date.now() - 2 * 3600_000));
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(res.json().data.messages.map((m: any) => m.id)).toEqual(['msg-2']);
+    await app.close();
+  });
+
+  it('sert, dans la grâce, l’échéance du message cité sur la réponse', async () => {
+    const consumedAt = new Date(Date.now() - 10 * 60_000);
+    const app = await appFor(consumedAt);
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    const served = res.json().data.messages.find((m: any) => m.id === 'reply-1');
+    expect(served.expiresAt).toBe(consumedAt.toISOString());
+    await app.close();
+  });
+});

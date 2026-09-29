@@ -18,7 +18,8 @@ import { buildLastMessagePreviewTranslations } from './utils/last-message-previe
 import { loadConversationListActivity } from './utils/list-activity';
 import { loadRankedConversationPage } from './utils/list-rank';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
-import { loadListEphemeralExpiries } from './utils/list-ephemeral-expiry';
+import { loadListEphemeralExpiries, loadListInheritedExpiries } from './utils/list-ephemeral-expiry';
+import { inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
 import { projectListLastMessageBody } from './utils/list-last-message-body';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
@@ -556,7 +557,7 @@ export function registerConversationListRoute(
       });
       // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
       const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
-      const [servedEphemeralExpiry, consumedViewOnce] = await Promise.all([
+      const [servedEphemeralExpiry, consumedViewOnce, quotedDeaths] = await Promise.all([
         loadListEphemeralExpiries(
           prisma,
           conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
@@ -571,6 +572,12 @@ export function registerConversationListRoute(
             return message?.isViewOnce && participantId ? [{ messageId: message.id, participantId }] : [];
           }),
           (error) => logger.warn('view-once consumption read failed', { error })
+        ),
+        // #8630 — une réponse meurt, pour ce lecteur, avec ce qu'elle cite.
+        loadListInheritedExpiries(
+          prisma,
+          conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+          (conversationId) => readerParticipantByConversation.get(conversationId)
         )
       ]);
       perfTimings.listActivity = performance.now() - t0;
@@ -790,9 +797,11 @@ export function registerConversationListRoute(
         // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
         // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
         const firstId = conversation.messages[0]?.id;
-        const servedExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
+        const ownExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
+        const quotedDeathAt = firstId ? quotedDeaths.get(firstId) ?? null : null;
+        const servedExpiresAt = quotedDeathAt ? inheritedEphemeralExpiresAt([ownExpiresAt, quotedDeathAt]) : ownExpiresAt;
         const lastMessageProtected = latestMessage
-          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt }))
+          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }))
           : false;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
