@@ -776,6 +776,8 @@ export function registerConversationListRoute(
               expiresAt?: Date | string | null;
               ephemeralDuration?: number | null;
               isEncrypted?: boolean | null;
+              /* #8634 — porte la flamme-œil, que `resolvePreviewProtection` retient. */
+              effectFlags?: number | null;
             }
           | undefined;
         // #6111 — un dernier message à vue unique, flouté ou éphémère périmé

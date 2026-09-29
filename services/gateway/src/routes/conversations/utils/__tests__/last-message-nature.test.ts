@@ -27,6 +27,22 @@ describe('resolvePreviewProtection — un prédicat pour REST, la recherche et l
     expect(resolvePreviewProtection({ ephemeralDuration: 240, servedExpiresAt: null }, NOW)).toBe('ephemeral');
   });
 
+  it('une flamme-œil (disparaît après lecture) RETIENT son contenu, plafond de rétention ou non (#8634)', () => {
+    const FUTURE = new Date('2026-09-30T12:00:00Z');
+    expect(resolvePreviewProtection({ effectFlags: 1 | 8, expiresAt: FUTURE }, NOW)).toBe('after-read');
+    expect(resolvePreviewProtection({ effectFlags: 1 | 8, expiresAt: PAST }, NOW)).toBe('after-read');
+    expect(isPreviewWithheld('after-read')).toBe(true);
+  });
+
+  it('une flamme-œil CONSOMMÉE par son lecteur (échéance servie passée) est expirée (#8634)', () => {
+    expect(resolvePreviewProtection({ effectFlags: 1 | 8, servedExpiresAt: PAST }, NOW)).toBe('expired');
+  });
+
+  it('vue unique, flou et chiffré passent devant la flamme-œil', () => {
+    expect(resolvePreviewProtection({ effectFlags: 1 | 8, isViewOnce: true }, NOW)).toBe('view-once');
+    expect(resolvePreviewProtection({ effectFlags: 1 | 8, isEncrypted: true }, NOW)).toBe('encrypted');
+  });
+
   it('un message chiffré retient son contenu', () => {
     expect(isPreviewWithheld(resolvePreviewProtection({ isEncrypted: true }, NOW))).toBe(true);
   });

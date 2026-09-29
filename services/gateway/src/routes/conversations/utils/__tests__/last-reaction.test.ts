@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { resolveConversationLastReaction } from '../last-reaction';
+import { LAST_REACTION_SELECT, resolveConversationLastReaction } from '../last-reaction';
 
 const NOW = new Date('2026-09-23T12:00:00Z');
 
@@ -57,6 +57,7 @@ describe('resolveConversationLastReaction (#7545)', () => {
     ['blurred', { isBlurred: true }],
     ['encrypted', { isEncrypted: true }],
     ['expired', { expiresAt: new Date('2026-09-23T11:30:00Z') }],
+    ['after-read', { effectFlags: 9, expiresAt: new Date('2026-09-30T12:00:00Z') }],
   ])('message réagi %s : l’extrait ne part pas, la protection le dit', (protection, flags) => {
     const lastReaction = resolveConversationLastReaction(makeRow(flags), reader, NOW);
     expect(lastReaction?.excerpt).toBeNull();
@@ -64,6 +65,10 @@ describe('resolveConversationLastReaction (#7545)', () => {
     expect(lastReaction?.excerptOriginalLanguage).toBeNull();
     expect(lastReaction?.excerptProtection).toBe(protection);
     expect(JSON.stringify(lastReaction)).not.toContain('4521');
+  });
+
+  it('la lecture charge le bitfield qui porte la flamme-œil (#8634)', () => {
+    expect(LAST_REACTION_SELECT.message.select.effectFlags).toBe(true);
   });
 
   it('un message réagi supprimé n’a plus de dernière réaction', () => {
