@@ -33,10 +33,13 @@ extension CallView {
     var cameraRail: some View {
         let actions = CallCameraRail.actions(from: currentActionSet)
         if cameraControlsPlacement == .topCenter && !actions.isEmpty {
-            HStack(spacing: 10) {
-                ForEach(actions, id: \.self) { action in
-                    railActionButton(action)
+            VStack(spacing: 2) {
+                HStack(spacing: 10) {
+                    ForEach(actions, id: \.self) { action in
+                        railActionButton(action)
+                    }
                 }
+                CallZoomRailSlot(placement: .topCenter, actionCount: actions.count)
             }
             .background(CallCameraZoomAccessibilityElement())
             .padding(.vertical, 6)
@@ -75,6 +78,11 @@ extension CallView {
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                             .transition(.opacity)
                     }
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if !isCameraMenuUnfolded {
+                    CallZoomRailSlot(placement: .selfTile, tileSize: tileSize, actionCount: actions.count)
                 }
             }
             .callChromeVisibility(CallCameraRail.isShown(.selfTile, at: cameraControlsPlacement, chrome: chromeVisibility))

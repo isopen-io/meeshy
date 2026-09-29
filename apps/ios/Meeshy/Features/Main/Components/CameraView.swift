@@ -346,6 +346,15 @@ final class CameraModel: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureMovieFileOutput()
+    /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
+    /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
+    /// redressée, bornée et améliorée, EXIF compris.
+    nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
+
+    init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
+        self.photoProcessor = photoProcessor
+        super.init()
+    }
     /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
@@ -839,19 +848,25 @@ final class CameraModel: NSObject, ObservableObject {
 
 extension CameraModel: AVCapturePhotoCaptureDelegate {
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
+        guard let original = photo.fileDataRepresentation() else {
+            Task { @MainActor in self.isTakingPhoto = false }
+            return
+        }
+        let processed = photoProcessor.process(encoded: original, settings: .capture)
+        let data = processed?.data ?? original
+        guard let image = processed.map({ UIImage(cgImage: $0.image) }) ?? UIImage(data: original) else {
             Task { @MainActor in self.isTakingPhoto = false }
             return
         }
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
-            // Les octets D'ORIGINE, publiés à côté de l'image : c'est eux qui
-            // portent l'EXIF, et une `UIImage` ne le rend pas.
+            // Les octets TRAITÉS, publiés à côté de l'image : ils portent
+            // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
             self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
-        // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
+        // Persist the processed encoded bytes (HEIC/JPEG, EXIF kept), not a
         // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
         // so its `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
