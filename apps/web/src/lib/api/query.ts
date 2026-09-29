@@ -17,7 +17,7 @@ import { forwardMessages, type ForwardResult, type ForwardSource } from './forwa
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
-import { commentsInfiniteOptions, performComment, type CommentResult } from './publication-comments';
+import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type PostComment } from './publication-comments';
 import { postQueryOptions } from './publication-detail';
 import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -27,7 +27,7 @@ import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
 import { deletePost, editPost, pinPost, type EditPostOutcome, type PostActionOutcome } from './publication-actions';
-import { reportPost, type ReportOutcome, type ReportReason } from './reports';
+import { reportComment, reportPost, type ReportOutcome, type ReportReason } from './reports';
 import {
   STORIES_QUERY_PREFIX,
   STORY_TRAY_QUERY_KEY,
@@ -218,6 +218,11 @@ export function editPostAction(postId: string, content: string): Promise<EditPos
 
 export function reportPostAction(postId: string, reason: ReportReason): Promise<ReportOutcome> {
   return reportPost({ postId, reason, deps: apiDeps });
+}
+
+/** Le « Signaler » du menu « … » d'un commentaire (#8734). */
+export function reportCommentAction(commentId: string, reason: ReportReason): Promise<ReportOutcome> {
+  return reportComment({ commentId, reason, deps: apiDeps });
 }
 
 /** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
@@ -466,6 +471,21 @@ export function useComments(postId: string, options?: { readonly enabled?: boole
  */
 export function useCommentReplies(postId: string, parentId: string, options: { readonly enabled: boolean }) {
   return useInfiniteQuery({ ...repliesInfiniteOptions({ ...apiDeps, postId, parentId }), enabled: options.enabled });
+}
+
+/**
+ * LES RÉPONSES D'UNE RACINE, POUR LES JOINDRE À SA CARTE (#8734) — la caisse
+ * du fil déplié si elle existe (`ensureInfiniteQueryData`), sinon la première
+ * page lue et gardée pour le dépliage suivant. Une lecture ratée rend `[]` :
+ * la carte part sans elles, elle n'attend pas.
+ */
+export async function loadCommentRepliesAction(postId: string, parentId: string): Promise<readonly PostComment[]> {
+  try {
+    const data = await appQueryClient.ensureInfiniteQueryData(repliesInfiniteOptions({ ...apiDeps, postId, parentId }));
+    return flattenCommentPages(data as CommentInfiniteData);
+  } catch {
+    return [];
+  }
 }
 
 /**

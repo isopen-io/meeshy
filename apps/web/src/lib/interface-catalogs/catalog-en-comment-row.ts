@@ -6,7 +6,6 @@ const enCommentRow = {
   'comments.action.unlike': 'Unlike',
   'comments.action.edit': 'Edit',
   'comments.action.delete': 'Delete',
-  'comments.action.delete.confirm': 'Confirm',
   'comments.edit.label': 'Edit comment',
   'comments.edit.save': 'Save',
   'comments.edit.cancel': 'Cancel',
@@ -19,6 +18,8 @@ const enCommentRow = {
   'comments.replies.more': 'View more replies',
   'comments.replies.error': 'Couldn’t load the replies',
   'comments.replies.label': 'Replies to {name}',
+  'comments.action.image_with_replies': 'Make an image with the replies',
+  'comments.report.title': 'Report this comment',
 } satisfies CommentRowCatalogSlice;
 
 export default enCommentRow;

@@ -27,13 +27,14 @@ export function commentMenuEntries(params: {
   readonly viewerId: string;
   /** Le texte que la rangée affiche en ce moment. */
   readonly servedText: string;
+  readonly canCopy: boolean;
   readonly canImage: boolean;
   readonly canReport: boolean;
 }): readonly CommentMenuEntry[] {
-  const { comment, viewerId, servedText, canImage, canReport } = params;
+  const { comment, viewerId, servedText, canCopy, canImage, canReport } = params;
   if (comment.pending === true) return [];
   const isMine = viewerId !== '' && comment.author.id === viewerId;
-  const copyable = !maskedByEffects(comment.effectFlags) && servedText.trim() !== '';
+  const copyable = canCopy && !maskedByEffects(comment.effectFlags) && servedText.trim() !== '';
   const imageable = canImage && commentCardSubjectOf({ comment, servedText, parent: null }) !== null;
   const isRoot = typeof comment.parentId !== 'string' || comment.parentId === '';
   const hasReplies = typeof comment.replyCount === 'number' && comment.replyCount > 0;

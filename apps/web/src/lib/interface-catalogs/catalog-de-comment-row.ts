@@ -6,7 +6,6 @@ const deCommentRow = {
   'comments.action.unlike': 'Gefällt mir nicht mehr',
   'comments.action.edit': 'Bearbeiten',
   'comments.action.delete': 'Löschen',
-  'comments.action.delete.confirm': 'Bestätigen',
   'comments.edit.label': 'Kommentar bearbeiten',
   'comments.edit.save': 'Speichern',
   'comments.edit.cancel': 'Abbrechen',
@@ -19,6 +18,8 @@ const deCommentRow = {
   'comments.replies.more': 'Weitere Antworten ansehen',
   'comments.replies.error': 'Die Antworten konnten nicht geladen werden',
   'comments.replies.label': 'Antworten an {name}',
+  'comments.action.image_with_replies': 'Mit den Antworten als Bild gestalten',
+  'comments.report.title': 'Diesen Kommentar melden',
 } satisfies CommentRowCatalogSlice;
 
 export default deCommentRow;

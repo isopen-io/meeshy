@@ -10,7 +10,6 @@ const frCommentRow = {
   'comments.action.unlike': 'Je n’aime plus',
   'comments.action.edit': 'Modifier',
   'comments.action.delete': 'Supprimer',
-  'comments.action.delete.confirm': 'Confirmer',
   'comments.edit.label': 'Modifier le commentaire',
   'comments.edit.save': 'Enregistrer',
   'comments.edit.cancel': 'Annuler',
@@ -23,6 +22,8 @@ const frCommentRow = {
   'comments.replies.more': 'Voir plus de réponses',
   'comments.replies.error': 'Impossible de charger les réponses',
   'comments.replies.label': 'Réponses à {name}',
+  'comments.action.image_with_replies': 'Imager avec les réponses',
+  'comments.report.title': 'Signaler ce commentaire',
 } as const;
 
 export type CommentRowCatalogSlice = Readonly<Record<keyof typeof frCommentRow, string>>;

@@ -18,11 +18,12 @@ const comment = (overrides: Partial<PostComment> = {}): PostComment => ({
 
 const mine = (overrides: Partial<PostComment> = {}) => comment({ author: { id: VIEWER, username: 'me' }, ...overrides });
 
-const entries = (target: PostComment, servedText = 'C’est où ?', options: { readonly canImage?: boolean; readonly canReport?: boolean } = {}) =>
+const entries = (target: PostComment, servedText = 'C’est où ?', options: { readonly canCopy?: boolean; readonly canImage?: boolean; readonly canReport?: boolean } = {}) =>
   commentMenuEntries({
     comment: target,
     viewerId: VIEWER,
     servedText,
+    canCopy: options.canCopy ?? true,
     canImage: options.canImage ?? true,
     canReport: options.canReport ?? true,
   });
@@ -59,7 +60,8 @@ describe('commentMenuEntries — le menu « … » d’un commentaire (#8734, ju
     expect(entries(mine({ pending: true }))).toEqual([]);
   });
 
-  test('sans hôte d’atelier ni de signalement, ces entrées ne se montent pas (loi 4)', () => {
+  test('sans hôte de presse-papiers, d’atelier ni de signalement, ces entrées ne se montent pas (loi 4)', () => {
     expect(entries(comment({ replyCount: 1 }), 'x', { canImage: false, canReport: false })).toEqual(['copy']);
+    expect(entries(mine(), 'x', { canCopy: false, canImage: false })).toEqual(['edit', 'delete']);
   });
 });

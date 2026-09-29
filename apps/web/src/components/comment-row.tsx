@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { Avatar } from '@/components/avatar';
 import { CommentBody } from '@/components/comment-body';
+import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
 import { CommentSwipe } from '@/components/comment-swipe';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { PersonName } from '@/components/person-name';
@@ -13,10 +14,12 @@ import type {
   CommentGestureReasonKey,
 } from '@/lib/api/comment-gestures';
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
+import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
+import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
 import { replyTargetOf, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
@@ -71,9 +74,14 @@ export type CommentGestureHandlers = {
   /**
    * « IMAGER » (#8693) — le commentaire ET le texte que la rangée en AFFICHE
    * (le Prisme, ou l'original que le lecteur a demandé) : la carte montre ce
-   * qu'on lit. Absent ⇒ aucun bouton.
+   * qu'on lit. `withReplies` (#8734) : une racine emporte ses réponses sous
+   * elle. Absent ⇒ aucune entrée.
    */
-  readonly onImage?: (comment: PostComment, servedText: string) => void;
+  readonly onImage?: (comment: PostComment, servedText: string, options: { readonly withReplies: boolean }) => void;
+  /** « COPIER » (#8734) — le texte AFFICHÉ ; l'hôte annonce l'issue. Absent ⇒ aucune entrée. */
+  readonly onCopy?: (text: string) => void;
+  /** « SIGNALER » (#8734) — le motif choisi dans la feuille ; aux autres seuls. Absent ⇒ aucune entrée. */
+  readonly onReport?: (commentId: string, reason: ReportReason) => void;
   /** Le dernier geste EN ÉCHEC sur cette rangée, avec SA classe d'issue. */
   readonly failureOf: (commentId: string) => CommentGestureRowFailure | undefined;
   /** Rejoue ce geste-là — l'hôte se souvient duquel il s'agit. */
@@ -133,58 +141,34 @@ const countOf = (value: number | null | undefined): number =>
 const GESTURE_BUTTON =
   'inline-flex items-center justify-center gap-1 rounded-chip px-2 focus-visible:outline-2 focus-visible:outline-offset-2';
 
-/**
- * LE DÉLAI DE RÉTRACTATION DU VERBE DESTRUCTEUR — assez long pour viser
- * « Confirmer » sans se presser, assez court pour qu'un tap oublié ne laisse
- * pas une rangée armée quand on y revient. La valeur est ici, à son SITE
- * UNIQUE, pour que le témoin la lise plutôt que de la redire.
- */
-export const COMMENT_DELETE_CONFIRM_MS = 4000;
-
 function GestureBar({
   comment,
   language,
   gestures,
-  editRef,
-  onStartEdit,
-  onDelete,
+  menuEntries,
+  authorName,
+  menuRef,
+  onPick,
   onReply,
-  onImage,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
   readonly gestures: CommentGestureHandlers;
-  readonly editRef: { current: HTMLButtonElement | null };
-  readonly onStartEdit: () => void;
-  readonly onDelete: () => void;
+  readonly menuEntries: readonly CommentMenuEntry[];
+  readonly authorName: string;
+  readonly menuRef: { current: HTMLButtonElement | null };
+  readonly onPick: (pick: CommentMenuPick) => void;
   readonly onReply: (() => void) | undefined;
-  readonly onImage: (() => void) | undefined;
 }) {
   const isLiked = comment.isLikedByMe === true;
   const likes = countOf(comment.likeCount);
-  const isMine = comment.author.id === gestures.viewerId;
   const busy = gestures.busyOf(comment.id);
-
-  /**
-   * **SUPPRIMER DEMANDE DEUX GESTES, COMME SUR iOS** (revue-correction #7135,
-   * défaut majeur 5). `CommentRowView.swift:364` enferme
-   * `Button(role: .destructive)` dans un menu « … » : ouvrir, puis choisir.
-   * Le web posait le verbe irréversible À DÉCOUVERT, immédiatement à droite du
-   * verbe réversible — un pouce qui vise « Modifier » atteignait « Supprimer »,
-   * et le commentaire partait sans qu'aucun dialogue ne s'interpose. La
-   * confirmation SUR PLACE coûte le même second geste qu'iOS sans imposer une
-   * feuille modale, et elle se rétracte seule.
-   */
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => {
-    if (!confirming) return undefined;
-    const timer = setTimeout(() => setConfirming(false), COMMENT_DELETE_CONFIRM_MS);
-    return () => clearTimeout(timer);
-  }, [confirming]);
 
   return (
     /* Le retrait compense le `px-2` des boutons : la rangée de gestes
-       s'aligne alors sur le TEXTE qu'elle suit, pas deux crans à sa droite. */
+       s'aligne alors sur le TEXTE qu'elle suit, pas deux crans à sa droite.
+       Le « … » (#8734) se pose au BOUT de la rangée, comme le `Menu` de
+       `CommentRowView.swift` après son `Spacer()`. */
     <div className="flex items-center gap-1 pt-0.5" style={{ marginInlineStart: -8 }}>
       <button
         type="button"
@@ -241,66 +225,11 @@ function GestureBar({
           {translate(language, 'comments.action.reply')}
         </button>
       )}
-      {/* « IMAGER » (#8693) — le commentaire devient une carte, comme un message. */}
-      {onImage === undefined ? null : (
-        <button
-          type="button"
-          data-comment-gesture="image"
-          onClick={onImage}
-          className={`${GESTURE_BUTTON} text-check`}
-          style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          {translate(language, 'comments.action.image')}
-        </button>
-      )}
-      {isMine ? (
-        <>
-          <button
-            type="button"
-            ref={editRef}
-            data-comment-gesture="edit"
-            onClick={onStartEdit}
-            className={`${GESTURE_BUTTON} text-check`}
-            style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
-          >
-            {translate(language, 'comments.action.edit')}
-          </button>
-          {/* **L'ENCRE DESTRUCTRICE** — `Button(role: .destructive)`
-              (`CommentRowView.swift:364`), que SwiftUI peint en rouge. Ici le
-              signal compte DOUBLE : iOS enferme « Supprimer » dans un menu
-              « … » (deux gestes, et le rouge au bout), le web le pose à
-              découvert et détruit au PREMIER tap. Sans cette encre, le geste
-              irréversible avait l'apparence exacte du geste réversible posé
-              juste à sa gauche. Le MÊME jeton que l'alerte d'échec — une
-              seule encre de refus pour toute la rangée. */}
-          <button
-            type="button"
-            data-comment-gesture="delete"
-            data-comment-delete-armed={confirming ? '' : undefined}
-            onClick={() => {
-              if (!confirming) {
-                setConfirming(true);
-                return;
-              }
-              setConfirming(false);
-              onDelete();
-            }}
-            className={`${GESTURE_BUTTON} text-check`}
-            style={{
-              minHeight: 44,
-              /* L'ÉCART MESURÉ AU RECTANGLE, pas au texte — 4 px séparaient
-                 deux cibles dont l'une est irréversible, moitié moins que le
-                 minimum entre cibles adjacentes. `gap-1` (4) + 12 = 16 px. */
-              marginInlineStart: 12,
-              color: 'var(--color-error)',
-              fontWeight: confirming ? 600 : undefined,
-              outlineColor: 'var(--color-ios-brand)',
-            }}
-          >
-            {translate(language, confirming ? 'comments.action.delete.confirm' : 'comments.action.delete')}
-          </button>
-        </>
-      ) : null}
+      {/* **LE MENU « … »** (#8734) — Copier, Imager (avec les réponses),
+          Modifier et Supprimer (l'auteur), Signaler (les autres). SUPPRIMER y
+          coûte DEUX gestes, comme sur iOS : ouvrir, puis choisir le verbe
+          rouge — le web le posait à découvert, à côté du verbe réversible. */}
+      <CommentRowMenu entries={menuEntries} language={language} authorName={authorName} triggerRef={menuRef} onPick={onPick} />
     </div>
   );
 }
@@ -558,8 +487,37 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
         : () => onReplyHandler(replyTargetOf(comment, { authorName: name, displayedText: lu.text })),
     [onReplyHandler, editing, comment, name, lu.text],
   );
-  const onImageHandler = actionable?.onImage;
-  const image = onImageHandler === undefined || editing ? undefined : () => onImageHandler(comment, lu.text);
+  const menuEntries =
+    actionable === undefined
+      ? []
+      : commentMenuEntries({
+          comment,
+          viewerId: actionable.viewerId,
+          servedText: lu.text,
+          canCopy: actionable.onCopy !== undefined,
+          canImage: actionable.onImage !== undefined,
+          canReport: actionable.onReport !== undefined,
+        });
+  const pick = (choice: CommentMenuPick) => {
+    switch (choice.entry) {
+      case 'copy':
+        actionable?.onCopy?.(lu.text);
+        return;
+      case 'image':
+      case 'imageWithReplies':
+        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies' });
+        return;
+      case 'edit':
+        setEditing(true);
+        return;
+      case 'delete':
+        requestDelete();
+        return;
+      case 'report':
+        actionable?.onReport?.(comment.id, choice.reason);
+        return;
+    }
+  };
 
   return (
     <li
@@ -632,11 +590,11 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                 comment={comment}
                 language={language}
                 gestures={actionable}
-                editRef={editRef}
-                onStartEdit={() => setEditing(true)}
-                onDelete={requestDelete}
+                menuEntries={menuEntries}
+                authorName={name}
+                menuRef={editRef}
+                onPick={pick}
                 onReply={reply}
-                onImage={image}
               />
             ) : null}
             {actionable !== undefined && failure !== undefined ? (

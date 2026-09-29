@@ -7,13 +7,14 @@ import { CommentReplies } from '@/components/comment-replies';
 import type { CommentGestureHandlers } from '@/components/comment-row';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
-import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
+import { commentAction, commentGestureAction, loadCommentRepliesAction, reportCommentAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
@@ -101,20 +102,37 @@ export function CommentThread({
    * texte que le lecteur y lit (le Prisme des commentaires, `resolveFeedText`).
    */
   const [imaging, setImaging] = useState<CommentImageRequest | null>(null);
+  const servedOf = (comment: PostComment) => ({
+    comment,
+    servedText: resolveFeedText({ preferredLanguages: reader.languages, originalLanguage: comment.originalLanguage, translations: comment.translations, content: comment.content }).text,
+  });
   const imageRequestOf = (comment: PostComment, servedText: string): CommentImageRequest => {
     const root = typeof comment.parentId === 'string' ? comments.find((candidate) => candidate.id === comment.parentId) : undefined;
-    return {
-      comment,
-      servedText,
-      parent:
-        root === undefined
-          ? null
-          : {
-              comment: root,
-              servedText: resolveFeedText({ preferredLanguages: reader.languages, originalLanguage: root.originalLanguage, translations: root.translations, content: root.content }).text,
-            },
-    };
+    return { comment, servedText, parent: root === undefined ? null : servedOf(root) };
   };
+  /**
+   * « IMAGER AVEC LES RÉPONSES » (#8734) — l'atelier s'ouvre TOUT DE SUITE sur
+   * la racine seule, puis la carte reçoit ses réponses dès qu'elles sont là :
+   * celles de la caisse si le fil est déplié, sinon une lecture de leur
+   * première page. Une lecture ratée laisse la carte sans elles — jamais
+   * d'attente muette avant l'atelier.
+   */
+  const imageWithReplies = (comment: PostComment, servedText: string) => {
+    const request = imageRequestOf(comment, servedText);
+    setImaging(request);
+    void loadCommentRepliesAction(postId, comment.id).then((replies) =>
+      setImaging((current) => (current === request ? { ...request, replies: replies.map(servedOf) } : current)),
+    );
+  };
+
+  /**
+   * LES ISSUES DU MENU « … » (#8734) — « Texte copié », « Signalement
+   * envoyé »… s'ANNONCENT : la rangée n'a pas de région vivante, et un geste
+   * sans effet visible ne se tait pas.
+   */
+  const [notice, setNotice] = useState('');
+  const say = (key: 'feed.post.copied' | 'feed.post.copy_failed' | 'report.done' | 'report.throttled' | 'report.failed') =>
+    setNotice(translate(currentInterfaceLanguage(), key));
   /** LES RACINES DÉPLIÉES — une réponse qu'on vient de poser déplie la sienne, pour qu'elle se VOIE. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const toggleReplies = useCallback((rootId: string) => {
@@ -230,7 +248,13 @@ export function CommentThread({
                 ...(parentId === undefined ? {} : { parentId }),
               }),
             onReply: setReplyTarget,
-            onImage: (comment, servedText) => setImaging(imageRequestOf(comment, servedText)),
+            onImage: (comment, servedText, options) =>
+              options.withReplies ? imageWithReplies(comment, servedText) : setImaging(imageRequestOf(comment, servedText)),
+            onCopy: (text) => void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed')),
+            onReport: (commentId, reason) =>
+              void reportCommentAction(commentId, reason).then((outcome) =>
+                say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed'),
+              ),
             failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
@@ -306,6 +330,9 @@ export function CommentThread({
         {...(onWritingChange === undefined ? {} : { onWritingChange })}
         foldOnSend={foldOnSend}
       />
+      <p role="status" aria-live="polite" className="sr-only" data-comment-thread-notice="">
+        {notice}
+      </p>
       <CommentImagePortal request={imaging} handle={viewer.handle} onClose={() => setImaging(null)} />
     </section>
   );
