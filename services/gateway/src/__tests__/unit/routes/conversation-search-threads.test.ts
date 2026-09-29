@@ -303,12 +303,6 @@ function makeThreadMessage(id: string, createdAt: Date, replyToId: string | null
 // SEARCH ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-
-/**
- * Les lectures de COLLECTE du fil (`replyToId: { in: … }`) — les seules que ces
- * témoins comptent. Depuis #8630 la route remonte aussi la chaîne CITÉE de ce
- * qu'elle sert (`id: { in: … }`), une lecture qui ne collecte rien.
- */
 const threadCollectionCalls = (prisma: any): number =>
   prisma.message.findMany.mock.calls.filter(([args]: any[]) => args?.where?.replyToId !== undefined).length;
 
@@ -1233,7 +1227,6 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    // findMany called twice: depth 0 + depth 1 (empty)
     expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
@@ -1277,7 +1270,6 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    // Only one findMany call (first batch saturates limit)
     expect(threadCollectionCalls(prisma)).toBe(1);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(200);
@@ -1330,7 +1322,6 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    // MAX_DEPTH = 10, so findMany is called exactly 10 times
     expect(threadCollectionCalls(prisma)).toBe(10);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(10);
