@@ -42,12 +42,18 @@ struct RootThemedBackground: View {
 
 /// Toast de notification temps réel (socket), monté au sommet du `ZStack`
 /// racine. Un appui long OU un tirage vers le bas ouvre l'aperçu de la
-/// conversation au lieu de naviguer.
+/// conversation au lieu de naviguer ; un BALAYAGE VERS LE HAUT la ferme
+/// (#8723), la carte suivant le doigt.
 struct RootNotificationToastOverlay: View {
     @ObservedObject var notificationManager: NotificationToastManager
     let suppressToastTap: Bool
     let onTap: (SocketNotificationEvent) -> Void
     let onPreview: (SocketNotificationEvent) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Le déplacement vertical du doigt pendant le geste — seul le haut suit
+    /// (la carte ne descend pas : tirer vers le bas ouvre l'aperçu).
+    @GestureState private var dragLift: CGFloat = 0
 
     var body: some View {
         VStack {
@@ -56,42 +62,73 @@ struct RootNotificationToastOverlay: View {
                     event: toast,
                     // #7167 — la présentation est résolue à la POSE du toast ;
                     // la vue la place, elle ne la recalcule pas à chaque corps.
-                    presentation: notificationManager.currentToastPresentation
-                ) {
-                    if suppressToastTap { return }
-                    notificationManager.dismissToast()
-                    // #6999 — taper un toast OUVRE le contenu : la notification
-                    // est consommée, exactement comme une ligne de cloche tapée.
-                    // Le geste ne marquait rien lu, et le contenu ouvert
-                    // n'aidait pas toujours : une mention, un palier ou une
-                    // alerte système n'a pas de conversation à rattraper.
-                    let consumedId = toast.id
-                    Task { @MainActor in
-                        await NotificationToastManager.shared.consume(.notification(id: consumedId))
-                    }
-                    onTap(toast)
-                }
+                    presentation: notificationManager.currentToastPresentation,
+                    onTap: {
+                        if suppressToastTap { return }
+                        notificationManager.dismissToast()
+                        // #6999 — taper un toast OUVRE le contenu : la notification
+                        // est consommée, exactement comme une ligne de cloche tapée.
+                        let consumedId = toast.id
+                        Task { @MainActor in
+                            await NotificationToastManager.shared.consume(.notification(id: consumedId))
+                        }
+                        onTap(toast)
+                    },
+                    onDismiss: { notificationManager.dismissToast() }
+                )
+                .offset(y: min(0, dragLift))
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                         onPreview(toast)
                     }
                 )
                 .simultaneousGesture(
-                    DragGesture(minimumDistance: 24)
+                    DragGesture(minimumDistance: 12)
+                        .updating($dragLift) { value, lift, _ in
+                            lift = value.translation.height
+                        }
                         .onEnded { value in
-                            if value.translation.height > 36 {
-                                onPreview(toast)
+                            switch NotificationBannerSwipe.outcome(
+                                translation: value.translation.height,
+                                predictedEnd: value.predictedEndTranslation.height
+                            ) {
+                            case .dismiss: notificationManager.dismissToast()
+                            case .preview: onPreview(toast)
+                            case .none: break
                             }
                         }
                 )
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .padding(.top, MeeshySpacing.xxl)
             }
             Spacer()
         }
-        .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : MeeshyAnimation.springBouncy,
+                   value: notificationManager.currentToast?.id)
         .zIndex(201)
+        #if DEBUG
+        .task { await Self.presentLaunchPreviewIfRequested(on: notificationManager) }
+        #endif
     }
+
+    #if DEBUG
+    /// Recette DEBUG (#8723) : `-MeeshyBannerPreview audio` pose, deux secondes
+    /// après l'ouverture, la bannière de la capture porteur (un vocal dont la
+    /// passerelle a déjà composé le libellé) — sans socket ni envoi.
+    private static func presentLaunchPreviewIfRequested(on manager: NotificationToastManager) async {
+        guard ProcessInfo.processInfo.arguments.contains("-MeeshyBannerPreview") else { return }
+        try? await Task.sleep(for: .seconds(2))
+        let fixture = #"""
+        {"id":"preview-8723","userId":"me","type":"new_message","title":"Abed Dollar",
+         "content":"🎵 Audio · 0:32 · 193 Ko",
+         "actor":{"id":"preview-actor","displayName":"Abed Dollar"},
+         "context":{"conversationType":"direct"},
+         "metadata":{"commentPreview":"🎵 Audio · 0:32 · 193 Ko","attachments":{"count":1,"firstType":"audio"}}}
+        """#
+        guard let event = try? JSONDecoder().decode(SocketNotificationEvent.self, from: Data(fixture.utf8)) else { return }
+        manager.presentPreviewToast(event)
+    }
+    #endif
 }
 
 /// Hôte UNIQUE de la bulle de mood pour toute la fenêtre, et les deux feuilles
