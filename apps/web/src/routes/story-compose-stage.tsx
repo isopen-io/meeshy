@@ -46,6 +46,8 @@ export type StudioStageCapture = {
   readonly onTap: () => void;
   readonly onHoldStart: () => void;
   readonly onHoldEnd: () => void;
+  /** Le doigt qui filme glisse (écart depuis l'appui, en px). */
+  readonly onHoldMove: (dx: number, dy: number) => void;
 };
 
 /** Les propriétés que `SceneObjectFrame.applyPose` écrit — mêmes noms, même
@@ -76,6 +78,9 @@ type Press = {
    * le relâcher clôt la prise. Tenu depuis l'appui — la caméra ouverte, la
    * scène ne l'offre plus, mais ce doigt-là doit encore pouvoir la clore. */
   filming?: () => void;
+  /** Le même doigt qui GLISSE pendant qu'il filme (#8672) : vers le cadenas
+   * (verrou), vers le haut ou le bas (zoom) — relayé à la caméra. */
+  filmingMove?: (dx: number, dy: number) => void;
   pose: StudioPose | null;
   timer: ReturnType<typeof setTimeout> | null;
   /** Né dans la SAISIE d'un texte en édition (#8535) : un toucher sans
@@ -228,6 +233,7 @@ export function StudioStageGestures({
     if (found === null && capture !== null && !inField) {
       current.timer = setTimeout(() => {
         current.filming = capture.onHoldEnd;
+        current.filmingMove = capture.onHoldMove;
         capture.onHoldStart();
       }, CAPTURE_HOLD_MS);
     }
@@ -249,6 +255,10 @@ export function StudioStageGestures({
       return;
     }
     const current = press.current;
+    if (current?.filmingMove !== undefined) {
+      current.filmingMove(event.clientX - current.x, event.clientY - current.y);
+      return;
+    }
     if (current === null || current.menu || current.hit?.kind !== 'object' || current.origin === null) return;
     if (!current.moved && Math.hypot(event.clientX - current.x, event.clientY - current.y) < DRAG_THRESHOLD) return;
     if (!current.moved) {

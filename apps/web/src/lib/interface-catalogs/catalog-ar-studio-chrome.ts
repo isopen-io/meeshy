@@ -74,7 +74,8 @@ const arStudioChrome = {
   'composer.reelOffer.reel': 'إنه ريل',
   'composer.reelOffer.post': 'إنه منشور',
   'story.studio.tool.close': 'إغلاق الأداة',
-  'story.studio.camera.quick.photoOrVideo': 'المس: صورة · اضغط مطولًا: فيديو',
+  'story.studio.camera.quick.tapPhoto': 'المس: صورة',
+  'story.studio.camera.quick.holdFilm': 'اضغط مطولًا: تصوير',
   'story.studio.camera.quick.videoOnly': 'اضغط مطولًا للتصوير',
   'story.studio.camera.quick.photo': 'التقاط صورة',
   'story.studio.camera.quick.video': 'تصوير',
@@ -89,6 +90,13 @@ const arStudioChrome = {
   'story.studio.camera.hint.video': 'المس للتصوير · المس مجددًا للوضع',
   'story.studio.camera.unavailable': 'الكاميرا غير متاحة. اسمح بها في إعدادات المتصفح.',
   'story.studio.camera.recording': 'جارٍ التسجيل',
+  'story.studio.scene.empty.title': 'هذا مشهدك',
+  'story.studio.scene.empty.invite': 'أضِف نصًا أو رسمًا أو صورة أو فيديو، واجعله على طريقتك.',
+  'story.studio.camera.locked': 'تم تثبيت التسجيل',
+  'story.studio.camera.hint.holding': 'اسحب نحو القفل لتثبيت التسجيل · إلى الأعلى للتكبير',
+  'story.studio.camera.hint.locked': 'بدون يدين — اسحب للأعلى أو للأسفل للتكبير',
+  'story.studio.camera.flash.intensity': 'شدة الفلاش',
+  'story.studio.camera.flash.intensityValue': '{percent}٪',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;
