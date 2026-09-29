@@ -109,3 +109,55 @@ struct ComposerSceneCameraFrameKey: PreferenceKey {
         value = nextValue() ?? value
     }
 }
+
+/// **L'indication GRISE d'une scène vide** (#8653, directive porteur
+/// 2026-09-29 : « mettre en gris le fait de prendre une photo ou vidéo
+/// rapidement »). Elle ne prend aucun doigt : le toucher et l'appui long
+/// qu'elle nomme appartiennent à la scène, dessous.
+///
+/// **Elle se VEND avant de s'expliquer** (#8671, même jour : « être plus
+/// commercial : ceci est votre scène, ajouter texte, dessin, image, vidéo.
+/// Puis le petit détail en plus grand : Toucher et Maintenir… »). Trois
+/// lignes, trois rangs : le titre accroche, l'invitation nomme ce qu'on y pose,
+/// les gestes — plus grands qu'avant — disent comment commencer. Toutes
+/// suivent le Dynamic Type.
+struct ComposerSceneQuickCaptureHint: View {
+    let hint: ComposerSceneQuickCapture.Hint
+
+    static let railClearance: CGFloat = 64
+
+    var body: some View {
+        // **Aucun pictogramme au-dessus du titre** (complément porteur
+        // 2026-09-29 : « l'appareil photo au-dessus ne représente pas une
+        // scène. Soit rien, soit une scène »). Rien : la carte qui entoure ce
+        // texte EST déjà le cadre 9:16 de la scène — un rectangle dessiné
+        // dedans la redirait en plus petit. Les icônes passent devant LEUR
+        // geste, là où elles disent quelque chose.
+        VStack(spacing: 10) {
+            Text(ComposerSceneCameraCopy.emptySceneTitle)
+                .font(.system(.title2, design: .rounded).weight(.bold))
+            Text(ComposerSceneCameraCopy.emptySceneInvite)
+                .font(.system(.subheadline, design: .rounded))
+                .opacity(0.9)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(ComposerSceneQuickCapture.gestureLines(hint), id: \.symbol) { ligne in
+                    Label(ComposerSceneCameraCopy.gestureLine(ligne), systemImage: ligne.symbol)
+                }
+            }
+            .font(.system(.headline, design: .rounded).weight(.semibold))
+            .padding(.top, 6)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .foregroundStyle(Color.gray)
+        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        // Le rail des outils longe le bord gauche de la scène : la marge
+        // latérale le laisse libre, et le bloc reste centré.
+        .padding(.horizontal, Self.railClearance)
+        .padding(.vertical, 28)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(ComposerSceneCameraCopy.emptySceneSpoken(hint)))
+        .transition(.opacity)
+    }
+}

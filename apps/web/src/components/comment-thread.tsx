@@ -38,9 +38,25 @@ export type CommentThreadProps = {
    * charge pas les commentaires qu'on ne regarde pas. */
   readonly enabled?: boolean;
   readonly tone?: 'onLight' | 'onDark';
+  /**
+   * **LE FIL MONTÉ EN FEUILLE SUR UN LECTEUR** (#8643) — la feuille veut
+   * savoir quand on écrit (`onWritingChange`), replier la saisie après un
+   * envoi réussi (`foldOnSend`), et retirer la liste pendant qu'on écrit
+   * (`listHidden`) : la scène réduite prend sa place au-dessus du composeur.
+   */
+  readonly onWritingChange?: (writing: boolean) => void;
+  readonly foldOnSend?: boolean;
+  readonly listHidden?: boolean;
 };
 
-export function CommentThread({ postId, enabled = true, tone = 'onLight' }: CommentThreadProps) {
+export function CommentThread({
+  postId,
+  enabled = true,
+  tone = 'onLight',
+  onWritingChange,
+  foldOnSend = false,
+  listHidden = false,
+}: CommentThreadProps) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const reader = useReaderLanguages();
@@ -231,10 +247,10 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
          accessible annonce « Commentaires » plutôt qu'un retour muet au haut
          du document. */
       tabIndex={-1}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col outline-none"
       style={tone === 'onDark' ? { colorScheme: 'dark' } : undefined}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto px-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3" hidden={listHidden} data-comment-thread-list="">
         <CommentList
           comments={comments}
           state={{
@@ -264,6 +280,8 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
         mentionSource={mentionSource}
         replyTo={replyTarget}
         onCancelReply={() => setReplyTarget(null)}
+        {...(onWritingChange === undefined ? {} : { onWritingChange })}
+        foldOnSend={foldOnSend}
       />
     </section>
   );

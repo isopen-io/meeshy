@@ -81,8 +81,10 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyCallPlugin.class);
         registerPlugin(MeeshyContactsPlugin.class);
         registerPlugin(MeeshyNotificationSettingsPlugin.class);
+        registerPlugin(MeeshyClipboardPlugin.class);
         super.onCreate(savedInstanceState);
         suivreTailleDuTexte(getResources().getConfiguration());
+        SilentNotificationChannel.ensure(this);
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor

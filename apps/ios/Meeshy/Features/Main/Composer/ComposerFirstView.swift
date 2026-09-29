@@ -103,7 +103,7 @@ nonisolated enum ComposerFirstView {
         case .descriptionPanel:   return .describe
         // **Les réglages du texte REVIENNENT sur la scène** (directive porteur
         // 2026-09-28) : la porte TEXTE ouvre le clavier en ligne et pose ses
-        // options en colonne à droite de son bouton, au lieu de l'éditeur plein
+        // réglages à la place des portes (#8652), au lieu de l'éditeur plein
         // écran. On règle ce qu'on vient d'AJOUTER.
         case .textToolControls:   return .add
         case .textStylesBand, .trimBand: return nil
@@ -129,7 +129,7 @@ nonisolated enum ComposerFirstView {
     /// **La zone basse porte-t-elle les options d'un outil ?**
     ///
     /// Celles du DESSIN, et celles du TEXTE en cours d'édition sur la scène
-    /// (2026-09-28) : la colonne à droite de la porte choisit le réglage, la
+    /// (2026-09-28) : le rail, qui remplace ses portes par eux, choisit le réglage, la
     /// zone basse le déplie.
     static func lowZoneShowsToolOptions(drawing: Bool, textEditing: Bool) -> Bool {
         (drawing && serves(.drawingToolOptions)) || railShowsTextTools(textEditing: textEditing)

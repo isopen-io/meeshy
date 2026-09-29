@@ -236,6 +236,56 @@ final class ProtectedContentTapTests: XCTestCase {
         XCTAssertEqual(content(message(viewOnce: true, revealed: true)).protectedTap(), .closeViewOnce)
     }
 
+    // MARK: - Une vue unique FLOUTÉE ouverte reste floutée (#8567)
+    //
+    // Décision porteur du 2026-09-29 : « l'ouverture de la vue unique n'enlève
+    // pas le flou, sauf si c'est un attachement directement ». Le texte ouvert
+    // reste voilé, et le geste du voile est celui du FLOU — il révèle sur
+    // place, il ne consomme pas une seconde fois la vue unique.
+
+    func test_resolve_revealedBlurredViewOnceText_tapRevealsTheBlurInPlace() {
+        XCTAssertEqual(content(message(blurred: true, viewOnce: true, revealed: true)).protectedTap(), .revealInPlace)
+    }
+
+    func test_bubbleContent_revealedBlurredViewOnceText_staysVeiledOverItsText() {
+        let opened = content(message(text: "code 4242", blurred: true, viewOnce: true, revealed: true))
+        XCTAssertEqual(opened.kind, .standard)
+        XCTAssertEqual(opened.text?.raw, "code 4242", "ouverte, la vue unique livre son texte au modèle")
+        XCTAssertTrue(opened.requiresVeil, "…mais le flou le garde voilé")
+        XCTAssertFalse(opened.veilConsumesViewOnce, "le voile restant est celui du FLOU")
+        XCTAssertFalse(opened.viewOnceRetouchIsActive, "toucher le voile ne referme pas la vue unique")
+    }
+
+    func test_accessibilityLabel_revealedBlurredViewOnceText_doesNotReadTheText() {
+        let label = MessageAccessibilityLabelComposer.compose(
+            content(message(text: "code 4242", blurred: true, viewOnce: true, revealed: true)))
+        XCTAssertFalse(label.contains("4242"), label)
+    }
+
+    func test_veilReveal_revealedBlurredViewOnceText_revealsWithoutConsuming() {
+        let opened = content(message(blurred: true, viewOnce: true, revealed: true))
+        let controller = BubbleBlurRevealController()
+        var consumed = 0
+
+        controller.requestReveal(
+            request: .init(messageId: opened.messageId, isViewOnce: opened.veilConsumesViewOnce),
+            consumeViewOnce: { _, completion in consumed += 1; completion(true) }
+        )
+
+        XCTAssertTrue(controller.isRevealed, "le geste du flou lève le voile sur place")
+        XCTAssertEqual(consumed, 0, "la vue unique a déjà été consommée à l'ouverture")
+    }
+
+    func test_bubbleContent_revealedViewOnceText_withoutBlur_isRetouchable() {
+        let opened = content(message(viewOnce: true, revealed: true))
+        XCTAssertFalse(opened.requiresVeil)
+        XCTAssertTrue(opened.viewOnceRetouchIsActive)
+    }
+
+    func test_veilConsumesViewOnce_blurredOnly_isFalse() {
+        XCTAssertFalse(content(message(blurred: true)).veilConsumesViewOnce)
+    }
+
     func test_resolve_openedViewOnce_doesNotReopen() {
         let opened = content(message(viewOnce: true, openedAt: Date())).protectedTap()
         XCTAssertEqual(opened, .alreadyOpened)

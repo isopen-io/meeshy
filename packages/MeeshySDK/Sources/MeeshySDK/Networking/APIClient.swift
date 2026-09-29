@@ -610,6 +610,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         )
     }
 
+    /// Un chemin porte-t-il un segment VIDE (`//`, ou `/` final) ? C'est la
+    /// trace d'un identifiant vide interpolé dans une route
+    /// (`/conversations/\(id)/messages` avec `id == ""`), qu'un intermédiaire
+    /// normalise ensuite en une AUTRE route (#8651).
+    nonisolated static func containsEmptyPathSegment(_ path: String) -> Bool {
+        path.count > 1 && (path.contains("//") || path.hasSuffix("/"))
+    }
+
     /// La requête NUE — `requestWithHeaders(resolved:…)` l'enveloppe de la garde
     /// de l'e-mail (#8365, `EmailVerificationGate.swift`).
     func performRequestWithHeaders<T: Decodable>(
@@ -620,7 +628,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         headers: [String: String]?
     ) async throws -> T {
         var hasRefreshedOn401 = false
-        guard var components = URLComponents(string: resolved.urlString) else {
+        guard var components = URLComponents(string: resolved.urlString),
+              !Self.containsEmptyPathSegment(components.path) else {
             throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
 

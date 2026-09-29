@@ -53,6 +53,7 @@ public enum ConversationPreviewStringKey: String, Sendable, CaseIterable {
     case protectionHidden = "protection.hidden"
     case protectionHiddenHint = "protection.hidden.hint"
     case protectionEncrypted = "protection.encrypted"
+    case protectionAfterRead = "protection.afterRead"
     case effectCount = "effect.count"
     case effectShake = "effect.shake"
     case effectZoom = "effect.zoom"

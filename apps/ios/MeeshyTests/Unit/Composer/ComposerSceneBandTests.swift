@@ -209,8 +209,8 @@ final class ComposerSceneBandTests: XCTestCase {
         // `HStack` vide en dessous. Toujours PAS une bande — la garde négative
         // ci-dessous continue de le vérifier.
         XCTAssertTrue(
-            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { socle }")),
-            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones), sur une seule ligne lisible."
+            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen) socle")),
+            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones) ; il ne s'efface que devant un OUTIL ouvert (#8652), jamais devant une bande."
         )
         // Et la bande n'apparaît PAS dans cette pile : elle est passée à la
         // surface de scène, dans une propriété à part. Un identifiant de bande

@@ -303,7 +303,7 @@ struct FocalRow: View {
                 } else if content.requiresVeil {
                     FocalProtectedContent(
                         isBlurred: true,
-                        isViewOnce: content.isViewOnce,
+                        isViewOnce: content.veilConsumesViewOnce,
                         isDark: input.isDark,
                         messageId: content.messageId,
                         onConsumeViewOnce: actions.onConsumeViewOnce,
@@ -312,7 +312,7 @@ struct FocalRow: View {
                         contentSections
                     }
                 } else {
-                    contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+                    contentSections.viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
             }
             .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)

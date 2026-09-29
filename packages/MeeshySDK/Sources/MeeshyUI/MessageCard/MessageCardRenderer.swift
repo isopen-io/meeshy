@@ -15,28 +15,63 @@ public nonisolated struct MessageCardImage: Sendable {
     public let width: Int
     public let height: Int
     public let truncated: Bool
+    /// Les zones touchables de la carte, en pixels de la carte — l'aperçu les pose sur l'image.
+    public let regions: [MessageCardRegion]
 }
 
 public nonisolated enum MessageCardRenderer {
 
     public static func render(_ input: MessageCardInput, metadata: MessageCardPNGMetadata = .meeshy) -> MessageCardImage? {
         let fonts = FontBook()
-        let layout = MessageCardLayout.make(input) { text, font in
-            Double((text as NSString).size(withAttributes: [.font: fonts.font(font)]).width)
-        }
-        let size = CGSize(width: layout.width, height: layout.height)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let palette = input.template.palette.palette
-        let png = UIGraphicsImageRenderer(size: size, format: format).pngData { context in
-            let cg = context.cgContext
-            paintBackground(cg, size: size, palette: palette)
-            paintWatermark(cg, size: size, text: layout.watermark, palette: palette, fonts: fonts)
-            for op in layout.ops { paint(op, in: cg, fonts: fonts) }
+        let layout = layout(input, fonts: fonts)
+        let png = renderer(layout, scale: 1).pngData { context in
+            paint(layout, input: input, in: context.cgContext, fonts: fonts)
         }
         guard !png.isEmpty else { return nil }
-        return MessageCardImage(png: metadata.stamp(png), width: Int(layout.width), height: Int(layout.height), truncated: layout.truncated)
+        return MessageCardImage(
+            png: metadata.stamp(png),
+            width: Int(layout.width),
+            height: Int(layout.height),
+            truncated: layout.truncated,
+            regions: layout.regions
+        )
+    }
+
+    /// La VIGNETTE d'un template pour la galerie : la même carte, peinte à `width`
+    /// points de large — sans métadonnées, elle ne quitte jamais l'appareil.
+    public static func thumbnail(_ input: MessageCardInput, width: Double, displayScale: Double = 2) -> UIImage? {
+        let fonts = FontBook()
+        let layout = layout(input, fonts: fonts)
+        let scale = width / layout.width
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = CGFloat(displayScale)
+        format.opaque = true
+        let size = CGSize(width: layout.width * scale, height: layout.height * scale)
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            context.cgContext.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+            paint(layout, input: input, in: context.cgContext, fonts: fonts)
+        }
+    }
+
+    private static func layout(_ input: MessageCardInput, fonts: FontBook) -> MessageCardLayout {
+        MessageCardLayout.make(input) { text, font in
+            Double((text as NSString).size(withAttributes: [.font: fonts.font(font)]).width)
+        }
+    }
+
+    private static func renderer(_ layout: MessageCardLayout, scale: CGFloat) -> UIGraphicsImageRenderer {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: CGSize(width: layout.width, height: layout.height), format: format)
+    }
+
+    private static func paint(_ layout: MessageCardLayout, input: MessageCardInput, in cg: CGContext, fonts: FontBook) {
+        let size = CGSize(width: layout.width, height: layout.height)
+        let palette = input.template.palette.palette
+        paintBackground(cg, size: size, palette: palette)
+        paintWatermark(cg, size: size, text: layout.watermark, palette: palette, fonts: fonts)
+        for op in layout.ops { paint(op, in: cg, fonts: fonts) }
     }
 
     // MARK: - Fonts

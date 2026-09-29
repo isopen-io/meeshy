@@ -222,13 +222,45 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_speakerButton_hasAccessibilityLabel() throws {
-        let source = try pillSource()
+    func test_speakerButton_mountsTheSharedOutputMenu_wiredToToggleSpeaker() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        guard let body = DeclarationBodyScanner.body(containing: "private var speakerButton", in: source) else {
+            return XCTFail("FloatingCallPillView must define speakerButton")
+        }
         XCTAssertTrue(
-            source.contains("call.pill.speaker.on") && source.contains("call.pill.speaker.off"),
-            "The speaker button must carry dynamic accessibility labels reflecting the " +
-            "current speaker state."
+            body.contains("CallOutputMenu(") && body.contains("callManager.toggleSpeaker()"),
+            "#8208 — la sortie de la pastille est le MÊME menu que l'écran d'appel " +
+            "(CallDeviceControls) : toucher bascule le haut-parleur, maintenir ouvre " +
+            "le sélecteur de sortie et le choix du micro."
         )
+    }
+
+    func test_pill_neverReimplementsTheRoutePickerOrTheQualitySheet() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        XCTAssertFalse(source.contains("AVRoutePickerView"),
+                       "le sélecteur de sortie vit dans CallDeviceControls, jamais recopié dans la pastille")
+        XCTAssertFalse(source.contains("CallQualityDetailViewModel"),
+                       "la qualité passe par CallQualitySheet, jamais par une feuille jumelle")
+        XCTAssertFalse(source.contains("CallAudioRouteViewModel"),
+                       "la route audio est lue par CallOutputMenu, pas par un second modèle dans la pastille")
+    }
+
+    func test_pill_presentsTheSharedQualitySheet() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        XCTAssertTrue(source.contains(".callQualityDetailSheet(isPresented: $showQualityDetail)"),
+                      "#8208 — la pastille présente la feuille « Qualité » de l'écran d'appel")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "callQualityDetailTrigger", in: source), 1,
+                       "un seul déclencheur, sur la ligne d'état : la durée et le glyphe signal")
+    }
+
+    func test_qualityTrigger_isOfferedOnlyOnceConnected() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        guard let body = DeclarationBodyScanner.body(containing: "private var statusEntry", in: source) else {
+            return XCTFail("FloatingCallPillView must define statusEntry")
+        }
+        XCTAssertTrue(body.contains("if pillStatus.isConnected"),
+                      "avant la connexion, rien à mesurer : toucher la ligne d'état revient au plein écran")
+        XCTAssertTrue(body.contains("callQualityDetailTrigger(isPresented: $showQualityDetail)"))
     }
 
     func test_hangupButton_hasAccessibilityLabel() throws {
@@ -443,16 +475,16 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_speakerButton_hasAccessibilityHint() throws {
+    func test_speakerButton_leavesItsHintToTheSharedMenu() throws {
         let source = try pillSource()
         guard let vicinity = pillMemberBody(source, "private var speakerButton") else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
         XCTAssertTrue(
-            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.speaker.hint"),
-            "The speaker button must carry an accessibility hint, sharing the call.control.speaker.hint " +
-            "key already used by CallView's speaker control so both call surfaces read identically."
+            !vicinity.contains(".accessibilityHint("),
+            "The speaker button takes its label, value and hint from CallOutputMenu — the ones " +
+            "CallView's output control speaks — so both call surfaces read identically."
         )
     }
 
@@ -525,7 +557,7 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_speakerButton_appliesToggleAccessibility() throws {
+    func test_speakerButton_handsTheSpeakerStateToTheSharedMenu() throws {
         let source = try pillSource()
         // Corps équilibré, pas une fenêtre de 1 000 caractères :
         // `toggleStateAccessibility` se trouvait à 1 001 — UN caractère de
@@ -535,9 +567,9 @@ final class FloatingCallPillViewTests: XCTestCase {
             return
         }
         XCTAssertTrue(
-            vicinity.contains("toggleStateAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
-            "The speaker button must apply .toggleStateAccessibility so VoiceOver exposes the " +
-            "same toggle trait + on/off value as the equivalent control in CallView."
+            vicinity.contains("isSpeaker: callManager.isSpeaker"),
+            "The speaker button must hand the speaker state to CallOutputMenu, which speaks it " +
+            "as the on/off value — the same one CallView's output control speaks."
         )
     }
 

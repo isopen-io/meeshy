@@ -11,7 +11,8 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { ARRIVALS_NOTICE_KIND, parseArrivalsNotice } from '@meeshy/shared/utils/arrivals-notice';
-import { postGlobalArrival } from '../../../../services/conversations/globalArrivalsNotice';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { emitArrivalsLineUpdate, postGlobalArrival } from '../../../../services/conversations/globalArrivalsNotice';
 import { systemEventFromMessage } from '../../../../routes/conversations/utils/last-message-nature';
 
 const CONV = 'conv-global';
@@ -181,5 +182,32 @@ describe('la ligne de liste de Global lit la ligne d’arrivées', () => {
       key: 'system.members-arrived',
       params: { first: 'Omar', second: 'Léa', third: '', others: 2, count: 4 },
     });
+  });
+});
+
+describe('`message:edited` d’une ligne complétée porte ce que la ligne de liste lit (#8565)', () => {
+  function emitted(line: Row): Record<string, unknown> {
+    const emit = jest.fn<any>();
+    const to = jest.fn<any>(() => ({ emit }));
+    const row = { ...line, messageType: 'system', conversationId: CONV, originalLanguage: 'fr' };
+
+    emitArrivalsLineUpdate({ to } as never, row, CONV);
+
+    expect(to).toHaveBeenCalledWith(ROOMS.conversation(CONV));
+    expect(emit.mock.calls[0][0]).toBe(SERVER_EVENTS.MESSAGE_EDITED);
+    return emit.mock.calls[0][1] as Record<string, unknown>;
+  }
+
+  it('sert l’événement système recomposé : clé, noms des derniers arrivés et total', () => {
+    const payload = emitted(openLine({ names: ['Omar', 'Léa', 'Tom', 'Aïcha'] }));
+
+    expect(payload.systemEvent).toEqual({
+      key: 'system.members-arrived',
+      params: { first: 'Omar', second: 'Léa', third: '', others: 2, count: 4 },
+    });
+  });
+
+  it('ne marque jamais l’avis « modifié » : personne ne l’a édité', () => {
+    expect(emitted(openLine({ names: ['Tom', 'Aïcha'] })).isEdited).toBe(false);
   });
 });

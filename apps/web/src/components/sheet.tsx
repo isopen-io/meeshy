@@ -42,6 +42,7 @@ export function Sheet({
   onSearchChange,
   bodyAs = 'ul',
   presentation = 'fullscreen',
+  accessory,
   onClose,
   children,
 }: {
@@ -76,6 +77,8 @@ export function Sheet({
    * bureau, et l'écran d'où l'on vient reste visible derrière le voile.
    */
   presentation?: 'fullscreen' | 'centered';
+  /** Les gestes propres à la feuille, au bout de l'en-tête (le composer d'export : « Au hasard », « Format par défaut »). */
+  accessory?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -155,6 +158,7 @@ export function Sheet({
           <h2 id={titleId} className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             {title}
           </h2>
+          {accessory}
         </div>
 
         {onSearchChange === undefined ? null : (

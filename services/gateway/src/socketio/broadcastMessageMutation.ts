@@ -13,6 +13,7 @@ import {
 } from './emitConversationPreviewUpdate';
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
 import type { QueuedVariantFor } from './queuedEventContract';
+import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -30,6 +31,8 @@ export interface MessageMutationManager {
     conversationId: string;
     actorUserId: string | null | undefined;
     messageId: string;
+    /** #8562 — la variante d'un lecteur que la charge commune ne peut pas servir. */
+    resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
   } & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'>): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
@@ -104,6 +107,12 @@ export type MessageMutationParams =
   | (MessageMutationBase<MessageEditedMutationPayload> & {
       eventType: 'edited';
       prisma: MutationPrisma;
+      /**
+       * #8562 — les lecteurs pour qui le message CITÉ par ce message est un
+       * éphémère déjà échu, avec leur échéance (`loadSealedQuoteAudience`).
+       * Ils reçoivent la citation SCELLÉE, et la room ne la leur sert pas.
+       */
+      sealedQuoteAudience?: ReadonlyMap<string, Date>;
     })
   | (MessageMutationBase<MessageDeletedMutationPayload> & {
       eventType: 'deleted';
@@ -237,12 +246,54 @@ function queuedVariant(
   }
 }
 
+const NO_SEALED_READER: ReadonlyMap<string, Date> = new Map();
+
+const sealedVariant = <T extends object>(payload: T, sealed: ReadonlyMap<string, Date>, key: string): T => {
+  const at = sealed.get(key);
+  return at ? withSealedQuote(payload, at) : payload;
+};
+
+type ExceptingTarget = ServerEmitTarget & { except(rooms: string[]): ServerEmitTarget };
+
+const canExcept = (target: ServerEmitTarget): target is ExceptingTarget =>
+  typeof (target as { except?: unknown }).except === 'function';
+
+/**
+ * `message:edited` d'une réponse dont la citation est échue pour certains
+ * lecteurs (#8562) : la room sans eux, puis leur variante scellée sur leur room
+ * personnelle — un seul événement chacun. Une cible qui ne sait pas exclure
+ * reçoit la citation scellée pour TOUS : la porte échoue en montrant moins.
+ */
+function emitEditedWithSealedQuote(
+  io: PreviewEmitIO | null | undefined,
+  conversationId: string,
+  payload: MessageEditedMutationPayload,
+  sealed: ReadonlyMap<string, Date>,
+): void {
+  if (!io) return;
+  const room = io.to(ROOMS.conversation(conversationId));
+  if (!canExcept(room)) {
+    const earliest = new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())));
+    room.emit(SERVER_EVENTS.MESSAGE_EDITED, withSealedQuote(payload, earliest));
+    return;
+  }
+  room.except([...sealed.keys()].map((key) => ROOMS.user(key))).emit(SERVER_EVENTS.MESSAGE_EDITED, payload);
+  for (const key of sealed.keys()) {
+    io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_EDITED, sealedVariant(payload, sealed, key));
+  }
+}
+
 export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
   const { manager, conversationId, actorUserId, eventType, messageId, onError } = params;
   if (!manager) return;
 
+  const sealed = params.eventType === 'edited' ? params.sealedQuoteAudience ?? NO_SEALED_READER : NO_SEALED_READER;
   try {
-    emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);
+    if (params.eventType === 'edited' && sealed.size > 0) {
+      emitEditedWithSealedQuote(manager.getIO(), conversationId, params.payload, sealed);
+    } else {
+      emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);
+    }
   } catch (error) {
     onError?.(error);
   }
@@ -319,6 +370,9 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
         // deux unions indépendantes, et la file cesserait d'être gardée à
         // l'étage même où elle vient de l'être.
         ...queuedVariant(params),
+        ...(sealed.size > 0
+          ? { resolvePayloadForReader: (queueKey: string) => sealedVariant(params.payload, sealed, queueKey) }
+          : {}),
       })
     ).catch((error: unknown) => onError?.(error));
   } catch (error) {

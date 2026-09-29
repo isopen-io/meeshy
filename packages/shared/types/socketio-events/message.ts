@@ -9,6 +9,7 @@
 // Import unified Participant types
 import type { ParticipantType } from '../participant.js';
 import type { MessageSticker } from '../message-sticker.js';
+import type { LastMessageSystemEvent } from '../conversation-preview.js';
 
 /**
  * Données pour l'événement de suppression de message
@@ -595,4 +596,13 @@ export interface SocketIOMessage {
   /** Servis par le seul transport REST/ZMQ (cf. `messageNewPayload.ts`). */
   readonly originalContent?: string;
   readonly metadata?: unknown;
+
+  /**
+   * L'événement système localisable d'un avis que le SERVEUR complète sur
+   * place (#8565) — la ligne d'arrivées regroupées de Meeshy Global, qui ne
+   * part qu'en `message:edited`. Même forme que `lastMessageSystemEvent` de
+   * `conversation:updated` : la ligne de liste y relit sa clé, ses noms et son
+   * compte sans recalcul client ni seconde diffusion.
+   */
+  readonly systemEvent?: LastMessageSystemEvent;
 }

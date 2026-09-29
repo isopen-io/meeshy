@@ -36,6 +36,7 @@ import { admitAttachmentReply } from '../../services/messaging/attachmentReplySn
 import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { withQuoteServedToReader } from './ephemeralReaderDeadlines';
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
@@ -464,7 +465,8 @@ export function registerSendMessageRoute(
         messageId: result.data?.id
       });
 
-      return sendSuccess(reply, result.data);
+      // #8562 — la citation, telle que CET expéditeur a le droit de la lire.
+      return sendSuccess(reply, await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined));
 
     } catch (error) {
       logger.error('Error in REST send message:', error);

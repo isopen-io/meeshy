@@ -43,4 +43,16 @@ struct MessageCardRendererTests {
         #expect(poster.fontName == StoryTextStyle.poster.fontName)
         #expect(poster.pointSize == 40)
     }
+
+    @Test func render_carriesTheTouchableRegionsOfItsLayout() throws {
+        let card = try #require(MessageCardRenderer.render(Self.input(MessageCardTemplates.defaultID)))
+        #expect(card.regions.map(\.part) == [.header, .quote, .link, .reply])
+    }
+
+    @Test func thumbnail_paintsTheSameCardAtTheGalleryWidth() throws {
+        let card = try #require(MessageCardRenderer.render(Self.input(MessageCardTemplates.defaultID)))
+        let thumb = try #require(MessageCardRenderer.thumbnail(Self.input(MessageCardTemplates.defaultID), width: 120, displayScale: 1))
+        #expect(Int(thumb.size.width.rounded()) == 120)
+        #expect(abs(Double(thumb.size.height) - Double(card.height) * 120 / 1080) < 1)
+    }
 }

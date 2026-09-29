@@ -1,6 +1,6 @@
 import '@/styles/story-fonts.css';
 
-import { layoutMessageCard, type CardLayout, type CardOp, type MessageCardInput } from './message-card-layout';
+import { CARD_WIDTH, layoutMessageCard, type CardLayout, type CardOp, type CardRegion, type MessageCardInput } from './message-card-layout';
 import { MEESHY_PNG_METADATA, withPngMetadata } from './png-metadata';
 import { canvasFont, templateFonts, templateOf, type CardPalette, type MessageCardTemplate } from './message-card-templates';
 
@@ -139,10 +139,19 @@ export function paintMessageCard(ctx: Paintable, layout: CardLayout, template: M
   for (const op of layout.ops) paintOp(ctx, op);
 }
 
-export type RenderedMessageCard = { readonly blob: Blob; readonly width: number; readonly height: number; readonly truncated: boolean };
+export type RenderedMessageCard = {
+  readonly blob: Blob;
+  readonly width: number;
+  readonly height: number;
+  readonly truncated: boolean;
+  /** Les zones touchables de l'aperçu, en pixels de la carte (1080 de large). */
+  readonly regions: readonly CardRegion[];
+};
 
-/** Rend la carte en PNG — `null` si le navigateur refuse le canvas (mémoire, contexte perdu). */
-export async function renderMessageCard(input: MessageCardInput, doc: Document = document): Promise<RenderedMessageCard | null> {
+type Painted = { readonly layout: CardLayout; readonly blob: Blob };
+
+/** Mesure et peint la carte à l'échelle voulue — `null` si le navigateur refuse le canvas (mémoire, contexte perdu). */
+async function paintCard(input: MessageCardInput, doc: Document, scale: number): Promise<Painted | null> {
   const template = templateOf(input.template);
   await loadCardFonts(template, doc.fonts);
   const canvas = doc.createElement('canvas');
@@ -152,12 +161,30 @@ export async function renderMessageCard(input: MessageCardInput, doc: Document =
     ctx.font = font;
     return ctx.measureText(text).width;
   });
-  canvas.width = layout.width;
-  canvas.height = layout.height;
+  canvas.width = Math.max(1, Math.round(layout.width * scale));
+  canvas.height = Math.max(1, Math.round(layout.height * scale));
+  if (scale !== 1) ctx.scale(scale, scale);
   paintMessageCard(ctx, layout, template);
-  const painted = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  return blob === null ? null : { layout, blob };
+}
+
+/** Rend la carte en PNG — `null` si le navigateur refuse le canvas (mémoire, contexte perdu). */
+export async function renderMessageCard(input: MessageCardInput, doc: Document = document): Promise<RenderedMessageCard | null> {
+  const painted = await paintCard(input, doc, 1);
   if (painted === null) return null;
-  const stamped = withPngMetadata(new Uint8Array(await painted.arrayBuffer()), MEESHY_PNG_METADATA);
+  const stamped = withPngMetadata(new Uint8Array(await painted.blob.arrayBuffer()), MEESHY_PNG_METADATA);
   const blob = new Blob([stamped], { type: 'image/png' });
-  return { blob, width: layout.width, height: layout.height, truncated: layout.truncated };
+  const { layout } = painted;
+  return { blob, width: layout.width, height: layout.height, truncated: layout.truncated, regions: layout.regions };
+}
+
+/**
+ * La VIGNETTE d'une carte, pour la galerie : la même peinture, réduite à
+ * `width` pixels de large. Elle ne quitte jamais l'appareil — ni métadonnées,
+ * ni compteur d'usage.
+ */
+export async function renderMessageCardThumbnail(input: MessageCardInput, width: number, doc: Document = document): Promise<Blob | null> {
+  const painted = await paintCard(input, doc, width / CARD_WIDTH);
+  return painted?.blob ?? null;
 }

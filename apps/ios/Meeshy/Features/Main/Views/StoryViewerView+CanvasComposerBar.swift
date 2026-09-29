@@ -46,6 +46,9 @@ struct StoryComposerBarView: View {
     @Binding var storyDrafts: [String: StoryDraft]
     @Binding var replyingToStoryComment: FeedComment?
 
+    /// Le repli ⌄ que le lecteur confie à la barre, posé DANS la plaque (#8642).
+    var foldControl: ComposerFoldControl? = nil
+
     /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
     /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
     /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
@@ -103,6 +106,7 @@ struct StoryComposerBarView: View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
+            foldControl: foldControl,
             onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: composerAccent,
             secondaryColor: composerSecondaryColor,

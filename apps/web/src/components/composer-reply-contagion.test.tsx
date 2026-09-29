@@ -125,6 +125,21 @@ describe('Composer — la contagion de la citation (#8557)', () => {
     expect(harness.sent).toEqual([{ ephemeralSeconds: 60, blurred: true }]);
   });
 
+  test('réponse contaminée par le flou : la vue unique s’ARME et part avec le flou (#8567)', () => {
+    const harness = mount(blurredOnly);
+    const viewOnce = () => button('[data-composer-view-once]');
+    expect(viewOnce().disabled).toBe(false);
+
+    act(() => {
+      viewOnce().click();
+    });
+    expect(viewOnce().getAttribute('aria-pressed')).toBe('true');
+    expect(blur().getAttribute('aria-pressed')).toBe('true');
+
+    typeAndSend('ma réponse');
+    expect(harness.sent).toEqual([{ viewOnce: true, blurred: true }]);
+  });
+
   test('retirer la citation rend l’état d’avant, et l’imposition n’atteint jamais la préférence', () => {
     const harness = mount(undefined);
     expect(blur().getAttribute('aria-pressed')).toBe('false');

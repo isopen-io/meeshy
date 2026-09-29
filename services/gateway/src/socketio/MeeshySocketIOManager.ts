@@ -46,6 +46,7 @@ import { validateSocketEvent, isValidationFailure } from '../middleware/validati
 import { SocketTranslationRequestSchema } from '../validation/socket-event-schemas.js';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
+import { loadSealedQuoteAudience, sealedQuoteVariant } from './quotedEphemeralAudience';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
@@ -1065,6 +1066,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     actorUserId: string | null | undefined;
     messageId: string;
+    resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
   } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted' | 'expired'>): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
@@ -3063,7 +3065,16 @@ export class MeeshySocketIOManager {
       // and sends a trimmed payload once per distinct language. Original content preserved.
       // Opt-in (OFF by default): enable explicitly with SOCKET_LANG_FILTER=true once
       // validated in staging (measured savings + multi-device + Prisme fallback check).
-      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
+      //
+      // #8562 — les lecteurs pour qui le message CITÉ est un éphémère déjà échu
+      // reçoivent la citation SCELLÉE sur leur room personnelle, et sont exclus
+      // de la room : une diffusion commune ne peut pas porter leur échéance.
+      // Leur exclusion désactive le filtre de langue, qui ne sait pas exclure
+      // de room utilisateur (même règle que le chemin WS).
+      const sealedQuote = await loadSealedQuoteAudience(this.prisma, message.replyTo);
+      const sealedKeys = [...sealedQuote.keys()].filter((key) => key !== senderUserId && key !== message.senderId);
+      const sealedRooms = sealedKeys.map((key) => ROOMS.user(key));
+      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true' && sealedRooms.length === 0;
 
       if (senderUserId) {
         if (langFilterOn) {
@@ -3071,14 +3082,18 @@ export class MeeshySocketIOManager {
         } else {
           this.io
             .to(room)
-            .except(ROOMS.user(senderUserId))
+            .except([ROOMS.user(senderUserId), ...sealedRooms])
             .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
         }
         this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else if (langFilterOn) {
         this._emitMessageNewByLanguage(room, broadcastPayload);
       } else {
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        const peers = this.io.to(room);
+        (sealedRooms.length > 0 ? peers.except(sealedRooms) : peers).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+      }
+      for (const key of sealedKeys) {
+        this.io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_NEW, sealedQuoteVariant(sealedQuote, key, broadcastPayload));
       }
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
@@ -3140,6 +3155,9 @@ export class MeeshySocketIOManager {
             message,
             broadcastPayload,
             resolvedSenderId,
+            ...(sealedKeys.length > 0
+              ? { payloadForReader: (key: string) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) }
+              : {}),
           }
         );
       } catch (syncError) {
