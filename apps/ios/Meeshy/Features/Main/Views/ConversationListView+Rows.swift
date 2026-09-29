@@ -548,13 +548,29 @@ extension ConversationRowItem: @MainActor Equatable {
 
 /// Cursor-based infinite-scroll footer driven by `paginationState`.
 /// Extracted from `ConversationListView.paginationFooter`. Rendered once at
-/// the tail of the list, so it reads the view model directly rather than
-/// taking a dozen primitive inputs.
+/// the tail of the list, so it reads the view model directly and hands the
+/// pure `ConversationPaginationFooterContent` its primitives.
 struct ConversationPaginationFooter: View {
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
 
     var body: some View {
-        switch conversationViewModel.paginationState {
+        ConversationPaginationFooterContent(
+            state: conversationViewModel.paginationState,
+            hasMore: conversationViewModel.hasMore,
+            conversationCount: conversationViewModel.conversations.count,
+            onLoadMore: { Task { await conversationViewModel.loadMore() } }
+        )
+    }
+}
+
+struct ConversationPaginationFooterContent: View {
+    let state: PaginationState
+    let hasMore: Bool
+    let conversationCount: Int
+    let onLoadMore: () -> Void
+
+    var body: some View {
+        switch state {
         case .loadingMore:
             HStack {
                 Spacer()
@@ -566,7 +582,7 @@ struct ConversationPaginationFooter: View {
         case .exhausted:
             // Show the "all loaded" hint only on lists that actually
             // had to paginate -- avoids cluttering empty/small lists.
-            if conversationViewModel.conversations.count > 30 {
+            if conversationCount > 30 {
                 Text(String(
                     localized: "conversations.pagination.allLoaded",
 
@@ -585,7 +601,7 @@ struct ConversationPaginationFooter: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 Button {
-                    Task { await conversationViewModel.loadMore() }
+                    onLoadMore()
                 } label: {
                     Text(String(
                         localized: "conversations.pagination.retry",
@@ -601,12 +617,10 @@ struct ConversationPaginationFooter: View {
             // Invisible sentinel: when the user scrolls deep enough to
             // reveal this row, fire `loadMore`. The ViewModel guards
             // against re-entry and short-circuits when hasMore=false.
-            if conversationViewModel.hasMore {
+            if hasMore {
                 Color.clear
                     .frame(height: 1)
-                    .onAppear {
-                        Task { await conversationViewModel.loadMore() }
-                    }
+                    .onAppear { onLoadMore() }
             }
         }
     }
