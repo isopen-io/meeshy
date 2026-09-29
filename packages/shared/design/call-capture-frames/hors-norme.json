@@ -297,7 +297,7 @@
           "place": "bottom-left",
           "color": "#111111",
           "size": "m",
-          "font": "tag"
+          "font": "handwriting"
         },
         "names": {
           "show": "both",
