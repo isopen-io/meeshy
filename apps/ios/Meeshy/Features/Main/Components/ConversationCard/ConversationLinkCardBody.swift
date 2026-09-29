@@ -241,15 +241,16 @@ struct ConversationCardStatsRow: View {
             if let messages = stats.messageCount {
                 metric(icon: "bubble.left.and.bubble.right.fill", value: messages)
             }
-            ForEach(Array(stats.languages.prefix(visible)), id: \.self) { code in
-                Text(verbatim: code.uppercased())
-                    .font(MeeshyFont.relative(11, weight: .bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(accent.opacity(0.14)))
-                    .fixedSize()
-            }
+            // Pas de `ForEach` : sa fermeture hérite de l'isolation @MainActor,
+            // et iOS 26 la rappelle sur `com.apple.SwiftUI.AsyncRenderer` en
+            // mesurant la bulle — le contrôle d'isolation de Swift 6 y trappe
+            // (`.ips` du 2026-09-29, `closure #1 in closure #1 in row`). Au plus
+            // quatre pastilles, posées sans fermeture.
+            let shown = Array(stats.languages.prefix(visible))
+            if shown.count > 0 { languagePill(shown[0]) }
+            if shown.count > 1 { languagePill(shown[1]) }
+            if shown.count > 2 { languagePill(shown[2]) }
+            if shown.count > 3 { languagePill(shown[3]) }
             if stats.languages.count > visible {
                 Text(verbatim: "+\(stats.languages.count - visible)")
                     .font(MeeshyFont.relative(11, weight: .bold))
@@ -257,6 +258,16 @@ struct ConversationCardStatsRow: View {
                     .fixedSize()
             }
         }
+    }
+
+    private func languagePill(_ code: String) -> some View {
+        Text(verbatim: code.uppercased())
+            .font(MeeshyFont.relative(11, weight: .bold))
+            .foregroundColor(accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(accent.opacity(0.14)))
+            .fixedSize()
     }
 
     private func metric(icon: String, value: Int) -> some View {
