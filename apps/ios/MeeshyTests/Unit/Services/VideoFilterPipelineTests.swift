@@ -1,4 +1,5 @@
 import XCTest
+import CoreImage
 import CoreVideo
 @testable import Meeshy
 
@@ -306,6 +307,20 @@ final class VideoFilterPipelineTests: XCTestCase {
         XCTAssertNil(sut.lastFrameProcessingTime, "une scène déjà claire ne coûte rien")
     }
 
+    func test_process_overBudgetThenFiltersCleared_restoresDarkSceneLift() {
+        let sut = VideoFilterPipeline(faceEffects: SlowFaceEffectsRenderer(delay: 0.03), isPowerConstrained: { false })
+        var stylized = VideoFilterConfig.default
+        stylized.faceEffect = .toad
+        sut.config = stylized
+        (0..<10).forEach { _ in _ = sut.process(makePixelBuffer(), averageBrightness: 20) }
+        XCTAssertTrue(sut.isAutoDegraded)
+
+        sut.config = .default
+        (0..<30).forEach { _ in _ = sut.process(makePixelBuffer(), averageBrightness: 20) }
+
+        XCTAssertFalse(sut.isAutoDegraded, "une surcharge passée ne doit pas couper l'éclaircissement pour tout l'appel")
+    }
+
     // Regression test for a data race: `config` used to be a plain
     // unsynchronized `var`, written from the MainActor (slider drags) and read
     // from WebRTC's capture queue inside `process(_:averageBrightness:)` at
@@ -435,3 +450,25 @@ final class VideoFilterCapturerDelegateTests: XCTestCase {
 }
 
 #endif
+
+private final class SlowFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
+    private let delay: TimeInterval
+
+    init(delay: TimeInterval) {
+        self.delay = delay
+    }
+
+    nonisolated func render(
+        _ effect: CallFaceEffect,
+        on image: CIImage,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        intensity: Float,
+        isDegraded: Bool
+    ) -> CIImage {
+        Thread.sleep(forTimeInterval: delay)
+        return image
+    }
+
+    nonisolated func reset() {}
+}
