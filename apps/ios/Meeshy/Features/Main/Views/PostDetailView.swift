@@ -801,6 +801,7 @@ struct PostDetailView: View {
                         .adaptiveOnChange(of: viewModel.topLevelComments.count) { _, _ in
                             attemptScrollToTargetComment(using: scrollProxy)
                         }
+                        .keepsReplyTargetInView(viewModel.replyingTo?.id, proxy: scrollProxy)
                         .onReceive(CallManagerHost.shared.callStatePublisher) { state in
                             isCallActive = state.isActive
                         }
