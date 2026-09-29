@@ -110,10 +110,11 @@ nonisolated enum MessageCardMediaLoader {
             guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
             let length = CMBlockBufferGetDataLength(block)
             guard length >= 2 else { continue }
+            let byteCount = (length / 2) * 2
             var pcm = [Int16](repeating: 0, count: length / 2)
             let status = pcm.withUnsafeMutableBytes { raw -> OSStatus in
                 guard let base = raw.baseAddress else { return kCMBlockBufferBadCustomBlockSourceErr }
-                return CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: pcm.count * 2, destination: base)
+                return CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: byteCount, destination: base)
             }
             guard status == kCMBlockBufferNoErr else { continue }
             levels.append(pcm.reduce(0.0) { $0 + abs(Double($1)) } / Double(pcm.count))
