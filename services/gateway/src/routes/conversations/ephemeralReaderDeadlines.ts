@@ -137,6 +137,17 @@ export async function loadEphemeralReaderDeadlines(
 }
 
 /**
+ * #8562 — la page ET les messages qu'elle CITE : une citation d'éphémère se
+ * scelle à l'échéance de CE lecteur, que le message cité soit sur la page ou
+ * non. Même lecture, même plafond — une seule requête.
+ */
+export function withQuotedMessages<T extends EphemeralRow & { readonly replyTo?: EphemeralRow | null }>(
+  messages: readonly T[],
+): EphemeralRow[] {
+  return [...messages, ...messages.flatMap((message) => (message.replyTo ? [message.replyTo] : []))];
+}
+
+/**
  * Le message est-il encore SERVABLE à ce lecteur ?
  *
  * La directive du 2026-09-22 arrête le service à `D(u) + 1 h` — une heure APRÈS
