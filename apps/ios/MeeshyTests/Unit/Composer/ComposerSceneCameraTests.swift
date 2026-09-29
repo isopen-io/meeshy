@@ -246,16 +246,7 @@ final class ComposerSceneCameraSizeTests: XCTestCase {
                           ComposerSceneCameraSize.fullScreen.toggleSymbol)
     }
 
-    /// **La croix n'existe qu'en plein écran**, et c'est la décision qui fait
-    /// de ceci une règle plutôt qu'un booléen.
-    ///
-    /// En carte, le plateau reste visible : le viseur a déjà ses sorties — la
-    /// porte qui l'a armé, et le geste qui l'a ouvert. Une croix y ferait
-    /// double emploi et occuperait la place du seul contrôle que la carte ne
-    /// peut pas offrir autrement. En plein écran, il n'y a plus rien autour :
-    /// sans elle, l'écran serait un piège.
-    func test_seulLePleinÉcran_montreLaCroix() {
-        XCTAssertFalse(ComposerSceneCameraSize.card.showsClose)
-        XCTAssertTrue(ComposerSceneCameraSize.fullScreen.showsClose)
-    }
+    // La croix « seulement en plein écran » est RÉVOQUÉE (#8653, porteur
+    // 2026-09-29) : elle est là dans les deux tailles, et son témoin vit dans
+    // `ComposerSceneQuickCaptureTests`.
 }

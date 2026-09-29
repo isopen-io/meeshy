@@ -346,7 +346,8 @@ final class CameraModel: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureMovieFileOutput()
-    private var currentPosition: AVCaptureDevice.Position = .back
+    /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
+    @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
 
     // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
@@ -494,6 +495,47 @@ final class CameraModel: NSObject, ObservableObject {
         }
         isTakingPhoto = true
         photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+
+    /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
+    /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
+    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse.
+    var isCaptureReady: Bool {
+        let connection = photoOutput.connection(with: .video)
+        return CameraRecordingReadiness.mayCapturePhoto(
+            sessionIsRunning: session.isRunning,
+            hasVideoConnection: connection != nil,
+            connectionIsActive: connection?.isActive ?? false,
+            connectionIsEnabled: connection?.isEnabled ?? false)
+    }
+
+    /// Attend que la session soit prête, au plus `timeout`. `false` ⇒ elle ne
+    /// l'a pas été (permission refusée, simulateur sans caméra, tâche annulée).
+    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool {
+        let limite = Date().addingTimeInterval(timeout)
+        while !isCaptureReady {
+            guard !Task.isCancelled, Date() < limite else { return false }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return !Task.isCancelled
+    }
+
+    /// **La torche de l'objectif actif** (#8653) — la lumière d'une VIDÉO, que
+    /// `flashMode` n'éclaire pas. Sans lampe, ou sur un mode refusé, rien ne
+    /// change : l'objectif avant n'en a pas, c'est l'écran qui l'éclaire.
+    func setTorch(_ mode: AVCaptureDevice.TorchMode) {
+        guard let device = session.inputs
+            .compactMap({ ($0 as? AVCaptureDeviceInput)?.device })
+            .first(where: { $0.hasMediaType(.video) }),
+              device.hasTorch, device.isTorchModeSupported(mode), device.torchMode != mode
+        else { return }
+        do {
+            try device.lockForConfiguration()
+            device.torchMode = mode
+            device.unlockForConfiguration()
+        } catch {
+            Logger.media.error("Torch configuration failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// **Peut-on demander un enregistrement à AVFoundation ?** La question est

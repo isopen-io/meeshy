@@ -109,3 +109,28 @@ struct ComposerSceneCameraFrameKey: PreferenceKey {
         value = nextValue() ?? value
     }
 }
+
+/// **L'indication GRISE d'une scène vide** (#8653, directive porteur
+/// 2026-09-29 : « mettre en gris le fait de prendre une photo ou vidéo
+/// rapidement »). Elle ne prend aucun doigt : le toucher et l'appui long
+/// qu'elle nomme appartiennent à la scène, dessous.
+struct ComposerSceneQuickCaptureHint: View {
+    let hint: ComposerSceneQuickCapture.Hint
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: hint == .videoOnly ? "video" : "camera")
+                .font(.system(.title2, design: .rounded).weight(.medium))
+            Text(ComposerSceneCameraCopy.quickCaptureHint(hint))
+                .font(.system(.footnote, design: .rounded).weight(.medium))
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(Color.gray)
+        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        .padding(24)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(ComposerSceneCameraCopy.quickCaptureHint(hint)))
+        .transition(.opacity)
+    }
+}

@@ -402,6 +402,7 @@ extension MeeshyComposerHost {
             // avec la vue qui les peignait : le socle étant le FRÈRE de la
             // surface, aucun overlay posé sur elle ne pouvait le couvrir.
             cameraStage: sceneCameraStage,
+            quickCaptureHint: sceneQuickCaptureHint,
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -1087,5 +1088,17 @@ extension MeeshyComposerHost {
     /// autre surface : le document et l'humeur gardent leur socle.
     var sceneToolOwnsScreen: Bool {
         mountedComposerView == .scene && sceneRailMode.opensTool
+    }
+
+    /// **L'indication grise de la capture rapide** (#8653) — la MÊME question
+    /// que celle que le toucher pose (`handleSceneQuickTap`) : l'indication ne
+    /// promet jamais un geste que la scène refuserait.
+    var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
+        guard ComposerSceneQuickCapture.offers(
+            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
+            format: selectedFormat,
+            stage: sceneCameraStage,
+            toolIsOpen: sceneToolOwnsScreen) else { return nil }
+        return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }

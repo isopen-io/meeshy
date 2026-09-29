@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - Le geste qui ouvre la caméra depuis la scène (#4036, #4851)
 
@@ -68,4 +69,94 @@ nonisolated enum ComposerSceneCaptureGesture {
         guard format != .status else { return false }
         return backgroundIsEmpty
     }
+}
+
+// MARK: - La capture RAPIDE sur une scène vide (#8653)
+
+/// **Un toucher ouvre ET prend la photo ; un appui long ouvre ET filme**
+/// (directive porteur 2026-09-29).
+///
+/// > « Lorsque la scène est vide mettre en gris le fait de prendre une photo ou
+/// > vidéo rapidement — par tap simple ça ouvre et prend la photo, longpress
+/// > ouvre et lance la vidéo ! »
+///
+/// Avant ce lot, seul l'appui long armait le viseur, et c'était sa LEVÉE qui
+/// choisissait : relâché tôt, une photo ; tenu, une vidéo. Deux intentions sur
+/// un seul geste, dont la plus courante — la photo — demandait d'appuyer
+/// longtemps puis de lâcher vite. Chaque geste porte désormais UNE intention,
+/// et l'indication grise de la scène vide les nomme.
+nonisolated enum ComposerSceneQuickCapture {
+
+    enum Tap: Equatable, Sendable {
+        /// Le viseur s'ouvre et prend la photo dès qu'il est prêt.
+        case photo
+        /// Le format ne sert pas la photo (un réel) : le viseur s'ouvre, rien
+        /// n'est pris — une image dans un format qui attend du mouvement serait
+        /// une faute plus grave qu'un geste de plus.
+        case armOnly
+    }
+
+    enum Release: Equatable, Sendable {
+        case closeTake
+        case keepFilming
+        /// Le doigt est parti avant que la caméra soit prête : rien n'est pris,
+        /// jamais une photo que personne n'a demandée.
+        case cancelPending
+    }
+
+    enum Hint: Equatable, Sendable {
+        case photoOrVideo
+        case videoOnly
+    }
+
+    /// **Rien n'est POSÉ sur la scène.** Une couleur de fond n'y pose rien ;
+    /// un texte, un média, un sticker, un tracé, un lieu ou un son, si.
+    static func sceneIsBlank(_ slide: StorySlide) -> Bool {
+        let effets = slide.effects
+        return slide.mediaURL == nil
+            && effets.textObjects.isEmpty
+            && (effets.mediaObjects ?? []).isEmpty
+            && (effets.stickerObjects ?? []).isEmpty
+            && (effets.stickers ?? []).isEmpty
+            && effets.drawingData == nil
+            && (effets.drawingStrokes ?? []).isEmpty
+            && effets.locationObjects.isEmpty
+            && (effets.audioPlayerObjects ?? []).isEmpty
+    }
+
+    /// Le geste — et son indication — n'existent que sur une scène vide, viseur
+    /// éteint, aucun outil ouvert, dans un format qui a un viseur.
+    static func offers(sceneIsBlank: Bool,
+                       format: ComposerFormat,
+                       stage: ComposerSceneCameraStage,
+                       toolIsOpen: Bool) -> Bool {
+        sceneIsBlank && stage == .off && !toolIsOpen && !ComposerSceneCamera.modes(for: format).isEmpty
+    }
+
+    static func tap(format: ComposerFormat) -> Tap? {
+        let modes = ComposerSceneCamera.modes(for: format)
+        guard !modes.isEmpty else { return nil }
+        return modes.contains(.photo) ? .photo : .armOnly
+    }
+
+    static func release(isRecording: Bool, locked: Bool) -> Release {
+        guard isRecording else { return .cancelPending }
+        return locked ? .keepFilming : .closeTake
+    }
+
+    static func hint(format: ComposerFormat) -> Hint? {
+        switch tap(format: format) {
+        case .photo:   return .photoOrVideo
+        case .armOnly: return .videoOnly
+        case nil:      return nil
+        }
+    }
+
+    /// Le temps que l'exposition se pose après l'ouverture de la session : une
+    /// photo prise sur la première image sortirait sombre.
+    static let exposureSettle: TimeInterval = 0.35
+
+    /// Au-delà, la caméra ne viendra pas (simulateur, matériel occupé) : le
+    /// viseur reste ouvert, et son propre déclencheur prend le relais.
+    static let readinessTimeout: TimeInterval = 3
 }

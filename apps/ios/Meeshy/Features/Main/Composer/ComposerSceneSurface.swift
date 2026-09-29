@@ -133,6 +133,10 @@ struct ComposerSceneSurface: View {
     /// nommé est un contrat.
     var cameraStage: ComposerSceneCameraStage = .off
 
+    /// **L'indication grise d'une scène vide** (#8653) — déjà résolue par le
+    /// meuble (`ComposerSceneQuickCapture`). `nil` ⇒ rien à dire.
+    var quickCaptureHint: ComposerSceneQuickCapture.Hint?
+
     // MARK: - Les deux rails
 
     /// **Ce que le rail *leading* montre** — déjà résolu par
@@ -691,6 +695,9 @@ struct ComposerSceneSurface: View {
         // diverger.
         .padding(.horizontal, edge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay {
+            if let quickCaptureHint { ComposerSceneQuickCaptureHint(hint: quickCaptureHint) }
+        }
         // **La surface PUBLIE la place du viseur, elle ne le peint pas**
         // (#4080, directive porteur 2026-09-04). Le meuble le monte une seule
         // fois ; `Color.clear` + `aspectRatio(.fit)` reproduit exactement le
