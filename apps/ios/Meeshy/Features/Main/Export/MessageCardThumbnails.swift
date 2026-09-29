@@ -27,7 +27,7 @@ final class MessageCardThumbnailStore {
         cache.object(forKey: key as NSString)
     }
 
-    func image(_ key: String, input: MessageCardInput, width: Double, displayScale: Double) async -> UIImage? {
+    func image(_ key: String, input: MessageCardInput, width: Double, displayScale: Double, pictures: MessageCardPictures) async -> UIImage? {
         if let hit = cached(key) { return hit }
         await gate.enter()
         guard !Task.isCancelled else {
@@ -35,7 +35,7 @@ final class MessageCardThumbnailStore {
             return nil
         }
         let image = await Task.detached(priority: .utility) {
-            MessageCardRenderer.thumbnail(input, width: width, displayScale: displayScale)
+            MessageCardRenderer.thumbnail(input, width: width, displayScale: displayScale, pictures: pictures)
         }.value
         await gate.leave()
         if let image { cache.setObject(image, forKey: key as NSString) }
@@ -75,10 +75,15 @@ struct MessageCardThumbSource {
     let store: MessageCardThumbnailStore
     let keyOf: (MessageCardTemplateID) -> String
     let inputOf: (MessageCardTemplateID) -> MessageCardInput
+    /// Les pixels des médias — la vignette montre la MÊME carte que l'image exportée.
+    let pictures: MessageCardPictures
 }
 
 /// Une vignette de template — en attendant sa peinture, le fond de sa palette
 /// et un « Aa » dans sa police : jamais un carré vide, jamais un saut.
+///
+/// La carte entière tient dans la tuile (#8692) : recadrée par le haut, une
+/// carte haute perdait sa liaison — le séparateur vit au milieu.
 struct MessageCardThumb: View {
     let id: MessageCardTemplateID
     let source: MessageCardThumbSource
@@ -100,9 +105,8 @@ struct MessageCardThumb: View {
                 if let image = image ?? source.store.cached(key) {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFill()
-                        .frame(width: width, height: width * 1.05, alignment: .top)
-                        .clipped()
+                        .scaledToFit()
+                        .frame(width: width, height: width * 1.05)
                 } else {
                     Text(verbatim: "Aa")
                         .font(MessageCardFontStyle.font(id.typeface.typeface.replyFace, size: 22))
@@ -123,7 +127,7 @@ struct MessageCardThumb: View {
         .task(id: key) {
             image = source.store.cached(key)
             guard image == nil else { return }
-            let painted = await source.store.image(key, input: source.inputOf(id), width: Double(width), displayScale: Double(displayScale))
+            let painted = await source.store.image(key, input: source.inputOf(id), width: Double(width), displayScale: Double(displayScale), pictures: source.pictures)
             if !Task.isCancelled { image = painted }
         }
     }

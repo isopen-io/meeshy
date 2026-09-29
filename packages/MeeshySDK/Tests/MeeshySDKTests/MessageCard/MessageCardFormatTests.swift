@@ -49,11 +49,11 @@ struct MessageCardFormatTests {
 
     @Test func format_offersTheTitleOnlyWhenItExists_andAnonymityOnlyForAPaintedName() {
         let initial = MessageCardFormat.initial
-        #expect(initial.offeredToggles(hasConversationTitle: true, hasQuote: true) == [.showConversationTitle, .showAuthors, .showDate, .anonymizeQuoted, .anonymizeReply])
-        #expect(initial.offeredToggles(hasConversationTitle: false, hasQuote: false) == [.showAuthors, .showDate, .anonymizeReply])
+        #expect(initial.offeredToggles(hasConversationTitle: true, hasQuote: true) == [.showConversationTitle, .showAuthors, .anonymizeQuoted, .anonymizeReply])
+        #expect(initial.offeredToggles(hasConversationTitle: false, hasQuote: false) == [.showAuthors, .anonymizeReply])
         var hidden = initial
         hidden[.showAuthors] = false
-        #expect(hidden.offeredToggles(hasConversationTitle: false, hasQuote: true) == [.showAuthors, .showDate])
+        #expect(hidden.offeredToggles(hasConversationTitle: false, hasQuote: true) == [.showAuthors])
     }
 
     // MARK: - Usage

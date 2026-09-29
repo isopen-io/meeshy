@@ -742,8 +742,8 @@
       "pattern": "^assets/catalog-export-card-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 9,
-        "status": "CIBLE -- MESUREE PAR #8667, NON ARBITREE",
+        "value": 12,
+        "status": "REMESURE PAR « IMAGER » (#8693) -- 10,97 Ko gzip -9 pour les sept catalogues (`bun run build` puis `node scripts/measure-weight.mjs`, le 2026-09-29) : l atelier « Imagine » gagne l onglet Frame (format de l image, en-tete couche, noms, rotation, heures, pseudo, anonymat), l onglet Medias (disposition des images, representation de l audio), le choix Image · GIF · Video et leurs annonces -- 43 cles, chacune payee SEPT fois, un lecteur n en telechargeant qu UN. Plafond porte a ceil(10,97) + 1 = 12. PRECEDENT : CIBLE -- MESUREE PAR #8667, NON ARBITREE",
         "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 7,52 Ko pour les SEPT catalogues du composer d export en image (`export.card.*` et `export.announce.*` : onglets du plateau, parties touchables de la carte, galerie et sa recherche, tons, typographies, liaisons, options, format par defaut, annonces). Charges avec la feuille d export seulement, au premier « Exporter en image » (`routes/thread-sheets.tsx`, `lib/i18n-export-card-catalog.ts`) ; un lecteur n en telecharge qu UN. POURQUOI UN CATALOGUE A PART : le composer tactile ajoutait 0,74 Ko au-dela du plafond de `interface_catalogs` (161) ; il en sort toute la famille, ce qui ramene les catalogues d interface a 156,5 Ko. Arrondi au Ko SUPERIEUR (8) + 1 Ko de marge."
       }
     },

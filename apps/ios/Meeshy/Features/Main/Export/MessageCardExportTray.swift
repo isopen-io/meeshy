@@ -2,11 +2,12 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **LE PLATEAU DU COMPOSER D'EXPORT** — miroir de
+/// **LE PLATEAU DE L'ATELIER « IMAGINE »** — miroir de
 /// `apps/web/src/routes/thread-export-tray.tsx`. Une surface Liquid Glass sous
 /// l'aperçu, qui ne montre qu'UN panneau à la fois : les styles tout faits,
-/// le fond, la police, la liaison, les détails, la langue. Toucher une partie
-/// de la carte ouvre l'onglet qui la règle ; l'onglet se choisit aussi à la main.
+/// le format de l'image, la disposition (« Frame »), le fond, la police, la
+/// liaison, les médias, les détails, la langue. Toucher une partie de la carte
+/// ouvre l'onglet qui la règle ; l'onglet se choisit aussi à la main.
 ///
 /// Les tuiles du plateau ne sont PAS en verre : on ne pose pas de verre sur du
 /// verre. Elles sont teintées de l'encre du système, et l'élu se reconnaît à
@@ -19,6 +20,10 @@ struct MessageCardExportTray: View {
     let popular: [MessageCardTemplateID]
     let hasQuote: Bool
     let hasTitle: Bool
+    /// Le pseudo des auteurs est connu : « pseudo au lieu du nom » s'offre.
+    let hasHandles: Bool
+    /// Les médias du contenu — « Médias » ne propose que ce qui a un effet.
+    let mediaKinds: [MessageCardMediaKind]
     let languages: [String]
     @Binding var exportLanguage: String?
     let thumbs: MessageCardThumbSource
@@ -70,9 +75,12 @@ struct MessageCardExportTray: View {
     private var panel: some View {
         switch tab {
         case .styles: stylesPanel
+        case .format: formatPanel
+        case .frame: framePanel
         case .palette: palettePanel
         case .typeface: typefacePanel
         case .link: linkPanel
+        case .media: mediaPanel
         case .details: detailsPanel
         case .language: languagePanel
         }
@@ -193,7 +201,7 @@ struct MessageCardExportTray: View {
 
     // MARK: - Briques
 
-    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 10) { content() }
                 .padding(.horizontal, 16)
@@ -201,7 +209,7 @@ struct MessageCardExportTray: View {
         }
     }
 
-    private func tile<Content: View>(
+    func tile<Content: View>(
         _ label: String,
         selected: Bool,
         action: @escaping () -> Void,
@@ -231,7 +239,7 @@ struct MessageCardExportTray: View {
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
-    private func pill(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    func pill(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.light()
             action()

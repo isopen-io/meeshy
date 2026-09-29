@@ -35,6 +35,8 @@ struct MessageMoreSheet: View {
     var onEdit: (() -> Void)? = nil
     var onCopy: (() -> Void)? = nil
     var onShare: (() -> Void)? = nil
+    /// « Imager » (#8692) — ouvre l'atelier « Imagine » une fois la feuille fermée.
+    var onImagine: (() -> Void)? = nil
     /// Ajout d'une réaction depuis la vue « Réactions » de « Plus… » (voir + ajouter).
     var onReact: ((String) -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
@@ -258,6 +260,14 @@ struct MessageMoreSheet: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedItem = (selectedItem == item) ? nil : item
             }
+        } else if item == .imager {
+            // L'atelier se présente APRÈS la fermeture de cette feuille : présenté
+            // pendant, il serait emporté avec elle (`MessageCardExportPresenter`
+            // attend la fin d'une fermeture en cours).
+            HapticFeedback.medium()
+            let open = onImagine
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { open?() }
         } else if item == .media {
             // Ouvre le sous-menu média (enregistrer / transférer / supprimer) —
             // jamais de suppression directe (feedback device 2026-07-14).
@@ -350,7 +360,7 @@ struct MessageMoreSheet: View {
         // `pinSticker`/`unpinSticker` FONT et ferment, comme leurs voisins :
         // épingler une décoration n'ouvre rien à explorer.
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
-             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share: return false
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -371,6 +381,7 @@ struct MessageMoreSheet: View {
         case .edit: return MeeshyColors.indigo500
         case .copy: return MeeshyColors.indigo400
         case .share: return MeeshyColors.info
+        case .imager: return MeeshyColors.indigo500
         case .language: return MeeshyColors.info
         case .views: return MeeshyColors.success
         case .reactions: return MeeshyColors.warning
@@ -450,7 +461,7 @@ struct MessageMoreSheet: View {
         case .report:
             MessageReportDetailView(onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
-             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share:
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager:
             EmptyView()
         }
     }
@@ -471,6 +482,7 @@ struct MessageMoreSheet: View {
         case .edit: return "pencil"
         case .copy: return "doc.on.doc"
         case .share: return "square.and.arrow.up"
+        case .imager: return MessageCardExportMenu.imageSymbol
         case .language: return "globe"
         case .views: return "eye"
         case .reactions: return "face.smiling"
@@ -502,6 +514,7 @@ struct MessageMoreSheet: View {
         case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
+        case .imager: return MessageCardExportMenu.imageLabel
         case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)
         case .views: return String(localized: "message-detail.tab.views", defaultValue: "Qui a vu", bundle: .main)
         case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Réactions", bundle: .main)
