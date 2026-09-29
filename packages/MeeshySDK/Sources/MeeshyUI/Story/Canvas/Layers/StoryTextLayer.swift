@@ -19,6 +19,15 @@ public final class StoryTextLayer: CATextLayer {
     nonisolated deinit {}
     public private(set) nonisolated(unsafe) var textObject: StoryTextObject?
 
+    /// **La taille de police PEINTE sur le canvas monté** — celle du calque ET
+    /// celle du champ de saisie en ligne (#8680). Une seule écriture : le texte
+    /// qu'on tape a la taille du texte qu'on publiera, et l'échelle de la carte
+    /// (`SceneCardProjection`) s'applique aux deux à la fois.
+    public nonisolated static func renderedFontSize(of text: StoryTextObject,
+                                                    in geometry: CanvasGeometry) -> CGFloat {
+        geometry.render(CGFloat(text.fontSize * text.scale))
+    }
+
     /// Backing layer placed behind the text glyphs when `backgroundStyle` is
     /// non-`.none`. For `.solid` this is a tinted CALayer; for `.glass` this is
     /// a `StoryGlassBackdropLayer` which routes through `StoryBlurFilter`
@@ -260,7 +269,7 @@ public final class StoryTextLayer: CATextLayer {
         }
 
         // Render-space font for actual painting — applique aussi le textStyle.
-        let renderedFontSize = geometry.render(designFontSize)
+        let renderedFontSize = Self.renderedFontSize(of: text, in: geometry)
         let renderedFont = StoryTextFontResolver.resolveFont(forTextObject: text, size: renderedFontSize)
         let renderedAttr = NSAttributedString(string: text.text, attributes: [
             .font: renderedFont,
