@@ -17,12 +17,13 @@ struct ConversationLinkCard: View {
     @StateObject private var model: ConversationLinkCardViewModel
     @State private var confirmsLeave = false
 
-    init(target: ConversationCardTarget, urlString: String, fallbackAccent: String, isDark: Bool) {
+    init(target: ConversationCardTarget, urlString: String, fallbackAccent: String, isDark: Bool,
+         model: @autoclosure @escaping () -> ConversationLinkCardViewModel? = nil) {
         self.target = target
         self.urlString = urlString
         self.fallbackAccent = fallbackAccent
         self.isDark = isDark
-        _model = StateObject(wrappedValue: ConversationLinkCardViewModel(target: target))
+        _model = StateObject(wrappedValue: model() ?? ConversationLinkCardViewModel(target: target))
     }
 
     var body: some View {

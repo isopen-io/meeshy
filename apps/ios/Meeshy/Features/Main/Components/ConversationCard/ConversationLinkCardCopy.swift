@@ -8,11 +8,24 @@ enum ConversationLinkCardCopy {
         String(localized: "conversationCard.invitesYou",
                defaultValue: "vous invite à rejoindre cette conversation", bundle: .main)
     }
-    static var join: String {
-        String(localized: "conversationCard.join", defaultValue: "Rejoindre", bundle: .main)
+    /// « Rejoindre ? » puis les deux choix compacts (#8726).
+    static var joinPrompt: String {
+        String(localized: "conversationCard.joinPrompt", defaultValue: "Rejoindre ?", bundle: .main)
     }
+    static var joinAsGuest: String {
+        String(localized: "conversationCard.joinChoice.anonymous", defaultValue: "Anonyme", bundle: .main)
+    }
+    static var joinWithAccount: String {
+        String(localized: "conversationCard.joinChoice.account", defaultValue: "Mon compte", bundle: .main)
+    }
+    /// Le libellé VoiceOver de chaque choix : la phrase ENTIÈRE, parce qu'un
+    /// « Anonyme » lu hors de sa question ne dit pas ce qu'il fait.
     static var joinAnonymously: String {
         String(localized: "conversationCard.joinAnonymously", defaultValue: "Rejoindre en anonyme", bundle: .main)
+    }
+    static var joinWithAccountA11y: String {
+        String(localized: "conversationCard.a11y.joinWithAccount",
+               defaultValue: "Rejoindre avec mon compte", bundle: .main)
     }
     static var leave: String {
         String(localized: "conversationCard.leave", defaultValue: "Quitter", bundle: .main)
