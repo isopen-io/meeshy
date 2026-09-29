@@ -1,14 +1,14 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
-import { SW_RUNTIME_CACHE_NAMES } from '@/lib/sw-caches';
-
+import { createAccountCacheShelf, type CacheStorageLike } from './account-caches';
 import { ApiError } from './client';
+import { apiConfig } from './config';
 import { resetAbsentMedia } from './media-absent';
 import { reactionStore } from './reaction-store';
 /* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
    depuis le socle sans y tirer les décodeurs d'administration (#6862). */
 import { estClefSouveraine } from './souverain';
-import { sessionStore, type SessionStoreApi, type SessionStoreState } from './session';
+import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
  * LE SOCLE DE TANSTACK QUERY (#5650, F5/F9) — ce module N'IMPORTE NI
@@ -152,74 +152,28 @@ export function persistableQuery(query: {
 
 export type CreateAppQueryClientOptions = {
   readonly storage?: StorageLike;
+  /** Le `buster` de l'identité COURANTE à la création. */
   readonly buster: string;
-  /** Le magasin de session — sa souscription PURGE le cache dès que
-   * l'identité change (déconnexion, ou changement de compte sur le même
-   * navigateur, D-6). Optionnel : un témoin qui ne teste que la
-   * persistance n'en a pas besoin. */
-  readonly session?: SessionStoreApi;
   /**
-   * LE STOCKAGE DU SERVICE WORKER — injecté pour être TÉMOIGNABLE ; le
-   * défaut est `globalThis.caches`, absent hors navigateur (et hors coque
-   * Capacitor, où aucun service worker n'est enregistré : `keys()` rend
-   * alors une liste vide, et la purge ne fait rien).
+   * Le `buster` d'un compte (`null` = aucun compte) — relu à chaque
+   * changement d'identité (#8674) : c'est lui qui scelle le cache RANGÉ d'un
+   * compte quitté et qui le revérifie à son retour. Défaut : le `buster`
+   * initial suffixé du compte.
    */
-  readonly cacheStorage?: CacheStorageLike;
+  readonly busterOf?: (userId: string | null) => string;
+  /** Le magasin de session — sa souscription VIDE le cache en mémoire dès
+   * que l'identité change (D-6), RANGE celui du compte quitté et REPREND
+   * celui du compte qui revient (#8674). Optionnel : un témoin qui ne teste
+   * que la persistance n'en a pas besoin. */
+  readonly session?: SessionStoreApi;
 };
 
-export type CacheStorageLike = {
-  keys(): Promise<readonly string[]>;
-  delete(cacheName: string): Promise<boolean>;
-};
+export { purgeReaderCaches, type CacheStorageLike } from './account-caches';
 
-/**
- * LES SEAUX DU SERVICE WORKER QUI PORTENT DE LA DONNÉE DE LECTEUR — les
- * noms de `runtimeCaching` (`vite.config.ts` § VitePWA) : `api` (les
- * réponses `/api/**` en NetworkFirst, 200 entrées, SEPT JOURS) et `medias`
- * (les images en CacheFirst, TRENTE jours). Le seau de PRÉCACHE
- * (`workbox-precache-*`) n'y est PAS : il ne contient que le shell, le même
- * pour tout le monde.
- *
- * **LU, jamais recopié** (#6936) : les mêmes noms sont créés par
- * `vite.config.ts` et purgés par la mise à jour de l'application
- * (`lib/app-update/service-worker.ts`). Trois littéraux auraient divergé au
- * premier seau ajouté — et une purge qui ne nomme plus un seau existant est
- * silencieuse.
- */
-const READER_SCOPED_SW_CACHES = SW_RUNTIME_CACHE_NAMES;
-
-/**
- * `purgeReaderCaches` — CE QUI PART À CÔTÉ DU CACHE DE REQUÊTES (#5650,
- * revue-correction).
- *
- * Câbler la passerelle a fait entrer, pour la PREMIÈRE fois, des réponses
- * d'API dans le `runtimeCaching` du service worker : la liste des
- * conversations et les pages de messages d'un lecteur vivent désormais dans
- * `caches.open('api')`, sur le DISQUE, sept jours durant. Le `buster` par
- * identité ci-dessous protégeait soigneusement le cache TanStack et le
- * `localStorage` — et laissait ce seau-là intact : sur un réseau lent
- * (`networkTimeoutSeconds: 3`) ou hors ligne, le NetworkFirst du service
- * worker aurait resservi la liste du compte PRÉCÉDENT au compte suivant sur
- * le même appareil.
- *
- * « Une protection de contenu se mesure sur tout ce que la charge
- * TRANSPORTE » (CLAUDE.md § Prisme, cycle 125) : la purge se pose sur TOUS
- * les seaux à portée de lecteur, jamais sur celui qu'on vient d'écrire.
- * Best-effort et silencieuse : une purge qui échoue ne doit pas empêcher la
- * déconnexion, qui a déjà retiré le jeton.
- */
-export function purgeReaderCaches(storage?: CacheStorageLike): void {
-  const store = storage ?? (globalThis as { caches?: CacheStorageLike }).caches;
-  if (store === undefined) return;
-  void store
-    .keys()
-    .then((names) =>
-      Promise.all(
-        names.filter((name) => READER_SCOPED_SW_CACHES.some((c) => name === c)).map((name) => store.delete(name)),
-      ),
-    )
-    .catch(() => undefined);
-}
+/** Le compte d'une session — `null` pour un invité ou personne : seul un
+ * COMPTE a un cache rangé (un invité quitté est oublié, comme avant). */
+const accountOf = (session: SessionState): string | null =>
+  session.status === 'authenticated' ? session.user.id : null;
 
 /**
  * `createAppQueryClient` — FABRIQUE testable (motif `createSessionStore`) :
@@ -227,7 +181,9 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
  */
 export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQueryClient {
   const storage = options.storage ?? browserStorage();
-  const { buster } = options;
+  const busterOf = options.busterOf ?? ((userId: string | null) => `${options.buster}|${userId ?? 'anonymous'}`);
+  const shelf = createAccountCacheShelf(storage);
+  let buster = options.buster;
 
   const client = new QueryClient({
     defaultOptions: {
@@ -241,41 +197,58 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     },
   }) as AppQueryClient;
 
-  // RESTAURATION SYNCHRONE — avant que le premier composant ne s'abonne.
-  try {
-    const raw = storage.getItem(CACHE_KEY);
-    if (raw !== null) {
+  /** Hydrate depuis une entrée SÉRIALISÉE si elle porte le `buster` attendu —
+   * `false` sinon (absente, périmée, corrompue) : rien n'est alors restauré. */
+  const restoreFrom = (raw: string | null, expected: string): boolean => {
+    if (raw === null) return false;
+    try {
       const parsed: unknown = JSON.parse(raw);
-      if (isPersistedCache(parsed) && parsed.buster === buster) {
-        hydrate(client, parsed.state);
-        // « MES RÉACTIONS », SUR LA MÊME HORLOGE (revue #5814, défaut
-        // majeur 5) — restaurée dans le MÊME bloc, sous la MÊME garde de
-        // `buster`, pour que les deux moitiés d'un même fait naissent et
-        // meurent ensemble. `?? {}` : un cache antérieur à ce correctif
-        // n'a pas ce champ.
-        reactionStore.setState({ mine: parsed.reactions ?? {} });
-      } else {
-        storage.removeItem(CACHE_KEY);
-      }
+      if (!isPersistedCache(parsed) || parsed.buster !== expected) return false;
+      hydrate(client, parsed.state);
+      // « MES RÉACTIONS », SUR LA MÊME HORLOGE (revue #5814, défaut
+      // majeur 5) — restaurée dans le MÊME bloc, sous la MÊME garde de
+      // `buster`, pour que les deux moitiés d'un même fait naissent et
+      // meurent ensemble. `?? {}` : un cache antérieur à ce correctif
+      // n'a pas ce champ.
+      reactionStore.setState({ mine: parsed.reactions ?? {} });
+      return true;
+    } catch {
+      return false;
     }
-  } catch {
-    // JSON corrompu, ou storage qui lance à la lecture : on repart d'un
-    // cache vide plutôt que de faire échouer le démarrage de l'application.
+  };
+
+  const serialize = (sealedWith: string): string => {
+    const state = dehydrate(client, { shouldDehydrateQuery: persistableQuery });
+    const reactions = reactionStore.getState().mine;
+    return JSON.stringify({ buster: sealedWith, state, reactions });
+  };
+
+  const removeActive = (): void => {
     try {
       storage.removeItem(CACHE_KEY);
     } catch {
       /* rien de plus à faire */
     }
-  }
+  };
+
+  // RESTAURATION SYNCHRONE — avant que le premier composant ne s'abonne.
+  // JSON corrompu, `buster` étranger ou storage qui lance : on repart d'un
+  // cache vide plutôt que de faire échouer le démarrage de l'application.
+  const initial = ((): string | null => {
+    try {
+      return storage.getItem(CACHE_KEY);
+    } catch {
+      return null;
+    }
+  })();
+  if (initial !== null && !restoreFrom(initial, buster)) removeActive();
 
   let persistenceHalted = false;
 
   const persist = (): void => {
     if (persistenceHalted) return;
     try {
-      const state = dehydrate(client, { shouldDehydrateQuery: persistableQuery });
-      const reactions = reactionStore.getState().mine;
-      storage.setItem(CACHE_KEY, JSON.stringify({ buster, state, reactions }));
+      storage.setItem(CACHE_KEY, serialize(buster));
     } catch {
       /* Stockage refusé (quota, navigation privée) : le cache tient pour
        * l'onglet, sans se souvenir — même doctrine que `session.ts`. */
@@ -294,11 +267,10 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   client.discardPersisted = (): void => {
     persistenceHalted = true;
     if (debounceHandle !== undefined) clearTimeout(debounceHandle);
-    try {
-      storage.removeItem(CACHE_KEY);
-    } catch {
-      /* Stockage refusé : il n'y a rien de persisté à jeter. */
-    }
+    removeActive();
+    // L'ÉTAGÈRE AUSSI (#8674) : les caches rangés des autres comptes portent
+    // les formes de données de la version qui s'en va.
+    shelf.forgetAll();
   };
 
   client.getQueryCache().subscribe(schedulePersist);
@@ -322,37 +294,56 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
 
   if (options.session !== undefined) {
     const session = options.session;
-    const identityOf = (state: SessionStoreState): string | null => {
-      const s = state.session;
-      return s.status === 'authenticated' ? s.user.id : null;
-    };
-    let lastIdentity = identityOf(session.getState());
+    let lastIdentity = sessionIdentityKey(session.getState().session);
+    let lastAccount = accountOf(session.getState().session);
+    /*
+     * LE CHANGEMENT D'IDENTITÉ (D-6, #8674) — SYNCHRONE : `establish(B)`
+     * notifie ici avant de rendre la main, donc avant que le moindre écran de
+     * B ne lise le cache. Dans l'ordre :
+     *  1. le cache d'A (encore seul en mémoire) est RANGÉ sous la clé d'A —
+     *     jamais sous celle de B ; un invité quitté n'est pas rangé ;
+     *  2. la mémoire est VIDÉE (cache, « mes réactions », médias absents) ;
+     *  3. le cache rangé de B, s'il existe et porte son `buster`, est REPRIS
+     *     et redevient le cache actif — périmé, donc relu au montage : B voit
+     *     sa liste à l'instant, le réseau ne resynchronise que l'écart.
+     * Une requête d'A encore en vol ne peut plus rien y écrire : le transport
+     * ne la résout jamais (`http.ts`, `identity`). Les seaux du service worker
+     * ne sont plus purgés ici : le seau `api` range chaque réponse sous
+     * l'identité qui l'a demandée (`net/api-cache-identity.ts`), et ce qui les
+     * vide est la FIN d'un compte (`account-caches.ts#forgetAccountCaches`).
+     */
     session.subscribe((state) => {
-      const identity = identityOf(state);
+      const identity = sessionIdentityKey(state.session);
       if (identity === lastIdentity) return;
+      const leaving = lastAccount;
+      const arriving = accountOf(state.session);
       lastIdentity = identity;
+      lastAccount = arriving;
+
+      if (debounceHandle !== undefined) clearTimeout(debounceHandle);
+      if (leaving !== null && !persistenceHalted) {
+        try {
+          shelf.put(leaving, serialize(busterOf(leaving)));
+        } catch {
+          /* Déshydratation impossible : le compte quitté repartira du réseau. */
+        }
+      }
+      removeActive();
+
       client.clear();
       // « MES RÉACTIONS » DE L'IDENTITÉ PRÉCÉDENTE (revue #5814, défaut
-      // majeur 5, D-6) — sans cette ligne, `reactionStore` restait en
-      // MÉMOIRE (module-level, jamais démonté) au-delà de la purge du
-      // cache : un compte SUIVANT sur le même navigateur aurait hérité des
-      // emojis « miens » du compte PRÉCÉDENT tant qu'aucune réaction
-      // nouvelle n'écrasait la carte.
+      // majeur 5, D-6) — `reactionStore` vit en MÉMOIRE (module-level,
+      // jamais démonté) au-delà du cache : sans cette ligne, le compte
+      // SUIVANT hériterait des emojis « miens » du compte PRÉCÉDENT.
       reactionStore.setState({ mine: {} });
-      // LE REGISTRE DES MÉDIAS ABSENTS DE L'IDENTITÉ PRÉCÉDENTE (#7022 suivi,
-      // revue adversariale 2026-09-18) — même défaut que `reactionStore`
-      // ci-dessus, une ligne plus haut : un média REFUSÉ (403) à A restait
-      // gravé absent pour B, connecté ENSUITE dans le même onglet, alors que
-      // B a parfaitement le droit de le voir. `resetAbsentMedia` est un
-      // module-level singleton (`lib/api/media-absent.ts`), comme
-      // `reactionStore` — sans cette ligne, il survit à la purge du cache.
+      // LE REGISTRE DES MÉDIAS ABSENTS DE L'IDENTITÉ PRÉCÉDENTE (#7022 suivi)
+      // — un média REFUSÉ (403) à A ne doit pas rester gravé absent pour B,
+      // qui a peut-être le droit de le voir.
       resetAbsentMedia();
-      try {
-        storage.removeItem(CACHE_KEY);
-      } catch {
-        /* rien de plus à faire */
-      }
-      purgeReaderCaches(options.cacheStorage);
+
+      buster = busterOf(arriving);
+      if (arriving === null || persistenceHalted) return;
+      if (restoreFrom(shelf.take(arriving), buster)) persist();
     });
   }
 
@@ -389,10 +380,18 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
  */
 export const CACHE_SCHEMA = 3;
 
+/**
+ * Le `buster` d'un compte — la VERSION, le SCHÉMA, l'ORIGINE de l'API (#8674 :
+ * un même identifiant sur une autre passerelle n'est pas le même compte) et
+ * le compte. Scelle le cache actif ET le cache rangé d'un compte quitté.
+ */
+function busterFor(userId: string | null): string {
+  return `${__APP_VERSION__}:${CACHE_SCHEMA}:${apiConfig.base}:${userId ?? 'anonymous'}`;
+}
+
 function currentBuster(): string {
   const session = sessionStore.getState().session;
-  const userId = session.status === 'authenticated' ? session.user.id : 'anonymous';
-  return `${__APP_VERSION__}:${CACHE_SCHEMA}:${userId}`;
+  return busterFor(session.status === 'authenticated' ? session.user.id : null);
 }
 
 /**
@@ -409,4 +408,8 @@ function currentBuster(): string {
  */
 sessionStore.getState().restoreSession();
 
-export const appQueryClient: AppQueryClient = createAppQueryClient({ buster: currentBuster(), session: sessionStore });
+export const appQueryClient: AppQueryClient = createAppQueryClient({
+  buster: currentBuster(),
+  busterOf: busterFor,
+  session: sessionStore,
+});

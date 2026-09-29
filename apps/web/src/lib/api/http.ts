@@ -166,6 +166,14 @@ export type HttpRequest = {
 export type HttpTransportOptions = {
   readonly base: string;
   readonly credential?: () => Credential | null;
+  /**
+   * QUI parle — une clé d'identité stable (le compte, pas son jeton), relue
+   * au départ ET à l'arrivée de chaque requête (#8674). Une réponse obtenue
+   * avec le crédential d'une identité qui n'est plus la courante ne se résout
+   * JAMAIS : ni son `queryFn` ni le rollback d'une mutation de l'identité
+   * précédente ne s'exécutent sous la suivante.
+   */
+  readonly identity?: () => string | null;
   readonly deviceLocale?: () => string | null;
   /** Notifié sur un 401 PORTANT un crédential, et seulement là. Un 403
    * (interdit) ou un 500 (panne) ne disent rien du jeton courant — et un 401
@@ -311,6 +319,15 @@ function abortCode(
   return undefined;
 }
 
+/**
+ * LA RÉPONSE D'UNE IDENTITÉ QUITTÉE (#8674) — une promesse qui ne se résout
+ * jamais. Ni succès (son `queryFn` écrirait la donnée d'A dans le cache de
+ * B), ni échec (le rollback d'une mutation d'A y recopierait l'instantané
+ * d'A) : rien de ce qui attend cette réponse ne s'exécute sous B. Personne ne
+ * la retient une fois son appelant démonté ; elle part avec lui.
+ */
+const NEVER: Promise<never> = new Promise<never>(() => undefined);
+
 export function createHttpTransport(options: HttpTransportOptions): HttpTransport {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -320,6 +337,12 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     const locale = options.deviceLocale?.() ?? null;
     const credential = options.credential?.() ?? null;
     const presentsIdentity = credential !== null || namesAnIdentity(req.headers);
+    const issuedUnder = options.identity?.() ?? null;
+    const identityChanged = (): boolean => options.identity !== undefined && options.identity() !== issuedUnder;
+    /** La charge d'une identité quittée — seulement quand CE transport a
+     * présenté le crédential de session : une requête publique ne porte
+     * rien de personnel. */
+    const staleForReader = (): boolean => credential !== null && identityChanged();
     /**
      * UN CORPS `FormData` (#5668, upload multipart) NE POSE JAMAIS SON PROPRE
      * `Content-Type` : c'est le NAVIGATEUR qui doit l'écrire, `boundary`
@@ -346,6 +369,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ...(req.body !== undefined ? { body: formBody ?? JSON.stringify(req.body) } : {}),
       });
     } catch (error) {
+      if (staleForReader()) return NEVER;
       const code = abortCode(error, { callerSignal: req.signal, timeoutSignal });
       return {
         ok: false,
@@ -355,7 +379,11 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       };
     }
 
-    if (response.status === 401 && presentsIdentity) options.onUnauthorized?.();
+    if (staleForReader()) return NEVER;
+    /* Un 401 ne dit rien de l'identité COURANTE si elle n'est plus celle qui
+       a demandé : la déconnexion d'A, rejouée sur ses en-têtes explicites, ne
+       ferme jamais la session de B ouverte entre-temps. */
+    if (response.status === 401 && presentsIdentity && !identityChanged()) options.onUnauthorized?.();
 
     let payload: unknown;
     try {
@@ -363,6 +391,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     } catch {
       payload = undefined;
     }
+    if (staleForReader()) return NEVER;
     const envelope = envelopeOf(payload);
 
     if (envelope.success === true) {
