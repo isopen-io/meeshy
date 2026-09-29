@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { layoutMessageCard, type MessageCardInput } from './message-card-layout';
-import { loadCardFonts, paintMessageCard } from './message-card-paint';
+import { loadCardFonts, paintMessageCard, strokeFloorAt } from './message-card-paint';
 import { CARD_PALETTES, templateOf } from './message-card-templates';
 
 type Painted = { readonly text: string; readonly font: string; readonly alpha: number };
@@ -10,6 +10,10 @@ type Painted = { readonly text: string; readonly font: string; readonly alpha: n
 function recordingContext() {
   const painted: Painted[] = [];
   const calls: string[] = [];
+  const drawn: number[][] = [];
+  /** Chaque trait tiré : son épaisseur et son pointillé au moment du `stroke()`. */
+  const strokes: { readonly lineWidth: number; readonly dash: readonly number[] }[] = [];
+  let dash: readonly number[] = [];
   const gradient = { addColorStop: () => {} };
   const ctx = {
     fillStyle: '' as string | CanvasGradient | CanvasPattern,
@@ -30,9 +34,14 @@ function recordingContext() {
     arc: () => calls.push('arc'),
     moveTo: () => {},
     lineTo: () => {},
-    stroke: () => calls.push('stroke'),
+    stroke() {
+      strokes.push({ lineWidth: this.lineWidth, dash });
+      calls.push('stroke');
+    },
     fill: () => calls.push('fill'),
-    setLineDash: () => {},
+    setLineDash: (next: number[]) => {
+      dash = next;
+    },
     save() {
       calls.push('save');
     },
@@ -41,12 +50,18 @@ function recordingContext() {
       calls.push('restore');
     },
     translate: () => {},
-    rotate: () => {},
+    rotate: (angle: number) => calls.push(`rotate:${angle}`),
     createLinearGradient: () => gradient as unknown as CanvasGradient,
     createRadialGradient: () => gradient as unknown as CanvasGradient,
     roundRect: () => calls.push('roundRect'),
+    closePath: () => calls.push('closePath'),
+    clip: () => calls.push('clip'),
+    drawImage(...args: unknown[]) {
+      drawn.push(args.slice(1).map(Number));
+      calls.push('drawImage');
+    },
   };
-  return { ctx, painted, calls };
+  return { ctx, painted, calls, drawn, strokes };
 }
 
 const input: MessageCardInput = {
@@ -107,6 +122,59 @@ describe('paintMessageCard — ce que l’image porte réellement', () => {
     const fil = recordingContext();
     paintMessageCard(fil.ctx, layoutOf({ template: 'manuscrit.plume.fil' }), templateOf('manuscrit.plume.fil'));
     expect(fil.calls.includes('arc')).toBe(true);
+  });
+});
+
+describe('la MINIATURE et l’IMAGE — un seul moteur (#8693)', () => {
+  const THUMB_SCALE = 240 / 1080;
+
+  test('le séparateur de la miniature est le MÊME trait que celui de l’image, relevé au pixel d’écran', () => {
+    const full = recordingContext();
+    const thumb = recordingContext();
+    const layout = layoutOf();
+    paintMessageCard(full.ctx, layout, templateOf(input.template));
+    paintMessageCard(thumb.ctx, layout, templateOf(input.template), { strokeFloor: strokeFloorAt(THUMB_SCALE) });
+    expect(thumb.calls.filter((call) => call === 'stroke').length).toBe(full.calls.filter((call) => call === 'stroke').length);
+    const [line] = thumb.strokes;
+    expect(line).toBeDefined();
+    expect((line?.lineWidth ?? 0) * THUMB_SCALE).toBeGreaterThanOrEqual(1.5);
+    const [fullLine] = full.strokes;
+    expect(fullLine?.lineWidth).toBe(3);
+    const ratio = (line?.lineWidth ?? 0) / (fullLine?.lineWidth ?? 1);
+    expect(line?.dash).toEqual((fullLine?.dash ?? []).map((length) => length * ratio));
+  });
+
+  test('à pleine taille, aucun trait n’est épaissi', () => {
+    expect(strokeFloorAt(1)).toBe(0);
+    expect(strokeFloorAt(2)).toBe(0);
+  });
+
+  test('une image jointe est posée en « cover » dans son cadre, rognée à ses coins arrondis', () => {
+    const { ctx, calls, drawn } = recordingContext();
+    const layout = layoutOf({ quoted: null, media: [{ kind: 'image', width: 2000, height: 1000 }] });
+    const frame = layout.ops.find((op) => op.kind === 'media');
+    paintMessageCard(ctx, layout, templateOf(input.template), { sources: [{ width: 2000, height: 1000 } as unknown as CanvasImageSource] });
+    expect(calls).toContain('clip');
+    const [, , w = 0, h = 0] = drawn[0] ?? [];
+    expect(frame?.kind).toBe('media');
+    if (frame?.kind !== 'media') return;
+    expect(h).toBeCloseTo(frame.height, 5);
+    expect(w).toBeGreaterThanOrEqual(frame.width);
+  });
+
+  test('un média encore absent laisse un cadre neutre, jamais un trou', () => {
+    const { ctx, calls } = recordingContext();
+    paintMessageCard(ctx, layoutOf({ quoted: null, media: [{ kind: 'video', width: 16, height: 9 }] }), templateOf(input.template));
+    expect(calls).not.toContain('drawImage');
+    expect(calls).toContain('clip');
+    expect(calls).toContain('closePath');
+  });
+
+  test('la rotation du message tourne le contenu, pas le fond', () => {
+    const { ctx, calls } = recordingContext();
+    paintMessageCard(ctx, layoutOf({ frame: { header: 'horizontal', authors: 'top', tilt: 'right' } }), templateOf(input.template));
+    expect(calls.filter((call) => call.startsWith('rotate:')).map((call) => Number(call.slice(7)))).toContain(Math.PI / 60);
+    expect(calls.indexOf('fillRect')).toBeLessThan(calls.findIndex((call) => call === `rotate:${Math.PI / 60}`));
   });
 });
 
