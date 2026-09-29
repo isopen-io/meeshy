@@ -891,6 +891,7 @@ struct MeeshyComposerHost: View {
     /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
     /// zone contextuelle restant montée pour toujours.
     func handleSceneBackgroundTap() {
+        if handleSceneQuickTap() { return }
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia

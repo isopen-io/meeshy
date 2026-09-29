@@ -43,31 +43,45 @@ extension MeeshyComposerHost {
         ) else { return }
         HapticFeedback.medium()
         armSceneCamera()
-        // **Le geste ne s'arrête pas à l'armement** (directive porteur
-        // 2026-09-04) :
-        //
-        // > « il faut que le simple longpress déclenche la photo et non pas
-        // > juste l'objectif, si on a un vrai longpress ça déclenche la capture
-        // > vidéo avec le chrono et indicateur »
-        //
-        // L'appui long ARME et VISE ; c'est sa LEVÉE qui décide. Un doigt
-        // relâché tôt rend une photo, un doigt qui tient bascule en vidéo. La
-        // loi est celle de l'obturateur de la barre — `ComposerShutterGesture`,
-        // le site unique (#5074) — et non un second seuil écrit ici : deux
-        // seuils pour un même verbe divergent au premier réglage.
+        // **L'appui long OUVRE ET FILME** (#8653, directive porteur
+        // 2026-09-29 : « longpress ouvre et lance la vidéo »). Il n'y a plus de
+        // seuil à franchir en tenant : la prise part dès que la session peut
+        // écrire, et dure tant que le doigt reste. La photo a son propre geste,
+        // le toucher (`handleSceneQuickTap`).
         sceneHoldStartedAt = Date()
         sceneHoldTask?.cancel()
-        // Un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
-        // MOUVEMENT. Un doigt parfaitement immobile — le cas nominal quand on
-        // cadre — ne réveillerait personne, et la vidéo ne partirait jamais.
-        // C'est l'horloge qui la déclenche, pas le geste.
         sceneHoldTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds:
-                UInt64(ComposerShutterGesture.holdToFilm * 1_000_000_000))
-            guard !Task.isCancelled, sceneHoldStartedAt != nil else { return }
+            guard await sceneCamera.waitUntilCaptureReady(
+                timeout: ComposerSceneQuickCapture.readinessTimeout),
+                  sceneHoldStartedAt != nil else { return }
             HapticFeedback.medium()
             startSceneFilming()
         }
+    }
+
+    /// **Un toucher sur une scène VIDE ouvre le viseur ET prend la photo**
+    /// (#8653). Rend `true` quand il a pris le geste — le tap de sélection du
+    /// fond n'a alors rien à faire : il n'y a rien à sélectionner.
+    func handleSceneQuickTap() -> Bool {
+        guard ComposerSceneQuickCapture.offers(
+            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
+            format: selectedFormat,
+            stage: sceneCameraStage,
+            toolIsOpen: sceneToolOwnsScreen),
+              let geste = ComposerSceneQuickCapture.tap(format: selectedFormat) else { return false }
+        HapticFeedback.light()
+        armSceneCamera()
+        guard geste == .photo else { return true }
+        sceneHoldTask?.cancel()
+        sceneHoldTask = Task { @MainActor in
+            guard await sceneCamera.waitUntilCaptureReady(
+                timeout: ComposerSceneQuickCapture.readinessTimeout) else { return }
+            try? await Task.sleep(nanoseconds:
+                UInt64(ComposerSceneQuickCapture.exposureSettle * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            takeScenePhoto()
+        }
+        return true
     }
 
     /// **Le doigt glisse pendant la prise : à DROITE, il la verrouille.**
@@ -100,16 +114,16 @@ extension MeeshyComposerHost {
         // n'applique que ses trois gardes, la clause « scène vide » vit ici.
         // Sans ce témoin de début, cette fin poserait une photo que personne
         // n'a armée — et sur une scène qui a déjà un fond.
-        guard let debut = sceneHoldStartedAt else { return }
+        guard sceneHoldStartedAt != nil else { return }
         sceneHoldStartedAt = nil
-        switch ComposerShutterGesture.outcome(
-            heldFor: Date().timeIntervalSince(debut),
+        switch ComposerSceneQuickCapture.release(
+            isRecording: sceneCameraStage == .recording,
             locked: sceneCameraMode == ComposerShutterGesture.mode(locked: true)) {
-        case .photo:
-            takeScenePhoto()
         case .closeTake:
             closeSceneTake()
-        case .keepFilming:
+        case .keepFilming, .cancelPending:
+            // Parti avant que la caméra soit prête : le viseur reste ouvert,
+            // son déclencheur prend le relais — rien n'est pris à sa place.
             break
         }
     }
@@ -158,7 +172,33 @@ extension MeeshyComposerHost {
         guard sceneCameraStage == .armed else { return }
         sceneCameraMode = .photo
         HapticFeedback.medium()
-        sceneCamera.takePhoto(flash: sceneCameraFlash)
+        let flash = sceneCameraFlash
+        guard sceneFloorIsLit else {
+            sceneCamera.takePhoto(flash: flash)
+            return
+        }
+        // **Objectif avant : l'ÉCRAN est le flash** (#8653). La luminosité
+        // monte, l'image part sous elle, puis l'écran rend la sienne.
+        ComposerScreenFlash.shared.light()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
+            sceneCamera.takePhoto(flash: flash)
+            try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
+            ComposerScreenFlash.shared.restore()
+        }
+    }
+
+    /// Le sol blanc du flash avant est-il allumé ? (#8653)
+    var sceneFloorIsLit: Bool {
+        ComposerFrontFlash.lightsFloor(flash: sceneCameraFlash,
+                                       position: sceneCamera.currentPosition,
+                                       stage: sceneCameraStage)
+    }
+
+    /// Éteint tout ce que le flash a allumé — torche et luminosité.
+    func extinguishSceneFlash() {
+        sceneCamera.setTorch(.off)
+        ComposerScreenFlash.shared.restore()
     }
 
     /// **Le doigt a TENU : la prise commence.** Le seuil vit dans
@@ -167,7 +207,12 @@ extension MeeshyComposerHost {
         guard sceneCameraStage == .armed else { return }
         sceneCameraMode = ComposerShutterGesture.mode(locked: false)
         sceneCameraStage = .recording
-        Task {
+        // **La vidéo s'éclaire aussi** (#8653) : torche à l'arrière, écran
+        // blanc à pleine luminosité à l'avant, le temps de la prise.
+        sceneCamera.setTorch(ComposerFrontFlash.torch(flash: sceneCameraFlash,
+                                                      position: sceneCamera.currentPosition))
+        if sceneFloorIsLit { ComposerScreenFlash.shared.light() }
+        Task { @MainActor in
             await sceneCamera.enableAudioCaptureIfNeeded()
             sceneCamera.startRecording()
         }
@@ -190,6 +235,7 @@ extension MeeshyComposerHost {
         sceneCameraStage = .armed
         pendingSegmentDuration = sceneCamera.recordingDuration
         sceneCamera.stopRecording()
+        extinguishSceneFlash()
         HapticFeedback.medium()
     }
 
@@ -255,6 +301,7 @@ extension MeeshyComposerHost {
     func poseSceneCapture(_ result: CameraResult) {
         sceneCameraStage = ComposerSceneCamera.stageAfterCapture
         sceneCameraMode = nil
+        extinguishSceneFlash()
         sceneCamera.stop()
         HapticFeedback.success()
         Task { await ingestCameraCapture(result) }
@@ -277,6 +324,10 @@ extension MeeshyComposerHost {
         // — et la prise suivante repartirait AVEC eux, ce qui poserait dans la
         // scène des segments que l'auteur croyait avoir jetés.
         discardSceneSegments()
+        sceneHoldTask?.cancel()
+        sceneHoldTask = nil
+        sceneHoldStartedAt = nil
+        extinguishSceneFlash()
         sceneCamera.stop()
     }
 
@@ -312,11 +363,18 @@ extension MeeshyComposerHost {
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
                 GeometryReader { proxy in
                     if let ancre, sceneCameraStage != .off {
+                        // **Le sol en BLANC brillant** (#8653) : objectif
+                        // avant, flash actif — tout ce qui entoure l'aperçu
+                        // devient la lumière qui éclaire le visage.
+                        if sceneFloorIsLit { Color.white }
                         sceneCameraPreview(
-                            rect: ComposerSceneCameraFrame.rect(
-                                card: proxy[ancre],
-                                full: CGRect(origin: .zero, size: proxy.size),
-                                size: sceneCameraSize))
+                            rect: ComposerFrontFlash.previewRect(
+                                ComposerSceneCameraFrame.rect(
+                                    card: proxy[ancre],
+                                    full: CGRect(origin: .zero, size: proxy.size),
+                                    size: sceneCameraSize),
+                                size: sceneCameraSize,
+                                floorLit: sceneFloorIsLit))
                     }
                 }
                 .ignoresSafeArea()

@@ -110,18 +110,13 @@ struct ComposerSceneCameraBar: View {
                          tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
                          action: onCycleFlash)
             Spacer(minLength: 0)
-            // **`[ ]` a pris la place de `(x)`** (directive porteur
-            // 2026-09-04). En carte, le plateau reste visible et le viseur a
-            // déjà ses sorties — la croix y faisait double emploi et occupait
-            // la place du seul contrôle que la carte ne peut pas offrir
-            // autrement. En plein écran, il n'y a plus rien autour : la croix
-            // revient, et c'est la règle qui le dit.
-            if size.showsClose {
-                glassControl(symbol: "xmark",
-                             label: ComposerSceneCameraCopy.disarmLabel,
-                             tint: .white,
-                             action: onDisarm)
-            }
+            // **La croix est TOUJOURS là** (#8653, directive porteur
+            // 2026-09-29 : « permettre de quitter à tout moment »), en carte
+            // comme en plein écran. Quitter ne perd rien du brouillon.
+            glassControl(symbol: "xmark",
+                         label: ComposerSceneCameraCopy.disarmLabel,
+                         tint: .white,
+                         action: onDisarm)
             glassControl(symbol: size.toggleSymbol,
                          label: ComposerSceneCameraCopy.sizeLabel(size),
                          tint: .white,

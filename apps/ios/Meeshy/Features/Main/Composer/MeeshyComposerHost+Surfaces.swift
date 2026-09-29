@@ -402,6 +402,7 @@ extension MeeshyComposerHost {
             // avec la vue qui les peignait : le socle étant le FRÈRE de la
             // surface, aucun overlay posé sur elle ne pouvait le couvrir.
             cameraStage: sceneCameraStage,
+            quickCaptureHint: sceneQuickCaptureHint,
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -432,18 +433,10 @@ extension MeeshyComposerHost {
             // `enterTextEditingMode` — et c'est précisément lui que la règle
             // apprend à ignorer, plutôt qu'un état qu'on interdirait.
             //
-            // **Depuis le 2026-09-28, la porte TEXTE saisit sur la scène** et
-            // ses options s'accrochent à elle (`anchorsToDoor`) — sauf quand
-            // l'éditeur plein écran est monté : c'est alors lui qui les porte.
-            railMode: ComposerRailMode.resolve(
-                drawing: viewModel.isDrawingActive,
-                textEditing: ComposerFirstView.railShowsTextTools(
-                    textEditing: sceneTextEditing),
-                expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
-                expandedTextTool: viewModel.textEditingMode.expandedTool,
-                doors: sceneDoors,
-                anchorsToDoor: true
-            ),
+            // **Depuis le 2026-09-28, la porte TEXTE saisit sur la scène** ;
+            // ses réglages REMPLACENT les portes (#8652) — sauf quand l'éditeur
+            // plein écran est monté : c'est alors lui qui les porte.
+            railMode: sceneRailMode,
             // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
             // ICI parce que les deux magasins vivent ici — la slide pour ce qui
             // se voit, l'état du meuble pour ce qui qualifie la publication.
@@ -1027,8 +1020,19 @@ extension MeeshyComposerHost {
             // (`ComposerMoodSurface.header`), et sans cette garde le socle se
             // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
             // un padding, l'espace exact que la consolidation vise à rendre.
+            // **Un outil ouvert efface le socle** (#8652) : audience et
+            // publication n'ont rien à faire pendant qu'on dessine ou qu'on
+            // écrit, et publier en plein tracé n'est pas un geste à offrir.
+            // Par l'OPACITÉ : l'encart garde sa hauteur, donc la scène ne
+            // grandit pas sous le doigt au moment où l'outil s'ouvre.
             if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+                let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
                 socle
+                    .opacity(servi ? 1 : 0)
+                    .allowsHitTesting(servi)
+                    .accessibilityHidden(!servi)
+                    .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
+                               value: servi)
             }
         }
     }
@@ -1067,5 +1071,34 @@ extension MeeshyComposerHost {
     /// scène, couverte, n'a alors rien à montrer.
     var sceneTextEditing: Bool {
         viewModel.textEditingMode.activeTextId != nil && editedObject == nil
+    }
+
+    /// **Ce que le rail de la scène montre** — un site unique, lu par la
+    /// surface ET par le socle : les deux doivent céder au MÊME outil ouvert.
+    var sceneRailMode: ComposerRailMode {
+        ComposerRailMode.resolve(
+            drawing: viewModel.isDrawingActive,
+            textEditing: ComposerFirstView.railShowsTextTools(textEditing: sceneTextEditing),
+            expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
+            expandedTextTool: viewModel.textEditingMode.expandedTool,
+            doors: sceneDoors)
+    }
+
+    /// **Un outil de la SCÈNE occupe-t-il l'écran ?** (#8652) Faux sous toute
+    /// autre surface : le document et l'humeur gardent leur socle.
+    var sceneToolOwnsScreen: Bool {
+        mountedComposerView == .scene && sceneRailMode.opensTool
+    }
+
+    /// **L'indication grise de la capture rapide** (#8653) — la MÊME question
+    /// que celle que le toucher pose (`handleSceneQuickTap`) : l'indication ne
+    /// promet jamais un geste que la scène refuserait.
+    var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
+        guard ComposerSceneQuickCapture.offers(
+            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
+            format: selectedFormat,
+            stage: sceneCameraStage,
+            toolIsOpen: sceneToolOwnsScreen) else { return nil }
+        return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }
