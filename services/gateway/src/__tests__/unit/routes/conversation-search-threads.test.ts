@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { threadCollectionCalls } from './thread-collection-calls';
 
 // ─── Module mocks (must come before all imports — jest hoisting) ──────────────
-
 // Mocked fn refs declared at module scope (hoisted correctly)
 const mockGenerateDefaultConversationTitle = jest.fn<any>();
 const mockGetUnreadCountsForUser = jest.fn<any>();
@@ -302,15 +302,6 @@ function makeThreadMessage(id: string, createdAt: Date, replyToId: string | null
 // ─────────────────────────────────────────────────────────────────────────────
 // SEARCH ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
-
-
-/**
- * Les lectures de COLLECTE du fil (`replyToId: { in: … }`) — les seules que ces
- * témoins comptent. Depuis #8630 la route remonte aussi la chaîne CITÉE de ce
- * qu'elle sert (`id: { in: … }`), une lecture qui ne collecte rien.
- */
-const threadCollectionCalls = (prisma: any): number =>
-  prisma.message.findMany.mock.calls.filter(([args]: any[]) => args?.where?.replyToId !== undefined).length;
 
 describe('registerSearchRoutes — GET /conversations/search', () => {
   beforeEach(() => {
