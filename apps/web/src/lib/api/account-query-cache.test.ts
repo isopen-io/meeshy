@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { createCallJournalStore } from '../calls/call-network-journal-store';
+
 import {
   ACCOUNT_CACHE_PREFIX,
   MAX_SHELVED_ACCOUNTS,
@@ -255,6 +257,19 @@ describe('l’étagère est bornée et se vide à la fin d’un compte', () => {
 
     expect(session.getState().session.status).toBe('anonymous');
     expect(everything(storage)).not.toContain('secret de A');
+  });
+
+  test('la fin d’un compte (déconnexion, retrait, révocation) efface son journal réseau d’appels, pas celui d’un autre (#8698)', () => {
+    const storage = fakeStorage();
+    const journal = createCallJournalStore({ storage, now: () => 0 });
+    journal.append('a', 'call-a', [{ at: 1, kind: 'phase', phase: 'connected' }]);
+    journal.append('b', 'call-b', [{ at: 2, kind: 'phase', phase: 'connected' }]);
+    const { session } = appWith(storage, 'a');
+
+    endRevokedSession(session, { storage, cacheStorage: { keys: async () => [], delete: async () => false } });
+
+    expect(journal.read('a', 'call-a')).toEqual([]);
+    expect(journal.read('b', 'call-b')).toEqual([{ at: 2, kind: 'phase', phase: 'connected' }]);
   });
 
   test('la mise à jour de l’application jette AUSSI l’étagère', () => {
