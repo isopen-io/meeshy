@@ -32,7 +32,8 @@ final class CallCaptureControllerTests: XCTestCase {
         frames: [String: CGImage]? = nil,
         access: Bool = true,
         saves: Bool = true,
-        face: CGRect? = CGRect(x: 0.3, y: 0.4, width: 0.3, height: 0.25)
+        face: CGRect? = CGRect(x: 0.3, y: 0.4, width: 0.3, height: 0.25),
+        recorder: MockCallMontageRecorder = MockCallMontageRecorder()
     ) -> (sut: CallCaptureController, grabber: MockCallFrameGrabber, saver: MockCapturePhotoSaver) {
         let grabber = MockCallFrameGrabber()
         grabber.snapshotResult = CallFrameSnapshot(images: frames ?? ["remote": makeImage(), "local": makeImage(width: 48, height: 64)])
@@ -43,6 +44,7 @@ final class CallCaptureControllerTests: XCTestCase {
             grabber: grabber,
             saver: saver,
             faceLocator: MockFaceLocator(rect: face),
+            recorder: recorder,
             now: { Date(timeIntervalSince1970: 1_790_000_000) }
         )
         sut.update(subjects: makeSubjects(), tracks: [:])
@@ -202,6 +204,143 @@ final class CallCaptureControllerTests: XCTestCase {
         XCTAssertTrue(saver.saved.isEmpty)
     }
 
+    // MARK: - Capturer un style imposé (mode Effets)
+
+    func test_capture_withAFixedStyle_keepsTheCarouselStyle() async {
+        let (sut, _, saver) = makeSUT()
+        sut.select(.polaroid)
+
+        await sut.capture(style: .screen)
+
+        XCTAssertEqual(saver.saved.count, 1)
+        XCTAssertEqual(sut.style, .polaroid)
+    }
+
+    // MARK: - Filmer (#8625)
+
+    func test_startRecording_accessGranted_startsTheRecorderAtTheRecordingSize() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, _) = makeSUT(recorder: recorder)
+
+        await sut.startRecording()
+
+        XCTAssertEqual(recorder.startedCanvases, [CallCaptureController.recordingCanvas])
+        XCTAssertEqual(sut.recordingStartedAt, Date(timeIntervalSince1970: 1_790_000_000))
+        XCTAssertTrue(sut.isRecording)
+        sut.stop()
+    }
+
+    func test_startRecording_accessDenied_recordsNothing() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, _) = makeSUT(access: false, recorder: recorder)
+
+        await sut.startRecording()
+
+        XCTAssertEqual(sut.status, .denied)
+        XCTAssertTrue(recorder.startedCanvases.isEmpty)
+        XCTAssertFalse(sut.isRecording)
+    }
+
+    func test_startRecording_writerUnavailable_reportsFailure() async {
+        let recorder = MockCallMontageRecorder()
+        recorder.startError = CallMontageRecordingError.writerUnavailable
+        let (sut, _, _) = makeSUT(recorder: recorder)
+
+        await sut.startRecording()
+
+        XCTAssertEqual(sut.status, .failed)
+        XCTAssertFalse(sut.isRecording)
+    }
+
+    func test_startRecording_twice_startsOnce() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, _) = makeSUT(recorder: recorder)
+
+        await sut.startRecording()
+        await sut.startRecording()
+
+        XCTAssertEqual(recorder.startedCanvases.count, 1)
+        sut.stop()
+    }
+
+    func test_recordFrame_appendsTheRenderedMontageAndShowsIt() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, _) = makeSUT(recorder: recorder)
+        await sut.startRecording()
+
+        await sut.recordFrame(style: nil)
+
+        XCTAssertFalse(recorder.appended.isEmpty)
+        XCTAssertTrue(recorder.appended.allSatisfy { $0.width == Int(CallCaptureController.recordingCanvas.width) })
+        XCTAssertEqual(sut.preview?.height, Int(CallCaptureController.recordingCanvas.height))
+        sut.stop()
+    }
+
+    func test_recordFrame_notRecording_appendsNothing() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, _) = makeSUT(recorder: recorder)
+
+        await sut.recordFrame(style: nil)
+
+        XCTAssertTrue(recorder.appended.isEmpty)
+    }
+
+    func test_refreshPreviews_whileRecording_leavesTheImageToTheRecording() async {
+        let (sut, _, _) = makeSUT()
+        await sut.startRecording()
+
+        await sut.refreshPreviews()
+
+        XCTAssertTrue(sut.thumbnails.isEmpty)
+        sut.stop()
+    }
+
+    func test_stopRecording_savesTheVideoToThePhotoLibrary() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, saver) = makeSUT(recorder: recorder)
+        await sut.startRecording()
+
+        await sut.stopRecording()
+
+        XCTAssertEqual(saver.savedVideos, [recorder.finishURL])
+        XCTAssertEqual(sut.status, .videoSaved)
+        XCTAssertNil(sut.recordingStartedAt)
+    }
+
+    func test_stopRecording_nothingFilmed_reportsFailure() async {
+        let recorder = MockCallMontageRecorder()
+        recorder.finishURL = nil
+        let (sut, _, saver) = makeSUT(recorder: recorder)
+        await sut.startRecording()
+
+        await sut.stopRecording()
+
+        XCTAssertEqual(sut.status, .failed)
+        XCTAssertTrue(saver.savedVideos.isEmpty)
+    }
+
+    func test_stopRecording_saveFails_reportsFailure() async {
+        let (sut, _, _) = makeSUT(saves: false)
+        await sut.startRecording()
+
+        await sut.stopRecording()
+
+        XCTAssertEqual(sut.status, .failed)
+    }
+
+    func test_stop_whileRecording_stillSavesTheVideo() async {
+        let recorder = MockCallMontageRecorder()
+        let (sut, _, saver) = makeSUT(recorder: recorder)
+        let saved = expectation(description: "video saved")
+        saver.onSaveVideo = { saved.fulfill() }
+        await sut.startRecording()
+
+        sut.stop()
+
+        await fulfillment(of: [saved], timeout: 2)
+        XCTAssertEqual(recorder.finishCount, 1)
+    }
+
     // MARK: - Recadrage
 
     func test_faceSquare_isSquareAtTheRequestedSide() {
@@ -245,7 +384,9 @@ private final class MockCallFrameGrabber: CallFrameGrabbing, @unchecked Sendable
 private final class MockCapturePhotoSaver: CallCapturePhotoSaving {
     var accessResult = true
     var saveResult = true
+    var onSaveVideo: (() -> Void)?
     private(set) var saved: [CGImage] = []
+    private(set) var savedVideos: [URL?] = []
 
     func requestAccess() async -> Bool {
         accessResult
@@ -254,6 +395,40 @@ private final class MockCapturePhotoSaver: CallCapturePhotoSaving {
     func save(_ image: CGImage) async -> Bool {
         saved.append(image)
         return saveResult
+    }
+
+    func saveVideo(at url: URL) async -> Bool {
+        savedVideos.append(url)
+        onSaveVideo?()
+        return saveResult
+    }
+}
+
+@MainActor
+private final class MockCallMontageRecorder: CallMontageRecordingProviding {
+    var startError: Error?
+    var finishURL: URL? = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("montage-mock.mp4")
+    private(set) var startedCanvases: [CGSize] = []
+    private(set) var appended: [CGImage] = []
+    private(set) var finishCount = 0
+    private(set) var cancelCount = 0
+
+    func start(canvas: CGSize) throws {
+        if let startError { throw startError }
+        startedCanvases.append(canvas)
+    }
+
+    func append(_ frame: CGImage) {
+        appended.append(frame)
+    }
+
+    func finish() async -> URL? {
+        finishCount += 1
+        return finishURL
+    }
+
+    func cancel() {
+        cancelCount += 1
     }
 }
 

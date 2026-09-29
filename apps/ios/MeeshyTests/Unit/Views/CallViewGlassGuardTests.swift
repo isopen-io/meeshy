@@ -128,6 +128,23 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
     }
 
+    /// #8625 — aucun déclencheur : deux tapes sur le style choisi prennent la
+    /// photo, un appui long filme, et l'arrêt se pose au centre du gabarit.
+    func test_mode_shootsFromTheSelectedStyle_withoutAShutter() throws {
+        let code = try callViewCode()
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeControls.swift")
+        )
+        let carousel = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+        )
+        XCTAssertFalse(controls.contains("CallModeShutter"), "Le déclencheur a quitté Effets et Montage")
+        XCTAssertFalse(carousel.contains("struct CallModeShutter"))
+        XCTAssertTrue(carousel.contains("CallModeGestureRule.outcome("), "Le geste se lit par la règle pure")
+        XCTAssertTrue(code.contains("CallModeRecordingStop(startedAt:"), "L'arrêt de l'enregistrement se pose sur la scène")
+        XCTAssertTrue(code.contains("CallCaptureOutcomeAnnouncer(capture: capture)"), "Le résultat s'annonce même après la sortie du mode")
+    }
+
     /// #8576 — le zoom caméra suit MON image en plein écran, jamais la
     /// vignette. #8626 — les commandes de ma caméra vivent dans ma vignette,
     /// et en haut au centre quand mon image est en plein écran, visibles avec

@@ -42,6 +42,7 @@ extension CallView {
                     .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
                 CallCaptureFlash(trigger: capture.flashCount, reduceMotion: reduceMotion)
+                CallCaptureOutcomeAnnouncer(capture: capture)
             }
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en

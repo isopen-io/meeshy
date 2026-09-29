@@ -21,6 +21,13 @@ extension CallView {
                     modeControls(mode)
                 }
                 .padding(.bottom, Self.chromeBottomInset)
+                if let startedAt = capture.recordingStartedAt {
+                    CallModeRecordingStop(startedAt: startedAt) {
+                        Task { await capture.stopRecording() }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+                }
             }
             .transition(.opacity)
             .accessibilityElement(children: .contain)
@@ -48,7 +55,7 @@ extension CallView {
     private func modeControls(_ mode: CallScreenMode) -> some View {
         switch mode {
         case .effects:
-            CallEffectsModeControls(callManager: callManager, onExit: exitMode)
+            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, onExit: exitMode)
         case .montage:
             CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, onExit: exitMode)
         }

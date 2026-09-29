@@ -15,14 +15,6 @@ enum CallCaptureCopy {
         String(localized: "call.control.capture.caption", defaultValue: "Capture", bundle: .main)
     }
 
-    static var shoot: String {
-        String(localized: "call.capture.shoot", defaultValue: "Capturer", bundle: .main)
-    }
-
-    static var shootHint: String {
-        String(localized: "call.capture.shoot.hint", defaultValue: "Enregistre le montage choisi dans Photos", bundle: .main)
-    }
-
     static var faces: String {
         String(localized: "call.capture.faces", defaultValue: "Chaque visage", bundle: .main)
     }
@@ -81,6 +73,8 @@ enum CallCaptureCopy {
             return nil
         case .saved:
             return (String(localized: "call.capture.saved", defaultValue: "Capture enregistrée", bundle: .main), false)
+        case .videoSaved:
+            return (String(localized: "call.capture.video.saved", defaultValue: "Vidéo enregistrée", bundle: .main), false)
         case .facesSaved(let count):
             return (String(format: String(localized: "call.capture.faces.saved", defaultValue: "%d visages enregistrés", bundle: .main), count), false)
         case .denied:
@@ -120,6 +114,26 @@ struct CallCaptureFlash: View {
                 opacity = reduceMotion ? 0.35 : 0.85
                 try? await Task.sleep(nanoseconds: 30_000_000)
                 withAnimation(.easeOut(duration: reduceMotion ? 0.3 : 0.45)) { opacity = 0 }
+            }
+    }
+}
+
+struct CallCaptureOutcomeAnnouncer: View {
+    @ObservedObject var capture: CallCaptureController
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .adaptiveOnChange(of: capture.status) { _, status in
+                guard let outcome = CallCaptureCopy.outcome(status) else { return }
+                if outcome.isError {
+                    FeedbackToastManager.shared.showError(outcome.message)
+                } else {
+                    FeedbackToastManager.shared.showSuccess(outcome.message)
+                }
+                UIAccessibility.post(notification: .announcement, argument: outcome.message)
             }
     }
 }
