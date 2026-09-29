@@ -79,6 +79,15 @@ final class WebRTCService {
     /// would thaw without anyone deciding it. `applyVideoQuality` therefore reads
     /// this flag FIRST and substitutes the floor for the computed tier.
     private(set) var survivalFloorActive = false
+    /// #8697 — how much data the call may spend, from the OS path (Wi-Fi,
+    /// cellular, Low Data Mode) and the RTT/loss heuristic. Caps both the
+    /// ladder's audio and video targets and shapes the Opus fmtp of the next
+    /// local description.
+    private(set) var dataProfile: CallDataProfile = .wifi
+    private(set) var networkPath: CallNetworkPath = .unrestricted
+    private var ladderAudioBitrate: Int = QualityThresholds.defaultBitrate
+    private var lastHeuristicLevel: VideoQualityLevel = .excellent
+    private let pathMonitor: any CallNetworkPathProviding
     // Audit P1-4 — replace Timer.scheduledTimer with cancellable Task to
     // align with PERF-011 (heartbeat / duration migrated; this monitor was
     // missed). Timers run on RunLoop.main, are App-Nap-unfriendly, and have
@@ -102,8 +111,9 @@ final class WebRTCService {
     // (`.failed`/`.closed`, which fire `webRTCServiceDidDisconnect` at once).
     private var disconnectDebounceTask: Task<Void, Never>?
 
-    init(client: (any WebRTCClientProviding)? = nil) {
+    init(client: (any WebRTCClientProviding)? = nil, pathMonitor: (any CallNetworkPathProviding)? = nil) {
         self.client = client ?? P2PWebRTCClient()
+        self.pathMonitor = pathMonitor ?? CallNetworkPathMonitor()
         self.client.delegate = self
         Logger.webrtc.info("WebRTCService initialized")
     }
@@ -143,6 +153,7 @@ final class WebRTCService {
             let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
+            startNetworkPathMonitoring()
             return true
         } catch {
             Logger.webrtc.error("WebRTC configuration failed: \(error.localizedDescription)")
@@ -254,6 +265,8 @@ final class WebRTCService {
 
     func startLocalMedia(isVideo: Bool) async throws {
         try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
+        currentBitrate = dataProfile.budget.audio.capping(ladderAudioBitrate)
+        client.applyAudioEncoding(maxBitrateBps: currentBitrate)
         Logger.webrtc.info("Local media started - video: \(isVideo)")
     }
 
@@ -406,6 +419,8 @@ final class WebRTCService {
         // estimator has converged (audio-only calls sit at ~64 kbps forever
         // and would read as .poor/.critical on a perfectly healthy link).
         let heuristicLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
+        lastHeuristicLevel = heuristicLevel
+        refreshDataProfile()
         let bweLevel: VideoQualityLevel? = stats.availableOutgoingBitrateBps > 0
             ? VideoQualityLevel.from(availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps)
             : nil
@@ -434,7 +449,9 @@ final class WebRTCService {
             jitterMs: stats.jitterMs,
             thresholdMs: QualityThresholds.highJitterThresholdMs
         )
-        let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate
+        let ladderBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate
+        ladderAudioBitrate = ladderBitrate
+        let effectiveBitrate = dataProfile.budget.audio.capping(ladderBitrate)
 
         if effectiveBitrate != currentBitrate {
             currentBitrate = effectiveBitrate
@@ -504,11 +521,19 @@ final class WebRTCService {
             scaleDownBy: scale,
             thermalState: ProcessInfo.processInfo.thermalState
         )
-        client.applyVideoEncoding(
+        // #8697 — the data profile is a third, independent ceiling: a healthy
+        // cellular link still must not spend Wi-Fi megabits.
+        let capped = dataProfile.budget.video.capping(CallVideoBudget(
             maxBitrateBps: thermal.bitrateBps,
             maxFramerate: thermal.framerate,
             scaleResolutionDownBy: thermal.scaleDownBy,
             degradationPreference: .maintainFramerate
+        ))
+        client.applyVideoEncoding(
+            maxBitrateBps: capped.maxBitrateBps,
+            maxFramerate: capped.maxFramerate,
+            scaleResolutionDownBy: capped.scaleResolutionDownBy,
+            degradationPreference: capped.degradationPreference
         )
     }
 
@@ -606,6 +631,12 @@ final class WebRTCService {
         // would otherwise pin the next call's encoder at 2 fps for its whole
         // duration, with nothing left to thaw it (the controller is reset too).
         survivalFloorActive = false
+        pathMonitor.stop()
+        networkPath = .unrestricted
+        dataProfile = .wifi
+        ladderAudioBitrate = QualityThresholds.defaultBitrate
+        lastHeuristicLevel = .excellent
+        (client as? CallDataProfileApplying)?.applyDataProfile(.wifi)
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()
@@ -625,6 +656,37 @@ final class WebRTCService {
         hasRemoteDescription = false
         connectionState = .closed
         Logger.webrtc.info("WebRTC connection closed")
+    }
+
+    // MARK: - Data profile (#8697)
+
+    /// Feeds the OS path into the data profile. Internal so the path monitor's
+    /// callback — and the tests — reach it.
+    func updateNetworkPath(_ path: CallNetworkPath) {
+        guard path != networkPath else { return }
+        networkPath = path
+        refreshDataProfile()
+    }
+
+    private func startNetworkPathMonitoring() {
+        pathMonitor.start { [weak self] path in
+            self?.updateNetworkPath(path)
+        }
+    }
+
+    private func refreshDataProfile() {
+        let next = CallDataProfile.resolve(path: networkPath, heuristic: lastHeuristicLevel, current: dataProfile)
+        guard next != dataProfile else { return }
+        let previous = dataProfile
+        dataProfile = next
+        (client as? CallDataProfileApplying)?.applyDataProfile(next)
+        let capped = next.budget.audio.capping(ladderAudioBitrate)
+        if capped != currentBitrate {
+            currentBitrate = capped
+            client.applyAudioEncoding(maxBitrateBps: capped)
+        }
+        applyVideoQuality(currentQualityLevel)
+        Logger.webrtc.info("Data profile \(previous.rawValue, privacy: .public) → \(next.rawValue, privacy: .public)")
     }
 
     // MARK: - Private
