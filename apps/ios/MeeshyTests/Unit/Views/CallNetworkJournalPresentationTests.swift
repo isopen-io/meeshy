@@ -90,10 +90,25 @@ final class CallNetworkJournalPresentationTests: XCTestCase {
         XCTAssertTrue(presentation.timeline.isEmpty)
     }
 
-    func test_isEmpty_forAJournalWithOnlyReconnectionRow_isFalse() {
+    func test_isEmpty_forAJournalWithoutEvents_isTrue() {
         let presentation = CallNetworkJournalPresentation(journal: journal([]), locale: locale)
 
-        XCTAssertFalse(presentation.isEmpty, "the reconnection count always reads, even at zero")
+        XCTAssertTrue(presentation.isEmpty)
+    }
+
+    func test_isEmpty_forAMissedCallThatOnlyEnded_isTrue() {
+        let presentation = CallNetworkJournalPresentation(journal: journal([(30, .ended(reason: "missed"))]), locale: locale)
+
+        XCTAssertTrue(presentation.isEmpty, "a call whose link was never observed has no network story to tell")
+    }
+
+    func test_isEmpty_onceTheLinkWasObserved_isFalse() {
+        let presentation = CallNetworkJournalPresentation(
+            journal: journal([(1, .link(state: "connected")), (60, .ended(reason: "local"))]),
+            locale: locale
+        )
+
+        XCTAssertFalse(presentation.isEmpty)
     }
 }
 

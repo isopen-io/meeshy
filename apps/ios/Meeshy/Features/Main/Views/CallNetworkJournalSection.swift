@@ -24,10 +24,15 @@ struct CallNetworkJournalPresentation: Equatable {
 
     let summary: [Row]
     let timeline: [Moment]
-
-    var isEmpty: Bool { summary.isEmpty && timeline.isEmpty }
+    /// A call whose link was never observed (missed, declined) has nothing to
+    /// say: its only event is its end, and the sheets then hide the section.
+    let isEmpty: Bool
 
     init(journal: CallNetworkJournal, locale: Locale = .autoupdatingCurrent) {
+        isEmpty = journal.events.allSatisfy { event in
+            if case .ended = event.kind { return true }
+            return false
+        }
         summary = Self.summaryRows(journal.summary, locale: locale)
         timeline = journal.events.enumerated().compactMap { index, event in
             Self.moment(index: index, event: event, startedAt: journal.startedAt, locale: locale)
