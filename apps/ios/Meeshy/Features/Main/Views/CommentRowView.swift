@@ -108,7 +108,22 @@ struct CommentRowView: View, Equatable {
     /// évite un bouton mort (le bug d'origine) sur un commentaire média-seul
     /// dont l'utilisateur n'est pas l'auteur.
     private var hasMoreOptions: Bool {
-        canCopyContent || onDeleteComment != nil || onEditComment != nil
+        canCopyContent || onDeleteComment != nil || onEditComment != nil || imagineRequest != nil
+    }
+
+    /// **« Imager » un commentaire** (#8692) — la carte montre le texte que la
+    /// ligne affiche (le Prisme, ou l'original si la puce l'a demandé), son
+    /// auteur et ses médias. `nil` pour un commentaire protégé ou vide : l'entrée
+    /// n'apparaît pas.
+    private var imagineRequest: MessageCardExportRequest? {
+        let user = AuthManager.shared.currentUser
+        return MessageCardExportMenu.request(
+            comment: comment,
+            showOriginal: showOriginal,
+            accentColor: accentColor,
+            viewer: MessageCardSubject.Viewer(id: user?.id ?? "", displayName: user?.displayName, username: user?.username),
+            handle: user?.username
+        )
     }
 
     var body: some View {
@@ -356,6 +371,14 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.success()
                                 } label: {
                                     Label(String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+                                }
+                            }
+                            if let request = imagineRequest {
+                                Button {
+                                    HapticFeedback.light()
+                                    MessageCardExportPresenter.present(request)
+                                } label: {
+                                    Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
                                 }
                             }
                             if let onEditComment {

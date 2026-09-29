@@ -19,15 +19,25 @@ public struct MessageCardFormat: Equatable, Sendable {
     public var showDate: Bool
     public var anonymizeQuoted: Bool
     public var anonymizeReply: Bool
+    /// L'heure de chaque message, sur la ligne de son nom (onglet « Frame », #8692).
+    public var showTimes: Bool
+    /// Le pseudo au lieu du nom affiché — une anonymisation plus douce (#8692).
+    public var useHandles: Bool
+    /// Le format de l'image, l'en-tête, la place des noms, l'inclinaison, les médias (#8692).
+    public var disposition: MessageCardDisposition
 
     public init(template: MessageCardTemplateID, showConversationTitle: Bool = false, showAuthors: Bool = true,
-                showDate: Bool = false, anonymizeQuoted: Bool = false, anonymizeReply: Bool = false) {
+                showDate: Bool = false, anonymizeQuoted: Bool = false, anonymizeReply: Bool = false,
+                showTimes: Bool = false, useHandles: Bool = false, disposition: MessageCardDisposition = .standard) {
         self.template = template
         self.showConversationTitle = showConversationTitle
         self.showAuthors = showAuthors
         self.showDate = showDate
         self.anonymizeQuoted = anonymizeQuoted
         self.anonymizeReply = anonymizeReply
+        self.showTimes = showTimes
+        self.useHandles = useHandles
+        self.disposition = disposition
     }
 
     public static let initial = MessageCardFormat(template: MessageCardTemplates.defaultID)
@@ -35,7 +45,7 @@ public struct MessageCardFormat: Equatable, Sendable {
     public static let storageKey = "meeshy.export.message-card.default-format"
 
     public enum Toggle: String, CaseIterable, Sendable {
-        case showConversationTitle, showAuthors, showDate, anonymizeQuoted, anonymizeReply
+        case showConversationTitle, showAuthors, showDate, anonymizeQuoted, anonymizeReply, showTimes, useHandles
     }
 
     public subscript(toggle: Toggle) -> Bool {
@@ -46,6 +56,8 @@ public struct MessageCardFormat: Equatable, Sendable {
             case .showDate: return showDate
             case .anonymizeQuoted: return anonymizeQuoted
             case .anonymizeReply: return anonymizeReply
+            case .showTimes: return showTimes
+            case .useHandles: return useHandles
             }
         }
         set {
@@ -55,22 +67,34 @@ public struct MessageCardFormat: Equatable, Sendable {
             case .showDate: showDate = newValue
             case .anonymizeQuoted: anonymizeQuoted = newValue
             case .anonymizeReply: anonymizeReply = newValue
+            case .showTimes: showTimes = newValue
+            case .useHandles: useHandles = newValue
             }
         }
     }
 
-    /// Les options OFFERTES : le titre seulement s'il existe, et l'anonymat
-    /// seulement pour un nom PEINT — celui du message cité, que s'il y en a un.
+    /// Les options de l'onglet « Détails » : le titre seulement s'il existe, et
+    /// l'anonymat seulement pour un nom PEINT — celui du message cité, que s'il
+    /// y en a un. La date a rejoint l'onglet « Frame » (#8692).
     public func offeredToggles(hasConversationTitle: Bool, hasQuote: Bool) -> [Toggle] {
         var toggles: [Toggle] = []
         if hasConversationTitle { toggles.append(.showConversationTitle) }
         toggles.append(.showAuthors)
-        toggles.append(.showDate)
         if showAuthors && hasQuote { toggles.append(.anonymizeQuoted) }
         if showAuthors { toggles.append(.anonymizeReply) }
         return toggles
     }
 
+    /// Les options de l'onglet « Frame » : la date, les heures, et — pour un
+    /// nom peint dont on connaît le pseudo — le pseudo au lieu du nom affiché.
+    public func frameToggles(hasHandles: Bool) -> [Toggle] {
+        var toggles: [Toggle] = [.showDate, .showTimes]
+        if showAuthors && hasHandles { toggles.append(.useHandles) }
+        return toggles
+    }
+
+    /// Les réglages nés avec #8692 sont OPTIONNELS à la relecture : un format
+    /// enregistré plus tôt (ou par le web) se relit avec la disposition standard.
     private struct Stored: Codable {
         let template: String
         let showConversationTitle: Bool
@@ -78,19 +102,38 @@ public struct MessageCardFormat: Equatable, Sendable {
         let showDate: Bool
         let anonymizeQuoted: Bool
         let anonymizeReply: Bool
+        let showTimes: Bool?
+        let useHandles: Bool?
+        let aspect: String?
+        let headerOrientation: String?
+        let authorPlacement: String?
+        let tilt: String?
+        let mediaLayout: String?
+        let audioStyle: String?
     }
 
     public static func parse(_ raw: String?) -> MessageCardFormat? {
         guard let data = raw?.data(using: .utf8),
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
               let template = MessageCardTemplateID(rawValue: stored.template) else { return nil }
+        let standard = MessageCardDisposition.standard
         return MessageCardFormat(
             template: template,
             showConversationTitle: stored.showConversationTitle,
             showAuthors: stored.showAuthors,
             showDate: stored.showDate,
             anonymizeQuoted: stored.anonymizeQuoted,
-            anonymizeReply: stored.anonymizeReply
+            anonymizeReply: stored.anonymizeReply,
+            showTimes: stored.showTimes ?? false,
+            useHandles: stored.useHandles ?? false,
+            disposition: MessageCardDisposition(
+                aspect: stored.aspect.flatMap(MessageCardAspect.init(rawValue:)) ?? standard.aspect,
+                headerOrientation: stored.headerOrientation.flatMap(MessageCardHeaderOrientation.init(rawValue:)) ?? standard.headerOrientation,
+                authorPlacement: stored.authorPlacement.flatMap(MessageCardAuthorPlacement.init(rawValue:)) ?? standard.authorPlacement,
+                tilt: stored.tilt.flatMap(MessageCardTilt.init(rawValue:)) ?? standard.tilt,
+                mediaLayout: stored.mediaLayout.flatMap(MessageCardMediaLayout.init(rawValue:)) ?? standard.mediaLayout,
+                audioStyle: stored.audioStyle.flatMap(MessageCardAudioStyle.init(rawValue:)) ?? standard.audioStyle
+            )
         )
     }
 
@@ -101,7 +144,15 @@ public struct MessageCardFormat: Equatable, Sendable {
             showAuthors: showAuthors,
             showDate: showDate,
             anonymizeQuoted: anonymizeQuoted,
-            anonymizeReply: anonymizeReply
+            anonymizeReply: anonymizeReply,
+            showTimes: showTimes,
+            useHandles: useHandles,
+            aspect: disposition.aspect.rawValue,
+            headerOrientation: disposition.headerOrientation.rawValue,
+            authorPlacement: disposition.authorPlacement.rawValue,
+            tilt: disposition.tilt.rawValue,
+            mediaLayout: disposition.mediaLayout.rawValue,
+            audioStyle: disposition.audioStyle.rawValue
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys

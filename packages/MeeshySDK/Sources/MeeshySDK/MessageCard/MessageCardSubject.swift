@@ -1,5 +1,19 @@
 import Foundation
 
+/// Un média qu'une carte a le droit de peindre, et où l'application ira le
+/// chercher — le fichier, et l'image d'attente d'une vidéo.
+public struct MessageCardSubjectMedia: Equatable, Sendable {
+    public let media: MessageCardMedia
+    public let fileURL: String
+    public let posterURL: String?
+
+    public init(media: MessageCardMedia, fileURL: String, posterURL: String? = nil) {
+        self.media = media
+        self.fileURL = fileURL
+        self.posterURL = MessageCardText.nonBlank(posterURL)
+    }
+}
+
 /// **CE QU'UNE CARTE D'EXPORT A LE DROIT DE MONTRER** — miroir de
 /// `apps/web/src/lib/export/message-card-subject.ts`.
 ///
@@ -14,46 +28,93 @@ import Foundation
 /// en douce — sauf quand l'exportateur CHOISIT une langue d'export : la
 /// réponse part alors dans cette langue (son original, ou la traduction
 /// servie), et la citation garde le Prisme du lecteur.
+///
+/// LES MÉDIAS (#8692) : une photo, une vidéo (sa première image) ou un son se
+/// peignent — sauf une pièce CHIFFRÉE, dont le fichier n'est pas lisible
+/// hors de la bulle. Une pièce floutée ou à vue unique rend le message
+/// entier inexportable : la protection d'une pièce protège son message.
 public struct MessageCardSubject: Equatable, Sendable {
     public let quoted: MessageCardPart?
     public let reply: MessageCardPart
     /// L'heure d'envoi de la réponse — la date qu'une carte peut afficher.
     public let sentAt: Date
+    /// L'heure du message cité, quand l'appelant la connaît.
+    public let quotedAt: Date?
+    public let media: [MessageCardSubjectMedia]
 
-    public init(quoted: MessageCardPart?, reply: MessageCardPart, sentAt: Date) {
+    public init(quoted: MessageCardPart?, reply: MessageCardPart, sentAt: Date, quotedAt: Date? = nil, media: [MessageCardSubjectMedia] = []) {
         self.quoted = quoted
         self.reply = reply
         self.sentAt = sentAt
+        self.quotedAt = quotedAt
+        self.media = media
     }
 
     public struct Viewer: Equatable, Sendable {
         public let id: String
         public let displayName: String?
+        public let username: String?
 
-        public init(id: String, displayName: String?) {
+        public init(id: String, displayName: String?, username: String? = nil) {
             self.id = id
             self.displayName = displayName
+            self.username = username
         }
     }
 
     /// Le message peut-il partir en image ? La même famille de gardes que « Copier ».
     public static func isExportable(_ message: MeeshyMessage, now: Date) -> Bool {
-        if message.holdsViewOnce || message.isBlurred || message.attachments.contains(where: { $0.isBlurred }) { return false }
+        if message.holdsViewOnce || message.isBlurred || message.attachments.contains(where: { $0.isBlurred || $0.isViewOnce }) { return false }
         if message.isDeleted || message.messageSource == .system { return false }
         if let expiresAt = message.expiresAt, expiresAt <= now { return false }
-        return MessageCardText.nonBlank(message.content) != nil
+        return MessageCardText.nonBlank(message.content) != nil || !paintableMedia(of: message).isEmpty
+    }
+
+    /// Les pièces qu'une carte peut peindre — photo, vidéo, son, dans l'ordre du message.
+    public static func paintableMedia(of message: MeeshyMessage) -> [MessageCardSubjectMedia] {
+        message.attachments.compactMap { attachment in
+            guard !attachment.isEncrypted, !attachment.isBlurred, !attachment.isViewOnce else { return nil }
+            let kind: MessageCardMediaKind
+            switch AttachmentKind(mimeType: attachment.mimeType) {
+            case .image: kind = .image
+            case .video: kind = .video
+            case .audio: kind = .audio
+            default: return nil
+            }
+            let file = MessageCardText.nonBlank(attachment.fileUrl) ?? MessageCardText.nonBlank(attachment.thumbnailUrl)
+            guard let file else { return nil }
+            let aspect = aspect(width: attachment.width, height: attachment.height)
+            return MessageCardSubjectMedia(
+                media: MessageCardMedia(
+                    id: attachment.id.isEmpty ? file : attachment.id,
+                    kind: kind,
+                    aspect: aspect,
+                    duration: attachment.duration.map { Double($0) / 1000 },
+                    name: kind == .audio ? (attachment.title ?? attachment.originalName) : nil
+                ),
+                fileURL: file,
+                posterURL: kind == .video ? attachment.thumbnailUrl : nil
+            )
+        }
+    }
+
+    private static func aspect(width: Int?, height: Int?) -> Double {
+        guard let width, let height, width > 0, height > 0 else { return 1 }
+        return Double(width) / Double(height)
     }
 
     /// - Parameters:
     ///   - servedText: le texte que le lecteur a sous les yeux (Prisme, ou la langue imposée par « Traduire »).
     ///   - translations: les traductions servies du message, par code de langue.
     ///   - language: la langue d'export choisie — `nil` : la carte montre ce que le lecteur lit.
+    ///   - quotedAt: l'heure du message cité, quand l'appelant l'a sous la main.
     public static func of(
         message: MeeshyMessage,
         servedText: String?,
         translations: [String: String],
         viewer: Viewer,
         language: String? = nil,
+        quotedAt: Date? = nil,
         now: Date
     ) -> MessageCardSubject? {
         guard isExportable(message, now: now) else { return nil }
@@ -65,12 +126,66 @@ public struct MessageCardSubject: Equatable, Sendable {
         } else {
             chosen = servedText ?? message.content
         }
-        guard let text = MessageCardText.nonBlank(chosen) else { return nil }
+        let media = paintableMedia(of: message)
+        let text = MessageCardText.nonBlank(chosen)
+        guard text != nil || !media.isEmpty else { return nil }
+        let isViewer = message.isMe || message.senderId == viewer.id
         let reply = MessageCardPart(
-            author: author(isViewer: message.isMe || message.senderId == viewer.id, names: [message.senderName, message.senderUsername], viewer: viewer),
-            text: text
+            author: author(isViewer: isViewer, names: [message.senderName, message.senderUsername], viewer: viewer),
+            text: text ?? "",
+            handle: isViewer ? (viewer.username ?? message.senderUsername) : message.senderUsername
         )
-        return MessageCardSubject(quoted: quote(message.replyTo, viewer: viewer, now: now), reply: reply, sentAt: message.createdAt)
+        return MessageCardSubject(
+            quoted: quote(message.replyTo, viewer: viewer, now: now),
+            reply: reply,
+            sentAt: message.createdAt,
+            quotedAt: message.replyTo == nil ? nil : quotedAt,
+            media: media
+        )
+    }
+
+    /// **Un COMMENTAIRE devient une carte** (#8692) — le texte servi par le
+    /// Prisme (`displayContent`), son auteur et ses médias. Un commentaire
+    /// éphémère, flouté ou à vue unique ne part jamais en image.
+    public static func of(comment: FeedComment, viewer: Viewer, showOriginal: Bool = false) -> MessageCardSubject? {
+        guard !comment.effects.flags.hasLifecycleEffect else { return nil }
+        let media = paintableMedia(of: comment)
+        let text = MessageCardText.nonBlank(showOriginal ? comment.content : comment.displayContent)
+        guard text != nil || !media.isEmpty else { return nil }
+        let isViewer = !viewer.id.isEmpty && comment.authorId == viewer.id
+        return MessageCardSubject(
+            quoted: nil,
+            reply: MessageCardPart(
+                author: author(isViewer: isViewer, names: [comment.author, comment.authorUsername], viewer: viewer),
+                text: text ?? "",
+                handle: comment.authorUsername
+            ),
+            sentAt: comment.timestamp,
+            media: media
+        )
+    }
+
+    public static func paintableMedia(of comment: FeedComment) -> [MessageCardSubjectMedia] {
+        comment.media.compactMap { item in
+            let kind: MessageCardMediaKind
+            switch item.type {
+            case .image: kind = .image
+            case .video: kind = .video
+            case .audio: kind = .audio
+            case .document: return nil
+            }
+            guard let file = MessageCardText.nonBlank(item.url) ?? MessageCardText.nonBlank(item.thumbnailUrl) else { return nil }
+            return MessageCardSubjectMedia(
+                media: MessageCardMedia(
+                    id: item.id, kind: kind,
+                    aspect: aspect(width: item.width, height: item.height),
+                    duration: item.duration.map { Double($0) },
+                    name: kind == .audio ? item.fileName : nil
+                ),
+                fileURL: file,
+                posterURL: kind == .video ? item.thumbnailUrl : nil
+            )
+        }
     }
 
     /// Les langues dans lesquelles la réponse EXISTE : son original d'abord, puis chaque traduction servie.
@@ -89,7 +204,11 @@ public struct MessageCardSubject: Equatable, Sendable {
         guard let reference, !reference.isStoryReply, !reference.isQuotedMessageDeleted else { return nil }
         if let expiresAt = reference.quotedExpiresAt, expiresAt <= now { return nil }
         guard let text = MessageCardText.nonBlank(reference.previewText) else { return nil }
-        return MessageCardPart(author: author(isViewer: reference.isMe, names: [reference.authorName], viewer: viewer), text: text)
+        return MessageCardPart(
+            author: author(isViewer: reference.isMe, names: [reference.authorName], viewer: viewer),
+            text: text,
+            handle: reference.isMe ? viewer.username : nil
+        )
     }
 
     private static func author(isViewer: Bool, names: [String?], viewer: Viewer) -> String {
@@ -98,16 +217,17 @@ public struct MessageCardSubject: Equatable, Sendable {
     }
 
     /// Le nom du fichier : lisible dans une galerie, sans rien du contenu.
-    public static func fileName(at date: Date, calendar: Calendar = .current) -> String {
+    public static func fileName(at date: Date, output: MessageCardOutput = .image, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         let pad: (Int?) -> String = { String(format: "%02d", $0 ?? 0) }
-        return "meeshy-\(parts.year ?? 0)\(pad(parts.month))\(pad(parts.day))-\(pad(parts.hour))\(pad(parts.minute))\(pad(parts.second)).png"
+        return "meeshy-\(parts.year ?? 0)\(pad(parts.month))\(pad(parts.day))-\(pad(parts.hour))\(pad(parts.minute))\(pad(parts.second)).\(output.fileExtension)"
     }
 }
 
 public extension MessageCardInput {
     /// La carte telle que le format la demande — un titre absent ou vide n'est
     /// jamais « affiché », et un auteur anonymisé cède son nom à `anonymousLabel`.
+    /// « Pseudo au lieu du nom affiché » peint `@pseudo` quand on le connaît.
     /// Le filigrane, lui, garde toujours le pseudo de qui exporte.
     static func of(
         subject: MessageCardSubject,
@@ -115,10 +235,16 @@ public extension MessageCardInput {
         handle: String?,
         conversationTitle: String?,
         anonymousLabel: String,
-        formatDate: (Date) -> String
+        formatDate: (Date) -> String,
+        formatTime: (Date) -> String = { _ in "" },
+        media: [MessageCardMedia]? = nil
     ) -> MessageCardInput {
-        let quoted = subject.quoted.map { format.anonymizeQuoted ? MessageCardPart(author: anonymousLabel, text: $0.text) : $0 }
-        let reply = format.anonymizeReply ? MessageCardPart(author: anonymousLabel, text: subject.reply.text) : subject.reply
+        let named: (MessageCardPart) -> MessageCardPart = { part in
+            guard format.useHandles, let handle = part.handle else { return part }
+            return MessageCardPart(author: "@\(handle)", text: part.text, handle: handle)
+        }
+        let quoted = subject.quoted.map { format.anonymizeQuoted ? MessageCardPart(author: anonymousLabel, text: $0.text) : named($0) }
+        let reply = format.anonymizeReply ? MessageCardPart(author: anonymousLabel, text: subject.reply.text) : named(subject.reply)
         return MessageCardInput(
             quoted: quoted,
             reply: reply,
@@ -126,7 +252,16 @@ public extension MessageCardInput {
             handle: handle,
             title: format.showConversationTitle ? conversationTitle : nil,
             date: format.showDate ? formatDate(subject.sentAt) : nil,
-            showAuthors: format.showAuthors
+            showAuthors: format.showAuthors,
+            media: media ?? subject.media.map(\.media),
+            disposition: format.disposition,
+            quotedTime: format.showTimes ? subject.quotedAt.map(formatTime) : nil,
+            replyTime: format.showTimes ? formatTime(subject.sentAt) : nil
         )
     }
+}
+
+public extension MessageCardSubject {
+    /// Les pseudos sont-ils connus ? L'option « pseudo au lieu du nom affiché » n'existe qu'alors.
+    var hasHandles: Bool { reply.handle != nil || quoted?.handle != nil }
 }

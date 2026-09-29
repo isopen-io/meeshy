@@ -597,6 +597,8 @@ struct MessageListView: UIViewControllerRepresentable {
     /// qui BASCULE une coche dans un mode déjà actif : le menu doit armer.
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
+    /// « Imager » au double tap (#8692) — remplace « Composer » en tête de barre.
+    var onImagineFromMessage: ((String) -> Void)?
     /// « Plus… » ouvre le **GRAND** menu (`MessageMoreSheet`), pas l'overlay
     /// d'appui long — directive porteur : « le plus doit ouvrir le grand menu
     /// et non le menu longpress ». Les deux sont distincts : l'appui long
@@ -704,6 +706,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onEditMessage = onEditMessage
         vc.onSelectMessage = onSelectMessage
         vc.onComposeFromMessage = onComposeFromMessage
+        vc.onImagineFromMessage = onImagineFromMessage
         vc.onOpenMoreSheet = onOpenMoreSheet
         vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
@@ -822,6 +825,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onEditMessage = onEditMessage
         vc.onSelectMessage = onSelectMessage
         vc.onComposeFromMessage = onComposeFromMessage
+        vc.onImagineFromMessage = onImagineFromMessage
         vc.onOpenMoreSheet = onOpenMoreSheet
         vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction

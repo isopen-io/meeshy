@@ -23,9 +23,10 @@ enum PrimaryAction: String, Equatable {
     /// « parmi les premiers éléments ». Vivait dans `MoreItem` (« Plus… »),
     /// enterrée derrière un geste supplémentaire — retour porteur explicite.
     case select
-    /// **Exporter en image** — la carte d'export (miroir du menu web,
-    /// `apps/web/src/lib/view/message-actions.ts`). Même garde que « Copier » :
-    /// une image est une copie qu'on partage, ce qui ne se copie pas ne se peint pas.
+    /// **Imager** (#8692, ex « Exporter en image ») — l'atelier « Imagine »
+    /// (miroir du menu web, `apps/web/src/lib/view/message-actions.ts`). Même
+    /// garde que « Copier » : une image est une copie qu'on partage, ce qui ne
+    /// se copie pas ne se peint pas. Offert sur un texte ET sur un média seul.
     case exportImage
     /// **Export rapide** — la carte part dans le format par défaut enregistré
     /// sur l'appareil, sans passer par les options. N'existe qu'avec ce défaut.
@@ -54,6 +55,9 @@ enum MoreItem: String, Equatable {
     /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
     /// éditer, copier, partager. `language`/`transcription` = explorables.
     case edit, copy, share
+    /// **Imager** dans « Plus… » (#8692) — la même porte que l'action
+    /// primaire, pour qui la cherche dans le grand menu.
+    case imager
     case language, views, reactions, transcription, sentiment, history
     case report
 }
@@ -133,6 +137,13 @@ struct MessageMenuContext: Equatable {
     /// Un format d'export par défaut est enregistré sur l'appareil : « Export
     /// rapide » l'applique sans options (`MessageCardFormat.readDefault`).
     var hasDefaultExportFormat: Bool = false
+    /// Le message porte un média qu'une carte peut peindre — photo, vidéo,
+    /// son (`MessageCardSubject.paintableMedia`). « Imager » s'offre alors
+    /// même sans texte (#8692).
+    var hasPaintableMedia: Bool = false
+
+    /// « Imager » a-t-il quelque chose à peindre ? Un texte ou un média peignable.
+    var canImagine: Bool { hasText || hasPaintableMedia }
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -281,7 +292,7 @@ enum MessageActionResolver {
         let showsContent = !ctx.isBlurred
         if ctx.hasText && showsContent { out.append(.translate) }
         if ctx.hasText && showsContent { out.append(.copy) }
-        if ctx.hasText && showsContent {
+        if ctx.canImagine && showsContent {
             out.append(.exportImage)
             if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
         }
@@ -316,6 +327,7 @@ enum MessageActionResolver {
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText && showsContent { actions.append(.copy) }
         if showsContent { actions.append(.share) }
+        if ctx.canImagine && showsContent { actions.append(.imager) }
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
         // **La décoration, juste après le favori du MESSAGE** — c'est le

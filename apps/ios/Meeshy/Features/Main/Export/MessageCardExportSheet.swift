@@ -7,7 +7,7 @@ import MeeshyUI
 /// Ce que la feuille d'export reçoit : la carte telle que le lecteur la lit,
 /// les autres langues où elle existe, et qui signe le filigrane.
 struct MessageCardExportRequest {
-    /// La carte telle que le lecteur la lit.
+    /// La carte telle que le lecteur la lit — ses médias compris (#8692).
     let subject: MessageCardSubject
     /// Les langues dans lesquelles la réponse existe — l'original d'abord.
     let languages: [String]
@@ -21,47 +21,55 @@ struct MessageCardExportRequest {
     let quick: Bool
 }
 
-/// **EXPORTER UN MESSAGE EN IMAGE — UN COMPOSER QUI SE RÈGLE AU TOUCHER.**
-/// Miroir natif de `apps/web/src/routes/thread-export-sheet.tsx` : la feuille ne
-/// crée aucun contenu, elle choisit comment MONTRER ce qui existe (le template,
-/// le titre de la conversation, les noms des auteurs ou leur anonymat, la date),
-/// montre la carte telle qu'elle partira, puis l'enregistre.
+/// **« IMAGINE » — UN MESSAGE OU UN COMMENTAIRE DEVIENT UNE IMAGE, UN GIF OU
+/// UNE VIDÉO** (#8692, ex « Exporter en image », #8667). Miroir natif de
+/// `apps/web/src/routes/thread-export-sheet.tsx` : l'atelier ne crée aucun
+/// contenu, il choisit comment MONTRER ce qui existe — le template, le format
+/// de l'image, la disposition (« Frame »), les médias, les noms ou leur
+/// anonymat — montre la carte telle qu'elle partira, puis l'enregistre.
 ///
 /// L'aperçu EST le contrôle : chaque partie de la carte (en-tête, citation,
-/// liaison, réponse, fond) se touche, et le plateau ouvre l'onglet qui la règle
-/// — un seul panneau à la fois, jamais toute la liste. Les 784 templates se
-/// parcourent dans une galerie peinte sur le message, qui se cherche. Le
-/// plateau, les deux gestes de fin (« Sauvegarder », « Partager ») et les
-/// étiquettes sont en Liquid Glass adaptatif : sur iOS 26 ils fondent dans le
-/// style du système, et gardent une matière lisible jusqu'à iOS 16.
+/// liaison, réponse, médias, fond) se touche, et le plateau ouvre l'onglet qui
+/// la règle — un seul panneau à la fois, jamais toute la liste. Les 784
+/// templates se parcourent dans une galerie peinte sur le message, qui se
+/// cherche. Le plateau, les gestes de fin et les étiquettes sont en Liquid
+/// Glass adaptatif : sur iOS 26 ils fondent dans le style du système, et
+/// gardent une matière lisible jusqu'à iOS 16.
 ///
 /// La peinture tourne HORS du MainActor : l'aperçu précédent reste affiché
-/// pendant que le suivant se peint, jamais de saut ni d'écran vide.
+/// pendant que le suivant se peint, jamais de saut ni d'écran vide. Les médias
+/// se chargent derrière : la carte se peint d'abord avec leurs couleurs
+/// d'attente, puis se repeint quand les pixels arrivent.
 struct MessageCardExportSheet: View {
     let request: MessageCardExportRequest
     let onClose: () -> Void
 
-    private let store: MessageCardPreferenceStore = UserDefaultsMessageCardStore()
+    let store: MessageCardPreferenceStore = UserDefaultsMessageCardStore()
 
-    @State private var savedDefault: MessageCardFormat?
-    @State private var format: MessageCardFormat = .initial
-    @State private var popular: [MessageCardTemplateID] = []
-    @State private var usage: [MessageCardTemplateID: Int] = [:]
-    @State private var exportLanguage: String?
-    @State private var rendered: Rendered?
-    @State private var failed = false
-    @State private var busy = false
-    @State private var notice: String?
-    @State private var shareFile: ShareFile?
-    @State private var quickSent = false
-    @State private var loaded = false
-    @State private var tab: MessageCardExportTab = .styles
-    @State private var focus: MessageCardPartID?
-    @State private var touched = false
-    @State private var galleryOpen = false
-    @State private var thumbnails = MessageCardThumbnailStore()
+    @State var savedDefault: MessageCardFormat?
+    @State var format: MessageCardFormat = .initial
+    @State var popular: [MessageCardTemplateID] = []
+    @State var usage: [MessageCardTemplateID: Int] = [:]
+    @State var exportLanguage: String?
+    @State var rendered: Rendered?
+    @State var failed = false
+    @State var busy = false
+    @State var notice: String?
+    @State var shareFile: ShareFile?
+    @State var quickSent = false
+    @State var loaded = false
+    @State var tab: MessageCardExportTab = .styles
+    @State var focus: MessageCardPartID?
+    @State var touched = false
+    @State var galleryOpen = false
+    @State var thumbnails = MessageCardThumbnailStore()
+    @State var loadedMedia: MessageCardLoadedMedia = .empty
+    @State var mediaVersion = 0
+    @State var output: MessageCardOutput = .image
+    @State var motionTask: Task<Void, Never>?
+    @StateObject var motion = MessageCardMotionProgress()
 
-    private struct Rendered {
+    struct Rendered {
         let key: String
         let image: UIImage
         let png: Data
@@ -70,7 +78,7 @@ struct MessageCardExportSheet: View {
         let regions: [MessageCardRegion]
     }
 
-    private struct ShareFile: Identifiable {
+    struct ShareFile: Identifiable {
         let url: URL
         var id: String { url.path }
     }
@@ -79,10 +87,15 @@ struct MessageCardExportSheet: View {
     /// La tolérance du doigt autour d'une zone, en points d'écran.
     private static let touchSlop: CGFloat = 8
 
-    private var accent: Color { Color(hex: request.accentColor) }
+    var accent: Color { Color(hex: request.accentColor) }
 
-    private var subject: MessageCardSubject {
+    var subject: MessageCardSubject {
         exportLanguage.flatMap(request.subjectIn) ?? request.subject
+    }
+
+    /// Les médias tels qu'on les peint — avec leur onde réelle dès qu'elle est lue.
+    var currentMedia: [MessageCardMedia] {
+        loadedMedia.media.isEmpty ? subject.media.map(\.media) : loadedMedia.media
     }
 
     private var title: String? {
@@ -90,12 +103,12 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    private var renderKey: String { "\(format.serialized)|\(exportLanguage ?? "")" }
-    private var ready: Bool { rendered?.key == renderKey }
+    var renderKey: String { "\(format.serialized)|\(exportLanguage ?? "")|\(mediaVersion)" }
+    var ready: Bool { rendered?.key == renderKey }
     private var isDefault: Bool { savedDefault == format }
 
     private var tabs: [MessageCardExportTab] {
-        MessageCardExportTab.allCases.filter { $0 != .language || request.languages.count > 1 }
+        MessageCardExportTab.offered(hasMedia: !request.subject.media.isEmpty, languageCount: request.languages.count)
     }
 
     var body: some View {
@@ -106,6 +119,7 @@ struct MessageCardExportSheet: View {
                 AdaptiveGlassContainer(spacing: 12) {
                     VStack(spacing: 12) {
                         tray
+                        outputPicker
                         actions
                     }
                 }
@@ -113,12 +127,14 @@ struct MessageCardExportSheet: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .background(ambient)
-            .navigationTitle(MessageCardExportText.text("export.card.title", "Exporter en image"))
+            .navigationTitle(MessageCardExportText.text("export.card.title", "Imagine"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
         }
         .tint(accent)
         .onAppear(perform: load)
+        .onDisappear { motionTask?.cancel() }
+        .task(id: loaded) { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
             MessageCardExportGallery(
@@ -145,7 +161,10 @@ struct MessageCardExportSheet: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(MessageCardExportText.text("common.cancel", "Annuler"), action: onClose)
+            Button(MessageCardExportText.text("common.cancel", "Annuler")) {
+                motionTask?.cancel()
+                onClose()
+            }
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
@@ -226,7 +245,7 @@ struct MessageCardExportSheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel(MessageCardExportText.partLabel(.background))
             .accessibilityHint(MessageCardExportText.text("export.card.hint", "Touchez une partie de la carte pour la régler"))
-            ForEach(rendered.regions, id: \.part) { region in
+            ForEach(Array(rendered.regions.enumerated()), id: \.offset) { _, region in
                 zone(region, scale: scale)
             }
         }
@@ -305,6 +324,8 @@ struct MessageCardExportSheet: View {
             popular: popular,
             hasQuote: subject.quoted != nil,
             hasTitle: title != nil,
+            hasHandles: subject.hasHandles,
+            mediaKinds: currentMedia.map(\.kind),
             languages: request.languages,
             exportLanguage: $exportLanguage,
             thumbs: thumbSource,
@@ -325,23 +346,26 @@ struct MessageCardExportSheet: View {
 
     /// Choisir un onglet à la main désigne la partie qu'il règle.
     private func openTab(_ next: MessageCardExportTab) {
+        let painted = Set(rendered?.regions.map(\.part) ?? [])
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             tab = next
             switch next {
             case .palette: focus = .background
             case .link: focus = subject.quoted == nil ? nil : .link
             case .typeface: focus = focus == .quote || focus == .reply ? focus : .reply
-            case .styles, .details, .language: focus = nil
+            case .frame: focus = painted.contains(.header) ? .header : nil
+            case .media: focus = painted.contains(.media) ? .media : nil
+            case .styles, .format, .details, .language: focus = nil
             }
         }
     }
 
     // MARK: - Vignettes
 
-    private var thumbSource: MessageCardThumbSource {
+    var thumbSource: MessageCardThumbSource {
         var neutral = format
         neutral.template = MessageCardTemplates.defaultID
-        let state = "\(neutral.serialized)|\(exportLanguage ?? "")"
+        let state = "\(neutral.serialized)|\(exportLanguage ?? "")|\(mediaVersion)"
         let format = format
         return MessageCardThumbSource(
             store: thumbnails,
@@ -350,46 +374,25 @@ struct MessageCardExportSheet: View {
                 var styled = format
                 styled.template = id
                 return input(for: styled)
-            }
+            },
+            pictures: loadedMedia.pictures
         )
     }
 
-    private func input(for format: MessageCardFormat) -> MessageCardInput {
+    func input(for format: MessageCardFormat) -> MessageCardInput {
         MessageCardInput.of(
             subject: subject,
             format: format,
             handle: request.handle,
             conversationTitle: title,
             anonymousLabel: MessageCardExportText.text("export.card.anonymous", "Anonyme"),
-            formatDate: { Self.dateFormatter.string(from: $0) }
+            formatDate: { Self.dateFormatter.string(from: $0) },
+            formatTime: { Self.timeFormatter.string(from: $0) },
+            media: currentMedia
         )
     }
 
-    // MARK: - Gestes
-
-    private var actions: some View {
-        HStack(spacing: 10) {
-            Button { save() } label: {
-                Label(MessageCardExportText.text("export.card.save", "Sauvegarder"), systemImage: "square.and.arrow.down")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .adaptiveGlassProminent(in: Capsule(), tint: accent)
-            Button { share() } label: {
-                Label(MessageCardExportText.text("export.card.share", "Partager"), systemImage: "square.and.arrow.up")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .adaptiveGlass(in: Capsule(), interactive: true)
-        }
-        .disabled(!ready || busy)
-        .opacity(ready && !busy ? 1 : 0.6)
-    }
+    // MARK: - Chargement et peinture
 
     private func load() {
         guard !loaded else { return }
@@ -401,12 +404,26 @@ struct MessageCardExportSheet: View {
         popular = MessageCardUsage.popular(usage, count: Self.popularCount)
     }
 
+    /// Les pixels et l'onde réelle des médias, chargés HORS du MainActor —
+    /// la carte est déjà peinte avec leurs couleurs d'attente.
+    private func loadMedia() async {
+        let items = request.subject.media
+        guard loaded, mediaVersion == 0, !items.isEmpty else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            await MessageCardMediaLoader.load(items)
+        }.value
+        guard !Task.isCancelled else { return }
+        loadedMedia = result
+        mediaVersion += 1
+    }
+
     private func render() async {
         guard loaded else { return }
         let key = renderKey
         failed = false
         let input = input(for: format)
-        let card = await Task.detached(priority: .userInitiated) { MessageCardRenderer.render(input) }.value
+        let pictures = loadedMedia.pictures
+        let card = await Task.detached(priority: .userInitiated) { MessageCardRenderer.render(input, pictures: pictures) }.value
         guard !Task.isCancelled, key == renderKey else { return }
         guard let card, let image = UIImage(data: card.png) else {
             failed = true
@@ -420,60 +437,34 @@ struct MessageCardExportSheet: View {
             size: CGSize(width: card.width, height: card.height),
             regions: card.regions
         )
-        if request.quick && !quickSent {
+        // L'export rapide attend les pixels des médias : il ne part jamais
+        // avec leurs couleurs d'attente.
+        if request.quick && !quickSent && (request.subject.media.isEmpty || mediaVersion > 0) {
             quickSent = true
             save()
         }
     }
 
-    private enum Outcome { case gallery, shared, cancelled, denied }
-
-    private func save() {
-        guard ready, !busy, let rendered else { return }
-        busy = true
-        notice = nil
-        Task {
-            let saved = await PhotoLibraryManager.shared.saveImageFile(rendered.png, fileName: MessageCardSubject.fileName(at: Date()))
-            busy = false
-            finish(saved ? .gallery : .denied)
-        }
-    }
-
-    private func share() {
-        guard ready, !busy, let rendered else { return }
-        notice = nil
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(MessageCardSubject.fileName(at: Date()))
-        do {
-            try rendered.png.write(to: url, options: .atomic)
-            shareFile = ShareFile(url: url)
-        } catch {
-            notice = MessageCardExportText.text("export.announce.failed", "Impossible de créer l’image")
-        }
-    }
-
-    /// Chaque carte ENREGISTRÉE compte pour son template ; un refus reste dans
-    /// la feuille, où l'utilisateur peut réessayer.
-    private func finish(_ outcome: Outcome) {
-        switch outcome {
-        case .gallery, .shared:
-            MessageCardUsage.record(format.template, in: store)
-            HapticFeedback.success()
-            onClose()
-            let message = outcome == .gallery
-                ? MessageCardExportText.text("export.announce.gallery", "Image enregistrée dans la galerie")
-                : MessageCardExportText.text("export.announce.shared", "Image prête")
-            FeedbackToastManager.shared.showSuccess(message)
-        case .cancelled:
-            notice = nil
-        case .denied:
-            notice = MessageCardExportText.text("export.announce.photosDenied", "Autorisez Meeshy à ajouter des photos pour enregistrer l’image")
-        }
-    }
-
-    private static let dateFormatter: DateFormatter = {
+    static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
         formatter.timeStyle = .none
         return formatter
     }()
+
+    static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
+/// La progression d'une carte animée — écrite depuis l'encodeur, lue par le plateau.
+final class MessageCardMotionProgress: ObservableObject {
+    @Published var value: Double?
+
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage.
+    // Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
 }
