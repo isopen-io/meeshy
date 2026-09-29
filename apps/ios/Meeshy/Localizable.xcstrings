@@ -14793,96 +14793,96 @@
         }
       }
     },
-    "composer.camera.quickHint.photoOrVideo": {
+    "composer.camera.gesture.tapPhoto": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس: صورة · اضغط مطولًا: فيديو"
+            "value": "المس: صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippen: Foto · Halten: Video"
+            "value": "Tippen: Foto"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap: photo · Hold: video"
+            "value": "Tap: photo"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca: foto · Mantén: vídeo"
+            "value": "Toca: foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toucher : photo · Maintenir : vidéo"
+            "value": "Toucher : photo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca: foto · Tieni premuto: video"
+            "value": "Tocca: foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque: foto · Segure: vídeo"
+            "value": "Toque: foto"
           }
         }
       }
     },
-    "composer.camera.quickHint.videoOnly": {
+    "composer.camera.gesture.holdFilm": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطولًا للتصوير"
+            "value": "اضغط مطولًا: صوّر فيديو"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Filmen halten"
+            "value": "Halten: filmen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold to film"
+            "value": "Hold: record"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén para grabar"
+            "value": "Mantén: grabar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenir pour filmer"
+            "value": "Maintenir : filmer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto per filmare"
+            "value": "Tieni premuto: filma"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Segure para filmar"
+            "value": "Segure: filmar"
           }
         }
       }
