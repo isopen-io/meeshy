@@ -69,6 +69,10 @@ const itStudioChrome = {
   'story.studio.objects.edit': 'Modifica {name}',
   'story.studio.media.alt': 'Testo alternativo',
   'story.studio.media.alt.placeholder': 'Descrivi questo contenuto per i lettori di schermo',
+  'composer.reelOffer.title': 'Pubblicare come reel?',
+  'composer.reelOffer.body': 'Il tuo post contiene un solo video: come reel, si apre a schermo intero nei Reel.',
+  'composer.reelOffer.reel': 'È un reel',
+  'composer.reelOffer.post': 'È un post',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

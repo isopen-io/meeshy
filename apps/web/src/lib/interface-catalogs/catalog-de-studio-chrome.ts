@@ -69,6 +69,10 @@ const deStudioChrome = {
   'story.studio.objects.edit': '{name} bearbeiten',
   'story.studio.media.alt': 'Alternativtext',
   'story.studio.media.alt.placeholder': 'Beschreibe dieses Medium für Screenreader',
+  'composer.reelOffer.title': 'Als Reel veröffentlichen?',
+  'composer.reelOffer.body': 'Dein Beitrag enthält nur ein Video: Als Reel läuft es im Vollbild unter Reels.',
+  'composer.reelOffer.reel': 'Es ist ein Reel',
+  'composer.reelOffer.post': 'Es ist ein Beitrag',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

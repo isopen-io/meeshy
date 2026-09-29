@@ -437,7 +437,7 @@ final class ComposerObjectEditorTests: XCTestCase {
             .replacingOccurrences(of: "\n", with: "")
         XCTAssertTrue(verre.contains(".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
                       "La carte d'un rail en colonne est le verre teinté du plateau.")
-        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:tint??plateauTint.opacity(0.55))"),
                       "Un bouton séparé porte le MÊME verre teinté, en disque.")
         for (nom, source, attendu, air) in [
             ("le couloir d'OUTILS", editeur,
@@ -448,7 +448,7 @@ final class ComposerObjectEditorTests: XCTestCase {
              ".padding(.vertical,8)"),
             ("le couloir des PORTES", leading,
              ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint))",
-             ".padding(axis==.vertical?.vertical:.horizontal,8)")
+             ".padding(axis==.vertical?.vertical:.horizontal,ComposerRailGeometry.floatingColumnPadding)")
         ] {
             let nu = AppSourceGuard.stripComments(source)
                 .replacingOccurrences(of: " ", with: "")
@@ -462,6 +462,8 @@ final class ComposerObjectEditorTests: XCTestCase {
                 nu.contains(air),
                 "\(nom) doit respirer comme son jumeau")
         }
+        XCTAssertEqual(ComposerRailGeometry.floatingColumnPadding, 8,
+                       "l'air du couloir des PORTES vaut celui de ses jumeaux")
     }
 
     /// **Non-vacuité** — sans elle, le témoin ci-dessus passerait sur un fichier

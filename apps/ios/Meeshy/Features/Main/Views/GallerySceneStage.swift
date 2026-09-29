@@ -103,4 +103,29 @@ enum GallerySceneStage {
         let zone = region(viewport: viewport, presentation: presentation, corridors: corridors)
         return Frame(layout: SceneShape.layout(in: zone, immersive: presentation.isFull))
     }
+
+    /// **Le cadre auquel le canvas est TOUJOURS posé** (#8598) — celui du plein
+    /// cadre, le plus grand que la page connaisse, indépendant de l'état.
+    ///
+    /// Le passage cadré → plein cadre changeait les COTES du player : SwiftUI
+    /// anime le cadre d'un `UIViewRepresentable`, pas la mise en page de ce
+    /// qu'il contient — le canvas se reposait d'un coup à sa taille finale au
+    /// milieu d'un conteneur qui, lui, glissait. « Une vue remplacée ne peut pas
+    /// être fluide » : une vue RE-POSÉE non plus. Le lecteur de stories a
+    /// répondu à la même question par une ÉCHELLE (`readerCard`, `framing.scale`)
+    /// ; la page scène reprend sa réponse. Le canvas ne change plus jamais de
+    /// taille : seule une transformation l'amène au cadre de l'état.
+    static func reference(viewport: CGSize) -> Frame {
+        Frame(layout: SceneShape.layout(in: viewport, immersive: true))
+    }
+
+    /// **L'échelle qui amène le cadre de référence au cadre de l'état.** La
+    /// forme étant la même (9:16) des deux côtés, une échelle UNIFORME suffit ;
+    /// `1` au plein cadre, et `1` aussi pour un cadre dégénéré — mieux vaut une
+    /// carte trop grande d'une passe qu'une division par zéro.
+    static func scale(of frame: Frame, reference: Frame) -> CGFloat {
+        let largeur = reference.sceneSize.width
+        guard largeur > 0, frame.sceneSize.width > 0 else { return 1 }
+        return frame.sceneSize.width / largeur
+    }
 }

@@ -131,6 +131,8 @@ extension StoryCardView {
             // la hauteur arbitraire qui la faisait flotter trop haut.
             .padding(.bottom, captionBottomInset(geometry: geometry))
             .animation(.spring(response: 0.32, dampingFraction: 0.85), value: composerBlockHeight)
+            // #8601 — écrire un commentaire tait la légende (`StoryComposingFocus`).
+            .storyFocusFade(readerDecorationsShown)
             .transition(.opacity)
             // **L'invite doit recevoir le doigt** (#4762, mesuré au
             // simulateur le 2026-09-02).
@@ -183,6 +185,8 @@ extension StoryCardView {
                     .padding(.bottom, captionBottomInset(geometry: geometry))
             }
             .allowsHitTesting(false)
+            .opacity(readerDecorationsShown ? 1 : 0)
+            .animation(StoryComposingFocus.fade, value: readerDecorationsShown)
             .transition(.opacity)
         }
     }
@@ -215,6 +219,8 @@ extension StoryCardView {
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .allowsHitTesting(false)
+            .opacity(readerDecorationsShown ? 1 : 0)
+            .animation(StoryComposingFocus.fade, value: readerDecorationsShown)
         }
     }
 

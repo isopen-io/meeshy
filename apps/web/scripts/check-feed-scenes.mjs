@@ -649,7 +649,12 @@ async function fullscreenInvariants(viewport) {
   // ── 8. le tap ouvre EN PLACE, sur la scène TOUCHÉE (jamais la première) ──
   await page.click('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"] button');
   await page.waitForSelector('[data-scene-fullscreen] [data-scene-viewer-page]');
-  await page.waitForTimeout(120); // `ResizeObserver`/`fitScene` peint la boîte après le montage
+  // #8598 — la boîte GRANDIT depuis la carte (FLIP, 320 ms) : sa place se lit
+  // une fois l'ouverture JOUÉE, jamais sur une image intermédiaire — un FAIT
+  // attendu, qui remplace l'ancien délai fixe de 120 ms.
+  await page.waitForFunction(() =>
+    document.querySelector('[data-scene-fullscreen]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  );
 
   const fullscreen = await page.evaluate(() => {
     const dialog = document.querySelector('[data-scene-fullscreen]');
@@ -773,6 +778,87 @@ for (const [asked, expected] of [
   }
 
   check(pageErrors.length === 0, `#6902 (?scene=${asked}) : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
+  await context.close();
+}
+
+/* ── 12. #8598 — UNE SCÈNE À TIMELINE S'OUVRE DEPUIS SA CARTE, AVEC SON
+ * CURSEUR. Quatre mesures, toutes à l'EFFET : (a) la PREMIÈRE image après le
+ * tap montre déjà la scène (jamais un `Suspense` vide), posée sur la carte et
+ * non à sa place finale, sur un fond encore transparent ; (b) le curseur est
+ * dans le couloir et AVANCE ; (c) glisser le curseur déplace la lecture sans
+ * basculer le plateau ; (d) le plein cadre efface le curseur avec le chrome,
+ * aux yeux ET au doigt. */
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+  const CARD = '[data-feed-card-id="post-scene-decorated"] [data-feed-scene] button';
+
+  await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
+  await page.waitForSelector(`${CARD} [data-scene-player]`);
+  await page.locator(CARD).scrollIntoViewIfNeeded();
+
+  const first = await page.evaluate(async (selector) => {
+    const button = document.querySelector(selector);
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const card = button.querySelector('[data-feed-scene-frame]').getBoundingClientRect();
+    button.click();
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    const dialog = document.querySelector('[data-scene-fullscreen]');
+    const active = dialog === null ? null : [...dialog.querySelectorAll('[data-viewer-page]')].find((p) => p.style.transform === 'translateX(0%)');
+    const box = active?.querySelector('[data-scene-viewer-box]');
+    const rect = box?.getBoundingClientRect();
+    return {
+      dialog: dialog !== null,
+      player: box?.querySelector('[data-scene-player]') !== null && box !== undefined,
+      card: { top: card.top, width: card.width },
+      box: rect === undefined ? null : { top: rect.top, width: rect.width },
+      background: dialog === null ? '' : getComputedStyle(dialog).backgroundColor,
+    };
+  }, CARD);
+  check(first.dialog && first.player, `#8598 : la première image après le tap doit montrer la scène (dialogue ${first.dialog}, player ${first.player})`);
+  check(
+    first.box !== null && Math.abs(first.box.top - first.card.top) < Math.abs(first.box.top - 76),
+    `#8598 : la première image doit partir de la CARTE (haut carte ${first.card.top.toFixed(0)}, haut boîte ${first.box?.top.toFixed(0)}) — pas de la place finale`,
+  );
+  check(first.background !== 'rgb(0, 0, 0)', `#8598 : le fond doit se LEVER avec la scène, pas tomber noir d'un bloc (reçu ${first.background})`);
+
+  await page.waitForFunction(() =>
+    document.querySelector('[data-scene-fullscreen]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  );
+  const SCRUB = '[data-scene-fullscreen] [data-viewer-transport-slot] [data-scene-scrub]';
+  const scrubVisible = await page.locator(SCRUB).isVisible();
+  check(scrubVisible, '#8598 : le curseur de la scène doit être visible dans le couloir de transport');
+  const t0 = Number(await page.getAttribute(SCRUB, 'aria-valuenow'));
+  const advanced = await page
+    .waitForFunction(({ s, from }) => Number(document.querySelector(s)?.getAttribute('aria-valuenow')) !== from, { s: SCRUB, from: t0 }, { timeout: 1500 })
+    .then(() => true)
+    .catch(() => false);
+  check(advanced, `#8598 : le curseur doit AVANCER pendant la lecture (resté à ${t0})`);
+
+  const bar = await page.locator(SCRUB).boundingBox();
+  await page.mouse.move(bar.x + bar.width * 0.2, bar.y + bar.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width * 0.75, bar.y + bar.height / 2, { steps: 6 });
+  const during = Number(await page.getAttribute(SCRUB, 'aria-valuenow'));
+  await page.mouse.up();
+  check(Math.abs(during - 75) <= 3, `#8598 : glisser le curseur doit pointer 75 % (reçu ${during})`);
+  const corridorAfterScrub = await page.evaluate((s) => document.querySelector(s).closest('.media-viewer-chrome').style.opacity, SCRUB);
+  check(corridorAfterScrub === '1', `#8598 : glisser le curseur ne doit PAS basculer le plein cadre (opacité du couloir ${corridorAfterScrub})`);
+
+  await page.mouse.click(195, 400);
+  await page
+    .waitForFunction((s) => getComputedStyle(document.querySelector(s).closest('.media-viewer-chrome')).opacity === '0', SCRUB, { timeout: 1500 })
+    .catch(() => undefined);
+  const full = await page.evaluate((s) => {
+    const corridor = document.querySelector(s).closest('.media-viewer-chrome');
+    return { opacity: getComputedStyle(corridor).opacity, pointer: getComputedStyle(corridor).pointerEvents };
+  }, SCRUB);
+  check(full.opacity === '0' && full.pointer === 'none', `#8598 : en plein cadre, le curseur s'efface avec le chrome (opacité ${full.opacity}, pointeur ${full.pointer})`);
+
+  check(pageErrors.length === 0, `#8598 : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
   await context.close();
 }
 
