@@ -101,6 +101,7 @@
     "build:watch": "tsc --watch --project tsconfig.json",
     "api-endpoints:generate": "tsx scripts/generate-api-endpoints.ts",
     "ios-endpoints:generate": "tsx scripts/generate-ios-endpoints.ts",
+    "generate:call-frames": "bun scripts/generate-call-frames-swift.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",
     "generate": "prisma generate --schema=./prisma/schema.prisma --generator client",

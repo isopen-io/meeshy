@@ -55,16 +55,23 @@ async function developed(surface: Canvas2D, size: Size, fileName: string, env: C
   return blob === null ? null : { blob, fileName, mimeType: blob.type || PHOTO_MIME };
 }
 
+type DrawnInput = { readonly viewport: Size; readonly style: string; readonly env: CaptureEnv; readonly draw: (context: Canvas2D['context'], size: Size) => void };
+
+/** Une image peinte par `draw` à pleine résolution (`captureSize`), développée — un montage, ou un cadre (#8743). */
+export async function captureDrawn({ viewport, style, env, draw }: DrawnInput): Promise<CaptureFile | null> {
+  const size = captureSize(viewport);
+  const surface = env.canvas(size);
+  if (surface === null) return null;
+  draw(surface.context, size);
+  return developed(surface, size, captureFileName({ at: env.now(), style }), env);
+}
+
 type MontageInput = { readonly stage: Element; readonly style: MontageStyle; readonly text: MontageText; readonly viewport: Size; readonly env: CaptureEnv };
 
 export async function captureMontage({ stage, style, text, viewport, env }: MontageInput): Promise<CaptureFile | null> {
   const tiles = visibleTiles(stage);
   if (tiles.length === 0) return null;
-  const size = captureSize(viewport);
-  const surface = env.canvas(size);
-  if (surface === null) return null;
-  drawMontage(surface.context, montageLayout({ style, count: tiles.length, size, onScreen: tiles.map((tile) => tile.onScreen) }), tiles, text);
-  return developed(surface, size, captureFileName({ at: env.now(), style }), env);
+  return captureDrawn({ viewport, style, env, draw: (context, size) => drawMontage(context, montageLayout({ style, count: tiles.length, size, onScreen: tiles.map((tile) => tile.onScreen) }), tiles, text) });
 }
 
 async function portrait(tile: CaptureTile, index: number, at: Date, env: CaptureEnv): Promise<CaptureFile | null> {

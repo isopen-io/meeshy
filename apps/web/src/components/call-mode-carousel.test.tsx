@@ -243,6 +243,89 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
+  /* LE DOIGT QUI SE POSE PUIS GLISSE (#8736) : un appui long sur un AUTRE
+     style le choisit — mais un défilement programmé SOUS le doigt encore
+     posé luttait contre lui, et le glissé qui suivait restait collé. Le
+     centrage attend que le doigt se lève. */
+  const mountRecorded = () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const chosen: string[] = [];
+    const captured: string[] = [];
+    const scrolls: number[] = [];
+    act(() =>
+      root.render(
+        <ModeCarousel
+          label="Montages"
+          items={IDS.map((id) => ({ id, label: id, visual: null }))}
+          selected="screen"
+          onSelect={(id) => void chosen.push(id)}
+          capture={{ recording: false, onCapture: (intent) => void captured.push(intent), hint: 'Deux tapes : photo · Appui long : vidéo', longPressMs: 30 }}
+        />,
+      ),
+    );
+    const track = host.querySelector('[data-call-row-scroll]') as Track;
+    track.scrollLeft = 0;
+    layout(track);
+    Object.defineProperty(track, 'scrollTo', { configurable: true, value: (options: { readonly left: number }) => void scrolls.push(options.left) });
+    const item = (id: string) => host.querySelector(`[data-carousel-item="${id}"]`) as HTMLElement;
+    const pointer = (id: string, type: string) => act(() => void item(id).dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, isPrimary: true, clientX: 10, clientY: 10 })));
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { host, track, item, pointer, chosen, captured, scrolls, done };
+  };
+
+  test('un appui long sur un autre style le choisit sans rien faire défiler sous le doigt ; il se centre quand le doigt se lève (#8736)', async () => {
+    const view = mountRecorded();
+    view.pointer('gold', 'pointerdown');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.chosen).toEqual(['gold']);
+    expect(view.scrolls).toEqual([]);
+    view.pointer('gold', 'pointerup');
+    expect(view.scrolls).toEqual([2 * PITCH]);
+    view.done();
+  });
+
+  test('un doigt posé qui se met à défiler n’est plus un appui long : la piste qui bouge le relâche (#8736)', async () => {
+    const view = mountRecorded();
+    view.pointer('screen', 'pointerdown');
+    view.track.scrollLeft = 20;
+    act(() => void view.track.dispatchEvent(new Event('scroll')));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.captured).toEqual([]);
+    view.done();
+  });
+
+  test('un glissé ne redemande pas le style déjà choisi à chaque image (#8736)', async () => {
+    const view = mountRecorded();
+    view.track.dispatchEvent(new Event('pointerdown'));
+    view.track.scrollLeft = 10;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    view.track.scrollLeft = 20;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    expect(view.chosen).toEqual([]);
+    view.track.scrollLeft = PITCH;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    view.track.scrollLeft = PITCH + 6;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    expect(view.chosen).toEqual(['cover']);
+    view.done();
+  });
+
+  test('la piste défile sans élasticité : overscroll-x-none (#8736)', () => {
+    const view = mountRecorded();
+    expect(view.track.className).toContain('overscroll-x-none');
+    expect(view.track.className).not.toContain('overscroll-x-contain');
+    view.done();
+  });
+
   /* Chromium, sous `scroll-snap-type: mandatory`, recalcule les points
      d'accroche à chaque mise en page de la piste ; s'ils ont bougé pendant un
      glissé du doigt, il RÉACCROCHE sur-le-champ au dernier élément accroché et

@@ -30,12 +30,16 @@ extension CallView {
         let trailingX = container.width - safeArea.trailing - margin - halfW
         let topY = topInset + halfH
         let bottomY = container.height - bottomInset - halfH
+        let anchor: CGPoint
         switch corner {
-        case .topLeading: return CGPoint(x: leadingX, y: topY)
-        case .topTrailing: return CGPoint(x: trailingX, y: topY)
-        case .bottomLeading: return CGPoint(x: leadingX, y: bottomY)
-        case .bottomTrailing: return CGPoint(x: trailingX, y: bottomY)
+        case .topLeading: anchor = CGPoint(x: leadingX, y: topY)
+        case .topTrailing: anchor = CGPoint(x: trailingX, y: topY)
+        case .bottomLeading: anchor = CGPoint(x: leadingX, y: bottomY)
+        case .bottomTrailing: anchor = CGPoint(x: trailingX, y: bottomY)
         }
+        // #8747 — au repos, une rangée de commandes tient entre la vignette
+        // et l'en-tête comme entre elle et la pilule.
+        return CallSelfTileControlsPlacement.restingCenter(anchor, tileSize: size, bounds: selfTileControlsBounds(in: container, safeArea: safeArea))
     }
 
     /// #8577 — la taille de la vignette : son palier, suivi du pincement en
@@ -63,57 +67,62 @@ extension CallView {
         GeometryReader { geo in
             let size = pipTileSize(in: geo.size, safeArea: geo.safeAreaInsets)
             let base = pipCenter(pipCorner, in: geo.size, size: size, safeArea: geo.safeAreaInsets)
-            // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
-            // primary). Swap flips both with one tap.
-            videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
-                .frame(width: size.width, height: size.height)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                )
-                .overlay(alignment: .bottom) { selfTileCameraControls(tileSize: size) }
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-                .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
-                .gesture(
-                    DragGesture()
-                        .onChanged { pipDragOffset = $0.translation }
-                        .onEnded { value in
-                            let dropped = CGPoint(x: base.x + value.translation.width,
-                                                  y: base.y + value.translation.height)
-                            let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
-                                pipCorner = corner
-                                pipDragOffset = .zero
+            ZStack {
+                // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
+                // primary). Swap flips both with one tap.
+                videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
+                    .frame(width: size.width, height: size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                    )
+                    .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
+                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                    .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { pipDragOffset = $0.translation }
+                            .onEnded { value in
+                                let dropped = CGPoint(x: base.x + value.translation.width,
+                                                      y: base.y + value.translation.height)
+                                let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
+                                    pipCorner = corner
+                                    pipDragOffset = .zero
+                                }
+                                HapticFeedback.light()
                             }
-                            HapticFeedback.light()
+                    )
+                    .simultaneousGesture(selfTilePinchGesture)
+                    // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
+                    // #8747 — les commandes de ma caméra vivent AUTOUR de la
+                    // vignette : la toucher ne fait que permuter.
+                    .onTapGesture {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
+                            swapStreams.toggle()
                         }
+                        HapticFeedback.light()
+                    }
+                    .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
+                    .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
+                    .accessibilityValue(CallSelfTileCopy.sizeName(selfTileScale))
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: settleSelfTile(on: selfTileScale.larger)
+                        case .decrement: settleSelfTile(on: selfTileScale.smaller)
+                        @unknown default: return
+                        }
+                    }
+                // #8747 — Effets · Écran au-dessus, Retourner · Caméra en
+                // dessous : ils suivent le glissé et le pincement.
+                selfTileControlRows(
+                    tile: CGRect(x: base.x - size.width / 2, y: base.y - size.height / 2, width: size.width, height: size.height),
+                    container: geo.size,
+                    safeArea: geo.safeAreaInsets,
+                    dragOffset: pipDragOffset
                 )
-                .simultaneousGesture(selfTilePinchGesture)
-                // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
-                // #8626 — les commandes de ma caméra vivent en bas de la
-                // vignette quand elle porte mon image ; leurs boutons gagnent
-                // le toucher, le reste de la vignette permute — ou replie la
-                // grille déployée d'une petite vignette.
-                .onTapGesture {
-                    if CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: isCameraMenuUnfolded) {
-                        return tapCameraMenu(.elsewhere)
-                    }
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
-                        swapStreams.toggle()
-                    }
-                    HapticFeedback.light()
-                }
-                .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
-                .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
-                .accessibilityValue(CallSelfTileCopy.sizeName(selfTileScale))
-                .accessibilityAdjustableAction { direction in
-                    switch direction {
-                    case .increment: settleSelfTile(on: selfTileScale.larger)
-                    case .decrement: settleSelfTile(on: selfTileScale.smaller)
-                    @unknown default: return
-                    }
-                }
+            }
         }
         .onAppear { selfTileScale = selfTileMemory.scale(for: callManager.currentCallId) }
     }
@@ -133,7 +142,6 @@ extension CallView {
         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
             selfTileScale = scale
             selfTilePinch = 1
-            if changed { isCameraMenuUnfolded = false }
         }
         guard changed else { return }
         HapticFeedback.light()

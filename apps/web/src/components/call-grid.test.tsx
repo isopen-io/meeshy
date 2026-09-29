@@ -66,6 +66,14 @@ describe('CallGrid', () => {
     expect(html).not.toContain('data-call-spotlight');
   });
 
+  test('chaque vidéo dit À QUI elle est — le membre, ou moi : la capture pose chaque visage dans SA case (#8743)', () => {
+    const html = grid({ members: [member('u-a', 'Awa', { cameraOn: true })], remoteStreams: { 'u-a': liveVideo }, self: { stream: liveVideo, cameraOn: true, mirrored: true } });
+    expect(html).toMatch(/<video[^>]*data-call-member="u-a"/);
+    expect(html).toMatch(/<video[^>]*data-call-self=""/);
+    const shared = grid(sharing);
+    expect(shared).toMatch(/<video[^>]*data-call-stream="contain"[^>]*data-call-member="u-k"/);
+  });
+
   test('chaque vignette porte le liseré de la couleur de sa personne — celle de son nom dans les sous-titres', () => {
     const html = grid();
     expect(html).toContain(`border-color:${speakerColor('u-a')}`);

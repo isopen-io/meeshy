@@ -80,19 +80,27 @@ extension CallView {
 
     var captureSubjects: [CallCaptureSubject] {
         guard isGroupStage else { return duoCaptureSubjects }
-        return GroupCallStage.tiles(mesh: mesh, callManager: callManager).map { tile in
-            CallCaptureSubject(
-                id: tile.id,
-                name: tile.displayName,
-                isMirrored: tile.isLocal && isMyCaptureMirrored,
-                showsVideo: tile.showsVideo
-            )
-        }
+        return CallCaptureIdentity.group(
+            tiles: GroupCallStage.tiles(mesh: mesh, callManager: callManager),
+            myName: myCaptureName,
+            myUsername: AuthManager.shared.currentUser?.username,
+            isMyCaptureMirrored: isMyCaptureMirrored
+        )
+    }
+
+    /// #8743 — ce que l'appel sait déjà de sa conversation, pour les textes d'un cadre.
+    var montageCallContext: CallFrameCallContext {
+        let conversationId = callManager.conversationId
+        return CallFrameCallContext(
+            conversationId: conversationId,
+            knownGroupTitle: mesh.groupTitle(for: conversationId),
+            isGroupCall: isGroupStage || mesh.isGroupConversation(conversationId)
+        )
     }
 
     var captureTracks: [String: Any] {
         guard isGroupStage else {
-            let duo: [String: Any?] = [Self.remoteCaptureId: callManager.remoteVideoTrack, Self.localCaptureId: callManager.localVideoTrack]
+            let duo: [String: Any?] = [CallCaptureIdentity.remoteDuoId: callManager.remoteVideoTrack, CallCaptureIdentity.localDuoId: callManager.localVideoTrack]
             return duo.compactMapValues { $0 }
         }
         return GroupCallStage.tiles(mesh: mesh, callManager: callManager).reduce(into: [String: Any]()) { result, tile in
@@ -136,15 +144,24 @@ extension CallView {
     var myImageCaptureSubjects: [CallCaptureSubject] { [myImageCaptureSubject] }
 
     var myImageCaptureTracks: [String: Any] {
-        callManager.localVideoTrack.map { [Self.localCaptureId: $0] } ?? [:]
+        callManager.localVideoTrack.map { [CallCaptureIdentity.localDuoId: $0] } ?? [:]
     }
 
     private var myImageCaptureSubject: CallCaptureSubject {
-        CallCaptureSubject(
-            id: Self.localCaptureId,
-            name: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main),
+        CallCaptureIdentity.me(
+            name: myCaptureName,
+            username: AuthManager.shared.currentUser?.username,
             isMirrored: isMyCaptureMirrored,
             showsVideo: callManager.isVideoEnabled && callManager.hasLocalVideoTrack
+        )
+    }
+
+    private var myCaptureName: String {
+        let user = AuthManager.shared.currentUser
+        return CallCaptureIdentity.myName(
+            displayName: user?.displayName,
+            username: user?.username,
+            fallback: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main)
         )
     }
 
@@ -157,17 +174,13 @@ extension CallView {
         )
     }
 
-    private static let remoteCaptureId = "duo-remote"
-    private static let localCaptureId = "duo-local"
-
     private var duoCaptureSubjects: [CallCaptureSubject] {
-        let remote = CallCaptureSubject(
-            id: Self.remoteCaptureId,
-            name: callManager.remoteUsername ?? "",
-            isMirrored: false,
-            showsVideo: callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled
+        CallCaptureIdentity.duo(
+            me: myImageCaptureSubject,
+            remoteName: callManager.remoteUsername ?? "",
+            remoteUsername: remoteProfile?.username,
+            remoteShowsVideo: callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled,
+            meFirst: swapStreams && callManager.hasLocalVideoTrack
         )
-        let local = myImageCaptureSubject
-        return swapStreams && callManager.hasLocalVideoTrack ? [local, remote] : [remote, local]
     }
 }

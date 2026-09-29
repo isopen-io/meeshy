@@ -61,7 +61,7 @@ extension CallView {
         case .effects:
             CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, onExit: exitMode)
         case .montage:
-            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, onExit: exitMode)
+            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, onExit: exitMode)
         }
     }
 

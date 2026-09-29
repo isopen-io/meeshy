@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { useStore } from 'zustand/react';
 
 import { callOutputStore } from '@/lib/calls/call-output';
@@ -11,8 +11,9 @@ import { callOutputStore } from '@/lib/calls/call-output';
  * qu'un appel réduit continue de s'entendre.
  */
 
-function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null) {
-  const ref = useRef<T | null>(null);
+function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null, held?: MutableRefObject<T | null>) {
+  const own = useRef<T | null>(null);
+  const ref = held ?? own;
   useEffect(() => {
     const element = ref.current;
     if (element === null) return;
@@ -30,6 +31,9 @@ export function StreamVideo({
   label,
   fit = 'cover',
   zoom = 1,
+  videoRef,
+  member,
+  self = false,
 }: {
   readonly stream: MediaStream | null;
   readonly mirrored: boolean;
@@ -38,8 +42,14 @@ export function StreamVideo({
   readonly fit?: 'cover' | 'contain';
   /** Le zoom numérique de MON aperçu (#8441) : à l'écran seulement, jamais dans ce qui part. */
   readonly zoom?: number;
+  /** L'élément tenu par qui le NOMME (#8737) : la capture du mode Effets lit MA vidéo par lui, jamais en fouillant l'écran. */
+  readonly videoRef?: MutableRefObject<HTMLVideoElement | null>;
+  /** À QUI est cette vidéo (#8743) : le membre montré — la capture pose chaque visage dans SA case d'un cadre. */
+  readonly member?: string | undefined;
+  /** Ma propre vidéo. */
+  readonly self?: boolean;
 }) {
-  const ref = useSrcObject<HTMLVideoElement>(stream);
+  const ref = useSrcObject<HTMLVideoElement>(stream, videoRef);
   const transform = [mirrored ? 'scaleX(-1)' : '', zoom > 1 ? `scale(${zoom})` : ''].filter((part) => part !== '').join(' ');
   return (
     <video
@@ -51,6 +61,8 @@ export function StreamVideo({
       className={className}
       style={{ objectFit: fit, transform: transform === '' ? undefined : transform, backgroundColor: '#000' }}
       data-call-stream={fit}
+      data-call-member={member}
+      {...(self ? { 'data-call-self': '' } : {})}
       {...(mirrored ? { 'data-call-mirrored': '' } : {})}
     />
   );

@@ -166,6 +166,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   let incomingTimer: unknown = null;
   let generation = 0;
   let screenPicking = false;
+  let cameraBusy = false;
 
   const read = (): ActiveCall | null => store.getState().call;
   const write = (call: ActiveCall | null): void => store.setState({ call });
@@ -807,30 +808,86 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     update((latest) => ({ ...latest, localStream: deps.createStream(stream.getTracks()) }));
   };
 
-  const toggleCamera = async (): Promise<void> => {
-    const call = read();
-    if (call === null || !isCallLive(call) || call.phase.kind === 'incoming' || call.screenSharing) return;
-    if (call.cameraOn) {
-      await setCamera(null);
-    } else {
-      const track = await deps.acquireCamera(call.facing).catch(() => null);
-      if (track === null) return;
-      await setCamera(track);
-      if (call.media === 'audio') update((current) => ({ ...current, media: 'video' }));
+  /**
+   * UN GESTE DE CAMÉRA À LA FOIS (#8735) — l'écran bascule AVANT que la
+   * caméra ne réponde ; un second toucher pendant qu'elle s'ouvre est ignoré
+   * (il partirait d'un état périmé), comme le choix d'un écran à partager.
+   */
+  const cameraGesture = async (run: () => Promise<void>): Promise<void> => {
+    if (cameraBusy) return;
+    cameraBusy = true;
+    try {
+      await run();
+    } finally {
+      cameraBusy = false;
     }
+  };
+
+  /** Une caméra ouverte pour CE flux ; arrivée trop tard (appel fini, flux remplacé), elle est relâchée. */
+  const openCamera = async (facing: Facing, stream: MediaStream): Promise<MediaStreamTrack | null> => {
+    const track = await deps.acquireCamera(facing).catch(() => null);
+    if (track !== null && localStream !== stream) {
+      track.stop();
+      return null;
+    }
+    return track;
+  };
+
+  const announceCamera = (): void => {
     const after = read();
     if (after?.callId != null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: after.callId, enabled: after.cameraOn });
   };
 
-  const switchCamera = async (): Promise<void> => {
-    const call = read();
-    if (call === null || !call.cameraOn) return;
-    const facing: Facing = call.facing === 'user' ? 'environment' : 'user';
-    const track = await deps.acquireCamera(facing).catch(() => null);
-    if (track === null) return;
-    await setCamera(track);
-    update((current) => ({ ...current, facing }));
-  };
+  const toggleCamera = (): Promise<void> =>
+    cameraGesture(async () => {
+      const call = read();
+      const stream = localStream;
+      if (call === null || stream === null || !isCallLive(call) || call.phase.kind === 'incoming' || call.screenSharing) return;
+      write({ ...call, cameraOn: !call.cameraOn });
+      if (call.cameraOn) {
+        await setCamera(null);
+        announceCamera();
+        return;
+      }
+      const track = await openCamera(call.facing, stream);
+      if (localStream !== stream) return;
+      if (track === null) {
+        update((current) => ({ ...current, cameraOn: call.cameraOn }));
+        return;
+      }
+      await setCamera(track);
+      if (call.media === 'audio') update((current) => ({ ...current, media: 'video' }));
+      announceCamera();
+    });
+
+  /**
+   * Retourner : l'autre caméra, ouverte d'abord à côté de celle qui tourne ;
+   * un appareil qui n'en ouvre qu'une à la fois la refuse — la caméra en
+   * cours est alors relâchée, puis l'autre rouverte. Si elle ne vient pas,
+   * celle d'avant revient (et l'écran avec elle) ; sans aucune, la caméra
+   * s'éteint et le pair l'apprend.
+   */
+  const switchCamera = (): Promise<void> =>
+    cameraGesture(async () => {
+      const call = read();
+      const stream = localStream;
+      if (call === null || stream === null || !call.cameraOn || call.screenSharing) return;
+      const facing: Facing = call.facing === 'user' ? 'environment' : 'user';
+      write({ ...call, facing });
+      const beside = await openCamera(facing, stream);
+      if (localStream !== stream) return;
+      if (beside !== null) {
+        await setCamera(beside);
+        return;
+      }
+      await setCamera(null, true);
+      const flipped = await openCamera(facing, stream);
+      const track = flipped ?? (await openCamera(call.facing, stream));
+      if (localStream !== stream) return;
+      update((current) => ({ ...current, facing: flipped === null ? call.facing : facing }));
+      await setCamera(track);
+      if (track === null) announceCamera();
+    });
 
   const sharable = (call: ActiveCall | null): call is ActiveCall => call !== null && (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
 

@@ -24,7 +24,9 @@
  *     envoyée par la piste traitée, et le pair continue de DÉCODER des images
  *     (aucune image perdue) ; plus de déclencheur : l'indice « Deux tapes :
  *     photo · Appui long : vidéo » se montre, et deux tapes sur « Chaud »
- *     téléchargent MON image (#8625) ;
+ *     téléchargent MON image (#8625) ; l'autre reste à l'écran, dans un
+ *     bloc en haut, hors de l'aperçu capturé, qui ne couvre pas le carrousel
+ *     et se glisse d'un coin du haut à l'autre (#8737) ;
  *  4 bis. l'effet de visage « Éruption » teint l'image ENVOYÉE : le rouge y
  *     domine le bleu nettement plus qu'avant (lave, braises, étalonnage
  *     orangé), et le pair décode toujours (#8551) ;
@@ -44,6 +46,12 @@
  *     JPEG développé de 1080 × 1920 (#8695) ; un APPUI LONG la filme : le stop rond, au centre du
  *     gabarit, sous un chrono, télécharge une vidéo WebM/MP4 non vide
  *     (#8625) ; « Chaque visage » en télécharge un par tuile affichée ;
+ *  8 bis. les CADRES de capture (#8742, #8743) : les puces d'ambiance
+ *     (« Classiques » d'abord et choisie, 44 au moins) ; toucher une ambiance
+ *     change le carrousel — à deux, ses seuls cadres de duo —, leurs
+ *     vignettes et l'aperçu se peignent, deux tapes photographient le cadre
+ *     (JPEG 1080 × 1920) ; une troisième personne arrive (caméra coupée) et
+ *     plus AUCUNE ambiance n'offre de cadre de duo ;
  *  9. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
@@ -254,9 +262,9 @@ try {
 
       // ------------------------------------------------ 3. la rangée de mon image
       check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
-      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-row] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
-      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
+      check(JSON.stringify(labels) === JSON.stringify(['Effets de ma vidéo', 'Partager l’écran', 'Couper la caméra', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
       check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
@@ -275,6 +283,24 @@ try {
       check((await page.$('[data-call-capture-shoot], [data-call-mode-bar] .size-\\[72px\\]')) === null, `${label} : plus de déclencheur dans la barre`);
       check(await appears(page, '[data-call-capture-hint]', 2000) && (await page.textContent('[data-call-capture-hint]')) === 'Deux tapes : photo · Appui long : vidéo', `${label} : l'indice du geste se montre`);
       await capture(page, `effets-indice-${slug}`);
+      check(await appears(page, '[data-call-effects-companions] [data-call-effects-companion]'), `${label} : l'autre reste à l'écran, dans le bloc du haut (#8737)`);
+      const companions = await page.$eval('[data-call-effects-companions]', (block) => {
+        const box = block.getBoundingClientRect();
+        const bar = document.querySelector('[data-call-mode-bar]')?.getBoundingClientRect();
+        const carousel = document.querySelector('[data-call-mode-carousel]')?.getBoundingClientRect();
+        const clear = (other) => other === undefined || box.bottom <= other.top;
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { top: Math.round(box.top), left: Math.round(box.left), right: Math.round(box.right), bottom: Math.round(box.bottom), clear: clear(bar) && clear(carousel), inPreview: block.closest('[data-call-mode-preview]') !== null, reached: hit !== null && block.contains(hit) };
+      });
+      check(companions.top >= 0 && companions.bottom < height / 2 && companions.left >= 0 && companions.right <= width, `${label} : le bloc des autres tient en haut de l'écran (${JSON.stringify(companions)})`);
+      check(companions.clear && !companions.inPreview, `${label} : il ne couvre ni le carrousel ni la barre, et vit hors de l'aperçu capturé`);
+      check(companions.reached, `${label} : il reçoit le doigt`);
+      const startCorner = await page.getAttribute('[data-call-effects-companions]', 'data-call-effects-companions-corner');
+      await page.mouse.move((companions.left + companions.right) / 2, (companions.top + companions.bottom) / 2);
+      await page.mouse.down();
+      await page.mouse.move(width - (companions.left + companions.right) / 2, (companions.top + companions.bottom) / 2, { steps: 8 });
+      await page.mouse.up();
+      check(await until(page, (from) => document.querySelector('[data-call-effects-companions]')?.getAttribute('data-call-effects-companions-corner') !== from, startCorner), `${label} : glissé de l'autre côté, il y reste (${startCorner} → l'autre coin)`);
       const categories = await page.$$eval('[data-call-effects-category]', (tabs) => tabs.map((tab) => [tab.getAttribute('data-call-effects-category'), tab.getAttribute('aria-pressed'), tab.textContent]));
       check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur']]), `${label} : « Visage · Couleur », Visage d'abord (${JSON.stringify(categories)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
@@ -364,7 +390,7 @@ try {
 
       // ------------------------------------------------ 7. pas de zoom proposé : le zoom numérique de mon seul aperçu
       check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche pas de capsule sur ma vignette`);
-      const step = '[data-call-corner-frame] [data-call-self-control="zoom"]';
+      const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
       check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette zoome mon seul aperçu (#8441)`);
       await page.$eval(step, (button) => button.click());
       check(await until(page, () => (document.querySelector('[data-call-corner] video')?.style.transform ?? '').includes('scale(2)')), `${label} : un cran agrandit mon image à 2×, à l'écran seulement`);
@@ -443,6 +469,44 @@ try {
       const deadline = Date.now() + 3000;
       while (downloads.length < tiles && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
       check(tiles > 0 && downloads.length === tiles && downloads.every((name) => /^meeshy-appel-visage-/.test(name)), `${label} : un portrait par tuile affichée (${downloads.length}/${tiles})`);
+
+      // ------------------------------------------------ 8 bis. les cadres de capture (#8742, #8743)
+      check(await appears(page, '[data-call-frame-moods] [data-call-frame-mood]:nth-child(2)'), `${label} : les puces d'ambiance se montrent`);
+      const chips = await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => { const box = button.getBoundingClientRect(); return { id: button.getAttribute('data-call-frame-mood'), label: button.textContent, pressed: button.getAttribute('aria-pressed'), width: box.width, height: box.height }; }));
+      check(chips[0]?.id === 'classics' && chips[0]?.label === 'Classiques' && chips[0]?.pressed === 'true' && chips.length > 2, `${label} : « Classiques » d'abord et choisie, puis ${chips.length - 1} ambiances (${chips.map((chip) => chip.label).join(' · ')})`);
+      check(chips.every((chip) => chip.height >= TAP_FLOOR && chip.width >= TAP_FLOOR), `${label} : chaque puce fait ${TAP_FLOOR} au moins`);
+      const classics = await page.$$eval('[data-call-mode="montage"] [data-carousel-item]', (items) => items.map((item) => item.getAttribute('data-carousel-item')));
+      const mood = chips[1]?.id ?? '';
+      await page.click(`[data-call-frame-mood="${mood}"]`);
+      const framesOf = () => page.$$eval('[data-call-mode="montage"] [data-carousel-item]', (items) => items.map((item) => item.getAttribute('data-carousel-item') ?? ''));
+      const duoFrames = await framesOf();
+      check((await page.getAttribute(`[data-call-frame-mood="${mood}"]`, 'aria-pressed')) === 'true' && JSON.stringify(duoFrames) !== JSON.stringify(classics) && duoFrames.length > 0 && duoFrames.every((id) => id.startsWith(`${mood}.`) && id.endsWith('.duo')), `${label} : toucher « ${chips[1]?.label} » change le carrousel — ses cadres de duo (${duoFrames.join(' · ')})`);
+      check((await page.getAttribute('[data-call-capture-preview]', 'data-call-capture-preview')) === duoFrames[0], `${label} : le premier cadre passe à l'aperçu`);
+      check(await paintedAll('[data-call-frame-thumb]'), `${label} : les vignettes de cadre se peignent (${(await painted(page, '[data-call-frame-thumb]')).filter(Boolean).length})`);
+      check(await paintedAll('[data-call-capture-preview]'), `${label} : l'aperçu du cadre se peint en direct`);
+      await capture(page, `montage-cadre-${slug}`);
+      await centered(page, duoFrames[0]);
+      const framed = page.waitForEvent('download', { timeout: 8000 });
+      await page.dblclick(`[data-carousel-item="${duoFrames[0]}"]`);
+      const framedDownload = await framed.catch(() => null);
+      check(framedDownload !== null && /^meeshy-appel-cadre-[a-z0-9-]+-duo-\d{8}-\d{6}\.jpg$/.test(framedDownload.suggestedFilename()), `${label} : deux tapes sur le cadre le photographient (${framedDownload?.suggestedFilename() ?? 'rien'})`);
+      if (framedDownload !== null) {
+        const path = join(CAPTURE_DIR ?? '/tmp', `capture-cadre-${slug}.jpg`);
+        await framedDownload.saveAs(path);
+        const size = await jpegSize(path);
+        check(size.jpeg && size.width === 1080 && size.height === 1920, `${label} : le cadre part en JPEG de 1080 × 1920 (${size.width} × ${size.height})`);
+      }
+      await page.evaluate(() => window.__meeshyFixtureCallPeer?.join({ userId: 'u-fixture-call-lina', name: 'Lina Moreau' }));
+      check(await until(page, () => [...document.querySelectorAll('[data-call-mode="montage"] [data-carousel-item]')].every((item) => !(item.getAttribute('data-carousel-item') ?? '').endsWith('.duo'))), `${label} : une troisième personne arrive — le cadre de duo passe à sa variante, ou aux classiques`);
+      const trioChips = await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => button.getAttribute('data-call-frame-mood') ?? ''));
+      const offeredAtThree = [];
+      for (const id of trioChips.slice(1)) {
+        await page.click(`[data-call-frame-mood="${id}"]`);
+        offeredAtThree.push(...(await framesOf()));
+      }
+      check(trioChips.length > 1 && offeredAtThree.length > 0 && offeredAtThree.every((id) => !id.endsWith('.duo')), `${label} : à trois, aucune ambiance n'offre un cadre de duo (${offeredAtThree.length} cadres, ${offeredAtThree.filter((id) => id.endsWith('.duo')).length} de duo)`);
+      await page.click('[data-call-frame-mood="classics"]');
+      check(JSON.stringify(await framesOf()) === JSON.stringify(classics), `${label} : « Classiques » rend les treize montages`);
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
 
@@ -493,4 +557,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log('\n  Les effets de couleur et de visage partent chez le pair sans perdre une image, dans un mode qui libère l’écran ; le micro coupé le reste ; les treize montages se peignent en direct, se photographient en deux tapes et se filment en appui long ; la capsule du zoom n’apparaît que sur mon image en plein écran, un cran « 1× » sur ma vignette.\n');
+console.log('\n  Les effets de couleur et de visage partent chez le pair sans perdre une image, dans un mode qui libère l’écran ; le micro coupé le reste ; les treize montages se peignent en direct, se photographient en deux tapes et se filment en appui long ; les cadres s’offrent par ambiance selon le nombre de personnes, jamais un cadre de duo à trois ; la capsule du zoom n’apparaît que sur mon image en plein écran, un cran « 1× » sur ma vignette.\n');

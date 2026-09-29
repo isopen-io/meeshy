@@ -40,7 +40,7 @@ export const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort } = {}) {
+export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera'] } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -75,11 +75,13 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
       if (options.mediaError !== undefined) throw options.mediaError;
       return stream(video ? [track('audio'), track('video')] : [track('audio')]);
     },
-    acquireCamera: async () => {
-      const camera = track('video');
-      cameras.push(camera);
-      return camera as unknown as MediaStreamTrack;
-    },
+    acquireCamera:
+      options.acquireCamera ??
+      (async () => {
+        const camera = track('video');
+        cameras.push(camera);
+        return camera as unknown as MediaStreamTrack;
+      }),
     acquireDisplay: async () => {
       if (options.displayError !== undefined) throw options.displayError;
       const display = track('video');

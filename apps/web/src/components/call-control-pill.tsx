@@ -9,6 +9,7 @@ import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallControlSet } from '@/lib/calls/call-controls';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { useChromeHold } from '@/lib/calls/use-call-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -22,7 +23,12 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * ouvert, qui les REMPLACE (#8578) — jamais les deux empilés.
  *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
- * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
+ * `call-devices-sheet.tsx`, chunk à part chargé au premier geste). Ouverte,
+ * elle RETIENT l'écran (`onHold`, #8735) : on ne retire pas une feuille
+ * qu'on lit.
+ *
+ * Un toucher qui manque la pilule de peu reste à elle (#8735) : un débord
+ * transparent autour d'elle garde les commandes au lieu de les effacer.
  */
 
 const CallActionRows = lazy(() => import('./call-control-actions').then((module) => ({ default: module.CallActionRows })));
@@ -43,14 +49,17 @@ type PillProps = {
   readonly kit: CallRowsKit;
   /** Le panneau ouvert, À LA PLACE des rangées. */
   readonly panel: ReactNode;
+  /** Une feuille ouverte (la sortie audio) retient l'écran : `true` à l'ouverture, `false` à la fermeture. */
+  readonly onHold?: (held: boolean) => void;
 };
 
-export function CallControlPill({ call, language, set, expanded, onToggle, prominent, framedCaptions, panels, kit, panel }: PillProps) {
+export function CallControlPill({ call, language, set, expanded, onToggle, prominent, framedCaptions, panels, kit, panel, onHold }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
+  useChromeHold(devicesOpen, onHold);
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} mx-auto flex flex-col rounded-[28px] p-1.5 ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-[28px] p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] before:content-[''] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={expanded ? 'grown' : 'pill'}
         data-call-chrome-keep=""
       >

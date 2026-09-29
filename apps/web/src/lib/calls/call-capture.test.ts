@@ -4,7 +4,7 @@ import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import type { FileDeliveryPortal } from '@/lib/media/deliver-file';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { captureFaces, captureMontage, saveCaptures, type CaptureEnv } from './call-capture';
+import { captureDrawn, captureFaces, captureMontage, saveCaptures, type CaptureEnv } from './call-capture';
 import { drawMontage } from './call-montage-render';
 import { montageLayout } from './call-montage';
 
@@ -87,6 +87,16 @@ describe('capturer', () => {
     expect(draws.some((draw) => draw.op === 'fillText' && draw.args[0] === 'Quel appel !')).toBe(true);
     expect(file?.fileName).toBe('meeshy-appel-comic-20260928-090503.jpg');
     expect(file?.mimeType).toBe('image/jpeg');
+  });
+
+  test('une image PEINTE (un cadre, #8743) : à pleine résolution, développée, nommée par son style', async () => {
+    const { env, sizes, developed } = envWith();
+    const painted: Array<{ width: number; height: number }> = [];
+    const file = await captureDrawn({ viewport: { width: 1280, height: 720 }, style: 'cadre-jovial-fete-duo', env, draw: (_context, size) => void painted.push(size) });
+    expect(painted).toEqual([{ width: 1920, height: 1080 }]);
+    expect(sizes).toEqual([{ width: 1920, height: 1080 }]);
+    expect(developed).toEqual([{ width: 1920, height: 1080 }]);
+    expect(file?.fileName).toBe('meeshy-appel-cadre-jovial-fete-duo-20260928-090503.jpg');
   });
 
   test('rien d’affiché : rien à capturer', async () => {
