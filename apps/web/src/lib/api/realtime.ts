@@ -4,11 +4,13 @@ import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { outboxStore } from '@/lib/send/outbox-store';
 
+import { endRevokedSession } from './account-caches';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
+import { watchIdentityScopedStores } from './identity-scoped-stores';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { sessionStore } from './session';
@@ -126,12 +128,15 @@ function syncConnection(): void {
       conversationStore,
       outbox: outboxStore,
       viewerId: currentViewerId,
-      onClearSession: () => sessionStore.getState().clearSession(),
+      onClearSession: () => endRevokedSession(sessionStore),
     },
   );
   bridgeCalls(connection);
 }
 
+/* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
+   frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
+watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore });
 sessionStore.subscribe(syncConnection);
 // La session peut déjà être authentifiée au moment où ce module se charge
 // (restauration `localStorage`, `main.tsx` § « LA SESSION EST TENUE » —

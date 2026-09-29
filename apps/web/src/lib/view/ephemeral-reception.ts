@@ -143,9 +143,11 @@ export function resolveEphemeralDeadline(input: {
      rétention d'un message jamais lu, #8302) ne se montre pas non plus.
      SAUF l'échéance PASSÉE d'un destinataire : c'est SA consommation, que la
      passerelle ressert une heure (#8556) — la rangée est partie, jumelle
-     d'`ExpiredEphemeralRow.isGone` (iOS, #8352). */
+     d'`ExpiredEphemeralRow.isGone` (iOS, #8352).
+     #8630 — l'AUTEUR aussi : la passerelle ne lui sert d'échéance que quand
+     ce que sa réponse cite est mort pour lui, et la réponse part avec. */
   if (isAfterReadMessage(message)) {
-    const consumedAtMs = isMine ? Number.NaN : timeOfServed(servedDeadlines.get(message.id) ?? message.expiresAt);
+    const consumedAtMs = timeOfServed(servedDeadlines.get(message.id) ?? message.expiresAt);
     return consumedAtMs <= now ? { state: 'scheduled', expiresAtMs: consumedAtMs } : { state: 'none' };
   }
   if (!isMine && hasDuration) noteEphemeralReception(message.id, now);

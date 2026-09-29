@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
+import { endRevokedSession } from '@/lib/api/account-caches';
 import { apiConfig } from '@/lib/api/config';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
@@ -128,7 +129,7 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   joined: () => {
     void appQueryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   },
-  expireSession: () => sessionStore.getState().clearSession(),
+  expireSession: () => endRevokedSession(sessionStore),
   copyText: (url) => copyLinkText(url, portailDuNavigateur()),
   shareUrl: (data) => partagerLien(data),
   origin: () => webOriginOf(apiConfig.base, window.location.origin),

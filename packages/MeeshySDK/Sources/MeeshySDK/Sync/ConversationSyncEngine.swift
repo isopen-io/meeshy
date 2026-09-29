@@ -393,6 +393,26 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         lastDeltaSyncAt = .distantPast
     }
 
+    /// #8674 — le point de reprise du compte ACTIF, pour le garder avec son
+    /// cache quand on le quitte sans l'oublier.
+    public func currentSyncCheckpoint() -> SyncCheckpoint {
+        SyncCheckpoint(
+            lastSync: UserDefaults.standard.object(forKey: syncTimestampKey) as? Date,
+            lastCleanup: lastCleanupDate,
+            lastFullReconcile: lastFullReconcileAt
+        )
+    }
+
+    /// #8674 — rend au compte qui revient SON point de reprise : le delta
+    /// repart de là, jamais de l'époque. Le refroidissement en mémoire repart
+    /// à zéro pour que le premier delta du retour ne soit pas avalé.
+    public func restoreSyncCheckpoint(_ checkpoint: SyncCheckpoint) {
+        resetSyncCheckpoints()
+        if let lastSync = checkpoint.lastSync { lastSyncTimestamp = lastSync }
+        lastCleanupDate = checkpoint.lastCleanup
+        lastFullReconcileAt = checkpoint.lastFullReconcile
+    }
+
     // MARK: - Helpers
 
     /* partagé entre les fichiers du moteur (#4172) */ func currentUserId() async -> String {

@@ -176,6 +176,19 @@ export type SessionStoreState = {
 
 export type SessionStoreApi = StoreApi<SessionStoreState>;
 
+/**
+ * QUI PARLE — la clé d'identité d'une session (#8674) : le COMPTE, jamais son
+ * jeton (un jeton renouvelé reste la même personne), l'invité par sa session
+ * de lien, personne sinon. Le transport (`client.ts`), le cache de requêtes
+ * (`query-client.ts`) et les magasins en mémoire la comparent pour savoir
+ * qu'une donnée appartient à une identité QUITTÉE.
+ */
+export function sessionIdentityKey(session: SessionState): string | null {
+  if (session.status === 'authenticated') return `u:${session.user.id}`;
+  if (session.status === 'guest') return `g:${session.sessionToken}`;
+  return null;
+}
+
 const STORAGE_KEY = 'meeshy.session';
 
 /**

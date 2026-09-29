@@ -16,6 +16,7 @@ import {
   retractMessageNotifications,
   type RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
+import { loadQuoteCascadeAudience } from './quoteCascade';
 
 export type { NotificationActorProfile };
 
@@ -65,6 +66,7 @@ export type FanOutPrisma = Pick<
   | 'messageAttachment'
   | 'userConversationPreferences'
   | 'notification'
+  | 'messageStatusEntry'
 >;
 
 /**
@@ -340,9 +342,13 @@ export async function notifyMessageRecipients(params: {
   } = params;
   if (!notificationService) return;
 
-  const validatedMentionUserIds = params.validatedMentionUserIds ?? [];
-
   try {
+    // #8630 — une réponse à ce qui est déjà MORT pour un membre (flamme-œil
+    // consommée, éphémère échu, transitivement) est morte pour lui dès sa
+    // naissance : aucune bannière ne lui annonce son texte.
+    const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
+    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !deadFor.has(id));
+
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
     const protectedOverride = protectedPreview({
@@ -381,7 +387,7 @@ export async function notifyMessageRecipients(params: {
 
     const memberIds = conversation.participants
       .map(p => p.userId)
-      .filter((id): id is string => id !== null);
+      .filter((id): id is string => id !== null && !deadFor.has(id));
 
     // L'auteur du message auquel celui-ci répond, en `User.id`. Un auteur
     // anonyme n'a pas de ligne `Notification` possible : il reste `null`.

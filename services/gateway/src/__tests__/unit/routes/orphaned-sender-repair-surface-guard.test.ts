@@ -212,6 +212,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #8557 — la contagion d'une réponse relit le message CITÉ :
   // `{ select: { effectFlags, isBlurred, ephemeralDuration } }`, jamais `sender`.
   'messaging/replyProtectionContagion.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8630 — la chaîne citée (vers le haut) et les réponses (vers le bas) :
+  // `senderId` en COLONNE, jamais la relation `sender`.
+  'messaging/quoteCascade.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,
@@ -254,14 +257,17 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // orphelin qui bloque cette passe reste couvert par le balayage nocturne de
   // maintenance (`MaintenanceService.cleanupExpiredData`), qui répare AVANT
   // de nettoyer.
+  // #8630 — la 2e lecture charge les RÉPONSES que la destruction emporte, avec
+  // le même `select` que la passe : même balayage, même portée, même raison.
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
-    reads: 1,
+    reads: 2,
     why:
       "Balayage de rétention côté serveur, sans lecteur et de portée GLOBALE (toute la base, " +
       "filtrée par `expiresAt` — jamais une conversation) : aucune liste de `conversationIds` " +
       "bornable ne peut être donnée à la réparation sans lire aussi large que la passe " +
-      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage.',
+      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage. ' +
+      "La lecture des réponses emportées (#8630) suit la passe qui les découvre, avec le même `select`.",
   },
   'CallService.ts': {
     kind: 'exempt',

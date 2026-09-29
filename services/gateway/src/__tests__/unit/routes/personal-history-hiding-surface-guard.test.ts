@@ -373,10 +373,10 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   },
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
-    reads: 1,
+    reads: 2,
     why:
       "Balayage de rétention côté serveur : il détruit les messages arrivés à " +
-      "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
+      "expiration, sans lecteur, et les réponses qui les citent (#8630). Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
   },
 
@@ -437,6 +437,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "des messages que le lecteur VIENT de voir, et ne rend aucun contenu. " +
       'Un masquage personnel empêcherait ce lecteur de faire disparaître ' +
       'chez lui ce qu\'il a vu — le contraire de la directive.',
+  },
+  'messaging/quoteCascade.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Chaîne citée (#8630) : elle lit identifiants, expéditeur et échéance des " +
+      "messages CITÉS (vers le haut) et les identifiants des RÉPONSES (vers le bas) " +
+      "pour décider ce qui est mort pour un lecteur, et ne rend aucun contenu. " +
+      "Masquer ici laisserait vivre, chez qui a effacé l'original de son historique, " +
+      "une réponse à un éphémère déjà détruit pour lui.",
   },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
