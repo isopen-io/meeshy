@@ -45,10 +45,14 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     // que rien ne le dise : un déplacement de code n'emporte pas les témoins qui
     // le désignent par son CHEMIN.
     func test_callPresentationLayer_injectsOwnCallManagerIntoCallView() throws {
-        let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
+        // #8725 — l'écran d'appel se présente désormais dans sa propre fenêtre :
+        // la construction de CallView a suivi dans `CallWindowPresenter`, qui
+        // transmet l'instance que lui remet `CallManagerHost` au lieu de laisser
+        // CallView retomber sur `CallManager.shared`.
+        let source = try source(of: "Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(
-            source.contains("CallView(callManager: callManager, mesh: .shared)"),
-            "`CallPresentationLayer` must pass its own `callManager` into CallView " +
+            source.contains("CallView(callManager: manager, mesh: .shared)"),
+            "`CallWindowPresenter` must pass the manager it is given into CallView " +
             "instead of letting CallView default to CallManager.shared on every " +
             "reconstruction."
         )
