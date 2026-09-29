@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
+import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
 import { callRecordingStore } from '@/lib/calls/call-recording-live';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
@@ -49,14 +50,26 @@ const CallRecordingLayer = lazy(() =>
   Promise.all([import('./call-recording-layer'), loadCallRecordingCatalog(currentInterfaceLanguage())]).then(([module]) => module),
 );
 
+/* « Appeler » d'un rappel qui attend son geste (#8199) : son chunk, chargé
+   quand un onglet ouvert à froid n'a pas pu composer sans toucher. */
+const CallBackPromptLayer = lazy(() =>
+  Promise.all([import('./call-back-prompt-layer'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
   const hasCall = useStore(callStore, (state) => state.call !== null);
   const bubble = useStore(callStore, (state) => state.call?.display === 'bubble');
   const rating = useStore(callStore, (state) => state.feedback !== null && state.call === null);
   const recording = useStore(callRecordingStore, (state) => state.view.kind !== 'idle' || state.notice !== null);
+  const callingBack = useStore(callBackPromptStore, (state) => state.request !== null);
   return (
     <>
+      {callingBack ? (
+        <Suspense fallback={null}>
+          <CallBackPromptLayer />
+        </Suspense>
+      ) : null}
       <Suspense fallback={null}>
         <CallResumeBanner />
       </Suspense>
