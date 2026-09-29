@@ -11,7 +11,7 @@ type Encoding = Readonly<Record<string, unknown>>;
 
 type FakeSender = { readonly kind: 'audio' | 'video'; encodings: readonly Encoding[]; readonly sets: Encoding[][]; preference: unknown };
 
-function fakeConnection(network: { loss: number; rtt: number; relay?: boolean }) {
+function fakeConnection(network: { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean }) {
   const senders: Record<'audio' | 'video', FakeSender> = {
     audio: { kind: 'audio', encodings: [{ active: true }], sets: [], preference: undefined },
     video: { kind: 'video', encodings: [{ active: true, rid: 'f' }], sets: [], preference: undefined },
@@ -21,6 +21,7 @@ function fakeConnection(network: { loss: number; rtt: number; relay?: boolean })
   const sender = (fake: FakeSender) => ({
     getParameters: () => ({ transactionId: 't', encodings: fake.encodings }),
     setParameters: async (parameters: { readonly encodings: readonly Encoding[]; readonly degradationPreference?: unknown }) => {
+      if (network.refusePreference === true && parameters.degradationPreference !== undefined) throw Object.assign(new Error('unsupported'), { name: 'InvalidModificationError' });
       fake.encodings = parameters.encodings;
       fake.preference = parameters.degradationPreference;
       fake.sets.push([...parameters.encodings]);
@@ -47,9 +48,9 @@ function fakeConnection(network: { loss: number; rtt: number; relay?: boolean })
 function harness(options: { readonly wantsVideo?: () => boolean; readonly profile?: () => DataProfile } = {}) {
   let now = 0;
   const peers = new Map<string, ReturnType<typeof fakeConnection>>();
-  const networks = new Map<string, { loss: number; rtt: number; relay?: boolean }>();
-  const add = (userId: string) => {
-    const network: { loss: number; rtt: number; relay?: boolean } = { loss: 0, rtt: 40 };
+  const networks = new Map<string, { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean }>();
+  const add = (userId: string, refusePreference = false) => {
+    const network: { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean } = { loss: 0, rtt: 40, refusePreference };
     networks.set(userId, network);
     peers.set(userId, fakeConnection(network));
   };
@@ -208,5 +209,16 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     const [relayed] = await h.advance(2_000);
     expect(relayed?.path).toBe('relay');
     expect(relayed?.profile).toBe('wifi');
+  });
+
+  test('un navigateur qui refuse la préférence de dégradation reçoit quand même le plafond du profil, une seule fois (#8697)', async () => {
+    const h = harness({ profile: () => 'cellular' });
+    h.add('a', true);
+    await h.advance(2_000);
+    const peer = h.peers.get('a') as ReturnType<typeof fakeConnection>;
+    expect(lastVideo(peer)).toEqual({ rid: 'f', ...profiledEncoding(TIER_ENCODING.high, 'cellular') });
+    const sets = peer.senders.video.sets.length;
+    await h.advance(6_000);
+    expect(peer.senders.video.sets.length).toBe(sets);
   });
 });

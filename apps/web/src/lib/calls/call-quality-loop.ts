@@ -37,15 +37,19 @@ export type QualityLoop = { readonly tick: () => Promise<QualityTick | null> };
 const senderOf = (pc: RTCPeerConnection, kind: 'audio' | 'video'): RTCRtpSender | null =>
   typeof pc.getTransceivers !== 'function' ? null : (pc.getTransceivers().find((transceiver) => transceiver.receiver.track?.kind === kind)?.sender ?? null);
 
+/** `setParameters` exige un `getParameters` frais à chaque essai : un refus de la préférence de dégradation se rejoue sans elle. */
 async function rewrite(sender: RTCRtpSender | null, change: (encoding: RTCRtpEncodingParameters) => RTCRtpEncodingParameters, preference?: RTCDegradationPreference): Promise<boolean> {
   if (sender === null || typeof sender.getParameters !== 'function') return false;
-  const parameters = sender.getParameters();
-  if (parameters.encodings.length === 0) return false;
-  const next = { ...parameters, encodings: parameters.encodings.map(change), ...(preference === undefined ? {} : { degradationPreference: preference }) };
-  return sender.setParameters(next).then(
-    () => true,
-    () => false,
-  );
+  const attempt = (degradation: RTCDegradationPreference | undefined): Promise<boolean> => {
+    const parameters = sender.getParameters();
+    if (parameters.encodings.length === 0) return Promise.resolve(false);
+    const next = { ...parameters, encodings: parameters.encodings.map(change), ...(degradation === undefined ? {} : { degradationPreference: degradation }) };
+    return sender.setParameters(next).then(
+      () => true,
+      () => false,
+    );
+  };
+  return (await attempt(preference)) || (preference !== undefined && attempt(undefined));
 }
 
 export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
