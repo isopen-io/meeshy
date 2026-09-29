@@ -46,12 +46,11 @@ function changementsDeclares(): readonly string[] {
 describe('la coque Android suit la taille du texte sans redémarrer (#8616)', () => {
   const code = sansCommentaires(readFileSync(MAIN_ACTIVITY, 'utf8'));
 
-  test.each(['fontScale', 'fontWeightAdjustment', 'layoutDirection'])(
-    "l'activité déclare le changement %s au lieu d'être recréée",
-    (changement) => {
+  ['fontScale', 'fontWeightAdjustment', 'layoutDirection'].forEach((changement) => {
+    test(`l'activité déclare le changement ${changement} au lieu d'être recréée`, () => {
       expect(changementsDeclares()).toContain(changement);
-    },
-  );
+    });
+  });
 
   test('un changement de configuration règle le zoom de texte sur la nouvelle échelle', () => {
     const corps = corpsDe(code, /public void onConfigurationChanged\(\s*Configuration \w+\s*\)/);
