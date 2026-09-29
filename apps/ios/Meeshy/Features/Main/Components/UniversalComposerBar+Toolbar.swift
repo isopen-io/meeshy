@@ -77,7 +77,36 @@ extension UniversalComposerBar {
                         .transition(.opacity)
                 }
             }
+
+            if let fold = foldControl {
+                foldButton(fold)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
+            }
         }
+    }
+
+    // ========================================================================
+    // MARK: - Repli (#8642)
+    // ========================================================================
+
+    /// **Le ⌄ vit DANS le verre** (directive porteur 2026-09-29 : « doit être à
+    /// l'intérieur, angle à droite de la plaque de verre »). Il flottait au-dessus
+    /// de la plaque ; il ferme désormais la rangée d'outils, dont la bande
+    /// `trailing` ne défile jamais — Dynamic Type ne peut pas le pousser hors de
+    /// l'écran. Glyphe au format des outils (30 pt), cible de 44 pt.
+    private func foldButton(_ fold: ComposerFoldControl) -> some View {
+        Button(action: fold.action) {
+            Image(systemName: fold.symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundColor(style == .dark ? .white.opacity(0.9) : servedAccent)
+                .frame(width: 30, height: 30)
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, -7)
+        .accessibilityLabel(fold.label)
     }
 
     // ========================================================================
@@ -158,6 +187,14 @@ extension UniversalComposerBar {
 // mis en page sur 493 pt pour un iPhone de 402 pt. La bande garde la rangée
 // telle quelle quand elle tient, et la fait DÉFILER horizontalement sinon :
 // sa largeur ne dépasse jamais celle proposée.
+
+/// Le repli qu'un hôte confie à la barre (#8642) : son glyphe, son libellé
+/// VoiceOver et son geste. La barre le pose ; l'hôte décide QUAND il existe.
+struct ComposerFoldControl {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+}
 
 struct ComposerToolbarStrip<Leading: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading

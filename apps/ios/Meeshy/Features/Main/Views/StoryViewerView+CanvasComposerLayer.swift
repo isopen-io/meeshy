@@ -120,17 +120,6 @@ extension StoryCardView {
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
 
-            if StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation,
-                                                  isComposerEngaged: isComposerEngaged) {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    composerFoldButton
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 2)
-                .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottomTrailing)))
-            }
-
             StoryComposerBarView(
                 accentColor: currentGroup?.avatarColor ?? "6366F1",
                 storyId: currentStory?.id,
@@ -144,6 +133,7 @@ extension StoryCardView {
                 composerFocusTrigger: $composerFocusTrigger,
                 storyDrafts: $storyDrafts,
                 replyingToStoryComment: $replyingToStoryComment,
+                foldControl: composerFoldControl,
                 sendComment: sendComment
             )
                 // Marge latérale 16pt, alignée sur le `sideInset` (16) de
@@ -210,20 +200,17 @@ extension StoryCardView {
         }
     }
 
-    /// ⌄ en verre adaptatif, à l'angle haut-droit du bloc, en rédaction.
-    private var composerFoldButton: some View {
-        Button(action: foldComposer) {
-            Image(systemName: StoryComposerFold.foldSymbol)
-                .font(MeeshyFont.relative(14, weight: .bold))
-                .foregroundColor(.white.opacity(0.9))
-                .frame(width: 32, height: 32)
-                .adaptiveLiquidGlass(in: Circle(), interactive: true)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.composer.fold",
-                                   defaultValue: "Masquer la zone de commentaire", bundle: .main))
+    /// **Le ⌄ vit DANS la plaque de verre** (#8642) : le lecteur ne le peint
+    /// plus au-dessus d'elle, il le CONFIE à la barre, qui le pose au bout de sa
+    /// rangée d'outils. La loi qui dit QUAND il existe reste celle de #8431.
+    var composerFoldControl: ComposerFoldControl? {
+        guard StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation,
+                                                 isComposerEngaged: isComposerEngaged) else { return nil }
+        return ComposerFoldControl(
+            symbol: StoryComposerFold.foldSymbol,
+            label: String(localized: "story.composer.fold",
+                          defaultValue: "Masquer la zone de commentaire", bundle: .main),
+            action: foldComposer)
     }
 
     /// Replié, il ne reste que ce bouton, centré, à l'icône de commentaire.

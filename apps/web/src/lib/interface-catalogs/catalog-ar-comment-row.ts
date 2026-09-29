@@ -13,6 +13,7 @@ const arCommentRow = {
   'comments.action.reply': 'رد',
   'comments.reply.to': 'الرد على {name}',
   'comments.reply.cancel': 'إلغاء الرد',
+  'comments.composer.fold': 'طيّ حقل التعليق',
   'comments.replies.show': 'عرض الردود ({count})',
   'comments.replies.hide': 'إخفاء الردود',
   'comments.replies.more': 'عرض المزيد من الردود',

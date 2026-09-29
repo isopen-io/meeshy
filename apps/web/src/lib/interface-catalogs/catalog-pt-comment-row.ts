@@ -13,6 +13,7 @@ const ptCommentRow = {
   'comments.action.reply': 'Responder',
   'comments.reply.to': 'Respondendo a {name}',
   'comments.reply.cancel': 'Cancelar resposta',
+  'comments.composer.fold': 'Recolher o campo de comentário',
   'comments.replies.show': 'Ver respostas ({count})',
   'comments.replies.hide': 'Ocultar respostas',
   'comments.replies.more': 'Ver mais respostas',
