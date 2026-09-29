@@ -40,6 +40,23 @@ nonisolated struct VideoFilterConfig: Equatable, Sendable {
     static let `default` = VideoFilterConfig()
 }
 
+// MARK: - Low light (#8695)
+
+/// La scène sombre, seule amélioration AUTOMATIQUE du flux envoyé : elle ne
+/// coûte une passe GPU que si l'image est sous 30 % de luminance moyenne, et
+/// jamais sur un appareil contraint (économie d'énergie, pipeline hors budget).
+nonisolated enum CallVideoLowLight {
+    static let threshold: Float = 0.3
+
+    /// - Returns: la force de l'éclaircissement (0…1), `nil` pour ne rien faire.
+    static func boost(averageBrightness: Float?, isConstrained: Bool) -> Float? {
+        guard !isConstrained, let averageBrightness else { return nil }
+        let normalized = averageBrightness / 255
+        guard normalized < threshold else { return nil }
+        return (threshold - normalized) / threshold
+    }
+}
+
 // MARK: - Filter Presets
 
 nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
@@ -161,6 +178,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     private let underBudgetThreshold = 30
 
     private let faceEffects: any CallFaceEffectsRendererProviding
+    private let isPowerConstrained: @Sendable () -> Bool
 
     // PERF-014: dedicated CVPixelBufferPool for filter output. Rendering back
     // into the input buffer (capturer-owned pool) starves the camera capturer
@@ -183,8 +201,12 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         return request
     }()
 
-    init(faceEffects: any CallFaceEffectsRendererProviding = CallFaceEffectsRenderer()) {
+    init(
+        faceEffects: any CallFaceEffectsRendererProviding = CallFaceEffectsRenderer(),
+        isPowerConstrained: @escaping @Sendable () -> Bool = { ProcessInfo.processInfo.isLowPowerModeEnabled }
+    ) {
         self.faceEffects = faceEffects
+        self.isPowerConstrained = isPowerConstrained
         // PERF-015: explicit Metal device + disabled colorspace work. Pinning
         // CIContext to MTLCreateSystemDefaultDevice() forces GPU-backed
         // rendering and skips the implicit sRGB→working-space conversion that
@@ -223,7 +245,14 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // are independent opt-in toggles (§14.1) that never touch `isEnabled`
         // — gating the whole pipeline on it alone silently no-op'd both
         // whenever a user enabled one without ever picking a preset.
-        guard cfg.isEnabled || cfg.hasAdvancedFilters else { return pixelBuffer }
+        // #8695 — a dark scene is lifted even with no filter chosen, unless
+        // the device saves power or the pipeline is already over budget.
+        let hasChosenFilters = cfg.isEnabled || cfg.hasAdvancedFilters
+        let lowLightBoost = CallVideoLowLight.boost(
+            averageBrightness: averageBrightness,
+            isConstrained: isAutoDegraded || isPowerConstrained()
+        )
+        guard hasChosenFilters || lowLightBoost != nil else { return pixelBuffer }
 
         let start = CACurrentMediaTime()
 
@@ -231,11 +260,13 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
         // Pipeline order per §14.2.5:
         // 1. Low-light boost (automatic)
-        image = applyLowLightBoost(to: image, averageBrightness: averageBrightness)
+        image = applyLowLightBoost(to: image, boost: lowLightBoost)
         // 2. Colorimetry
-        image = applyTemperatureAndTint(to: image, config: cfg)
-        image = applyColorControls(to: image, config: cfg)
-        image = applyExposure(to: image, config: cfg)
+        if hasChosenFilters {
+            image = applyTemperatureAndTint(to: image, config: cfg)
+            image = applyColorControls(to: image, config: cfg)
+            image = applyExposure(to: image, config: cfg)
+        }
         // 3. Background blur (if enabled and not auto-degraded)
         if cfg.backgroundBlurEnabled && !isAutoDegraded {
             image = applyBackgroundBlur(to: image, pixelBuffer: pixelBuffer, config: cfg)
@@ -380,13 +411,8 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
     // MARK: - Low-Light Boost (§14.2.4)
 
-    private func applyLowLightBoost(to image: CIImage, averageBrightness: Float?) -> CIImage {
-        guard let avgBrightness = averageBrightness else { return image }
-
-        let normalizedBrightness = avgBrightness / 255.0
-        guard normalizedBrightness < 0.3 else { return image }
-
-        let boostFactor = (0.3 - normalizedBrightness) / 0.3
+    private func applyLowLightBoost(to image: CIImage, boost: Float?) -> CIImage {
+        guard let boostFactor = boost else { return image }
 
         var boosted = image
         boosted = boosted.applyingFilter("CIExposureAdjust", parameters: [
