@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frGallery from './catalog-fr-gallery';
+import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
@@ -41,6 +42,7 @@ import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
 import frContactCard from './catalog-fr-contact-card';
 import frQuote from './catalog-fr-quote';
+import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 
 const fr = {
@@ -877,6 +879,7 @@ const fr = {
   'story.studio.refusal.door.visual': 'Choisissez une image ou une vidéo.',
   'story.studio.refusal.door.sound': 'Choisissez un fichier audio.',
   'story.studio.refusal.media-max': 'Cette publication porte déjà dix médias — le plafond de la passerelle.',
+  'story.studio.refusal.import-max': '{count} média(s) non importé(s) : une publication en porte dix au plus.',
   'story.studio.failure.network': 'Réseau indisponible.',
   'story.studio.failure.timeout': 'La passerelle n’a pas répondu.',
   'story.studio.failure.session': 'Session expirée — reconnectez-vous.',
@@ -1071,14 +1074,6 @@ const fr = {
   'comment.send.error': 'Le commentaire n’a pas pu être publié.',
   'comment.send.pending': 'Commentaire non confirmé — hors ligne',
   'comment.send.empty': 'Écrivez quelque chose avant d’envoyer.',
-  'comments.action.like': 'J’aime',
-  'comments.action.unlike': 'Je n’aime plus',
-  'comments.action.edit': 'Modifier',
-  'comments.action.delete': 'Supprimer',
-  'comments.action.delete.confirm': 'Confirmer',
-  'comments.edit.label': 'Modifier le commentaire',
-  'comments.edit.save': 'Enregistrer',
-  'comments.edit.cancel': 'Annuler',
   'comment.like.error': 'Le « j’aime » n’a pas été enregistré.',
   'comment.edit.error': 'La modification n’a pas été enregistrée.',
   'comment.delete.error': 'Le commentaire n’a pas pu être supprimé.',
@@ -1161,6 +1156,7 @@ const fr = {
   ...frStudioChrome,
   ...frEphemeral,
   ...frGallery,
+  ...frMessageCard,
   ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
@@ -1196,6 +1192,7 @@ const fr = {
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,
+  ...frCommentRow,
   ...frContactDiscovery,
 } as const;
 

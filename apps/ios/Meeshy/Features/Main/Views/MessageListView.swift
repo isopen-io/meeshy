@@ -256,7 +256,7 @@ struct BubbleSwipeContainer<Content: View>: View {
     private var swipeIndicator: some View {
         let directed = offset * replyDirection
         let isReplyDir = directed > 0
-        let isOverThreshold = abs(offset) >= 66
+        let isOverThreshold = BubbleSwipeResistance.commits(offset: abs(offset))
         let visibility = min(1.0, abs(offset) / 24.0)
 
         if abs(offset) > 8 {
@@ -319,18 +319,11 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ),
                     resistance: resistance
                 ) else { return }
-                let zone: CGFloat = 72
-                let absH = abs(h)
-                let sign: CGFloat = h > 0 ? 1 : -1
-                if absH > zone {
-                    offset = sign * (zone + (absH - zone) * 0.15)
-                } else {
-                    offset = h
-                }
+                offset = BubbleSwipeResistance.trackedOffset(translation: h)
                 // Light haptic the moment we cross the commit threshold
                 // (and only once per drag) so the user feels the bubble
                 // "snap" into the action zone before they let go.
-                let crossed = abs(offset) >= 66
+                let crossed = BubbleSwipeResistance.commits(offset: abs(offset))
                 if crossed && !didCrossThreshold {
                     didCrossThreshold = true
                     HapticFeedback.light()
@@ -340,10 +333,10 @@ struct BubbleSwipeContainer<Content: View>: View {
             }
             .onEnded { _ in
                 let directed = offset * replyDirection
-                if directed >= 66 {
+                if BubbleSwipeResistance.commits(offset: directed) {
                     onSwipeReply()
                     HapticFeedback.success()
-                } else if directed <= -66 {
+                } else if BubbleSwipeResistance.commits(offset: -directed) {
                     onSwipeForward()
                     HapticFeedback.success()
                 }

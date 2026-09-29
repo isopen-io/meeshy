@@ -92,12 +92,40 @@ export function transcriptLines(transcript: CallTranscript, reader: { readonly v
     });
 }
 
-export async function loadCallTranscript(deps: Pick<CallsDeps, 'source' | 'transport'>, callId: string, signal?: AbortSignal): Promise<ApiResult<CallTranscript | null>> {
+const PAGE = 100;
+
+/** Garde-fou : une passerelle qui dirait « encore » sans fin ne fait pas tourner le client sans fin (100 pages = 10 000 segments). */
+const MAX_PAGES = 100;
+
+const HasMore = z.object({ hasMore: z.optional(z.boolean()) });
+
+const moreAfter = (raw: unknown): boolean => HasMore.safeParse(raw).data?.hasMore === true;
+
+type Deps = Pick<CallsDeps, 'source' | 'transport'>;
+
+/** Les pages suivantes, lues l'une après l'autre ; une page refusée (limite de débit, réseau) garde ce qui est déjà lu. */
+async function followingPages(deps: Deps, callId: string, read: CallTranscript, pages: number, signal: AbortSignal | undefined): Promise<CallTranscript> {
+  if (pages >= MAX_PAGES) return read;
+  const offset = pages * PAGE;
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: `${callsEndpoints.byCallIdTranscript(callId)}?limit=${PAGE}&offset=${offset}`, ...(signal === undefined ? {} : { signal }) });
+  const next = result.ok ? decodeCallTranscript(result.data) : null;
+  if (!result.ok || next === null) return read;
+  const joined = { ...read, segments: [...read.segments, ...next.segments] };
+  return moreAfter(result.data) ? followingPages(deps, callId, joined, pages + 1, signal) : joined;
+}
+
+/**
+ * Le journal ENTIER de l'appel (#8579) : la passerelle le sert par pages de
+ * cent segments (`hasMore`), et un appel d'une heure en compte des centaines.
+ */
+export async function loadCallTranscript(deps: Deps, callId: string, signal?: AbortSignal): Promise<ApiResult<CallTranscript | null>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureCallTranscript } = await import('@/lib/api/fixtures-calls');
     return { ok: true, data: fixtureCallTranscript(callId) };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: `${callsEndpoints.byCallIdTranscript(callId)}?limit=100`, ...(signal === undefined ? {} : { signal }) });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: `${callsEndpoints.byCallIdTranscript(callId)}?limit=${PAGE}`, ...(signal === undefined ? {} : { signal }) });
   if (!result.ok) return result.status === 403 || result.status === 404 ? { ok: true, data: null } : result;
-  return { ok: true, data: decodeCallTranscript(result.data) };
+  const first = decodeCallTranscript(result.data);
+  if (first === null || !moreAfter(result.data)) return { ok: true, data: first };
+  return { ok: true, data: await followingPages(deps, callId, first, 1, signal) };
 }

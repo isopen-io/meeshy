@@ -15,8 +15,6 @@ const itCallCaptions = {
   'callCaptions.listening': 'La tua voce viene trascritta',
   'callCaptions.unsupported': 'Questo browser non trascrive la tua voce: leggi gli altri',
   'callCaptions.denied': 'Riconoscimento vocale negato: leggi gli altri',
-  'callCaptions.journal.show': 'Registro',
-  'callCaptions.journal.hide': 'Nascondi il registro',
   'callCaptions.journal.title': 'Registro della chiamata',
   'callCaptions.participant': 'Partecipante',
   'callTranscript.show': 'Trascrizione',

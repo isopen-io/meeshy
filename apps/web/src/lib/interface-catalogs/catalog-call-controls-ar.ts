@@ -47,6 +47,18 @@ const ar = {
   'callControls.record.audioDetail': 'أصوات الجميع',
   'callControls.record.video': 'الصوت والفيديو',
   'callControls.record.videoDetail': 'الصور الظاهرة والأصوات',
+  'callControls.capture': 'التقاط',
+  'callControls.capture.label': 'التقاط صورة من المكالمة',
+  'callControls.back': 'رجوع',
+  'callControls.journal': 'السجل',
+  'callControls.journal.label': 'فتح سجل المكالمة',
+  'callControls.journal.live': 'العودة إلى البث المباشر',
+  'callControls.journal.empty': 'لم يُنسخ شيء بعد. فعّل الترجمة النصية: كل جملة تُقال تظهر هنا مع ترجمتها طوال المكالمة.',
+  'callControls.journal.original': 'الأصل',
+  'callControls.camera.options': 'خيارات الكاميرا الخاصة بي',
+  'callControls.selfTile.small': 'صورتي المصغرة: صغيرة',
+  'callControls.selfTile.medium': 'صورتي المصغرة: متوسطة',
+  'callControls.selfTile.large': 'صورتي المصغرة: كبيرة',
 } satisfies CallControlsCatalog;
 
 export default ar;

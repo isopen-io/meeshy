@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -30,6 +30,8 @@ import {
 } from '@/lib/view/media-stage';
 import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
@@ -547,6 +549,14 @@ export default function MediaViewer({
   });
   const pinnedAt = pinned.id === undefined ? -1 : items.findIndex((attachment) => attachment.id === pinned.id);
   const index = pinnedAt >= 0 ? pinnedAt : clampIndex(pinned.index, items.length);
+  /* L'OUVERTURE CONFIÉE PAR LA CARTE DU FIL (#8598) — reprise UNE fois, pour
+     la page d'entrée seule : une page atteinte ensuite ne rejoue rien. */
+  const [opening] = useState(() => {
+    const entry = items[pinned.index];
+    if (entry === undefined || scenes?.has(entry.id) !== true) return null;
+    const taken = takeSceneOpening(entry.id);
+    return taken === null ? null : { itemId: entry.id, opening: taken };
+  });
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -584,6 +594,21 @@ export default function MediaViewer({
       document.body.style.overflow = previousOverflow;
       previouslyFocusedRef.current?.focus();
     };
+  }, []);
+
+  /* LE FOND SE LÈVE AVEC LA SCÈNE (#8598) — ouverte depuis une carte, la
+     couche part TRANSPARENTE (le fil reste visible derrière la scène qui
+     grandit) et les couloirs apparaissent en fondu : jamais un noir qui tombe
+     d'un bloc. Même durée que la boîte (`ViewerScenePage`). */
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (opening?.opening.origin == null || dialog === null || typeof dialog.animate !== 'function' || prefersReducedMotion()) return;
+    const timing = { duration: SCENE_OPENING_MS, easing: SCENE_OPENING_EASING };
+    dialog.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: 'rgb(0, 0, 0)' }], timing);
+    for (const chrome of dialog.querySelectorAll<HTMLElement>('.media-viewer-chrome, [data-scene-viewer-controls]')) {
+      chrome.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onNearEndRef = useRef(onNearEnd);
@@ -789,6 +814,8 @@ export default function MediaViewer({
                   onToggleRef={(fn) => {
                     if (i === index) activePlayToggleRef.current = fn;
                   }}
+                  corridorSlot={transportSlot}
+                  opening={opening !== null && opening.itemId === attachment.id ? opening.opening : null}
                 />
               ) : isMasked ? (
                 <ViewerMaskedPage attachment={attachment} />

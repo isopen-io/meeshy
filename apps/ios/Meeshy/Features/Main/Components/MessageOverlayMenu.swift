@@ -65,6 +65,8 @@ struct MessageOverlayMenu: View {
     /// étant rendu au menu du message (directive 2026-08-24), elle entre dans
     /// le menu plutôt que de disparaître.
     var onShowCallDetail: (() -> Void)? = nil
+    /// Ouvre la carte d'export — `true` pour l'« Export rapide » (format par défaut).
+    var onExportImage: ((Bool) -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
 
@@ -186,7 +188,8 @@ struct MessageOverlayMenu: View {
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur
+            isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
+            hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat
         )
     }
 
@@ -212,6 +215,8 @@ struct MessageOverlayMenu: View {
             onShowMore?()
         case .callDetail:
             onShowCallDetail?()
+        case .exportImage, .exportQuick:
+            onExportImage?(action == .exportQuick)
         }
         dismiss()
     }
