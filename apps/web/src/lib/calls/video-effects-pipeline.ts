@@ -1,3 +1,5 @@
+import { lookFilter } from '@/lib/media/photo-develop';
+
 import { faceGrade } from './face-effects';
 import { createFaceLayer } from './face-effects-draw';
 import { browserFaceDetector } from './face-tracker';
@@ -54,13 +56,19 @@ type CanvasEnv = {
 
 export type PipelineEnv = { readonly frames: FramesEnv | null; readonly canvas: CanvasEnv | null; readonly face?: FaceLayer };
 
-/** Le filtre de canevas de toute l'image : la couleur choisie, puis l'étalonnage de l'effet de visage. */
-export function frameFilter(effects: VideoEffects): string {
-  const parts = [effectsFilter(effects), faceGrade(effects.faceEffect)].filter((part) => part !== '' && part !== 'none');
-  return parts.length === 0 ? 'none' : parts.join(' ');
-}
+const graded = (effects: VideoEffects): readonly string[] => [effectsFilter(effects), faceGrade(effects.faceEffect)].filter((part) => part !== '' && part !== 'none');
 
-const untouched = (effects: VideoEffects): boolean => frameFilter(effects) === 'none' && effects.faceEffect === 'none';
+const untouched = (effects: VideoEffects): boolean => graded(effects).length === 0 && effects.faceEffect === 'none';
+
+/**
+ * Le filtre de canevas de toute l'image : le look léger des photos (#8695,
+ * `lookFilter`), la couleur choisie, puis l'étalonnage de l'effet de visage.
+ * Le look ne vient qu'avec une image DÉJÀ repeinte : il ne coûte aucun
+ * traitement de plus, et une image intacte part intacte.
+ */
+export function frameFilter(effects: VideoEffects): string {
+  return untouched(effects) ? 'none' : [lookFilter(), ...graded(effects)].join(' ');
+}
 
 type Painter = { readonly effects: () => VideoEffects; readonly set: (effects: VideoEffects) => void; readonly paint: (context: Surface2D, source: CanvasImageSource, width: number, height: number, t: number) => void };
 

@@ -48,6 +48,8 @@ public actor CacheCoordinator {
     /// Local-only call transcripts — never sent to the Meeshy server. See
     /// `CachePolicy.callTranscripts`.
     public let callTranscripts: GRDBCacheStore<String, CallTranscript>
+    /// #8698 — per-call network and quality journal, local to this device.
+    public let callNetworkJournals: GRDBCacheStore<String, CallNetworkJournal>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
@@ -341,6 +343,7 @@ public actor CacheCoordinator {
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
         self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
+        self.callNetworkJournals = GRDBCacheStore(policy: .callNetworkJournals, db: db, namespace: "callnet", encrypted: true)
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
@@ -737,7 +740,7 @@ public actor CacheCoordinator {
         [
             conversations, messages, conversationMedia, notifications, feed, stories, participants, profiles,
             comments, statuses, communities, stats, engagementProgress, drafts,
-            callTranscripts, friends, friendRequests, blockedUsers, userSearch,
+            callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, userSearch,
             phonebook, affiliates, callHistory, timeline,
             affiliateTokens, shareLinks, trackingLinks, communityLinks,
             categories, userTags, userPreferences, conversationPreferences

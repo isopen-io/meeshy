@@ -236,11 +236,14 @@ describe('les données locales d’un compte déconnecté', () => {
       'meeshy.last-opened.u_a1.c1': '1',
       'meeshy.draft.u_b2.c1': '{}',
       'meeshy.draft.story.b2': '{}',
+      'meeshy.call-journal.u_a1': '[]',
+      'meeshy.call-journal.u_a1.call-1': '[]',
+      'meeshy.call-journal.u_b2': '[]',
       'meeshy.scheme': 'dark',
     });
 
     purgeAccountLocalData({ storage, userId: 'a1', keys: [...storage.raw.keys()] });
 
-    expect([...storage.raw.keys()].sort()).toEqual(['meeshy.draft.story.b2', 'meeshy.draft.u_b2.c1', 'meeshy.scheme']);
+    expect([...storage.raw.keys()].sort()).toEqual(['meeshy.call-journal.u_b2', 'meeshy.draft.story.b2', 'meeshy.draft.u_b2.c1', 'meeshy.scheme']);
   });
 });

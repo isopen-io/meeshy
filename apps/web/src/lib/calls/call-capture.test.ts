@@ -34,16 +34,25 @@ const recorder = () => {
 
 const envWith = (options: { readonly faces?: boolean } = {}) => {
   const sizes: Array<{ width: number; height: number }> = [];
+  const developed: Array<{ width: number; height: number }> = [];
   const log = recorder();
   const env: CaptureEnv = {
     canvas: (size) => {
       sizes.push(size);
-      return { context: log.context, toBlob: async () => new Blob(['png'], { type: 'image/png' }) };
+      return { context: log.context, image: {} as CanvasImageSource };
+    },
+    photo: {
+      surface: (size) => ({
+        paint: () => void developed.push(size),
+        pixels: () => null,
+        put: () => undefined,
+        encode: async (mime) => new Blob(['jpeg'], { type: mime }),
+      }),
     },
     detector: options.faces === true ? { detect: async () => [{ boundingBox: { x: 500, y: 200, width: 200, height: 260 } }] } : null,
     now: () => new Date(2026, 8, 28, 9, 5, 3),
   };
-  return { env, sizes, draws: log.draws };
+  return { env, sizes, developed, draws: log.draws };
 };
 
 const place = (element: Element, box: { left: number; top: number; width: number; height: number }): void => {
@@ -70,12 +79,14 @@ describe('capturer', () => {
   afterAll(async () => releaseHappyDomIfRegistered());
 
   test('le montage se rend en 1080 × 1920 sur un écran étroit, une image par tuile affichée, nommé par son style', async () => {
-    const { env, sizes, draws } = envWith();
+    const { env, sizes, developed, draws } = envWith();
     const file = await captureMontage({ stage: stageOf(2), style: 'comic', text: { bubble: 'Quel appel !', date: '28 septembre 2026', coverlines: [] }, viewport: { width: 390, height: 844 }, env });
     expect(sizes).toEqual([{ width: 1080, height: 1920 }]);
+    expect(developed).toEqual([{ width: 1080, height: 1920 }]);
     expect(draws.filter((draw) => draw.op === 'drawImage')).toHaveLength(2);
     expect(draws.some((draw) => draw.op === 'fillText' && draw.args[0] === 'Quel appel !')).toBe(true);
-    expect(file?.fileName).toBe('meeshy-appel-comic-20260928-090503.png');
+    expect(file?.fileName).toBe('meeshy-appel-comic-20260928-090503.jpg');
+    expect(file?.mimeType).toBe('image/jpeg');
   });
 
   test('rien d’affiché : rien à capturer', async () => {
@@ -87,7 +98,7 @@ describe('capturer', () => {
   test('« Chaque visage » : un carré de 1080 par tuile, cadré sur le visage vu', async () => {
     const { env, sizes, draws } = envWith({ faces: true });
     const files = await captureFaces({ stage: stageOf(2), env });
-    expect(files.map((file) => file.fileName)).toEqual(['meeshy-appel-visage-20260928-090503-1.png', 'meeshy-appel-visage-20260928-090503-2.png']);
+    expect(files.map((file) => file.fileName)).toEqual(['meeshy-appel-visage-20260928-090503-1.jpg', 'meeshy-appel-visage-20260928-090503-2.jpg']);
     expect(sizes).toEqual([
       { width: 1080, height: 1080 },
       { width: 1080, height: 1080 },
@@ -97,11 +108,11 @@ describe('capturer', () => {
     expect((crop[0] ?? 0) + (crop[2] ?? 0) / 2).toBeCloseTo(600, 0);
   });
 
-  test('un miroir se capture comme il se voit : l’image est retournée', () => {
-    const { context, draws } = recorder();
-    const layout = montageLayout({ style: 'grid', count: 1, size: { width: 100, height: 100 } });
-    drawMontage(context, layout, [{ source: {} as CanvasImageSource, size: { width: 100, height: 100 }, mirrored: true, fit: 'cover' }], { bubble: '', date: '', coverlines: [] });
-    expect(draws.some((draw) => draw.op === 'scale' && draw.args[0] === -1)).toBe(true);
+  test('ma caméra en miroir à l’écran se capture à l’endroit, comme l’autre la voit (#8696)', async () => {
+    const { env, draws } = envWith();
+    await captureMontage({ stage: stageOf(2), style: 'grid', text: { bubble: '', date: '', coverlines: [] }, viewport: { width: 390, height: 844 }, env });
+    expect(draws.some((draw) => draw.op === 'scale' && draw.args[0] === -1)).toBe(false);
+    expect(draws.some((draw) => draw.op === 'setTransform' && draw.args[0] === -1)).toBe(false);
   });
 
   test('le cœur découpe le montage dans sa forme', () => {

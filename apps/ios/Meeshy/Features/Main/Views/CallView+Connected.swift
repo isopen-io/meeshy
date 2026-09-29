@@ -536,7 +536,7 @@ extension CallView {
         if local {
             // §7.7 — mirror ONLY the front camera (a mirrored back camera shows
             // reversed text/scene — bug k).
-            CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: contentMode)
+            LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: contentMode)
         } else if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
             CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
         } else if callManager.hasRemoteVideoTrack {

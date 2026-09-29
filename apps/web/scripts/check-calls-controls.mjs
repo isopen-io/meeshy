@@ -34,11 +34,12 @@
  *  6. le pair coupe mon micro : il est coupé, et « Nadia Benali a coupé votre
  *     micro » s'affiche ; je peux le rouvrir ;
  *  7. aucun verre dans un verre, aucune erreur de page ;
- *  8. en vidéo : ma vignette en coin est à ×2, SANS zoom (#8576) ; un toucher
+ *  8. en vidéo : ma vignette en coin est à ×2, SANS capsule de zoom (#8576) ; un toucher
  *     sur la scène efface l'en-tête et la pilule, un second les rend ; un
  *     panneau ouvert ne s'efface pas tout seul (l'auto-masquage ne vaut qu'au
  *     repos et dans le menu) ; « Capturer » suit « Enregistrer » ; les
- *     commandes de MA caméra (Caméra · Effets · Écran, 44 px) sont une rangée
+ *     commandes de MA caméra (Caméra · Effets · Écran et le cran du zoom,
+ *     #8441, 44 px) sont une rangée
  *     en bas de ma vignette, et le (…) ne les double pas (#8626) ; toucher ma
  *     vignette met MON image en plein écran : la rangée monte en haut au
  *     centre, sous l'en-tête, la vignette du pair descend sous elle, la
@@ -432,7 +433,7 @@ try {
       check((await page.getAttribute('[data-call-corner]', 'data-call-self-tile')) === '2', 'vidéo : ma vignette est à ×2 par défaut');
       const corner = await page.locator('[data-call-corner]').boundingBox();
       check(corner !== null && Math.round(corner.width) === 112 && Math.round(corner.height) === 160, `vidéo : ×2 mesure 112 × 160 (${corner && [Math.round(corner.width), Math.round(corner.height)]})`);
-      check((await page.$('[data-call-zoom]')) === null, 'vidéo : aucun zoom sur la vignette en coin');
+      check((await page.$('[data-call-zoom]')) === null, 'vidéo : aucune capsule de zoom sur la vignette en coin');
       const tileRow = await page.$eval('[data-call-corner-frame]', (frame) => {
         const row = frame.querySelector('[data-call-self-controls="tile"]');
         if (row === null) return null;
@@ -448,7 +449,7 @@ try {
         };
       });
       check(tileRow !== null && tileRow.orientation === 'horizontal', `vignette : les commandes de ma caméra sont DANS ma vignette, en rangée (${JSON.stringify(tileRow)})`);
-      check(tileRow !== null && JSON.stringify(tileRow.actions.filter((action) => action !== 'flip')) === JSON.stringify(['camera', 'effects', 'screen']), `vignette : (Retourner) · Caméra · Effets · Écran (${tileRow?.actions.join(' · ')})`);
+      check(tileRow !== null && JSON.stringify(tileRow.actions.filter((action) => action !== 'flip')) === JSON.stringify(['camera', 'effects', 'screen', 'zoom']), `vignette : (Retourner) · Caméra · Effets · Écran · cran du zoom, #8441 (${tileRow?.actions.join(' · ')})`);
       check(tileRow !== null && tileRow.sizes.every((size) => size >= TAP_FLOOR) && tileRow.inside && tileRow.onScreen, `vignette : ${TAP_FLOOR} px chacun, en bas de ma vignette, à l’écran (${JSON.stringify(tileRow)})`);
       check((await page.$('[data-call-row="mine"]')) === null && (await page.locator('[data-call-control="camera"]').count()) === 1, 'vignette : le (…) ne double pas les commandes de ma caméra');
       await capture(page, 'controles-vignette-rangee-dark');

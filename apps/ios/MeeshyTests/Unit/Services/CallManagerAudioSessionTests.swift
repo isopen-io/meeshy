@@ -982,23 +982,31 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
     }
 
     func test_p2pClient_opusMunge_usesQualityThresholdsConstants() throws {
-        // Regression guard: mungeOpusSDP must not hardcode 64000 / 48000.
-        let source = try p2pClientSource()
+        // Regression guard: the Opus fmtp (moved to CallDataProfile, #8697) must
+        // not hardcode its ceilings.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/CallDataProfile.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(
             source.contains("opusFmtpMaxAverageBitrate"),
-            "mungeOpusSDP must reference QualityThresholds.opusFmtpMaxAverageBitrate"
+            "The Wi-Fi voice budget must reference QualityThresholds.opusFmtpMaxAverageBitrate"
         )
         XCTAssertTrue(
             source.contains("opusFmtpMaxPlaybackRate"),
-            "mungeOpusSDP must reference QualityThresholds.opusFmtpMaxPlaybackRate"
-        )
-        XCTAssertFalse(
-            source.contains("\"maxaveragebitrate=64000\""),
-            "Hardcoded maxaveragebitrate=64000 in mungeOpusSDP — replace with QualityThresholds.opusFmtpMaxAverageBitrate"
+            "The Opus fmtp must reference QualityThresholds.opusFmtpMaxPlaybackRate"
         )
         XCTAssertFalse(
             source.contains("\"maxplaybackrate=48000\""),
-            "Hardcoded maxplaybackrate=48000 in mungeOpusSDP — replace with QualityThresholds.opusFmtpMaxPlaybackRate"
+            "Hardcoded maxplaybackrate=48000 — replace with QualityThresholds.opusFmtpMaxPlaybackRate"
+        )
+        let client = try p2pClientSource()
+        XCTAssertTrue(
+            client.contains("Self.mungeOpusSDP(sdp.sdp, audio: dataProfile.budget.audio)"),
+            "The local description must be munged with the ACTIVE data profile"
         )
     }
 
