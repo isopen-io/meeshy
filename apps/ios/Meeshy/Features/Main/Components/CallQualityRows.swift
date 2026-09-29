@@ -98,7 +98,7 @@ enum CallQualityRows {
         }
     }
 
-    private static func formatted(_ value: Double, as metric: CallQualityMetric, locale: Locale) -> String {
+    static func formatted(_ value: Double, as metric: CallQualityMetric, locale: Locale) -> String {
         switch metric {
         case .packetLoss:
             return (value / 100).formatted(.percent.precision(.fractionLength(0...1)).locale(locale))
