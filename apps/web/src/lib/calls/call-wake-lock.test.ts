@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
 
@@ -187,7 +186,7 @@ describe("bindCallWakeLock — l'écran reste allumé tant que l'appel vit", () 
 
 describe('le pont d’appel branche le verrou d’écran', () => {
   test('call-socket-bridge démarre le verrou d’écran à la connexion', () => {
-    const source = readFileSync(join(import.meta.dir, 'call-socket-bridge.ts'), 'utf8');
+    const source = readFileSync(new URL('./call-socket-bridge.ts', import.meta.url), 'utf8');
     expect(source).toContain("import('./call-wake-lock')");
     expect(source).toContain('startCallWakeLock()');
   });
