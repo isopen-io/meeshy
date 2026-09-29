@@ -557,7 +557,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `StoryViewerContentView` en sort d'abord (−121), la loi rentre par ses
     // appels (+10). La feuille de commentaires et le détail d'un post reçoivent
     // une ligne chacun (+2) : la règle vit dans `CommentReplyFocus.swift`.
-    private static let legacyLineCeiling = 43_322
+    //
+    // #8709 — 43 322 → 43 276 (−46, NET du lot). Le menu « … » des commentaires
+    // de story devait toucher la fabrique de la ligne dans
+    // `StoryViewerView+Content.swift` : elle en sort d'abord pour
+    // `StoryViewerView+CommentMenu.swift` (−44), et l'écho `comment:updated`
+    // y délègue son remplacement en place à `StoryCommentEditing` (−2).
+    private static let legacyLineCeiling = 43_276
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

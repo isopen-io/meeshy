@@ -34,9 +34,10 @@ enum MessageCardExportMenu {
 
     /// **Un commentaire devient une carte** : le texte que le lecteur a sous
     /// les yeux (`showOriginal` suit la puce de langue de la ligne), son auteur,
-    /// ses médias. `nil` pour un commentaire protégé ou vide.
-    static func request(comment: FeedComment, showOriginal: Bool, accentColor: String, viewer: MessageCardSubject.Viewer, handle: String?) -> MessageCardExportRequest? {
-        guard let subject = MessageCardSubject.of(comment: comment, viewer: viewer, showOriginal: showOriginal) else { return nil }
+    /// ses médias. `nil` pour un commentaire protégé ou vide. Une réponse
+    /// emporte sa racine (`quoting`) en citation — l'arbre de réponses (#8709).
+    static func request(comment: FeedComment, showOriginal: Bool, accentColor: String, viewer: MessageCardSubject.Viewer, handle: String?, quoting root: FeedComment? = nil) -> MessageCardExportRequest? {
+        guard let subject = MessageCardSubject.of(comment: comment, viewer: viewer, showOriginal: showOriginal, quoting: root) else { return nil }
         return MessageCardExportRequest(
             subject: subject,
             languages: [],
