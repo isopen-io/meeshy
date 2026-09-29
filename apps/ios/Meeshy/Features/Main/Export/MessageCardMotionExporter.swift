@@ -81,7 +81,8 @@ nonisolated enum MessageCardMotionExporter {
         var painted = pictures
         if let generator, let videoID {
             let time = CMTime(seconds: plan.time(ofFrame: index), preferredTimescale: 600)
-            if let still = try? await generator.image(at: time).image {
+            nonisolated(unsafe) let exclusive = generator
+            if let still = try? await exclusive.image(at: time).image {
                 painted = pictures.replacing(videoID, with: still)
             }
         }
