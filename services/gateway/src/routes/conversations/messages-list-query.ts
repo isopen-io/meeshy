@@ -757,6 +757,8 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               // `message.replyTo.metadata` (qui porterait la pièce que le
               // message CITÉ visait lui-même, un cran plus haut dans le fil).
               attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+              // #8562 — l'échéance du LECTEUR sur le message cité.
+              ephemeralReader: { resolution: ephemeralDeadlines?.get(message.replyTo.id), now: new Date() },
             }),
             sender: replySender ? {
               ...replySender,
