@@ -1,5 +1,6 @@
 package me.meeshy.app;
 
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -81,6 +82,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyContactsPlugin.class);
         registerPlugin(MeeshyNotificationSettingsPlugin.class);
         super.onCreate(savedInstanceState);
+        suivreTailleDuTexte(getResources().getConfiguration());
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor
@@ -161,5 +163,26 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             );
+    }
+
+    /**
+     * #8616 — la taille, la graisse et le sens du texte sont declares dans
+     * `configChanges` : sans cela, les regler dans Android recreait l'activite,
+     * et Capacitor detruisait la WebView puis rechargeait l'URL de depart
+     * (brouillon, fil ouvert et appel perdus). Chrome suit la taille de police
+     * du systeme sans recharger ; la coque regle donc elle-meme le zoom de
+     * texte de la WebView, au demarrage et a chaque changement.
+     */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        suivreTailleDuTexte(newConfig);
+    }
+
+    private void suivreTailleDuTexte(Configuration config) {
+        WebView webView = getBridge().getWebView();
+        if (webView != null) {
+            webView.getSettings().setTextZoom(Math.round(config.fontScale * 100));
+        }
     }
 }
