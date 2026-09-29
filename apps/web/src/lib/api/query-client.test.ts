@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { forgetAccountCaches } from './account-caches';
 import { ApiError } from './client';
 import { isMediaAbsent, noteMediaAbsent, resetAbsentMedia } from './media-absent';
 import { CACHE_SCHEMA, createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
@@ -312,19 +313,10 @@ describe('la session purge AUSSI les seaux du service worker (D-6)', () => {
     };
   }
 
-  test('changement d’identité ⇒ les seaux `api` et `medias` sont supprimés, le précache SURVIT', async () => {
-    const storage = fakeStorage();
-    const session = createSessionStore({ storage: fakeStorage() });
-    session.getState().establish({
-      user: { id: 'u-1', username: 'ada' },
-      token: 'jwt',
-      sessionToken: 'sess',
-      expiresIn: 86_400,
-    });
+  test('la FIN d’un compte ⇒ les seaux `api` et `medias` sont supprimés, le précache SURVIT (#8674 : plus au simple changement)', async () => {
     const cacheStorage = fakeCaches(['api', 'medias', 'workbox-precache-v2-https://x/']);
 
-    createAppQueryClient({ storage, buster: '0.0.0-test:u-1', session, cacheStorage });
-    session.getState().clearSession();
+    forgetAccountCaches({ userId: 'u-1', storage: fakeStorage(), cacheStorage });
     await Promise.resolve();
     await Promise.resolve();
 

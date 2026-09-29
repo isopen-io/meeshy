@@ -3,7 +3,8 @@ import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 import { draftStore } from '../send/draft-store';
 import { safeLocalStorage } from '../storage';
 
-import { createAccountSwitcher, createAccountVault, purgeAccountLocalData } from './accounts';
+import { forgetAccountCaches } from './account-caches';
+import { createAccountSwitcher, createAccountVault, forgettingLocalData, purgeAccountLocalData } from './accounts';
 import { logout } from './auth';
 import { httpTransport } from './client';
 import { sessionStore } from './session';
@@ -17,7 +18,28 @@ import { sessionStore } from './session';
 
 const now = (): number => Date.now();
 
-export const accountVault = createAccountVault({ storage: safeLocalStorage(), now });
+function storedKeys(): readonly string[] {
+  try {
+    const storage = globalThis.localStorage;
+    return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => key !== null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * CE QU'UN COMPTE LAISSE SUR L'APPAREIL, EFFACÉ (#8286, #8674) — brouillons,
+ * modes de lecture, dernières ouvertures, cache de requêtes rangé et seaux du
+ * service worker. Appelé par la déconnexion et par « retirer ce compte » ;
+ * jamais par un changement de compte.
+ */
+function forgetAccountLocally(userId: string): void {
+  draftStore.forgetScope(`u_${userId}`);
+  purgeAccountLocalData({ storage: safeLocalStorage(), userId, keys: storedKeys() });
+  forgetAccountCaches({ userId });
+}
+
+export const accountVault = forgettingLocalData(createAccountVault({ storage: safeLocalStorage(), now }), forgetAccountLocally);
 
 export const accountSwitcher = createAccountSwitcher({
   vault: accountVault,
@@ -34,19 +56,11 @@ export const accountSwitcher = createAccountSwitcher({
   },
 });
 
-function storedKeys(): readonly string[] {
-  try {
-    const storage = globalThis.localStorage;
-    return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => key !== null);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * « DÉCONNEXION » (#8286) — la session finit (serveur compris) et les données
- * locales du compte partent ; le compte RESTE listé, et y revenir exige le mot
- * de passe ou un lien magique. Changer de compte, lui, ne passe jamais ici.
+ * locales du compte partent, cache de requêtes compris (#8674) ; le compte
+ * RESTE listé, et y revenir exige le mot de passe ou un lien magique. Changer
+ * de compte, lui, ne passe jamais ici.
  */
 export async function signOutOfThisDevice(): Promise<void> {
   const current = sessionStore.getState().session;
@@ -54,6 +68,7 @@ export async function signOutOfThisDevice(): Promise<void> {
   if (current.status === 'authenticated') accountVault.noteActive(current.user);
   await logout().catch(() => undefined);
   if (userId === null) return;
-  draftStore.forgetScope(`u_${userId}`);
-  purgeAccountLocalData({ storage: safeLocalStorage(), userId, keys: storedKeys() });
+  /* Son cache de requêtes, rangé par `clearSession()` le temps de la
+     déconnexion, part avec le reste (#8674). */
+  forgetAccountLocally(userId);
 }

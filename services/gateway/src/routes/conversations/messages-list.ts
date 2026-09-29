@@ -75,6 +75,11 @@ import {
   withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
+import {
+  isServableThroughQuotes,
+  loadInheritedEphemeralDeadlines,
+  withInheritedExpiry,
+} from '../../services/messaging/quoteCascade';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -657,6 +662,20 @@ export function registerMessagesListRoute(
         }
       }
 
+      // #8630 — une réponse meurt, pour CE lecteur, avec ce qu'elle cite
+      // (transitivement) : même grâce d'une heure, même retrait en place.
+      const inheritedDeadlines = await loadInheritedEphemeralDeadlines(prisma, messages, currentParticipantId);
+      if (inheritedDeadlines.size > 0) {
+        const inheritedAt = new Date();
+        const alive = messages.filter((message: { id: string }) =>
+          isServableThroughQuotes(inheritedDeadlines, message.id, inheritedAt)
+        );
+        if (alive.length !== messages.length) {
+          messages.length = 0;
+          messages.push(...alive);
+        }
+      }
+
       const readStatusMap = await loadMessageReadStatusMap(
         prisma,
         conversationId,
@@ -748,6 +767,14 @@ export function registerMessagesListRoute(
       if (viewOnceStates.size > 0) {
         mappedMessages.forEach((m, index) => {
           mappedMessages[index] = projectViewOnceForReader(m, viewOnceStates.get(m.id));
+        });
+      }
+
+      // #8630 — l'échéance servie d'une réponse est la plus proche de la
+      // sienne et de celle de ce qu'elle cite : les clients la retirent alors.
+      if (inheritedDeadlines.size > 0) {
+        mappedMessages.forEach((m, index) => {
+          mappedMessages[index] = withInheritedExpiry(m, inheritedDeadlines);
         });
       }
 

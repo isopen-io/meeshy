@@ -510,15 +510,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
-
-        if activeUserId == userId {
-            activeUserId = nil
-            currentUser = nil
-            isAuthenticated = false
-            pendingOptimisticProfile = nil
-            APIClient.shared.authToken = nil
-        APIClient.shared.registeredSessionToken = nil
+        // #8674 — retiré de l'appareil : son cache part, qu'il soit vivant ou
+        // mis de côté.
+        guard activeUserId == userId else {
+            if let key = accountKey(for: userId) { CacheAccountBinder.shared.forget(key) }
+            return
         }
+        CacheAccountBinder.shared.bind(nil)
+        activeUserId = nil
+        currentUser = nil
+        isAuthenticated = false
+        pendingOptimisticProfile = nil
+        APIClient.shared.authToken = nil
+        APIClient.shared.registeredSessionToken = nil
     }
 
     // MARK: - Check Existing Session
@@ -706,6 +710,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // deux dans la même passe, et la lire après ferait décider le bascule
         // sur l'origine de la session PRÉCÉDENTE.
         sessionOrigin = origin
+        // #8674 — le cache devient celui de ce compte (rendu s'il en avait un
+        // de côté). Sans effet sur une rotation de jeton.
+        if !isTokenRotation { CacheAccountBinder.shared.bind(accountKey(for: userId)) }
         isAuthenticated = true
         // Hydrate session-scoped caches not carried by the auth payload (block
         // list). Skip on token rotation — already warm.
@@ -741,6 +748,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+        // #8674 — session révoquée : le cache du compte part, rien n'en est
+        // mis de côté (ses jetons viennent d'être effacés).
+        CacheAccountBinder.shared.bind(nil)
         activeUserId = nil
         currentUser = nil
         // sync-04 — ce chemin ne passe PAS par logout() mais son flip

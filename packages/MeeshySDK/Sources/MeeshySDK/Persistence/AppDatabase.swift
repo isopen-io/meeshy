@@ -145,6 +145,22 @@ public final class AppDatabase: @unchecked Sendable {
         return databaseURL
     }
 
+    /// #8674 — le dossier où dorment les caches des comptes quittés mais
+    /// gardés, à côté de `meeshy.sqlite` (même protection de fichier). Un
+    /// harnais de test y a son propre dossier temporaire : il n'écrit jamais
+    /// dans celui de l'app.
+    public static var accountArchiveDirectory: URL {
+        if runsUnderTestHarness(environment: ProcessInfo.processInfo.environment) {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("meeshy-cache-archives-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+        }
+        do {
+            return try resolveDatabaseURL().deletingLastPathComponent()
+        } catch {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("meeshy-cache-archives", isDirectory: true)
+        }
+    }
+
     private static func openPool(at databaseURL: URL) throws -> DatabasePool {
         var configuration = Configuration()
         // #7059 — LA BASE APPREND QUE L'APPLICATION SE SUSPEND.

@@ -17,6 +17,7 @@ import {
   reevaluateLegacyViewOnceBurn,
 } from './messaging/purgeViewOnceContent';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { loadQuoteDescendants } from './messaging/quoteCascade';
 
 const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
 
@@ -132,6 +133,27 @@ export interface ExpiredMessagesCleanupOptions {
 
 export const EXPIRED_MESSAGES_SWEEP_INTERVAL_MS = 60 * 1000;
 
+const EXPIRED_MESSAGE_SELECT = {
+  id: true,
+  conversationId: true,
+  senderId: true,
+  sender: { select: { id: true, userId: true } },
+  // Capturés AVANT l'effacement : `applyMessageRemovalEffects` en a
+  // besoin pour les `m+<token>` du contenu et pour le décompte des
+  // compteurs de conversation, et aucun d'eux n'est relisible ensuite.
+  content: true,
+  metadata: true,
+  messageType: true,
+  expiresAt: true,
+  attachments: { select: { id: true, mimeType: true } },
+  // #7578 — de quoi reconnaître une vue unique NON éphémère que l'ancien
+  // chemin avait programmée pour destruction par cette colonne.
+  createdAt: true,
+  isViewOnce: true,
+  ephemeralDuration: true,
+  effectFlags: true,
+} as const;
+
 export class ExpiredMessagesCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
   private refusalStreak = 0;
@@ -200,26 +222,7 @@ export class ExpiredMessagesCleanupService {
           // les deux se composent en conjonction au premier niveau.
           ...unsetOrNull('deletedAt'),
         },
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          sender: { select: { id: true, userId: true } },
-          // Capturés AVANT l'effacement : `applyMessageRemovalEffects` en a
-          // besoin pour les `m+<token>` du contenu et pour le décompte des
-          // compteurs de conversation, et aucun d'eux n'est relisible ensuite.
-          content: true,
-          metadata: true,
-          messageType: true,
-          expiresAt: true,
-          attachments: { select: { id: true, mimeType: true } },
-          // #7578 — de quoi reconnaître une vue unique NON éphémère que l'ancien
-          // chemin avait programmée pour destruction par cette colonne.
-          createdAt: true,
-          isViewOnce: true,
-          ephemeralDuration: true,
-          effectFlags: true,
-        },
+        select: EXPIRED_MESSAGE_SELECT,
         orderBy: { expiresAt: 'asc' },
         take: this.batchSize,
       });
@@ -259,8 +262,11 @@ export class ExpiredMessagesCleanupService {
     if (toBurn.length === 0) return { burned: 0 };
 
     let burned = 0;
+    const inPass = new Set(toBurn.map((message) => message.id));
     for (const message of toBurn) {
-      if (await this._burn(message, now, announcer)) burned += 1;
+      if (!(await this._burn(message, now, announcer))) continue;
+      burned += 1;
+      burned += await this._burnReplies(message, inPass, now, announcer);
     }
 
     if (candidates.length === this.batchSize) {
@@ -345,6 +351,47 @@ export class ExpiredMessagesCleanupService {
           });
       },
     });
+  }
+
+  /**
+   * #8630 — la destruction d'un éphémère emporte les réponses qui le citent,
+   * transitivement (décision porteur 2026-09-29). C'est la règle de son
+   * EXPÉDITEUR, à qui aucune échéance n'est servie : sa réponse vit jusqu'ici.
+   * Pour tout autre lecteur, la réponse est déjà morte avec sa `D(u)`
+   * (`quoteCascade.ts`) ; ce balayage détruit le contenu au repos. Même chemin
+   * que l'original — fichiers, clair, annonce — pour qu'aucune réponse ne
+   * survive en base à ce qu'elle cite.
+   */
+  private async _burnReplies(
+    message: ExpiredMessageRow,
+    inPass: Set<string>,
+    now: Date,
+    announcer: RetractedNotificationAnnouncer | undefined,
+  ): Promise<number> {
+    const descendants = (await loadQuoteDescendants(this.prisma, [message.id])).filter(
+      (reply) => !inPass.has(reply.id),
+    );
+    if (descendants.length === 0) return 0;
+
+    let rows: ExpiredMessageRow[];
+    try {
+      const ids = descendants.map((reply) => reply.id);
+      rows = ((await this.prisma.message.findMany({
+        where: { id: { in: ids }, ...unsetOrNull('deletedAt') },
+        select: EXPIRED_MESSAGE_SELECT,
+        take: ids.length,
+      })) as ExpiredMessageRow[]).filter((reply) => ids.includes(reply.id));
+    } catch (err) {
+      log.warn('quote cascade rows failed', { messageId: message.id, err });
+      return 0;
+    }
+
+    let burned = 0;
+    for (const reply of descendants.map((d) => rows.find((r) => r.id === d.id)).filter(Boolean) as ExpiredMessageRow[]) {
+      inPass.add(reply.id);
+      if (await this._burn(reply, now, announcer)) burned += 1;
+    }
+    return burned;
   }
 
   /** L'échéance est une DATE, et elle est passée. Tout le reste survit. */

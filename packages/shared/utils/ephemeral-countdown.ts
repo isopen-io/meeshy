@@ -225,3 +225,38 @@ export function isEphemeralServable(input: {
 
   return input.now.getTime() < deadline.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS;
 }
+
+/**
+ * #8630 — LA DESTRUCTION D'UN MESSAGE CITÉ ENTRAÎNE SES RÉPONSES (décision
+ * porteur 2026-09-29 : « quand elle se détruit, elle entraîne la destruction du
+ * message qui l'a cité »).
+ *
+ * Une réponse meurt, POUR UN LECTEUR, à la plus PROCHE des échéances servies à
+ * ce lecteur sur sa chaîne de citations : la sienne, celle du message qu'elle
+ * cite, celle du message que celui-ci cite… Chaque maillon garde sa propre loi
+ * ({@link servedEphemeralExpiresAt}) — l'expéditeur d'une flamme-œil n'y reçoit
+ * rien, et sa réponse vit donc jusqu'à la destruction GLOBALE, comme l'original.
+ *
+ * Une flamme-œil NON consommée n'a pas d'échéance servie : la citation reste
+ * lisible et la réponse vit (« quand on lit cela, on a lu les messages
+ * précédents »).
+ */
+export function inheritedEphemeralExpiresAt(deadlines: readonly (Date | null | undefined)[]): Date | null {
+  const known = deadlines.filter((deadline): deadline is Date => deadline instanceof Date);
+  if (known.length === 0) return null;
+  return new Date(Math.min(...known.map((deadline) => deadline.getTime())));
+}
+
+/**
+ * La réponse est-elle encore SERVABLE à ce lecteur ? Même grâce d'une heure que
+ * le message cité ({@link isEphemeralServable}) : la réponse ne survit pas à ce
+ * qu'elle cite, et ne disparaît pas non plus avant lui.
+ */
+export function isInheritedEphemeralServable(input: {
+  readonly inheritedExpiresAt?: Date | null;
+  readonly now: Date;
+}): boolean {
+  const deadline = asDate(input.inheritedExpiresAt);
+  if (!deadline) return true;
+  return input.now.getTime() < deadline.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS;
+}

@@ -22,6 +22,8 @@ import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messa
 import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { loadQuotedEphemeralReaders, type EphemeralReaderResolution } from './ephemeralReaderDeadlines';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import { readerParticipantIdOf } from './readerParticipant';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -234,20 +236,6 @@ type QuotedReaders = { readonly deadlines: ReadonlyMap<string, EphemeralReaderRe
 const formatThreadMessage = <T extends Record<string, unknown>>(message: T, readers: QuotedReaders): T =>
   hoistThreadMessageLocation(maskThreadMessageQuote(serializeThreadMessage(message), readers));
 
-/** Le `Participant.id` du lecteur — la clé des échéances d'éphémère (#8562). */
-async function readerParticipantIdOf(
-  prisma: PrismaClient,
-  conversationId: string,
-  authContext: UnifiedAuthRequest['authContext']
-): Promise<string | undefined> {
-  if (authContext.type === 'anonymous') return authContext.participantId ?? undefined;
-  const participant = await prisma.participant.findFirst({
-    where: { conversationId, userId: authContext.userId, isActive: true },
-    select: { id: true },
-  });
-  return participant?.id;
-}
-
 const REFUS_DE_FIL = {
   sansSession: 'Authentication required to read this thread'
 } as const;
@@ -336,19 +324,30 @@ export function registerThreadsRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
+      const collected = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
+
+      // #7451 × #8630 — ce qui est mort pour CE lecteur ne se sert pas : un
+      // éphémère échu, et toute réponse à ce qui l'est. Une racine morte
+      // n'est pas un fil tronqué : le fil n'existe plus pour lui.
+      const readerParticipantId = await readerParticipantIdOf(prisma, conversationId, authContext);
+      const now = new Date();
+      const readerPage = await keepAliveForReader(prisma, [parent, ...collected], readerParticipantId, now);
+      if (!readerPage.alive.some((m) => m.id === parent.id)) {
+        return sendNotFound(reply, 'Message not found');
+      }
+      const replies = readerPage.alive.filter((m) => m.id !== parent.id);
 
       // #7950 — la citation d'une story retirée sort expurgée : UNE requête
       // pour le parent et toutes ses réponses.
       const readers: QuotedReaders = {
-        deadlines: await loadQuotedEphemeralReaders(prisma, [parent, ...replies], () =>
-          readerParticipantIdOf(prisma, conversationId, authContext)
-        ),
-        now: new Date(),
+        deadlines: await loadQuotedEphemeralReaders(prisma, [parent, ...replies], async () => readerParticipantId),
+        now,
       };
+      const served = (m: ThreadMessage) =>
+        withInheritedExpiry(formatThreadMessage(m as unknown as Record<string, unknown>, readers) as Record<string, unknown> & { id: string }, readerPage.inherited);
       const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, [
-        formatThreadMessage(parent as unknown as Record<string, unknown>, readers),
-        ...replies.map((m) => formatThreadMessage(m as unknown as Record<string, unknown>, readers)),
+        served(parent),
+        ...replies.map(served),
       ]);
       return sendSuccess(reply, {
         parent: servedParent,

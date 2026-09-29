@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createAccountSwitcher, createAccountVault, purgeAccountLocalData, type PreservedSession } from './accounts';
+import { forgetAccountCaches } from './account-caches';
+import {
+  createAccountSwitcher,
+  createAccountVault,
+  forgettingLocalData,
+  purgeAccountLocalData,
+  type PreservedSession,
+} from './accounts';
+import { createAppQueryClient } from './query-client';
 import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 
 /**
@@ -160,6 +168,24 @@ describe('déconnexion', () => {
 
     expect(device.vault.list()).toEqual([]);
     expect(device.storage.raw.get('meeshy.accounts') ?? '').not.toContain('tA');
+  });
+
+  test('retirer un compte efface aussi le cache rangé de ce compte (#8674)', () => {
+    const device = makeDevice();
+    const client = createAppQueryClient({ storage: device.storage, buster: 't', session: device.store });
+    const vault = forgettingLocalData(device.vault, (userId) =>
+      forgetAccountCaches({ userId, storage: device.storage, cacheStorage: { keys: async () => [], delete: async () => false } }),
+    );
+    device.signIn(alice, 'tA');
+    client.setQueryData(['conversations'], [{ id: 'c-a', title: 'liste d’Alice' }]);
+    device.switcher.suspend();
+    device.signIn(bob, 'tB');
+    expect([...device.storage.raw.values()].join('\n')).toContain('liste d’Alice');
+
+    vault.forget('a1');
+
+    expect([...device.storage.raw.values()].join('\n')).not.toContain('liste d’Alice');
+    expect(vault.list().map((a) => a.user.username)).toEqual(['bob']);
   });
 });
 
