@@ -5538,6 +5538,10 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "didCollectStats must insert \"colorFilter\" into analyticsEffectsUsed when a " +
             "color-grading preset (filterConfig.isEnabled) is active."
         )
+        XCTAssertTrue(
+            body.contains("activeFaceEffect.analyticsName"),
+            "didCollectStats must record the active face effect preset (#8551) in analyticsEffectsUsed."
+        )
     }
 }
 

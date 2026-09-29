@@ -207,6 +207,16 @@ const RIVER_NO_TRANSLATION_INDEX = 12;
 export const RIVER_CONTINUATION_WITNESS_ID = `riv-${RIVER_CONTINUATION_INDEX}`;
 export const RIVER_NO_TRANSLATION_WITNESS_ID = `riv-${RIVER_NO_TRANSLATION_INDEX}`;
 
+/**
+ * LE TÉMOIN DES CAPSULES DE L'ÉLU (#8536) — la seule rangée RÉAGIE du corpus :
+ * `check-reading-mode.mjs` l'élit (`lib/check-focal-elected.mjs`) pour toucher
+ * sa capsule sur la bande de l'élu. Loin des deux témoins ci-dessus et de la
+ * zone du geste générique (~23), traduite et dernière de son groupe comme ses
+ * voisines : sa ligne basse (drapeau + capsules) tient dans la même hauteur.
+ */
+const RIVER_REACTION_INDEX = 18;
+export const RIVER_REACTION_WITNESS_ID = `riv-${RIVER_REACTION_INDEX}`;
+
 export const RIVER_MESSAGES: readonly Message[] = RIVER_LINES.map((content, i) => {
   // Le message suivant `RIVER_CONTINUATION_INDEX` est forcé au MÊME auteur
   // que lui (`amina`, la valeur que l'alternance lui donne déjà à cet
@@ -229,6 +239,7 @@ export const RIVER_MESSAGES: readonly Message[] = RIVER_LINES.map((content, i) =
         ? [translation(id, 'fr', content)]
         : [translation(id, 'en', RIVER_LINES_EN[i] ?? content)],
     createdAt: minutesAgo(50 - i),
+    ...(i === RIVER_REACTION_INDEX ? { reactionSummary: { '👍': 2, '🎉': 1 }, reactionCount: 3 } : {}),
   });
 });
 

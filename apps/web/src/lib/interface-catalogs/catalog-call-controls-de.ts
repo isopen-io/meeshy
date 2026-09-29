@@ -47,6 +47,18 @@ const de = {
   'callControls.record.audioDetail': 'Die Stimmen aller',
   'callControls.record.video': 'Audio und Video',
   'callControls.record.videoDetail': 'Die sichtbaren Bilder und die Stimmen',
+  'callControls.capture': 'Schnappschuss',
+  'callControls.capture.label': 'Schnappschuss vom Anruf',
+  'callControls.back': 'Zurück',
+  'callControls.journal': 'Protokoll',
+  'callControls.journal.label': 'Anrufprotokoll öffnen',
+  'callControls.journal.live': 'Zurück zu live',
+  'callControls.journal.empty': 'Noch nichts transkribiert. Schalte Untertitel ein: Jeder gesprochene Satz erscheint hier mit seiner Übersetzung, für den ganzen Anruf.',
+  'callControls.journal.original': 'Original',
+  'callControls.camera.options': 'Meine Kameraoptionen',
+  'callControls.selfTile.small': 'Mein Vorschaubild: klein',
+  'callControls.selfTile.medium': 'Mein Vorschaubild: mittel',
+  'callControls.selfTile.large': 'Mein Vorschaubild: groß',
 } satisfies CallControlsCatalog;
 
 export default de;

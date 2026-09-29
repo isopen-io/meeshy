@@ -110,6 +110,7 @@ extension StoryCanvasUIView {
     @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
+        if let touche = hitTestItem(at: location), resumeSuspendedInlineEdit(tappedId: touche) { return }
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else {
             // Tap sur une zone vide du canvas pendant l'édition de texte en
             // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
@@ -234,6 +235,7 @@ extension StoryCanvasUIView {
         }
         switch recognizer.state {
         case .began:
+            let saisi = suspendInlineEditForManipulation(at: recognizer.location(in: self))
             // Routage par couche : `.canvas` absorbe (recognizer cancelled),
             // `.background` cible le bg media, `.foreground` hit-teste les fg
             // (avec fallback bg si le doigt ne touche aucun foreground).
@@ -246,7 +248,7 @@ extension StoryCanvasUIView {
             // reader voient le changement live via @Binding/slide.didSet,
             // updateManipulatedItemLayer route le bg vers backgroundLayer
             // pour le rendu live sur le canvas principal).
-            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+            guard let id = saisi ?? resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
@@ -270,6 +272,7 @@ extension StoryCanvasUIView {
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
             hideManipulationLimits()
             slideContentRevision &+= 1
@@ -290,7 +293,8 @@ extension StoryCanvasUIView {
         guard mode == .edit else { return }
         switch recognizer.state {
         case .began:
-            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+            let saisi = suspendInlineEditForManipulation(at: recognizer.location(in: self))
+            guard let id = saisi ?? resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
@@ -318,6 +322,7 @@ extension StoryCanvasUIView {
             slide = updateRotation(slideId: id, rotation: baseRotation + degrees)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
             hideManipulationLimits()
             slideContentRevision &+= 1
@@ -332,7 +337,8 @@ extension StoryCanvasUIView {
         let location = recognizer.location(in: self)
         switch recognizer.state {
         case .began:
-            guard let id = resolveManipulationTarget(at: location),
+            let saisi = suspendInlineEditForManipulation(at: location)
+            guard let id = saisi ?? resolveManipulationTarget(at: location),
                   let (sx, sy) = currentItemNormalizedPosition(forId: id) else {
                 recognizer.state = .cancelled
                 return
@@ -404,6 +410,7 @@ extension StoryCanvasUIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
             lastBgSnapX = nil
             lastBgSnapY = nil

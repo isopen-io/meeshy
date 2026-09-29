@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **Ouvrir la galerie plein écran d'un post — un seul site, quatre surfaces**
 /// (#4927).
@@ -50,13 +51,16 @@ extension View {
     ///     n'ont qu'un média à feuilleter : `0` ne coûte rien à une galerie.
     ///   - preferredContentLanguages: le Prisme servi au PLAYER des scènes —
     ///     aux textes posés dans la scène. Vide ⇒ le Prisme du lecteur.
+    ///   - zoomSourceID: la carte d'où la galerie GRANDIT (#8598,
+    ///     `SceneZoomTransition.destinationID`). `nil` ⇒ la montée habituelle.
     func socialMediaGallery(
         post: FeedPost?,
         isPresented: Binding<Bool>,
         startMediaId: String?,
         startSceneIndex: Int = 0,
         accentColor: String,
-        preferredContentLanguages: [String] = []
+        preferredContentLanguages: [String] = [],
+        zoomSourceID: String? = nil
     ) -> some View {
         modifier(SocialMediaGalleryLayer(
             post: post,
@@ -64,7 +68,8 @@ extension View {
             startMediaId: startMediaId,
             startSceneIndex: startSceneIndex,
             accentColor: accentColor,
-            preferredContentLanguages: preferredContentLanguages
+            preferredContentLanguages: preferredContentLanguages,
+            zoomSourceID: zoomSourceID
         ))
     }
 }
@@ -84,6 +89,10 @@ private struct SocialMediaGalleryLayer: ViewModifier {
     let startSceneIndex: Int
     let accentColor: String
     let preferredContentLanguages: [String]
+    let zoomSourceID: String?
+
+    /// Le namespace de la transition zoom, posé par la racine (#8598).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
 
     /// **Le publieur de « Composer »** — valeur d'environnement, jamais
     /// `@EnvironmentObject` : les hôtes de ce modificateur sont montés dans des
@@ -216,6 +225,7 @@ private struct SocialMediaGalleryLayer: ViewModifier {
             }
         }
         .environment(\.meeshyStoryComposer, storyComposer)
+        .sceneZoomDestination(zoomSourceID, in: zoomNamespace)
     }
 }
 

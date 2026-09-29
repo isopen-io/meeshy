@@ -99,6 +99,8 @@ struct MessageActionsMenu: View {
         case .more: return "ellipsis"
         case .callDetail: return "info.circle"
         case .select: return "checkmark.circle"
+        case .exportImage: return MessageCardExportMenu.imageSymbol
+        case .exportQuick: return MessageCardExportMenu.quickSymbol
         }
     }
 
@@ -112,6 +114,8 @@ struct MessageActionsMenu: View {
         case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
         case .callDetail: return String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main)
         case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
+        case .exportImage: return MessageCardExportMenu.imageLabel
+        case .exportQuick: return MessageCardExportMenu.quickLabel
         }
     }
 }

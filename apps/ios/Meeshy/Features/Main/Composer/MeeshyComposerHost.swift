@@ -224,6 +224,8 @@ struct MeeshyComposerHost: View {
     /// capsule publie le format de la porte. Le chevron choisit ; seul Publier
     /// envoie (maquette plein écran, 2026-09-27). Lu par `armedChoice`.
     @State var armedPublishChoice: ComposerPublishChoice?
+    /// Le post à une seule vidéo qui attend « C'est un Réel / C'est un Post » (#8603).
+    @State var pendingReelOffer: ComposerPublishChoice?
     @State var composerVisibility: PostVisibility
     @State var composerVisibilityUserIds: [String] = []
 
@@ -555,6 +557,11 @@ struct MeeshyComposerHost: View {
     @StateObject var mediaPorterStore = ComposerMediaPorterStore()
 
     @State var showsPhotoPicker = false
+    /// Les médias choisis EN SÉRIE : chacun fonde sa scène (`ComposerScenePicking`).
+    @State var sceneSeriesMediaURLs: Set<URL> = []
+    /// Le sélecteur ouvert À L'OUVERTURE du composer : même un seul média y
+    /// fonde la première scène.
+    @State var openingPickFoundsScenes = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
     @State var showsFileImporter = false
 

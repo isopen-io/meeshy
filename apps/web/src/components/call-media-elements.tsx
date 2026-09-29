@@ -46,6 +46,8 @@ export function StreamVideo({
       aria-label={label}
       className={className}
       style={{ objectFit: fit, transform: mirrored ? 'scaleX(-1)' : undefined, backgroundColor: '#000' }}
+      data-call-stream={fit}
+      {...(mirrored ? { 'data-call-mirrored': '' } : {})}
     />
   );
 }

@@ -27,8 +27,8 @@ const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext =>
 });
 
 describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réduit (#5814 §1.2)', () => {
-  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, more', () => {
-    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'more']);
+  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, export, more', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'export', 'more']);
   });
 
   test('message SANS texte (m3) ⇒ select, forward, reply, more — ni copy ni translate', () => {
@@ -40,7 +40,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
   });
 
   test('une seule langue ⇒ pas de translate, copy reste', () => {
-    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'more']);
+    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'export', 'more']);
   });
 
   /**
@@ -58,6 +58,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       copy: 'message.menu.copy',
       forward: 'message.menu.forward',
       reply: 'message.menu.reply',
+      export: 'message.menu.export',
       more: 'message.menu.more',
     });
   });
@@ -78,6 +79,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Copy',
       'Forward',
       'Reply',
+      'Export as image',
       'More…',
     ]);
     expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
@@ -86,6 +88,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'نسخ',
       'إعادة توجيه',
       'رد',
+      'تصدير كصورة',
       'المزيد…',
     ]);
   });
@@ -175,6 +178,32 @@ describe('translationChoices — original puis les rangs du PRISME, jamais l’o
       servedLanguage: 'fr',
     });
     expect(choices).toEqual([{ code: 'fr', isOriginal: true, isServed: true }]);
+  });
+});
+
+describe('« Exporter en image » suit la garde de « Copier »', () => {
+  test('un message texte ordinaire s’exporte, juste avant « Plus… »', () => {
+    const ids = messageMenuItems(ctx()).map((i) => i.id);
+    expect(ids.indexOf('export')).toBe(ids.indexOf('more') - 1);
+  });
+
+  test('un message PROTÉGÉ ne s’exporte pas : ce qui ne se copie pas ne se peint pas', () => {
+    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('un message sans texte n’a rien à peindre', () => {
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('« Export rapide » n’apparaît qu’avec un format par défaut enregistré, juste après « Exporter en image »', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('exportQuick');
+    const ids = messageMenuItems(ctx({ hasDefaultExportFormat: true })).map((i) => i.id);
+    expect(ids.indexOf('exportQuick')).toBe(ids.indexOf('export') + 1);
+    expect(messageMenuItems(ctx({ hasDefaultExportFormat: true, isProtected: true })).map((i) => i.id)).not.toContain('exportQuick');
+  });
+
+  test('une vue unique ne propose que « Plus… »', () => {
+    expect(messageMenuItems(ctx({ isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
   });
 });
 

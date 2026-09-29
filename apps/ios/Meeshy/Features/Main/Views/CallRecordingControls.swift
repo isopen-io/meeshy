@@ -110,9 +110,11 @@ struct CallRecordingOverlay: View, Equatable {
     let onAnswer: (Bool) -> Void
     let onStop: () -> Void
     let onDismiss: () -> Void
+    var showsStatus = true
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.phase == rhs.phase && lhs.notice == rhs.notice && lhs.kind == rhs.kind && lhs.requesterName == rhs.requesterName
+            && lhs.showsStatus == rhs.showsStatus
     }
 
     var body: some View {
@@ -121,11 +123,14 @@ struct CallRecordingOverlay: View, Equatable {
             consentCard
         case .asking, .pending:
             statusPill(text: CallRecordingCopy.waiting, stopLabel: CallRecordingCopy.cancel)
+                .callChromeVisibility(showsStatus)
         case .recording:
             statusPill(text: CallRecordingCopy.active, stopLabel: CallRecordingCopy.label(isActive: true))
+                .callChromeVisibility(showsStatus)
         case .idle:
             if let notice {
                 noticePill(notice)
+                    .callChromeVisibility(showsStatus)
             }
         }
     }

@@ -74,6 +74,8 @@ import { useStoryPauseWhile } from '@/lib/view/use-story-pause-while';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
 import { screenGestureYields } from '@/lib/view/shortcut-scope';
+import { chromeYields, yieldingChrome } from '@/lib/view/chrome-yields';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -558,6 +560,10 @@ export default function StoryScreen() {
   const ownerRail = useStoryOwnerRail({ story: currentStory, online, pause, resume, announce, language: interfaceLanguage });
   const viewersOpen = ownerRail.viewers.postId !== null;
   const profilePeekOpen = useProfilePeekOpen();
+  /* UNE loi (#8601, `chrome-yields.ts`) : feuille ouverte ou appui long ⇒
+     l'en-tête, la légende et le rail cèdent ENSEMBLE ; feuille et média restent. */
+  const chromeYielded = chromeYields({ sheetOpen: commentsOpen || viewersOpen, held: chromeHidden });
+  const chrome = yieldingChrome({ hidden: chromeYielded, reducedMotion: prefersReducedMotion() });
 
   /* EXTRAIT dans `use-story-keyboard-shortcuts.ts` (§ budget, #7116) —
      comportement INCHANGÉ, sauf `layerOpen` qui gagne `viewersOpen` :
@@ -823,13 +829,14 @@ export default function StoryScreen() {
           )}
 
           <div
+            data-story-header
+            data-chrome-yields={chrome['data-chrome-yields']}
             className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 px-3"
             style={{
               paddingTop: 'calc(var(--safe-top, 0px) + 8px)',
               paddingBottom: 44,
               background: CHROME_SCRIM_TOP,
-              opacity: chromeHidden ? 0 : 1,
-              transition: 'opacity 180ms ease',
+              ...chrome.style,
             }}
             /* MASQUÉ ⇒ INERTE, jamais `aria-hidden` seul (D-90). Cette
                en-tête porte un CONTRÔLE — la croix de fermeture — et
@@ -843,7 +850,7 @@ export default function StoryScreen() {
                devenir INATTEIGNABLE »). La LÉGENDE, douze lignes plus bas,
                garde `aria-hidden` : elle ne contient que des `<p>` — rien
                d'atteignable, donc rien à rendre inerte. */
-            inert={chromeHidden}
+            inert={chrome.inert}
           >
             <ProgressBars
               group={group}
@@ -926,10 +933,10 @@ export default function StoryScreen() {
                 /* MÊME CESSION QUE LE RAIL (mesuré à la capture) : « Le lac,
                    ce matin. » se lisait PAR-DESSUS « Écrire un commentaire… ».
                    Deux textes superposés ne sont pas un état — c'en est zéro. */
-                opacity: chromeHidden || commentsOpen ? 0 : 1,
-                transition: 'opacity 180ms ease',
+                ...chrome.style,
               }}
-              aria-hidden={chromeHidden || commentsOpen ? true : undefined}
+              data-chrome-yields={chrome['data-chrome-yields']}
+              aria-hidden={chrome.inert ? true : undefined}
             >
               {resolvedContent !== null ? (
                 <p className="text-body" style={CLAMPED_CAPTION} lang={resolvedContent.language || undefined}>
@@ -985,7 +992,7 @@ export default function StoryScreen() {
                  contrôles superposés ne sont qu'un seul contrôle pour le
                  doigt : c'est la géométrie du web qui impose le retrait, pas
                  un choix d'iOS qu'on recopierait. */
-              hidden={chromeHidden || commentsOpen || viewersOpen}
+              hidden={chromeYielded}
             />
           ) : null}
 
