@@ -500,7 +500,10 @@ async function runScheme(colorScheme) {
     await page
       .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
       .catch(() => undefined);
-    await page.waitForTimeout(350);
+    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
+    await page
+      .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAnimations().length === 0, null, { timeout: 1500 })
+      .catch(() => undefined);
     const ecriture = await page.evaluate(() => {
       const layer = document.querySelector('[data-story-scene-layer]');
       const sheet = document.querySelector('[data-story-comments-sheet]');
@@ -533,7 +536,10 @@ async function runScheme(colorScheme) {
     await page
       .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
       .catch(() => undefined);
-    await page.waitForTimeout(350);
+    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
+    await page
+      .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAnimations().length === 0, null, { timeout: 1500 })
+      .catch(() => undefined);
     const lecture = await page.evaluate(() => {
       const layer = document.querySelector('[data-story-scene-layer]');
       return {

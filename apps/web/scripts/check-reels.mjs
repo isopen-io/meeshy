@@ -556,15 +556,23 @@ try {
             hautFeuille: Math.round(sheet.getBoundingClientRect().top),
           };
         });
-      await page.waitForTimeout(300);
+      const pagerSettled = (state) =>
+        page
+          .waitForFunction(
+            (want) => {
+              const pager = document.querySelector('[data-reels-pager]');
+              return pager?.getAttribute('data-scene-yields') === want && pager.getAnimations().length === 0;
+            },
+            state,
+            { timeout: 1500 },
+          )
+          .catch(() => undefined);
+      await pagerSettled('reading');
       const lu = await pagerYield();
       check(lu?.etat === 'reading' && /blur\(/.test(lu.filtre), `${label} : feuille ouverte, le réel se floute pour laisser lire le fil (#8643) — ${JSON.stringify(lu)}`);
       if ((await page.$('[data-comment-field]')) !== null) {
         await page.click('[data-comment-field]');
-        await page
-          .waitForFunction(() => document.querySelector('[data-reels-pager]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
-          .catch(() => undefined);
-        await page.waitForTimeout(350);
+        await pagerSettled('writing');
         const ecrit = await pagerYield();
         check(
           ecrit?.etat === 'writing' && ecrit.filtre === 'none' && ecrit.basPager <= ecrit.hautFeuille,
@@ -572,9 +580,7 @@ try {
         );
         await capture(page, `reels-ecrire-${slug}`);
         await page.click('[data-comment-fold]');
-        await page
-          .waitForFunction(() => document.querySelector('[data-reels-pager]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
-          .catch(() => undefined);
+        await pagerSettled('reading');
         const replie = await pagerYield();
         check(replie?.etat === 'reading', `${label} : le repli ⌄ rend la lecture (#8643) — ${JSON.stringify(replie)}`);
       }
