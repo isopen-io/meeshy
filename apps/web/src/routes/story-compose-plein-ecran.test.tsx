@@ -395,6 +395,8 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     expect(row().split(' ')).toContain('hidden');
     const close = el.querySelector('[data-story-frame-panel] [data-story-tool-close]');
     expect(close?.getAttribute('aria-label')).toBe('Fermer l’outil');
+    // La tuile qui l'a ouvert est devenue inerte : le focus entre dans l'outil.
+    expect(document.activeElement).toBe(close);
 
     click(close);
     await flush(() => el.querySelector('[data-story-frame-panel]') === null);

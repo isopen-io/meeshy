@@ -118,7 +118,7 @@ export function StudioFramePanel({
     >
       <div className="flex items-center gap-2">
         <h2 className="flex-1 text-body font-bold">{title}</h2>
-        <StudioToolClose lang={lang} probe="frame" onClose={onClose} />
+        <StudioToolClose lang={lang} probe="frame" onClose={onClose} focusOnOpen />
       </div>
       {/* Le corps DÉFILE sous son titre (#8517) : le Cadre ne mange pas la
           scène qu'il règle, au téléphone comme au bureau. */}

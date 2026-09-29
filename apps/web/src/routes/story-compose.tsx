@@ -652,8 +652,10 @@ function StoryStudio({
   /** La carte du socle — hors retouche, un média en montée ou en échec, le
    * son, et le message du pied ; plus rien de ce qu'on touche (lot 6). */
   const showsSocleCard = !retouching && (studioAssetsShown(page) || studioFooterSpeaks({ kind, placeRefusal, kindRefusal, publishFailure }));
-  /** UN PANNEAU OUVERT EN BAS (Cadre, édition) — sur mobile, le socle se
-   * retire le temps du panneau (lot 6). */
+  /** UN OUTIL OUVERT (Cadre, édition d'un objet) PREND TOUTE LA PLACE (#8654,
+   * jumelle de #8652) — en-tête, rails et leurs (+), socle cèdent en fondu ;
+   * restent ses réglages et son (X). La capture rapide, elle, n'existe que sur
+   * une scène vide, rien d'ouvert (#8654, jumelle de #8653). */
   const tool = studioOpenTool({ editing, frameOpen, hasBackground: page.background !== null, timelineOpen });
   const chrome = studioChrome({ tool, timelineOpen });
   const quick = useStudioQuickCapture({

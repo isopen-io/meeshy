@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
@@ -288,9 +288,28 @@ export const STUDIO_PLATE = 'mx-auto w-full min-w-0 max-w-xl';
  * témoins et les gates touchent déjà (`data-story-edit-done`,
  * `data-story-frame-done`).
  */
-export function StudioToolClose({ lang, probe, onClose }: { readonly lang: InterfaceLanguage; readonly probe: 'edit' | 'frame'; readonly onClose: () => void }) {
+export function StudioToolClose({
+  lang,
+  probe,
+  onClose,
+  focusOnOpen = false,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly probe: 'edit' | 'frame';
+  readonly onClose: () => void;
+  /** Le chrome qui portait le focus (la tuile qui a ouvert l'outil) vient de
+   * devenir inerte : le focus entre dans l'outil, par son (X). Jamais pour
+   * l'édition d'un texte, dont la saisie garde le clavier. */
+  readonly focusOnOpen?: boolean;
+}) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (focusOnOpen) ref.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <button
+      ref={ref}
       type="button"
       {...{ [`data-story-${probe}-done`]: '' }}
       data-story-tool-close
