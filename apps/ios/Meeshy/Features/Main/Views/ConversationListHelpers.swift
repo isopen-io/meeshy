@@ -11,6 +11,9 @@ struct SectionHeaderView: View {
     let count: Int
     let isExpanded: Bool
     var isDropTarget: Bool = false
+    /// #8694 — le compte de non-lus que la section cache quand elle est
+    /// repliée (`SectionFoldedUnread.count`, zéro dépliée).
+    var foldedUnread: Int = 0
     let onToggle: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -78,6 +81,13 @@ struct SectionHeaderView: View {
                         .transition(.scale.combined(with: .opacity))
                 }
 
+                // #8694 — repliée, la pastille de non-lus à côté du chevron.
+                if UnreadCountBadge.isVisible(count: foldedUnread) {
+                    UnreadCountBadge(count: foldedUnread, isDark: isDark)
+                        .fixedSize()
+                        .accessibilityHidden(true)
+                }
+
                 // Expand/collapse chevron with rotation animation
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
@@ -105,11 +115,7 @@ struct SectionHeaderView: View {
             .animation(.easeOut(duration: 0.2), value: isExpanded)
         }
         .buttonStyle(PlainButtonStyle())
-        .accessibilityValue(
-            isExpanded
-                ? String(localized: "accessibility.section_expanded", defaultValue: "Développée", bundle: .main)
-                : String(localized: "accessibility.section_collapsed", defaultValue: "Réduite", bundle: .main)
-        )
+        .accessibilityValue(SectionFoldedUnread.accessibilityValue(isExpanded: isExpanded, foldedUnread: foldedUnread))
     }
 }
 
