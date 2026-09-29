@@ -174,6 +174,28 @@ final class VideoFilterPresetTests: XCTestCase {
     }
 }
 
+// MARK: - CallVideoLowLight Tests
+
+final class CallVideoLowLightTests: XCTestCase {
+
+    func test_boost_darkFrame_returnsStrengthBetweenZeroAndOne() throws {
+        let boost = try XCTUnwrap(CallVideoLowLight.boost(averageBrightness: 38.25, isConstrained: false))
+        XCTAssertEqual(boost, 0.5, accuracy: 0.001)
+    }
+
+    func test_boost_brightFrame_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: 120, isConstrained: false))
+    }
+
+    func test_boost_unknownBrightness_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: nil, isConstrained: false))
+    }
+
+    func test_boost_constrainedDevice_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: 10, isConstrained: true))
+    }
+}
+
 // MARK: - VideoFilterPipeline Tests
 
 @MainActor
@@ -256,6 +278,32 @@ final class VideoFilterPipelineTests: XCTestCase {
         _ = sut.process(makePixelBuffer())
 
         XCTAssertNil(sut.lastFrameProcessingTime, "with no filters active at all, process() must still early-return")
+    }
+
+    // MARK: - #8695 — amélioration légère du flux d'appel : la scène sombre
+
+    func test_process_darkSceneWithoutFilters_liftsTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 20)
+
+        XCTAssertNotNil(sut.lastFrameProcessingTime, "une scène sombre s'éclaire sans qu'aucun filtre soit choisi")
+    }
+
+    func test_process_darkSceneInLowPowerMode_leavesTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { true })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 20)
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "en économie d'énergie, aucune passe GPU n'est ajoutée")
+    }
+
+    func test_process_brightSceneWithoutFilters_leavesTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 180)
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "une scène déjà claire ne coûte rien")
     }
 
     // Regression test for a data race: `config` used to be a plain
