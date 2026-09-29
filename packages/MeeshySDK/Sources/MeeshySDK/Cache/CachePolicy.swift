@@ -136,6 +136,10 @@ extension CachePolicy {
     /// privacy-forward positioning — see
     /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md.
     public static let callTranscripts = CachePolicy(ttl: .days(90), staleTTL: .days(90), maxItemCount: 1000, storageLocation: .grdb)
+    /// #8698 — the network and quality journal of each call, on this device
+    /// only. 30 days and 200 calls bound it: a journal serves the call's detail
+    /// sheet, not an archive. `staleTTL == ttl` keeps every read `.fresh`.
+    public static let callNetworkJournals = CachePolicy(ttl: .days(30), staleTTL: .days(30), maxItemCount: 200, storageLocation: .grdb)
 }
 
 // MARK: - TimeInterval Helpers
