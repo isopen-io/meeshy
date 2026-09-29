@@ -76,6 +76,23 @@ const frStudioChrome = {
   'composer.reelOffer.body': 'Votre post n’a qu’une vidéo : en réel, elle s’ouvre en plein écran dans les Réels.',
   'composer.reelOffer.reel': 'C’est un Réel',
   'composer.reelOffer.post': 'C’est un Post',
+  // L'outil ouvert et la capture rapide (#8654).
+  'story.studio.tool.close': 'Fermer l’outil',
+  'story.studio.camera.quick.photoOrVideo': 'Toucher : photo · Maintenir : vidéo',
+  'story.studio.camera.quick.videoOnly': 'Maintenir pour filmer',
+  'story.studio.camera.quick.photo': 'Prendre une photo',
+  'story.studio.camera.quick.video': 'Filmer',
+  'story.studio.camera.title': 'Caméra',
+  'story.studio.camera.close': 'Revenir à la scène',
+  'story.studio.camera.flip': 'Changer d’objectif',
+  'story.studio.camera.flash': 'Flash',
+  'story.studio.camera.shutter.photo': 'Prendre une photo',
+  'story.studio.camera.shutter.start': 'Démarrer l’enregistrement',
+  'story.studio.camera.shutter.stop': 'Arrêter l’enregistrement',
+  'story.studio.camera.hint.photo': 'Toucher : photo · maintenir : vidéo',
+  'story.studio.camera.hint.video': 'Toucher pour filmer · toucher encore pour poser',
+  'story.studio.camera.unavailable': 'La caméra n’est pas disponible. Autorisez-la dans les réglages du navigateur.',
+  'story.studio.camera.recording': 'Enregistrement en cours',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

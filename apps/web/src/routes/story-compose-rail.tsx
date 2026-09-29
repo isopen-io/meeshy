@@ -2,7 +2,7 @@ import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StudioDoor } from '@/lib/stories/studio-page';
-import { FrameMark, RedoMark, StudioTile, TextMark, UndoMark } from '@/routes/story-compose-chrome';
+import { chromeFade, FrameMark, RedoMark, StudioTile, TextMark, UndoMark } from '@/routes/story-compose-chrome';
 import { PageMark, StudioDoorButton, TimeMark } from '@/routes/story-compose-parts';
 
 /**
@@ -21,6 +21,7 @@ export function StudioLeadingRail({
   onAddText,
   onImport,
   sound = true,
+  hidden = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly locked: boolean;
@@ -32,10 +33,13 @@ export function StudioLeadingRail({
   readonly onImport?: (files: readonly File[]) => void;
   /** La porte du SON — absente d'une retouche d'image (#8416). */
   readonly sound?: boolean;
+  /** UN OUTIL OUVERT (#8654) — les portes et leurs (+) cèdent en fondu. */
+  readonly hidden?: boolean;
 }) {
   return (
     <div
       data-story-studio-rail="leading"
+      {...chromeFade(!hidden)}
       className="absolute start-2.5 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto p-0.5"
       style={{ maxHeight: 'calc(100% - 1rem)' }}
     >
@@ -98,6 +102,7 @@ export function StudioTrailingRail({
   frameOpen,
   onToggleFrame,
   onAddPage,
+  hidden = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly locked: boolean;
@@ -112,11 +117,14 @@ export function StudioTrailingRail({
   readonly onToggleFrame: (() => void) | null;
   /** `null` au plafond de scènes. */
   readonly onAddPage: (() => void) | null;
+  /** UN OUTIL OUVERT (#8654) — le rail et son (+) de scène cèdent en fondu. */
+  readonly hidden?: boolean;
 }) {
   if (onUndo === null && onRedo === null && onToggleTime === null && onToggleFrame === null && onAddPage === null) return null;
   return (
     <div
       data-story-studio-rail="trailing"
+      {...chromeFade(!hidden)}
       role="group"
       aria-label={translate(lang, 'story.studio.rail.scene')}
       className="absolute end-2.5 bottom-2 z-10 flex max-h-[calc(100%-1rem)] flex-col items-center gap-2 overflow-y-auto p-0.5"

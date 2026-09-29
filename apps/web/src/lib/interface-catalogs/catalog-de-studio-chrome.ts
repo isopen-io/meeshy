@@ -73,6 +73,22 @@ const deStudioChrome = {
   'composer.reelOffer.body': 'Dein Beitrag enthält nur ein Video: Als Reel läuft es im Vollbild unter Reels.',
   'composer.reelOffer.reel': 'Es ist ein Reel',
   'composer.reelOffer.post': 'Es ist ein Beitrag',
+  'story.studio.tool.close': 'Werkzeug schließen',
+  'story.studio.camera.quick.photoOrVideo': 'Tippen: Foto · Halten: Video',
+  'story.studio.camera.quick.videoOnly': 'Zum Filmen halten',
+  'story.studio.camera.quick.photo': 'Foto aufnehmen',
+  'story.studio.camera.quick.video': 'Filmen',
+  'story.studio.camera.title': 'Kamera',
+  'story.studio.camera.close': 'Zurück zur Szene',
+  'story.studio.camera.flip': 'Kamera wechseln',
+  'story.studio.camera.flash': 'Blitz',
+  'story.studio.camera.shutter.photo': 'Foto aufnehmen',
+  'story.studio.camera.shutter.start': 'Aufnahme starten',
+  'story.studio.camera.shutter.stop': 'Aufnahme beenden',
+  'story.studio.camera.hint.photo': 'Tippen: Foto · halten: Video',
+  'story.studio.camera.hint.video': 'Zum Filmen tippen · erneut tippen zum Platzieren',
+  'story.studio.camera.unavailable': 'Die Kamera ist nicht verfügbar. Erlaube sie in den Browsereinstellungen.',
+  'story.studio.camera.recording': 'Aufnahme läuft',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

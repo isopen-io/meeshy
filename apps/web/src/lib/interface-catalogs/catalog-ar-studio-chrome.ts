@@ -73,6 +73,22 @@ const arStudioChrome = {
   'composer.reelOffer.body': 'منشورك يحتوي على فيديو واحد فقط: كريل، يُعرض بملء الشاشة في الريلز.',
   'composer.reelOffer.reel': 'إنه ريل',
   'composer.reelOffer.post': 'إنه منشور',
+  'story.studio.tool.close': 'إغلاق الأداة',
+  'story.studio.camera.quick.photoOrVideo': 'المس: صورة · اضغط مطولًا: فيديو',
+  'story.studio.camera.quick.videoOnly': 'اضغط مطولًا للتصوير',
+  'story.studio.camera.quick.photo': 'التقاط صورة',
+  'story.studio.camera.quick.video': 'تصوير',
+  'story.studio.camera.title': 'الكاميرا',
+  'story.studio.camera.close': 'العودة إلى المشهد',
+  'story.studio.camera.flip': 'تبديل الكاميرا',
+  'story.studio.camera.flash': 'الفلاش',
+  'story.studio.camera.shutter.photo': 'التقاط صورة',
+  'story.studio.camera.shutter.start': 'بدء التسجيل',
+  'story.studio.camera.shutter.stop': 'إيقاف التسجيل',
+  'story.studio.camera.hint.photo': 'المس: صورة · اضغط مطولًا: فيديو',
+  'story.studio.camera.hint.video': 'المس للتصوير · المس مجددًا للوضع',
+  'story.studio.camera.unavailable': 'الكاميرا غير متاحة. اسمح بها في إعدادات المتصفح.',
+  'story.studio.camera.recording': 'جارٍ التسجيل',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

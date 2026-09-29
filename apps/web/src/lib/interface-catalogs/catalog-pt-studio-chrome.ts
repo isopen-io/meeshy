@@ -73,6 +73,22 @@ const ptStudioChrome = {
   'composer.reelOffer.body': 'Sua publicação tem um único vídeo: como reel, ela abre em tela cheia nos Reels.',
   'composer.reelOffer.reel': 'É um reel',
   'composer.reelOffer.post': 'É uma publicação',
+  'story.studio.tool.close': 'Fechar a ferramenta',
+  'story.studio.camera.quick.photoOrVideo': 'Tocar: foto · Manter: vídeo',
+  'story.studio.camera.quick.videoOnly': 'Mantenha para filmar',
+  'story.studio.camera.quick.photo': 'Tirar uma foto',
+  'story.studio.camera.quick.video': 'Filmar',
+  'story.studio.camera.title': 'Câmera',
+  'story.studio.camera.close': 'Voltar à cena',
+  'story.studio.camera.flip': 'Trocar de câmera',
+  'story.studio.camera.flash': 'Flash',
+  'story.studio.camera.shutter.photo': 'Tirar uma foto',
+  'story.studio.camera.shutter.start': 'Iniciar a gravação',
+  'story.studio.camera.shutter.stop': 'Parar a gravação',
+  'story.studio.camera.hint.photo': 'Tocar: foto · manter: vídeo',
+  'story.studio.camera.hint.video': 'Toque para filmar · toque de novo para colocar',
+  'story.studio.camera.unavailable': 'A câmera não está disponível. Permita-a nas configurações do navegador.',
+  'story.studio.camera.recording': 'Gravando',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;
