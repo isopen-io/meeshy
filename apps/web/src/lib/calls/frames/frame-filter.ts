@@ -1,4 +1,4 @@
-import { BUCKET_PEOPLE, FRAME_BUCKETS, FRAME_MOODS, type CaptureFrame, type FrameBucket, type FrameMood, type FrameMotif } from './frame-spec';
+import { BUCKET_PEOPLE, FRAME_BUCKETS, FRAME_MOODS, type CaptureFrame, type FrameBucket, type FrameLook, type FrameMood, type FrameMotif } from './frame-spec';
 
 /**
  * **QUELS CADRES POUR COMBIEN DE PERSONNES** — la règle de filtrage du § 2 de
@@ -16,7 +16,10 @@ export function expandMotif(motif: FrameMotif): readonly CaptureFrame[] {
   return FRAME_BUCKETS.flatMap((bucket) => {
     const variant = motif.variants[bucket];
     if (variant === undefined) return [];
-    return [{ ...motif.base, ...variant, id: `${motif.id}.${bucket}`, motif: motif.id, mood: motif.mood, name: motif.name, bucket, people: BUCKET_PEOPLE[bucket] }];
+    // motif.base fournit chaque clé de FrameLook ; variant n'en surcharge qu'une partie —
+    // le spread est donc toujours complet, ce que TS ne peut pas exprimer structurellement.
+    const look = { ...motif.base, ...variant } as FrameLook;
+    return [{ ...look, id: `${motif.id}.${bucket}`, motif: motif.id, mood: motif.mood, name: motif.name, bucket, people: BUCKET_PEOPLE[bucket] }];
   });
 }
 
