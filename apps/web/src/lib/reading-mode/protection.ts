@@ -119,6 +119,24 @@ export function protectionOf(message: ProtectionFields, now: number): Protection
   return 'standard';
 }
 
+/**
+ * CE QUE L'OUVERTURE D'UNE VUE UNIQUE LÈVE (#8567, décision porteur du
+ * 2026-09-29) : « l'ouverture de la vue unique n'enlève pas le flou, sauf si
+ * c'est un attachement directement, alors c'est ouvert en plein écran en
+ * clair ».
+ * - `fullscreen` — une pièce jointe : le plein écran, en clair, flou compris ;
+ * - `veiled-text` — un texte flouté : il s'ouvre à sa place ET reste voilé,
+ *   révélable par le geste du flou ;
+ * - `text` — un texte non flouté : il s'ouvre à sa place, en clair.
+ * Miroir iOS : `BubbleContent.veilConsumesViewOnce` / `protectedTap`.
+ */
+export type ViewOnceOpening = 'fullscreen' | 'veiled-text' | 'text';
+
+export function viewOnceOpeningOf(input: { readonly isBlurred: boolean; readonly attachmentCount: number }): ViewOnceOpening {
+  if (input.attachmentCount > 0) return 'fullscreen';
+  return input.isBlurred ? 'veiled-text' : 'text';
+}
+
 /** Les deux états de la vue unique — ceux que la PUCE porte. */
 export function isViewOnceKind(kind: ProtectionKind): kind is 'viewOnce' | 'opened' {
   return kind === 'viewOnce' || kind === 'opened';

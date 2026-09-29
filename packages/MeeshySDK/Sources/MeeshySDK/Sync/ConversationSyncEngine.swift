@@ -13,7 +13,10 @@ import os
 /// handler, and replaying it must not double-count a reaction or resurrect a
 /// stale edit.
 public enum RealtimeMessageMutation: Sendable, Equatable {
-    case edited(messageId: String, content: String, editedAt: Date)
+    /// `marksEdited` recopie l'`isEdited` servi : `false` pour un avis que le
+    /// SERVEUR complète sur place (la ligne d'arrivées, #8633) — le contenu
+    /// suit, le drapeau « modifié » ne se pose pas.
+    case edited(messageId: String, content: String, editedAt: Date, marksEdited: Bool = true)
     /// `message:edited` porteur d'un résumé d'appel : la transition live →
     /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
@@ -166,10 +169,47 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // State (protected by serial queue)
     /* partagé entre les fichiers du moteur (#4172) */ let stateQueue = DispatchQueue(label: "me.meeshy.sync-engine.state")
-    private var _isSyncing = false
-    /* partagé entre les fichiers du moteur (#4172) */ var isSyncing: Bool {
-        get { stateQueue.sync { _isSyncing } }
-        set { stateQueue.sync { _isSyncing = newValue } }
+    /// Le compte dont une synchronisation est EN VOL — jamais un simple
+    /// booléen (#8651). Un booléen confondait « ce compte synchronise déjà »
+    /// (coalescer) et « le compte QUITTÉ synchronise encore » (périmé) : au
+    /// changement de compte, la synchronisation du compte suivant rendait
+    /// `true` sans rien lire, pendant que celle de l'ancien, arrivée en retard,
+    /// écrivait SA liste dans le cache fraîchement purgé.
+    private var _syncingOwner: String?
+
+    /// Réserve la synchronisation pour `owner`. Refusée seulement quand CE
+    /// compte en a déjà une en vol ; celle d'un autre compte est périmée et
+    /// cède la place — ses écritures seront refusées par `ownsSession()`.
+    /* partagé entre les fichiers du moteur (#4172) */ func claimSync(for owner: String) -> Bool {
+        stateQueue.sync {
+            guard _syncingOwner != owner else { return false }
+            _syncingOwner = owner
+            return true
+        }
+    }
+
+    /* partagé entre les fichiers du moteur (#4172) */ func releaseSync(for owner: String) {
+        stateQueue.sync {
+            if _syncingOwner == owner { _syncingOwner = nil }
+        }
+    }
+
+    /// Le compte pour lequel la tâche COURANTE synchronise. Porté par la tâche
+    /// (et ses enfants), pas par le moteur : deux synchronisations de deux
+    /// comptes peuvent se chevaucher le temps d'un changement de compte, et
+    /// chacune doit juger ses propres écritures.
+    @TaskLocal static var syncOwner: String?
+
+    /// Le compte pour lequel la tâche courante écrit — lu par les persisteurs
+    /// de l'app (`apiMessagePersistor`) pour viser la base locale de CE compte
+    /// et aucune autre (#8656). `nil` hors d'une écriture attribuée.
+    public static var currentSyncOwner: String? { syncOwner }
+
+    /// La tâche courante synchronise-t-elle toujours pour le compte ACTIF ?
+    /// Vrai hors synchronisation (aucun propriétaire déclaré).
+    /* partagé entre les fichiers du moteur (#4172) */ func ownsSession() async -> Bool {
+        guard let owner = Self.syncOwner else { return true }
+        return await currentUserId() == owner
     }
     /// Currently-visible conversation. While non-nil the engine forces this
     /// conversation's `unreadCount` to 0 on every server broadcast and
@@ -307,6 +347,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// qui peut changer au login. Les tests injectent leur double.
     /* partagé entre les fichiers du moteur (#4172) */ let syncDeltaOverride: SyncDeltaClientProviding?
 
+    /// Le compte ACTIF — injecté pour que les témoins changent de compte
+    /// pendant une synchronisation (#8651).
+    private let currentUserIdProvider: @Sendable @concurrent () async -> String
+
     init(
         cache: CacheCoordinator = .shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
@@ -316,8 +360,12 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         api: APIClientProviding = APIClient.shared,
         syncDelta: SyncDeltaClientProviding? = nil,
         fullReconcileInterval: TimeInterval = 86_400,
-        markAsReceivedWindow: TimeInterval = 1.0
+        markAsReceivedWindow: TimeInterval = 1.0,
+        currentUserId: @escaping @Sendable @concurrent () async -> String = {
+            await MainActor.run { AuthManager.shared.currentUser?.id ?? "" }
+        }
     ) {
+        self.currentUserIdProvider = currentUserId
         self.syncDeltaOverride = syncDelta
         self.cache = cache
         self.conversationService = conversationService
@@ -348,7 +396,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // MARK: - Helpers
 
     /* partagé entre les fichiers du moteur (#4172) */ func currentUserId() async -> String {
-        await MainActor.run { AuthManager.shared.currentUser?.id ?? "" }
+        await currentUserIdProvider()
     }
 
     /* partagé entre les fichiers du moteur (#4172) */ func currentUsername() async -> String? {
@@ -381,11 +429,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     ///   confronterait les pages 2+ à un cache réduit à la page 1, et leurs
     ///   frontières de lecture — introuvables — seraient silencieusement
     ///   perdues. `nil` relit le cache (appelants à écriture unique).
+    @discardableResult
     /* partagé entre les fichiers du moteur (#4172) */ func saveSorted(
         _ items: [MeeshyConversation],
         to cacheKey: String,
         baseline: [MeeshyConversation]? = nil
-    ) async {
+    ) async -> Bool {
+        // #8651 — une liste lue pour un compte ne s'écrit jamais sous un autre.
+        guard await ownsSession() else {
+            Self.logger.notice("[SyncEngine] écriture de liste refusée : le compte a changé pendant la synchronisation")
+            return false
+        }
         // Chokepoint UNIQUE de toute écriture liste dérivée du serveur (fullSync
         // ×3, deltaSync ×1) : on y réconcilie le non-lu AVANT de persister, sinon
         // un instantané serveur en retard sur un `markAsRead` encore dans
@@ -415,6 +469,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         if cacheKey == "list" {
             await recomputeTotalUnread()
         }
+        return true
     }
 
     // MARK: - Currently-open conversation

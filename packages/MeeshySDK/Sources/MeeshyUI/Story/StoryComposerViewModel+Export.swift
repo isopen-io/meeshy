@@ -61,12 +61,15 @@ extension StoryComposerViewModel {
     ///   fichier a été adopté localement (`adoptedLocalMedia`).
     /// - `audioURLs` : les fichiers de session des sons, que la `mediaURL`
     ///   d'un son pas encore téléversé ne sait pas adresser.
+    /// - `animations` : les octets des stickers ANIMÉS collés (#8610), sans
+    ///   lesquels un GIF sortait figé sur sa première image.
     public func exportInputs(for slide: StorySlide) -> StoryExportInputs {
         let medias = slide.effects.mediaObjects ?? []
         let stickers = slide.effects.stickerObjects ?? []
         let referenced = Set(medias.flatMap { [$0.id, $0.postMediaId] }
             + stickers.flatMap(StoryStickerLayer.bitmapCacheKeys(for:)))
         let images = loadedImages.filter { referenced.contains($0.key) }
+        let animations = loadedStickerAnimations.filter { referenced.contains($0.key) }
         let stickerSources = stickers.reduce(into: [String: String]()) { sources, sticker in
             guard !sticker.postMediaId.isEmpty,
                   let local = adoptedLocalMedia[sticker.postMediaId] else { return }
@@ -80,7 +83,8 @@ extension StoryComposerViewModel {
         }
         return StoryExportInputs(stickerImageSources: stickerSources,
                                  images: images,
-                                 audioURLs: audioURLs)
+                                 audioURLs: audioURLs,
+                                 animations: animations)
     }
 
     /// Écrit le fond image composer en JPEG temporaire pour que le pipeline

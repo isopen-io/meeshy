@@ -58,6 +58,7 @@ export const DOMAINES = {
     'apps/web/package.json',
     'apps/web/vite.config.ts',
     'apps/web/scripts/build-shells.mjs',
+    'apps/web/scripts/lib/android-release.mjs',
     'apps/web/scripts/shell-start-path-hook.mjs',
     'apps/web/scripts/lib/files.mjs',
     'apps/web/scripts/lib/fixture-markers.mjs',

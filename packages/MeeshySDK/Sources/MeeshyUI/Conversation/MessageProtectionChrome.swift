@@ -156,6 +156,10 @@ public struct MessageProtectionChrome: View, Equatable {
         String(localized: "protection.view_once.a11y", defaultValue: "Vue unique", bundle: .module)
     }
 
+    public static var afterReadA11y: String {
+        String(localized: "protection.after_read.a11y", defaultValue: "Message éphémère, disparaît après lecture", bundle: .module)
+    }
+
     public static var blurredLabel: String {
         String(localized: "protection.blurred", defaultValue: "Flouté", bundle: .module)
     }
@@ -210,11 +214,20 @@ public extension MessageProtectionChrome {
     /// `message.expiresAt != nil`) et la vue unique n'était annoncée nulle
     /// part : la protection la plus forte du produit était la seule invisible
     /// au lecteur d'écran.
+    ///
+    /// La flamme-œil (#8635) n'a pas de capsule — son filigrane est muet —,
+    /// elle s'annonce donc en tête, à la place qu'aurait le décompte.
     static func accessibilityLabels(
         for descriptor: MessageProtectionDescriptor,
         now: Date = Date()
     ) -> [String] {
-        descriptor.badges.compactMap { accessibilityLabel(for: $0, now: now) }
+        let afterRead: [String]
+        if descriptor.isAfterRead, case .expired = descriptor.ephemeralState {
+            afterRead = []
+        } else {
+            afterRead = descriptor.isAfterRead ? [afterReadA11y] : []
+        }
+        return afterRead + descriptor.badges.compactMap { accessibilityLabel(for: $0, now: now) }
     }
 
     /// La phrase d'UN badge — celle que la capsule porte, et celle que les

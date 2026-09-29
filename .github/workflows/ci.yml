@@ -1298,6 +1298,15 @@ jobs:
           cd apps/web/android
           ./gradlew testDebugUnitTest
 
+      # #8669 — la variante RELEASE (celle du Play Store, lint vital compris)
+      # se construit à chaque changement de la coque : sans clé ni Firebase sur
+      # ce runner, gradle la rend NON signée, ce qui suffit à prouver qu'elle
+      # compile. La release signée part par `android-shell-release.yml`.
+      - name: Variante release de la coque (bundleRelease, non signée)
+        run: |
+          cd apps/web/android
+          ./gradlew bundleRelease -PmeeshyBuildNumber=${{ github.run_number }}
+
       # L'APK de recette, installable tel quel (`adb install -r`) : la
       # régression se voit sur le runner, et le build vert se pose sur le
       # téléphone sans machine outillée.

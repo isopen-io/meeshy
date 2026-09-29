@@ -232,12 +232,29 @@ const mediaOf = (params: {
  *   premier appelant qui l'oublie, et le défaut serait invisible pour qui
  *   parle français.
  */
+/**
+ * #8631 — UNE CITATION SCELLÉE N'A PAS TOUJOURS ÉTÉ SUPPRIMÉE. La passerelle
+ * scelle la citation d'un éphémère échu pour son lecteur sous la forme d'une
+ * suppression datée de son échéance, et y joint `expiresAt` = la même date
+ * (`sealedQuotedMessage`) ; le scellement local fait de même. Une échéance
+ * atteinte AU PLUS TARD à la date de scellement dit une EXPIRATION ; une
+ * suppression posée avant l'échéance reste une suppression.
+ */
+const instantOf = (value: unknown): number => new Date(value as string).getTime();
+
+function sealedByExpiry(deletedAt: unknown, expiresAt: unknown): boolean {
+  if (expiresAt === undefined || expiresAt === null) return false;
+  const expiry = instantOf(expiresAt);
+  const sealed = instantOf(deletedAt);
+  return Number.isFinite(expiry) && Number.isFinite(sealed) && expiry <= sealed;
+}
+
 export function quotedPreviewOf(params: {
   readonly quoted: Pick<
     Message,
     'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
   > &
-    Partial<Pick<Message, 'deletedAt'>>;
+    Partial<Pick<Message, 'deletedAt' | 'expiresAt'>>;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedPreview {
@@ -247,7 +264,8 @@ export function quotedPreviewOf(params: {
      l'ancien texte, sa traduction ou sa pièce, même si une charge en garde
      encore une trace. Aucune langue de CONTENU : c'est de l'interface. */
   if (quoted.deletedAt !== undefined && quoted.deletedAt !== null) {
-    return { text: translate(interfaceLanguage, 'message.deleted'), language: '', media: null, inventory: [], isProtected: true };
+    const key = sealedByExpiry(quoted.deletedAt, quoted.expiresAt) ? 'message.expired.a11y' : 'message.deleted';
+    return { text: translate(interfaceLanguage, key), language: '', media: null, inventory: [], isProtected: true };
   }
   const messageIsProtected = quotedIsProtected(quoted);
   const piece = representativeOf(quoted);

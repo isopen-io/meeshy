@@ -595,6 +595,24 @@
   }
 }
 
+/* UN OUTIL OUVERT PREND TOUTE LA PLACE (#8654) — l'en-tete, les rails et
+   leurs (+) cedent en fondu, sans quitter leur place (la scene ne saute
+   pas). */
+[data-studio-chrome] {
+  transition: opacity 200ms ease;
+}
+
+[data-studio-chrome='hidden'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-studio-chrome] {
+    transition: none;
+  }
+}
+
 /* LE SOL QUI CHANGE DE SOURCE (#8534) — l'image arrivee, deja decodee, se
    leve en fondu sur celle qui part (gardee dessous par `useDecodedSwap`) :
    aucune image perdue, aucun eclair de vide. */

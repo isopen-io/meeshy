@@ -99,6 +99,38 @@ final class StoryComposerFoldTests: XCTestCase {
         XCTAssertEqual(StoryComposerFold.foldSymbol, "chevron.down")
     }
 
+    /// **Le ⌄ vit DANS la plaque de verre, angle intérieur haut-droit** (#8642,
+    /// porteur 2026-09-29). Il flottait au-dessus de la plaque, hors du verre :
+    /// la barre le reçoit désormais et le pose au bout de sa rangée d'outils —
+    /// la bande `trailing`, qui ne défile jamais (#7997).
+    func test_foldButton_livesInsideTheGlassPlate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let views = root.appendingPathComponent("Meeshy/Features/Main/Views")
+        let components = root.appendingPathComponent("Meeshy/Features/Main/Components")
+
+        let layer = AppSourceGuard.stripComments(try String(
+            contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerLayer.swift"), encoding: .utf8))
+        XCTAssertFalse(layer.contains("composerFoldButton"),
+                       "plus aucun ⌄ ne flotte au-dessus de la plaque")
+        XCTAssertTrue(layer.contains("foldControl: composerFoldControl"),
+                      "le lecteur remet le repli à la barre")
+        XCTAssertTrue(layer.contains("StoryComposerFold.offersFoldButton("), "sous la même loi")
+
+        let bar = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerBar.swift"), encoding: .utf8)
+        XCTAssertTrue(bar.contains("foldControl: foldControl"))
+
+        let toolbar = AppSourceGuard.stripComments(try String(
+            contentsOf: components.appendingPathComponent("UniversalComposerBar+Toolbar.swift"), encoding: .utf8))
+        let trailing = try XCTUnwrap(toolbar.range(of: "} trailing: {"))
+        let bande = toolbar[trailing.upperBound...].prefix(900)
+        XCTAssertTrue(bande.contains("foldControl"),
+                      "le ⌄ est au bout de la rangée d'outils, dans le verre")
+        XCTAssertTrue(toolbar.contains("Image(systemName: fold.symbol)"), "le glyphe est celui que l'hôte déclare")
+        XCTAssertTrue(layer.contains("symbol: StoryComposerFold.foldSymbol"))
+    }
+
     // MARK: - 4 · Glissé bas sur le composeur
 
     func test_aVerticalSwipeOnTheComposer_belongsToTheComposer() {

@@ -169,8 +169,17 @@ final class CallBackRequestTests: XCTestCase {
                 return remote[id]
             },
             openProfile: { recorder.profiles.append($0) },
-            showUnavailable: { recorder.unavailable += 1 }
+            showUnavailable: { recorder.unavailable += 1 },
+            readiness: ReadyNow(),
+            showNotConnected: {}
         )
+    }
+
+    @MainActor
+    private final class ReadyNow: CallDialReadinessProviding {
+        nonisolated deinit {}
+        let isReady = true
+        func waitUntilReady() async -> CallDialReadinessOutcome { .ready }
     }
 
     func test_dial_placesTheCallThroughTheStarter() {

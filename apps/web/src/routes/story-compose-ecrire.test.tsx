@@ -60,6 +60,22 @@ describe('l’invite « Écrivez… » s’écrit au doigt', () => {
     await flush(() => el.querySelectorAll('[data-scene-text]').length === 2);
     expect([...el.querySelectorAll('[data-scene-text]')].map((node) => node.textContent)).toEqual(['Un', 'Deux']);
   });
+
+  test('l’invite du texte AJOUTÉ s’écrit à SA place, jamais dans la boîte du texte déjà écrit (#8681)', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    await flush(() => el.querySelector('[data-scene-object-id="text-1"] [data-scene-text]') !== null);
+    const first = el.querySelector<HTMLElement>('[data-scene-object-id="text-1"] [data-scene-text]')!;
+    first.style.width = '64px';
+    first.style.height = '40px';
+    typeText(el, 'Un!');
+    expect(field(el)?.style.height).toBe('40px');
+    click(el.querySelector('[data-story-option="add-text"]'));
+    expect(field(el)?.dataset.storyTextTarget).toBe('text-2');
+    expect(field(el)?.style.height).toBe('');
+    expect(field(el)?.style.left).toBe('50%');
+    expect(field(el)?.style.top).toBe('50%');
+  });
 });
 
 describe('toucher le vide désélectionne', () => {

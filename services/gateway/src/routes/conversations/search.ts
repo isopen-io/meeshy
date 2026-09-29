@@ -325,6 +325,7 @@ export function registerSearchRoutes(
               isEncrypted?: boolean | null;
               expiresAt?: Date | null;
               ephemeralDuration?: number | null;
+              effectFlags?: number | null;
             }))
           : false;
         const place = isMsgProtected

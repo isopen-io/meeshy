@@ -15,6 +15,10 @@ const arEphemeral = {
   'composer.ephemeral.rail': 'المدة قبل اختفاء الرسالة',
   'composer.protection.imposed.blur': 'التمويه مفروض بسبب الرسالة المقتبسة',
   'composer.protection.imposed.ephemeral': 'الوضع المؤقت مفروض بسبب الرسالة المقتبسة: {duration}',
+  'message.afterRead.a11y': 'رسالة مؤقتة، تختفي بعد القراءة',
+  'message.ephemeral.label.a11y': 'رسالة مؤقتة',
+  'message.blurred.a11y': 'مموّه',
+  'message.viewOnce.a11y': 'عرض لمرة واحدة',
 } satisfies EphemeralCatalogSlice;
 
 export default arEphemeral;

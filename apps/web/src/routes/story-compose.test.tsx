@@ -12,7 +12,6 @@ import { buttonNamed } from '@/test-support/act-mount';
 import StoryComposeScreen from './story-compose';
 import {
   VIEWER_ID,
-  fakeRect,
   flush,
   harness,
   image,
@@ -94,35 +93,29 @@ describe('StoryComposeScreen — l’aperçu par le moteur PARTAGÉ (D-79)', () 
     expect(textarea?.getAttribute('style') ?? '').not.toContain('text-shadow');
   });
 
-  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text], au pixel près — jamais une largeur/hauteur fixes (défaut 1, revue-correction)', () => {
+  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text] et la POSE de l’objet — jamais une largeur/hauteur fixes (défaut 1, #8681)', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    const stage = el.querySelector<HTMLElement>('[data-scene-stage]');
     const textNode = el.querySelector<HTMLElement>('[data-scene-text]');
-    expect(stage).not.toBeNull();
     expect(textNode).not.toBeNull();
 
-    // La carte occupe (50,100)-(350,600) sur l'écran ; le moteur peint le
-    // texte dans une boîte NARROW, décentrée verticalement — exactement ce
-    // qu'un texte court, shrink-to-fit, rend en pratique.
-    stage!.getBoundingClientRect = () => fakeRect({ top: 100, left: 50, width: 300, height: 500 });
-    textNode!.getBoundingClientRect = () => fakeRect({ top: 260, left: 140, width: 120, height: 30 });
+    // Le moteur peint le texte dans une boîte NARROW (shrink-to-fit) : sa
+    // taille de MISE EN PAGE, fractionnaire, avant toute transformation.
+    textNode!.style.width = '120.4px';
+    textNode!.style.height = '30px';
 
-    // Un second caractère force `useLayoutEffect` (dépendance `draft.text`) à
+    // Un second caractère force `useLayoutEffect` (dépendance `texts`) à
     // remesurer SYNCHRONEMENT, dans le MÊME tour — jamais un `flush` qui
     // masquerait un défaut d'alignement d'un frame.
     typeText(el, 'Bonjour!');
 
     const textarea = el.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
-    // Relatif à la carte : top 260-100=160, left 140-50=90.
-    expect(textarea.style.top).toBe('160px');
-    expect(textarea.style.left).toBe('90px');
-    expect(textarea.style.width).toBe('120px');
+    expect(textarea.style.width).toBe('121.4px');
     expect(textarea.style.height).toBe('30px');
-    // La forme centrée par défaut (translation à 50 %) ne doit PLUS gouverner
-    // une fois la boîte réelle connue — elle décalait le curseur d'une ligne
-    // entière au-dessus du texte (défaut 1).
-    expect(textarea.style.transform).toBe('');
+    // La pose de `SceneObjectFrame` : ancre en %, puis translate / rotate / scale.
+    expect(textarea.style.left).toBe('50%');
+    expect(textarea.style.top).toBe('50%');
+    expect(textarea.style.transform).toBe('translate(-50%, -50%) rotate(0deg) scale(1)');
   });
 });
 

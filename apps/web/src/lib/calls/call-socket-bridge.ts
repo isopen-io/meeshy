@@ -64,6 +64,10 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
     binding.authenticated();
   };
   socket.on(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+  /* Un socket qui s'est authentifié AVANT que le pont se pose (le bouchon de
+     fixtures le fait dans `connect()`) ne rejouera pas l'événement : sans ce
+     rattrapage, un rappel qui attend la connexion (#8199) attendrait toujours. */
+  if (socket.connected) onAuthenticated();
   return () => {
     for (const [event, handler] of [...handlers, ...recordingHandlers]) socket.off(event, handler);
     socket.off(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);

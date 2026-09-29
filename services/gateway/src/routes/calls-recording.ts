@@ -105,6 +105,7 @@ export function registerCallsRecordingRoutes(fastify: FastifyInstance, deps: Cal
               conversationId: result.conversationId,
               callSessionId: callId,
               messageId: result.message.id,
+              kind: result.mediaKind,
             },
           ).catch((error: unknown) => logger.error('call-recording: notification failed', { callId, error }));
         }

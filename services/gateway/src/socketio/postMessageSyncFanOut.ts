@@ -47,6 +47,8 @@ export interface PostMessageSyncFanOutParams {
   readonly message: Message;
   readonly broadcastPayload: QueuedPayloadFor<'new'>;
   readonly resolvedSenderId: string | null | undefined;
+  /** #8562 — la variante d'un lecteur que la diffusion commune ne peut pas servir (citation scellée). */
+  readonly payloadForReader?: (queueKey: string) => QueuedPayloadFor<'new'>;
 }
 
 /**
@@ -126,6 +128,7 @@ export async function syncConversationListOnNewMessage(
       // un rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
       // espace d'ids optimistes dans celui d'un autre utilisateur.
       payload: broadcastPayload,
+      ...(params.payloadForReader ? { resolvePayloadForReader: params.payloadForReader } : {}),
       participants: allParticipants,
     }
   );

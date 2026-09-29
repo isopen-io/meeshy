@@ -72,6 +72,7 @@ import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
   isEphemeralServableToReader,
   loadEphemeralReaderDeadlines,
+  withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
 
@@ -634,9 +635,11 @@ export function registerMessagesListRoute(
       // Le retrait a lieu ICI, sur `messages`, et pas sur la projection : les
       // deux tableaux avancent ensemble jusqu'à la pagination (`splice`), et
       // ne filtrer que le second les aurait désynchronisés.
+      // #8562 — les messages CITÉS aussi : la citation d'un éphémère échu
+      // pour ce lecteur sort scellée, même s'il n'est pas sur la page.
       const ephemeralDeadlines = await loadEphemeralReaderDeadlines(
         prisma,
-        messages,
+        withQuotedMessages(messages),
         currentParticipantId
       );
       if (ephemeralDeadlines.size > 0) {

@@ -497,7 +497,7 @@ struct BubbleStandardLayout: View {
                     // Blur peek: tap to reveal for N seconds, then auto re-blur
                     if content.requiresVeil && !blurController.isRevealed {
                         ProtectedVeilAffordance(
-                            isViewOnce: content.isViewOnce,
+                            isViewOnce: content.veilConsumesViewOnce,
                             isDark: isDark,
                             hint: content.protectedTap().accessibilityHint,
                             onReveal: revealBlurredContent
@@ -1442,7 +1442,7 @@ struct BubbleStandardLayout: View {
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
                 messageId: content.messageId,
-                isViewOnce: content.isViewOnce
+                isViewOnce: content.veilConsumesViewOnce
             ),
             consumeViewOnce: onConsumeViewOnce
         )
