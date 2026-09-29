@@ -3,7 +3,7 @@
  * L'A DEMANDÉE (#8674).
  *
  * Workbox range une réponse sous son URL. Deux comptes qui lisent
- * `GET /api/v1/conversations` sur le même appareil partageaient donc UNE
+ * la liste des conversations (`conversations.root`) sur le même appareil partageaient donc UNE
  * entrée : sur un réseau lent (`networkTimeoutSeconds: 3`) ou hors ligne, le
  * NetworkFirst resservait au compte B la liste du compte A. La purge au
  * changement d'identité ne fermait pas la course : une réponse d'A encore en
