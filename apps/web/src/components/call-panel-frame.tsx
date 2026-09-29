@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
 /**
  * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550, #8578) — la
@@ -55,7 +55,7 @@ const chevron = (
 export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back }: FrameProps) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = panel.current;
     const first = root === null ? undefined : FOCUS_ORDER.map((selector) => root.querySelector<HTMLElement>(selector)).find((element) => element !== null);
     first?.focus();
