@@ -283,6 +283,12 @@ jobs:
       - name: Inscription des témoins au project.pbxproj committé
         run: bash apps/ios/scripts/check_test_registration.sh
 
+      # Une valeur non quotée hors de l'alphabet nu (`path = A+B.swift;`) rend le
+      # pbxproj COMMITTÉ illisible pour Xcode, et `meeshy.sh device` échoue ; la
+      # compilation CI régénère le projet et ne le voit pas (2026-09-29).
+      - name: Le project.pbxproj committé reste lisible par Xcode
+        run: bash apps/ios/scripts/check_pbxproj_quoting.sh
+
   ios-tests:
     needs: scope
     # Le nom du check DIT ce qui a tourné. C'est la seule chose qui distingue,
