@@ -48,7 +48,7 @@ protocol TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL
 }
@@ -67,7 +67,7 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL {
         // Trampoline @MainActor → @Sendable : `StoryExporter.export` exige un
@@ -116,7 +116,7 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
             // fonctionnellement équivalent mais mesuré 5 à 20× plus lent —
             // voir `tasks/todo-story-export-single-pass.md`.
             branding: nil,
-            audioResolver: audioResolver,
+            inputs: inputs,
             progress: progressTrampoline
         )
 
@@ -226,7 +226,9 @@ final class TimelineExportController: ObservableObject {
         }
         pausedTimelineViewModel = timelineViewModel
         let slide = composer.exportableCurrentSlide()
-        let mediaURLs = composer.collectMediaURLs(for: slide)
+        // Même construction que le `⋯` du composer (#8599) : bitmaps en
+        // mémoire, stickers adoptés et sons de session — pas seulement l'audio.
+        let inputs = composer.exportInputs(for: slide)
         // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur) —
         // MÊME appel que les 3 autres chemins d'export (Task 9 : avant ce
         // fix, ce chemin appelait `.make()` SANS `username:`, filigrane
@@ -265,7 +267,7 @@ final class TimelineExportController: ObservableObject {
                     to: outputURL,
                     watermark: watermark,
                     intro: introContent,
-                    audioResolver: { audio in mediaURLs[audio.id] },
+                    inputs: inputs,
                     progress: { [weak self] fraction in
                         guard let self, self.isExporting else { return }
                         self.phase = .exporting(fraction)

@@ -23,6 +23,7 @@ import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
 import ptGallery from './catalog-pt-gallery';
+import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
@@ -30,6 +31,7 @@ import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
+import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
 
 /**
@@ -863,6 +865,7 @@ const pt = {
   'story.studio.refusal.door.visual': 'Escolha uma imagem ou um vídeo.',
   'story.studio.refusal.door.sound': 'Escolha um ficheiro de áudio.',
   'story.studio.refusal.media-max': 'Esta publicação já traz dez mídias — o limite da passarela.',
+  'story.studio.refusal.import-max': '{count} mídia(s) não importada(s): uma publicação traz no máximo dez.',
   'story.studio.failure.network': 'Rede indisponível.',
   'story.studio.failure.timeout': 'O servidor não respondeu.',
   'story.studio.failure.session': 'Sessão expirada — inicie sessão novamente.',
@@ -1033,14 +1036,6 @@ const pt = {
   'comment.send.error': 'Não foi possível publicar o comentário.',
   'comment.send.pending': 'Comentário não confirmado — offline',
   'comment.send.empty': 'Escreva algo antes de enviar.',
-  'comments.action.like': 'Gostei',
-  'comments.action.unlike': 'Já não gosto',
-  'comments.action.edit': 'Editar',
-  'comments.action.delete': 'Eliminar',
-  'comments.action.delete.confirm': 'Confirmar',
-  'comments.edit.label': 'Editar comentário',
-  'comments.edit.save': 'Guardar',
-  'comments.edit.cancel': 'Cancelar',
   'comment.like.error': 'O «gostei» não foi guardado.',
   'comment.edit.error': 'A alteração não foi guardada.',
   'comment.delete.error': 'Não foi possível eliminar o comentário.',
@@ -1168,10 +1163,12 @@ const pt = {
   ...ptStudioChrome,
   ...ptEphemeral,
   ...ptGallery,
+  ...ptMessageCard,
   ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,
   ...ptQuote,
+  ...ptCommentRow,
   ...ptContactDiscovery,
 } satisfies InterfaceCatalog;
 

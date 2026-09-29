@@ -872,7 +872,9 @@ export default function ThreadScreen() {
                (`replyTo.author`/`excerpt`), jamais l'identifiant. */
             onDraftChange={compose.reportComposerDraft}
             {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
-            {...(compose.replyTo ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply } : {})}
+            {...(compose.replyTo
+              ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
+              : {})}
           />
         </div>
       )}
@@ -902,6 +904,10 @@ export default function ThreadScreen() {
         readerLocale={readerLocale}
         conversationId={conversationId}
         viewerId={viewer.id ?? ''}
+        viewerName={viewer.displayName}
+        viewerHandle={viewer.handle}
+        conversationTitle={title}
+        announce={announcer.announce}
       />
     </div>
     </ThreadMediaContext.Provider>

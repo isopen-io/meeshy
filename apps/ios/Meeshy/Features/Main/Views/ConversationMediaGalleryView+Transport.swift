@@ -63,6 +63,13 @@ extension ConversationMediaGalleryView {
                         controls: [.scrubber, .mute, .speed, .pip],
                         placement: .corridor
                     )
+                } else if let scene = currentScene, scene.timeline != nil {
+                    // **Une scène qui a une timeline se parcourt au doigt**
+                    // (#8598) — la piste du lecteur de stories, au même couloir
+                    // que la barre d'une vidéo, donc sous la même règle de
+                    // chrome : elle part avec le plateau en plein cadre et sous
+                    // le voile d'une ouverture.
+                    GallerySceneScrubBar(clock: sceneClock, sceneId: scene.id, accentColor: accentColor)
                 } else {
                     Spacer(minLength: 0)
                 }

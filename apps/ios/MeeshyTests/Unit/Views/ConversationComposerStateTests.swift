@@ -95,4 +95,67 @@ final class ConversationComposerStateTests: XCTestCase {
         XCTAssertEqual(state.pendingAttachments.first?.id, "audio-new")
         XCTAssertEqual(state.pendingAttachments.first?.type, .audio)
     }
+
+    // MARK: - Vidéo éditée (#8443)
+
+    private func makeStateWithVideo(attachmentId: String = "video-1",
+                                    originalURL: URL = URL(fileURLWithPath: "/tmp/original.mp4"))
+        -> ConversationComposerState {
+        var state = ConversationComposerState()
+        state.pendingAttachments = [
+            MessageAttachment(id: attachmentId, mimeType: "video/mp4", width: 1080, height: 1920, duration: 9000)
+        ]
+        state.pendingMediaFiles[attachmentId] = originalURL
+        return state
+    }
+
+    private func editResult(url: URL, didEdit: Bool, duration: Double = 4.5) -> VideoEditResult {
+        VideoEditResult(url: url, didEdit: didEdit, duration: duration,
+                        transcriptionText: nil, captions: [], captionLanguageCode: nil)
+    }
+
+    func test_applyEditedVideo_edited_remplaceLeFichierQuiPart() {
+        let edited = URL(fileURLWithPath: "/tmp/edited.mp4")
+        var state = makeStateWithVideo()
+
+        let stale = state.applyEditedVideo(attachmentId: "video-1", result: editResult(url: edited, didEdit: true))
+
+        XCTAssertEqual(state.pendingMediaFiles["video-1"], edited, "La vidéo éditée doit être celle qui part")
+        XCTAssertEqual(stale, URL(fileURLWithPath: "/tmp/original.mp4"))
+        XCTAssertEqual(state.pendingAttachments.count, 1, "Remplacement par id, jamais un second chip")
+        XCTAssertEqual(state.pendingAttachments.first?.id, "video-1")
+        XCTAssertEqual(state.pendingAttachments.first?.duration, 4500)
+        XCTAssertEqual(state.pendingAttachments.first?.width, 1080)
+    }
+
+    func test_applyEditedVideo_nonEditee_gardeLOriginal() {
+        let original = URL(fileURLWithPath: "/tmp/original.mp4")
+        var state = makeStateWithVideo(originalURL: original)
+
+        let stale = state.applyEditedVideo(attachmentId: "video-1", result: editResult(url: original, didEdit: false))
+
+        XCTAssertNil(stale)
+        XCTAssertEqual(state.pendingMediaFiles["video-1"], original)
+        XCTAssertEqual(state.pendingAttachments.first?.duration, 9000)
+    }
+
+    /// Le résultat de l'éditeur était jeté dans le composeur du message : la
+    /// garde lit que la couverture l'applique.
+    func test_editeurVideoDuMessage_appliqueLeResultat() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(code.contains("onComplete: { _ in scrollState.videoToEdit = nil }"),
+                       "Le résultat de l'éditeur vidéo est jeté : la vidéo d'origine partirait.")
+        XCTAssertTrue(code.contains("applyEditedVideo(attachmentId: target.id"))
+
+        // Jumeau #8523 : la citation d'un post jetait aussi le résultat.
+        let citation = try String(contentsOf: url.deletingLastPathComponent()
+            .appendingPathComponent("FeedComposerSheet.swift"), encoding: .utf8)
+        XCTAssertFalse(citation.contains("onComplete: { _ in editingVideoURL = nil }"),
+                       "La citation d'un post jette le résultat de l'éditeur vidéo.")
+        XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: target.id"))
+    }
 }

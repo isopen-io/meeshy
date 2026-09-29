@@ -37,6 +37,9 @@ struct FocalProtectedContent<Content: View>: View {
 
     var body: some View {
         content
+            // #8537 — le message révélé lève AUSSI le voile de ses pièces
+            // floutées : un toucher montre l'image, le suivant l'ouvre.
+            .environment(\.focalMessageRevealed, reveal.isRevealed)
             .blur(radius: isMasked ? 18 : 0)
             .allowsHitTesting(!isMasked)
             .overlay {
@@ -81,5 +84,19 @@ struct FocalProtectedContent<Content: View>: View {
                 consumeViewOnce: onConsumeViewOnce
             )
         }
+    }
+}
+
+/// Le message qui porte cette pièce est-il RÉVÉLÉ (`FocalProtectedContent`) ?
+/// Lu par `FocalGridCell` : une pièce floutée d'un message révélé se montre
+/// sans second voile « Contenu masqué » (#8537). La vue unique n'est pas visée.
+private struct FocalMessageRevealedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var focalMessageRevealed: Bool {
+        get { self[FocalMessageRevealedKey.self] }
+        set { self[FocalMessageRevealedKey.self] = newValue }
     }
 }

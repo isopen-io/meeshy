@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Par où part ce qu'on vient de composer** (#4869).
 ///
@@ -101,6 +102,62 @@ nonisolated enum ComposerPublishChannel {
         // > le témoin qui la gelait disait de relire la mesure avant de le
         // > changer. Elle a été relue.
         case .post, .status, .reel: return .document
+        }
+    }
+}
+
+/// **Combien de publications une composition produit** (#4770, #8520).
+///
+/// Arbitrage porteur du 2026-09-02 (`docs/product/meeshy-composer-modele.md`
+/// § 1 bis) : le PROFIL décide de la cardinalité. Une story est une suite
+/// d'unités autonomes — N scènes, N stories ; un post et un réel sont UNE
+/// unité à plusieurs pages — M scènes, un envoi.
+///
+/// Le nom dit ce qu'elle rend, un nombre d'envois ; `deservesAPost` reste le
+/// filtre des unités (« celle-ci mérite-t-elle d'exister »), question distincte.
+nonisolated enum ComposerPublicationCardinality {
+    static func publicationCount(for type: PostType, sceneCount: Int) -> Int {
+        switch type {
+        case .story: return max(1, sceneCount)
+        case .post, .reel, .status: return 1
+        }
+    }
+}
+
+/// **Ce que devient la remise de l'atelier** (#8520).
+///
+/// L'atelier publie par `onPublishAllInBackground`, un canal qui crée UN POST
+/// PAR SLIDE (`StoryViewModel.runStoryUpload`). Il reste le bon canal tant que
+/// la cardinalité vaut une publication par scène. Sinon, la remise passe au
+/// canal DOCUMENT — celui du menu « Post + agencement », qui publie UNE fois et
+/// porte toutes les scènes dans `canvasV3` — et jamais à un troisième publieur.
+///
+/// Le document ne téléverse que ses `localMedia` : si une scène référence un
+/// fichier qu'il ne porte pas (`documentCarriesEveryMedia`), l'y envoyer
+/// publierait une scène amputée, et rester sur l'atelier publierait M posts.
+/// La remise est alors REFUSÉE, en le disant.
+nonisolated enum ComposerAtelierHandOff {
+
+    enum Route: Equatable {
+        case atelier
+        case document
+        case refuse
+    }
+
+    static func route(targetType: PostType,
+                      sceneCount: Int,
+                      documentCarriesEveryMedia: Bool) -> Route {
+        let envois = ComposerPublicationCardinality.publicationCount(for: targetType, sceneCount: sceneCount)
+        guard sceneCount > 1, envois != sceneCount else { return .atelier }
+        return documentCarriesEveryMedia ? .document : .refuse
+    }
+
+    static func format(for type: PostType) -> ComposerFormat {
+        switch type {
+        case .story: return .story
+        case .post: return .post
+        case .reel: return .reel
+        case .status: return .status
         }
     }
 }

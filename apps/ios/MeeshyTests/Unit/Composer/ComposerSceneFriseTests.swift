@@ -66,4 +66,49 @@ final class ComposerSceneFriseTests: XCTestCase {
         XCTAssertTrue(code.contains("onTimeButton:sceneIsAnimated&&!returnsImageToConversation?{toggleSceneFrise()}:nil"),
                       "« Temps » doit n'exister qu'en scène animée, et jamais dans la retouche d'une image.")
     }
+
+    // MARK: - Glisser une piste, tirer ses poignées (retour porteur 2026-09-28)
+
+    private typealias W = ComposerSceneFriseMetrics.Window
+
+    func test_glisserLaBarre_deplaceLObjet_sansChangerSaDuree() {
+        let w = ComposerSceneFriseMetrics.dragged(W(start: 1, end: 3), grip: .move, by: 1.5, duration: 6)
+        XCTAssertEqual(w, W(start: 2.5, end: 4.5))
+    }
+
+    func test_laBarreGlissee_resteDansLaSlide() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 1, end: 3), grip: .move, by: 9, duration: 6),
+                       W(start: 4, end: 6))
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 1, end: 3), grip: .move, by: -9, duration: 6),
+                       W(start: 0, end: 2))
+    }
+
+    func test_laPoigneeDeDebut_allongeOuRaccourcit_sansToucherLaFin() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .start, by: -1, duration: 6),
+                       W(start: 1, end: 4))
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .start, by: 1, duration: 6),
+                       W(start: 3, end: 4))
+    }
+
+    func test_laPoigneeDeFin_allongeOuRaccourcit_sansToucherLeDebut() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .end, by: 1.5, duration: 6),
+                       W(start: 2, end: 5.5))
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .end, by: 9, duration: 6),
+                       W(start: 2, end: 6))
+    }
+
+    /// Une poignée ne franchit jamais l'autre : la piste garde une durée
+    /// saisissable.
+    func test_unePoignee_neFranchitJamaisLAutre() {
+        let debut = ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .start, by: 5, duration: 6)
+        XCTAssertLessThan(debut.start, debut.end)
+        let fin = ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .end, by: -5, duration: 6)
+        XCTAssertLessThan(fin.start, fin.end)
+        XCTAssertEqual(fin.start, 2)
+    }
+
+    func test_unGlissementInvalide_neBougeRien() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.dragged(W(start: 2, end: 4), grip: .move, by: .nan, duration: 6),
+                       W(start: 2, end: 4))
+    }
 }

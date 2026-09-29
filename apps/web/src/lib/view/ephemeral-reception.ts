@@ -74,6 +74,13 @@ export function noteServedDeadline(messageId: string, expiresAt: string | Date):
   remember(servedDeadlines, messageId, ms);
 }
 
+/** Une échéance servie en millisecondes ; `NaN` quand il n'y en a pas — aucune comparaison ne la tient pour passée. */
+function timeOfServed(value: number | string | Date | null | undefined): number {
+  if (value === null || value === undefined) return Number.NaN;
+  if (typeof value === 'number') return value;
+  return (value instanceof Date ? value : new Date(value)).getTime();
+}
+
 /** La première réception locale de ce message, ou `null` (#7547 — l'entrée du composeur de la ligne). */
 export function receptionOf(messageId: string): number | null {
   return receptions.get(messageId) ?? null;
@@ -133,8 +140,14 @@ export function resolveEphemeralDeadline(input: {
   /* LA FLAMME-ŒIL NE DÉCOMPTE RIEN (#8304) : ni pastille ni chrono, chez
      l'expéditeur comme chez le lecteur — c'est la SORTIE de la conversation
      qui la retire, et son filigrane la désigne. Une échéance servie (la
-     rétention d'un message jamais lu, #8302) ne se montre pas non plus. */
-  if (isAfterReadMessage(message)) return { state: 'none' };
+     rétention d'un message jamais lu, #8302) ne se montre pas non plus.
+     SAUF l'échéance PASSÉE d'un destinataire : c'est SA consommation, que la
+     passerelle ressert une heure (#8556) — la rangée est partie, jumelle
+     d'`ExpiredEphemeralRow.isGone` (iOS, #8352). */
+  if (isAfterReadMessage(message)) {
+    const consumedAtMs = isMine ? Number.NaN : timeOfServed(servedDeadlines.get(message.id) ?? message.expiresAt);
+    return consumedAtMs <= now ? { state: 'scheduled', expiresAtMs: consumedAtMs } : { state: 'none' };
+  }
   if (!isMine && hasDuration) noteEphemeralReception(message.id, now);
 
   return ephemeralDeadline({

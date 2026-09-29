@@ -1,6 +1,9 @@
-import { Suspense, lazy, useMemo } from 'react';
+import { Suspense, useMemo } from 'react';
 
 import type { FeedCardModel } from '@/lib/feed/card-model';
+import { preloadable } from '@/lib/view/preloadable';
+
+import type { MediaViewerProps } from './media-viewer';
 import { boundedSceneIndex, composeSceneGalleryLot } from '@/lib/feed/gallery-lot';
 import type { SceneGalleryRequest } from '@/lib/feed/use-scene-gallery';
 import type { MediaCarrier } from '@/lib/view/media';
@@ -17,7 +20,12 @@ import type { MediaCarrier } from '@/lib/view/media';
  * la légende PAR PAGE venant de `scenes.get(id).caption` (`CarrierFooter`,
  * `media-viewer.tsx`), jamais de `carrier.caption` ici (`caption: null`).
  */
-const MediaViewer = lazy(() => import('./media-viewer'));
+const sceneViewer = preloadable<MediaViewerProps>(() => import('./media-viewer'));
+const MediaViewer = sceneViewer.Component;
+
+/** Le doigt posé sur une scène du fil précharge la visionneuse (#8598) : au
+ * relâcher, elle s'ouvre au premier rendu, jamais après un `Suspense` vide. */
+export const preloadSceneViewer = sceneViewer.preload;
 
 export type SceneFullscreenGalleryProps = {
   readonly request: SceneGalleryRequest | null;

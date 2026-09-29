@@ -102,7 +102,8 @@ export interface LastMessageCallSummary {
  * - `system.conversation-image` — params `{ actor }` : l'image a changé
  * - `system.encryption-enabled` — params `{ mode }` (`e2ee` | `server` | `hybrid`)
  * - `system.generic` — un message système que le serveur ne sait pas typer ;
- *   aucun paramètre, le client rend un libellé neutre.
+ *   aucun paramètre, le client rend son texte (Prisme compris), comme le fil,
+ *   et un libellé neutre seulement sans texte (#8561).
  */
 export type SystemEventKey =
   | 'system.member-joined'

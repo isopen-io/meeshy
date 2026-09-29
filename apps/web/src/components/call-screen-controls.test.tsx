@@ -25,8 +25,12 @@ const GLYPHS = { more: '…', mute: 'm', remove: 'r' };
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
+/* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
+  await import('./call-control-actions');
+  await new Promise((resolve) => setTimeout(resolve, 0));
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -78,6 +82,8 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   captions: [],
   captionsMode: 'off',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
   initiatorId: null,
   invitedBy: null,
@@ -107,10 +113,10 @@ const settle = async (chunk: () => Promise<unknown>) => {
 };
 
 describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
-  test('en duo, le rail de l’appel les porte ; en groupe, la rangée de l’appel aussi', () => {
+  test('en duo comme en groupe, la rangée de l’appel les porte', () => {
     const duo = mount(<CallScreen call={call()} canShare initiallyExpanded />);
-    expect(duo.find('[data-call-rail="call"] [data-call-control="invite"]')?.getAttribute('aria-label')).toBe('Ajouter des personnes à l’appel');
-    expect(duo.find('[data-call-rail="call"] [data-call-control="react"]')?.getAttribute('aria-label')).toBe('Envoyer une réaction');
+    expect(duo.find('[data-call-row="call"] [data-call-control="invite"]')?.getAttribute('aria-label')).toBe('Ajouter des personnes à l’appel');
+    expect(duo.find('[data-call-row="call"] [data-call-control="react"]')?.getAttribute('aria-label')).toBe('Envoyer une réaction');
     duo.done();
     const group = mount(<CallScreen call={call({ isGroup: true, members: { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno') } })} canShare initiallyExpanded />);
     expect(group.find('[data-call-row="call"] [data-call-control="invite"]')).not.toBeNull();
@@ -118,19 +124,22 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
     group.done();
   });
 
-  test('« Réagir » ouvre la palette des huit réactions, un seul panneau à la fois, et la referme', async () => {
+  test('« Réagir » ouvre la palette des huit réactions À LA PLACE des rangées ; ‹ les rend, un seul panneau à la fois (#8578)', async () => {
     const view = mount(<CallScreen call={call()} canShare initiallyExpanded />);
     view.press('[data-call-control="react"]');
     await settle(() => import('./call-control-panels'));
-    expect(view.find('[data-call-control="react"]')?.getAttribute('aria-expanded')).toBe('true');
     expect(document.body.querySelectorAll('[data-call-react-panel] [data-call-react]')).toHaveLength(8);
+    expect(view.find('[data-call-row]')).toBeNull();
+    view.press('[data-panel-back]');
+    expect(view.find('[data-call-react-panel]')).toBeNull();
+    expect(view.find('[data-call-control="react"]')?.getAttribute('aria-expanded')).toBe('false');
     view.press('[data-call-record]');
     await settle(() => import('./call-control-panels'));
-    expect(view.find('[data-call-react-panel]')).toBeNull();
     expect(view.find('[data-call-record-choice]')).not.toBeNull();
-    expect(view.find('[data-call-record]')?.getAttribute('aria-expanded')).toBe('true');
-    view.press('[data-call-record]');
+    expect(view.find('[data-call-react-panel]')).toBeNull();
+    view.press('[data-panel-close]');
     expect(view.find('[data-call-record-choice]')).toBeNull();
+    expect(view.find('[data-call-row]')).toBeNull();
     view.done();
   });
 
@@ -155,7 +164,7 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
 describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('chaque réaction part aussitôt, et la palette reste ouverte pour enchaîner', () => {
     const sent: string[] = [];
-    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
+    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
     view.press('[data-call-react="🎉"]');
     view.press('[data-call-react="👍"]');
     expect(sent).toEqual(['🎉', '👍']);
@@ -166,13 +175,13 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('« Audio et vidéo » demande un enregistrement vidéo et ferme le choix ; sans canevas filmable, il n’est pas offert', () => {
     const asked: string[] = [];
     const closed: string[] = [];
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
+    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
     expect(view.find('[data-call-record-kind="audio"]')?.textContent).toContain('Audio seul');
     view.press('[data-call-record-kind="video"]');
     expect(asked).toEqual(['video']);
     expect(closed).toHaveLength(1);
     view.done();
-    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
+    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
     expect(bare.find('[data-call-record-kind="video"]')?.hasAttribute('disabled')).toBe(true);
     bare.done();
   });
@@ -239,6 +248,32 @@ describe('le menu de modération', () => {
     act(() => view.find('[data-call-moderation-menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-moderation-menu]')).toBeNull();
     expect(document.activeElement?.getAttribute('data-call-moderate')).toBe('u-nadia');
+    view.done();
+  });
+
+  /**
+   * LE RETOUR ANDROID REFERME LE MENU, PUIS L'ALERTE (#8504) — dans la coque,
+   * le bouton retour est un `popstate`. Sans `useBackDismiss`, le menu et
+   * l'alerte restaient ouverts pendant que le retour faisait reculer la page
+   * sous l'écran d'appel ; Échap les refermait sur le web.
+   */
+  test('le retour matériel referme le menu, puis l’alerte, sans retirer personne', () => {
+    const log: string[] = [];
+    const view = mount(<CallModerationMenu member={member('u-nadia', 'Nadia')} language="fr" moderation={moderation(log)} glyphs={GLYPHS} />);
+    view.press('[data-call-moderate]');
+    expect(typeof (window.history.state as { backDismiss?: unknown } | null)?.backDismiss).toBe('string');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(view.find('[data-call-moderation-menu]')).toBeNull();
+    view.press('[data-call-moderate]');
+    view.press('[data-call-remove]');
+    expect(view.find('[role="alertdialog"]')).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(view.find('[role="alertdialog"]')).toBeNull();
+    expect(log).toEqual([]);
     view.done();
   });
 });

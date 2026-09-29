@@ -433,7 +433,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
     /// actions via `MessageActionResolver` (SSOT avec l'overlay).
     func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
-        let vSource = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+        let vSource = try source("Meeshy/Features/Main/Views/ConversationView+NativeMessageMenu.swift")
 
         guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
             XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")

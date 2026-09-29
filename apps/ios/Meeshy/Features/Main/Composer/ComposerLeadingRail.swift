@@ -112,11 +112,27 @@ struct ComposerLeadingRail: View {
     /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
     var separateButtons: Bool = false
 
+    /// **La porte dont les options sont ouvertes À SA DROITE** (directive
+    /// porteur 2026-09-28). Elle se teinte, comme un contrôleur déplié, et
+    /// publie son cadre (`ComposerRailFlyoutAnchorKey`) pour que la colonne se
+    /// pose à côté d'elle. Lue sur le mode : une seule source.
+    private var anchoredDoor: ComposerRailDoor? {
+        if case .flyout(let volet) = mode { return volet.anchor }
+        return nil
+    }
+
     @State private var lastTapped: String?
+
+    /// L'écart entre deux cadres : resserré quand chaque bouton ne dessine
+    /// qu'un disque plus petit que sa cible.
+    private var entrySpacing: CGFloat {
+        separateButtons ? ComposerRailGeometry.floatingEntrySpacing : ComposerRailGeometry.entrySpacing
+    }
 
     private var isEmpty: Bool {
         switch mode {
         case .doors(let doors):   return doors.isEmpty
+        case .flyout(let volet):  return volet.doors.isEmpty
         case .tool(let controls): return controls.isEmpty
         }
     }
@@ -124,9 +140,9 @@ struct ComposerLeadingRail: View {
     @ViewBuilder
     private func railStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         if axis == .vertical {
-            VStack(spacing: ComposerRailGeometry.entrySpacing) { content() }
+            VStack(spacing: entrySpacing) { content() }
         } else {
-            HStack(spacing: ComposerRailGeometry.entrySpacing) { content() }
+            HStack(spacing: entrySpacing) { content() }
         }
     }
 
@@ -174,24 +190,11 @@ struct ComposerLeadingRail: View {
     private var railEntries: some View {
         switch mode {
                 case .doors(let doors):
-                    ForEach(doors, id: \.rawValue) { door in
-                        doorButton(door)
-                        // Le bouton système se glisse à SA place dans l'ordre,
-                        // jamais en bout de rail : la maquette range le collage
-                        // entre le sticker et la mention, et une entrée qu'on
-                        // relègue à la fin cesse d'être trouvable là où le doigt
-                        // l'attend.
-                        if let systemEntry, systemEntryAfter == door {
-                            systemEntry
-                                .frame(width: ComposerRailGeometry.railWidth,
-                                       height: ComposerRailGeometry.railWidth)
-                        }
-                    }
-                    if let systemEntry, systemEntryAfter == nil {
-                        systemEntry
-                            .frame(width: ComposerRailGeometry.railWidth,
-                                   height: ComposerRailGeometry.railWidth)
-                    }
+                    doorEntries(doors)
+                case .flyout(let volet):
+                    // Les portes RESTENT : la colonne d'options se pose à côté
+                    // de la sienne, elle ne la remplace pas.
+                    doorEntries(volet.doors)
                 case .tool(let controls):
                     // **La rangée DÉFILE, le `(x)` reste** (#4582, directive
                     // porteur « faire très attention aux décalages hors du
@@ -214,7 +217,7 @@ struct ComposerLeadingRail: View {
                     // contrôleurs — c'est-à-dire quand on en a le plus besoin.
                     if axis == .horizontal {
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: ComposerRailGeometry.entrySpacing) {
+                            HStack(spacing: entrySpacing) {
                                 ForEach(controls) { toolButton($0) }
                             }
                         }
@@ -224,6 +227,28 @@ struct ComposerLeadingRail: View {
                         }
                     }
             exitButton
+        }
+    }
+
+    @ViewBuilder
+    private func doorEntries(_ doors: [ComposerRailDoor]) -> some View {
+        ForEach(doors, id: \.rawValue) { door in
+            doorButton(door)
+            // Le bouton système se glisse à SA place dans l'ordre,
+            // jamais en bout de rail : la maquette range le collage
+            // entre le sticker et la mention, et une entrée qu'on
+            // relègue à la fin cesse d'être trouvable là où le doigt
+            // l'attend.
+            if let systemEntry, systemEntryAfter == door {
+                systemEntry
+                    .frame(width: ComposerRailGeometry.railWidth,
+                           height: ComposerRailGeometry.railWidth)
+            }
+        }
+        if let systemEntry, systemEntryAfter == nil {
+            systemEntry
+                .frame(width: ComposerRailGeometry.railWidth,
+                       height: ComposerRailGeometry.railWidth)
         }
     }
 
@@ -246,7 +271,7 @@ struct ComposerLeadingRail: View {
             }
             .frame(width: axis == .vertical ? ComposerRailGeometry.railWidth : nil,
                    height: axis == .horizontal ? ComposerRailGeometry.railWidth : nil)
-            .padding(axis == .vertical ? .vertical : .horizontal, 8)
+            .padding(axis == .vertical ? .vertical : .horizontal, ComposerRailGeometry.floatingColumnPadding)
             // Verre TEINTÉ du plateau : le rail flotte sur la scène (#8370) —
             // une carte-colonne, ou rien quand chaque bouton porte le sien.
             .modifier(ComposerRailCard(separate: separateButtons, plateauTint: plateauTint))
@@ -256,12 +281,19 @@ struct ComposerLeadingRail: View {
     }
 
     private func doorButton(_ door: ComposerRailDoor) -> some View {
-        entry(id: door.rawValue,
-              symbolName: door.symbolName,
-              label: ComposerRailCopy.label(door),
-              tint: MeeshyColors.textSecondary(isDark: true),
-              badge: badges[door]) {
+        let accroche = anchoredDoor == door
+        return entry(id: door.rawValue,
+                     symbolName: door.symbolName,
+                     label: ComposerRailCopy.label(door),
+                     tint: accroche
+                         ? MeeshyColors.brandPrimary
+                         : MeeshyColors.textSecondary(isDark: true),
+                     badge: badges[door]) {
             onDoor?(door)
+        }
+        .accessibilityAddTraits(accroche ? .isSelected : [])
+        .anchorPreference(key: ComposerRailFlyoutAnchorKey.self, value: .bounds) {
+            accroche ? $0 : nil
         }
     }
 
@@ -307,16 +339,16 @@ struct ComposerLeadingRail: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: symbolName)
-                .font(.title3)
+                .font(separateButtons ? .body.weight(.semibold) : .title3)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundColor(tint)
                 .composerToolBounce(active: lastTapped == id)
+                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 // **La pastille est posée SUR le glyphe, hors du flux** : dans
                 // le flux elle décalerait l'icône, et la position qu'un doigt
                 // apprend ne doit pas dépendre de ce que la scène porte.
-                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint))
                 .overlay(alignment: .topTrailing) { badgeBubble(badge) }
                 .contentShape(Rectangle())
         }

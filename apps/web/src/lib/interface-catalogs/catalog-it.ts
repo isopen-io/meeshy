@@ -23,6 +23,7 @@ import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
 import itGallery from './catalog-it-gallery';
+import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
@@ -30,6 +31,7 @@ import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
+import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
 
 const it = {
@@ -859,6 +861,7 @@ const it = {
   'story.studio.refusal.door.visual': 'Scegli un’immagine o un video.',
   'story.studio.refusal.door.sound': 'Scegli un file audio.',
   'story.studio.refusal.media-max': 'Questa pubblicazione porta già dieci contenuti multimediali — il limite della piattaforma.',
+  'story.studio.refusal.import-max': '{count} contenuti non importati: una pubblicazione ne porta al massimo dieci.',
   'story.studio.failure.network': 'Rete non disponibile.',
   'story.studio.failure.timeout': 'Il server non ha risposto.',
   'story.studio.failure.session': 'Sessione scaduta — accedi di nuovo.',
@@ -1029,14 +1032,6 @@ const it = {
   'comment.send.error': 'Non è stato possibile pubblicare il commento.',
   'comment.send.pending': 'Commento non confermato — offline',
   'comment.send.empty': 'Scrivi qualcosa prima di inviare.',
-  'comments.action.like': 'Mi piace',
-  'comments.action.unlike': 'Non mi piace più',
-  'comments.action.edit': 'Modifica',
-  'comments.action.delete': 'Elimina',
-  'comments.action.delete.confirm': 'Conferma',
-  'comments.edit.label': 'Modifica commento',
-  'comments.edit.save': 'Salva',
-  'comments.edit.cancel': 'Annulla',
   'comment.like.error': 'Il «mi piace» non è stato salvato.',
   'comment.edit.error': 'La modifica non è stata salvata.',
   'comment.delete.error': 'Non è stato possibile eliminare il commento.',
@@ -1164,10 +1159,12 @@ const it = {
   ...itStudioChrome,
   ...itEphemeral,
   ...itGallery,
+  ...itMessageCard,
   ...itConversationCard,
   ...itStoriesMine,
   ...itContactCard,
   ...itQuote,
+  ...itCommentRow,
   ...itContactDiscovery,
 } satisfies InterfaceCatalog;
 

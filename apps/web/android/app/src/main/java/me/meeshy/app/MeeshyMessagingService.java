@@ -1,5 +1,6 @@
 package me.meeshy.app;
 
+import android.app.NotificationManager;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -9,6 +10,7 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * LE SEUL service `MESSAGING_EVENT` de la coque (#8049). FCM ne remet un
@@ -19,6 +21,8 @@ import java.nio.charset.StandardCharsets;
  * - une poussee d'APPEL (`type=call`, data-only, app tuee comprise) pose la
  *   notification plein ecran ; `call_cancel` / `call_answered_elsewhere` la
  *   retirent ({@link CallPush}) ;
+ * - une REVOCATION (`notification_revoked`, #8624) retire les bannieres que
+ *   FCM a posees ({@link NotificationRevocation}) et ne va pas au plugin ;
  * - TOUT le reste — et le renouvellement du jeton — est remis INCHANGE au
  *   plugin, exactement ce que faisait son propre service
  *   (`PushNotificationsPlugin.sendRemoteMessage` / `onNewToken`) ; et une
@@ -41,6 +45,14 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
         super.onMessageReceived(message);
+        List<String> revoked = NotificationRevocation.tagsToCancel(message.getData());
+        if (!revoked.isEmpty()) {
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                for (String tag : revoked) manager.cancel(tag, 0);
+            }
+            return;
+        }
         CallPush push = CallPush.route(
             message.getData(),
             MainActivity.isInForeground(),

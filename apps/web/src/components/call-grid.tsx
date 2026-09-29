@@ -4,7 +4,6 @@ import { Avatar } from '@/components/avatar';
 import { CallButton } from '@/components/call-glass-button';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo } from '@/components/call-media-elements';
-import { CallZoomControl, useCameraZoom, useZoomGestures } from '@/components/call-self-zoom';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -113,7 +112,7 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
     <div className="relative grid min-h-0">
       <Tile {...tile} />
       {moderated ? (
-        <div className="absolute right-1.5 top-1.5 z-10">
+        <div className="absolute right-1.5 top-1.5 z-10" data-call-chrome-fade="">
           <CallModerationSlot member={tile.member} language={tile.language} moderation={moderation} />
         </div>
       ) : null}
@@ -123,12 +122,9 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
 
 function SelfTile({ self, language, portrait }: { readonly self: CallGridProps['self']; readonly language: InterfaceLanguage; readonly portrait: number }) {
   const you = translate(language, 'call.you');
-  const zoom = useCameraZoom(self.cameraOn ? self.stream : null);
-  const gestures = useZoomGestures(zoom);
   return (
-    <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2" {...gestures} style={{ background: TILE, borderColor: SELF_SPEAKER_COLOR, ...gestures.style }} data-call-tile-self="">
+    <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2" style={{ background: TILE, borderColor: SELF_SPEAKER_COLOR }} data-call-tile-self="">
       {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} /> : <Portrait name={you} avatar={null} size={portrait} pulse={false} />}
-      {zoom === null ? null : <CallZoomControl zoom={zoom} language={language} className="absolute right-2 top-2 z-10" />}
       <NameLabel name={you} muted={false} suffix={null} />
     </div>
   );
@@ -180,7 +176,7 @@ export function CallGrid({ members, remoteStreams, self, choice, onChoose, immer
             <Tile member={featured} stream={remoteStreams[featured.userId]} language={language} onPress={null} label={featured.name} portrait={96} />
           </div>
         )}
-        <div className="absolute right-2 top-2 flex flex-col items-end gap-2">
+        <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
           <div className="flex gap-2">
             {screen ? (
               <CallButton

@@ -66,6 +66,8 @@ export type CaptionsContext = {
 export type CaptionsPort = {
   readonly receive: (event: string, payload: unknown) => void;
   readonly toggle: () => void;
+  /** Mon micro vient d'être coupé ou rallumé (#8475) : micro coupé, rien ne se capte ni ne part. */
+  readonly micChanged: () => void;
   /** Le canal de données `transcription` d'un lien — créé par l'offrant, reçu par l'autre. */
   readonly attach: (userId: string, channel: RTCDataChannel) => void;
   /** Fin de l'appel ; `bye` prévient les pairs en bande (raccroché local). */
@@ -145,7 +147,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
 
   const reconcile = (): void => {
     const call = live();
-    const listening = call !== null && !stopped && someoneListens({ mode: call.captionsMode, peers: call.captionPeers, members: call.members });
+    const listening = call !== null && !stopped && !call.micMuted && someoneListens({ mode: call.captionsMode, peers: call.captionPeers, members: call.members });
     const action = captureAction(listening, capture !== null);
     if (action === 'stop') {
       stopCapture();
@@ -220,6 +222,9 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
       if ((call.captionsMode === 'off') !== (next === 'off')) ctx.emit(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: ctx.callId, active: next !== 'off' });
       if (next !== 'off' && call.captions.some((caption) => !caption.mine)) ctx.shown();
       reconcile();
+    },
+    micChanged: () => {
+      if (!stopped) reconcile();
     },
     attach: (userId, channel) => {
       if (stopped) return;
