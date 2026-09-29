@@ -102,6 +102,21 @@ extension CallView {
         }
     }
 
+    var myImageCaptureSubjects: [CallCaptureSubject] { [myImageCaptureSubject] }
+
+    var myImageCaptureTracks: [String: Any] {
+        callManager.localVideoTrack.map { [Self.localCaptureId: $0] } ?? [:]
+    }
+
+    private var myImageCaptureSubject: CallCaptureSubject {
+        CallCaptureSubject(
+            id: Self.localCaptureId,
+            name: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main),
+            isMirrored: callManager.isUsingFrontCamera,
+            showsVideo: callManager.isVideoEnabled && callManager.hasLocalVideoTrack
+        )
+    }
+
     private static let remoteCaptureId = "duo-remote"
     private static let localCaptureId = "duo-local"
 
@@ -112,12 +127,7 @@ extension CallView {
             isMirrored: false,
             showsVideo: callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled
         )
-        let local = CallCaptureSubject(
-            id: Self.localCaptureId,
-            name: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main),
-            isMirrored: callManager.isUsingFrontCamera,
-            showsVideo: callManager.isVideoEnabled && callManager.hasLocalVideoTrack
-        )
+        let local = myImageCaptureSubject
         return swapStreams && callManager.hasLocalVideoTrack ? [local, remote] : [remote, local]
     }
 }

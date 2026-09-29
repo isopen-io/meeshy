@@ -83,4 +83,53 @@ final class CallModeRulesTests: XCTestCase {
         let tried = original.selectingFaceEffect(.demon)
         XCTAssertEqual(CallEffectsModeRule.exiting(validated: false, current: tried, original: original), original)
     }
+
+    // MARK: - Les gestes sur le style choisi (#8625)
+
+    func test_outcome_doubleTapOnTheSelectedStyle_capturesAPhoto() {
+        XCTAssertEqual(CallModeGestureRule.outcome(of: .doubleTap, isSelected: true, isRecording: false), .capturePhoto)
+    }
+
+    func test_outcome_longPressOnTheSelectedStyle_startsRecording() {
+        XCTAssertEqual(CallModeGestureRule.outcome(of: .longPress, isSelected: true, isRecording: false), .startRecording)
+    }
+
+    func test_outcome_singleTapOnTheSelectedStyle_doesNothing() {
+        XCTAssertEqual(CallModeGestureRule.outcome(of: .tap, isSelected: true, isRecording: false), .none)
+    }
+
+    func test_outcome_anyGestureOnAnotherStyle_selectsIt() {
+        for gesture in CallModeGesture.allCases {
+            XCTAssertEqual(CallModeGestureRule.outcome(of: gesture, isSelected: false, isRecording: false), .select, "\(gesture)")
+        }
+    }
+
+    func test_outcome_whileRecording_theSelectedStyleNeitherShootsNorRestarts() {
+        for gesture in CallModeGesture.allCases {
+            XCTAssertEqual(CallModeGestureRule.outcome(of: gesture, isSelected: true, isRecording: true), .none, "\(gesture)")
+        }
+    }
+
+    func test_outcome_whileRecording_anotherStyleIsStillSelectable() {
+        XCTAssertEqual(CallModeGestureRule.outcome(of: .tap, isSelected: false, isRecording: true), .select)
+    }
+
+    func test_listensForShots_onlyTheSelectedStyleWhenIdle_listens() {
+        XCTAssertTrue(CallModeGestureRule.listensForShots(isSelected: true, isRecording: false))
+        XCTAssertFalse(CallModeGestureRule.listensForShots(isSelected: false, isRecording: false))
+        XCTAssertFalse(CallModeGestureRule.listensForShots(isSelected: true, isRecording: true))
+    }
+
+    func test_showsHint_onlyUntilItHasBeenSeen() {
+        XCTAssertTrue(CallModeGestureRule.showsHint(hasSeenHint: false, isRecording: false))
+        XCTAssertFalse(CallModeGestureRule.showsHint(hasSeenHint: true, isRecording: false))
+        XCTAssertFalse(CallModeGestureRule.showsHint(hasSeenHint: false, isRecording: true))
+    }
+
+    func test_clock_readsMinutesAndSeconds() {
+        XCTAssertEqual(CallModeGestureRule.clock(0), "0:00")
+        XCTAssertEqual(CallModeGestureRule.clock(9.7), "0:09")
+        XCTAssertEqual(CallModeGestureRule.clock(75), "1:15")
+        XCTAssertEqual(CallModeGestureRule.clock(-3), "0:00")
+    }
 }

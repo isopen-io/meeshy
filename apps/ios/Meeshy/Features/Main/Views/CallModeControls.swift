@@ -4,12 +4,16 @@ import MeeshyUI
 
 struct CallEffectsModeControls: View {
     @ObservedObject var callManager: CallManager
+    @ObservedObject var capture: CallCaptureController
+    let subjects: [CallCaptureSubject]
+    let tracks: [String: Any]
     let onExit: () -> Void
 
     @State private var config = VideoFilterConfig()
     @State private var original = VideoFilterConfig()
     @State private var category: CallEffectsCategory = .face
     @State private var showsSettings = false
+    @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -26,9 +30,6 @@ struct CallEffectsModeControls: View {
             CallModeActionBar(
                 exitHint: CallModeCopy.quitEffectsHint,
                 onExit: { finish(validated: false) },
-                shutter: CallModeShutter(symbol: "checkmark", label: CallModeCopy.validate, hint: CallModeCopy.validateHint) {
-                    finish(validated: true)
-                },
                 options: [
                     CallModeOption(
                         id: "settings",
@@ -40,6 +41,15 @@ struct CallEffectsModeControls: View {
                     ) {
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { showsSettings.toggle() }
                         HapticFeedback.light()
+                    },
+                    CallModeOption(
+                        id: "validate",
+                        symbol: "checkmark",
+                        label: CallModeCopy.validate,
+                        caption: CallModeCopy.validate,
+                        hint: CallModeCopy.validateHint
+                    ) {
+                        finish(validated: true)
                     }
                 ]
             )
@@ -47,6 +57,13 @@ struct CallEffectsModeControls: View {
         .onAppear {
             original = callManager.videoFilters.config
             config = original
+        }
+        .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
+            capture.update(subjects: subjects, tracks: tracks)
+        }
+        .onDisappear {
+            hasSeenGestureHint = true
+            capture.stop()
         }
         .adaptiveOnChange(of: config) { _, newConfig in
             callManager.videoFilters.config = newConfig
@@ -95,7 +112,11 @@ struct CallEffectsModeControls: View {
                 items: CallEffectsModeRule.faces,
                 selection: faceBinding,
                 title: CallModeCopy.categoryName(.face),
-                name: CallEffectsCopy.name
+                name: CallEffectsCopy.name,
+                isRecording: capture.isRecording,
+                hint: gestureHint,
+                onCapturePhoto: shootMyImage,
+                onStartRecording: filmMyImage
             ) { effect, isSelected in
                 CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
             }
@@ -104,11 +125,31 @@ struct CallEffectsModeControls: View {
                 items: CallEffectsModeRule.colors,
                 selection: colorBinding,
                 title: CallModeCopy.categoryName(.color),
-                name: CallEffectsCopy.presetName
+                name: CallEffectsCopy.presetName,
+                isRecording: capture.isRecording,
+                hint: gestureHint,
+                onCapturePhoto: shootMyImage,
+                onStartRecording: filmMyImage
             ) { preset, isSelected in
                 CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
             }
         }
+    }
+
+    private var gestureHint: String? {
+        CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil
+    }
+
+    /// #8625 — en mode Effets, la photo et le film portent MON image seule,
+    /// telle que l'effet la rend.
+    private func shootMyImage() {
+        hasSeenGestureHint = true
+        Task { await capture.capture(style: .screen) }
+    }
+
+    private func filmMyImage() {
+        hasSeenGestureHint = true
+        Task { await capture.startRecording(style: .screen) }
     }
 
     private var faceBinding: Binding<CallFaceEffect> {
@@ -171,6 +212,8 @@ struct CallMontageModeControls: View {
     let tracks: [String: Any]
     let onExit: () -> Void
 
+    @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
+
     private static let thumbnailSize = CGSize(width: 48, height: 85)
 
     var body: some View {
@@ -181,21 +224,17 @@ struct CallMontageModeControls: View {
                 title: CallModeCopy.montageTitle,
                 name: CallCaptureCopy.styleName,
                 itemSize: Self.thumbnailSize,
-                spacing: 12
+                spacing: 12,
+                isRecording: capture.isRecording,
+                hint: CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil,
+                onCapturePhoto: shoot,
+                onStartRecording: film
             ) { style, isSelected in
                 CallModeThumbnail(image: capture.thumbnails[style], symbol: CallCaptureCopy.styleSymbol(style), isSelected: isSelected)
             }
             CallModeActionBar(
                 exitHint: CallModeCopy.quitMontageHint,
                 onExit: onExit,
-                shutter: CallModeShutter(
-                    symbol: "camera.fill",
-                    label: CallCaptureCopy.shoot,
-                    hint: CallCaptureCopy.shootHint,
-                    isBusy: capture.status == .working
-                ) {
-                    Task { await capture.capture() }
-                },
                 options: [
                     CallModeOption(
                         id: "faces",
@@ -203,7 +242,7 @@ struct CallMontageModeControls: View {
                         label: CallCaptureCopy.faces,
                         caption: CallCaptureCopy.faces,
                         hint: CallCaptureCopy.facesHint,
-                        isEnabled: capture.status != .working
+                        isEnabled: capture.status != .working && !capture.isRecording
                     ) {
                         Task { await capture.captureFaces() }
                     }
@@ -213,16 +252,20 @@ struct CallMontageModeControls: View {
         .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
             capture.start(subjects: subjects, tracks: tracks)
         }
-        .onDisappear { capture.stop() }
-        .adaptiveOnChange(of: capture.status) { _, status in
-            guard let outcome = CallCaptureCopy.outcome(status) else { return }
-            if outcome.isError {
-                FeedbackToastManager.shared.showError(outcome.message)
-            } else {
-                FeedbackToastManager.shared.showSuccess(outcome.message)
-            }
-            UIAccessibility.post(notification: .announcement, argument: outcome.message)
+        .onDisappear {
+            hasSeenGestureHint = true
+            capture.stop()
         }
+    }
+
+    private func shoot() {
+        hasSeenGestureHint = true
+        Task { await capture.capture() }
+    }
+
+    private func film() {
+        hasSeenGestureHint = true
+        Task { await capture.startRecording() }
     }
 
     private var styleBinding: Binding<CallMontageStyle> {
@@ -230,6 +273,45 @@ struct CallMontageModeControls: View {
             get: { capture.style },
             set: { capture.select($0) }
         )
+    }
+}
+
+/// #8625 — la scène du Montage lit l'aperçu sur son flux : à chaque trame,
+/// seule l'image se redessine, ni l'écran d'appel ni les commandes.
+struct CallMontageLiveStage: View {
+    @ObservedObject var capture: CallCaptureController
+
+    var body: some View {
+        CallMontageFeedStage(
+            feed: capture.previewFeed,
+            styleName: CallCaptureCopy.styleName(capture.style),
+            isWorking: capture.status == .working
+        )
+    }
+}
+
+private struct CallMontageFeedStage: View {
+    @ObservedObject var feed: CallCapturePreviewFeed
+    let styleName: String
+    let isWorking: Bool
+
+    var body: some View {
+        CallMontageStage(image: feed.image, styleName: styleName, isWorking: isWorking)
+    }
+}
+
+/// Pendant le film : le bouton stop et le chrono, seuls à suivre le film.
+struct CallModeRecordingOverlay: View {
+    @ObservedObject var capture: CallCaptureController
+
+    var body: some View {
+        if let startedAt = capture.recordingStartedAt {
+            CallModeRecordingStop(startedAt: startedAt) {
+                Task { await capture.stopRecording() }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity)
+        }
     }
 }
 

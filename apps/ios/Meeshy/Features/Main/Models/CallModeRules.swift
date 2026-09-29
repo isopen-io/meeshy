@@ -46,3 +46,46 @@ enum CallEffectsModeRule {
         validated ? current : original
     }
 }
+
+enum CallModeGesture: CaseIterable, Sendable {
+    case tap
+    case doubleTap
+    case longPress
+}
+
+enum CallModeGestureOutcome: Equatable, Sendable {
+    case select
+    case capturePhoto
+    case startRecording
+    case none
+}
+
+/// #8625 — le style choisi SE déclenche : deux tapes prennent la photo, un
+/// appui long filme ; un autre style se choisit d'un simple toucher. Pendant
+/// l'enregistrement, seul le bouton stop du gabarit l'arrête.
+enum CallModeGestureRule {
+    static let longPressDuration: Double = 0.45
+
+    static func outcome(of gesture: CallModeGesture, isSelected: Bool, isRecording: Bool) -> CallModeGestureOutcome {
+        guard isSelected else { return .select }
+        guard !isRecording else { return .none }
+        switch gesture {
+        case .tap: return .none
+        case .doubleTap: return .capturePhoto
+        case .longPress: return .startRecording
+        }
+    }
+
+    static func listensForShots(isSelected: Bool, isRecording: Bool) -> Bool {
+        isSelected && !isRecording
+    }
+
+    static func showsHint(hasSeenHint: Bool, isRecording: Bool) -> Bool {
+        !hasSeenHint && !isRecording
+    }
+
+    static func clock(_ elapsed: TimeInterval) -> String {
+        let seconds = elapsed.isFinite ? max(0, Int(elapsed)) : 0
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}

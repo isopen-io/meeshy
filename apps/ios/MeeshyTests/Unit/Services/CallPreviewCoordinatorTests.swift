@@ -191,11 +191,62 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         XCTAssertTrue(sut.isPreviewConnected)
     }
 
-    func test_toggleSound_beforeTheLinkConnects_doesNothing() async {
-        let (sut, _, _, host) = makeSUT()
+    /// #8627 — le bouton son est proposé d'emblée : choisi avant que le lien
+    /// ne s'établisse, il s'applique dès que l'appelant arrive.
+    func test_toggleSound_beforeTheLinkConnects_opensTheSoundOnConnection() async {
+        let (sut, factory, _, host) = makeSUT()
         sut.sync(state(.incomingRinging))
+
+        sut.toggleSound()
+        XCTAssertTrue(sut.isPreviewAudible)
+        XCTAssertTrue(host.audible.isEmpty)
+
         sut.handle(previewSignal("offer", from: "caller"))
         await settle()
+        factory.emit(.state(.connected))
+
+        XCTAssertEqual(host.audible, [true])
+    }
+
+    func test_toggleSound_chosenThenWithdrawnBeforeConnection_neverOpensTheSound() async {
+        let (sut, factory, _, host) = makeSUT()
+        sut.sync(state(.incomingRinging))
+        sut.toggleSound()
+        sut.toggleSound()
+
+        sut.handle(previewSignal("offer", from: "caller"))
+        await settle()
+        factory.emit(.state(.connected))
+
+        XCTAssertFalse(sut.isPreviewAudible)
+        XCTAssertTrue(host.audible.isEmpty)
+    }
+
+    func test_offersSound_directCallRinging_offersItAtOnce() {
+        let (sut, _, _, _) = makeSUT()
+
+        sut.sync(state(.incomingRinging))
+
+        XCTAssertTrue(sut.offersSound)
+    }
+
+    func test_offersSound_groupCallOrOutgoingOrAnswered_offersNothing() {
+        let (group, _, _, _) = makeSUT()
+        group.sync(state(.incomingRinging, isGroup: true))
+        let (outgoing, _, _, _) = makeSUT()
+        outgoing.sync(state(.outgoingRinging))
+        let (answered, _, _, _) = makeSUT()
+        answered.sync(state(.incomingRinging))
+        answered.sync(state(.answering))
+
+        XCTAssertFalse(group.offersSound)
+        XCTAssertFalse(outgoing.offersSound)
+        XCTAssertFalse(answered.offersSound)
+    }
+
+    func test_toggleSound_outsideTheRinging_doesNothing() {
+        let (sut, _, _, host) = makeSUT()
+        sut.sync(state(.connected))
 
         sut.toggleSound()
 
@@ -214,15 +265,34 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         XCTAssertEqual(host.audible, [true, false])
     }
 
-    func test_answering_closesThePreview_andLeavesTheSoundToTheCall() async {
+    /// #8627 — décrocher ne coupe pas l'aperçu : il tient jusqu'à ce que le
+    /// vrai lien soit connecté, sans écran noir entre les deux.
+    func test_answering_keepsThePreviewUntilTheCallConnects() async {
         let (sut, factory, _, host) = await connectedCallee()
+        let track = NSObject()
+        factory.links.first?.remoteVideoTrack = track
+        factory.emit(.remoteVideo)
         sut.toggleSound()
 
         sut.sync(state(.answering))
 
+        XCTAssertEqual(factory.links.first?.closeCallCount, 0)
+        XCTAssertTrue((sut.previewVideoTrack as? NSObject) === track)
+        XCTAssertTrue(sut.isPreviewConnected)
+        XCTAssertEqual(host.audible, [true])
+    }
+
+    func test_connected_closesThePreview_andLeavesTheSoundToTheCall() async {
+        let (sut, factory, _, host) = await connectedCallee()
+        sut.toggleSound()
+        sut.sync(state(.answering))
+
+        sut.sync(state(.connected))
+
         XCTAssertEqual(factory.links.first?.closeCallCount, 1)
         XCTAssertNil(sut.previewVideoTrack)
         XCTAssertFalse(sut.isPreviewConnected)
+        XCTAssertFalse(sut.isPreviewAudible)
         XCTAssertEqual(host.audible, [true])
     }
 
@@ -273,7 +343,7 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         XCTAssertTrue(factory.links.isEmpty)
     }
 
-    func test_callerLink_connected_tellsTheCallerHeIsSeen_untilAnswered() async {
+    func test_callerLink_connected_tellsTheCallerHeIsSeen_untilTheCallConnects() async {
         let (sut, factory, _, _) = makeSUT()
         sut.sync(state(.outgoingRinging, peer: "callee"))
         sut.handle(.requested(CallPreviewRequestedEvent(callId: "call1", userId: "callee")))
@@ -282,6 +352,9 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         factory.emit(.state(.connected))
         XCTAssertTrue(sut.isSeenByCallee)
         sut.sync(state(.answering, peer: "callee"))
+        XCTAssertTrue(sut.isSeenByCallee)
+        XCTAssertEqual(factory.links.first?.closeCallCount, 0)
+        sut.sync(state(.connected, peer: "callee"))
 
         XCTAssertFalse(sut.isSeenByCallee)
         XCTAssertEqual(factory.links.first?.closeCallCount, 1)
@@ -359,6 +432,21 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         XCTAssertEqual(CallManager.previewPhase(of: .connecting, ringsInApp: true), .answering)
         XCTAssertEqual(CallManager.previewPhase(of: .reconnecting(attempt: 1), ringsInApp: true), .connected)
         XCTAssertEqual(CallManager.previewPhase(of: .idle, ringsInApp: true), .none)
+    }
+
+    /// #8627 — un appel signalé à CallKit sonne AUSSI dans l'app dès qu'elle
+    /// est au premier plan : l'aperçu s'y montre.
+    func test_previewRingsInApp_callKitWithTheAppActive_ringsInApp() {
+        XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: true, isAppActive: true))
+    }
+
+    func test_previewRingsInApp_callKitInTheBackground_doesNotRingInApp() {
+        XCTAssertFalse(CallManager.previewRingsInApp(usesCallKit: true, isAppActive: false))
+    }
+
+    func test_previewRingsInApp_withoutCallKit_alwaysRingsInApp() {
+        XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: false, isAppActive: false))
+        XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: false, isAppActive: true))
     }
 
     func test_seenLabel_audioOnlyWithMutedMic_announcesNothing() {
