@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 
 import type { PendingAttachment } from '@/lib/send/attachments';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
@@ -16,7 +16,9 @@ const StoryComposeScreen = lazy(() => import('@/routes/story-compose'));
  * changer. Rien n'est envoyé.
  *
  * Le retour matériel de la coque Android la referme aussi (#8460) : c'est une
- * couche modale, elle passe par `useBackDismiss` comme les autres.
+ * couche modale, elle passe par `useBackDismiss` comme les autres — Échap
+ * compris (#8517), qui ne la referme que si aucune plaque du studio n'est
+ * ouverte par-dessus.
  */
 export default function ComposerRetouch({
   attachment,
@@ -29,14 +31,7 @@ export default function ComposerRetouch({
   readonly onCancel: () => void;
   readonly render?: StudioRetouchDeps;
 }) {
-  useBackDismiss(onCancel);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  useBackDismiss(onCancel, { escape: true });
 
   return (
     <div data-composer-retouch role="dialog" aria-modal="true" className="fixed inset-0 z-50">

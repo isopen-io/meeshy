@@ -23,6 +23,7 @@ import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
 import arGallery from './catalog-ar-gallery';
+import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
@@ -30,6 +31,7 @@ import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
+import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
 
 const ar = {
@@ -856,6 +858,7 @@ const ar = {
   'story.studio.refusal.door.visual': 'اختر صورة أو فيديو.',
   'story.studio.refusal.door.sound': 'اختر ملفًا صوتيًا.',
   'story.studio.refusal.media-max': 'هذا المنشور يحمل بالفعل عشرة عناصر وسائط — وهو الحد الأقصى للبوابة.',
+  'story.studio.refusal.import-max': 'لم يتم استيراد {count} من الوسائط: يحمل المنشور عشرة على الأكثر.',
   'story.studio.failure.network': 'الشبكة غير متاحة.',
   'story.studio.failure.timeout': 'لم يستجب الخادم.',
   'story.studio.failure.session': 'انتهت الجلسة — سجّل الدخول مجددًا.',
@@ -1026,14 +1029,6 @@ const ar = {
   'comment.send.error': 'تعذّر نشر التعليق.',
   'comment.send.pending': 'لم يُؤكَّد التعليق — غير متصل',
   'comment.send.empty': 'اكتب شيئًا قبل الإرسال.',
-  'comments.action.like': 'أعجبني',
-  'comments.action.unlike': 'لم يعد يعجبني',
-  'comments.action.edit': 'تعديل',
-  'comments.action.delete': 'حذف',
-  'comments.action.delete.confirm': 'تأكيد',
-  'comments.edit.label': 'تعديل التعليق',
-  'comments.edit.save': 'حفظ',
-  'comments.edit.cancel': 'إلغاء',
   'comment.like.error': 'لم يُحفظ إعجابك.',
   'comment.edit.error': 'لم يُحفظ التعديل.',
   'comment.delete.error': 'تعذّر حذف التعليق.',
@@ -1161,10 +1156,12 @@ const ar = {
   ...arStudioChrome,
   ...arEphemeral,
   ...arGallery,
+  ...arMessageCard,
   ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,
   ...arQuote,
+  ...arCommentRow,
   ...arContactDiscovery,
 } satisfies InterfaceCatalog;
 

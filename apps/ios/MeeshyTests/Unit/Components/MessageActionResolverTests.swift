@@ -41,12 +41,29 @@ final class MessageActionResolverTests: XCTestCase {
 
     func test_primaryActions_receivedText_isTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx())
-        XCTAssertEqual(a, [.select, .translate, .copy, .more])
+        XCTAssertEqual(a, [.select, .translate, .copy, .exportImage, .more])
     }
 
     func test_primaryActions_ownEditableText_isEditTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
-        XCTAssertEqual(a, [.edit, .select, .translate, .copy, .more])
+        XCTAssertEqual(a, [.edit, .select, .translate, .copy, .exportImage, .more])
+    }
+
+    // MARK: - Exporter en image
+
+    func test_primaryActions_quickExport_onlyWithASavedDefaultFormat() {
+        var withDefault = ctx()
+        withDefault.hasDefaultExportFormat = true
+        XCTAssertEqual(MessageActionResolver.primaryActions(withDefault), [.select, .translate, .copy, .exportImage, .exportQuick, .more])
+        XCTAssertFalse(MessageActionResolver.primaryActions(ctx()).contains(.exportQuick))
+    }
+
+    func test_primaryActions_noText_offersNoImageExport() {
+        var media = ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1)
+        media.hasDefaultExportFormat = true
+        let a = MessageActionResolver.primaryActions(media)
+        XCTAssertFalse(a.contains(.exportImage))
+        XCTAssertFalse(a.contains(.exportQuick))
     }
 
     func test_primaryActions_alwaysEndsWithMore() {

@@ -773,6 +773,9 @@ extension StoryViewModel {
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
         let loadedAudioURLs: [String: URL]
+        /// Les octets ANIMÉS des stickers (#8522), rendus au pipeline comme au
+        /// premier envoi — `uploadStickerImage` les préfère à l'image fixe.
+        var loadedStickerAnimations: [String: Data] = [:]
     }
 
     func loadMediaFromReferences(_ refs: [StoryMediaReference]) throws -> LoadedMedia {
@@ -780,6 +783,7 @@ extension StoryViewModel {
         var loadedImages: [String: UIImage] = [:]
         var loadedVideoURLs: [String: URL] = [:]
         var loadedAudioURLs: [String: URL] = [:]
+        var loadedStickerAnimations: [String: Data] = [:]
 
         let slideBgPrefix = "slide-bg-"
 
@@ -804,6 +808,9 @@ extension StoryViewModel {
                     slideImages[slideId] = image
                 } else {
                     loadedImages[ref.elementId] = image
+                    if let animated = Self.animatedStickerBytes(at: url) {
+                        loadedStickerAnimations[ref.elementId] = animated
+                    }
                 }
             case "video":
                 loadedVideoURLs[ref.elementId] = url
@@ -820,8 +827,18 @@ extension StoryViewModel {
             slideImages: slideImages,
             loadedImages: loadedImages,
             loadedVideoURLs: loadedVideoURLs,
-            loadedAudioURLs: loadedAudioURLs
+            loadedAudioURLs: loadedAudioURLs,
+            loadedStickerAnimations: loadedStickerAnimations
         )
+    }
+
+    /// Seul un fichier écrit sous l'extension d'un conteneur ANIMÉ en porte
+    /// (`StoryOfflineMediaWriter`) ; les JPEG et PNG fixes ne sont pas relus.
+    private static func animatedStickerBytes(at url: URL) -> Data? {
+        guard ["gif", "webp"].contains(url.pathExtension.lowercased()),
+              let data = try? Data(contentsOf: url),
+              AnimatedImageEligibility.container(data) != nil else { return nil }
+        return data
     }
 
     func retryUpload(id: String) {

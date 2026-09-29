@@ -76,10 +76,17 @@ export type PublishStoryParams = ConversationsDeps & {
    * `PostService.applyMediaCaption` l'écrit et déclenche sa traduction
    * (#6280) — c'est donc ELLE, et jamais `content`, qui porte « la légende de
    * l'image ou de la vidéo de fond ». Composée par
-   * `storyMediaCaptionPayload` (`lib/stories/media-caption.ts`), jamais à la
+   * `storyMediaTextPayload` (`lib/stories/media-caption.ts`), jamais à la
    * main : la borne et le rejet des entrées vides y vivent une fois.
    */
   readonly mediaCaption?: Record<string, string>;
+  /**
+   * **LE TEXTE ALTERNATIF DE CHAQUE MÉDIA** (#8518) — `PostMedia.alt`, la
+   * carte `{ postMediaId → texte }` de `CreatePostSchema.mediaAlt`
+   * (`routes/posts/types.ts:273`), même contrat que {@link mediaCaption} ;
+   * composée par `storyMediaTextPayload`.
+   */
+  readonly mediaAlt?: Record<string, string>;
   readonly originalLanguage?: string;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
@@ -137,6 +144,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
       ...(params.content !== undefined && params.content !== '' ? { content: params.content } : {}),
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
       ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),
+      ...(params.mediaAlt !== undefined ? { mediaAlt: params.mediaAlt } : {}),
       storyEffects: params.storyEffects,
       mediaIds: params.mediaIds,
     },

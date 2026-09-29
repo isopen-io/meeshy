@@ -237,86 +237,240 @@ nonisolated enum FocalScrollPerspective {
     /// (directive 2026-08-24). Le gain est écrêté pour qu'un long message ne
     /// déborde jamais de la marge verticale de sa carte, ni de la gouttière
     /// horizontale de la rangée.
+    ///
+    /// Depuis #8506, elle ne sert plus que le message long DÉPLIÉ (#8147) —
+    /// l'élu Focal a sa propre loi, `electedScale`, sans écrêtage vertical.
     static func loupeScale(isFocused: Bool, reduceMotion: Bool, size: CGSize) -> CGFloat {
         guard isFocused, !reduceMotion, size.width > 0, size.height > 0 else { return 1 }
         let gain = min(
-            FocalMetrics.Focus.loupeGain,
+            FocalMetrics.Focus.expandedLoupeGain,
             2 * FocalMetrics.FocusCard.marginVertical / size.height,
             2 * FocalMetrics.Row.paddingHorizontal / size.width
         )
         return 1 + gain
     }
 
-    /// Pose la loupe sur le layer de l'élu, la retire des autres — animée au
-    /// changement d'élu, sèche entre deux frames d'un même élu.
+    // MARK: - Le cadre de l'élu Focal (#8506)
+
+    /// **La marge entre le cadre de l'élu et tout ce qu'il porte** — identité,
+    /// texte, bande basse et heure, sur les QUATRE bords (directive porteur
+    /// 2026-09-28 : « place les contrôleurs et détails à l'intérieur du cadre,
+    /// en laissant de l'espace sur les bords »).
+    ///
+    /// C'est la marge que le texte avait déjà à GAUCHE du cadre : la gouttière
+    /// de la rangée moins l'inset du cadre (16 − 6 = 10 pt). La loupe la porte
+    /// à ≈ 12 pt à l'écran. Elle remplace, pour l'élu, `focusCardInnerMargin`
+    /// (3 pt), qui reste celle du DÉPLIÉ (#8147) et du web.
+    static let electedCardMargin: CGFloat = FocalMetrics.Row.paddingHorizontal - focusCardHorizontalInset
+
+    /// Le cadre de l'élu en X, dans le repère de la rangée : il épouse la
+    /// COLONNE du message, pas la rangée entière — la colonne de méta (heure,
+    /// coches) s'efface en focus, et l'heure passe dans le cadre. C'est cette
+    /// largeur rendue qui laisse l'élu grandir sans sortir de l'écran.
+    ///
+    /// La colonne de méta a une largeur PLANCHER (`MetaColumn.reservedWidth`) :
+    /// aux grandes tailles de texte elle s'élargit et le cadre rendu rétrécit —
+    /// l'estimation est alors plus large que le vrai cadre, donc l'échelle
+    /// qu'on en tire ne peut que rester en deçà de l'écran.
+    static func electedCardFrame(rowWidth: CGFloat, isRightToLeft: Bool) -> CGRect {
+        let column = rowWidth
+            - 2 * FocalMetrics.Row.paddingHorizontal
+            - FocalMetrics.MetaColumn.reservedWidth
+            - FocalMetrics.MetaColumn.spacing
+        let width = max(0, column + 2 * electedCardMargin)
+        let minX = isRightToLeft ? rowWidth - focusCardHorizontalInset - width : focusCardHorizontalInset
+        return CGRect(x: minX, y: 0, width: width, height: 0)
+    }
+
+    /// Le pivot HORIZONTAL de la loupe de l'élu : le bord d'ATTAQUE de la
+    /// colonne du message, qui reste à sa place — le contenu grandit dans le
+    /// sens de la lecture, jamais vers le bord de l'écran (#8537 : la loupe ne
+    /// porte plus que le contenu, posé sur la colonne).
+    static func electedPivotX(rowWidth: CGFloat, isRightToLeft: Bool) -> CGFloat {
+        isRightToLeft ? rowWidth - FocalMetrics.Row.paddingHorizontal : FocalMetrics.Row.paddingHorizontal
+    }
+
+    /// **L'échelle de l'élu Focal** (#8506 : « agrandis tout le contenu
+    /// intérieur par ×1,2 encore » — 1,05 × 1,2 = 1,26).
+    ///
+    /// Elle ne dépend plus de la HAUTEUR : l'ancien écrêtage à la marge
+    /// verticale de la carte (8 pt de chaque côté) rendait la loupe quasi
+    /// nulle dès la deuxième ligne. Le cadre grandit avec le contenu, et ce
+    /// sont les voisines qui s'écartent (`electionClearance`).
+    ///
+    /// Seule la LARGEUR la borne : le cadre agrandi garde, de chaque côté, la
+    /// gouttière du cadre au repos. Un texte ne se ré-enroule pas sans changer
+    /// la hauteur de sa rangée — interdit (zéro relayout) — donc au-delà,
+    /// l'échelle se réduit pour tenir. Mesuré : 1,26 jusqu'à 341 pt de large,
+    /// ≈ 1,23 sur un 375, ≈ 1,22 sur un 390, ≈ 1,19 sur un 430.
+    static func electedScale(reduceMotion: Bool, rowWidth: CGFloat) -> CGFloat {
+        guard !reduceMotion else { return 1 }
+        let card = electedCardFrame(rowWidth: rowWidth, isRightToLeft: false).width
+        guard card > 0 else { return 1 }
+        let fit = (rowWidth - 2 * focusCardHorizontalInset) / card
+        return max(1, min(1 + FocalMetrics.Focus.loupeGain, fit))
+    }
+
+    /// **La respiration du contenu grossi** (#8537, directive porteur
+    /// 2026-09-28 : « le bloc de verre doit avoir de la marge haut et bas pour
+    /// que le contenu soit aéré »). Elle s'AJOUTE à l'espacement de rangée
+    /// entre l'identité et le contenu, puis entre le contenu et la bande.
+    static let electedContentBreathing: CGFloat = FocalMetrics.Row.paddingVertical
+
+    /// Ce dont le contenu de l'élu descend en RENDU (jamais en hauteur) : la
+    /// pastille d'identité d'une suite de groupe, plus la respiration.
+    static func electedContentLift(isFirstInGroup: Bool) -> CGFloat {
+        FocalMetrics.FocusStrip.contentLift(isFirstInGroup: isFirstInGroup) + electedContentBreathing
+    }
+
+    /// Le haut de la bande basse, dans le repère de la COLONNE du message :
+    /// sous le contenu GROSSI (loupe posée sur son bord haut d'attaque), ou
+    /// sous la colonne si elle descend plus bas, à l'écart de la bande et de
+    /// la respiration. `FocalRow` la lit sur la mesure réelle du contenu.
+    static func electedStripTop(columnHeight: CGFloat, contentMinY: CGFloat, contentHeight: CGFloat, scale: CGFloat) -> CGFloat {
+        max(columnHeight, contentMinY + scale * contentHeight) + FocalMetrics.FocusStrip.stripGap + electedContentBreathing
+    }
+
+    /// Ce que le contenu grossi déborde de sa colonne du côté de FIN de
+    /// lecture — le cadre et la bande s'y étendent.
+    static func electedExtraWidth(columnWidth: CGFloat, contentWidth: CGFloat, scale: CGFloat) -> CGFloat {
+        max(0, scale * contentWidth - columnWidth)
+    }
+
+    /// Une étendue verticale, dans le repère VISUEL de la cellule (y = 0 à son haut).
+    struct ElectedSpan: Equatable {
+        let top: CGFloat
+        let bottom: CGFloat
+    }
+
+    /// **La disposition de l'élu** (#8537) : l'identité et la bande à l'échelle
+    /// 1, le contenu seul grossi autour de son bord haut, le cadre qui les
+    /// englobe à `electedCardMargin`. Repère VISUEL de la cellule, AVANT le
+    /// passage. La hauteur du contenu est un MAJORANT (tout le bloc sous
+    /// l'en-tête) : le cadre réel n'est jamais plus grand, donc le passage des
+    /// voisines et la zone de toucher le couvrent toujours.
+    struct ElectedGeometry: Equatable {
+        let card: ElectedSpan
+        let identityChip: ElectedSpan
+        let content: ElectedSpan
+        let strip: ElectedSpan
+    }
+
+    static func electedGeometry(isFirstInGroup: Bool, cellHeight: CGFloat, contentScale: CGFloat) -> ElectedGeometry {
+        let pad = FocalMetrics.Row.paddingVertical
+        let strip = FocalMetrics.FocusStrip.self
+        let blockTop = pad + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
+        let blockBottom = cellHeight - pad
+        let lift = electedContentLift(isFirstInGroup: isFirstInGroup)
+        // En tête de groupe, l'en-tête — effacé en focus, toujours réservé — et
+        // l'espacement de la pile précèdent le contenu.
+        let header = isFirstInGroup ? FocalMetrics.Focus.avatarSize + pad : 0
+        let contentTop = blockTop + lift + header
+        let contentHeight = max(0, blockBottom + lift - contentTop)
+        let contentBottom = contentTop + contentScale * contentHeight
+        let stripTop = contentBottom + strip.stripGap + electedContentBreathing
+        let identity = ElectedSpan(top: blockTop, bottom: blockTop + strip.identityChipHeight)
+        let stripSpan = ElectedSpan(top: stripTop, bottom: stripTop + strip.chipHeight)
+        return ElectedGeometry(
+            card: ElectedSpan(top: identity.top - electedCardMargin, bottom: stripSpan.bottom + electedCardMargin),
+            identityChip: identity,
+            content: ElectedSpan(top: contentTop, bottom: contentBottom),
+            strip: stripSpan
+        )
+    }
+
+    /// **La zone de toucher de l'élu** (#8537) : son cadre déborde de la
+    /// cellule — la bande basse vit ENTIÈRE sous elle — et UIKit ne remet un
+    /// toucher qu'à la vue dont les bornes le contiennent. Exprimée dans le
+    /// repère UIKit de la cellule, RENVERSÉ par le fil : y = 0 au bas visuel,
+    /// donc ce qui déborde sous la rangée est une marge `top`.
+    static func electedTouchOverflow(geometry: ElectedGeometry, cellHeight: CGFloat) -> UIEdgeInsets {
+        UIEdgeInsets(
+            top: max(0, geometry.card.bottom - cellHeight),
+            left: 0,
+            bottom: max(0, -geometry.card.top),
+            right: 0
+        )
+    }
+
     // MARK: - Le passage ouvert autour de la carte magnifiée (#7953)
 
-    /// Ce que les voisines d'une rangée magnifiée doivent céder pour qu'AUCUNE
-    /// pastille ne recouvre leur texte : au-dessus, la moitié haute de la
-    /// pastille d'identité ; au-dessous, la bande basse et le contenu descendu
-    /// d'une suite de groupe (`FocusStrip.contentLift`). Au-delà de ce que les
-    /// rembourrages des deux rangées offrent déjà, plus une marge de rangée
-    /// pour que la capsule ne touche pas le texte.
+    /// Ce que les voisines d'une rangée magnifiée doivent céder pour que le
+    /// cadre de l'élu — contenu grossi compris — ne recouvre JAMAIS leur texte.
     struct ElectionClearance: Equatable {
         let above: CGFloat
         let below: CGFloat
     }
 
-    static func electionClearance(isFirstInGroup: Bool) -> ElectionClearance {
+    /// Le cadre (`electedGeometry`), comparé au texte des voisines — qui finit
+    /// `paddingVertical` au-dessus de la cellule et commence au moins autant en
+    /// dessous — plus une marge de rangée pour que le verre ne touche pas le
+    /// texte.
+    static func electionClearance(isFirstInGroup: Bool, cellHeight: CGFloat, scale: CGFloat) -> ElectionClearance {
         let pad = FocalMetrics.Row.paddingVertical
-        let breathing = pad
-        // Ce qui sépare déjà le bloc magnifié du texte voisin : son propre
-        // rembourrage (tête de groupe comprise) et celui de la voisine.
-        let gapAbove = pad + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0) + pad
-        let gapBelow = pad + pad
-        let above = FocalMetrics.FocusStrip.identityOverhang - gapAbove + breathing
-        let below = FocalMetrics.FocusStrip.contentLift(isFirstInGroup: isFirstInGroup)
-            + FocalMetrics.FocusStrip.stripDrop + FocalMetrics.FocusStrip.overhang - gapBelow + breathing
-        return ElectionClearance(above: max(0, above), below: max(0, below))
+        let card = electedGeometry(isFirstInGroup: isFirstInGroup, cellHeight: cellHeight, contentScale: scale).card
+        return ElectionClearance(
+            above: max(0, -pad - card.top + pad),
+            below: max(0, card.bottom + pad - (cellHeight + pad))
+        )
     }
 
     /// Translation VISUELLE (> 0 vers le bas) d'une cellule autour de la
     /// rangée magnifiée : celles du dessus montent, celles du dessous
-    /// descendent — toutes du même pas, donc aucune ne mord sa voisine. La
-    /// croissance de la loupe (`loupeGrowth`, par bord) s'y ajoute. Transform
-    /// seul : la hauteur des rangées ne change jamais.
+    /// descendent — toutes du même pas, donc aucune ne mord sa voisine.
+    /// Transform seul : la hauteur des rangées ne change jamais.
     static func electionShift(
         cellMidY: CGFloat,
         magnifiedMidY: CGFloat?,
-        clearance: ElectionClearance,
-        loupeGrowth: CGFloat
+        clearance: ElectionClearance
     ) -> CGFloat {
         guard let magnifiedMidY, cellMidY != magnifiedMidY else { return 0 }
-        return cellMidY < magnifiedMidY ? -(clearance.above + loupeGrowth) : clearance.below + loupeGrowth
+        return cellMidY < magnifiedMidY ? -clearance.above : clearance.below
     }
 
-    /// La croissance de la loupe par bord, pour une rangée magnifiée.
+    /// Pose le PASSAGE sur le layer d'une cellule du fil Focal — animé au
+    /// changement d'élu, sec entre deux frames d'un même élu.
+    ///
+    /// Il n'y pose plus AUCUNE échelle (#8537) : la loupe de l'élu agrandissait
+    /// tout son calque, identité, date, drapeaux et réactions compris. Elle vit
+    /// désormais sur le seul contenu, dans la rangée (`FocalElectedLoupe`).
     @MainActor
-    static func loupeGrowth(of layer: CALayer) -> CGFloat {
-        let size = layer.bounds.size
-        return (loupeScale(isFocused: true, reduceMotion: UIAccessibility.isReduceMotionEnabled, size: size) - 1) * size.height / 2
+    static func poseElectionPassage(_ layer: CALayer, shift: CGFloat, animated: Bool) {
+        pose(layer, target: loupeTransform(scale: 1, pivotX: 0, shift: shift), animated: animated)
     }
 
+    /// Loupe du DÉPLIÉ (#8147), autour du centre du layer.
     @MainActor
     static func magnify(_ layer: CALayer, isFocused: Bool, shift: CGFloat = 0, animated: Bool) {
         let scale = loupeScale(isFocused: isFocused, reduceMotion: UIAccessibility.isReduceMotionEnabled, size: layer.bounds.size)
-        // Repère RENVERSÉ du fil : une translation visuelle vers le bas est
-        // un −y du layer (voir `transform(scale:pull:…)`).
-        let target = CATransform3DScale(CATransform3DMakeTranslation(0, -shift, 0), scale, scale, 1)
+        pose(layer, target: loupeTransform(scale: scale, pivotX: 0, shift: shift), animated: animated)
+    }
+
+    /// Échelle autour de `pivotX` (mesuré depuis l'ancre, le centre du
+    /// layer), puis translation. Repère RENVERSÉ du fil : une translation
+    /// visuelle vers le bas est un −y du layer (voir `transform(scale:pull:…)`).
+    static func loupeTransform(scale: CGFloat, pivotX: CGFloat, shift: CGFloat) -> CATransform3D {
+        guard scale != 1 else { return CATransform3DMakeTranslation(0, -shift, 0) }
+        let scaled = CATransform3DScale(CATransform3DMakeTranslation(pivotX, -shift, 0), scale, scale, 1)
+        return CATransform3DTranslate(scaled, -pivotX, 0, 0)
+    }
+
+    @MainActor
+    private static func pose(_ layer: CALayer, target: CATransform3D, animated: Bool) {
         guard !CATransform3DEqualToTransform(layer.transform, target) || layer.opacity != 1 else { return }
         // Le passage ne change qu'avec la rangée magnifiée : il s'ouvre et se
         // referme en douceur, jamais par saut.
         let passageMoves = abs(layer.transform.m42 - target.m42) > 0.5
-        let pose = {
+        let commit = {
             layer.transform = target
             layer.opacity = 1
         }
-        guard animated || passageMoves else { return pose() }
+        guard animated || passageMoves else { return commit() }
         UIView.animate(
             withDuration: FocalMetrics.Scene.enterDuration,
             delay: 0,
             options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction],
-            animations: pose
+            animations: commit
         )
     }
 

@@ -146,6 +146,36 @@ describe('ReelPage — commenter et repartager depuis le rail (#6484)', () => {
   });
 });
 
+/**
+ * #8601 — QUAND ON COMMENTE, LE CHROME DU RÉEL CÈDE LA PLACE. La feuille de
+ * commentaires s'ouvrait sous un bouton retour, une identité, une légende et
+ * un rail toujours peints (le pager n'était qu'`inert`) : la loi unique
+ * `chromeYields` (`lib/view/chrome-yields.ts`) les efface ENSEMBLE, le média
+ * reste.
+ */
+describe('le chrome du réel cède à la feuille (#8601)', () => {
+  test('feuille ouverte : identité, légende et rail s’effacent, inertes — le média reste', () => {
+    const html = page(REEL_SUNSET_EN, { onComment: () => undefined, chromeHidden: true });
+    expect(html).toMatch(/data-reel-chrome=""[^>]*data-chrome-yields="hidden"|data-chrome-yields="hidden"[^>]*data-reel-chrome=""/);
+    expect(html).toMatch(/<div[^>]*data-reel-chrome=""[^>]*inert=""|<div[^>]*inert=""[^>]*data-reel-chrome=""/);
+    expect(html).toContain('data-reel-media="video"');
+  });
+
+  test('feuille fermée : tout est là, atteignable', () => {
+    const html = page(REEL_SUNSET_EN, { onComment: () => undefined });
+    expect(html).toContain('data-chrome-yields="shown"');
+    expect(html).not.toMatch(/data-reel-chrome=""[^>]*inert=""/);
+  });
+
+  test('le bouton retour cède aussi — invisible ⇒ intouchable', () => {
+    const hidden = renderToStaticMarkup(<ReelsBackButton language="fr" onBack={() => undefined} hidden />);
+    expect(hidden).toContain('data-chrome-yields="hidden"');
+    expect(hidden).toMatch(/inert=""/);
+    const shown = renderToStaticMarkup(<ReelsBackButton language="fr" onBack={() => undefined} />);
+    expect(shown).toContain('data-chrome-yields="shown"');
+  });
+});
+
 describe('ReelPage — la légende passe par le Prisme', () => {
   test('rang 1 : original anglais, traduction française servie, dans sa langue', () => {
     const html = page(REEL_SUNSET_EN);

@@ -207,9 +207,9 @@ extension ConversationView {
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
-            ephemeralChoice: $viewModel.ephemeralChoice,
+            ephemeralChoice: $viewModel.composerEphemeralChoice,
             hideEphemeral: composerState.editingMessageId != nil,
-            isBlurEnabled: $viewModel.isBlurEnabled,
+            isBlurEnabled: $viewModel.composerBlurEnabled,
             hideBlur: composerState.editingMessageId != nil,
             // #7472 — la vue unique s'arme d'un TAP, à côté du flou, et se
             // cache dans les mêmes cas que lui : en ÉDITION, où la protection
@@ -219,8 +219,10 @@ extension ConversationView {
             // `forceHideAttachment` est passé plus haut (sa propriété est
             // déclarée avant `selectedLanguage`, l'init memberwise l'exige à
             // cette position).
-            isViewOnceEnabled: $viewModel.isViewOnceEnabled,
+            isViewOnceEnabled: $viewModel.composerViewOnceEnabled,
             hideViewOnce: composerState.editingMessageId != nil,
+            // #8557 — la citation impose son flou et son éphémère, verrouillés.
+            imposedProtection: composerState.editingMessageId == nil ? viewModel.replyImposedProtection : .none,
             pendingEffects: $viewModel.pendingEffects,
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
@@ -231,6 +233,10 @@ extension ConversationView {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isViewOnceEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.armedReplyContagion)
+        .adaptiveOnChange(of: outgoingReplyRoute.replyToId, initial: true) { _, replyToId in
+            viewModel.armReplyContagion(quoting: replyToId)
+        }
     }
 
     /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
@@ -343,45 +349,47 @@ extension ConversationView {
         // share one source of truth so the cover can never present empty.
         .fullScreenCover(isPresented: Binding(
             get: { scrollState.editingPendingAttachmentId != nil },
-            set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
+            set: { if !$0 { closePendingImageRetouche() } }
         )) {
             if let id = scrollState.editingPendingAttachmentId,
-               let thumb = composerState.pendingThumbnails[id] {
+               let source = scrollState.editingPendingSource ?? composerState.pendingThumbnails[id] {
                 // **La même scène que toute composition** (#8416) : la retouche
                 // d'une image du brouillon ouvre le composer plein écran, et
-                // « Terminé » rend l'image composée ici, au message.
-                ConversationImageSceneEditor(image: thumb, onDone: { editedImage in
-                    composerState.pendingThumbnails[id] = editedImage
+                // « Terminé » rend l'image composée ici, au message. Sa source
+                // est le fichier à 2 048 px (#8524), pas la vignette.
+                ConversationImageSceneEditor(image: source, onDone: { editedImage in
                     Task {
-                        let result = await MediaCompressor.shared.compressImage(editedImage)
-                        let fileName = "edited_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-                        await MainActor.run {
-                            if let oldURL = composerState.pendingMediaFiles[id] {
-                                try? FileManager.default.removeItem(at: oldURL)
-                            }
-                            composerState.pendingMediaFiles[id] = tempURL
-                            if let idx = composerState.pendingAttachments.firstIndex(where: { $0.id == id }) {
-                                composerState.pendingAttachments[idx] = MessageAttachment(
-                                    id: id, fileName: fileName, originalName: fileName,
-                                    mimeType: result.mimeType, fileSize: result.data.count,
-                                    fileUrl: tempURL.absoluteString,
-                                    width: Int(editedImage.size.width),
-                                    height: Int(editedImage.size.height),
-                                    thumbnailColor: accentColor
-                                )
-                            }
-                            scrollState.editingPendingAttachmentId = nil
+                        // **Écriture SÛRE** (#8524) : l'ancien fichier ne part
+                        // qu'une fois le nouveau écrit et vérifié ; sinon
+                        // l'image d'origine reste celle qui partira.
+                        guard let ecrit = await ConversationImageRetouche.writeEdited(editedImage) else {
+                            FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
+                            closePendingImageRetouche()
+                            return
                         }
+                        let ancien = composerState.pendingMediaFiles[id]
+                        composerState.pendingThumbnails[id] = editedImage
+                        composerState.pendingMediaFiles[id] = ecrit.url
+                        if let idx = composerState.pendingAttachments.firstIndex(where: { $0.id == id }) {
+                            composerState.pendingAttachments[idx] = MessageAttachment(
+                                id: id, fileName: ecrit.fileName, originalName: ecrit.fileName,
+                                mimeType: ecrit.mimeType, fileSize: ecrit.byteCount,
+                                fileUrl: ecrit.url.absoluteString,
+                                width: Int(editedImage.size.width * editedImage.scale),
+                                height: Int(editedImage.size.height * editedImage.scale),
+                                thumbnailColor: accentColor
+                            )
+                        }
+                        if let ancien, ancien != ecrit.url { try? FileManager.default.removeItem(at: ancien) }
+                        closePendingImageRetouche()
                     }
-                }, onCancel: { scrollState.editingPendingAttachmentId = nil })
+                }, onCancel: { closePendingImageRetouche() })
             } else {
                 // The thumbnail vanished out from under the presentation
                 // (attachment removed mid-race, or generation never
                 // succeeded) — never present a silently-empty cover; give the
                 // user a dismissable state instead.
-                attachmentPreviewUnavailableFallback { scrollState.editingPendingAttachmentId = nil }
+                attachmentPreviewUnavailableFallback { closePendingImageRetouche() }
             }
         }
         // D. Tap pending video → VideoPreviewView
@@ -389,12 +397,20 @@ extension ConversationView {
             get: { scrollState.videoToEdit != nil },
             set: { if !$0 { scrollState.videoToEdit = nil } }
         )) {
-            if let url = scrollState.videoToEdit {
+            if let target = scrollState.videoToEdit {
                 MeeshyVideoEditorView(
-                    url: url,
+                    url: target.url,
                     context: .message,
                     accentColor: accentColor,
-                    onComplete: { _ in scrollState.videoToEdit = nil },
+                    onComplete: { result in
+                        // La vidéo éditée remplace la pièce jointe (#8443),
+                        // comme `applyEditedAudio` pour l'audio.
+                        if let staleURL = composerState.applyEditedVideo(attachmentId: target.id,
+                                                                         result: result) {
+                            try? FileManager.default.removeItem(at: staleURL)
+                        }
+                        scrollState.videoToEdit = nil
+                    },
                     onCancel: { scrollState.videoToEdit = nil }
                 )
             }

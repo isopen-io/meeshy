@@ -70,8 +70,11 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
             return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
         }
         let libre = code[debut.upperBound...]
-        XCTAssertTrue(libre.contains("HStack(alignment:.bottom,spacing:0){floatingRailSpacer(minLength:0)ComposerTrailingRail("),
-                      "Rail gauche, ressort, rail droit — dans cet ordre, alignés au bas.")
+        // Au bas sur téléphone (le pouce), CENTRÉS sur grand écran (maquette
+        // `iPad.dc.html`, retour porteur 2026-09-28) — une seule règle, lue
+        // de `isRoomy`.
+        XCTAssertTrue(libre.contains("HStack(alignment:isRoomy?.center:.bottom,spacing:0){floatingRailSpacer(minLength:0)ComposerTrailingRail("),
+                      "Rail gauche, ressort, rail droit — dans cet ordre, au bas sur téléphone, centrés sur grand écran.")
         XCTAssertTrue(code.contains("freeZone"))
     }
 
@@ -79,9 +82,12 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
     /// la place APPRENABLE.
     func test_lesDeuxRails_partagentLeursMarges() throws {
         let code = compact(try sceneSurface())
-        XCTAssertTrue(code.contains(".padding(.leading,ComposerRailGeometry.outerMargin)"))
-        XCTAssertTrue(code.contains(".padding(.trailing,ComposerRailGeometry.outerMargin)"))
-        XCTAssertTrue(code.contains(".padding(.bottom,ComposerRailGeometry.gutter)"),
+        // La marge de bord se lit d'UNE règle (`edgeMargin(roomy:)`) : 10 pt sur
+        // téléphone, 24 sur iPad/Mac — et c'est la même des deux côtés.
+        XCTAssertTrue(code.contains("privatevaredge:CGFloat{ComposerRailGeometry.edgeMargin(roomy:isRoomy)}"))
+        XCTAssertTrue(code.contains(".padding(.leading,edge)"))
+        XCTAssertTrue(code.contains(".padding(.trailing,edge)"))
+        XCTAssertTrue(code.contains(".padding(.bottom,ComposerRailGeometry.floatingBottomInset)"),
                       "Les marges se lisent de `ComposerRailGeometry`, jamais d'un littéral : "
                       + "un nombre recopié ferait diverger les deux rails en silence.")
     }

@@ -131,9 +131,9 @@ extension MeeshyComposerHost {
         // exportable : timeline committée, URLs de vidéo résolues, fond image
         // du composer injecté. La recopier ici perdrait les trois.
         case .saveToPhotos:
-            sceneExport.export(.photoLibrary, slide: viewModel.exportableCurrentSlide())
+            exportScene(to: .photoLibrary)
         case .share:
-            sceneExport.export(.share, slide: viewModel.exportableCurrentSlide())
+            exportScene(to: .share)
 
         case .clearAll:
             // **Les HUIT porteurs du média partent d'un bloc, et les
@@ -182,5 +182,13 @@ extension MeeshyComposerHost {
             // mesure appartient désormais à l'éditeur plein écran — qui la
             // refait à chaque ouverture, donc n'a rien à effacer.
         }
+    }
+
+    /// Bake la scène courante vers `destination` : la slide ET ce que la scène
+    /// tient en mémoire (#8599), construits UNE fois depuis le même instantané
+    /// — `exportInputs(for:)` lit la slide qu'il reçoit, jamais une autre.
+    func exportScene(to destination: ComposerSceneExportController.Destination) {
+        let slide = viewModel.exportableCurrentSlide()
+        sceneExport.export(destination, slide: slide, inputs: viewModel.exportInputs(for: slide))
     }
 }

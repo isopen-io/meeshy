@@ -209,6 +209,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
       'Sélectionne `senderId` seul, pour exclure l\'auteur de sa propre consommation : ' +
       'aucune identité d\'expéditeur n\'est servie, rien à réparer.',
   },
+  // #8557 — la contagion d'une réponse relit le message CITÉ :
+  // `{ select: { effectFlags, isBlurred, ephemeralDuration } }`, jamais `sender`.
+  'messaging/replyProtectionContagion.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,
