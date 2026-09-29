@@ -483,8 +483,6 @@ struct MeeshyComposerHost: View {
     @State var soundSheetSession = UUID()
 
 
-    @State var showsMediaSourceChooser = false
-
 
 
     /// **La langue DÉCLARÉE du document (T2.2).** Semée sur

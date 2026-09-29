@@ -593,63 +593,23 @@ nonisolated enum ComposerSceneCapabilities {
 }
 
 
-/// **Les trois sources qu'UNE porte média ouvre** — et pourquoi la porte du
-/// rail n'en servait qu'une.
+/// **La porte média du rail ouvre la PHOTOTHÈQUE, directement** (#8680,
+/// directive porteur 2026-09-29 : « lorsqu'on touche le premier outil image,
+/// ça doit ouvrir directement la photothèque »).
 ///
-/// `ComposerRailDoor.offered` porte, sur son paramètre `allowsCapture`, cette
-/// phrase :
+/// Elle ouvrait une feuille de choix — photothèque, caméra, fichier — qui
+/// coûtait un geste pour une décision que l'écran a désormais prise
+/// ailleurs : la CAMÉRA vit sur la scène elle-même (toucher une scène vide
+/// prend une photo, la maintenir filme — #8653), et c'est la photothèque que
+/// l'auteur vient chercher en touchant l'image. Une feuille de choix entre
+/// une source attendue et deux autres déjà servies ailleurs est un geste de
+/// plus pour zéro décision (loi 7, chemin nominal ≤ 2 gestes).
 ///
-///   > « Le rail n'ayant qu'UNE porte pour les trois sources, la gater ici
-///   > retirerait la bibliothèque avec la caméra […]. Le drapeau est donc reçu,
-///   > documenté, et volontairement sans effet sur cette liste : c'est le
-///   > SÉLECTEUR qu'il gouverne, en aval. »
-///
-/// Le raisonnement est juste. **Le sélecteur en aval n'existait pas** :
-/// `handleRailDoor(.media)` allait droit à la photothèque. Dès qu'une scène
-/// existait, la CAMÉRA et l'IMPORT DE FICHIER — deux des sept entrées de la
-/// rangée canonique — disparaissaient de l'écran sans qu'aucune règle les
-/// retire. C'est la leçon 335 une seconde fois, sur le même écran : un
-/// commentaire qui décrit un mécanisme ABSENT ne se fait contredire par rien.
-///
-/// ## Ce que la règle décide, et ce qu'elle laisse au meuble
-///
-/// Elle dit QUELLES sources sont offertes ; le meuble décide comment les
-/// présenter — et notamment qu'**une source unique se présente DIRECTEMENT**,
-/// sans feuille de choix : une liste à un seul élément est un geste de plus
-/// pour zéro décision (loi 7, chemin nominal ≤ 2 gestes).
-///
-/// ## `allowsCapture` retire la caméra, jamais les deux autres
-///
-/// Le drapeau existe pour ce qui REPREND un contenu déjà publié (repost,
-/// édition) : on n'y filme pas, mais on garde le droit d'ajouter une image de
-/// sa bibliothèque ou un fichier. Le gater plus haut aurait fermé les trois.
+/// La source est une CONSTANTE de la règle, jamais un littéral du meuble :
+/// c'est elle que le témoin lit, et une source changée ici change l'écran.
 nonisolated enum ComposerMediaSourcePolicy {
 
-    static func offered(allowsCapture: Bool) -> [ComposerMediaIntake] {
-        [.photoLibrary, .camera, .files].filter { $0 != .camera || allowsCapture }
-    }
-
-    /// L'outil de la rangée canonique qui NOMME cette source.
-    ///
-    /// Le libellé n'est pas réécrit ici : c'est `ComposerDocumentCopy.label`
-    /// qui le rend, donc exactement le mot que la rangée du document emploie
-    /// pour le même geste. Une seconde table aurait fait dire « Photos » d'un
-    /// côté et « Photothèque » de l'autre pour un seul sélecteur (dimension 6),
-    /// et dédoublé sept traductions.
-    static func namingTool(_ intake: ComposerMediaIntake) -> ComposerDocumentTool {
-        switch intake {
-        case .photoLibrary: return .photo
-        case .camera:       return .camera
-        case .files:        return .document
-        }
-    }
-
-    /// Le titre de la feuille est **le libellé de la porte elle-même**, pas une
-    /// clé neuve : `composer.rail.media` dit déjà « Ajouter un média » dans les
-    /// sept langues servies. Une seconde clé pour la même phrase, ce sont sept
-    /// traductions à faire diverger — le raisonnement que
-    /// `ComposerDocumentCopy.label` tient déjà pour la rangée du document.
-    static var chooserTitle: String { ComposerRailCopy.label(.media) }
+    static let railDoorIntake: ComposerMediaIntake = .photoLibrary
 
     static var cancel: String {
         String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)

@@ -68,25 +68,6 @@ extension MeeshyComposerHost {
                 .padding(.bottom, 10)
             }
         }
-        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
-        .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
-                            isPresented: $showsMediaSourceChooser,
-                            titleVisibility: .visible) {
-            // Les boutons SORTENT de la règle : les écrire à la main ferait de
-            // ce bloc une seconde liste, que `allowsCapture` cesserait de
-            // gouverner au premier oubli.
-            ForEach(ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture),
-                    id: \.self) { source in
-                Button(ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))) {
-                    presentMediaIntake(source)
-                }
-            }
-            // **Annuler DÉSARME** (#6008). Ce corps était vide : l'intention
-            // posée par la porte du rail survivait à la feuille qu'elle venait
-            // d'ouvrir, et le média suivant — quelle que soit sa porte — se
-            // posait sur la scène courante au lieu d'ouvrir sa page.
-            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { abandonRailPosing() }
-        }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
         // sur la surface qui l'affiche. Un instantané pris seulement pendant
         // que la scène est montée perdrait tout ce que le document a posé
