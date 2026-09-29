@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { blurCapable, colorPipelineSupported, effectsFilter, effectsOffered, effectsUsedOf, needsColorPipeline, NO_EFFECTS, VIDEO_PRESETS, type VideoEffects } from './video-effects';
+import { blurCapable, colorPipelineSupported, effectsFilter, effectsOffered, effectsUsedOf, FACE_EFFECTS, needsFramePipeline, NO_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type VideoEffects } from './video-effects';
 
 /**
  * LES EFFETS DE MA VIDÉO (#8442) — les règles, sans DOM : ce qu'un préréglage
@@ -17,7 +17,7 @@ describe('les préréglages', () => {
 
   test('naturel, luminosité neutre : aucun filtre, aucun traitement', () => {
     expect(effectsFilter(NO_EFFECTS)).toBe('none');
-    expect(needsColorPipeline(NO_EFFECTS)).toBe(false);
+    expect(needsFramePipeline(NO_EFFECTS)).toBe(false);
   });
 
   test('chaque autre préréglage a SON filtre, distinct des autres', () => {
@@ -34,9 +34,28 @@ describe('les préréglages', () => {
   });
 
   test('seul le flou ne demande pas de traitement de couleur (il se fait à la source)', () => {
-    expect(needsColorPipeline(effects({ blur: true }))).toBe(false);
-    expect(needsColorPipeline(effects({ preset: 'warm' }))).toBe(true);
-    expect(needsColorPipeline(effects({ brightness: -0.1 }))).toBe(true);
+    expect(needsFramePipeline(effects({ blur: true }))).toBe(false);
+    expect(needsFramePipeline(effects({ preset: 'warm' }))).toBe(true);
+    expect(needsFramePipeline(effects({ brightness: -0.1 }))).toBe(true);
+  });
+});
+
+describe('les effets de visage (#8551)', () => {
+  test('six choix, dans l’ordre partagé avec iOS : aucun, lissage, crapaud, ange, démon, éruption', () => {
+    expect(FACE_EFFECTS).toEqual(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano']);
+    expect(NO_EFFECTS.faceEffect).toBe('none');
+  });
+
+  test('un effet de visage demande le traitement des images, même en couleur naturelle', () => {
+    expect(needsFramePipeline(effects({ faceEffect: 'volcano' }))).toBe(true);
+    expect(effectsFilter(effects({ faceEffect: 'volcano' }))).toBe('none');
+  });
+
+  test('changer d’effet garde la couleur et la luminosité choisies', () => {
+    videoEffectsStore.setState({ effects: effects({ preset: 'warm', brightness: 0.2 }) });
+    setVideoEffects({ faceEffect: 'angel' });
+    expect(videoEffectsStore.getState().effects).toEqual(effects({ preset: 'warm', brightness: 0.2, faceEffect: 'angel' }));
+    videoEffectsStore.setState({ effects: NO_EFFECTS });
   });
 });
 
@@ -73,5 +92,10 @@ describe('ce que l’analytique retient', () => {
 
   test('le préréglage, la luminosité et le flou, nommés', () => {
     expect(effectsUsedOf(effects({ preset: 'warm', brightness: 0.1, blur: true }))).toEqual(['filter:warm', 'brightness', 'background-blur']);
+  });
+
+  test('l’effet de visage, nommé par son identifiant', () => {
+    expect(effectsUsedOf(effects({ faceEffect: 'demon' }))).toEqual(['face:demon']);
+    expect(effectsUsedOf(effects({ faceEffect: 'smoothing', preset: 'cool' }))).toEqual(['filter:cool', 'face:smoothing']);
   });
 });

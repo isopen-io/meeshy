@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+
 export type StudioObjectAction = { readonly id: string; readonly label: string; readonly destructive?: boolean; readonly onSelect: () => void };
 
 const WIDTH = 220;
@@ -12,8 +14,9 @@ const ROW = 44;
  * modifier, retirer (« sortir de la scène » pour un média hors story). Seules
  * les actions qui ont un effet sont offertes (l'hôte les compose).
  *
- * Échap ou un appui HORS du menu le referment ; le focus entre sur la
- * première action, les flèches le déplacent.
+ * Échap, le retour matériel ou un appui HORS du menu le referment — lui seul,
+ * jamais la plaque ouverte dessous (#8517) ; le focus entre sur la première
+ * action, les flèches le déplacent.
  */
 export function StudioObjectMenu({
   label,
@@ -27,19 +30,15 @@ export function StudioObjectMenu({
   readonly onClose: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  useBackDismiss(onClose, { escape: true });
 
   useLayoutEffect(() => {
     menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
     const onDown = (event: PointerEvent) => {
       if (menuRef.current !== null && event.target instanceof Node && !menuRef.current.contains(event.target)) onClose();
     };
-    window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onDown, true);
     return () => {
-      window.removeEventListener('keydown', onKey);
       window.removeEventListener('pointerdown', onDown, true);
     };
   }, [onClose]);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createEffectsPipeline, type PipelineEnv } from './video-effects-pipeline';
+import { createEffectsPipeline, type FaceLayer, type PipelineEnv } from './video-effects-pipeline';
 import { NO_EFFECTS, type VideoEffects } from './video-effects';
 
 /**
@@ -24,7 +24,7 @@ const fakeTrack = () => {
 
 const warm: VideoEffects = { ...NO_EFFECTS, preset: 'warm' };
 
-function framesHarness(options: { readonly failDraw?: boolean } = {}) {
+function framesHarness(options: { readonly failDraw?: boolean; readonly face?: FaceLayer } = {}) {
   const incoming: FakeFrame[] = [];
   let push: ((value: FakeFrame) => void) | null = null;
   const readable = new ReadableStream<FakeFrame>({ start: (controller) => void (push = (value) => controller.enqueue(value)) });
@@ -43,6 +43,7 @@ function framesHarness(options: { readonly failDraw?: boolean } = {}) {
       frameFrom: (_canvas, init) => ({ derived: true, timestamp: init.timestamp }) as unknown as VideoFrame,
     },
     canvas: null,
+    ...(options.face === undefined ? {} : { face: options.face }),
   };
   const send = async (id: number): Promise<FakeFrame> => {
     const next = frame(id);
@@ -104,6 +105,47 @@ describe('les images traitables (MediaStreamTrackProcessor)', () => {
     await h.send(4);
     expect(h.output.readyState).toBe('ended');
     expect(h.written).toEqual([]);
+  });
+});
+
+describe('les effets de visage (#8551)', () => {
+  const faceLog = () => {
+    const calls: Array<{ effect: string; t: number; width: number; height: number }> = [];
+    const face: FaceLayer = (target, effects) => void calls.push({ effect: effects.faceEffect, t: target.t, width: target.width, height: target.height });
+    return { calls, face };
+  };
+
+  test('en couleur naturelle, un effet de visage redessine chaque image et y pose son calque, à l’heure de l’image', async () => {
+    const log = faceLog();
+    const h = framesHarness({ face: log.face });
+    const pipeline = createEffectsPipeline(fakeTrack() as unknown as MediaStreamTrack, { ...NO_EFFECTS, faceEffect: 'toad' }, h.env);
+    const sent = await h.send(5);
+    expect(h.draws).toEqual(['none']);
+    expect(log.calls).toEqual([{ effect: 'toad', t: 5, width: 640, height: 480 }]);
+    expect(h.written).toEqual([{ derived: true, timestamp: 5000 }]);
+    expect(sent.closed).toBe(true);
+    pipeline.stop();
+  });
+
+  test('l’éruption étalonne toute l’image, par-dessus le préréglage', async () => {
+    const h = framesHarness({ face: () => undefined });
+    const pipeline = createEffectsPipeline(fakeTrack() as unknown as MediaStreamTrack, { ...NO_EFFECTS, preset: 'vivid', faceEffect: 'volcano' }, h.env);
+    await h.send(1);
+    expect(h.draws[0]).toContain('saturate(1.3)');
+    expect(h.draws[0]).toContain('sepia(0.35)');
+    pipeline.stop();
+  });
+
+  test('revenir à « Aucun » rend les images telles quelles', async () => {
+    const log = faceLog();
+    const h = framesHarness({ face: log.face });
+    const pipeline = createEffectsPipeline(fakeTrack() as unknown as MediaStreamTrack, { ...NO_EFFECTS, faceEffect: 'angel' }, h.env);
+    await h.send(1);
+    pipeline.update(NO_EFFECTS);
+    const second = await h.send(2);
+    expect(log.calls).toHaveLength(1);
+    expect(h.written.at(-1)).toBe(second);
+    pipeline.stop();
   });
 });
 

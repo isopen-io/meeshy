@@ -49,7 +49,17 @@ extension CallView {
 
             // Call type badge
             callTypeBadge
-                .padding(.bottom, 60)
+                .padding(.bottom, 16)
+
+            // #8480 — l'appelé voit (ou entend) l'appelant avant de décrocher
+            CallPreviewSeenLabel(
+                preview: .shared,
+                peerName: callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
+                isVideo: callManager.isVideoEnabled,
+                isMuted: callManager.isMuted
+            )
+            .frame(minHeight: 28)
+            .padding(.bottom, 16)
 
             Spacer()
 

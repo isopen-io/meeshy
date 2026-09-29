@@ -121,3 +121,22 @@
 .glass-call-prominent {
   --glass-density: 86%;
 }
+
+/* LES COMMANDES POSÉES SUR LA SCÈNE D'UN APPEL (#8550) — le zoom de ma
+   vignette, Plein écran, Retour à la mosaïque, la modération d'une tuile :
+   un toucher sur la scène les efface avec l'en-tête et la pilule. La vidéo,
+   les sous-titres et les réactions restent. */
+[data-call-chrome-fade] {
+  transition: opacity 0.3s ease;
+}
+
+[data-call-chrome='hidden'] [data-call-chrome-fade] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-call-chrome-fade] {
+    transition: none;
+  }
+}

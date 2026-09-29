@@ -103,10 +103,15 @@ final class StoryComposerPublishFormatTests: XCTestCase {
             ComposerSourceGuard.occurrences(of: "Self.publishedType(requested:", in: flat), 1,
             "Le type publié doit passer par l'arbitrage, une fois."
         )
+        // #8522 : l'annonce VoiceOver nomme ce qui part, donc l'arbitrage se
+        // pose AVANT le hand-off, dans `publishedType` — que le hand-off doit
+        // recevoir tel quel, en dernier argument.
+        XCTAssertTrue(flat.contains("letpublishedType=Self.publishedType(requested:"),
+                      "L'arbitrage doit être nommé une fois, pour l'annonce ET le hand-off.")
         let handoff = try XCTUnwrap(flat.range(of: "onPublishAllInBackground("))
-        let format = try XCTUnwrap(flat.range(of: "Self.publishedType(requested:"))
+        let argument = try XCTUnwrap(flat.range(of: "Self.accessibilityHandoff(from:accessibilityStore),publishedType)"))
         XCTAssertTrue(
-            handoff.lowerBound < format.lowerBound,
+            handoff.upperBound <= argument.lowerBound,
             "Le format doit être un ARGUMENT du hand-off, pas un calcul posé à côté."
         )
     }

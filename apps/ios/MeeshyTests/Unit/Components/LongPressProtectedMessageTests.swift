@@ -91,7 +91,7 @@ final class LongPressProtectedMessageTests: XCTestCase {
 
     func test_primaryActions_blurred_offersNeitherCopyTranslateSaveNorCompose() {
         let actions = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveable: 1, isBlurred: true))
-        for leak in [PrimaryAction.copy, .translate, .saveMedia, .compose] {
+        for leak in [PrimaryAction.copy, .translate, .saveMedia, .compose, .exportImage, .exportQuick] {
             XCTAssertFalse(actions.contains(leak), "\(leak) ferait sortir un contenu flouté")
         }
         XCTAssertTrue(actions.contains(.more))
