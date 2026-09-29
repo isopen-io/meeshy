@@ -226,7 +226,7 @@ private struct RecordedVideoEncoding {
     let degradationPreference: VideoDegradationPreference
 }
 
-private final class DataProfileRecordingClient: WebRTCClientProviding, CallDataProfileApplying {
+private nonisolated final class DataProfileRecordingClient: WebRTCClientProviding, CallDataProfileApplying {
     weak var delegate: (any WebRTCClientDelegate)?
     var localVideoTrack: Any?
     var remoteVideoTrack: Any?
