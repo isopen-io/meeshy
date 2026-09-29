@@ -904,6 +904,9 @@ struct MeeshyComposerHost: View {
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
         )
+        // Toucher le fond QUITTE l'objet (#8714) : ses options quittent la
+        // colonne droite, comme sous le `(x)`.
+        selectedSceneItemId = nil
     }
 
     var body: some View {

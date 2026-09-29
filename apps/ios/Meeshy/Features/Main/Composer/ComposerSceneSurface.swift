@@ -163,8 +163,17 @@ struct ComposerSceneSurface: View {
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
 
-    /// La frame `[+]` du rail *trailing* — créer une slide.
-    var onAddSlide: (() -> Void)?
+    /// **Les options du moment, en haut du rail droit** (#8713, #8714) — les
+    /// contrôleurs de l'outil ouvert ou les options de l'objet touché, puis
+    /// leur `(x)`. Déjà composées par `ComposerTrailingColumn.options` :
+    /// cette vue ne re-filtre rien.
+    var trailingOptions: [ComposerTrailingColumn.Entry] = []
+    var onTrailingOption: ((ComposerTrailingColumn.Entry) -> Void)?
+
+    /// **L'éclair et le Cadre, au rail GAUCHE après le lieu** (#8713). Déjà
+    /// servis par `ComposerLeadingSceneToggles` ; le rail les range après la
+    /// porte que la même règle désigne.
+    var sceneToggles: [ComposerSceneToggleEntry] = []
 
     /// **L'HISTORIQUE, descendu du socle au rail droit** (#4586, directive
     /// porteur 2026-08-31). `nil` ⇒ rien à défaire, donc aucun bouton : la
@@ -229,13 +238,14 @@ struct ComposerSceneSurface: View {
     var onPickBandFitMode: ((String) -> Void)?
     var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
 
-    /// **Le mode Animé** (#8415) : la bascule de la barre haute, la frise qui
-    /// prend le bas tant qu'elle est ouverte, et le pont qui la laisse piloter
-    /// le canvas. Trois `nil` ⇒ une scène statique, comme avant.
-    var animatedToggle: AnyView?
-    /// Le bouton Cadre du rail droit (#8414) — `nil` sans média de fond.
-    var onFrameButton: (() -> Void)?
-    var frameIsOpen: Bool = false
+    /// **Ce que la barre haute porte avant le `⋯`** : le `(+)` d'une nouvelle
+    /// scène, à la place qu'occupait l'éclair (#8713, directive porteur
+    /// 2026-09-29). `nil` ⇒ rien — l'aller-retour d'une image vers une
+    /// conversation ne crée pas de scène.
+    var topBarAccessory: AnyView?
+    /// **Le mode Animé** (#8415) : la frise qui prend le bas tant qu'elle est
+    /// ouverte, et le pont qui la laisse piloter le canvas. Sa bascule vit au
+    /// rail gauche depuis #8713 (`sceneToggles`).
     var onTimeButton: (() -> Void)? = nil
     var timeIsOpen: Bool = false
     var timelinePanel: AnyView?
@@ -441,27 +451,29 @@ struct ComposerSceneSurface: View {
     /// sélectionné avec (X) »). Une seule colonne, au même endroit : le doigt
     /// qui vient d'ouvrir l'outil y trouve ses réglages, et le `(x)` qui le
     /// referme rend les portes à la même place.
+    ///
+    /// **Les contrôleurs de l'outil ont quitté ce rail pour le DROIT** (#8713,
+    /// directive porteur 2026-09-29 : « en bas undo et redo toujours, même pour
+    /// les outils type dessin, et au-dessus les options de l'outil
+    /// sélectionné »). Un outil ouvert vide donc ce côté : les portes cèdent,
+    /// comme le reste du chrome, et ses réglages vivent au-dessus de
+    /// l'historique.
     private var floatingRail: AnyView {
-        let mode: ComposerRailMode
-        switch railMode {
-        case .doors(let servies):
-            mode = .doors(ComposerSceneFloatingRail.sideRow(from: servies, format: format))
-        case .tool:
-            mode = railMode
-        }
-        if case .doors(let portes) = mode, portes.isEmpty { return AnyView(EmptyView()) }
+        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
+        let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
+        if portes.isEmpty && sceneToggles.isEmpty { return AnyView(EmptyView()) }
         return AnyView(
-            ComposerLeadingRail(mode: mode,
+            ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
-                                onToolControl: onRailToolControl,
-                                onExitTool: onRailExitTool,
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
                                 pushesToThumb: false,
                                 badges: railBadges,
-                                separateButtons: true)
+                                separateButtons: true,
+                                sceneToggles: sceneToggles,
+                                sceneTogglesAfter: ComposerLeadingSceneToggles.anchor(in: portes))
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
                 // `outerMargin` du bord — et d'un bouton plus haut que la
@@ -744,7 +756,7 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 plateauTint: plateauTint,
-                trailingAccessory: animatedToggle,
+                trailingAccessory: topBarAccessory,
                 edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
             )
             .padding(.top, -chromeLift)
@@ -855,6 +867,10 @@ struct ComposerSceneSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
+    /// « Temps » reste où il était — AU-DESSUS de l'historique (#8713) : la
+    /// frise masque annuler et rétablir (elle réécrit la slide à sa fermeture),
+    /// mais leur place est gardée, sans quoi le bouton qui la RANGE descendrait
+    /// sous le doigt qui vient de l'ouvrir.
     private var friseRail: some View {
         HStack {
             Spacer(minLength: 0)
@@ -865,7 +881,8 @@ struct ComposerSceneSurface: View {
                                  onTime: onTimeButton,
                                  timeIsOpen: timeIsOpen)
                 .padding(.trailing, ComposerRailGeometry.outerMargin)
-                .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
+                .padding(.bottom, ComposerRailGeometry.floatingBottomInset
+                                  + ComposerRailGeometry.historyReserve(undo: onUndo != nil, redo: onRedo != nil))
         }
     }
 
@@ -878,18 +895,21 @@ struct ComposerSceneSurface: View {
                 floatingRail
                 Spacer(minLength: 0)
                 if ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen) {
+                // **Les options EN HAUT, l'historique EN BAS** (#8713, #8714) :
+                // la colonne prend la hauteur de la scène libre dès qu'elle a
+                // des options, et son pied reste au pouce.
                 ComposerTrailingRail(actions: trailingActions,
                                      plateauTint: plateauTint,
                                      onAction: onTrailingAction,
-                                     onAddSlide: onAddSlide,
                                      onUndo: onUndo,
                                      onRedo: onRedo,
                                      pushesToThumb: false,
                                      separateButtons: true,
-                                     onFrame: onFrameButton,
-                                     frameIsOpen: frameIsOpen,
-                                     onTime: onTimeButton,
+                                     options: trailingOptions,
+                                     onOption: onTrailingOption,
+                                     onTime: toolIsOpen ? nil : onTimeButton,
                                      timeIsOpen: timeIsOpen)
+                    .padding(.top, ComposerRailGeometry.gutter)
                     .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
                     .transition(.opacity)

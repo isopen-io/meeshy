@@ -7,34 +7,11 @@ import MeeshyUI
 //
 // La frise existait, complète, mais seul l'atelier l'atteignait — c'est-à-dire
 // deux ouvertures sur toutes (vidéo caméra, reprise de brouillon). La bascule
-// « Animé » de la barre haute l'ouvre sur la scène du meuble : chaque objet y
+// « Animé » — l'éclair, au rail gauche après le lieu depuis #8713
+// (`sceneToggleEntries`) — l'ouvre sur la scène du meuble : chaque objet y
 // devient une piste, avec lecture et tête. La refermer rend ses pistes à la
 // slide ; publier aussi (`performSoclePublish`).
 extension MeeshyComposerHost {
-
-    var sceneAnimatedToggle: AnyView {
-        let actif = sceneIsAnimated
-        return AnyView(
-            Button {
-                toggleSceneAnimation()
-            } label: {
-                // **L'icône seule** (directive porteur 2026-09-27 : « enlève les
-                // captions partout » ; maquette iOS : un bouton rond à éclair).
-                // Un libellé la poussait sous la Dynamic Island.
-                Image(systemName: "bolt.fill")
-                    .font(.footnote.weight(.bold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                    .frame(width: ComposerControlMetrics.visualDiameter,
-                           height: ComposerControlMetrics.visualDiameter)
-                    .contentShape(Circle())
-                    .adaptiveGlass(in: Circle(),
-                                   tint: actif ? MeeshyColors.brandPrimary : tint.color.opacity(0.55))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(ComposerAnimatedCopy.toggle))
-            .accessibilityAddTraits(actif ? .isSelected : [])
-        )
-    }
 
     /// **La frise de la MAQUETTE**, pas l'éditeur de montage de l'atelier :
     /// lecture, temps, « Entre ici » / « Sort ici », une piste par objet, la
