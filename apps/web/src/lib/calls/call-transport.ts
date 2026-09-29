@@ -36,9 +36,23 @@ let listener: CallEventListener | null = null;
 let reauthListener: (() => void) | null = null;
 let pending: ReadonlyArray<readonly [string, unknown]> = [];
 let wake: (() => void) | null = null;
+let authenticatedTransport: CallTransport | null = null;
+let readyWaiters: ReadonlyArray<() => void> = [];
 
 export function currentCallTransport(): CallTransport | null {
   return transport;
+}
+
+/**
+ * La connexion peut porter un appel : liée, connectée, et authentifiée depuis
+ * sa connexion (#8199). Un onglet ouvert à froid par le worker attend ce point
+ * avant de composer — plus tôt, `call:initiate` n'aurait personne pour l'accuser.
+ */
+export function whenCallTransportReady(): Promise<void> {
+  if (transport !== null && authenticatedTransport === transport && transport.connected()) return Promise.resolve();
+  return new Promise((resolve) => {
+    readyWaiters = [...readyWaiters, resolve];
+  });
 }
 
 /** Posé une fois par la coquille : ce qui charge le moteur quand un appel arrive. */
@@ -76,10 +90,15 @@ export function bindCallTransport(next: CallTransport): CallTransportBinding {
     },
     authenticated: () => {
       if (transport !== next) return;
+      authenticatedTransport = next;
+      const waiters = readyWaiters;
+      readyWaiters = [];
+      for (const resolve of waiters) resolve();
       reauthListener?.();
     },
     detach: () => {
       if (transport === next) transport = null;
+      if (authenticatedTransport === next) authenticatedTransport = null;
     },
   };
 }
@@ -91,4 +110,6 @@ export function resetCallTransportForTests(): void {
   reauthListener = null;
   pending = [];
   wake = null;
+  authenticatedTransport = null;
+  readyWaiters = [];
 }

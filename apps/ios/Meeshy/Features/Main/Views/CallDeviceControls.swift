@@ -120,25 +120,50 @@ struct CallOutputPillButton: View {
     let caption: String?
     let diameter: CGFloat
     let onToggleSpeaker: () -> Void
-
-    @StateObject private var model: CallAudioRouteViewModel
-    @State private var routePicker = CallAudioRoutePickerLauncher()
+    let model: CallAudioRouteViewModel?
 
     init(isSpeaker: Bool, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
         self.isSpeaker = isSpeaker
         self.caption = caption
         self.diameter = diameter
         self.onToggleSpeaker = onToggleSpeaker
+        self.model = model
+    }
+
+    var body: some View {
+        CallOutputMenu(isSpeaker: isSpeaker, onToggleSpeaker: onToggleSpeaker, model: model) { route in
+            CallPillButtonLabel(
+                symbol: route.outputSymbol(isSpeaker: isSpeaker),
+                kind: isSpeaker || route.routesExternally ? .active : .normal,
+                caption: caption,
+                diameter: diameter
+            )
+        }
+    }
+}
+
+/// Le menu « Sortie » lui-même, habillé par chaque surface d'appel : l'écran
+/// d'appel y pose son disque de pilule, la pastille réduite (#8208) son rond
+/// sur l'aplat indigo. Le geste, le sélecteur système, le choix du micro et ce
+/// que VoiceOver en dit ne vivent qu'ici.
+struct CallOutputMenu<Face: View>: View {
+    let isSpeaker: Bool
+    let onToggleSpeaker: () -> Void
+    let label: (CallAudioRouteState) -> Face
+
+    @StateObject private var model: CallAudioRouteViewModel
+    @State private var routePicker = CallAudioRoutePickerLauncher()
+
+    init(
+        isSpeaker: Bool,
+        onToggleSpeaker: @escaping () -> Void,
+        model: CallAudioRouteViewModel? = nil,
+        @ViewBuilder label: @escaping (CallAudioRouteState) -> Face
+    ) {
+        self.isSpeaker = isSpeaker
+        self.onToggleSpeaker = onToggleSpeaker
+        self.label = label
         _model = StateObject(wrappedValue: model ?? CallAudioRouteViewModel())
-    }
-
-    private var isExternal: Bool {
-        model.state.output?.kind.isExternalOutput ?? false
-    }
-
-    private var symbol: String {
-        if isExternal, let output = model.state.output { return output.kind.symbolName }
-        return isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"
     }
 
     private var chooseOutputLabel: String {
@@ -172,7 +197,7 @@ struct CallOutputPillButton: View {
                 }
             }
         } label: {
-            CallPillButtonLabel(symbol: symbol, kind: isSpeaker || isExternal ? .active : .normal, caption: caption, diameter: diameter)
+            label(model.state)
         } primaryAction: {
             onToggleSpeaker()
         }

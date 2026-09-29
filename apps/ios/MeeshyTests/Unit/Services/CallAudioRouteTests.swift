@@ -123,6 +123,28 @@ final class CallAudioRouteStateTests: XCTestCase {
 
         XCTAssertEqual(state.selectedInput, airpods)
     }
+
+    func test_outputSymbol_bluetoothOutput_showsTheAccessory_whateverTheSpeakerFlag() {
+        let state = CallAudioRouteState(inputs: [], selectedInputId: nil, output: airpods)
+
+        XCTAssertEqual(state.outputSymbol(isSpeaker: false), "headphones")
+        XCTAssertEqual(state.outputSymbol(isSpeaker: true), "headphones")
+        XCTAssertTrue(state.routesExternally)
+    }
+
+    func test_outputSymbol_builtInOutput_followsTheSpeakerFlag() {
+        let receiver = CallAudioPort(id: "rcv", name: "Receiver", kind: .receiver)
+        let state = CallAudioRouteState(inputs: [], selectedInputId: nil, output: receiver)
+
+        XCTAssertEqual(state.outputSymbol(isSpeaker: true), "speaker.wave.3.fill")
+        XCTAssertEqual(state.outputSymbol(isSpeaker: false), "speaker.fill")
+        XCTAssertFalse(state.routesExternally)
+    }
+
+    func test_outputSymbol_unknownRoute_followsTheSpeakerFlag() {
+        XCTAssertEqual(CallAudioRouteState.empty.outputSymbol(isSpeaker: false), "speaker.fill")
+        XCTAssertFalse(CallAudioRouteState.empty.routesExternally)
+    }
 }
 
 @MainActor

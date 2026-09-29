@@ -307,6 +307,15 @@
         "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 0,67 Ko -- l APERCU avant decroche (`components/call-preview.tsx` : la video de l appelant voilee derriere la sonnerie et le bouton « Activer le son », en haut au centre et en toutes lettres, qui fait taire la sonnerie, #8627). Sorti de `call_overlay` (15,99 Ko mesures avec lui, plafond 16) : il ne se charge que quand un apercu arrive. Il n importe rien de `call_overlay`, qui lui remet ses elements video et audio et ses glyphes (`CallPreviewKit`). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
+    "call_back_prompt": {
+      "pattern": "^assets/call-back-prompt-layer-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #8199, NON ARBITREE",
+        "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 0,73 Ko -- la question « Rappeler X ? » quand le navigateur bloque le son (`components/call-back-prompt-layer.tsx`) : charge A LA DEMANDE par `call-layer.tsx` seulement si le rappel arrive sans geste. Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+      }
+    },
     "call_control_panels": {
       "pattern": "^assets/call-control-panels-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
