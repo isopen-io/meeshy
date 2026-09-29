@@ -299,6 +299,81 @@ final class MessageStorePerAccountTests: XCTestCase {
                        "fin de session : plus aucune base de compte n'est lue")
     }
 
+    // MARK: - #8674 — chaque compte garde sa base
+
+    func test_activate_keepingTheOutgoingAccount_returnsToTheSameOpenBaseWithItsRows() async throws {
+        let dir = try makeDirectory()
+        let router = makeRouter(in: dir, initialKey: key("alice"))
+        let aliceSession = router.current
+        try await aliceSession.messagePersistence.insertOptimistic(record(id: "m-a", senderId: "alice", content: "d'Alice"))
+
+        router.activate(nil, keepingOutgoing: true)
+        router.activate(key("bob"))
+        try await router.current.messagePersistence.insertOptimistic(record(id: "m-b", senderId: "bob", content: "de Bob"))
+        let bobSees = try contents(of: router.current)
+        router.activate(nil, keepingOutgoing: true)
+        router.activate(key("alice"))
+
+        XCTAssertEqual(bobSees, ["de Bob"], "Bob ne lit jamais la base d'Alice")
+        XCTAssertTrue(router.current === aliceSession, "Alice retrouve sa base OUVERTE, sans la rouvrir")
+        XCTAssertEqual(try contents(of: router.current), ["d'Alice"], "rien n'a été rechargé, rien de Bob n'y est")
+        XCTAssertTrue(router.openAccountFileNames.contains(key("bob").databaseFileName),
+                      "la base de Bob, gardé, reste hors de portée des balayages")
+    }
+
+    func test_keptAccountStore_survivesTheSignedOutSweepButALoggedOutOneDoesNot() async throws {
+        let dir = try makeDirectory()
+        let router = makeRouter(in: dir, initialKey: key("bob"))
+        router.activate(nil, keepingOutgoing: true)
+        router.activate(key("alice"))
+        let alice = try XCTUnwrap(router.activate(nil, keepingOutgoing: false), "Alice se déconnecte")
+
+        try await alice.messagePersistence.clearAllMessagesForLogout()
+        router.retire(alice)
+        MessageStoreRouter.sweepDormantAccountStores(in: dir, keeping: router.openAccountFileNames)
+
+        let left = Set(try FileManager.default.contentsOfDirectory(atPath: dir.path))
+        XCTAssertTrue(left.contains(key("bob").databaseFileName), "la déconnexion d'Alice ne touche pas Bob")
+        XCTAssertFalse(left.contains(key("alice").databaseFileName), "la déconnexion d'Alice efface sa base")
+    }
+
+    func test_dropSessions_releasesAccountsRemovedFromTheDeviceButNeverTheActiveOne() throws {
+        let dir = try makeDirectory()
+        let router = makeRouter(in: dir, initialKey: key("alice"))
+        router.activate(key("bob"), keepingOutgoing: true)
+        router.activate(key("carol"), keepingOutgoing: true)
+
+        let dropped = router.dropSessions(keeping: [key("bob")])
+
+        XCTAssertEqual(dropped.compactMap(\.key), [key("alice")], "Alice, retirée du sélecteur, est lâchée")
+        XCTAssertEqual(router.current.key, key("carol"), "le compte actif n'est jamais lâché")
+        XCTAssertEqual(router.openAccountFileNames, [key("bob").databaseFileName, key("carol").databaseFileName])
+    }
+
+    func test_orphanSweep_keepsTheSelectorAccountsAndRemovesTheOthers() throws {
+        let dir = try makeDirectory()
+        let retained = AccountDataRetention.retainedKeys(
+            savedAccountIds: ["alice", "bob"], activeUserId: "carol", serverOrigin: Self.production
+        )
+        let names = ["alice", "bob", "carol", "dave"].map { key($0).databaseFileName }
+        names.forEach { FileManager.default.createFile(atPath: dir.appendingPathComponent($0).path, contents: Data()) }
+
+        MessageStoreRouter.sweepDormantAccountStores(in: dir, keeping: Set(retained.map(\.databaseFileName)))
+
+        let left = Set(try FileManager.default.contentsOfDirectory(atPath: dir.path))
+        XCTAssertEqual(left, Set(["alice", "bob", "carol"].map { key($0).databaseFileName }),
+                       "Dave, absent du sélecteur, est un orphelin")
+    }
+
+    func test_keepsData_onlyWhileTheDeviceKeepsTheAccountsSession() {
+        let preserved: Set<String> = ["alice"]
+        XCTAssertTrue(AccountDataRetention.keepsData(of: key("alice")) { preserved.contains($0) },
+                      "changer de compte garde la session, donc les données")
+        XCTAssertFalse(AccountDataRetention.keepsData(of: key("bob")) { preserved.contains($0) },
+                       "déconnexion, session révoquée ou retrait : les jetons sont partis, les données aussi")
+        XCTAssertFalse(AccountDataRetention.keepsData(of: nil) { _ in true })
+    }
+
     // MARK: - À côté : les brouillons de commentaire
 
     func test_commentDraftStore_clearAll_forgetsEveryDraftIncludingThoseInFlight() throws {
