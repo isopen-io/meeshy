@@ -98,7 +98,7 @@ enum CallQualityRows {
         }
     }
 
-    private static func formatted(_ value: Double, as metric: CallQualityMetric, locale: Locale) -> String {
+    static func formatted(_ value: Double, as metric: CallQualityMetric, locale: Locale) -> String {
         switch metric {
         case .packetLoss:
             return (value / 100).formatted(.percent.precision(.fractionLength(0...1)).locale(locale))
@@ -110,6 +110,36 @@ enum CallQualityRows {
         case .audioRate, .videoRate:
             let number = value.rounded().formatted(.number.precision(.fractionLength(0)).locale(locale))
             return String(localized: "call.quality.rate.kbps", defaultValue: "\(number) kb/s", bundle: .main)
+        }
+    }
+}
+
+// MARK: - Call Quality Network Context
+
+/// #8697 / #8698 — what the numbers alone do not say: which data profile caps
+/// the call and whether the media rides a TURN relay or a direct path.
+struct CallQualityNetworkContext: Equatable, Sendable {
+    let profile: CallDataProfile?
+    let relayed: Bool?
+
+    static func from(_ reading: CallQualityReading?) -> CallQualityNetworkContext? {
+        guard let reading, reading.profile != nil || reading.relayed != nil else { return nil }
+        return CallQualityNetworkContext(profile: reading.profile, relayed: reading.relayed)
+    }
+
+    static var profileTitle: String {
+        String(localized: "call.quality.profile", defaultValue: "Profil de données", bundle: .main)
+    }
+
+    static var routeTitle: String {
+        String(localized: "call.quality.route", defaultValue: "Chemin réseau", bundle: .main)
+    }
+
+    var routeLabel: String? {
+        relayed.map { isRelayed in
+            isRelayed
+                ? String(localized: "call.quality.route.relayed", defaultValue: "Relais", bundle: .main)
+                : String(localized: "call.quality.route.direct", defaultValue: "Direct", bundle: .main)
         }
     }
 }

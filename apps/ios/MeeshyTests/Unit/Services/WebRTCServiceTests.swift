@@ -738,9 +738,13 @@ final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
     func test_adjustBitrate_jitterGate_capsToMinBitrate() throws {
         let src = try webRTCServiceSource()
         XCTAssertTrue(
-            src.contains("let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate"),
-            "When the jitter tracker confirms the cap, the effective bitrate must be minBitrate — " +
+            src.contains("let ladderBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate"),
+            "When the jitter tracker confirms the cap, the ladder bitrate must be minBitrate — " +
             "any other fallback value leaves the Opus encoder at a bitrate too high for the jitter buffer to compensate."
+        )
+        XCTAssertTrue(
+            src.contains("let effectiveBitrate = dataProfile.budget.audio.capping(ladderBitrate)"),
+            "#8697 — the data profile caps the ladder, it never lifts it: the jitter floor must reach the encoder through the cap."
         )
     }
 

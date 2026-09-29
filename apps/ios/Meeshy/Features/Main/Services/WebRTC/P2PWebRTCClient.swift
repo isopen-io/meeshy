@@ -42,6 +42,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var localAudioTrack: RTCAudioTrack?
     private var audioTransceiver: RTCRtpTransceiver?
     var videoTransceiver: RTCRtpTransceiver?
+    var dataProfile: CallDataProfile = .wifi
     var localVideoTrack_: RTCVideoTrack?
     var screenShareFeed: ScreenShareVideoFeed?
     private var videoCapturer: RTCCameraVideoCapturer?
@@ -1057,27 +1058,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // `CallStats.reduce` (§5.7) — here we only adapt NSObject → Double.
         let entries: [CallStats.RawEntry] = await withCheckedContinuation { continuation in
             pc.statistics { report in
-                let numericKeys = [
-                    "currentRoundTripTime", "availableOutgoingBitrate",
-                    "packetsLost", "packetsReceived",
-                    "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel"
-                ]
-                var parsed: [CallStats.RawEntry] = []
-                parsed.reserveCapacity(report.statistics.count)
-                for (id, stats) in report.statistics {
-                    let values = stats.values
-                    var nums: [String: Double] = [:]
-                    for key in numericKeys {
-                        if let number = values[key] as? NSNumber { nums[key] = number.doubleValue }
-                    }
-                    parsed.append(CallStats.RawEntry(
-                        id: id,
-                        type: stats.type,
-                        kind: (values["kind"] as? String) ?? (values["mediaType"] as? String),
-                        codecId: values["codecId"] as? String,
-                        mimeType: values["mimeType"] as? String,
-                        values: nums
-                    ))
+                let parsed = report.statistics.map { id, stats in
+                    CallStats.RawEntry(id: id, type: stats.type, raw: stats.values)
                 }
                 continuation.resume(returning: parsed)
             }
@@ -1288,7 +1270,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// Phase 2 — RED is negotiated via setCodecPreferences (libwebrtc 141 API); the
     /// legacy addAudioRedundancy SDP munger was removed (9e663039, PT/PT bug). §3.8 + ADR-4.
     private func mungeAndSetLocal(_ sdp: RTCSessionDescription, type: SDPType, on pc: RTCPeerConnection) async throws -> SessionDescription {
-        var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
+        var mungedSDP = Self.mungeOpusSDP(sdp.sdp, audio: dataProfile.budget.audio)
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         try await setLocalDescription(RTCSessionDescription(type: sdp.type, sdp: mungedSDP), on: pc)
@@ -1370,62 +1352,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         return sorted.first(where: supports30fps) ?? supported.last
-    }
-
-    static func mungeOpusSDP(_ sdp: String) -> String {
-        // Phase 2 — `usedtx=1` enables Opus discontinuous transmission (silence
-        // suppression). libwebrtc 141 iOS ObjC binding does NOT expose a `dtx`
-        // property on RTCRtpEncodingParameters, so DTX remains driven via fmtp
-        // here. `useinbandfec=1` is similarly fmtp-only (no native API).
-        // maxaveragebitrate, stereo, maxplaybackrate remain as quality hints.
-        // The earlier diagnostic that toggled `usedtx=0` (suspected of silent
-        // audio after ICE) was disproven once RED munging was disabled in
-        // 9e663039 — the PT/PT bug was the real cause, not DTX.
-        // Reference §3.8 + ADR-4.
-        let opusParams = [
-            "maxaveragebitrate=\(QualityThresholds.opusFmtpMaxAverageBitrate)",
-            "stereo=1",
-            "useinbandfec=1",
-            "usedtx=1",
-            "maxplaybackrate=\(QualityThresholds.opusFmtpMaxPlaybackRate)"
-        ]
-        let paramString = opusParams.joined(separator: ";")
-
-        var lines = sdp.components(separatedBy: "\r\n")
-        var opusPayloadType: String?
-
-        for line in lines where line.hasPrefix("a=rtpmap:") && line.contains("opus/48000") {
-            let parts = line.dropFirst("a=rtpmap:".count).split(separator: " ", maxSplits: 1)
-            if let pt = parts.first {
-                opusPayloadType = String(pt)
-            }
-        }
-
-        guard let payloadType = opusPayloadType else { return sdp }
-
-        let fmtpPrefix = "a=fmtp:\(payloadType) "
-        var found = false
-        lines = lines.map { line in
-            guard line.hasPrefix(fmtpPrefix) else { return line }
-            found = true
-            let existing = line.dropFirst(fmtpPrefix.count)
-            var params = existing.split(separator: ";").map(String.init)
-            let newKeys = Set(opusParams.map { $0.split(separator: "=", maxSplits: 1).first.map(String.init) ?? "" })
-            params.removeAll { param in
-                let key = param.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
-                return newKeys.contains(key)
-            }
-            params.append(contentsOf: opusParams)
-            return fmtpPrefix + params.joined(separator: ";")
-        }
-
-        if !found {
-            if let rtpmapIndex = lines.firstIndex(where: { $0.hasPrefix("a=rtpmap:\(payloadType) ") }) {
-                lines.insert(fmtpPrefix + paramString, at: rtpmapIndex + 1)
-            }
-        }
-
-        return lines.joined(separator: "\r\n")
     }
 
     static func addTransportCC(_ sdp: String) -> String {
