@@ -34,6 +34,7 @@ import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 import { emitServerEvent } from '../serverEmit';
+import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -609,7 +610,7 @@ export class PostReactionHandler {
         postAuthorId: post.authorId,
         emoji,
         postType: post.type,
-        postPreview: post.content?.slice(0, 80) ?? undefined,
+        postPreview: sliceCodePointsOrUndefined(post.content, 80),
         postCreatedAt: post.createdAt ?? undefined,
         postExpiresAt: post.expiresAt ?? undefined,
       })
