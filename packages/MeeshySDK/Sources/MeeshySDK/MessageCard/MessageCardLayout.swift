@@ -103,10 +103,28 @@ public enum MessageCardOp: Equatable, Sendable {
     case dot(MessageCardDotOp)
 }
 
+/// Les PARTIES d'une carte qu'un geste peut désigner sur l'aperçu : l'en-tête,
+/// la citation, la liaison, la réponse — et le fond, partout ailleurs. Le
+/// filigrane n'en est pas une : il signe toujours la carte, rien ne le règle.
+public enum MessageCardPartID: String, CaseIterable, Sendable {
+    case header, quote, link, reply, background
+}
+
+/// La zone d'une partie, en pixels de la carte.
+public struct MessageCardRegion: Equatable, Sendable {
+    public let part: MessageCardPartID
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+}
+
 public struct MessageCardLayout: Equatable, Sendable {
     public let width: Double
     public let height: Double
     public let ops: [MessageCardOp]
+    /// Les zones touchables, de haut en bas — seules les parties PEINTES en ont une.
+    public let regions: [MessageCardRegion]
     /// Le motif du filigrane diagonal.
     public let watermark: String
     /// Vrai quand, au plancher des polices, un texte a dû être coupé.
@@ -285,6 +303,12 @@ private struct MessageCardLayoutEngine {
             measure: measure
         )
 
+        var regions: [MessageCardRegion] = []
+        let region: (MessageCardPartID, Double, Double) -> Void = { part, top, bottom in
+            regions.append(MessageCardRegion(part: part, x: Metrics.padX, y: top, width: textWidth, height: bottom - top))
+        }
+        let headerTop = painter.y
+
         if let title {
             let direction = MessageCardText.direction(of: title)
             let font = MessageCardFont(face: .system(800), size: Metrics.titleSize)
@@ -298,7 +322,10 @@ private struct MessageCardLayoutEngine {
             painter.text(date, x: painter.start(rtl: direction == .rtl, inset: 0), baseline: painter.y + Metrics.dateSize, font: font, color: palette.quoteInk, direction: direction)
             painter.y += Metrics.dateLine
         }
-        if chrome.header > 0 { painter.y += Metrics.headerGap }
+        if chrome.header > 0 {
+            region(.header, headerTop, painter.y)
+            painter.y += Metrics.headerGap
+        }
 
         if let quoted {
             let quote = painter.block(quoted, lines: sized.quoteLines, style: BlockStyle(
@@ -319,11 +346,13 @@ private struct MessageCardLayoutEngine {
                     color: palette.accent
                 )))
             }
+            region(.quote, quote.top, painter.y)
             painter.ops.append(contentsOf: linkOps(input.template.link, y: painter.y, rtl: quote.rtl, accent: palette.accent, block: geometry.block))
+            region(.link, painter.y, painter.y + geometry.block)
             painter.y += geometry.block
         }
 
-        _ = painter.block(input.reply, lines: sized.replyLines, style: BlockStyle(
+        let reply = painter.block(input.reply, lines: sized.replyLines, style: BlockStyle(
             size: sized.replySize,
             lineHeight: replyLineHeight(sized.replySize),
             font: sized.replyFont,
@@ -331,11 +360,13 @@ private struct MessageCardLayoutEngine {
             inset: 0,
             bubble: geometry.bubbles ? BubbleStyle(offset: Metrics.bubbleOffset, color: palette.replyPanel) : nil
         ))
+        region(.reply, reply.top, painter.y)
 
         return MessageCardLayout(
             width: width,
             height: height,
             ops: painter.ops,
+            regions: regions,
             watermark: MessageCardLayout.watermark(handle: input.handle),
             truncated: truncated
         )
