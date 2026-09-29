@@ -97,10 +97,28 @@ export type CardDotOp = {
 
 export type CardOp = CardTextOp | CardBarOp | CardSeparatorOp | CardPanelOp | CardDotOp;
 
+/**
+ * Les PARTIES d'une carte qu'un geste peut désigner sur l'aperçu : l'en-tête,
+ * la citation, la liaison, la réponse — et le fond, partout ailleurs. Le
+ * filigrane n'en est pas une : il signe toujours la carte, rien ne le règle.
+ */
+export type CardPart = 'header' | 'quote' | 'link' | 'reply' | 'background';
+
+/** La zone d'une partie, en pixels de la carte. */
+export type CardRegion = {
+  readonly part: Exclude<CardPart, 'background'>;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
 export type CardLayout = {
   readonly width: number;
   readonly height: number;
   readonly ops: readonly CardOp[];
+  /** Les zones touchables, de haut en bas — seules les parties PEINTES en ont une. */
+  readonly regions: readonly CardRegion[];
   /** Le motif du filigrane diagonal. */
   readonly watermark: string;
   /** Vrai quand, au plancher des polices, un texte a dû être coupé. */
@@ -248,6 +266,10 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const align = (rtl: boolean): 'left' | 'right' => (rtl ? 'right' : 'left');
   const authorFont = canvasFont({ family: null, weight: 600, style: 'normal' }, AUTHOR_SIZE);
 
+  const regions: CardRegion[] = [];
+  const region = (part: CardRegion['part'], top: number, bottom: number) => regions.push({ part, x: PAD_X, y: top, width: textWidth, height: bottom - top });
+  const headerTop = y;
+
   if (title !== null) {
     const direction = textDirection(title);
     const titleFont = canvasFont({ family: null, weight: 800, style: 'normal' }, TITLE_SIZE);
@@ -261,7 +283,10 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     ops.push({ kind: 'text', text: date, x: start(direction === 'rtl', 0), y: y + DATE_SIZE, font: dateFont, color: palette.quoteInk, align: align(direction === 'rtl'), direction });
     y += DATE_LINE;
   }
-  if (chrome.header > 0) y += HEADER_GAP;
+  if (chrome.header > 0) {
+    region('header', headerTop, y);
+    y += HEADER_GAP;
+  }
 
   const author = (name: string, x: number, rtl: boolean) => {
     if (!showAuthors) return;
@@ -300,11 +325,13 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel } : null,
     });
     if (geometry.quoteBar) ops.push({ kind: 'bar', x: quote.rtl ? CARD_WIDTH - PAD_X - BAR_WIDTH : PAD_X, y: quote.top, width: BAR_WIDTH, height: y - quote.top, color: palette.accent });
+    region('quote', quote.top, y);
     ops.push(...linkOps(template.link, { y, rtl: quote.rtl, accent: palette.accent }));
+    region('link', y, y + geometry.block);
     y += geometry.block;
   }
 
-  block(input.reply, sized.replyLines, {
+  const reply = block(input.reply, sized.replyLines, {
     size: sized.replySize,
     lineHeight: replyLineHeight(sized.replySize),
     font: sized.replyFont,
@@ -312,8 +339,30 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     inset: 0,
     bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET, color: palette.replyPanel } : null,
   });
+  region('reply', reply.top, y);
 
-  return { width: CARD_WIDTH, height, ops, watermark: watermarkOf(input.handle), truncated };
+  return { width: CARD_WIDTH, height, ops, regions, watermark: watermarkOf(input.handle), truncated };
+}
+
+/** Une marge de tolérance autour de chaque zone : un doigt ne vise pas au pixel. */
+const TOUCH_SLOP = 24;
+
+/**
+ * La partie désignée par un point de la carte : la zone qui le contient (avec
+ * la tolérance du doigt, la plus proche l'emportant quand deux se chevauchent),
+ * le fond ailleurs.
+ */
+export function cardPartAt(layout: Pick<CardLayout, 'regions'>, point: { readonly x: number; readonly y: number }): CardPart {
+  const distance = (r: CardRegion) => {
+    const dx = Math.max(r.x - point.x, 0, point.x - (r.x + r.width));
+    const dy = Math.max(r.y - point.y, 0, point.y - (r.y + r.height));
+    return Math.hypot(dx, dy);
+  };
+  const [nearest] = layout.regions
+    .map((r) => ({ part: r.part, distance: distance(r) }))
+    .filter((hit) => hit.distance <= TOUCH_SLOP)
+    .sort((a, b) => a.distance - b.distance);
+  return nearest?.part ?? 'background';
 }
 
 /** Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse. */

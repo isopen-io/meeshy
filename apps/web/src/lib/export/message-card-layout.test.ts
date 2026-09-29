@@ -4,6 +4,7 @@ import {
   CARD_MAX_HEIGHT,
   CARD_MIN_HEIGHT,
   CARD_WIDTH,
+  cardPartAt,
   layoutMessageCard,
   textDirection,
   truncateLines,
@@ -253,5 +254,47 @@ describe('les liaisons — des façons variées de mener la question à la répo
 
   test('chaque liaison garde la carte dans un carré pour un échange court', () => {
     for (const link of CARD_LINKS) expect(layoutWith(link).height).toBe(CARD_MIN_HEIGHT);
+  });
+});
+
+describe('les zones touchables d’une carte', () => {
+  const center = (layout: ReturnType<typeof layoutMessageCard>, part: string) => {
+    const zone = layout.regions.find((r) => r.part === part);
+    if (zone === undefined) throw new Error(`zone ${part} absente`);
+    return { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
+  };
+
+  test('une réponse citée se lit de haut en bas : citation, liaison, réponse — sans en-tête non demandé', () => {
+    const layout = layoutMessageCard(cardInput(), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['quote', 'link', 'reply']);
+    const [quote, link, reply] = layout.regions;
+    expect(quote!.y + quote!.height).toBeLessThanOrEqual(link!.y);
+    expect(link!.y + link!.height).toBeLessThanOrEqual(reply!.y);
+  });
+
+  test('le titre ou la date ouvrent une zone d’en-tête ; un message isolé n’a ni citation ni liaison', () => {
+    const layout = layoutMessageCard(cardInput({ quoted: null, title: 'Soirée', date: '28 septembre 2026' }), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['header', 'reply']);
+  });
+
+  test('chaque zone contient le texte qu’elle nomme', () => {
+    const layout = layoutMessageCard(cardInput({ template: templateIdOf({ palette: 'neige', typeface: 'systeme', link: 'bulles' }) }), measure);
+    const reply = layout.regions.find((r) => r.part === 'reply')!;
+    const line = opWithText(layout.ops, 'Chez Lina, à 20 h !')!;
+    expect(line.y).toBeGreaterThan(reply.y);
+    expect(line.y).toBeLessThanOrEqual(reply.y + reply.height);
+  });
+
+  test('toucher une partie la désigne, toucher la marge désigne le fond', () => {
+    const layout = layoutMessageCard(cardInput({ title: 'Soirée' }), measure);
+    for (const part of ['header', 'quote', 'link', 'reply'] as const) expect(cardPartAt(layout, center(layout, part))).toBe(part);
+    expect(cardPartAt(layout, { x: 8, y: 8 })).toBe('background');
+    expect(cardPartAt(layout, { x: CARD_WIDTH - 4, y: layout.height - 4 })).toBe('background');
+  });
+
+  test('un doigt posé juste à côté d’une zone la désigne encore', () => {
+    const layout = layoutMessageCard(cardInput(), measure);
+    const reply = layout.regions.find((r) => r.part === 'reply')!;
+    expect(cardPartAt(layout, { x: reply.x - 10, y: reply.y + 4 })).toBe('reply');
   });
 });
