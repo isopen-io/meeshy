@@ -2125,6 +2125,7 @@
 		E031FB21FE54366CF8443867 /* PanelBackAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADF0AF500622DE47546B8FD /* PanelBackAction.swift */; };
 		E04BFD9AA0E0335F32FBE301 /* StatusBubbleHostScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C2A5BBA4EEC989E8A71E9E /* StatusBubbleHostScopeTests.swift */; };
 		E055770E49070202A0BA36BA /* ComposerCameraFlash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4A48F2DA0358A24D57D7A6 /* ComposerCameraFlash.swift */; };
+		E05C25B8ACE9D549B3D0AA2A /* ConversationListMessagePrefetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67044E2839AB7B963330D637 /* ConversationListMessagePrefetcher.swift */; };
 		E08C2FF3843C81B8E465E097 /* PeopleDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596E5D0444AE3B50BBC490D6 /* PeopleDiscoveryView.swift */; };
 		E0A7AC42BDE5ECF5E6A715BD /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 537FA4625B4C7FF71120B5FA /* WidgetPreviewView.swift */; };
 		E0D9E9D3DACCE991B5DDA03D /* ConversationTypeDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFFF558CEF1F603211177875 /* ConversationTypeDisplayName.swift */; };
@@ -3494,6 +3495,7 @@
 		6689D3220B4BD73D57B33D61 /* ComposerRailDoor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailDoor.swift; sourceTree = "<group>"; };
 		669F87494476EFA1E50C4C0E /* LinkPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewCard.swift; sourceTree = "<group>"; };
 		66DA0693EE6E515821B6E767 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
+		67044E2839AB7B963330D637 /* ConversationListMessagePrefetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListMessagePrefetcher.swift; sourceTree = "<group>"; };
 		670AA200BCB22955C806F69A /* ThemedConversationRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
 		67194BC837C9DB0125FE1C63 /* StoryIndexResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryIndexResolverTests.swift; sourceTree = "<group>"; };
 		67B04709990963E054A5E81E /* BubbleStickerRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleStickerRenderingTests.swift; sourceTree = "<group>"; };
@@ -5010,6 +5012,7 @@
 				1C42E41A77283BFC2570509E /* CallFeedbackViewModel.swift */,
 				28F9850E94EE3EB1DC1013DE /* CallQualityDetailViewModel.swift */,
 				DBB1C4FE83A6839017FA891F /* ConnectionStatusViewModel.swift */,
+				67044E2839AB7B963330D637 /* ConversationListMessagePrefetcher.swift */,
 				20BA18D6D81524E33F3069EB /* ConversationListPaginationCursor.swift */,
 				0D218074EE027B958057E149 /* ConversationListViewModel.swift */,
 				D3397276448BC17060DDA394 /* ConversationOptionsViewModel.swift */,
@@ -8864,6 +8867,7 @@
 				0629505A32AEB65FB2C3938C /* ConversationListEntry.swift in Sources */,
 				80A664B876456529902544D7 /* ConversationListEnvironment.swift in Sources */,
 				83CD1AC163BE53DD80418116 /* ConversationListHelpers.swift in Sources */,
+				E05C25B8ACE9D549B3D0AA2A /* ConversationListMessagePrefetcher.swift in Sources */,
 				39CDC7C4A67BE3038A422FC2 /* ConversationListPaginationCursor.swift in Sources */,
 				5C484DA964240EC8EC7DDFA3 /* ConversationListQuickActions.swift in Sources */,
 				81E40577153953344B78FA94 /* ConversationListSheetTargets.swift in Sources */,
