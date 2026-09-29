@@ -74,7 +74,7 @@ nonisolated enum MessageCardMediaLoader {
     /// ne reconnaît pas un fichier de cache nommé par son empreinte.
     static func localFile(_ fileURL: String, kind: MessageCardMediaKind) async -> URL? {
         let key = resolved(fileURL)
-        let store = kind == .audio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+        let store = kind == .audio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
         guard let data = try? await store.data(for: key), !data.isEmpty else { return nil }
         let known = URL(string: key)?.pathExtension ?? ""
         let fallback = kind == .audio ? "m4a" : "mp4"
