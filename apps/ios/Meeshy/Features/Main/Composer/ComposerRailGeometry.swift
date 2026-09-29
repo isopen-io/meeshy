@@ -75,28 +75,8 @@ nonisolated enum ComposerRailGeometry {
     /// cadre entier.
     static var floatingBottomInset: CGFloat { gutter + railWidth }
 
-    /// L'écart entre un bouton et la colonne d'options qu'il ouvre à sa droite.
-    static let flyoutGap: CGFloat = 6
-
-    /// **La hauteur NATURELLE d'une colonne de boutons flottants**, marges de
-    /// verre comprises — ce que la colonne d'options demanderait si rien ne la
-    /// bornait. Au-delà de la hauteur offerte, elle défile.
-    static func floatingColumnHeight(entries: Int) -> CGFloat {
-        guard entries > 0 else { return 0 }
-        return CGFloat(entries) * railWidth
-            + CGFloat(entries - 1) * floatingEntrySpacing
-            + 2 * floatingColumnPadding
-    }
-
     /// La marge verticale d'une colonne flottante (`ComposerLeadingRail`).
     static let floatingColumnPadding: CGFloat = 8
-
-    /// **Où se pose la colonne d'options** : son haut s'aligne sur celui du
-    /// bouton qui l'ouvre, puis remonte juste assez pour ne pas sortir de la
-    /// zone offerte — jamais au-dessus de son bord haut.
-    static func flyoutTop(anchorTop: CGFloat, columnHeight: CGFloat, available: CGFloat) -> CGFloat {
-        max(0, min(anchorTop - floatingColumnPadding, available - columnHeight))
-    }
 
     /// L'encastrement d'AVANT les rails, conservé tel quel là où aucun rail
     /// n'est monté : ce lot ne déplace pas une scène qui n'a pas de rails.

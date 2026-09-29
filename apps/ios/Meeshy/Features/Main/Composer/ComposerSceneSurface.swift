@@ -416,17 +416,12 @@ struct ComposerSceneSurface: View {
 
     /// **Les boutons de CONTRÔLE, à GAUCHE** (directive porteur 2026-08-31).
     ///
-    /// Trois places, trois niveaux : l'OUTIL agit (gauche), le DOCUMENT et la
-    /// SLIDE se pilotent (droite), les réglages de l'outil OUVERT vivent en bas.
-    /// Le rail avait d'abord été posé à droite d'après la planche `1b` ; la
-    /// directive le ramène à gauche, et sépare surtout ce qu'il PORTE — les
-    /// portes restent ici, les contrôleurs d'outil DESCENDENT.
-    ///
-    /// Il ne montre donc plus jamais `.tool(...)` : un outil ouvert VIDE ce rail
-    /// au lieu de le travestir. C'est ce qui rend la place signifiante — le
-    /// doigt apprend qu'à gauche on OUVRE, en bas on RÈGLE, et une place qui
-    /// change de sens selon l'état n'apprend rien.
+    /// Un outil ouvert y remplace les portes par SES contrôleurs et leur `(x)`,
+    /// et tout le reste du chrome s'efface (#8652, directive 2026-09-29) : la
+    /// place reste celle où l'on agit, l'outil en cours en est le seul
+    /// occupant — `ComposerToolFocus` en porte la règle.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// **L'écran LARGE** — iPad plein écran et Mac (maquette `iPad.dc.html`) :
     /// marges de 24 pt, rails centrés en hauteur plutôt que posés au pouce, et
@@ -436,26 +431,27 @@ struct ComposerSceneSurface: View {
     private var isRoomy: Bool { horizontalSizeClass == .regular }
     private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
 
+    /// **Le rail de gauche — les portes, ou les contrôleurs de l'outil
+    /// ouvert À LEUR PLACE** (#8652, directive porteur 2026-09-29 : « les
+    /// tools de la scène principale laissent place aux tools de l'outil
+    /// sélectionné avec (X) »). Une seule colonne, au même endroit : le doigt
+    /// qui vient d'ouvrir l'outil y trouve ses réglages, et le `(x)` qui le
+    /// referme rend les portes à la même place.
     private var floatingRail: AnyView {
         let mode: ComposerRailMode
         switch railMode {
         case .doors(let servies):
             mode = .doors(ComposerSceneFloatingRail.sideRow(from: servies, format: format))
-        case .flyout(let volet):
-            // La colonne s'accroche à une porte de CE rail : il garde les
-            // siennes, et `flyoutColumn` se pose à côté.
-            mode = .flyout(ComposerRailFlyout(
-                doors: ComposerSceneFloatingRail.sideRow(from: volet.doors, format: format),
-                anchor: volet.anchor,
-                controls: volet.controls))
         case .tool:
-            return AnyView(EmptyView())
+            mode = railMode
         }
         if case .doors(let portes) = mode, portes.isEmpty { return AnyView(EmptyView()) }
         return AnyView(
             ComposerLeadingRail(mode: mode,
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
+                                onToolControl: onRailToolControl,
+                                onExitTool: onRailExitTool,
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
@@ -468,61 +464,18 @@ struct ComposerSceneSurface: View {
                 // gouttière (directive porteur 2026-09-28).
                 .padding(.leading, edge)
                 .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
+                .id(toolIsOpen)
+                .transition(.opacity)
         )
-    }
-
-    /// **Les options de l'outil ouvert, en colonne À DROITE de sa porte**
-    /// (directive porteur 2026-09-28 : « affiche la liste des options
-    /// directement à droite du bouton en vertical scrollant »).
-    ///
-    /// Posée depuis le cadre que la porte publie, dans la zone ENTIÈRE des
-    /// rails : la colonne est souvent plus haute que le rail (neuf entrées pour
-    /// le texte), et bornée au rail elle serait coupée. Au-delà de la zone,
-    /// elle défile — `ComposerLeadingRail` le fait de lui-même.
-    @ViewBuilder
-    private func flyoutColumn(_ porte: Anchor<CGRect>?) -> some View {
-        if case .flyout(let volet) = railMode, let porte {
-            GeometryReader { geo in
-                let cadre = geo[porte]
-                let hauteur = min(ComposerRailGeometry.floatingColumnHeight(entries: volet.entryCount),
-                                  geo.size.height)
-                ComposerLeadingRail(mode: .tool(volet.controls),
-                                    plateauTint: plateauTint,
-                                    onToolControl: onRailToolControl,
-                                    onExitTool: onRailExitTool,
-                                    pushesToThumb: false,
-                                    separateButtons: true)
-                    .frame(height: hauteur)
-                    .offset(x: cadre.maxX + ComposerRailGeometry.flyoutGap,
-                            y: ComposerRailGeometry.flyoutTop(anchorTop: cadre.minY,
-                                                              columnHeight: hauteur,
-                                                              available: geo.size.height))
-            }
-            .transition(.opacity)
-        }
     }
 
     /// Ce qui FAIT ENTRER de la matière. Absente pendant qu'un outil est
     /// ouvert : la rangée ferait alors concurrence aux contrôleurs de l'outil,
     /// et l'arbitrage donne la priorité du bas à l'outil en cours.
     private var lowToolRow: AnyView {
-        // **Un outil OUVERT prend le BAS** (directive porteur 2026-08-31) : ses
-        // réglages y ont la largeur, et le rail de gauche redevient ce qu'il
-        // est — des portes. Les deux ne coexistent jamais, ce qui donne au bas
-        // de l'écran un seul sens à la fois.
-        if case .tool = railMode {
-            return AnyView(
-                ComposerLeadingRail(mode: railMode,
-                                    plateauTint: plateauTint,
-                                    onToolControl: onRailToolControl,
-                                    onExitTool: onRailExitTool,
-                                    axis: .horizontal,
-                                    separateButtons: true)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, ComposerRailGeometry.outerMargin)
-                    .padding(.bottom, 4)
-            )
-        }
+        // **Un outil ouvert ne prend plus le bas** (#8652) : ses contrôleurs
+        // remplacent les portes du rail de gauche, et la rangée basse cède
+        // avec le reste du chrome.
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.lowRow(from: servies, format: format)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
@@ -588,6 +541,13 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
+        // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
+        // curseur rejoint le rail qui porte désormais les réglages et le `(x)`.
+        .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: toolIsOpen)
+        .adaptiveOnChange(of: toolIsOpen) { _, _ in
+            UIAccessibility.post(notification: .layoutChanged, argument: nil)
+        }
         .background {
             GeometryReader { geo in
                 Color.clear.preference(key: ComposerSafeTopKey.self, value: geo.safeAreaInsets.top)
@@ -781,6 +741,13 @@ struct ComposerSceneSurface: View {
                 edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
             )
             .padding(.top, -chromeLift)
+            // **Un outil ouvert efface la barre haute** (#8652) — par l'opacité
+            // et non par le retrait : sa hauteur reste, donc la scène ne saute
+            // pas pendant le fondu, et le `(x)` de l'outil devient la seule
+            // sortie à l'écran.
+            .opacity(ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen) ? 1 : 0)
+            .allowsHitTesting(ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen))
+            .accessibilityHidden(!ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen))
 
             // **La trace du son de FOND, en tête** (#5001, #5017) : elle se lit
             // AVEC la scène, comme un titre avec ce qu'il titre. Aucun `tint:` —
@@ -903,6 +870,7 @@ struct ComposerSceneSurface: View {
             HStack(alignment: isRoomy ? .center : .bottom, spacing: 0) {
                 floatingRail
                 Spacer(minLength: 0)
+                if ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen) {
                 ComposerTrailingRail(actions: trailingActions,
                                      plateauTint: plateauTint,
                                      onAction: onTrailingAction,
@@ -917,15 +885,17 @@ struct ComposerSceneSurface: View {
                                      timeIsOpen: timeIsOpen)
                     .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
+                    .transition(.opacity)
+                }
             }
             .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
-            .overlayPreferenceValue(ComposerRailFlyoutAnchorKey.self) { flyoutColumn($0) }
             // **Le volet CÈDE au viseur** (#4080) : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
             // **Un outil ou une bande ouverts prennent le bas pour eux seuls**
             // (retour porteur 2026-09-28) : la légende s'efface le temps du
             // dessin ou du Cadre, comme la barre canonique sous un panneau.
-            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage), !toolIsOpen, band == nil {
+            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage),
+               ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen), band == nil {
                 descriptionOverlay
             }
             roomyBandCard

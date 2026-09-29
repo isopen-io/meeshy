@@ -112,15 +112,6 @@ struct ComposerLeadingRail: View {
     /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
     var separateButtons: Bool = false
 
-    /// **La porte dont les options sont ouvertes À SA DROITE** (directive
-    /// porteur 2026-09-28). Elle se teinte, comme un contrôleur déplié, et
-    /// publie son cadre (`ComposerRailFlyoutAnchorKey`) pour que la colonne se
-    /// pose à côté d'elle. Lue sur le mode : une seule source.
-    private var anchoredDoor: ComposerRailDoor? {
-        if case .flyout(let volet) = mode { return volet.anchor }
-        return nil
-    }
-
     @State private var lastTapped: String?
 
     /// L'écart entre deux cadres : resserré quand chaque bouton ne dessine
@@ -132,7 +123,6 @@ struct ComposerLeadingRail: View {
     private var isEmpty: Bool {
         switch mode {
         case .doors(let doors):   return doors.isEmpty
-        case .flyout(let volet):  return volet.doors.isEmpty
         case .tool(let controls): return controls.isEmpty
         }
     }
@@ -166,9 +156,29 @@ struct ComposerLeadingRail: View {
     /// comportement d'avant, au pixel.
     @ViewBuilder
     private var verticalDoors: some View {
-        ViewThatFits(in: .vertical) {
-            railStack { railEntries }
-            ScrollView(.vertical, showsIndicators: false) { railStack { railEntries } }
+        if case .tool(let controls) = mode {
+            verticalToolColumn(controls)
+        } else {
+            ViewThatFits(in: .vertical) {
+                railStack { railEntries }
+                ScrollView(.vertical, showsIndicators: false) { railStack { railEntries } }
+            }
+        }
+    }
+
+    /// **Les contrôleurs d'un outil à la place des portes, le `(x)` HORS du
+    /// défilement** (#8652). Le clavier d'un texte en saisie ramène la colonne
+    /// à ~300 pt : les réglages défilent, la sortie reste sous le pouce — la
+    /// même promesse que la rangée horizontale (#4582).
+    private func verticalToolColumn(_ controls: [ComposerToolControl]) -> some View {
+        VStack(spacing: entrySpacing) {
+            ViewThatFits(in: .vertical) {
+                VStack(spacing: entrySpacing) { ForEach(controls) { toolButton($0) } }
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: entrySpacing) { ForEach(controls) { toolButton($0) } }
+                }
+            }
+            exitButton
         }
     }
 
@@ -191,10 +201,6 @@ struct ComposerLeadingRail: View {
         switch mode {
                 case .doors(let doors):
                     doorEntries(doors)
-                case .flyout(let volet):
-                    // Les portes RESTENT : la colonne d'options se pose à côté
-                    // de la sienne, elle ne la remplace pas.
-                    doorEntries(volet.doors)
                 case .tool(let controls):
                     // **La rangée DÉFILE, le `(x)` reste** (#4582, directive
                     // porteur « faire très attention aux décalages hors du
@@ -281,19 +287,12 @@ struct ComposerLeadingRail: View {
     }
 
     private func doorButton(_ door: ComposerRailDoor) -> some View {
-        let accroche = anchoredDoor == door
-        return entry(id: door.rawValue,
-                     symbolName: door.symbolName,
-                     label: ComposerRailCopy.label(door),
-                     tint: accroche
-                         ? MeeshyColors.brandPrimary
-                         : MeeshyColors.textSecondary(isDark: true),
-                     badge: badges[door]) {
+        entry(id: door.rawValue,
+              symbolName: door.symbolName,
+              label: ComposerRailCopy.label(door),
+              tint: MeeshyColors.textSecondary(isDark: true),
+              badge: badges[door]) {
             onDoor?(door)
-        }
-        .accessibilityAddTraits(accroche ? .isSelected : [])
-        .anchorPreference(key: ComposerRailFlyoutAnchorKey.self, value: .bounds) {
-            accroche ? $0 : nil
         }
     }
 
