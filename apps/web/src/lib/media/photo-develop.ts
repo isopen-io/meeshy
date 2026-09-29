@@ -41,8 +41,8 @@ export function developedSize(size: PhotoSize, maxEdge: number = PHOTO_MAX_EDGE)
 
 export const lookFilter = (look: PhotoLook = PHOTO_LOOK): string => `brightness(${look.brightness}) contrast(${look.contrast}) saturate(${look.saturation})`;
 
-function toned(pixels: Uint8ClampedArray, look: PhotoLook): Float32Array {
-  const out = new Float32Array(pixels.length);
+function toned(pixels: Uint8ClampedArray, look: PhotoLook): Uint8ClampedArray<ArrayBuffer> {
+  const out = new Uint8ClampedArray(pixels.length);
   const tone = (value: number): number => (value * look.brightness - 128) * look.contrast + 128;
   for (let i = 0; i < pixels.length; i += 4) {
     const r = tone(pixels[i] ?? 0);
@@ -57,11 +57,16 @@ function toned(pixels: Uint8ClampedArray, look: PhotoLook): Float32Array {
   return out;
 }
 
-/** Retouche des pixels RGBA, rendue dans un tableau NEUF : la source n'est jamais touchée. */
-export function developPixels(pixels: Uint8ClampedArray, size: PhotoSize, look: PhotoLook = PHOTO_LOOK): Uint8ClampedArray {
+/**
+ * Retouche des pixels RGBA, rendue dans un tableau NEUF : la source n'est
+ * jamais touchée. Deux tableaux d'octets au plus (le ton, puis la netteté) :
+ * une photo de 2560 px en coûte deux fois 20 Mo, jamais un tableau flottant
+ * quatre fois plus lourd.
+ */
+export function developPixels(pixels: Uint8ClampedArray, size: PhotoSize, look: PhotoLook = PHOTO_LOOK): Uint8ClampedArray<ArrayBuffer> {
   const tone = toned(pixels, look);
+  if (look.sharpness <= 0 || size.width < 3 || size.height < 3) return tone;
   const out = new Uint8ClampedArray(tone);
-  if (look.sharpness <= 0 || size.width < 3 || size.height < 3) return out;
   const row = size.width * 4;
   const center = 1 + 4 * look.sharpness;
   for (let y = 1; y < size.height - 1; y += 1) {
@@ -81,7 +86,7 @@ export type PhotoSurface = {
   readonly paint: (image: CanvasImageSource, crop: PhotoCrop, size: PhotoSize) => void;
   /** `null` : pixels illisibles (canevas protégé, mémoire) — la photo part sans retouche. */
   readonly pixels: () => Uint8ClampedArray | null;
-  readonly put: (pixels: Uint8ClampedArray) => void;
+  readonly put: (pixels: Uint8ClampedArray<ArrayBuffer>) => void;
   readonly encode: (mime: string, quality: number) => Promise<Blob | null>;
 };
 
@@ -103,7 +108,7 @@ const surfaceOf = (context: Context2D, size: PhotoSize, encode: PhotoSurface['en
       return null;
     }
   },
-  put: (pixels) => context.putImageData(new ImageData(new Uint8ClampedArray(pixels), size.width, size.height), 0, 0),
+  put: (pixels) => context.putImageData(new ImageData(pixels, size.width, size.height), 0, 0),
   encode,
 });
 
