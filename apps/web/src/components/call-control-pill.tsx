@@ -59,7 +59,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-[28px] p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] before:content-[''] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-[28px] p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={expanded ? 'grown' : 'pill'}
         data-call-chrome-keep=""
       >
