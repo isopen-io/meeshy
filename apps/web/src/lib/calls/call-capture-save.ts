@@ -2,9 +2,10 @@ import { currentGallerySaver, type GallerySaver } from '@/lib/gallery/gallery-sa
 import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { FileDeliveryPortal } from '@/lib/media/deliver-file';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
+import { PHOTO_MIME } from '@/lib/media/photo-develop';
 
 /**
- * **ENREGISTRER UNE CAPTURE D'APPEL** (#8552, #8625) — une photo (PNG) ou une
+ * **ENREGISTRER UNE CAPTURE D'APPEL** (#8552, #8625) — une photo (JPEG, `developPhoto`) ou une
  * vidéo (MP4 ou WebM) part dans la PHOTOTHÈQUE là où l'hôte en a une (la
  * coque Android, album « Meeshy ») ; ailleurs par la porte de fichiers (le
  * téléchargement d'un navigateur, la feuille de partage de la coque iOS).
@@ -23,7 +24,7 @@ export const browserSaveEnv = (): SaveEnv => ({
   portal: () => import('@/lib/media/deliver-file').then((module) => module.fileDeliveryPortal(browserFileDeliveryHost())),
 });
 
-const PHOTO = 'image/png';
+const PHOTO = PHOTO_MIME;
 
 async function saveOne(file: CaptureFile, env: SaveEnv): Promise<'saved' | 'failed' | 'cancelled'> {
   const mimeType = file.mimeType ?? PHOTO;
