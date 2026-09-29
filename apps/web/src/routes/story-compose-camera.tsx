@@ -73,6 +73,8 @@ export function StudioCamera({
   const restoreRef = useRef<(() => void) | null>(null);
   const busyRef = useRef(false);
   const autoRef = useRef(false);
+  const closedRef = useRef(false);
+  const startedRef = useRef(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [facing, setFacing] = useState<CameraFacing>('environment');
   const [status, setStatus] = useState<'opening' | 'live' | 'unavailable'>('opening');
@@ -146,7 +148,8 @@ export function StudioCamera({
   };
 
   const finish = (file: File | null) => {
-    if (file === null) return;
+    // Quittée par le (X) pendant la prise : rien n'est posé.
+    if (file === null || closedRef.current) return;
     releaseStream();
     onTake(file);
   };
@@ -169,13 +172,23 @@ export function StudioCamera({
     recordingRef.current = mode;
     setRecording(mode);
     await lightOn('ring');
+    // Relâché (ou quittée) pendant que la lumière montait : rien ne tourne.
+    if (recordingRef.current !== mode || streamRef.current !== stream) {
+      await lightOff();
+      return;
+    }
     engine.startRecording(stream);
+    startedRef.current = true;
   };
 
   const stopRecording = async () => {
     if (recordingRef.current === null) return;
     recordingRef.current = null;
     setRecording(null);
+    // L'enregistreur n'a pas encore démarré : `startRecording` voit la levée
+    // et éteint la lumière lui-même — il n'y a rien à clore.
+    if (!startedRef.current) return;
+    startedRef.current = false;
     const file = await engine.stopRecording();
     await lightOff();
     finish(file);
@@ -191,13 +204,16 @@ export function StudioCamera({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  /* Le doigt de la scène se lève : la prise se clôt s'il filmait ; sinon
+     (la caméra ne voyait pas encore) rien n'est pris, le viseur reste. */
   useEffect(() => {
-    if (holding || recordingRef.current !== 'hold') return;
-    if (quickCaptureRelease({ recording: true }) === 'close-take') void stopRecording();
+    if (holding || intent !== 'hold') return;
+    if (quickCaptureRelease({ recording: recordingRef.current === 'hold' }) === 'close-take') void stopRecording();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holding]);
 
   const close = () => {
+    closedRef.current = true;
     if (holdTimer.current !== null) clearTimeout(holdTimer.current);
     recordingRef.current = null;
     releaseStream();
@@ -219,14 +235,19 @@ export function StudioCamera({
 
   return (
     <div
-      data-story-camera
+      data-story-camera={status}
+      data-story-camera-facing={facing}
       role="dialog"
       aria-modal="true"
       aria-label={translate(lang, 'story.studio.camera.title')}
       className="fixed inset-0 z-50 overflow-hidden bg-black"
       style={{ touchAction: 'none' }}
     >
-      {screenFlash !== 'off' ? <span aria-hidden="true" data-story-camera-screen-flash={screenFlash} className="studio-camera-flash absolute inset-0 block bg-white" /> : null}
+      {/* LE SOL BLANC s'allume d'un coup, jamais en fondu : la lumière doit
+          être pleine au moment où l'image est prise. */}
+      {screenFlash !== 'off' ? (
+        <span aria-hidden="true" data-story-camera-screen-flash={screenFlash} className="absolute inset-0 block" style={{ backgroundColor: '#fff' }} />
+      ) : null}
       <video
         ref={videoRef}
         data-story-camera-preview
@@ -281,7 +302,7 @@ export function StudioCamera({
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-3 px-3 pb-safe">
-        <p aria-hidden="true" className="text-caption" style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+        <p aria-hidden="true" className="text-caption" style={screenFlash === 'off' ? { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' } : { color: '#111' }}>
           {translate(lang, photoFirst ? 'story.studio.camera.hint.photo' : 'story.studio.camera.hint.video')}
         </p>
         <div className="mb-4 flex w-full items-center justify-center gap-10">
@@ -334,6 +355,7 @@ export function StudioCamera({
             disabled={recording !== null}
             onClick={() => {
               autoRef.current = true;
+              setStatus('opening');
               setFacing((current) => (current === 'user' ? 'environment' : 'user'));
             }}
             className={ROUND_GLASS}

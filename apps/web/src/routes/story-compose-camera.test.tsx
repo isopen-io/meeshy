@@ -161,6 +161,29 @@ describe('StudioCamera — la capture rapide', () => {
     expect(taken.map((file) => file.type)).toEqual(['video/mp4']);
   });
 
+  test('relâché pendant que la lumière du flash monte : aucun enregistrement ne reste en marche', async () => {
+    const { engine, journal } = fakeEngine();
+    const brightness: { release: () => void } = { release: () => undefined };
+    const slow: CameraEngine = {
+      ...engine,
+      maxBrightness: () =>
+        new Promise((resolve) => {
+          brightness.release = () => resolve(() => journal.push('brightness:restore'));
+        }),
+    };
+    const taken: File[] = [];
+    const host = await mounter.mount(camera({ engine: slow, intent: 'hold', holding: true, flash: true, taken }));
+    await settle();
+    await mounter.rerender(host, camera({ engine: slow, intent: 'hold', holding: false, flash: true, taken }));
+    await settle();
+    await act(async () => brightness.release());
+    await settle();
+    expect(journal).not.toContain('record');
+    expect(journal).toContain('brightness:restore');
+    expect(host.querySelector('[data-story-camera-screen-flash]')).toBeNull();
+    expect(taken).toEqual([]);
+  });
+
   test('relâché avant que la caméra voie : rien n’est pris, le viseur reste ouvert', async () => {
     const { engine, journal } = fakeEngine();
     const taken: File[] = [];
