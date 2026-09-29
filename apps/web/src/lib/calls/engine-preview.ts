@@ -18,6 +18,9 @@ import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-l
  *   pendant la sonnerie ne s'entend donc pas. `previewed` dit à l'écran que
  *   l'appelé le voit.
  *
+ * Activer le son de l'aperçu fait taire la sonnerie (#8627) : on entend
+ * l'appelant, pas les deux.
+ *
  * Tout passe par `call:preview-signal`, jamais par `call:signal`, où une
  * réponse décrocherait l'appel. L'aperçu survit au décroché jusqu'à la
  * connexion du vrai lien (`settle`), pour que l'image ne clignote pas.
@@ -32,6 +35,7 @@ export type EnginePreviewDeps = {
   readonly createStream: (tracks: readonly MediaStreamTrack[]) => MediaStream;
   readonly localStream: () => MediaStream | null;
   readonly iceServers: () => readonly RTCIceServer[];
+  readonly silenceRing: () => void;
 };
 
 export type EnginePreview = {
@@ -40,6 +44,8 @@ export type EnginePreview = {
   readonly receive: (event: string, payload: unknown) => void;
   /** La caméra de l'appelant a changé pendant la sonnerie. */
   readonly setVideoTrack: (track: MediaStreamTrack | null) => void;
+  /** L'appelé active le son de l'aperçu (#8627) : il entend l'appelant, la sonnerie se tait. */
+  readonly hear: () => void;
   /** Le vrai lien est connecté, ou l'appel s'arrête : l'aperçu n'a plus lieu d'être. */
   readonly close: () => void;
 };
@@ -130,6 +136,9 @@ export function createEnginePreview(deps: EnginePreviewDeps): EnginePreview {
       else if (event === SERVER_EVENTS.CALL_PREVIEW_SIGNAL) void onSignal(payload);
     },
     setVideoTrack: (track) => void open?.link.setVideoTrack(track).catch(() => undefined),
+    hear: () => {
+      if (deps.read()?.phase.kind === 'incoming') deps.silenceRing();
+    },
     close,
   };
 }

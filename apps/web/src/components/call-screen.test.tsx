@@ -667,6 +667,27 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     view.done();
   });
 
+  test('le bouton de son se lit d’emblée, en toutes lettres, au-dessus de l’identité (#8627)', () => {
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    const button = view.find('[data-call-preview-sound]');
+    expect(button?.textContent).toContain('Activer le son');
+    expect(button?.className).toContain('glass-call-prominent');
+    view.done();
+  });
+
+  test('activer le son de l’aperçu fait taire la sonnerie ; le couper ne la relance pas (#8627)', () => {
+    const original = callActions.hearPreview;
+    const heard: number[] = [];
+    callActions.hearPreview = () => void heard.push(1);
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    view.press('[data-call-preview-sound]');
+    expect(heard).toHaveLength(1);
+    view.press('[data-call-preview-sound]');
+    expect(heard).toHaveLength(1);
+    view.done();
+    callActions.hearPreview = original;
+  });
+
   test('un appel vocal qui sonne s’écoute aussi, sans vidéo', () => {
     const view = mount(ringing('audio', previewStream(['audio'])));
     expect(view.find('[data-call-preview] video')).toBeNull();

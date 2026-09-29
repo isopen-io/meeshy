@@ -3,15 +3,18 @@ import { useState } from 'react';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **L'APPELANT AVANT DE DÉCROCHER** (#8480) — ce que le moteur reçoit sur le
  * lien d'aperçu (`call.preview`) : sa vidéo derrière l'écran de sonnerie,
- * voilée pour que le nom et les boutons restent lisibles, et un bouton de son.
- * Le son est COUPÉ par défaut : on l'active d'un geste, et ce geste ouvre aussi
- * la lecture au navigateur. Monté à la même place de la sonnerie au décroché,
+ * voilée pour que le nom et les boutons restent lisibles, et un bouton de son
+ * qui se LIT d'emblée, en toutes lettres, en haut au centre (#8627). Le son
+ * est COUPÉ par défaut : on l'active d'un geste, qui ouvre aussi la lecture
+ * au navigateur et fait taire la sonnerie — on entend l'appelant, pas les
+ * deux. Monté à la même place de la sonnerie au décroché,
  * l'aperçu garde son son jusqu'à ce que le vrai lien prenne le relais.
  */
 export function CallPreview({ stream, language }: { readonly stream: MediaStream; readonly language: InterfaceLanguage }) {
@@ -27,15 +30,18 @@ export function CallPreview({ stream, language }: { readonly stream: MediaStream
       ) : null}
       <button
         type="button"
-        className="glass-call absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full"
+        className="glass-call-prominent absolute left-1/2 top-4 z-10 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full px-4 text-body font-semibold text-white"
         style={{ marginTop: 'env(safe-area-inset-top)' }}
         aria-label={label}
         aria-pressed={audible}
-        title={label}
         data-call-preview-sound=""
-        onClick={() => setAudible((value) => !value)}
+        onClick={() => {
+          if (!audible) callActions.hearPreview();
+          setAudible(!audible);
+        }}
       >
         <GlyphSvg glyph={audible ? CALL_VIEW_GLYPHS.speakerHigh : CALL_VIEW_GLYPHS.speakerSlash} size={22} />
+        <span aria-hidden>{label}</span>
       </button>
       {audible ? (
         <span hidden data-call-preview-audio="">
