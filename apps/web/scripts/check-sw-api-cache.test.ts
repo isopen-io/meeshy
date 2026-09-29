@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
+import { apiCacheIdentityPlugin } from '@/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from '@/lib/net/api-runtime-cache';
 
 import {
+  auditIdentiteDuSeauApi,
   auditRoutage,
   auditSeauApi,
   auditSeauMedias,
@@ -256,5 +258,40 @@ describe('le découpage du premier argument', () => {
     expect(decoupePremierArgument('registerRoute(({url:u})=>f(u,1),new X())', 'registerRoute('.length)).toBe(
       '({url:u})=>f(u,1)',
     );
+  });
+});
+
+describe('le seau `api` range chaque réponse sous son identité (#8674)', () => {
+  /** Le seau `api` avec un greffon `cacheKeyWillBeUsed` — la forme que Workbox sérialise. */
+  const SEAU_API_AVEC = (greffon: string) =>
+    `s.registerRoute(${MATCHER_JUSTE},new s.NetworkFirst({cacheName:"api",networkTimeoutSeconds:3,` +
+    `plugins:[new s.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800}),{cacheKeyWillBeUsed:${greffon}}]}),"GET")`;
+
+  test('sans greffon, deux comptes partagent l’entrée d’une URL : dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(CONFORME);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('cacheKeyWillBeUsed');
+  });
+
+  test('le greffon de PRODUCTION, stringifié comme Workbox le fait, est accepté', async () => {
+    const greffon = String(apiCacheIdentityPlugin.cacheKeyWillBeUsed);
+    expect(await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC(greffon)))).toEqual([]);
+  });
+
+  test('un greffon qui rend l’URL nue (même clé pour A et B) est dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>s.url')));
+    expect(violations.join('\n')).toContain('MÊME clé');
+  });
+
+  test('un greffon qui écrit le jeton en clair est dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(
+      AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>s.url+"#"+(s.headers.get("Authorization")??"")')),
+    );
+    expect(violations.join('\n')).toContain('EN CLAIR');
+  });
+
+  test('un greffon non autonome (identifiant importé) est dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>empreinte(s)')));
+    expect(violations.join('\n')).toContain('NON AUTONOME');
   });
 });
