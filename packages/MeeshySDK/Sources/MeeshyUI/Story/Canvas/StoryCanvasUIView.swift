@@ -1040,6 +1040,13 @@ public final class StoryCanvasUIView: UIView {
     /// stops as a unit (the « long-press = stop comme une vidéo »
     /// requirement).
     var isPlaybackPaused: Bool = false
+    /// Les deux causes dont `isPlaybackPaused` est la somme : la pause du
+    /// viewer (`setPaused`) et l'interruption de l'hôte (`PlaybackInterruption`,
+    /// #8725). Séparées pour que la fin d'un appel ne relance jamais une story
+    /// que l'utilisateur avait mise en pause.
+    var isPlaybackRequestedPaused: Bool = false
+    var isPlaybackInterrupted: Bool = false
+    nonisolated(unsafe) var playbackInterruptionCancellable: AnyCancellable?
 
     // MARK: - Playback health (unified timeline)
 

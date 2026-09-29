@@ -1,5 +1,7 @@
+import Combine
 import UIKit
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// #8725 — un appel entrant s'affiche par-dessus TOUT plein écran.
@@ -109,5 +111,43 @@ final class CallWindowPresenterTests: XCTestCase {
             source.contains("CallWindowPresenter.shared.bind("),
             "La racine doit brancher la fenêtre d'appel."
         )
+        XCTAssertTrue(
+            source.contains("CallPlaybackInterruptionBinding.shared.bind("),
+            "La racine doit brancher le gel des lecteurs pendant l'appel."
+        )
+    }
+}
+
+/// #8725 — l'appel gèle les lecteurs à timeline et ne les rend qu'au repos.
+@MainActor
+final class CallPlaybackInterruptionBindingTests: XCTestCase {
+
+    func test_transition_liveCall_beginsTheInterruption() {
+        XCTAssertEqual(CallPlaybackInterruptionRule.transition(for: .ringing(isOutgoing: false)), true)
+        XCTAssertEqual(CallPlaybackInterruptionRule.transition(for: .connected), true)
+    }
+
+    func test_transition_endedPanel_keepsTheInterruption() {
+        XCTAssertNil(CallPlaybackInterruptionRule.transition(for: .ended(reason: .remote)))
+    }
+
+    func test_transition_backToIdle_endsTheInterruption() {
+        XCTAssertEqual(CallPlaybackInterruptionRule.transition(for: .idle), false)
+    }
+
+    func test_bind_followsTheCallFromRingToRest() {
+        let states = PassthroughSubject<CallState, Never>()
+        let interruption = PlaybackInterruption()
+        let sut = CallPlaybackInterruptionBinding()
+        sut.bind(states: states.eraseToAnyPublisher(), interruption: interruption)
+
+        states.send(.idle)
+        XCTAssertFalse(interruption.isActive)
+        states.send(.ringing(isOutgoing: false))
+        XCTAssertTrue(interruption.isActive)
+        states.send(.ended(reason: .local))
+        XCTAssertTrue(interruption.isActive, "Le panneau de fin recouvre encore l'écran.")
+        states.send(.idle)
+        XCTAssertFalse(interruption.isActive)
     }
 }

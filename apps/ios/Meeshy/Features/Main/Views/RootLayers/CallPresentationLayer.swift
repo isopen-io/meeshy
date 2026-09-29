@@ -125,6 +125,7 @@ struct CallPresentationLayer: ViewModifier {
                 // fenêtre, au-dessus de toute présentation (story, réels,
                 // visionneuses, composer, feuilles).
                 CallWindowPresenter.shared.bind()
+                CallPlaybackInterruptionBinding.shared.bind()
                 #if DEBUG
                 CallDebugIncomingTrigger.arm()
                 #endif

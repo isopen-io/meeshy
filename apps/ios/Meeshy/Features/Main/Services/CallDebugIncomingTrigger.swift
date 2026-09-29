@@ -29,7 +29,7 @@ enum CallDebugIncomingTrigger {
             nil,
             { _, _, _, _, _ in
                 DispatchQueue.main.async {
-                    MainActor.assumeIsolated { ring() }
+                    MainActor.assumeIsolated { CallDebugIncomingTrigger.ring() }
                 }
             },
             darwinName as CFString,
@@ -38,10 +38,17 @@ enum CallDebugIncomingTrigger {
         )
     }
 
+    /// Au format d'un ObjectId (24 hex) : un identifiant d'une autre forme est
+    /// refusé par la validation de la passerelle, et ce refus raccroche l'appel
+    /// de recette avant qu'on ait pu le réduire.
+    static func debugCallId() -> String {
+        (0..<24).map { _ in String(Int.random(in: 0..<16), radix: 16) }.joined()
+    }
+
     @MainActor
     static func ring() {
         CallManagerHost.shared.require().handleIncomingCallNotification(
-            callId: "debug-8725-\(UUID().uuidString)",
+            callId: debugCallId(),
             fromUserId: "",
             fromUsername: callerName,
             isVideo: false
