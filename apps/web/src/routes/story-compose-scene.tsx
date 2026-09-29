@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentProps, type RefObject } from 'react';
+import { Fragment, lazy, Suspense, type ComponentProps, type RefObject } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
 import { COMPOSER_GLYPHS } from '@/components/glyphs-composer';
@@ -39,18 +39,39 @@ function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLan
     <>
       <div
         data-story-empty-scene
-        className="pointer-events-none absolute inset-x-4 bottom-6 flex flex-col items-center gap-1.5 text-center"
-        style={{ color: 'rgba(156,163,175,0.95)', zIndex: 2 }}
+        // Au-dessus du (+) de scène qui flotte sur le coin bas de la carte ;
+        // la carte vide est TOUJOURS sombre (`STORY_PLAIN_BACKGROUND`) : les
+        // gris sont fixes, jamais ceux du schéma. Les tailles suivent la
+        // LARGEUR de la carte (`cqw`) : sur un petit écran, le bloc tient sous
+        // l'invite d'écriture centrale, sans jamais descendre sous la légende
+        // d'avant (14 px) pour les gestes.
+        className="pointer-events-none absolute inset-x-4 flex flex-col items-center gap-1.5 text-center leading-snug"
+        style={{ color: 'rgba(156,163,175,0.95)', zIndex: 2, bottom: 'clamp(24px, 15.2cqw, 56px)' }}
       >
-        <p data-story-empty-scene-title className="text-thread font-bold" style={{ color: 'var(--color-ios-ink-2)' }}>
+        <p data-story-empty-scene-title className="font-bold" style={{ color: 'rgba(243,244,246,0.92)', fontSize: 'clamp(16px, 5.9cqw, 22px)' }}>
           {translate(lang, 'story.studio.scene.empty.title')}
         </p>
-        <p data-story-empty-scene-invite className="text-secondary text-balance">
+        <p data-story-empty-scene-invite className="text-balance" style={{ fontSize: 'clamp(12px, 4cqw, 15px)' }}>
           {translate(lang, 'story.studio.scene.empty.invite')}
         </p>
-        <p aria-hidden="true" data-story-quick-capture-hint className="mt-2.5 flex items-center justify-center gap-2 text-body font-semibold">
-          <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={20} />
-          {translate(lang, capture.hintKey)}
+        <p
+          aria-hidden="true"
+          data-story-quick-capture-hint
+          className="mt-2 text-balance font-semibold"
+          style={{ color: 'rgba(209,213,219,0.95)', fontSize: 'clamp(14px, 4.6cqw, 17px)' }}
+        >
+          <span className="me-1.5 inline-block" style={{ verticalAlign: '-0.2em' }}>
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={20} />
+          </span>
+          {/* Chaque geste reste d'un tenant : la ligne se brise au point. */}
+          {translate(lang, capture.hintKey)
+            .split(' · ')
+            .map((gesture, index, all) => (
+              <Fragment key={gesture}>
+                {index > 0 ? ' ' : null}
+                <span className="whitespace-nowrap">{index < all.length - 1 ? `${gesture} ·` : gesture}</span>
+              </Fragment>
+            ))}
         </p>
       </div>
       {capture.onPhoto !== null ? (

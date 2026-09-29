@@ -65,7 +65,7 @@ describe('la scène vide dit ses gestes', () => {
     const el = mount({ ...harness({}).deps, camera: camera().engine });
     await flush(() => emptyScene(el) !== null);
     expect(el.querySelector('[data-story-empty-scene-title]')?.textContent).toBe('Ceci est votre scène');
-    expect(el.querySelector('[data-story-empty-scene-invite]')?.textContent).toBe('Donnez-lui vie : texte, dessin, image ou vidéo.');
+    expect(el.querySelector('[data-story-empty-scene-invite]')?.textContent).toBe('Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.');
     expect(emptyScene(el)?.contains(hint(el))).toBe(true);
   });
 

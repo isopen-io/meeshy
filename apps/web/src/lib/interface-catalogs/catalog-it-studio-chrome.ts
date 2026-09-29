@@ -90,7 +90,7 @@ const itStudioChrome = {
   'story.studio.camera.unavailable': 'La fotocamera non è disponibile. Consentila nelle impostazioni del browser.',
   'story.studio.camera.recording': 'Registrazione in corso',
   'story.studio.scene.empty.title': 'Questa è la tua scena',
-  'story.studio.scene.empty.invite': 'Dalle vita con testo, disegni, immagini o video.',
+  'story.studio.scene.empty.invite': 'Aggiungi un testo, un disegno, un’immagine o un video: rendila tua.',
   'story.studio.camera.locked': 'Registrazione bloccata',
   'story.studio.camera.hint.holding': 'Scorri fino al lucchetto per bloccare · verso l’alto per lo zoom',
   'story.studio.camera.hint.locked': 'Mani libere: scorri su o giù per lo zoom',

@@ -94,10 +94,10 @@ const frStudioChrome = {
   'story.studio.camera.unavailable': 'La caméra n’est pas disponible. Autorisez-la dans les réglages du navigateur.',
   'story.studio.camera.recording': 'Enregistrement en cours',
   'story.studio.scene.empty.title': 'Ceci est votre scène',
-  'story.studio.scene.empty.invite': 'Donnez-lui vie : texte, dessin, image ou vidéo.',
+  'story.studio.scene.empty.invite': 'Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.',
   'story.studio.camera.locked': 'Enregistrement verrouillé',
-  'story.studio.camera.hint.holding': 'Glissez vers le cadenas pour verrouiller · vers le haut pour zoomer',
-  'story.studio.camera.hint.locked': 'Mains libres — glissez vers le haut ou le bas pour zoomer',
+  'story.studio.camera.hint.holding': 'Glisser vers le cadenas pour verrouiller · vers le haut pour zoomer',
+  'story.studio.camera.hint.locked': 'Mains libres — glisser vers le haut ou le bas pour zoomer',
   'story.studio.camera.flash.intensity': 'Intensité du flash',
   'story.studio.camera.flash.intensityValue': '{percent} %',
 } as const;

@@ -382,23 +382,29 @@ export function StudioCamera({
           style={{ backgroundColor: flashFloorColor(intensity) }}
         />
       ) : null}
-      <video
-        ref={videoRef}
-        data-story-camera-preview
-        muted
-        playsInline
-        autoPlay
+      {/* La FENÊTRE du viseur borne l'image : un zoom numérique agrandit la
+          vidéo DANS elle, jamais par-dessus l'anneau blanc du flash. */}
+      <div
         aria-hidden="true"
-        className="absolute size-full object-cover"
+        className="absolute overflow-hidden"
         style={{
           inset: floor === 'ring' ? '14% 10%' : 0,
           width: floor === 'ring' ? '80%' : '100%',
           height: floor === 'ring' ? '72%' : '100%',
           borderRadius: floor === 'ring' ? 28 : 0,
-          transform: transforms.length > 0 ? transforms.join(' ') : undefined,
           visibility: floor === 'full' ? 'hidden' : 'visible',
         }}
-      />
+      >
+        <video
+          ref={videoRef}
+          data-story-camera-preview
+          muted
+          playsInline
+          autoPlay
+          className="size-full object-cover"
+          style={{ transform: transforms.length > 0 ? transforms.join(' ') : undefined }}
+        />
+      </div>
       {status === 'unavailable' ? (
         <p data-story-camera-unavailable role="alert" className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-body" style={{ color: '#fff' }}>
           {translate(lang, 'story.studio.camera.unavailable')}
@@ -427,27 +433,30 @@ export function StudioCamera({
           onIntensity={onIntensity}
           onPreview={setPreviewingFloor}
         />
-        <span className="flex-1" aria-hidden="true" />
-        {recording !== null ? (
-          <span
-            data-story-camera-recording={recording === 'locked' ? 'locked' : ''}
-            role="status"
-            className="mt-1.5 flex items-center gap-1 rounded-full px-3 py-1 text-caption font-bold"
-            style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
-          >
-            {recording === 'locked' ? <GlyphSvg glyph={GLYPHS.lock} size={14} /> : null}
-            {translate(lang, recording === 'locked' ? 'story.studio.camera.locked' : 'story.studio.camera.recording')}
-          </span>
-        ) : null}
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-3 px-3 pb-safe">
-        {recording !== null && zoomRangeRef.current.max > zoomRangeRef.current.min ? (
-          <span data-story-camera-zoom={zoom.toFixed(1)} aria-hidden="true" className="glass rounded-full px-2.5 py-1 text-caption font-bold tabular-nums" style={{ color: 'var(--color-ios-ink)' }}>
-            {`${zoom.toFixed(1)}×`}
-          </span>
+        {/* L'ÉTAT DU FILM, au-dessus du déclencheur (la barre haute porte le
+            curseur du flash déplié) : enregistrement ou verrou, et le zoom. */}
+        {recording !== null ? (
+          <div className="flex items-center gap-2">
+            <span
+              data-story-camera-recording={recording === 'locked' ? 'locked' : ''}
+              role="status"
+              className="flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-caption font-bold"
+              style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
+            >
+              {recording === 'locked' ? <GlyphSvg glyph={GLYPHS.lock} size={14} /> : null}
+              {translate(lang, recording === 'locked' ? 'story.studio.camera.locked' : 'story.studio.camera.recording')}
+            </span>
+            {zoomRangeRef.current.max > zoomRangeRef.current.min ? (
+              <span data-story-camera-zoom={zoom.toFixed(1)} aria-hidden="true" dir="ltr" className="glass rounded-full px-2.5 py-1 text-caption font-bold tabular-nums" style={{ color: 'var(--color-ios-ink)' }}>
+                {`${zoom.toFixed(1)}×`}
+              </span>
+            ) : null}
+          </div>
         ) : null}
-        <p aria-hidden="true" data-story-camera-hint className="text-caption" style={floor === 'off' ? { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' } : { color: '#111' }}>
+        <p aria-hidden="true" data-story-camera-hint className="text-center text-caption" style={floor === 'off' ? { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' } : { color: '#111' }}>
           {translate(lang, hintKey)}
         </p>
         <div className="mb-4 flex w-full items-center justify-center gap-10">
@@ -456,10 +465,10 @@ export function StudioCamera({
           <span
             aria-hidden="true"
             data-story-camera-lock={recording === 'hold' ? (lockProgress > 0 ? 'near' : 'shown') : undefined}
-            className="grid size-11 place-items-center rounded-full motion-safe:transition-transform"
+            className="glass grid size-11 place-items-center rounded-full motion-safe:transition-transform"
             style={
               recording === 'hold'
-                ? { backgroundColor: 'rgba(255,255,255,0.22)', color: '#fff', transform: `scale(${1 + lockProgress * 0.25})` }
+                ? { color: 'var(--color-ios-ink)', transform: `scale(${1 + lockProgress * 0.25})` }
                 : { visibility: 'hidden' }
             }
           >
@@ -471,7 +480,7 @@ export function StudioCamera({
             disabled={!live}
             aria-label={translate(lang, shutterLabel)}
             className="grid size-20 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ border: '4px solid #fff', outlineColor: 'var(--color-ios-brand)', opacity: live ? 1 : 0.5, touchAction: 'none' }}
+            style={{ border: `4px solid ${floor === 'off' ? '#fff' : '#111'}`, outlineColor: 'var(--color-ios-brand)', opacity: live ? 1 : 0.5, touchAction: 'none' }}
             onPointerDown={(event) => {
               if (!live || event.button !== 0) return;
               const already = recordingRef.current !== null;
