@@ -215,30 +215,38 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(service.contains("@Published private(set) var preview"), "L'aperçu se publie sur son flux, pas sur le contrôleur")
     }
 
-    /// #8576 — le zoom caméra suit MON image en plein écran, jamais la
-    /// vignette. #8626 — les commandes de ma caméra vivent dans ma vignette,
-    /// et en haut au centre quand mon image est en plein écran, visibles avec
-    /// le chrome.
-    /// #8626 — une vignette trop petite pour la grille pose UN bouton caméra
-    /// qui la déploie par-dessus elle ; un tap ailleurs, sur la vignette ou sur
-    /// une action la replie.
-    func test_smallSelfTile_foldsTheCameraControlsIntoOneButton() throws {
+    /// #8747 — les commandes de ma caméra quittent la vignette : Effets ·
+    /// Écran au-dessus, Retourner · Caméra en dessous, posés par la règle pure,
+    /// chacun un disque de verre interactif, chaque rangée un conteneur de
+    /// verre. La vignette ne porte plus que le zoom ; la toucher permute.
+    func test_selfTileControls_liveAroundTheTile_inInteractiveGlass() throws {
         let code = try callViewCode()
-        XCTAssertTrue(code.contains("CallCameraRail.tileLayout(tileSize: tileSize, count: actions.count)"))
-        XCTAssertTrue(code.contains("foldedCameraButton"))
-        XCTAssertTrue(code.contains("tapCameraMenu(.button)"))
-        XCTAssertTrue(code.contains("tapCameraMenu(.action)"))
-        let toggle = try block("func toggleControls() {", until: "\n    }\n", in: code)
-        XCTAssertTrue(toggle.contains("tapCameraMenu(.elsewhere)"), "Un tap ailleurs replie la grille")
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
-        XCTAssertTrue(pip.contains("tapCameraMenu(.elsewhere)"), "Un tap sur la vignette replie la grille avant de permuter")
+        XCTAssertTrue(pip.contains("selfTileControlRows("), "Les rangées sont posées autour de la vignette")
+        XCTAssertTrue(pip.contains("dragOffset: pipDragOffset"), "Elles suivent le glissé")
+        XCTAssertTrue(pip.contains("selfTileZoomSlot(tileSize: size)"), "Le zoom reste dans la vignette")
+        XCTAssertFalse(pip.contains("tapCameraMenu"), "Plus de grille repliée dans la vignette")
+        XCTAssertFalse(code.contains("foldedCameraButton"))
+        XCTAssertFalse(code.contains("cameraControlsGrid"))
+        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.layout("))
+        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.following("))
+        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.restingCenter("), "Au repos, la vignette laisse la place des rangées")
+        let rows = try block("func selfTileControlRows(", until: "func selfTileZoomSlot(", in: code)
+        XCTAssertTrue(rows.contains("CallCameraRail.isShown(.selfTile"), "Elles se masquent avec le chrome")
+        XCTAssertTrue(code.contains("AdaptiveGlassContainer(spacing: CallSelfTileControlsPlacement.buttonSpacing)"))
+        let glyph = try block("struct CallSelfTileControlGlyph: View {", until: "enum CallMyImageCopy", in: code)
+        XCTAssertTrue(glyph.contains(".callControlGlass(diameter: CallSelfTileControlsPlacement.buttonSide"), "Un disque de verre interactif, comme la flèche de l'en-tête")
+        let button = try block("struct CallSelfTileControlButton: View {", until: "struct CallSelfTileControlGlyph: View {", in: code)
+        XCTAssertTrue(button.contains(".buttonStyle(CallPressButtonStyle())"), "L'enfoncement se voit au premier toucher")
+        XCTAssertTrue(button.contains(".toggleStateAccessibility("))
+        XCTAssertTrue(code.contains("screenSharePicker.toggle(controller: callManager.screenShare)"))
     }
 
     func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
         XCTAssertFalse(pip.contains("callCameraZoom"), "Pincer la vignette la redimensionne, il ne zoome pas")
-        XCTAssertTrue(pip.contains("selfTileCameraControls(tileSize: size)"), "Les commandes de ma caméra vivent dans ma vignette")
+        XCTAssertTrue(pip.contains("selfTileControlRows("), "Les commandes de ma caméra vivent autour de ma vignette")
         XCTAssertTrue(code.contains(".callCameraZoom(isEnabled: effectiveSwapStreams)"))
         let rail = try block("var cameraRail: some View {", until: "\n    }\n}", in: code)
         XCTAssertTrue(rail.contains("CallCameraRail.actions(from: currentActionSet)"))

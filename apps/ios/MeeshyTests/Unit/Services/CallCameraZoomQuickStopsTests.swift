@@ -65,44 +65,45 @@ final class CallCameraZoomQuickStopsTests: XCTestCase {
     // MARK: - Où le zoom se pose dans les commandes de ma caméra
 
     func test_control_fullScreenImage_showsLensChips() throws {
-        let control = CallCameraRail.zoomControl(profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .topCenter, tileSize: nil, actionCount: 5)
+        let control = CallCameraRail.zoomControl(profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .topCenter, tileSize: nil)
         XCTAssertEqual(control, .lensChips([0.5, 1, 2, 3]))
     }
 
     func test_control_selfTile_foldsIntoOneButton() throws {
         let control = CallCameraRail.zoomControl(
-            profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: CGSize(width: 120, height: 160), actionCount: 2)
+            profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: CGSize(width: 120, height: 160))
         XCTAssertEqual(control, .cycleButton)
     }
 
-    func test_control_selfTileTooShortForTwoTargets_showsNothing() throws {
+    /// #8747 — les commandes de ma caméra ont quitté la vignette : le bouton
+    /// de zoom y a sa place à chaque palier, même le plus petit.
+    func test_control_everySelfTileStep_hasTheCycleButton() throws {
+        let zoomable = try profile(lenses: .triple, switchOvers: [2, 6])
+        for scale in CallSelfTileScale.allCases {
+            XCTAssertEqual(CallCameraRail.zoomControl(profile: zoomable, placement: .selfTile, tileSize: scale.size), .cycleButton, "\(scale)")
+        }
+    }
+
+    func test_control_selfTileSmallerThanOneTarget_showsNothing() throws {
         let control = CallCameraRail.zoomControl(
-            profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: CGSize(width: 120, height: 80), actionCount: 2)
+            profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: CGSize(width: 48, height: 80))
         XCTAssertNil(control)
     }
 
-    func test_control_selfTileFilledByTheGrid_showsNothing() throws {
-        let control = CallCameraRail.zoomControl(
-            profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: CGSize(width: 100, height: 140), actionCount: 5)
-        XCTAssertNil(control, "la grille occupe toute la vignette : le bouton de zoom la recouvrirait")
-    }
-
-    func test_control_selfTileFoldedWithRoomAbove_showsCycleButton() throws {
-        let control = CallCameraRail.zoomControl(
-            profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: CGSize(width: 120, height: 100), actionCount: 5)
-        XCTAssertEqual(control, .cycleButton)
+    func test_control_selfTileWithoutSize_showsNothing() throws {
+        XCTAssertNil(CallCameraRail.zoomControl(profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .selfTile, tileSize: nil))
     }
 
     func test_control_menuPlacement_showsNothing() throws {
-        XCTAssertNil(CallCameraRail.zoomControl(profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .menu, tileSize: nil, actionCount: 5))
+        XCTAssertNil(CallCameraRail.zoomControl(profile: try profile(lenses: .triple, switchOvers: [2, 6]), placement: .menu, tileSize: nil))
     }
 
     func test_control_notZoomable_showsNothing() {
-        XCTAssertNil(CallCameraRail.zoomControl(profile: nil, placement: .topCenter, tileSize: nil, actionCount: 5))
+        XCTAssertNil(CallCameraRail.zoomControl(profile: nil, placement: .topCenter, tileSize: nil))
     }
 
     func test_control_singleStop_showsNothing() throws {
-        XCTAssertNil(CallCameraRail.zoomControl(profile: try profile(lenses: .single, max: 1.5), placement: .topCenter, tileSize: nil, actionCount: 5))
+        XCTAssertNil(CallCameraRail.zoomControl(profile: try profile(lenses: .single, max: 1.5), placement: .topCenter, tileSize: nil))
     }
 
     // MARK: - Contrôleur

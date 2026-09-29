@@ -80,11 +80,10 @@ struct CallZoomCycleButton: View {
 struct CallZoomRailSlot: View {
     let placement: CallCameraControlsPlacement
     var tileSize: CGSize? = nil
-    let actionCount: Int
     @ObservedObject var zoom: CameraZoomController = .shared
 
     var body: some View {
-        switch CallCameraRail.zoomControl(profile: zoom.profile, placement: placement, tileSize: tileSize, actionCount: actionCount) {
+        switch CallCameraRail.zoomControl(profile: zoom.profile, placement: placement, tileSize: tileSize) {
         case .lensChips(let stops)?:
             CallZoomLensChips(stops: stops, zoom: zoom)
         case .cycleButton?:
