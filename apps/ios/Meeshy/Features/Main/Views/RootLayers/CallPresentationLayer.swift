@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Découple la présentation d'appel (cover plein écran + pastille flottante +
+/// Découple la présentation d'appel (fenêtre plein écran #8725 + pastille flottante +
 /// bulle + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
 ///
 /// EXTRAIT de `RootView.swift` le 2026-09-14 (#6579). `RootView.swift` dépassait
@@ -119,7 +119,16 @@ struct CallPresentationLayer: ViewModifier {
             )
             content
         }
-            .onAppear { incomingCallGate.arm() }
+            .onAppear {
+                incomingCallGate.arm()
+                // #8725 — la vue d'appel plein écran vit dans sa propre
+                // fenêtre, au-dessus de toute présentation (story, réels,
+                // visionneuses, composer, feuilles).
+                CallWindowPresenter.shared.bind()
+                #if DEBUG
+                CallDebugIncomingTrigger.arm()
+                #endif
+            }
             // La BANDE DU HAUT (#6579) — le site UNIQUE qui peint la zone
             // status-bar au-dessus de la barre active. Montée ICI parce que ce
             // conteneur est le seul endroit que les DEUX racines partagent
@@ -142,38 +151,17 @@ struct CallPresentationLayer: ViewModifier {
                 } ?? false,
                 audio: audioBarContext
             ))
-            // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
-            // swiper le cover vers le bas ne raccroche pas. Le bouton hangup de
-            // chaque UI passe explicitement par `callManager.endCall()`.
-            .fullScreenCover(isPresented: Binding(
-                get: {
-                    guard let callManager else { return false }
-                    return CallState.shouldPresentFullScreenCover(
-                        callState: callManager.callState,
-                        displayMode: callManager.displayMode
-                    )
-                },
-                set: { if !$0 { callManager?.displayMode = .pip } }
-            )) {
-                if let callManager {
-                    // #8276 — la grille d'un appel de groupe vit DANS
-                    // `CallView`, entre son en-tête et sa pilule : elle suit la
-                    // disposition réelle, jamais des marges fixes.
-                    CallView(callManager: callManager, mesh: .shared)
-                }
-            }
             // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre
-            // vivait dans `CallView`, donc dans le `fullScreenCover` : réduire
-            // l'appel démonte le cover, `pipConfiguredSource` est `weak` et passe
+            // vivait dans `CallView`, donc dans la présentation plein écran : réduire
+            // l'appel la démonte, `pipConfiguredSource` est `weak` et passe
             // à nil, et plus rien ne reconfigure. Un appel réduit ne pouvait donc
             // PLUS ouvrir de PiP — alors que le réduire est exactement le geste
             // qui devrait le préparer.
             //
             // Deux gardes, chacune pour une raison distincte :
-            // • `displayMode != .fullScreen` — pendant que le cover est présenté
-            //   (`UIModalPresentationFullScreen`), UIKit détache la hiérarchie
-            //   présentante : une ancre montée ici y serait hors fenêtre, et le
-            //   bouton PiP manuel de `CallView` resterait visible mais inerte.
+            // • `displayMode != .fullScreen` — en plein écran, `CallView` (dans
+            //   sa fenêtre dédiée, #8725) porte sa propre ancre : deux ancres
+            //   vivantes se disputeraient la source AVKit à chaque rendu.
             // • PAS de garde sur `isSystemPiPActive` — contrairement à la pilule
             //   et à la bulle, qui se masquent pendant le PiP. L'ancre doit
             //   SURVIVRE à la fenêtre flottante : c'est la vue d'où AVKit fait
