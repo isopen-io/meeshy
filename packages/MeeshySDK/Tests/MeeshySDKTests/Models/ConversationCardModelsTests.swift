@@ -57,10 +57,20 @@ final class ConversationCardModelsTests: XCTestCase {
                        .join(identifier: "mshy_club", allowsAnonymous: true))
     }
 
-    func test_resolveActions_connectedAccountOnGuestFriendlyLink_joinsInItsOwnNameOnly() throws {
+    /// #8726 — directive porteur 2026-09-29 : un lecteur CONNECTÉ qui n'est pas
+    /// membre choisit lui aussi « Anonyme » ou « Mon compte ».
+    func test_resolveActions_connectedAccountOnGuestFriendlyLink_offersBothAnonymousAndAccount() throws {
         let card = try decode(Self.shareLinkJSON)
-        XCTAssertEqual(ConversationCardActions.resolve(for: card, target: .shareLink(identifier: "mshy_club"), viewerHasAccount: true),
-                       .join(identifier: "mshy_club", allowsAnonymous: false))
+        XCTAssertEqual(ConversationCardActions.resolve(for: card, target: .shareLink(identifier: "mshy_club")),
+                       .join(identifier: "mshy_club", allowsAnonymous: true))
+    }
+
+    func test_resolveActions_linkRequiringAnAccount_offersTheAccountOnly() {
+        let card = Self.card(kind: .shareLink, conversationId: nil, isMember: false,
+                             link: ConversationCardLink(identifier: "x", isActive: true, expiresAt: nil))
+        XCTAssertFalse(card.viewer.canJoinAnonymously)
+        XCTAssertEqual(ConversationCardActions.resolve(for: card, target: .shareLink(identifier: "x")),
+                       .join(identifier: "x", allowsAnonymous: false))
     }
 
     func test_resolveActions_member_leavesOrOpens() {
