@@ -1,5 +1,8 @@
+import { useEffect, useState, type ReactNode } from 'react';
+
 import { ForwardSheet } from '@/components/forward-sheet';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
+import { isExportCardCatalogLoaded, loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
@@ -170,17 +173,40 @@ export function ThreadMessageSheets({
         const subject = subjectIn(null);
         if (subject === null) return null;
         return (
-          <MessageExportSheet
-            subject={subject}
-            exportLanguages={{ codes: messageCardLanguagesOf(exportMessage), subjectIn }}
-            handle={viewerHandle}
-            conversationTitle={conversationTitle}
-            quick={request.quick}
-            announce={announce}
-            onClose={() => messageMenu.setExportFor(null)}
-          />
+          <ExportCatalogGate>
+            <MessageExportSheet
+              subject={subject}
+              exportLanguages={{ codes: messageCardLanguagesOf(exportMessage), subjectIn }}
+              handle={viewerHandle}
+              conversationTitle={conversationTitle}
+              quick={request.quick}
+              announce={announce}
+              onClose={() => messageMenu.setExportFor(null)}
+            />
+          </ExportCatalogGate>
         );
       })(messageMenu.exportFor)}
     </>
   );
+}
+
+/** Le composer d'export ne se monte qu'une fois SON catalogue chargé : il vit
+ * hors du catalogue d'interface, chargé au premier « Exporter en image ». */
+function ExportCatalogGate({ children }: { readonly children: ReactNode }) {
+  const language = currentInterfaceLanguage();
+  const [ready, setReady] = useState(() => isExportCardCatalogLoaded(language));
+  useEffect(() => {
+    if (ready) return;
+    let live = true;
+    void loadExportCardCatalog(language).then(
+      () => {
+        if (live) setReady(true);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language, ready]);
+  return ready ? <>{children}</> : null;
 }

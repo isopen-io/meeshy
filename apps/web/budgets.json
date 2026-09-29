@@ -729,6 +729,15 @@
         "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 5,54 Ko pour les SEPT catalogues du studio d un appel video. RELEVE de 5 a 7 Ko, et pourquoi : du TEXTE, dans sept langues -- les six montages glamour et les trois accroches de la couverture (#8580), les libelles des deux MODES qui remplacent les panneaux (Quitter, Valider, Visage · Couleur, Reglages, choisir un effet / un montage, #8578). Charges avec le MODE qui s en sert (Effets ou Montage), jamais avec l ecran d appel ; un lecteur n en telecharge qu UN. HISTORIQUE : 3,79 Ko (#8551/#8552, 35 cles). Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_export_card": {
+      "pattern": "^assets/catalog-export-card-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 9,
+        "status": "CIBLE -- MESUREE PAR #8667, NON ARBITREE",
+        "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 7,52 Ko pour les SEPT catalogues du composer d export en image (`export.card.*` et `export.announce.*` : onglets du plateau, parties touchables de la carte, galerie et sa recherche, tons, typographies, liaisons, options, format par defaut, annonces). Charges avec la feuille d export seulement, au premier « Exporter en image » (`routes/thread-sheets.tsx`, `lib/i18n-export-card-catalog.ts`) ; un lecteur n en telecharge qu UN. POURQUOI UN CATALOGUE A PART : le composer tactile ajoutait 0,74 Ko au-dela du plafond de `interface_catalogs` (161) ; il en sort toute la famille, ce qui ramene les catalogues d interface a 156,5 Ko. Arrondi au Ko SUPERIEUR (8) + 1 Ko de marge."
+      }
+    },
     "conversation_media_hub": {
       "pattern": "^assets/conversation-media-hub-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,

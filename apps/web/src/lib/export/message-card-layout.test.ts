@@ -4,7 +4,6 @@ import {
   CARD_MAX_HEIGHT,
   CARD_MIN_HEIGHT,
   CARD_WIDTH,
-  cardPartAt,
   layoutMessageCard,
   textDirection,
   truncateLines,
@@ -258,12 +257,6 @@ describe('les liaisons — des façons variées de mener la question à la répo
 });
 
 describe('les zones touchables d’une carte', () => {
-  const center = (layout: ReturnType<typeof layoutMessageCard>, part: string) => {
-    const zone = layout.regions.find((r) => r.part === part);
-    if (zone === undefined) throw new Error(`zone ${part} absente`);
-    return { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
-  };
-
   test('une réponse citée se lit de haut en bas : citation, liaison, réponse — sans en-tête non demandé', () => {
     const layout = layoutMessageCard(cardInput(), measure);
     expect(layout.regions.map((r) => r.part)).toEqual(['quote', 'link', 'reply']);
@@ -285,16 +278,15 @@ describe('les zones touchables d’une carte', () => {
     expect(line.y).toBeLessThanOrEqual(reply.y + reply.height);
   });
 
-  test('toucher une partie la désigne, toucher la marge désigne le fond', () => {
-    const layout = layoutMessageCard(cardInput({ title: 'Soirée' }), measure);
-    for (const part of ['header', 'quote', 'link', 'reply'] as const) expect(cardPartAt(layout, center(layout, part))).toBe(part);
-    expect(cardPartAt(layout, { x: 8, y: 8 })).toBe('background');
-    expect(cardPartAt(layout, { x: CARD_WIDTH - 4, y: layout.height - 4 })).toBe('background');
-  });
-
-  test('un doigt posé juste à côté d’une zone la désigne encore', () => {
-    const layout = layoutMessageCard(cardInput(), measure);
-    const reply = layout.regions.find((r) => r.part === 'reply')!;
-    expect(cardPartAt(layout, { x: reply.x - 10, y: reply.y + 4 })).toBe('reply');
+  test('les zones ne se chevauchent pas et restent dans la carte', () => {
+    const layout = layoutMessageCard(cardInput({ title: 'Soirée', date: '28 septembre 2026' }), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['header', 'quote', 'link', 'reply']);
+    for (const [i, zone] of layout.regions.entries()) {
+      expect(zone.x).toBeGreaterThanOrEqual(0);
+      expect(zone.x + zone.width).toBeLessThanOrEqual(CARD_WIDTH);
+      expect(zone.y + zone.height).toBeLessThanOrEqual(layout.height);
+      const next = layout.regions[i + 1];
+      if (next !== undefined) expect(zone.y + zone.height).toBeLessThanOrEqual(next.y);
+    }
   });
 });

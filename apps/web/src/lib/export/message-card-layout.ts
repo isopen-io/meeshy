@@ -344,26 +344,6 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   return { width: CARD_WIDTH, height, ops, regions, watermark: watermarkOf(input.handle), truncated };
 }
 
-/** Une marge de tolérance autour de chaque zone : un doigt ne vise pas au pixel. */
-const TOUCH_SLOP = 24;
-
-/**
- * La partie désignée par un point de la carte : la zone qui le contient (avec
- * la tolérance du doigt, la plus proche l'emportant quand deux se chevauchent),
- * le fond ailleurs.
- */
-export function cardPartAt(layout: Pick<CardLayout, 'regions'>, point: { readonly x: number; readonly y: number }): CardPart {
-  const distance = (r: CardRegion) => {
-    const dx = Math.max(r.x - point.x, 0, point.x - (r.x + r.width));
-    const dy = Math.max(r.y - point.y, 0, point.y - (r.y + r.height));
-    return Math.hypot(dx, dy);
-  };
-  const [nearest] = layout.regions
-    .map((r) => ({ part: r.part, distance: distance(r) }))
-    .filter((hit) => hit.distance <= TOUCH_SLOP)
-    .sort((a, b) => a.distance - b.distance);
-  return nearest?.part ?? 'background';
-}
 
 /** Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse. */
 function linkOps(link: CardLinkId, at: { readonly y: number; readonly rtl: boolean; readonly accent: string }): CardOp[] {
