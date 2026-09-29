@@ -789,67 +789,18 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
     }
 }
 
-/// **La porte média ouvre les TROIS sources** (#4092 · leçon 335, seconde
-/// instance sur le même écran).
+/// **La porte média ouvre la PHOTOTHÈQUE, directement** (#8680, directive
+/// porteur 2026-09-29 : « lorsqu'on touche le premier outil image, ça doit
+/// ouvrir directement la photothèque »).
 ///
-/// `handleRailDoor(.media)` allait droit à la photothèque. Dès qu'une scène
-/// existait, la CAMÉRA et l'IMPORT DE FICHIER — deux des sept entrées de la
-/// rangée canonique — quittaient l'écran, sans qu'aucune règle les retire.
-///
-/// Le commentaire d'à côté décrivait pourtant le bon mécanisme : « le rail
-/// n'ayant qu'UNE porte pour les trois sources », `allowsCapture` gouverne « le
-/// SÉLECTEUR, en aval ». Le sélecteur n'existait pas — et un commentaire qui
-/// décrit un mécanisme absent ne se fait contredire par rien.
+/// Elle ouvrait une feuille de choix — photothèque, caméra, fichier (#4092).
+/// Depuis #8653 la caméra vit sur la scène elle-même : la feuille coûtait un
+/// geste pour une décision que l'écran a déjà prise ailleurs.
 final class ComposerMediaSourcePolicyTests: XCTestCase {
 
-    /// **Le fusible.**
-    func test_lesTroisSources_sontOffertesQuandLaCaptureEstPermise() {
-        XCTAssertEqual(ComposerMediaSourcePolicy.offered(allowsCapture: true),
-                       [.photoLibrary, .camera, .files])
-    }
-
-    /// `allowsCapture` retire la CAMÉRA — jamais la bibliothèque ni les
-    /// fichiers. Reprendre un contenu déjà publié interdit de filmer, pas
-    /// d'ajouter une image qu'on possède.
-    func test_sansCapture_seuleLaCameraTombe() {
-        let sources = ComposerMediaSourcePolicy.offered(allowsCapture: false)
-        XCTAssertEqual(sources, [.photoLibrary, .files])
-        XCTAssertFalse(sources.contains(.camera))
-    }
-
-    /// L'ordre est celui de la rangée canonique — la position que les doigts
-    /// connaissent, pas l'ordre de déclaration d'un `enum`.
-    func test_lOrdre_suitCeluiDeLaRangeeCanonique() {
-        let outils = ComposerMediaSourcePolicy.offered(allowsCapture: true)
-            .map(ComposerMediaSourcePolicy.namingTool)
-        XCTAssertEqual(outils, [.photo, .camera, .document])
-        let rang = { (t: ComposerDocumentTool) in
-            ComposerDocumentTool.canonicalRow.firstIndex(of: t) ?? .max
-        }
-        XCTAssertEqual(outils.map(rang), outils.map(rang).sorted(),
-                       "Deux ordres pour un même trio se lisent comme deux gestes.")
-    }
-
-    /// **Le libellé n'est pas réécrit.** Une seconde table dirait « Photos »
-    /// d'un côté et « Photothèque » de l'autre pour un seul sélecteur, et
-    /// dédoublerait sept traductions.
-    func test_chaqueSource_estNommeeParLaRangeeDuDocument() {
-        for source in ComposerMediaSourcePolicy.offered(allowsCapture: true) {
-            let libelle = ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))
-            XCTAssertFalse(libelle.isEmpty)
-        }
-        XCTAssertEqual(
-            Set(ComposerMediaSourcePolicy.offered(allowsCapture: true)
-                .map { ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool($0)) }).count,
-            3, "Deux sources qui s'annoncent pareil sont indiscernables.")
-    }
-
-    /// **Le titre de la feuille est le libellé de la porte.** Une clé neuve
-    /// pour la même phrase, ce sont sept traductions à faire diverger.
-    func test_leTitreDeLaFeuille_estLeLibelleDeLaPorte() {
-        XCTAssertEqual(ComposerMediaSourcePolicy.chooserTitle,
-                       ComposerRailCopy.label(.media))
-        XCTAssertFalse(ComposerMediaSourcePolicy.chooserTitle.isEmpty)
+    /// **Le fusible** : la source de la porte est la photothèque.
+    func test_laPorteMedia_ouvreLaPhototheque() {
+        XCTAssertEqual(ComposerMediaSourcePolicy.railDoorIntake, .photoLibrary)
     }
 }
 
@@ -864,57 +815,30 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    func test_laSourceDuMeuble_estLisible() throws {
-        XCTAssertTrue(try hostSource().contains("ComposerMediaSourcePolicy"))
-    }
-
-    /// **La garde du défaut d'origine.** La porte média n'appelle plus l'outil
-    /// PHOTO en direct : c'était le raccourci qui faisait disparaître deux
-    /// sources sur trois dès qu'une scène existait.
-    ///
-    /// **#6073 — la règle a changé de FORME au #6047, et ce témoin gardait la
-    /// lettre.** Il exigeait `railPosesNextMedia = true; presentMediaSources()`,
-    /// c'est-à-dire l'intention armée AVANT la présentation. #6008 a lié
-    /// l'intention au RETOUR de la présentation, pour une raison que son
-    /// doc-comment porte : `presentMediaSources` peut ne RIEN présenter (la
-    /// règle des sources peut en offrir zéro), et une intention armée devant
-    /// une feuille qui n'apparaît pas n'a plus aucune sortie — ni consommation,
-    /// ni annulation à laquelle se raccrocher.
-    ///
-    /// La forme neuve est donc PLUS forte que celle que ce témoin gardait. Ce
-    /// qu'il doit garder n'est pas l'ordre des deux instructions mais les deux
-    /// propriétés qui comptent : l'intention est LIÉE à la présentation (par
-    /// l'affectation du retour), et la porte ne court-circuite pas vers l'outil
-    /// PHOTO. Écrire l'assertion sur la LETTRE d'une implémentation, c'est
-    /// s'engager à rougir à chaque amélioration de cette implémentation.
-    func test_laPorteMedia_neVaPlusDroitALaPhototheque() throws {
+    /// **L'intention du rail reste LIÉE au retour de la présentation** (#6008)
+    /// et la porte ne court-circuite pas vers l'outil PHOTO de la rangée du
+    /// document : c'est la règle des sources qu'elle lit.
+    func test_laPorteMedia_lieSonIntentionALaPresentation() throws {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("case.media:railPosesNextMedia=presentMediaSources()"),
-                      "La porte LIE l'intention de pose au RETOUR de la présentation : une "
-                        + "feuille qui ne s'ouvre pas ne laisse aucune intention armée derrière "
-                        + "elle (#6008), et une intention posée garde la pose sur la scène "
-                        + "courante (directive porteur 2026-08-30).")
+                      "La porte LIE l'intention de pose au RETOUR de la présentation (#6008).")
         XCTAssertFalse(source.contains("case.media:handleDocumentTool(.photo)"),
-                       "Ce raccourci retire la caméra et l'import de fichier sans qu'aucune règle les refuse.")
+                       "La porte du rail n'est pas la rangée du document.")
         XCTAssertFalse(source.contains("railPosesNextMedia=true;presentMediaSources()"),
-                       "L'intention ne s'arme plus AVANT la présentation : cette forme laissait "
-                         + "un drapeau posé devant une feuille qui peut n'offrir aucune source.")
+                       "L'intention ne s'arme plus AVANT la présentation.")
     }
 
-    /// Le choix a son lecteur AU-DESSUS de l'aiguillage, comme tout portail du
-    /// meuble (#4120) — et il lit la règle, jamais une seconde liste.
-    func test_leChoixDeSource_estMonteEtLitLaRegle() throws {
+    /// **#8680 — aucune feuille intermédiaire.** La présentation va droit à la
+    /// source que la règle nomme ; la feuille de choix et son état ne reviennent
+    /// pas.
+    func test_laPorteMedia_neMonteAucuneFeuilleDeChoix() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("isPresented:$showsMediaSourceChooser"))
-        XCTAssertTrue(source.contains("ComposerMediaSourcePolicy.offered(allowsCapture:profile.allowsCapture)"))
-    }
-
-    /// **Une source unique se présente directement** — une feuille de choix à un
-    /// seul élément demande un geste pour zéro décision.
-    func test_uneSourceUnique_neDemandeAucunChoix() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("guardsources.count>1else{"),
-                      "Sans ce garde-fou, un profil à source unique paie une feuille pour rien.")
+        XCTAssertTrue(source.contains("presentMediaIntake(ComposerMediaSourcePolicy.railDoorIntake)"),
+                      "La porte doit présenter DIRECTEMENT la source de la règle.")
+        XCTAssertFalse(source.contains("showsMediaSourceChooser"),
+                       "La feuille de choix photothèque / caméra / fichier est revenue (#8680).")
+        XCTAssertFalse(source.contains("confirmationDialog(ComposerMediaSourcePolicy"),
+                       "La feuille de choix photothèque / caméra / fichier est revenue (#8680).")
     }
 }
 

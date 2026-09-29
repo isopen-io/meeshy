@@ -14793,96 +14793,96 @@
         }
       }
     },
-    "composer.camera.quickHint.photoOrVideo": {
+    "composer.camera.gesture.tapPhoto": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس: صورة · اضغط مطولًا: فيديو"
+            "value": "المس: صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippen: Foto · Halten: Video"
+            "value": "Tippen: Foto"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap: photo · Hold: video"
+            "value": "Tap: photo"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca: foto · Mantén: vídeo"
+            "value": "Toca: foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toucher : photo · Maintenir : vidéo"
+            "value": "Toucher : photo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca: foto · Tieni premuto: video"
+            "value": "Tocca: foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque: foto · Segure: vídeo"
+            "value": "Toque: foto"
           }
         }
       }
     },
-    "composer.camera.quickHint.videoOnly": {
+    "composer.camera.gesture.holdFilm": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطولًا للتصوير"
+            "value": "اضغط مطولًا: صوّر فيديو"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Filmen halten"
+            "value": "Halten: filmen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold to film"
+            "value": "Hold: record"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén para grabar"
+            "value": "Mantén: grabar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenir pour filmer"
+            "value": "Maintenir : filmer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto per filmare"
+            "value": "Tieni premuto: filma"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Segure para filmar"
+            "value": "Segure: filmar"
           }
         }
       }
@@ -212258,53 +212258,6 @@
         }
       }
     },
-    "export.card.language": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لغة الرسالة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sprache der Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Message language"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Idioma del mensaje"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Langue du message"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lingua del messaggio"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Idioma da mensagem"
-          }
-        }
-      }
-    },
     "export.card.language.asRead": {
       "extractionState": "manual",
       "localizations": {
@@ -212348,53 +212301,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Como eu leio"
-          }
-        }
-      }
-    },
-    "export.card.link": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الربط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verbindung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Link"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enlace"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Liaison"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Collegamento"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ligação"
           }
         }
       }
@@ -212963,194 +212869,6 @@
         }
       }
     },
-    "export.card.options": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anzeigen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostra"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar"
-          }
-        }
-      }
-    },
-    "export.card.palette": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الألوان"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Farben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colors"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colores"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couleurs"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colori"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cores"
-          }
-        }
-      }
-    },
-    "export.card.popular": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الأكثر استخدامًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beliebt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Popular"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Populares"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Populaires"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Popolari"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Populares"
-          }
-        }
-      }
-    },
-    "export.card.preview": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "معاينة الصورة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bildvorschau"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Image preview"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vista previa de la imagen"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aperçu de l’image"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anteprima dell’immagine"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pré-visualização da imagem"
-          }
-        }
-      }
-    },
     "export.card.random": {
       "extractionState": "manual",
       "localizations": {
@@ -213429,53 +213147,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mensagem longa: o final é cortado na imagem."
-          }
-        }
-      }
-    },
-    "export.card.typeface": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الخط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schrift"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Typeface"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tipografía"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Typographie"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Carattere"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tipografia"
           }
         }
       }

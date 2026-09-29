@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #8678 — le canal des bannières sans son (SilentNotificationChannel). -->
+    <string name="push_channel_silent_name">Notificações silenciosas</string>
+    <string name="push_channel_silent_description">Notificações exibidas sem som, quando o som está desativado no Meeshy</string>
+</resources>

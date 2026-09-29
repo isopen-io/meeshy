@@ -127,17 +127,25 @@ struct ComposerSceneQuickCaptureHint: View {
     static let railClearance: CGFloat = 64
 
     var body: some View {
+        // **Aucun pictogramme au-dessus du titre** (complément porteur
+        // 2026-09-29 : « l'appareil photo au-dessus ne représente pas une
+        // scène. Soit rien, soit une scène »). Rien : la carte qui entoure ce
+        // texte EST déjà le cadre 9:16 de la scène — un rectangle dessiné
+        // dedans la redirait en plus petit. Les icônes passent devant LEUR
+        // geste, là où elles disent quelque chose.
         VStack(spacing: 10) {
-            Image(systemName: hint == .videoOnly ? "video" : "camera")
-                .font(.system(.title, design: .rounded).weight(.medium))
             Text(ComposerSceneCameraCopy.emptySceneTitle)
                 .font(.system(.title2, design: .rounded).weight(.bold))
             Text(ComposerSceneCameraCopy.emptySceneInvite)
                 .font(.system(.subheadline, design: .rounded))
                 .opacity(0.9)
-            Text(ComposerSceneCameraCopy.quickCaptureHint(hint))
-                .font(.system(.headline, design: .rounded).weight(.semibold))
-                .padding(.top, 6)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(ComposerSceneQuickCapture.gestureLines(hint), id: \.symbol) { ligne in
+                    Label(ComposerSceneCameraCopy.gestureLine(ligne), systemImage: ligne.symbol)
+                }
+            }
+            .font(.system(.headline, design: .rounded).weight(.semibold))
+            .padding(.top, 6)
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)

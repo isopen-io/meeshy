@@ -71,6 +71,7 @@ import { pageIsAnimated, studioPageDuration, studioTracks, timingEnteringAt, tim
 import type { StudioTiming } from '@/lib/stories/studio-text';
 import type { StoryFrame } from '@/lib/stories/story-document';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
+import { studioWritingStyle } from '@/lib/stories/studio-writing';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
@@ -568,19 +569,19 @@ function StoryStudio({
   /** La saisie se DESSINE par le résolveur du player (`resolveSceneText`) :
    * même couleur, même taille relative à la largeur de la carte (`cqw`) que
    * le texte publié — jamais une taille de champ de formulaire. Elle suit le
-   * style de l'objet SÉLECTIONNÉ, comme le texte qu'elle recouvre. */
+   * style de l'objet qu'elle ÉCRIT, comme le texte qu'elle recouvre. */
   const textAppearance = useMemo(() => {
-    if (selectedLayer === null) return null;
-    const probe = parseCanvasDocument(composeStoryCanvas({ texts: [{ ...selectedLayer, text: '·' }] }))?.scenes[0]?.objects.find(
+    if (inviteLayer === null) return null;
+    const probe = parseCanvasDocument(composeStoryCanvas({ texts: [{ ...inviteLayer, text: '·' }] }))?.scenes[0]?.objects.find(
       (o) => o.kind === 'text',
     );
-    return probe === undefined ? null : resolveSceneText({ object: probe, preferredLanguages: [selectedLayer.language] });
-  }, [selectedLayer]);
+    return probe === undefined ? null : resolveSceneText({ object: probe, preferredLanguages: [inviteLayer.language] });
+  }, [inviteLayer]);
 
   const { soundSrc, soundMuted, setSoundMuted, soundAudioRef } = useStudioBackgroundSound(previewDocument, deps.media ?? protectedMediaDeps);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const { textBox, remeasureText } = useStudioTextBox({ stageRef, selectedId, texts: page.texts, textAppearance });
+  const { textBox, remeasureText } = useStudioTextBox({ stageRef, selectedId: inviteLayer?.id ?? null, texts: page.texts, textAppearance });
 
   const canPublish = canPublishStudioDraft(draft);
   const kindRefusal = studioPublishRefusal(draft, kind);
@@ -748,8 +749,10 @@ function StoryStudio({
                   targetId: inviteLayer?.id ?? null,
                   layer: inviteLayer,
                   fallbackLanguage: language,
-                  textBox,
-                  fontSize: textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null,
+                  geometry:
+                    inviteLayer !== null && textAppearance !== null
+                      ? studioWritingStyle({ layer: inviteLayer, widthFraction: textAppearance.widthFraction, box: textBox })
+                      : null,
                   onText: onTextChange,
                   onPublish: reelOffer.requestPublish,
                   locked: publishing,

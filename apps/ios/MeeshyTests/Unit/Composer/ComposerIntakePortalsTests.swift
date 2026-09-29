@@ -67,24 +67,22 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// serait sur DEUX ensembles vides, ce qui passe.
     func test_lesEtatsDePresentation_sontLisiblesEtNombreux() throws {
         let etats = declaredPresentationStates(in: try hostSource())
-        // **Trois depuis #4483**, et la baisse est ENCORE le correctif. Le
+        // **Deux depuis #8680**, et la baisse est ENCORE le correctif. Le
         // compte est passé de huit à quatre au #4467 (les feuilles devenues un
-        // `ComposerPortal?`), puis de quatre à trois ici : la porte du son
-        // n'offre plus un dialogue « emprunter / enregistrer » avant d'ouvrir
-        // quoi que ce soit — elle ouvre le micro, et les deux autres
-        // provenances vivent SOUS lui, dans la même feuille. Un sélecteur qui
-        // ne sélectionne plus rien n'a pas d'état à déclarer.
+        // `ComposerPortal?`), de quatre à trois au #4483 (la porte du son ouvre
+        // le micro sans dialogue préalable), puis de trois à deux ici : la
+        // porte image ouvre DIRECTEMENT la photothèque (directive porteur
+        // 2026-09-29) — la caméra vit sur la scène vide (#8653), et le choix
+        // caméra / photothèque / fichier n'a plus d'état à déclarer.
         //
         // Ce qui reste sont les présentations qui ne sont PAS des feuilles — la
-        // photothèque, l'importateur de fichiers — et l'unique dialogue de
-        // choix encore justifié, celui du média (caméra / photothèque /
-        // fichier ne posent pas le même objet).
+        // photothèque et l'importateur de fichiers.
         //
         // Le plancher reste un plancher : il garde contre la lecture qui casse
         // (zéro état lu passerait sinon au vert), jamais contre une baisse
         // voulue et motivée.
-        XCTAssertGreaterThanOrEqual(etats.count, 3,
-            "Le meuble déclare au moins trois sélecteurs — en lire moins veut dire que la lecture a cassé.")
+        XCTAssertGreaterThanOrEqual(etats.count, 2,
+            "Le meuble déclare au moins deux sélecteurs — en lire moins veut dire que la lecture a cassé.")
         XCTAssertTrue(etats.contains("showsPhotoPicker"))
         XCTAssertTrue(etats.contains("showsFileImporter"))
     }

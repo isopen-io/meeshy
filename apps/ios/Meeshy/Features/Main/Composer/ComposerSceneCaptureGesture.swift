@@ -139,6 +139,28 @@ nonisolated enum ComposerSceneQuickCapture {
         return modes.contains(.photo) ? .photo : .armOnly
     }
 
+    /// **Un geste, une ligne, son icône** (#8671, complément porteur
+    /// 2026-09-29 : « l'instruction de taper photo peut avoir l'appareil photo
+    /// au-devant, et à la ligne une caméra vidéo pour la partie long press »).
+    enum GestureLine: Equatable, Sendable {
+        case tapPhoto
+        case holdFilm
+
+        var symbol: String {
+            switch self {
+            case .tapPhoto: return "camera"
+            case .holdFilm: return "video"
+            }
+        }
+    }
+
+    static func gestureLines(_ hint: Hint) -> [GestureLine] {
+        switch hint {
+        case .photoOrVideo: return [.tapPhoto, .holdFilm]
+        case .videoOnly:    return [.holdFilm]
+        }
+    }
+
     static func hint(format: ComposerFormat) -> Hint? {
         switch tap(format: format) {
         case .photo:   return .photoOrVideo
