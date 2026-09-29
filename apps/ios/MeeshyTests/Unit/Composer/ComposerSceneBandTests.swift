@@ -248,8 +248,12 @@ final class ComposerSceneBandTests: XCTestCase {
             return XCTFail("Les étages du bas de la surface de scène sont introuvables")
         }
         let compacte = compact(corps)
-        XCTAssertTrue(compacte.contains("ComposerSceneBandView("),
+        // La bande passe par `bandView(_:)` depuis que le grand écran la pose
+        // aussi en carte flottante (#8532) : un seul montage, deux places.
+        XCTAssertTrue(compacte.contains("bandView(ouverte)"),
                       "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
+        XCTAssertTrue(compact(code).contains("privatefuncbandView(_ouverte:ComposerSceneBand)->someView{ComposerSceneBandView("),
+                      "Le montage unique de la bande est introuvable.")
         for interdit in [".transition(", "withAnimation", ".animation("] {
             XCTAssertFalse(compacte.contains(compact(interdit)),
                            "`\(interdit)` dans le body de la scène ferait varier la frame du canvas.")

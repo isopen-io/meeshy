@@ -23,6 +23,7 @@ import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
 import enGallery from './catalog-en-gallery';
+import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
@@ -30,6 +31,7 @@ import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
+import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 
 const en = {
@@ -859,6 +861,7 @@ const en = {
   'story.studio.refusal.door.visual': 'Choose an image or a video.',
   'story.studio.refusal.door.sound': 'Choose an audio file.',
   'story.studio.refusal.media-max': 'This publication already carries ten media — the gateway’s ceiling.',
+  'story.studio.refusal.import-max': '{count} media not imported: a publication carries ten at most.',
   'story.studio.failure.network': 'Network unavailable.',
   'story.studio.failure.timeout': 'The server did not respond.',
   'story.studio.failure.session': 'Session expired — please log in again.',
@@ -1029,14 +1032,6 @@ const en = {
   'comment.send.error': 'Your comment couldn’t be posted.',
   'comment.send.pending': 'Comment not confirmed — offline',
   'comment.send.empty': 'Write something before sending.',
-  'comments.action.like': 'Like',
-  'comments.action.unlike': 'Unlike',
-  'comments.action.edit': 'Edit',
-  'comments.action.delete': 'Delete',
-  'comments.action.delete.confirm': 'Confirm',
-  'comments.edit.label': 'Edit comment',
-  'comments.edit.save': 'Save',
-  'comments.edit.cancel': 'Cancel',
   'comment.like.error': 'Your like wasn’t saved.',
   'comment.edit.error': 'Your edit wasn’t saved.',
   'comment.delete.error': 'The comment couldn’t be deleted.',
@@ -1164,10 +1159,12 @@ const en = {
   ...enStudioChrome,
   ...enEphemeral,
   ...enGallery,
+  ...enMessageCard,
   ...enConversationCard,
   ...enStoriesMine,
   ...enContactCard,
   ...enQuote,
+  ...enCommentRow,
   ...enContactDiscovery,
 } satisfies InterfaceCatalog;
 

@@ -196,7 +196,7 @@ public final class StoryStickerLayer: CALayer {
         guard let synchronousReader = imageCache as? ComposerImageCacheReader else { return nil }
         return bitmapCacheKeys(for: sticker)
             .lazy
-            .compactMap { synchronousReader.images[$0]?.cgImage }
+            .compactMap { CanvasImageOrientation.displayCGImage(synchronousReader.images[$0]) }
             .first
     }
 

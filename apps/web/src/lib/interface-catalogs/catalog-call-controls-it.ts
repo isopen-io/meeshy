@@ -47,6 +47,18 @@ const it = {
   'callControls.record.audioDetail': 'Le voci di tutti',
   'callControls.record.video': 'Audio e video',
   'callControls.record.videoDetail': 'Le immagini visibili e le voci',
+  'callControls.capture': 'Cattura',
+  'callControls.capture.label': 'Cattura la chiamata',
+  'callControls.back': 'Indietro',
+  'callControls.journal': 'Diario',
+  'callControls.journal.label': 'Apri il diario della chiamata',
+  'callControls.journal.live': 'Torna alla diretta',
+  'callControls.journal.empty': 'Ancora nulla di trascritto. Attiva i sottotitoli: ogni frase detta compare qui con la sua traduzione, per tutta la chiamata.',
+  'callControls.journal.original': 'Originale',
+  'callControls.camera.options': 'Opzioni della mia fotocamera',
+  'callControls.selfTile.small': 'La mia miniatura: piccola',
+  'callControls.selfTile.medium': 'La mia miniatura: media',
+  'callControls.selfTile.large': 'La mia miniatura: grande',
 } satisfies CallControlsCatalog;
 
 export default it;

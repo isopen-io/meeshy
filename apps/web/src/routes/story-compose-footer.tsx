@@ -22,7 +22,9 @@ const REFUSAL_KEY: Readonly<Record<PublicationRefusal, 'story.studio.refusal.ree
  * par refus (#7684), jamais le libellé du réel pour tout. */
 export const publicationRefusalText = (lang: InterfaceLanguage, refusal: PublicationRefusal): string => translate(lang, REFUSAL_KEY[refusal]);
 
-export type StudioPlaceRefusalNotice = { readonly door: StudioDoor; readonly reason: 'door' | 'media-max' };
+/** `count` : les fichiers écartés d'un import multiple (#8533) — le pied dit
+ * combien, jamais un refus muet. */
+export type StudioPlaceRefusalNotice = { readonly door: StudioDoor; readonly reason: 'door' | 'media-max' | 'import-max'; readonly count?: number };
 
 /** La carte des médias a-t-elle une ligne à montrer ? */
 export const studioAssetsShown = (page: StudioPage): boolean =>
@@ -131,7 +133,9 @@ export function StudioFooterMessage({
     <div className="text-caption">
       {placeRefusal !== null ? (
         <p role="alert" data-place-refusal={placeRefusal.reason} style={{ color: 'var(--color-error)' }}>
-          {placeRefusal.reason === 'media-max'
+          {placeRefusal.reason === 'import-max'
+            ? translate(lang, 'story.studio.refusal.import-max', { count: String(placeRefusal.count ?? 0) })
+            : placeRefusal.reason === 'media-max'
             ? translate(lang, 'story.studio.refusal.media-max')
             : translate(lang, placeRefusal.door === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
         </p>

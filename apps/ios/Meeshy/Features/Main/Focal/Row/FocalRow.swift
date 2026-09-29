@@ -168,10 +168,31 @@ struct FocalRow: View {
         HStack(alignment: .bottom, spacing: FocalMetrics.MetaColumn.spacing) {
             // #8303 — la flamme-œil, dans la gouttière de l'avatar jusqu'à la première lettre.
             contentColumn.afterReadWatermark(content.protection.isAfterRead, gutter: indent, tint: ComposerProtection.ephemeral.tint)
+                // #8506 (directive porteur 2026-09-28 : « place les contrôleurs
+                // et détails À L'INTÉRIEUR du cadre, en laissant de l'espace
+                // sur les bords ») : le cadre de l'élu épouse la colonne du
+                // MESSAGE, et tout ce qu'il porte y vit ENTIER, à
+                // `electedCardMargin` de ses quatre bords — l'identité en haut
+                // du bloc, la bande et l'heure sous le contenu. Des
+                // superpositions et un fond : aucune hauteur réservée, tout
+                // apparaît AVEC le cadre, au tick d'élection.
+                //
+                // #8537 — seul le CONTENU grossit (`focalElectedLoupe`) : le
+                // cadre et la bande se posent sur sa mesure réelle, lue par
+                // préférence, et gardent leur échelle d'origine.
+                .backgroundPreferenceValue(FocalElectedContentKey.self) { elected in
+                    if input.isFocused { electedCardBackground(elected) }
+                }
+                .overlay(alignment: .topLeading) {
+                    if input.isFocused { focusIdentityChip.offset(y: -focusLift) }
+                }
+                .overlayPreferenceValue(FocalElectedContentKey.self) { elected in
+                    if input.isFocused { electedStrip(elected) }
+                }
 
-            // En focus, `focusStampChip` dit la même chose sur la bande de la
-            // carte : la colonne s'efface alors, comme la ligne basse, sans
-            // céder sa place — largeur stable, zéro relayout à l'élection.
+            // En focus, `focusStampChip` dit la même chose dans le cadre : la
+            // colonne s'efface alors, comme la ligne basse, sans céder sa
+            // place — largeur stable, zéro relayout à l'élection.
             FocalMetaColumn(
                 isMe: content.isMe,
                 timeString: content.meta.timeString,
@@ -187,34 +208,10 @@ struct FocalRow: View {
         }
         // #7953 — une SUITE magnifiée descend sous sa pastille, en rendu seul.
         .offset(y: focusLift)
-        // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
-        // que ses chips, toujours consolidés quelle que soit la hauteur
-        // (estimée ou posée) de la cellule ; identité sur la ligne du HAUT
-        // (hors tête de groupe, qui a déjà la sienne) et bande sur la ligne
-        // BASSE — des superpositions, aucune hauteur réservée : tout apparaît
-        // AVEC la carte, au tick d'élection.
+        // #8147 — le message long DÉPLIÉ (hors élection) garde le bloc de
+        // verre de la rangée entière, à ses marges d'origine.
         .background {
-            if input.isFocused || input.isExpanded {
-                focusCardBackground.padding(.bottom, -focusDrop)
-            }
-        }
-        .overlay(alignment: .topLeading) {
-            if input.isFocused {
-                focusIdentityChip
-                    .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                    .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if input.isFocused {
-                HStack(alignment: .center, spacing: 4) {
-                    focusStrip
-                    Spacer(minLength: 4)
-                    focusStampChip
-                }
-                .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                .offset(y: FocalMetrics.FocusStrip.overhang + focusDrop)
-            }
+            if input.isExpanded && !input.isFocused { focusCardBackground }
         }
         // F-083ter (F15) : l'effet épouse le bloc CONTENU, pas la rangée.
         // Il a vécu ici au nom d'un « même périmètre que la bulle » citant
@@ -229,9 +226,8 @@ struct FocalRow: View {
     }
 
     private var focusLift: CGFloat {
-        input.isFocused ? FocalMetrics.FocusStrip.contentLift(isFirstInGroup: input.isFirstInGroup) : 0
+        input.isFocused ? FocalScrollPerspective.electedContentLift(isFirstInGroup: input.isFirstInGroup) : 0
     }
-    private var focusDrop: CGFloat { input.isFocused ? focusLift + FocalMetrics.FocusStrip.stripDrop : 0 }
 
     /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
     /// d'un espace avec #5135 : seule la méta l'a quittée, et la ligne basse
@@ -301,22 +297,25 @@ struct FocalRow: View {
             // « Voir une fois » n'existait que sur les médias. Un message
             // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
             // jusqu'au toucher qui le consomme.
-            if let chip = content.viewOnceChipState {
-                ViewOnceChip(state: chip, isDark: input.isDark, hint: content.protectedTap().accessibilityHint) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
-            } else if content.requiresVeil {
-                FocalProtectedContent(
-                    isBlurred: true,
-                    isViewOnce: content.isViewOnce,
-                    isDark: input.isDark,
-                    messageId: content.messageId,
-                    onConsumeViewOnce: actions.onConsumeViewOnce,
-                    tap: content.protectedTap()
-                ) {
-                    contentSections
+            Group {
+                if let chip = content.viewOnceChipState {
+                    ViewOnceChip(state: chip, isDark: input.isDark, hint: content.protectedTap().accessibilityHint) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+                } else if content.requiresVeil {
+                    FocalProtectedContent(
+                        isBlurred: true,
+                        isViewOnce: content.isViewOnce,
+                        isDark: input.isDark,
+                        messageId: content.messageId,
+                        onConsumeViewOnce: actions.onConsumeViewOnce,
+                        tap: content.protectedTap()
+                    ) {
+                        contentSections
+                    }
+                } else {
+                    contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
-            } else {
-                contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
             }
+            .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection
 
@@ -338,26 +337,15 @@ struct FocalRow: View {
             // Sa garde d'origine (`translation != nil || showsReactions`) était
             // juste ; c'est en lui confiant la méta qu'on l'avait rendue
             // inconditionnelle. La méta partie en colonne, la condition revient.
+            // #8506 — plus de réserve sous le texte d'un élu sans ligne basse
+            // (#5718) : la bande ne chevauche plus la dernière ligne, elle se
+            // pose ENTIÈRE sous le contenu. La rangée ne change donc plus du
+            // tout de hauteur à l'élection.
             if mountsBottomLine {
                 flagAndReactionsRow
-                    // En focus, la bande SUR la ligne basse remplace visuellement
-                    // cette ligne — qui garde sa place (hauteur stable).
+                    // En focus, la bande du cadre remplace visuellement cette
+                    // ligne — qui garde sa place (hauteur stable).
                     .opacity(input.isFocused ? 0 : 1)
-            } else if input.isFocused {
-                // Miroir iOS du défaut 1 fermé côté web (#5648,
-                // `apps/web/src/components/focal-row.tsx:528-558`,
-                // `data-focus-reserve`) : sans ligne basse, la rangée n'a
-                // aucune hauteur réservée sous son texte, et `focusStrip`/
-                // `focusStampChip` (overlay `.bottom`, `offset(y: overhang)`)
-                // remontent alors sur sa dernière ligne. Réservé UNIQUEMENT
-                // sur la rangée ÉLUE sans ligne basse : ailleurs, ça ferait
-                // réapparaître la ligne blanche que #5135 a retirée.
-                Color.clear
-                    .frame(height: Self.focusOverlayReserveHeight(
-                        chipHeight: FocalMetrics.FocusStrip.chipHeight,
-                        overhang: FocalMetrics.FocusStrip.overhang
-                    ))
-                    .accessibilityHidden(true)
             }
         }
         // L'effet se pose ICI : AVANT l'étirement ci-dessous, donc sur la
@@ -385,23 +373,6 @@ struct FocalRow: View {
             isLastInGroup: input.isLastInGroup,
             hasReactions: mountsReactions
         )
-    }
-
-    /// Hauteur à réserver sous le texte d'une rangée ÉLUE **sans** ligne
-    /// basse (#5718, miroir du défaut 1 fermé côté web par #5648).
-    ///
-    /// `focusStrip`/`focusStampChip` se posent en `.overlay(alignment:
-    /// .bottom)` puis `.offset(y: overhang)` : leur bord bas descend donc de
-    /// `overhang` sous le bord bas de la rangée, et leur bord haut — à
-    /// `chipHeight` au-dessus du leur — remonte de `chipHeight - overhang`
-    /// AU-DESSUS de ce même bord bas. Quand une ligne basse réelle est
-    /// montée (`flagAndReactionsRow`), c'est sa propre hauteur qui absorbe ce
-    /// débord ; sans elle, rien ne l'absorbe et la bande recouvre la
-    /// dernière ligne de texte. Réserver exactement `chipHeight - overhang`
-    /// annule le débord au point près, quelle que soit l'évolution future de
-    /// ces deux cotes — jamais une valeur à part qui pourrait diverger.
-    static func focusOverlayReserveHeight(chipHeight: CGFloat, overhang: CGFloat) -> CGFloat {
-        max(0, chipHeight - overhang)
     }
 
     // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
@@ -1022,18 +993,57 @@ struct FocalRow: View {
         .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
     }
 
-    /// Le FOND du message en focus, dessiné dans le repère du CONTENU
-    /// (la carte UIKit bornée à la cellule dérivait de ses chips tant que la
-    /// cellule n'était pas posée). Mêmes cotes que `focusCardInsets` : elle
-    /// dépasse le bloc de `focusCardInnerMargin` en haut et en bas, et
-    /// s'arrête à `focusCardHorizontalInset` du bord de la cellule.
+    /// Le FOND du message long DÉPLIÉ (#8147), dessiné dans le repère du
+    /// CONTENU. Mêmes cotes que `focusCardInsets` : il dépasse le bloc de
+    /// `focusCardInnerMargin` en haut et en bas, et s'arrête à
+    /// `focusCardHorizontalInset` du bord de la cellule.
     private var focusCardBackground: some View {
-        FocalGlassBlock(accentHex: input.accentHex)
+        FocalGlassBlock()
             .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }
 
-    /// HAUT-GAUCHE : l'auteur, sur la ligne du haut de la carte — pour TOUTES
+    /// Le CADRE de l'élu Focal (#8506), fond de la colonne du message : il
+    /// englobe l'identité posée au-dessus du contenu descendu, le contenu
+    /// GROSSI (#8537) et la bande posée dessous, à `electedCardMargin` de
+    /// chacun — la disposition que la passe mesure (`electedGeometry`).
+    private func electedCardBackground(_ elected: FocalElectedContent?) -> some View {
+        GeometryReader { proxy in
+            let margin = FocalScrollPerspective.electedCardMargin
+            let span = electedSpan(elected, in: proxy)
+            FocalGlassBlock()
+                .padding(.leading, -margin)
+                .padding(.trailing, -(margin + span.extraWidth))
+                .padding(.top, -(focusLift + margin))
+                .padding(.bottom, -(span.stripTop + FocalMetrics.FocusStrip.chipHeight + margin - proxy.size.height))
+        }
+    }
+
+    /// La bande basse de l'élu — pastille de langue, drapeaux, réactions, date —
+    /// à l'échelle 1, sous le contenu grossi, sur toute la largeur du cadre.
+    private func electedStrip(_ elected: FocalElectedContent?) -> some View {
+        GeometryReader { proxy in
+            let span = electedSpan(elected, in: proxy)
+            HStack(alignment: .center, spacing: 4) {
+                focusStrip
+                Spacer(minLength: 4)
+                focusStampChip
+            }
+            .frame(width: proxy.size.width + span.extraWidth, height: FocalMetrics.FocusStrip.chipHeight)
+            .offset(y: span.stripTop)
+        }
+    }
+
+    private func electedSpan(_ elected: FocalElectedContent?, in proxy: GeometryProxy) -> (extraWidth: CGFloat, stripTop: CGFloat) {
+        let bounds = elected.map { proxy[$0.bounds] } ?? CGRect(x: 0, y: 0, width: 0, height: proxy.size.height)
+        let scale = elected?.scale ?? 1
+        return (
+            FocalScrollPerspective.electedExtraWidth(columnWidth: proxy.size.width, contentWidth: bounds.width, scale: scale),
+            FocalScrollPerspective.electedStripTop(columnHeight: proxy.size.height, contentMinY: bounds.minY, contentHeight: bounds.height, scale: scale)
+        )
+    }
+
+    /// HAUT-GAUCHE : l'auteur, en haut du cadre — pour TOUTES
     /// les bulles en focus.
     ///
     /// **Directive 2026-08-24.** Cette chip recomposait une identité PAUVRE :
@@ -1043,11 +1053,8 @@ struct FocalRow: View {
     /// précis où le message est le plus regardé. Elle réemploie donc l'en-tête,
     /// à un gabarit plus grand, au lieu d'en réécrire une version amputée.
     ///
-    /// **Elle n'a NI fond NI capsule** (directive 2026-08-24) : l'auteur se
-    /// pose HORS de la carte, juste au-dessus d'elle, exactement comme la
-    /// rangée Script affiche le sien. Seule la taille demeure agrandie. La
-    /// capsule opaque la faisait lire comme une pastille posée SUR la bulle,
-    /// alors que l'auteur n'appartient pas au message : il le précède.
+    /// Elle vit DANS le cadre depuis #8506, à sa marge — plus à cheval sur
+    /// sa ligne haute.
     ///
     /// Le toucher passe par `onOpenProfile`, le routage que l'hôte tient
     /// déjà : la feuille de PROFIL pour un compte, la fiche de participation
@@ -1084,15 +1091,15 @@ struct FocalRow: View {
     }
 
     /// BAS-DROITE : date complète (pré-calculée) + coche d'état de réception
-    /// (mes messages), sur la ligne basse à côté de la bande — toucher =
-    /// détails de lecture. Elle a quitté la ligne du HAUT le 2026-08-23 : la
+    /// (mes messages), sur la ligne basse à côté de la bande — toucher = les
+    /// DÉTAILS du message, la feuille qu'ouvre « Infos » (#8537). Elle a quitté la ligne du HAUT le 2026-08-23 : la
     /// carte affichait alors sa date deux fois, en haut par cette chip et en
     /// bas par la méta.
     private var focusStampChip: some View {
         let metaTint: Color = input.isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
         let readTint: Color = input.isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
         return Button {
-            actions.onShowReadStatus?(content.messageId)
+            actions.onShowMessageInfo?(content.messageId)
         } label: {
             focusChip {
                 HStack(spacing: 4) {

@@ -15,8 +15,6 @@ const enCallCaptions = {
   'callCaptions.listening': 'Your voice is being transcribed',
   'callCaptions.unsupported': 'This browser can’t transcribe your voice: you can read the others',
   'callCaptions.denied': 'Speech recognition denied: you can read the others',
-  'callCaptions.journal.show': 'Log',
-  'callCaptions.journal.hide': 'Hide log',
   'callCaptions.journal.title': 'Call log',
   'callCaptions.participant': 'Participant',
   'callTranscript.show': 'Transcript',

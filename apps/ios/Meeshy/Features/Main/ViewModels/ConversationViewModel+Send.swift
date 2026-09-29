@@ -78,8 +78,12 @@ extension ConversationViewModel {
     /// protection armée reste armée pour les messages suivants de la
     /// conversation jusqu'à ce qu'on la change. Seuls les effets décoratifs
     /// restent à usage unique (`finalizeSuccessfulSend`).
-    func captureArmedProtection() -> MessageProtectionIntent {
-        armedProtection
+    ///
+    /// La contagion de la citation (#8557) s'y applique : tout ce qui part de
+    /// ce tap — ligne optimiste, corps REST, file hors ligne — porte les bits
+    /// que le message cité impose.
+    func captureArmedProtection(replyingTo replyToId: String?) -> MessageProtectionIntent {
+        contaminated(armedProtection, replyingTo: replyToId)
     }
 
     /// Les bits que la ligne OPTIMISTE doit porter : l'axe apparition/persistant
@@ -279,7 +283,7 @@ extension ConversationViewModel {
 
         // La protection de CET envoi, saisie avant toute branche (#8303) : la
         // file hors ligne la rejoue désormais, elle doit donc la connaître.
-        let intent = protection ?? armedProtection
+        let intent = contaminated(protection ?? armedProtection, replyingTo: replyToId)
 
         // Offline: enqueue for later delivery + show optimistic message.
         // NOTE: we only gate on network availability here — NOT on socket

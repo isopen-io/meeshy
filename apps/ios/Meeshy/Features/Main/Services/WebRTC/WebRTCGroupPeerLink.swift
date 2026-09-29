@@ -56,6 +56,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     private(set) var remoteVideoTrack: Any?
 
     private let isPolite: Bool
+    private let receiveOnly: Bool
     private let localVideoTrack: @MainActor () -> RTCVideoTrack?
     private let onEvent: @MainActor (GroupPeerLinkEvent) -> Void
     private let audioTrack: RTCAudioTrack
@@ -78,6 +79,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     ) {
         self.remoteUserId = configuration.remoteUserId
         self.isPolite = configuration.isPolite
+        self.receiveOnly = configuration.receiveOnly
         self.localVideoTrack = localVideoTrack
         self.onEvent = onEvent
         self.sendsVideo = configuration.sendsVideo
@@ -117,6 +119,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     }
 
     func setVideoEnabled(_ enabled: Bool) async {
+        guard !receiveOnly else { return }
         sendsVideo = enabled
         guard let pc = peerConnection, let transceiver = pc.transceivers.first(where: { $0.mediaType == .video }) else { return }
         guard enabled, let track = localVideoTrack() else {
@@ -264,6 +267,10 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     }
 
     private func attachAnswererTracks(on pc: RTCPeerConnection) {
+        guard !receiveOnly else {
+            pc.transceivers.forEach(forceRecvOnly)
+            return
+        }
         for transceiver in pc.transceivers {
             switch transceiver.mediaType {
             case .audio:
@@ -276,6 +283,16 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
             default:
                 continue
             }
+        }
+    }
+
+    /// L'aperçu de l'appelé : ni micro ni caméra ne partent avant le décroché.
+    private func forceRecvOnly(_ transceiver: RTCRtpTransceiver) {
+        transceiver.sender.track = nil
+        var error: NSError?
+        transceiver.setDirection(.recvOnly, error: &error)
+        if let error {
+            Logger.webrtc.warning("[PREVIEW] setDirection(.recvOnly) failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

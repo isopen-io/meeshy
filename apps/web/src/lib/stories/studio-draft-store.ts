@@ -37,8 +37,9 @@ export type StudioDraftAssetRef = {
   readonly durationMs?: number;
 };
 
-/** Une LÉGENDE de média conservée avec sa référence (#6944). */
-type StudioDraftCaption = { readonly caption?: string };
+/** Une LÉGENDE de média conservée avec sa référence (#6944), et son FILTRE
+ * (lot 7) — LÂCHE, normalisé à la relecture (`studio.ts`). */
+type StudioDraftCaption = { readonly caption?: string; readonly filter?: unknown };
 
 /** Ce qu'UNE page porte — voir `StudioPage` (`studio-page.ts`) côté vivant. */
 export type StudioPageSnapshot = {

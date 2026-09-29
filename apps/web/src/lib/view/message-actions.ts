@@ -39,10 +39,10 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'more';
+export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
-export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'dotsThree';
+export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
 
 /**
  * UNE CLÉ, JAMAIS UN LIBELLÉ (#7555). `as const satisfies` plutôt qu'une
@@ -57,6 +57,8 @@ const MENU_LABEL_KEYS = {
   copy: 'message.menu.copy',
   forward: 'message.menu.forward',
   reply: 'message.menu.reply',
+  export: 'message.menu.export',
+  exportQuick: 'message.menu.exportQuick',
   more: 'message.menu.more',
 } as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
 
@@ -90,6 +92,8 @@ export type MessageMenuContext = {
    * encore de port web (`message-detail-sheet.tsx`, D-29).
    */
   readonly isViewOnce?: boolean;
+  /** Un format d'export par défaut est enregistré sur l'appareil : « Export rapide » l'applique sans options. */
+  readonly hasDefaultExportFormat?: boolean;
 };
 
 /**
@@ -158,6 +162,15 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
+  /* « EXPORTER EN IMAGE » — même garde que « Copier » : une image est une
+     copie qu'on partage, ce qui ne se copie pas ne se peint pas
+     (`lib/export/message-card-subject.ts`). */
+  if (ctx.hasText && !ctx.isProtected) {
+    items.push({ id: 'export', labelKey: MENU_LABEL_KEYS.export, glyph: 'imageSquare' });
+    if (ctx.hasDefaultExportFormat === true) {
+      items.push({ id: 'exportQuick', labelKey: MENU_LABEL_KEYS.exportQuick, glyph: 'lightning' });
+    }
+  }
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
 }

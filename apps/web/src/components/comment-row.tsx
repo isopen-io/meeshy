@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
+import { CommentBody } from '@/components/comment-body';
+import { CommentSwipe } from '@/components/comment-swipe';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { PersonName } from '@/components/person-name';
 import { GlyphSvg } from '@/components/glyph';
@@ -15,6 +17,7 @@ import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
+import { replyTargetOf, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
@@ -53,10 +56,18 @@ export type CommentGestureHandlers = {
   /** L'identité qui décide de « Modifier » et « Supprimer » — jamais recalculée ici. */
   readonly viewerId: string;
   /** `on` est la direction VOULUE, élue ici parce que c'est ici qu'on voit
-   * l'état du cœur — et elle voyage ensuite avec la requête (défaut majeur 2). */
-  readonly onLike: (commentId: string, on: boolean) => void;
-  readonly onEdit: (commentId: string, content: string) => void;
-  readonly onDelete: (commentId: string) => void;
+   * l'état du cœur — et elle voyage ensuite avec la requête (défaut majeur 2).
+   * `parentId` n'est passé que pour une RÉPONSE (#8583) : le geste vise alors
+   * la caisse des réponses de sa racine. */
+  readonly onLike: (commentId: string, on: boolean, parentId?: string) => void;
+  readonly onEdit: (commentId: string, content: string, parentId?: string) => void;
+  readonly onDelete: (commentId: string, parentId?: string) => void;
+  /**
+   * RÉPONDRE (#8583) — le glissé vers la droite ET le bouton « Répondre »
+   * appellent CE rappel, avec la cible déjà composée (racine, extrait servi,
+   * mention) : deux portes, un seul geste. Absent ⇒ ni bouton ni glissé.
+   */
+  readonly onReply?: (target: CommentReplyTarget) => void;
   /** Le dernier geste EN ÉCHEC sur cette rangée, avec SA classe d'issue. */
   readonly failureOf: (commentId: string) => CommentGestureRowFailure | undefined;
   /** Rejoue ce geste-là — l'hôte se souvient duquel il s'agit. */
@@ -85,6 +96,9 @@ export type CommentRowProps = {
   readonly locale: string;
   readonly now: Date;
   readonly gestures?: CommentGestureHandlers | undefined;
+  /** LES RÉPONSES de cette racine (#8583), posées DANS sa rangée — une liste
+   * imbriquée appartient à l'élément qu'elle détaille. */
+  readonly children?: ReactNode;
 };
 
 /** LE PSEUDO, pour que l'avatar d'un commentaire ouvre le profil de son
@@ -97,6 +111,10 @@ const displayName = (author: PostComment['author']): string => {
   const username = typeof author.username === 'string' && author.username !== '' ? author.username : null;
   return display ?? username ?? '';
 };
+
+/** La racine d'une RÉPONSE, en argument optionnel — rien pour un premier niveau. */
+const parentArgs = (comment: PostComment): [] | [string] =>
+  typeof comment.parentId === 'string' && comment.parentId !== '' ? [comment.parentId] : [];
 
 const countOf = (value: number | null | undefined): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
@@ -124,6 +142,7 @@ function GestureBar({
   editRef,
   onStartEdit,
   onDelete,
+  onReply,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
@@ -131,6 +150,7 @@ function GestureBar({
   readonly editRef: { current: HTMLButtonElement | null };
   readonly onStartEdit: () => void;
   readonly onDelete: () => void;
+  readonly onReply: (() => void) | undefined;
 }) {
   const isLiked = comment.isLikedByMe === true;
   const likes = countOf(comment.likeCount);
@@ -171,7 +191,7 @@ function GestureBar({
         aria-busy={busy}
         onClick={() => {
           if (busy) return;
-          gestures.onLike(comment.id, !isLiked);
+          gestures.onLike(comment.id, !isLiked, ...parentArgs(comment));
         }}
         className={GESTURE_BUTTON}
         style={{
@@ -199,6 +219,20 @@ function GestureBar({
         />
         {likes > 0 ? <span className="text-check">{likes}</span> : null}
       </button>
+      {/* **« RÉPONDRE » À LA SOURIS ET AU CLAVIER** (#8583) — le glissé est un
+          geste de DOIGT ; ce bouton est la même porte pour qui n'en a pas, et
+          il appelle le MÊME rappel que le glissé. */}
+      {onReply === undefined ? null : (
+        <button
+          type="button"
+          data-comment-gesture="reply"
+          onClick={onReply}
+          className={`${GESTURE_BUTTON} text-check`}
+          style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'comments.action.reply')}
+        </button>
+      )}
       {isMine ? (
         <>
           <button
@@ -414,7 +448,7 @@ function EditForm({
   );
 }
 
-export function CommentRow({ comment, language, preferredLanguages, locale, now, gestures }: CommentRowProps) {
+export function CommentRow({ comment, language, preferredLanguages, locale, now, gestures, children }: CommentRowProps) {
   const [editing, setEditing] = useState(false);
   const name = displayName(comment.author);
   const servi = resolveFeedText({
@@ -473,7 +507,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   const save = useCallback(
     (content: string) => {
       setEditing(false);
-      actionable?.onEdit(comment.id, content);
+      actionable?.onEdit(comment.id, content, ...parentArgs(comment));
     },
     [actionable, comment.id],
   );
@@ -492,87 +526,103 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
       next?.querySelector<HTMLElement>('[data-comment-gesture="like"]') ??
       row?.closest<HTMLElement>('[data-comment-thread]') ??
       null;
-    actionable?.onDelete(comment.id);
+    actionable?.onDelete(comment.id, ...parentArgs(comment));
     target?.focus();
   }, [actionable, comment.id]);
+
+  const onReplyHandler = actionable?.onReply;
+  const reply = useMemo(
+    () =>
+      onReplyHandler === undefined || editing
+        ? undefined
+        : () => onReplyHandler(replyTargetOf(comment, { authorName: name, displayedText: lu.text })),
+    [onReplyHandler, editing, comment, name, lu.text],
+  );
 
   return (
     <li
       ref={rowRef}
       data-comment-row={comment.id}
       {...(comment.pending === true ? { 'data-comment-pending': '' } : {})}
-      className="flex gap-3 py-2"
       style={{ opacity: comment.pending === true ? 0.6 : 1 }}
     >
-      <Avatar
-        initials={initialsOf(name)}
-        color="var(--color-ios-brand)"
-        size={32}
-        name={name}
-        {...(photo === undefined ? {} : { src: photo })}
-        {...(handleOf(comment.author) === undefined ? {} : { profileUsername: handleOf(comment.author) as string })}
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-baseline gap-2">
-          {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — même pseudo, même loi
-              (`identityTarget`), jamais une seconde décision à faire dériver. */}
-          <PersonName
+      <CommentSwipe onReply={reply}>
+        <div className="flex gap-3 py-2">
+          <Avatar
+            initials={initialsOf(name)}
+            color="var(--color-ios-brand)"
+            size={32}
             name={name}
-            username={handleOf(comment.author)}
-            className="truncate text-check font-semibold"
-            style={{ color: 'var(--color-ios-ink)' }}
+            {...(photo === undefined ? {} : { src: photo })}
+            {...(handleOf(comment.author) === undefined ? {} : { profileUsername: handleOf(comment.author) as string })}
           />
-          <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {comment.pending === true
-              ? translate(language, 'comments.row.pending')
-              : shortRelativeTime(new Date(comment.createdAt), now, locale)}
-          </span>
-          {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
-              ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
-              aucune condition n'est à tenir ici en double. */}
-          <PrismPastille
-            servedLanguage={servi.language}
-            originalLanguage={originalLanguage}
-            active={showingOriginal ? originalLanguage : null}
-            language={language}
-            subject="comment"
-            onToggle={() => setShowingOriginal((open) => !open)}
-          />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex min-w-0 items-baseline gap-2">
+              {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — même pseudo, même loi
+                  (`identityTarget`), jamais une seconde décision à faire dériver. */}
+              <PersonName
+                name={name}
+                username={handleOf(comment.author)}
+                className="truncate text-check font-semibold"
+                style={{ color: 'var(--color-ios-ink)' }}
+              />
+              <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
+                {comment.pending === true
+                  ? translate(language, 'comments.row.pending')
+                  : shortRelativeTime(new Date(comment.createdAt), now, locale)}
+              </span>
+              {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
+                  ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
+                  aucune condition n'est à tenir ici en double. */}
+              <PrismPastille
+                servedLanguage={servi.language}
+                originalLanguage={originalLanguage}
+                active={showingOriginal ? originalLanguage : null}
+                language={language}
+                subject="comment"
+                onToggle={() => setShowingOriginal((open) => !open)}
+              />
+            </div>
+            {editing && actionable !== undefined ? (
+              <EditForm
+                comment={comment}
+                language={language}
+                mentionSource={gestures?.mentionSource ?? null}
+                onSave={save}
+                onCancel={() => setEditing(false)}
+              />
+            ) : (
+              /* `lang` UNIQUEMENT quand le texte servi n'est PAS la langue du
+                 document : poser `lang` partout ferait mentir la voix sur les
+                 rangées non traduites. */
+              <CommentBody comment={comment} contentLength={lu.text.length}>
+                <p
+                  className="text-body break-words whitespace-pre-wrap"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                  {...(lu.marque ? { lang: lu.language } : {})}
+                >
+                  {lu.text}
+                </p>
+              </CommentBody>
+            )}
+            {actionable !== undefined && !editing ? (
+              <GestureBar
+                comment={comment}
+                language={language}
+                gestures={actionable}
+                editRef={editRef}
+                onStartEdit={() => setEditing(true)}
+                onDelete={requestDelete}
+                onReply={reply}
+              />
+            ) : null}
+            {actionable !== undefined && failure !== undefined ? (
+              <GestureFailure language={language} failure={failure} onRetry={() => actionable.onRetryGesture(comment.id)} />
+            ) : null}
+          </div>
         </div>
-        {editing && actionable !== undefined ? (
-          <EditForm
-            comment={comment}
-            language={language}
-            mentionSource={gestures?.mentionSource ?? null}
-            onSave={save}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          /* `lang` UNIQUEMENT quand le texte servi n'est PAS la langue du
-             document : poser `lang` partout ferait mentir la voix sur les
-             rangées non traduites. */
-          <p
-            className="text-body break-words whitespace-pre-wrap"
-            style={{ color: 'var(--color-ios-ink)' }}
-            {...(lu.marque ? { lang: lu.language } : {})}
-          >
-            {lu.text}
-          </p>
-        )}
-        {actionable !== undefined && !editing ? (
-          <GestureBar
-            comment={comment}
-            language={language}
-            gestures={actionable}
-            editRef={editRef}
-            onStartEdit={() => setEditing(true)}
-            onDelete={requestDelete}
-          />
-        ) : null}
-        {actionable !== undefined && failure !== undefined ? (
-          <GestureFailure language={language} failure={failure} onRetry={() => actionable.onRetryGesture(comment.id)} />
-        ) : null}
-      </div>
+      </CommentSwipe>
+      {children}
     </li>
   );
 }

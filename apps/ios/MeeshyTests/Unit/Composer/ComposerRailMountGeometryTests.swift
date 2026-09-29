@@ -136,8 +136,10 @@ final class ComposerRailMountGeometryTests: XCTestCase {
 
         XCTAssertEqual(rail.minX, ComposerRailGeometry.outerMargin, accuracy: 0.5,
                        "Le rail doit commencer à la marge de bord.")
-        XCTAssertEqual(scene.minX, 0, accuracy: 0.5,
-                       "La scène doit commencer au bord : plus aucun couloir.")
+        // Plus aucun couloir — la seule respiration de bord, celle des rails
+        // (retour porteur 2026-09-28 : « trop collée au viewport »).
+        XCTAssertEqual(scene.minX, ComposerRailGeometry.outerMargin, accuracy: 0.5,
+                       "La scène commence à la marge de bord, jamais sous un couloir.")
     }
 
     /// La scène occupe bien la largeur que la règle annonce — le lien entre

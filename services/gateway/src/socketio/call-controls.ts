@@ -8,10 +8,11 @@ import { resolveActiveCallParticipant } from './call-participants';
 import { callInviteDependencies, registerCallInviteEvents } from './call-invite-events';
 import { registerCallModerationEvents } from './call-moderation-events';
 import { registerCallReactionEvents } from './call-reaction-events';
+import { callPreviewDependencies, registerCallPreviewEvents } from './call-preview-events';
 
 /**
  * Les contrôles d'un appel EN COURS — inviter (#8433), couper un micro
- * (#8438), réagir (#8439) — branchés d'un seul appel depuis
+ * (#8438), réagir (#8439) — et l'aperçu d'un appel qui SONNE (#8480), branchés d'un seul appel depuis
  * `CallEventsHandler`, qui est hors budget de taille et ne reçoit plus de
  * verbe neuf.
  */
@@ -40,4 +41,5 @@ export function registerCallControlEvents(
     socket,
     getUserId
   );
+  registerCallPreviewEvents(callPreviewDependencies({ io, prisma, callService, rateLimiter }), socket, getUserId);
 }

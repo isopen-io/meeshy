@@ -104,9 +104,9 @@ final class ConversationArmedProtectionTests: XCTestCase {
         sut.isBlurEnabled = true
         sut.ephemeralChoice = .duration(.oneMinute)
 
-        _ = await sut.sendMessage(content: "premier", protection: sut.captureArmedProtection())
+        _ = await sut.sendMessage(content: "premier", protection: sut.captureArmedProtection(replyingTo: nil))
         let premier = messageService.lastSendRequest
-        _ = await sut.sendMessage(content: "second", protection: sut.captureArmedProtection())
+        _ = await sut.sendMessage(content: "second", protection: sut.captureArmedProtection(replyingTo: nil))
         let second = messageService.lastSendRequest
 
         XCTAssertEqual(premier?.isBlurred, true)
@@ -120,7 +120,7 @@ final class ConversationArmedProtectionTests: XCTestCase {
         let (sut, _) = try await makeSUT(store: isolatedStore())
         sut.pendingEffects = MessageEffects(flags: .confetti)
 
-        _ = await sut.sendMessage(content: "fête", protection: sut.captureArmedProtection())
+        _ = await sut.sendMessage(content: "fête", protection: sut.captureArmedProtection(replyingTo: nil))
 
         XCTAssertFalse(sut.pendingEffects.hasAnyEffect)
     }

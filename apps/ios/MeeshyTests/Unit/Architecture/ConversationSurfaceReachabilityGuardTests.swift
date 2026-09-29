@@ -740,8 +740,13 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
     /// s'il a un effet.
     func test_lÉtatArmé_atteintLEnvoi() throws {
         let mount = try source(at: "Features/Main/Views/ConversationView+Composer.swift")
-        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.isViewOnceEnabled"),
+        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.composerViewOnceEnabled"),
                       "La bascule doit écrire dans l'état du ViewModel, pas dans un `@State` local.")
+        // #8557 — la bascule passe par la projection qui respecte la contagion
+        // d'une réponse ; la projection, elle, écrit l'état armé du ViewModel.
+        let projection = try source(at: "Features/Main/ViewModels/ConversationViewModel+ReplyContagion.swift")
+        XCTAssertTrue(projection.contains("isViewOnceEnabled = newValue"),
+                      "La projection du composeur doit écrire l'état armé du ViewModel.")
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
         XCTAssertTrue(send.contains("isViewOnceEnabled"),
                       "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
@@ -776,7 +781,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// l'acquittement, on est au bout d'UN message, et il en reste à partir.
     func test_leDésarmement_seFaitAuTapEtPasÀLAcquittement() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertTrue(send.contains("func captureArmedProtection()"),
+        XCTAssertTrue(send.contains("func captureArmedProtection(replyingTo replyToId: String?)"),
                       "La saisie doit être UNE fonction nommée, appelée par le tap — elle ne désarme plus (#8305).")
 
         guard let finalize = send.range(of: "func finalizeSuccessfulSend") else {
@@ -872,7 +877,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
         let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
         XCTAssertEqual(
-            src.components(separatedBy: "viewModel.captureArmedProtection()").count - 1, 1,
+            src.components(separatedBy: "viewModel.captureArmedProtection(replyingTo: replyId)").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
         let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
