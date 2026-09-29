@@ -1,22 +1,26 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
+import { CommentImagePortal } from '@/components/comment-image-sheet-lazy';
 import { CommentList } from '@/components/comment-list';
 import { CommentReplies } from '@/components/comment-replies';
 import type { CommentGestureHandlers } from '@/components/comment-row';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
-import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
+import { commentAction, commentGestureAction, loadCommentRepliesAction, reportCommentAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
+import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useViewer } from '@/lib/view/use-viewer';
+import type { CommentImageRequest } from '@/routes/comment-image-sheet';
 
 /**
  * **LE FIL DE COMMENTAIRES, MONTÉ** — la liste (`comment-list.tsx`), son
@@ -38,9 +42,25 @@ export type CommentThreadProps = {
    * charge pas les commentaires qu'on ne regarde pas. */
   readonly enabled?: boolean;
   readonly tone?: 'onLight' | 'onDark';
+  /**
+   * **LE FIL MONTÉ EN FEUILLE SUR UN LECTEUR** (#8643) — la feuille veut
+   * savoir quand on écrit (`onWritingChange`), replier la saisie après un
+   * envoi réussi (`foldOnSend`), et retirer la liste pendant qu'on écrit
+   * (`listHidden`) : la scène réduite prend sa place au-dessus du composeur.
+   */
+  readonly onWritingChange?: (writing: boolean) => void;
+  readonly foldOnSend?: boolean;
+  readonly listHidden?: boolean;
 };
 
-export function CommentThread({ postId, enabled = true, tone = 'onLight' }: CommentThreadProps) {
+export function CommentThread({
+  postId,
+  enabled = true,
+  tone = 'onLight',
+  onWritingChange,
+  foldOnSend = false,
+  listHidden = false,
+}: CommentThreadProps) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const reader = useReaderLanguages();
@@ -77,6 +97,42 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
    * frères : c'est leur hôte commun qui les relie.
    */
   const [replyTarget, setReplyTarget] = useState<CommentReplyTarget | null>(null);
+  /**
+   * « IMAGER » UN COMMENTAIRE (#8693) — une réponse cite sa racine, dans le
+   * texte que le lecteur y lit (le Prisme des commentaires, `resolveFeedText`).
+   */
+  const [imaging, setImaging] = useState<CommentImageRequest | null>(null);
+  const servedOf = (comment: PostComment) => ({
+    comment,
+    servedText: resolveFeedText({ preferredLanguages: reader.languages, originalLanguage: comment.originalLanguage, translations: comment.translations, content: comment.content }).text,
+  });
+  const imageRequestOf = (comment: PostComment, servedText: string): CommentImageRequest => {
+    const root = typeof comment.parentId === 'string' ? comments.find((candidate) => candidate.id === comment.parentId) : undefined;
+    return { comment, servedText, parent: root === undefined ? null : servedOf(root) };
+  };
+  /**
+   * « IMAGER AVEC LES RÉPONSES » (#8734) — l'atelier s'ouvre TOUT DE SUITE sur
+   * la racine seule, puis la carte reçoit ses réponses dès qu'elles sont là :
+   * celles de la caisse si le fil est déplié, sinon une lecture de leur
+   * première page. Une lecture ratée laisse la carte sans elles — jamais
+   * d'attente muette avant l'atelier.
+   */
+  const imageWithReplies = (comment: PostComment, servedText: string) => {
+    const request = imageRequestOf(comment, servedText);
+    setImaging(request);
+    void loadCommentRepliesAction(postId, comment.id).then((replies) =>
+      setImaging((current) => (current === request ? { ...request, replies: replies.map(servedOf) } : current)),
+    );
+  };
+
+  /**
+   * LES ISSUES DU MENU « … » (#8734) — « Texte copié », « Signalement
+   * envoyé »… s'ANNONCENT : la rangée n'a pas de région vivante, et un geste
+   * sans effet visible ne se tait pas.
+   */
+  const [notice, setNotice] = useState('');
+  const say = (key: 'feed.post.copied' | 'feed.post.copy_failed' | 'report.done' | 'report.throttled' | 'report.failed') =>
+    setNotice(translate(currentInterfaceLanguage(), key));
   /** LES RACINES DÉPLIÉES — une réponse qu'on vient de poser déplie la sienne, pour qu'elle se VOIE. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const toggleReplies = useCallback((rootId: string) => {
@@ -192,6 +248,13 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
                 ...(parentId === undefined ? {} : { parentId }),
               }),
             onReply: setReplyTarget,
+            onImage: (comment, servedText, options) =>
+              options.withReplies ? imageWithReplies(comment, servedText) : setImaging(imageRequestOf(comment, servedText)),
+            onCopy: (text) => void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed')),
+            onReport: (commentId, reason) =>
+              void reportCommentAction(commentId, reason).then((outcome) =>
+                say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed'),
+              ),
             failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
@@ -201,7 +264,8 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
             mentionSource,
           }
         : undefined,
-    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource],
+    /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
+    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages],
   );
 
   const renderReplies = useCallback(
@@ -231,10 +295,10 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
          accessible annonce « Commentaires » plutôt qu'un retour muet au haut
          du document. */
       tabIndex={-1}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col outline-none"
       style={tone === 'onDark' ? { colorScheme: 'dark' } : undefined}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto px-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3" hidden={listHidden} data-comment-thread-list="">
         <CommentList
           comments={comments}
           state={{
@@ -264,7 +328,13 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
         mentionSource={mentionSource}
         replyTo={replyTarget}
         onCancelReply={() => setReplyTarget(null)}
+        {...(onWritingChange === undefined ? {} : { onWritingChange })}
+        foldOnSend={foldOnSend}
       />
+      <p role="status" aria-live="polite" className="sr-only" data-comment-thread-notice="">
+        {notice}
+      </p>
+      <CommentImagePortal request={imaging} handle={viewer.handle} onClose={() => setImaging(null)} />
     </section>
   );
 }

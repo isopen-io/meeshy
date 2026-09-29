@@ -38,6 +38,7 @@ export const CALL_SERVER_EVENTS: readonly string[] = [
 
 export function bridgeCallEvents(socket: SocketClient): () => void {
   if (__SHELL__) void import('./shell-call-runtime').then(({ startShellCall }) => startShellCall());
+  void import('./call-wake-lock').then(({ startCallWakeLock }) => startCallWakeLock());
   const binding = bindCallTransport({
     connected: () => socket.connected,
     emit: (event, payload) => socket.emit(event, payload),
@@ -64,6 +65,10 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
     binding.authenticated();
   };
   socket.on(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+  /* Un socket qui s'est authentifié AVANT que le pont se pose (le bouchon de
+     fixtures le fait dans `connect()`) ne rejouera pas l'événement : sans ce
+     rattrapage, un rappel qui attend la connexion (#8199) attendrait toujours. */
+  if (socket.connected) onAuthenticated();
   return () => {
     for (const [event, handler] of [...handlers, ...recordingHandlers]) socket.off(event, handler);
     socket.off(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);

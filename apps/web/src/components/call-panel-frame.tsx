@@ -19,7 +19,8 @@ export type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 
 export type RowWheel = (event: WheelEvent<HTMLElement>) => void;
 
-export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
+/** La rangée d'un panneau : comme celles du `(…)`, libre et sans élasticité (#8736). */
+export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
 

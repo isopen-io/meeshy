@@ -33,6 +33,8 @@ export const LAST_REACTION_SELECT = {
       isEncrypted: true,
       expiresAt: true,
       ephemeralDuration: true,
+      // #8634 — porte la flamme-œil, qu'aucune colonne ne dit.
+      effectFlags: true,
       sender: { select: { userId: true } },
     },
   },
@@ -60,6 +62,7 @@ export interface LastReactionRow {
     readonly isEncrypted?: boolean | null;
     readonly expiresAt?: Date | string | null;
     readonly ephemeralDuration?: number | null;
+    readonly effectFlags?: number | null;
     readonly sender?: { readonly userId?: string | null } | null;
   };
 }

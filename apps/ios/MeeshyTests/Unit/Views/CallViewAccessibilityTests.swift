@@ -345,16 +345,33 @@ final class CallViewAccessibilityTests: XCTestCase {
     }
 
     func test_flipCameraButton_hasAccessibilityHint() throws {
+        // Deux boutons basculent la caméra : celui du (…) de la pilule, et celui
+        // qui encadre MA vignette (#8747), qui lit son libellé dans
+        // `CallMyImageCopy`. CHACUN doit porter l'indice, pas seulement le
+        // premier trouvé.
         let source = try callViewSource()
-        guard let range = source.range(of: "callManager.switchCamera()") else {
-            XCTFail("CallView must wire the camera-flip action")
+        var searchStart = source.startIndex
+        var sites = 0
+        while let range = source.range(of: "callManager.switchCamera()", range: searchStart..<source.endIndex) {
+            sites += 1
+            let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
+            let vicinity = String(source[start..<range.upperBound])
+            XCTAssertTrue(
+                vicinity.contains("call.control.flipCamera.hint") || vicinity.contains("CallMyImageCopy.flipHint"),
+                "Every camera-flip button must pass hint: call.control.flipCamera.hint (site \(sites))."
+            )
+            searchStart = range.upperBound
+        }
+        XCTAssertGreaterThan(sites, 0, "CallView must wire the camera-flip action")
+
+        guard let helper = source.range(of: "static var flipHint: String {") else {
+            XCTFail("CallMyImageCopy.flipHint must exist when a flip button reads it")
             return
         }
-        let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
-        let vicinity = String(source[start..<range.upperBound])
+        let end = source.index(helper.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
         XCTAssertTrue(
-            vicinity.contains("call.control.flipCamera.hint"),
-            "The camera-flip rail button must pass hint: call.control.flipCamera.hint."
+            source[helper.upperBound..<end].contains("\"call.control.flipCamera.hint\""),
+            "CallMyImageCopy.flipHint must resolve call.control.flipCamera.hint."
         )
     }
 

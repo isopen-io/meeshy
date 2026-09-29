@@ -1,0 +1,526 @@
+{
+  "mood": "elegant",
+  "motifs": [
+    {
+      "id": "elegant.gala",
+      "mood": "elegant",
+      "name": "Gala",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.2,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "arch",
+          "stroke": {
+            "color": "#C9A45C",
+            "width": 0.006
+          },
+          "double": true,
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#1F1A12",
+            "#0B0B0F"
+          ]
+        },
+        "border": {
+          "kind": "deco",
+          "color": "#C9A45C",
+          "width": 0.006,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "bokeh",
+            "color": "#C9A45C55",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#F3E3B5",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#C9A45C",
+          "size": "m",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "elegant",
+          "color": "#F3E3B5"
+        },
+        "title": {
+          "source": "group",
+          "font": "calligraphy",
+          "color": "#F3E3B5",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "elegant",
+          "color": "#C9A45C",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.22,
+            "bottom": 0.14
+          },
+          "title": {
+            "source": "names",
+            "font": "calligraphy",
+            "color": "#F3E3B5",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.2,
+            "bottom": 0.14
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.18,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "elegant",
+            "color": "#F3E3B5",
+            "fill": "#0B0B0FD9"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "arch",
+            "stroke": {
+              "color": "#C9A45C",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "elegant",
+            "color": "#F3E3B5"
+          }
+        }
+      }
+    },
+    {
+      "id": "elegant.art-deco",
+      "mood": "elegant",
+      "name": "Art déco",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.02,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#C9A45C",
+            "width": 0.005
+          },
+          "double": true,
+          "tilt": "none",
+          "tone": "mono"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#0B0B0F"
+        },
+        "pattern": {
+          "kind": "sunburst",
+          "color": "#C9A45C",
+          "opacity": 0.08
+        },
+        "border": {
+          "kind": "double",
+          "color": "#C9A45C",
+          "width": 0.006,
+          "inset": 0.025
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#C9A45C1F",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top",
+          "color": "#C9A45C",
+          "size": "m"
+        },
+        "names": {
+          "show": "handle",
+          "style": "plate",
+          "font": "poster",
+          "color": "#0B0B0F",
+          "fill": "#C9A45CF2"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#F3E3B5",
+          "place": "bottom",
+          "size": "m",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.08,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.12
+          },
+          "title": {
+            "source": "names",
+            "font": "poster",
+            "color": "#F3E3B5",
+            "place": "bottom",
+            "size": "m",
+            "case": "upper"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.07,
+            "gap": 0.02,
+            "top": 0.16,
+            "bottom": 0.12
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.06,
+            "gap": 0.015,
+            "top": 0.14,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#C9A45C",
+              "width": 0.005
+            },
+            "tilt": "none",
+            "tone": "mono"
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "poster",
+            "color": "#0B0B0F",
+            "fill": "#C9A45CF2"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.05,
+            "gap": 0.01,
+            "top": 0.12,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#C9A45C",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "mono"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "poster",
+            "color": "#0B0B0F"
+          }
+        }
+      }
+    },
+    {
+      "id": "elegant.opera",
+      "mood": "elegant",
+      "name": "Opéra",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "arch",
+          "stroke": {
+            "color": "#C9A45C",
+            "width": 0.005
+          },
+          "glow": "#C9A45C66",
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#3B0A10",
+            "#1C0508",
+            "#0B0B0F"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "damask",
+          "color": "#C9A45C",
+          "opacity": 0.06
+        },
+        "border": {
+          "kind": "bulbs",
+          "color": "#F3E3B5",
+          "width": 0.01,
+          "inset": 0.025
+        },
+        "ornaments": [
+          {
+            "kind": "candles",
+            "color": "#F3E3B5",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom-right",
+          "color": "#F3E3B5",
+          "size": "m",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "handle",
+          "style": "ribbon",
+          "font": "italic",
+          "color": "#0B0B0F",
+          "fill": "#C9A45C"
+        },
+        "title": {
+          "source": "group",
+          "font": "calligraphy",
+          "color": "#F3E3B5",
+          "place": "top",
+          "size": "l",
+          "effect": "shadow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "italic",
+          "color": "#C9A45C",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.06,
+            "stroke": {
+              "color": "#C9A45C",
+              "width": 0.005
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "title": {
+            "source": "names",
+            "font": "calligraphy",
+            "color": "#F3E3B5",
+            "place": "top",
+            "size": "l",
+            "effect": "shadow"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "ornaments": [
+            {
+              "kind": "candles",
+              "color": "#F3E3B5",
+              "density": "low",
+              "layer": "front"
+            },
+            {
+              "kind": "crown",
+              "color": "#D4AF37",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "italic",
+            "color": "#0B0B0F",
+            "fill": "#C9A45CF2"
+          }
+        }
+      }
+    },
+    {
+      "id": "elegant.tete-a-tete",
+      "mood": "elegant",
+      "name": "Tête-à-tête",
+      "base": {
+        "layout": {
+          "arrangement": "row",
+          "margin": 0.1,
+          "gap": 0.05,
+          "top": 0.18,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "circle",
+          "stroke": {
+            "color": "#C9A45C",
+            "width": 0.006
+          },
+          "double": true,
+          "glow": "#F3E3B566",
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#1A1712",
+            "#0B0B0F"
+          ]
+        },
+        "ornaments": [
+          {
+            "kind": "bokeh",
+            "color": "#F3E3B544",
+            "density": "high",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#C9A45C",
+            "density": "mid",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom-left",
+          "color": "#C9A45C",
+          "size": "s",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "italic",
+          "color": "#F3E3B5"
+        },
+        "title": {
+          "source": "names",
+          "font": "calligraphy",
+          "color": "#F3E3B5",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "elegant",
+          "color": "#C9A45C",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
+}

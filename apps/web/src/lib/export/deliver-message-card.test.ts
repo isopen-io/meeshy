@@ -29,6 +29,14 @@ describe('deliverMessageCard(« Sauvegarder ») — la photothèque d’abord', 
     expect(journal).toEqual(['gallery:m.png:image/png']);
   });
 
+  test('un GIF ou une vidéo part avec SON type, jamais comme un PNG (#8693)', async () => {
+    const journal: string[] = [];
+    const video = new Blob(['v'], { type: 'video/webm;codecs=vp9,opus' });
+    await deliverMessageCard(video, 'm.webm', 'save', { gallery: gallery('saved', journal), portal: async () => portal('delivered', journal) });
+    await deliverMessageCard(new Blob(['g'], { type: 'image/gif' }), 'm.gif', 'save', { gallery: gallery('saved', journal), portal: async () => portal('delivered', journal) });
+    expect(journal).toEqual(['gallery:m.webm:video/webm', 'gallery:m.gif:image/gif']);
+  });
+
   test('une galerie en échec retombe sur le partage du système', async () => {
     const journal: string[] = [];
     expect(await deliverMessageCard(blob, 'm.png', 'save', { gallery: gallery('failed', journal), portal: async () => portal('delivered', journal) })).toBe('shared');

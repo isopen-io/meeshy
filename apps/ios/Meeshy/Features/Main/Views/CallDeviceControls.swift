@@ -24,12 +24,15 @@ struct CallPillGlyph: View {
     let kind: CallPillButtonKind
     let diameter: CGFloat
 
+    @Environment(\.callButtonIsPressed) private var isPressed
+
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: diameter * 0.4, weight: .semibold))
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
             .background(Circle().fill(CallButtonFill.color(for: kind)))
+            .background(Circle().fill(CallButtonFill.pressedHighlight(isPressed: isPressed)))
             .accessibilityHidden(true)
     }
 
@@ -94,17 +97,85 @@ struct CallPressButtonStyle: ButtonStyle {
     }
 }
 
+/// #8735 — l'enfoncement se VOIT au premier toucher, comme la flèche et le
+/// bouton Conversation de l'en-tête : aucun ressort à l'enfoncement (le
+/// ressort ne sert qu'au relâchement), un disque qui s'éclaircit, et —
+/// Réduire les animations — un disque qui s'éclaircit sans rétrécir.
+enum CallPressFeedback {
+    static let pressedScale: CGFloat = 0.88
+
+    static func scale(isPressed: Bool, reduceMotion: Bool) -> CGFloat {
+        isPressed && !reduceMotion ? pressedScale : 1
+    }
+
+    static func animation(isPressed: Bool, reduceMotion: Bool) -> Animation? {
+        guard !isPressed, !reduceMotion else { return nil }
+        return .spring(response: 0.25, dampingFraction: 0.7)
+    }
+}
+
+/// L'étiquette de TOUT bouton `CallPressButtonStyle` — pilule, rangées du
+/// (…), puces, barre d'un mode. Elle signale chaque doigt posé et levé au
+/// chrome d'appel (`callChromeInteraction`) : c'est ce qui réarme le masquage
+/// automatique, et ce qui l'empêche tant qu'un doigt est posé.
 private struct CallPressLabel<Content: View>: View {
     let isPressed: Bool
     @ViewBuilder let label: () -> Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.callChromeInteraction) private var reportInteraction
 
     var body: some View {
         label()
-            .scaleEffect(isPressed && !reduceMotion ? 0.93 : 1)
-            .brightness(isPressed ? -0.05 : 0)
-            .animation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+            .environment(\.callButtonIsPressed, isPressed)
+            .scaleEffect(CallPressFeedback.scale(isPressed: isPressed, reduceMotion: reduceMotion))
+            .animation(CallPressFeedback.animation(isPressed: isPressed, reduceMotion: reduceMotion), value: isPressed)
+            .modifier(CallPressHaptic(isPressed: isPressed))
+            .adaptiveOnChange(of: isPressed) { _, pressed in
+                reportInteraction?(pressed ? .touchBegan : .touchEnded)
+            }
+            .onDisappear {
+                guard isPressed else { return }
+                reportInteraction?(.touchEnded)
+            }
+    }
+}
+
+/// Un léger choc au doigt posé (iOS 17+) ; l'action garde son propre retour
+/// au relâchement.
+private struct CallPressHaptic: ViewModifier {
+    let isPressed: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.sensoryFeedback(.impact(weight: .light), trigger: isPressed) { _, pressed in pressed }
+        } else {
+            content
+        }
+    }
+}
+
+private struct CallButtonIsPressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private struct CallChromeInteractionKey: EnvironmentKey {
+    static let defaultValue: ((CallChromeInteraction) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Vrai sous le doigt : le disque du bouton s'éclaircit (`CallPillGlyph`).
+    var callButtonIsPressed: Bool {
+        get { self[CallButtonIsPressedKey.self] }
+        set { self[CallButtonIsPressedKey.self] = newValue }
+    }
+
+    /// #8735 — UNE porte par laquelle chaque contrôle de l'écran d'appel dit
+    /// qu'il est touché. `nil` hors de l'écran d'appel (pastille réduite).
+    var callChromeInteraction: ((CallChromeInteraction) -> Void)? {
+        get { self[CallChromeInteractionKey.self] }
+        set { self[CallChromeInteractionKey.self] = newValue }
     }
 }
 
@@ -120,25 +191,51 @@ struct CallOutputPillButton: View {
     let caption: String?
     let diameter: CGFloat
     let onToggleSpeaker: () -> Void
-
-    @StateObject private var model: CallAudioRouteViewModel
-    @State private var routePicker = CallAudioRoutePickerLauncher()
+    let model: CallAudioRouteViewModel?
 
     init(isSpeaker: Bool, caption: String? = nil, diameter: CGFloat = 50, onToggleSpeaker: @escaping () -> Void, model: CallAudioRouteViewModel? = nil) {
         self.isSpeaker = isSpeaker
         self.caption = caption
         self.diameter = diameter
         self.onToggleSpeaker = onToggleSpeaker
+        self.model = model
+    }
+
+    var body: some View {
+        CallOutputMenu(isSpeaker: isSpeaker, onToggleSpeaker: onToggleSpeaker, model: model) { route in
+            CallPillButtonLabel(
+                symbol: route.outputSymbol(isSpeaker: isSpeaker),
+                kind: isSpeaker || route.routesExternally ? .active : .normal,
+                caption: caption,
+                diameter: diameter
+            )
+        }
+    }
+}
+
+/// Le menu « Sortie » lui-même, habillé par chaque surface d'appel : l'écran
+/// d'appel y pose son disque de pilule, la pastille réduite (#8208) son rond
+/// sur l'aplat indigo. Le geste, le sélecteur système, le choix du micro et ce
+/// que VoiceOver en dit ne vivent qu'ici.
+struct CallOutputMenu<Face: View>: View {
+    let isSpeaker: Bool
+    let onToggleSpeaker: () -> Void
+    let label: (CallAudioRouteState) -> Face
+
+    @StateObject private var model: CallAudioRouteViewModel
+    @State private var routePicker = CallAudioRoutePickerLauncher()
+    @Environment(\.callChromeInteraction) private var reportInteraction
+
+    init(
+        isSpeaker: Bool,
+        onToggleSpeaker: @escaping () -> Void,
+        model: CallAudioRouteViewModel? = nil,
+        @ViewBuilder label: @escaping (CallAudioRouteState) -> Face
+    ) {
+        self.isSpeaker = isSpeaker
+        self.onToggleSpeaker = onToggleSpeaker
+        self.label = label
         _model = StateObject(wrappedValue: model ?? CallAudioRouteViewModel())
-    }
-
-    private var isExternal: Bool {
-        model.state.output?.kind.isExternalOutput ?? false
-    }
-
-    private var symbol: String {
-        if isExternal, let output = model.state.output { return output.kind.symbolName }
-        return isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"
     }
 
     private var chooseOutputLabel: String {
@@ -172,8 +269,9 @@ struct CallOutputPillButton: View {
                 }
             }
         } label: {
-            CallPillButtonLabel(symbol: symbol, kind: isSpeaker || isExternal ? .active : .normal, caption: caption, diameter: diameter)
+            label(model.state)
         } primaryAction: {
+            reportInteraction?(.tap)
             onToggleSpeaker()
         }
         .menuIndicator(.hidden)

@@ -38,6 +38,8 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import { readerParticipantIdOf } from './readerParticipant';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -171,6 +173,9 @@ export function registerMessageSearchRoute(
         translations: true,
         createdAt: true,
         senderId: true,
+        // #8630 — la chaîne citée : une réponse à ce qui est mort pour le
+        // lecteur ne ressort pas par recherche.
+        replyToId: true,
         // Lot 1 : un résultat de recherche est une bulle complète elle
         // aussi — sans `metadata`, un message géolocalisé trouvé par
         // recherche n'affiche jamais sa position.
@@ -266,8 +271,15 @@ export function registerMessageSearchRoute(
 
       // Sort by createdAt desc and apply limit
       merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      const hasMore = merged.length > searchLimit;
-      const results = merged.slice(0, searchLimit);
+      // #7451 × #8630 — ce qui est mort pour CE lecteur ne ressort pas par
+      // son contenu : l'éphémère échu, puis la réponse à ce qui l'est.
+      const readerPage = await keepAliveForReader(
+        prisma,
+        merged,
+        await readerParticipantIdOf(prisma, conversationId, authRequest.authContext)
+      );
+      const hasMore = readerPage.alive.length > searchLimit;
+      const results = readerPage.alive.slice(0, searchLimit);
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
@@ -293,7 +305,10 @@ export function registerMessageSearchRoute(
           ...msg,
           // #4885 — les quatre drapeaux de protection, servis à l'identique
           // de `GET .../messages` (même source, `mapMessageProtectionFields`).
-          ...mapMessageProtectionFields(msg),
+          ...withInheritedExpiry(
+            { id: msg.id, ...mapMessageProtectionFields(msg, readerPage.deadlines.get(msg.id)) },
+            readerPage.inherited
+          ),
           // #4177 — même résolution que `GET .../messages` : `msg.senderId`
           // (spread ci-dessus) est le `Participant.id` BRUT stocké en base,
           // jamais le `User.id` que les clients comparent à LEUR `userId`.

@@ -82,23 +82,73 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
         )
         XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
-        XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned)"))
+        XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Un lancer va aussi loin qu'il porte (#8736)")
         XCTAssertFalse(row.contains("adaptiveGlass"), "Une rangée dans le bloc de verre n'a pas de verre à elle")
         XCTAssertFalse(row.contains("callChromeGlass"))
     }
 
-    /// #8575 — un geste de glissé posé sur les boutons d'une rangée capte le
-    /// doigt avant le `ScrollView` : la rangée ne défile plus. L'enfoncement
-    /// passe par un `ButtonStyle`, qui ne pose aucun geste.
-    func test_rowButtons_carryNoDragGesture_soEveryRowScrolls() throws {
-        let rows = try ["Meeshy/Features/Main/Views/CallPillRow.swift", "Meeshy/Features/Main/Views/CallModeCarousel.swift"]
-            .map { AppSourceGuard.stripComments(try AppSourceGuard.unit($0)) }
-            .joined(separator: "\n")
-        let code = try callViewCode() + rows
-        XCTAssertFalse(code.contains(".pressable()"), "pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
+    /// Les fichiers de l'écran d'appel qui portent un défilement horizontal
+    /// — balayés par GLOB, jamais par liste : un nouveau carrousel est gardé
+    /// dès qu'il existe.
+    private func horizontalScrollerSources() throws -> [String: String] {
+        let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/CallModeCarousel.swift").first)
+        let directory = anchor.deletingLastPathComponent()
+        let horizontal = try NSRegularExpression(pattern: #"ScrollView\([^)]*\.horizontal"#)
+        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { url in
+                let name = url.lastPathComponent
+                return url.pathExtension == "swift"
+                    && (name.hasPrefix("Call") || name.hasPrefix("GroupCall") || name == "VideoFiltersPanel.swift")
+            }
+            .reduce(into: [String: String]()) { result, url in
+                let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                let range = NSRange(code.startIndex ..< code.endIndex, in: code)
+                guard horizontal.firstMatch(in: code, range: range) != nil else { return }
+                result[url.lastPathComponent] = code
+            }
+    }
+
+    /// #8575 · #8736 — un geste de glissé posé sur les éléments d'un
+    /// défilement horizontal capte le doigt avant le `ScrollView` : la rangée
+    /// ne défile plus. L'enfoncement passe par un `ButtonStyle`, qui ne pose
+    /// aucun geste — dans TOUT fichier d'appel qui défile à l'horizontale.
+    func test_horizontalScrollers_carryNoDragGesture_soEveryRowScrolls() throws {
+        let scrollers = try horizontalScrollerSources()
+        let expected: Set<String> = ["CallModeCarousel.swift", "CallPillRow.swift", "VideoFiltersPanel.swift", "GroupCallStageView.swift"]
+        XCTAssertTrue(expected.isSubset(of: Set(scrollers.keys)), "La garde ne mesurerait rien : \(scrollers.keys.sorted())")
+        for (file, code) in scrollers {
+            XCTAssertFalse(code.contains(".pressable()"), "\(file) : pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
+            XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"), file)
+        }
+        let code = try callViewCode()
+        XCTAssertFalse(code.contains(".pressable()"))
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
-        XCTAssertTrue(rows.contains(".buttonStyle(CallPressButtonStyle())"))
+        for file in ["CallPillRow.swift", "CallModeCarousel.swift", "VideoFiltersPanel.swift"] {
+            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle())") == true, file)
+        }
+    }
+
+    /// #8736 — le carrousel et les rangées laissent le lancer aller aussi
+    /// loin qu'il porte ; le centre suit le doigt, et le choix ne part qu'au
+    /// repos, jamais un défilement programmé contre le doigt.
+    func test_carouselAndRows_followTheFingerWithoutBlocking() throws {
+        let carousel = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+        )
+        let row = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
+        )
+        for (file, code) in [("CallModeCarousel", carousel), ("CallPillRow", row)] {
+            XCTAssertTrue(code.contains(".viewAligned(limitBehavior: .never)"), "\(file) : l'accroche par défaut raccourcit le lancer")
+            XCTAssertFalse(code.contains("scrollTargetBehavior(.viewAligned)"), "\(file) : accroche sans limitBehavior")
+        }
+        XCTAssertEqual(carousel.components(separatedBy: "LazyHStack(spacing: layout.spacing)").count - 1, 2, "Les deux pistes, iOS 17+ et iOS 16, sont paresseuses")
+        XCTAssertTrue(carousel.contains("onScrollPhaseChange"), "iOS 18 : le choix part au repos du défilement")
+        XCTAssertTrue(carousel.contains(".task(id: centred)"), "Avant iOS 18 : le repos se lit après un court délai")
+        XCTAssertTrue(carousel.contains("CallModeCarouselRule.trackHeight(itemHeight:"), "La bande de glissé tient un pouce")
+        XCTAssertTrue(carousel.contains("motion.rests(on:"), "Le choix se lit par la règle pure")
+        XCTAssertTrue(carousel.contains("motion.follows("), "Le suivi programmé se lit par la règle pure")
     }
 
     /// #8578 — un mode libère l'écran : le chrome d'appel se masque par la
@@ -123,7 +173,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         let carousel = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
         )
-        XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned)"), "Le carrousel s'accroche")
+        XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Le carrousel s'accroche")
         XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
     }
@@ -165,30 +215,38 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(service.contains("@Published private(set) var preview"), "L'aperçu se publie sur son flux, pas sur le contrôleur")
     }
 
-    /// #8576 — le zoom caméra suit MON image en plein écran, jamais la
-    /// vignette. #8626 — les commandes de ma caméra vivent dans ma vignette,
-    /// et en haut au centre quand mon image est en plein écran, visibles avec
-    /// le chrome.
-    /// #8626 — une vignette trop petite pour la grille pose UN bouton caméra
-    /// qui la déploie par-dessus elle ; un tap ailleurs, sur la vignette ou sur
-    /// une action la replie.
-    func test_smallSelfTile_foldsTheCameraControlsIntoOneButton() throws {
+    /// #8747 — les commandes de ma caméra quittent la vignette : Effets ·
+    /// Écran au-dessus, Retourner · Caméra en dessous, posés par la règle pure,
+    /// chacun un disque de verre interactif, chaque rangée un conteneur de
+    /// verre. La vignette ne porte plus que le zoom ; la toucher permute.
+    func test_selfTileControls_liveAroundTheTile_inInteractiveGlass() throws {
         let code = try callViewCode()
-        XCTAssertTrue(code.contains("CallCameraRail.tileLayout(tileSize: tileSize, count: actions.count)"))
-        XCTAssertTrue(code.contains("foldedCameraButton"))
-        XCTAssertTrue(code.contains("tapCameraMenu(.button)"))
-        XCTAssertTrue(code.contains("tapCameraMenu(.action)"))
-        let toggle = try block("func toggleControls() {", until: "\n    }\n", in: code)
-        XCTAssertTrue(toggle.contains("tapCameraMenu(.elsewhere)"), "Un tap ailleurs replie la grille")
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
-        XCTAssertTrue(pip.contains("tapCameraMenu(.elsewhere)"), "Un tap sur la vignette replie la grille avant de permuter")
+        XCTAssertTrue(pip.contains("selfTileControlRows("), "Les rangées sont posées autour de la vignette")
+        XCTAssertTrue(pip.contains("dragOffset: pipDragOffset"), "Elles suivent le glissé")
+        XCTAssertTrue(pip.contains("selfTileZoomSlot(tileSize: size)"), "Le zoom reste dans la vignette")
+        XCTAssertFalse(pip.contains("tapCameraMenu"), "Plus de grille repliée dans la vignette")
+        XCTAssertFalse(code.contains("foldedCameraButton"))
+        XCTAssertFalse(code.contains("cameraControlsGrid"))
+        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.layout("))
+        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.following("))
+        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.restingCenter("), "Au repos, la vignette laisse la place des rangées")
+        let rows = try block("func selfTileControlRows(", until: "func selfTileZoomSlot(", in: code)
+        XCTAssertTrue(rows.contains("CallCameraRail.isShown(.selfTile"), "Elles se masquent avec le chrome")
+        XCTAssertTrue(code.contains("AdaptiveGlassContainer(spacing: CallSelfTileControlsPlacement.buttonSpacing)"))
+        let glyph = try block("struct CallSelfTileControlGlyph: View {", until: "enum CallMyImageCopy", in: code)
+        XCTAssertTrue(glyph.contains(".callControlGlass(diameter: CallSelfTileControlsPlacement.buttonSide"), "Un disque de verre interactif, comme la flèche de l'en-tête")
+        let button = try block("struct CallSelfTileControlButton: View {", until: "struct CallSelfTileControlGlyph: View {", in: code)
+        XCTAssertTrue(button.contains(".buttonStyle(CallPressButtonStyle())"), "L'enfoncement se voit au premier toucher")
+        XCTAssertTrue(button.contains(".toggleStateAccessibility("))
+        XCTAssertTrue(code.contains("screenSharePicker.toggle(controller: callManager.screenShare)"))
     }
 
     func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
         XCTAssertFalse(pip.contains("callCameraZoom"), "Pincer la vignette la redimensionne, il ne zoome pas")
-        XCTAssertTrue(pip.contains("selfTileCameraControls(tileSize: size)"), "Les commandes de ma caméra vivent dans ma vignette")
+        XCTAssertTrue(pip.contains("selfTileControlRows("), "Les commandes de ma caméra vivent autour de ma vignette")
         XCTAssertTrue(code.contains(".callCameraZoom(isEnabled: effectiveSwapStreams)"))
         let rail = try block("var cameraRail: some View {", until: "\n    }\n}", in: code)
         XCTAssertTrue(rail.contains("CallCameraRail.actions(from: currentActionSet)"))

@@ -125,18 +125,30 @@
 /* LES COMMANDES POSÉES SUR LA SCÈNE D'UN APPEL (#8550) — le zoom de ma
    vignette, Plein écran, Retour à la mosaïque, la modération d'une tuile :
    un toucher sur la scène les efface avec l'en-tête et la pilule. La vidéo,
-   les sous-titres et les réactions restent. */
+   les sous-titres et les réactions restent.
+
+   Un bouton encore visible répond toujours (#8735) : effacées par l'attente
+   (`resting`), elles restent sous le doigt, qui agit et les rend ; rangées
+   d'un toucher (`dismissed`), elles ne laissent passer le doigt qu'à la FIN
+   du fondu — la visibilité suit la transition, et revient d'un coup. */
 [data-call-chrome-fade] {
   transition: opacity 0.3s ease;
 }
 
 [data-call-chrome='hidden'] [data-call-chrome-fade] {
   opacity: 0;
-  pointer-events: none;
+}
+
+[data-call-chrome-state='dismissed'] [data-call-chrome-fade] {
+  visibility: hidden;
+  transition:
+    opacity 0.3s ease,
+    visibility 0.3s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-call-chrome-fade] {
+  [data-call-chrome-fade],
+  [data-call-chrome-state='dismissed'] [data-call-chrome-fade] {
     transition: none;
   }
 }

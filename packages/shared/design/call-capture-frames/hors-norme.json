@@ -1,0 +1,786 @@
+{
+  "mood": "hors-norme",
+  "motifs": [
+    {
+      "id": "hors-norme.pop-art",
+      "mood": "hors-norme",
+      "name": "Pop Art",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.05,
+          "gap": 0.02,
+          "top": 0.13,
+          "bottom": 0.08
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#111111",
+            "width": 0.014
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "duotone",
+          "duotone": [
+            "#1C3FFF",
+            "#FFE600"
+          ]
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#FF2E2E"
+        },
+        "pattern": {
+          "kind": "halftone",
+          "color": "#FFE600",
+          "opacity": 0.28
+        },
+        "border": {
+          "kind": "double",
+          "color": "#111111",
+          "width": 0.012,
+          "inset": 0.018
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#FFE60024",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "lightning",
+            "color": "#111111",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom-right",
+          "color": "#FFFFFF",
+          "size": "m",
+          "font": "poster"
+        },
+        "names": {
+          "show": "handle",
+          "style": "bubble",
+          "font": "cartoon",
+          "color": "#111111",
+          "fill": "#FFFFFF"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#FFE600",
+          "place": "top",
+          "size": "l",
+          "effect": "outline",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.13,
+            "bottom": 0.08
+          },
+          "title": {
+            "source": "names",
+            "font": "poster",
+            "color": "#FFE600",
+            "place": "top",
+            "size": "l",
+            "effect": "outline",
+            "case": "upper"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.13,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#111111",
+              "width": 0.014
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#FF2E2E",
+              "#FFE600"
+            ]
+          },
+          "background": {
+            "kind": "solid",
+            "color": "#1C3FFF"
+          },
+          "pattern": {
+            "kind": "halftone",
+            "color": "#FFFFFF",
+            "opacity": 0.18
+          },
+          "ornaments": [
+            {
+              "kind": "rays",
+              "color": "#FFFFFF1A",
+              "density": "mid",
+              "layer": "back"
+            },
+            {
+              "kind": "lightning",
+              "color": "#FFE600",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.045,
+            "gap": 0.018,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#111111",
+              "width": 0.014
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#1C3FFF",
+              "#FF2E2E"
+            ]
+          },
+          "background": {
+            "kind": "solid",
+            "color": "#FFE600"
+          },
+          "pattern": {
+            "kind": "halftone",
+            "color": "#FF2E2E",
+            "opacity": 0.22
+          },
+          "ornaments": [
+            {
+              "kind": "lightning",
+              "color": "#1C3FFF",
+              "density": "low",
+              "layer": "front"
+            }
+          ],
+          "brand": {
+            "mark": "both",
+            "place": "bottom-right",
+            "color": "#111111",
+            "size": "m",
+            "font": "poster"
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "cartoon",
+            "color": "#111111",
+            "fill": "#FFFFFF"
+          },
+          "title": {
+            "source": "group",
+            "font": "poster",
+            "color": "#1C3FFF",
+            "place": "top",
+            "size": "l",
+            "effect": "outline",
+            "case": "upper"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.04,
+            "gap": 0.012,
+            "top": 0.11,
+            "bottom": 0.07
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#111111",
+              "width": 0.01
+            },
+            "shadow": false,
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#1C3FFF",
+              "#FFE600"
+            ]
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "cartoon",
+            "color": "#111111",
+            "fill": "#FFFFFF"
+          }
+        }
+      }
+    },
+    {
+      "id": "hors-norme.collage",
+      "mood": "hors-norme",
+      "name": "Collage",
+      "base": {
+        "layout": {
+          "arrangement": "scatter",
+          "margin": 0.06,
+          "gap": 0.03,
+          "top": 0.15,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "card": {
+            "color": "#FFFFFF",
+            "pad": 0.04,
+            "foot": 0.04
+          },
+          "shadow": true,
+          "tilt": "wild",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#F2EDE4"
+        },
+        "pattern": {
+          "kind": "checker",
+          "color": "#111111",
+          "opacity": 0.05
+        },
+        "border": {
+          "kind": "torn",
+          "color": "#111111",
+          "width": 0.012,
+          "inset": 0
+        },
+        "ornaments": [
+          {
+            "kind": "grain",
+            "color": "#1111111F",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "tape",
+            "color": "#FFE600B3",
+            "density": "mid",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom-left",
+          "color": "#111111",
+          "size": "m",
+          "font": "handwriting"
+        },
+        "names": {
+          "show": "both",
+          "style": "tag",
+          "font": "tag",
+          "color": "#111111",
+          "fill": "#FFFFFF"
+        },
+        "title": {
+          "source": "group",
+          "font": "tag",
+          "color": "#FF2E2E",
+          "place": "top",
+          "size": "l",
+          "effect": "none",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "typewriter",
+          "color": "#111111",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "cascade",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "tag",
+            "color": "#FF2E2E",
+            "place": "top",
+            "size": "l",
+            "effect": "none",
+            "case": "upper"
+          },
+          "names": {
+            "show": "handle",
+            "style": "tag",
+            "font": "tag",
+            "color": "#111111",
+            "fill": "#FFFFFF"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "rect",
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.04,
+              "foot": 0.04
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "color"
+          },
+          "ornaments": [
+            {
+              "kind": "grain",
+              "color": "#1111111F",
+              "density": "mid",
+              "layer": "back"
+            },
+            {
+              "kind": "tape",
+              "color": "#FF2E2EB3",
+              "density": "mid",
+              "layer": "front"
+            },
+            {
+              "kind": "confetti",
+              "color": "#1C3FFF",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "scatter",
+            "margin": 0.05,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "stamp",
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.05,
+              "foot": 0.05
+            },
+            "shadow": true,
+            "tilt": "wild",
+            "tone": "color"
+          },
+          "names": {
+            "show": "handle",
+            "style": "tag",
+            "font": "tag",
+            "color": "#111111",
+            "fill": "#FFFFFF"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.045,
+            "gap": 0.02,
+            "top": 0.13,
+            "bottom": 0.09
+          },
+          "slot": {
+            "shape": "stamp",
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.05,
+              "foot": 0.05
+            },
+            "tilt": "gentle",
+            "tone": "color"
+          },
+          "names": {
+            "show": "none",
+            "style": "tag",
+            "font": "tag",
+            "color": "#111111"
+          }
+        }
+      }
+    },
+    {
+      "id": "hors-norme.vitrail",
+      "mood": "hors-norme",
+      "name": "Vitrail",
+      "base": {
+        "layout": {
+          "arrangement": "column",
+          "margin": 0.08,
+          "gap": 0.035,
+          "top": 0.18,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "arch",
+          "stroke": {
+            "color": "#16110C",
+            "width": 0.018
+          },
+          "double": true,
+          "glow": "#B3122E",
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#3A1B5E",
+            "#120A22",
+            "#07040E"
+          ]
+        },
+        "pattern": {
+          "kind": "grid",
+          "color": "#000000",
+          "opacity": 0.35
+        },
+        "border": {
+          "kind": "double",
+          "color": "#E0A93B",
+          "width": 0.008,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#E0A93B26",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "lightleak",
+            "color": "#1D4ED833",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "bottom",
+          "color": "#E0A93B",
+          "size": "m"
+        },
+        "names": {
+          "show": "name",
+          "style": "plate",
+          "font": "poster",
+          "color": "#F5E6C4",
+          "fill": "#0E0B1AD9"
+        },
+        "title": {
+          "source": "group",
+          "font": "calligraphy",
+          "color": "#F5E6C4",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "poster",
+          "color": "#E0A93B",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "title": {
+            "source": "names",
+            "font": "calligraphy",
+            "color": "#F5E6C4",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "orbit",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.17,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "diamond",
+            "stroke": {
+              "color": "#16110C",
+              "width": 0.018
+            },
+            "double": true,
+            "glow": "#1D4ED8",
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "background": {
+            "kind": "radial",
+            "colors": [
+              "#12306B",
+              "#0A1330",
+              "#05070F"
+            ]
+          },
+          "ornaments": [
+            {
+              "kind": "rays",
+              "color": "#E0A93B26",
+              "density": "high",
+              "layer": "back"
+            },
+            {
+              "kind": "sparkles",
+              "color": "#E0A93B",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#16110C",
+              "width": 0.018
+            },
+            "double": true,
+            "glow": "#0F8A5F",
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "background": {
+            "kind": "radial",
+            "colors": [
+              "#0D4A3A",
+              "#082620",
+              "#030C0A"
+            ]
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "poster",
+            "color": "#F5E6C4",
+            "fill": "#0E0B1AD9"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.15,
+            "bottom": 0.09
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#16110C",
+              "width": 0.018
+            },
+            "double": true,
+            "glow": "#E0A93B",
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "background": {
+            "kind": "radial",
+            "colors": [
+              "#5A1020",
+              "#2A0710",
+              "#0C0206"
+            ]
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "poster",
+            "color": "#F5E6C4"
+          }
+        }
+      }
+    },
+    {
+      "id": "hors-norme.tete-d-affiche",
+      "mood": "hors-norme",
+      "name": "Tête d’affiche",
+      "base": {
+        "layout": {
+          "arrangement": "arch",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.17,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "star",
+          "stroke": {
+            "color": "#F5C84B",
+            "width": 0.01
+          },
+          "glow": "#FF3E8A",
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#5A0F3C",
+            "#1E0616",
+            "#0A0208"
+          ]
+        },
+        "pattern": {
+          "kind": "sunburst",
+          "color": "#FF3E8A",
+          "opacity": 0.12
+        },
+        "border": {
+          "kind": "bulbs",
+          "color": "#F5C84B",
+          "width": 0.02,
+          "inset": 0.02
+        },
+        "ornaments": [
+          {
+            "kind": "sparkles",
+            "color": "#F5C84B",
+            "density": "mid",
+            "layer": "front"
+          },
+          {
+            "kind": "bokeh",
+            "color": "#FF3E8A40",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "watermark",
+          "color": "#FFFFFF",
+          "size": "s",
+          "font": "poster"
+        },
+        "names": {
+          "show": "handle",
+          "style": "badge",
+          "font": "poster",
+          "color": "#1E0616",
+          "fill": "#F5C84B"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#F5C84B",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "brand",
+          "font": "cartoon",
+          "color": "#FFD1E4",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.06,
+            "gap": 0.022,
+            "top": 0.16,
+            "bottom": 0.1
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.15,
+            "bottom": 0.09
+          },
+          "slot": {
+            "shape": "star",
+            "stroke": {
+              "color": "#F5C84B",
+              "width": 0.007
+            },
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "poster",
+            "color": "#1E0616",
+            "fill": "#F5C84B"
+          }
+        }
+      }
+    }
+  ]
+}

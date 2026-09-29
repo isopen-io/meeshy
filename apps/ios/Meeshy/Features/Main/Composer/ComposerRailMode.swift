@@ -39,12 +39,6 @@ nonisolated enum ComposerRailMode: Equatable {
     /// Un outil est ouvert : ses contrôleurs, puis `(x)`.
     case tool([ComposerToolControl])
 
-    /// **Un outil est ouvert, et ses contrôleurs se posent À DROITE de sa
-    /// porte** (directive porteur 2026-09-28 : « plutôt que d'ouvrir l'édition
-    /// de texte, affiche la liste des options directement à droite du bouton
-    /// en vertical scrollant »). Les portes restent ; la colonne s'y accroche.
-    case flyout(ComposerRailFlyout)
-
     /// - Parameter drawing: l'outil de dessin est-il actif ?
     /// - Parameter textEditing: un texte est-il en cours d'édition ?
     /// - Parameter doors: les portes SERVIES, déjà filtrées.
@@ -57,27 +51,18 @@ nonisolated enum ComposerRailMode: Equatable {
     /// isolés (leurs libellés lisent `Bundle.module`). Seul un corps de vue
     /// appelle cette résolution — le type reste `nonisolated` pour que ses
     /// VALEURS restent lisibles d'un test non isolé.
-    ///
-    /// - Parameter anchorsToDoor: la surface sait-elle poser les contrôleurs à
-    ///   côté de la porte de l'outil ? Faux ⇒ ils REMPLACENT les portes, comme
-    ///   avant. Même vrai, un outil dont la porte n'est pas servie retombe sur
-    ///   ce remplacement : une colonne sans bouton auquel s'accrocher n'aurait
-    ///   nulle part où paraître.
     @MainActor
     static func resolve(drawing: Bool,
                         textEditing: Bool,
                         expandedDrawingTool: DrawingEditTool?,
                         expandedTextTool: TextEditTool?,
-                        doors: [ComposerRailDoor],
-                        anchorsToDoor: Bool = false) -> ComposerRailMode {
+                        doors: [ComposerRailDoor]) -> ComposerRailMode {
         let controls = toolControls(drawing: drawing,
                                     textEditing: textEditing,
                                     expandedDrawingTool: expandedDrawingTool,
                                     expandedTextTool: expandedTextTool)
         guard let controls else { return .doors(doors) }
-        let anchor: ComposerRailDoor = drawing ? .drawing : .text
-        guard anchorsToDoor, doors.contains(anchor) else { return .tool(controls) }
-        return .flyout(ComposerRailFlyout(doors: doors, anchor: anchor, controls: controls))
+        return .tool(controls)
     }
 
     @MainActor
@@ -109,34 +94,12 @@ nonisolated enum ComposerRailMode: Equatable {
         return nil
     }
 
-    /// Un outil est-il ouvert — qu'il remplace les portes ou s'y accroche ?
+    /// Un outil est-il ouvert ?
     var opensTool: Bool {
         switch self {
-        case .doors:          return false
-        case .tool, .flyout:  return true
+        case .doors: return false
+        case .tool:  return true
         }
-    }
-}
-
-/// **La colonne d'options d'un outil, et la porte à laquelle elle s'accroche.**
-nonisolated struct ComposerRailFlyout: Equatable {
-    /// Les portes servies, INCHANGÉES — la colonne ne retire rien au rail.
-    let doors: [ComposerRailDoor]
-    /// La porte de l'outil ouvert : la colonne se pose à sa droite.
-    let anchor: ComposerRailDoor
-    /// Les contrôleurs de l'outil ; le `(x)` suit toujours le dernier.
-    let controls: [ComposerToolControl]
-
-    /// Ce que la colonne compte d'entrées, `(x)` compris.
-    var entryCount: Int { controls.count + 1 }
-}
-
-/// **Le cadre de la porte qui porte la colonne**, publié par le rail et lu par
-/// la surface — qui seule connaît la zone où la colonne a la place de défiler.
-struct ComposerRailFlyoutAnchorKey: PreferenceKey {
-    static let defaultValue: Anchor<CGRect>? = nil
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = value ?? nextValue()
     }
 }
 
@@ -161,5 +124,62 @@ nonisolated enum ComposerToolExitCopy {
     static var label: String {
         String(localized: "composer.rail.tool.exit",
                defaultValue: "Terminer l'outil", bundle: .main)
+    }
+}
+
+/// **Un outil ouvert prend TOUTE la place** (#8652, directive porteur
+/// 2026-09-29).
+///
+/// > « Il faudrait enlever le rail d'en-tête (X) (…) etc., les tools de la
+/// > scène principale laissent place aux tools de l'outil sélectionné avec
+/// > (X), et le rail du bas audience, publication ; les (+) n'ont pas besoin
+/// > d'être là quand un outil est ouvert ! »
+///
+/// Le lot #8558 posait les options d'un outil en colonne À CÔTÉ de sa porte :
+/// le rail gardait ses portes, la barre haute sa croix, le socle sa capsule —
+/// une colonne « en surplus » par-dessus un écran déjà complet. La règle
+/// devient une bascule : outil ouvert ⇒ ses contrôleurs et leur `(x)`, SEULS ;
+/// outil fermé ⇒ le chrome d'avant, exactement.
+///
+/// **Le `switch` est exhaustif** : une pièce de chrome ajoutée demain ne
+/// compilera pas tant qu'elle n'aura pas dit si elle cède à l'outil.
+nonisolated enum ComposerToolFocus {
+
+    enum Chrome: String, CaseIterable, Sendable {
+        /// La barre haute : `(x)` du composer, `(…)`, rail des scènes et son
+        /// `(+)`, bascule Animé.
+        case topBar
+        /// Le rail des PORTES — ce qui fait entrer de la matière.
+        case sceneDoors
+        /// Le rail droit : les options du moment, puis Temps et l'historique.
+        /// Il RESTE quand un outil s'ouvre (#8713) : « en bas on a undo et
+        /// redo toujours, même pour les outils type dessin », et les
+        /// contrôleurs de l'outil s'y posent au-dessus.
+        case trailingRail
+        /// Le socle : audience et publication.
+        case socle
+        /// La trace du son de fond, en tête.
+        case soundTrace
+        /// Le volet de description.
+        case description
+        /// Les contrôleurs de l'outil ouvert, et leur `(x)`.
+        case toolControls
+    }
+
+    static func isShown(_ chrome: Chrome, toolIsOpen: Bool) -> Bool {
+        switch chrome {
+        case .toolControls:
+            return toolIsOpen
+        case .trailingRail:
+            return true
+        case .topBar, .sceneDoors, .socle, .soundTrace, .description:
+            return !toolIsOpen
+        }
+    }
+
+    /// Le fondu de la bascule — coupé sous Reduce Motion, où le chrome
+    /// s'échange sans mouvement.
+    static func transition(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.22)
     }
 }

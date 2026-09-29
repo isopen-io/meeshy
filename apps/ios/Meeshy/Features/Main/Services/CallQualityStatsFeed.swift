@@ -10,17 +10,41 @@ struct CallQualitySample: Equatable, Sendable {
     let jitterMs: Double
     let inboundAudioBytes: Int
     let inboundVideoBytes: Int
+    let relayed: Bool?
+    let profile: CallDataProfile?
+
+    init(
+        at: Date,
+        roundTripTimeMs: Double,
+        packetLossPercent: Double,
+        jitterMs: Double,
+        inboundAudioBytes: Int,
+        inboundVideoBytes: Int,
+        relayed: Bool? = nil,
+        profile: CallDataProfile? = nil
+    ) {
+        self.at = at
+        self.roundTripTimeMs = roundTripTimeMs
+        self.packetLossPercent = packetLossPercent
+        self.jitterMs = jitterMs
+        self.inboundAudioBytes = inboundAudioBytes
+        self.inboundVideoBytes = inboundVideoBytes
+        self.relayed = relayed
+        self.profile = profile
+    }
 }
 
 extension CallQualitySample {
-    init(stats: CallStats, packetLossPercent: Double, at: Date) {
+    init(stats: CallStats, packetLossPercent: Double, at: Date, profile: CallDataProfile? = nil) {
         self.init(
             at: at,
             roundTripTimeMs: stats.roundTripTimeMs,
             packetLossPercent: packetLossPercent,
             jitterMs: stats.jitterMs,
             inboundAudioBytes: stats.inboundAudioBytes,
-            inboundVideoBytes: stats.inboundVideoBytes
+            inboundVideoBytes: stats.inboundVideoBytes,
+            relayed: stats.relayed,
+            profile: profile
         )
     }
 }
@@ -33,6 +57,26 @@ struct CallQualityReading: Equatable, Sendable {
     let jitterMs: Double
     let audioKbps: Double
     let videoKbps: Double
+    let relayed: Bool?
+    let profile: CallDataProfile?
+
+    init(
+        packetLossPercent: Double,
+        roundTripTimeMs: Double,
+        jitterMs: Double,
+        audioKbps: Double,
+        videoKbps: Double,
+        relayed: Bool? = nil,
+        profile: CallDataProfile? = nil
+    ) {
+        self.packetLossPercent = packetLossPercent
+        self.roundTripTimeMs = roundTripTimeMs
+        self.jitterMs = jitterMs
+        self.audioKbps = audioKbps
+        self.videoKbps = videoKbps
+        self.relayed = relayed
+        self.profile = profile
+    }
 
     static func derive(current: CallQualitySample, previous: CallQualitySample?) -> CallQualityReading {
         let elapsedMs = previous.map { current.at.timeIntervalSince($0.at) * 1000 } ?? 0
@@ -45,7 +89,9 @@ struct CallQualityReading: Equatable, Sendable {
             roundTripTimeMs: current.roundTripTimeMs,
             jitterMs: current.jitterMs,
             audioKbps: rate(current.inboundAudioBytes, previous?.inboundAudioBytes),
-            videoKbps: rate(current.inboundVideoBytes, previous?.inboundVideoBytes)
+            videoKbps: rate(current.inboundVideoBytes, previous?.inboundVideoBytes),
+            relayed: current.relayed,
+            profile: current.profile
         )
     }
 }

@@ -6,18 +6,20 @@ const itCommentRow = {
   'comments.action.unlike': 'Non mi piace più',
   'comments.action.edit': 'Modifica',
   'comments.action.delete': 'Elimina',
-  'comments.action.delete.confirm': 'Conferma',
   'comments.edit.label': 'Modifica commento',
   'comments.edit.save': 'Salva',
   'comments.edit.cancel': 'Annulla',
   'comments.action.reply': 'Rispondi',
   'comments.reply.to': 'Risposta a {name}',
   'comments.reply.cancel': 'Annulla la risposta',
+  'comments.composer.fold': 'Chiudi il campo del commento',
   'comments.replies.show': 'Vedi risposte ({count})',
   'comments.replies.hide': 'Nascondi risposte',
   'comments.replies.more': 'Vedi altre risposte',
   'comments.replies.error': 'Impossibile caricare le risposte',
   'comments.replies.label': 'Risposte a {name}',
+  'comments.action.image_with_replies': 'Crea immagine con le risposte',
+  'comments.report.title': 'Segnala questo commento',
 } satisfies CommentRowCatalogSlice;
 
 export default itCommentRow;

@@ -29,6 +29,16 @@ describe('androidNotificationConfig — le son, le canal et le badge', () => {
   });
 });
 
+describe('androidNotificationConfig — un lecteur qui a coupé le son ne sonne pas, comme sur le web (#8678)', () => {
+  it('a muted banner goes to the silent shell channel: since Android 8 the channel, not the sound key, rings', () => {
+    expect(androidNotificationConfig({ ...banner, muted: true }).channelId).toBe('meeshy_notifications_silent');
+  });
+
+  it('a banner with sound stays on the default shell channel', () => {
+    expect(androidNotificationConfig({ ...banner, muted: false }).channelId).toBe('meeshy_notifications');
+  });
+});
+
 describe('androidNotificationConfig — la bannière d’une conversation remplace la précédente, comme sur le web', () => {
   it('threadId becomes the tag, the analogue of the web tag and of aps thread-id', () => {
     expect(androidNotificationConfig({ ...banner, threadId: 'conv-42' }).tag).toBe('conv-42');

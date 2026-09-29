@@ -45,8 +45,8 @@ struct ComposerTopBar: View {
     /// le 2026-09-27). Teinté du plateau, il reste sombre partout.
     let plateauTint: Color
 
-    /// Une pastille posée avant le `⋯` — la bascule « Animé » de la scène
-    /// (#8415). `nil` ⇒ rien.
+    /// Une pastille posée avant le `⋯` — le `(+)` d'une nouvelle scène depuis
+    /// #8713 (l'éclair « Animé » y vivait, #8415). `nil` ⇒ rien.
     var trailingAccessory: AnyView? = nil
     /// La marge de bord : 16 pt sur téléphone, celle de la maquette iPad/Mac
     /// (`ComposerRailGeometry.roomyMargin`) sur grand écran.
@@ -114,10 +114,12 @@ struct ComposerTopBar: View {
     /// scène existait alors sans tuile. Le doc-comment qui vivait ici l'écrivait
     /// comme une définition — c'est ce qui l'a rendue invisible.
     ///
-    /// **Aucun `＋` ici, et c'est une RÉPONSE.** La planche en dessine un ; la
-    /// création d'une scène est le geste du rail DROIT (§ 2 bis), et deux portes
-    /// pour un seul geste sont le motif que « une porte n'a pas de jumelle »
-    /// interdit.
+    /// **Le `(+)` d'une nouvelle scène vit dans cette barre depuis #8713**
+    /// (directive porteur 2026-09-29 : « mets à la place [de l'éclair] le bouton
+    /// (+) pour créer une nouvelle scène »), posé par l'hôte en
+    /// `trailingAccessory`. Il a QUITTÉ le rail droit dans le même geste : deux
+    /// portes pour un seul geste sont le motif que « une porte n'a pas de
+    /// jumelle » interdit.
     @ViewBuilder
     private var slideRail: some View {
         if let slideRailSlot {

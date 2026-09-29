@@ -230,6 +230,17 @@ describe('message:edited — le fil suit le texte modifié', () => {
     expect(rowOf(client, 'm-reply')?.replyTo?.content).toBe('👁️');
   });
 
+  test('une citation SCELLÉE par la passerelle (éphémère échu pour ce lecteur, #8562) reste scellée', () => {
+    const sealedAt = new Date('2026-09-29T09:00:00.000Z');
+    const client = seeded([reply(original({ content: '', translations: [], deletedAt: sealedAt, expiresAt: sealedAt }))]);
+
+    editWith(client, edited());
+
+    const quote = rowOf(client, 'm-reply')?.replyTo;
+    expect(quote?.content).toBe('');
+    expect(quote?.deletedAt).toEqual(sealedAt);
+  });
+
   test('la ligne de liste qui décrit ce message suit, sans sa carte périmée', () => {
     const client = seeded([original()]);
     seedList(client, [

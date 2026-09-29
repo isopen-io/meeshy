@@ -3,11 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { CallCaption } from '@/lib/calls/call-captions';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
+import type { EffectsCompanion } from './call-effects-companions';
 import { CallEffectsMode, type FrameGrab } from './call-effects-mode';
 
 /**
@@ -33,7 +35,16 @@ describe('CallEffectsMode', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (options: { readonly color?: boolean; readonly blur?: boolean; readonly effects?: VideoEffects } = {}) => {
+  const companion = (id: string): EffectsCompanion => ({
+    id,
+    name: id,
+    color: '#123456',
+    render: () => <video data-testid={`peer-${id}`} />,
+  });
+
+  const saying = (speakerId: string): CallCaption => ({ id: `${speakerId}-1`, speakerId, speakerName: speakerId, original: '…', translated: null, pair: null, isFinal: false, at: 1, mine: false });
+
+  const mount = (options: { readonly color?: boolean; readonly blur?: boolean; readonly effects?: VideoEffects; readonly companions?: readonly EffectsCompanion[]; readonly captions?: readonly CallCaption[] } = {}) => {
     videoEffectsStore.setState({ effects: options.effects ?? NO_EFFECTS });
     const applied: Array<Partial<VideoEffects>> = [];
     const exits: string[] = [];
@@ -60,7 +71,15 @@ describe('CallEffectsMode', () => {
           language="fr"
           colorAvailable={options.color ?? true}
           blurAvailable={options.blur ?? false}
-          preview={<video data-testid="self-preview" />}
+          preview={
+            <>
+              <video data-testid="decoy" />
+              <video data-testid="self-preview" />
+            </>
+          }
+          selfVideo={() => host.querySelector<HTMLVideoElement>('[data-testid="self-preview"]')}
+          companions={options.companions ?? []}
+          captions={options.captions ?? []}
           quitGlyph={null}
           onExit={() => void exits.push('exit')}
           grab={grab}
@@ -84,7 +103,7 @@ describe('CallEffectsMode', () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { find, all, press, settle, applied, exits, saved, grabbed, released, done };
+    return { host, find, all, press, settle, applied, exits, saved, grabbed, released, done };
   };
 
   test('une région nommée, ma vidéo en plein écran derrière, un seul carrousel', () => {
@@ -215,6 +234,70 @@ describe('CallEffectsMode', () => {
     await act(async () => {});
     expect(view.saved.map((files) => files.map((file) => [file.fileName, file.mimeType]))).toEqual([[['meeshy-appel-none-20260929-180409.webm', 'video/webm']]]);
     expect(view.released).toEqual(['video']);
+    view.done();
+  });
+  test('les autres restent visibles : un bloc nommé, en haut, HORS de l’aperçu capturé, qu’on touche (#8737)', () => {
+    const view = mount({ companions: [companion('amina')] });
+    const block = view.find('[data-call-effects-companions]');
+    expect(block?.getAttribute('role')).toBe('group');
+    expect(block?.getAttribute('aria-label')).toBe('Participants à l’appel');
+    expect(block?.closest('[data-call-mode-preview]')).toBeNull();
+    expect(view.find('[data-call-mode-preview] [data-testid="peer-amina"]')).toBeNull();
+    expect(view.find('[data-call-effects-companion="amina"] [data-testid="peer-amina"]')).not.toBeNull();
+    expect(view.find('[data-testid="peer-amina"]')?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(block?.className).toContain('pointer-events-auto');
+    expect((block?.closest('[data-call-effects-companions-band]') as HTMLElement | null)?.style.top).toContain('safe-area-inset-top');
+    view.done();
+  });
+
+  test('seul dans l’appel, aucun bloc', () => {
+    const view = mount();
+    expect(view.find('[data-call-effects-companions]')).toBeNull();
+    view.done();
+  });
+
+  test('en groupe : trois vignettes dans l’ordre d’arrivée, le reste en « +N » nommé ; l’orateur hors cadre prend la dernière place (#8737)', () => {
+    const view = mount({ companions: ['a', 'b', 'c', 'd', 'e'].map(companion), captions: [saying('e')] });
+    expect(view.all('[data-call-effects-companion]').map((tile) => tile.getAttribute('data-call-effects-companion'))).toEqual(['a', 'b', 'e']);
+    const chip = view.find('[data-call-effects-companions-more]');
+    expect(chip?.textContent).toBe('+2');
+    expect(chip?.getAttribute('aria-label')).toBe('2 autres participants');
+    const speaker = view.find('[data-call-effects-companion="e"]') as HTMLElement;
+    expect(speaker.hasAttribute('data-call-effects-companion-speaking')).toBe(true);
+    expect(speaker.style.borderWidth).toBe('4px');
+    expect((view.find('[data-call-effects-companion="a"]') as HTMLElement).style.borderWidth).toBe('2px');
+    view.done();
+  });
+
+  test('glissé, le bloc suit le doigt puis rejoint le coin du haut le plus proche ; « Changer de côté » le fait au clavier (#8737)', () => {
+    const view = mount({ companions: [companion('amina')] });
+    const block = view.find('[data-call-effects-companions]') as HTMLElement;
+    expect(block.getAttribute('data-call-effects-companions-corner')).toBe('top-trailing');
+    const pointer = (type: string, clientX: number, clientY = 40) => act(() => void block.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, clientX, clientY, button: 0, pointerType: 'touch' })));
+    pointer('pointerdown', 900);
+    pointer('pointermove', 700, 60);
+    expect(block.style.transform).toBe('translate(-200px, 20px)');
+    expect(block.className).not.toContain('transition-');
+    pointer('pointerup', 700, 60);
+    expect(block.getAttribute('data-call-effects-companions-corner')).toBe('top-trailing');
+    expect(block.style.transform).toBe('');
+    pointer('pointerdown', 900);
+    pointer('pointermove', 100);
+    pointer('pointerup', 100);
+    expect(block.getAttribute('data-call-effects-companions-corner')).toBe('top-leading');
+    expect(block.className).toContain('motion-reduce:transition-none');
+    view.press('[data-call-effects-companions-move]');
+    expect(block.getAttribute('data-call-effects-companions-corner')).toBe('top-trailing');
+    expect(view.find('[data-call-effects-companions-move]')?.textContent).toBe('Changer de côté');
+    view.done();
+  });
+
+  test('la capture reste MON image : ni une vignette d’un autre, ni une vidéo voisine de l’aperçu (#8737)', async () => {
+    const view = mount({ companions: [companion('amina')] });
+    await view.settle('[data-carousel-item="angel"]');
+    await view.settle('[data-carousel-item="angel"]');
+    await view.settle('[data-carousel-item="angel"]');
+    expect(view.grabbed).toEqual(['self-preview:angel']);
     view.done();
   });
 });

@@ -11,8 +11,10 @@
  * - **époque de négociation** (`negotiationId`) : chaque offre émise ouvre une
  *   époque, la réponse et les candidats la reprennent, et un signal d'une
  *   époque plus ancienne que la plus haute vue est écarté ;
- * - **pas de munging SDP** : Opus + RED passent par `setCodecPreferences`
- *   (ADR-4 iOS — un RED injecté dans le SDP a rendu l'audio muet après ICE).
+ * - **aucun codec injecté dans le SDP** : Opus + RED passent par
+ *   `setCodecPreferences` (ADR-4 iOS — un RED injecté dans le SDP a rendu
+ *   l'audio muet après ICE). Seuls les paramètres `fmtp` d'Opus de la
+ *   description ENVOYÉE sont réglés (`shapeSdp`, #8697).
  *
  * La reprise ICE : `disconnected` attend 3 s avant de relancer, `failed`
  * relance tout de suite, puis 2 → 16 s entre deux tentatives, 5 au plus.
@@ -36,6 +38,8 @@ export type PeerLinkDeps = {
   readonly onChannel?: (channel: RTCDataChannel) => void;
   /** Le lien d'aperçu de l'appelé (#8480) : il ne fait que RECEVOIR, aucune piste ne s'y attache jamais. */
   readonly receiveOnly?: boolean;
+  /** Le réglage de la description ENVOYÉE (#8697, `call-opus-sdp.ts`) ; la description locale reste celle du navigateur. */
+  readonly shapeSdp?: (sdp: string) => string;
   readonly createConnection?: (config: RTCConfiguration) => RTCPeerConnection;
   readonly createStream?: () => MediaStream;
   readonly schedule?: (fn: () => void, ms: number) => unknown;
@@ -119,7 +123,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
   const sendDescription = (): void => {
     const description = pc.localDescription;
     if (description === null || (description.type !== 'offer' && description.type !== 'answer')) return;
-    deps.send({ type: description.type, sdp: description.sdp, negotiationId: epoch });
+    deps.send({ type: description.type, sdp: deps.shapeSdp?.(description.sdp) ?? description.sdp, negotiationId: epoch });
   };
 
   const makeOffer = async (options?: { readonly iceRestart?: boolean }): Promise<void> => {

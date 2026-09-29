@@ -46,6 +46,10 @@ struct CommentRowView: View, Equatable {
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState? = nil
+    /// La racine d'une réponse — « Imager » l'emporte en citation (#8709).
+    var threadRoot: FeedComment? = nil
+    /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
+    var threadReplies: [FeedComment] = []
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -70,7 +74,12 @@ struct CommentRowView: View, Equatable {
         // relu (vignette recadrée, légende corrigée) ne repeint JAMAIS : la
         // ligne se déclare égale à elle-même. `Equatable` sur une vue de liste
         // est une DÉCLARATION de ce qui la fait changer, pas une optimisation.
-        lhs.comment.quotedMedia == rhs.comment.quotedMedia
+        lhs.comment.quotedMedia == rhs.comment.quotedMedia &&
+        // #8709 — l'arbre qu'« Imager » emporte : sans ces lignes, une racine
+        // éditée ou une réponse arrivée laisserait le menu sur l'ancien fil.
+        lhs.threadRoot?.id == rhs.threadRoot?.id &&
+        lhs.threadRoot?.displayContent == rhs.threadRoot?.displayContent &&
+        lhs.threadReplies.map(\.id) == rhs.threadReplies.map(\.id)
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -96,19 +105,6 @@ struct CommentRowView: View, Equatable {
     private var effectiveCommentContent: String {
         if showOriginal { return comment.content }
         return comment.displayContent
-    }
-
-    /// « Copier » n'a de sens que pour un commentaire qui porte du texte
-    /// (un commentaire média-seul n'a rien à copier).
-    private var canCopyContent: Bool {
-        !effectiveCommentContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    /// Le menu « … » n'est affiché que s'il contient au moins une action —
-    /// évite un bouton mort (le bug d'origine) sur un commentaire média-seul
-    /// dont l'utilisateur n'est pas l'auteur.
-    private var hasMoreOptions: Bool {
-        canCopyContent || onDeleteComment != nil || onEditComment != nil
     }
 
     var body: some View {
@@ -348,40 +344,21 @@ struct CommentRowView: View, Equatable {
 
                     Spacer()
 
-                    if hasMoreOptions {
-                        Menu {
-                            if canCopyContent {
-                                Button {
-                                    UIPasteboard.general.string = effectiveCommentContent
-                                    HapticFeedback.success()
-                                } label: {
-                                    Label(String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
-                                }
-                            }
-                            if let onEditComment {
-                                Button {
-                                    HapticFeedback.light()
-                                    onEditComment()
-                                } label: {
-                                    Label(String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                                }
-                            }
-                            if let onDeleteComment {
-                                Button(role: .destructive) {
-                                    HapticFeedback.medium()
-                                    onDeleteComment()
-                                } label: {
-                                    Label(String(localized: "comment.action.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(MeeshyFont.relative(isReply ? 12 : 14))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))
-                        .meeshyTapTarget(44)
-                    }
+                    // Le menu « … » — le MÊME que celui d'un commentaire de story
+                    // (#8709) : Copier, Imager (l'arbre de réponses compris),
+                    // Modifier, Signaler, Supprimer, selon `CommentMenuPolicy`.
+                    CommentMoreMenu(
+                        comment: comment,
+                        servedText: effectiveCommentContent,
+                        showOriginal: showOriginal,
+                        accentColor: accentColor,
+                        root: threadRoot,
+                        loadedReplies: threadReplies,
+                        onEdit: onEditComment,
+                        onDelete: onDeleteComment,
+                        glyphSize: isReply ? 12 : 14,
+                        glyphColor: theme.textMuted
+                    )
                 }
                 .padding(.top, isReply ? 2 : 4)
             }

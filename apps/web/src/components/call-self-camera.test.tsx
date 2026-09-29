@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
+import { setLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
@@ -97,9 +98,11 @@ const pinchOn = (element: HTMLElement, from: number, to: number) => {
   act(() => element.click());
 };
 
+const MINE = ['flip', 'camera', 'effects', 'screen'] as const;
+
 function Harness({ active, layout, controls }: { readonly active: ActiveCall; readonly layout: 'video-duo' | 'grid'; readonly controls: boolean }) {
   const [full, setFull] = useState(false);
-  const self = { full, onToggle: () => setFull((value) => !value), controls, row: () => <div data-test-row="" />, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div> };
+  const self = { full, onToggle: () => setFull((value) => !value), controls, mine: MINE, row: (group?: string) => <div data-test-row={group ?? 'all'} />, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div> };
   return <CallStage call={active} layout={layout} language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
 }
 
@@ -125,25 +128,31 @@ describe('mon image pendant un appel', () => {
     return { find, press, full, done };
   };
 
-  test('en coin, aucun zoom : ni capsule, ni colonne — la rangée de ma caméra est DANS ma vignette (#8626)', () => {
+  test('en coin, aucun zoom : ni capsule, ni colonne — les commandes de ma caméra vivent AUTOUR de ma vignette, jamais dedans (#8626, #8747)', () => {
     fresh();
     const view = mount(call(zoomCamera()));
     expect(view.find('[data-call-zoom]')).toBeNull();
     expect(view.find('[data-test-column]')).toBeNull();
-    expect(view.find('[data-call-corner-frame] [data-test-row]')).not.toBeNull();
+    expect(view.find('[data-call-self-row="effects"][data-call-self-row-side="above"] [data-test-row="effects"]')).not.toBeNull();
+    expect(view.find('[data-call-self-row="camera"][data-call-self-row-side="below"] [data-test-row="camera"]')).not.toBeNull();
+    expect(view.find('[data-test-row="all"]')).toBeNull();
     expect(view.find('[data-call-corner] [data-test-row]')).toBeNull();
+    const above = view.find('[data-call-self-row="effects"]') as HTMLElement;
+    const below = view.find('[data-call-self-row="camera"]') as HTMLElement;
+    expect(Number.parseFloat(above.style.top) + Number.parseFloat(above.style.height)).toBeLessThanOrEqual(-8);
+    expect(Number.parseFloat(below.style.top)).toBeGreaterThanOrEqual(Number.parseFloat((view.find('[data-call-corner-frame]') as HTMLElement).style.height) + 8);
     view.done();
   });
 
-  test('en plein écran, la rangée quitte la vignette pour le haut ; la vignette du pair descend d’un cran (#8626)', async () => {
+  test('en plein écran, la rangée entière quitte la vignette pour le haut ; la vignette ne bouge pas (#8626, #8747)', async () => {
     fresh();
     const view = mount(call(zoomCamera()));
     const top = () => (view.find('[data-call-corner-frame]') as HTMLElement).style.top;
     const before = top();
     await view.full();
-    expect(view.find('[data-test-row]')).not.toBeNull();
+    expect(view.find('[data-test-row="all"]')).not.toBeNull();
     expect(view.find('[data-call-corner-frame] [data-test-row]')).toBeNull();
-    expect(top()).not.toBe(before);
+    expect(top()).toBe(before);
     view.done();
   });
 
@@ -161,6 +170,7 @@ describe('mon image pendant un appel', () => {
     const view = mount(call(zoomCamera()));
     await view.full();
     expect(view.find('[data-test-column] [data-call-zoom]')?.getAttribute('aria-label')).toBe('Zoom de ma caméra');
+    expect(view.find('[data-call-zoom]')?.getAttribute('data-call-zoom')).toBe('device');
     expect(view.find('[data-call-zoom-value]')?.textContent).toBe('1×');
     expect((view.find('[data-call-zoom-out]') as HTMLButtonElement).disabled).toBe(true);
     expect(view.find('[data-call-self-gestures]')).not.toBeNull();
@@ -203,13 +213,28 @@ describe('mon image pendant un appel', () => {
     view.done();
   });
 
-  test('sans zoom proposé, la rangée de ma caméra vient seule, en haut', async () => {
+  test('sans zoom de la caméra, le zoom NUMÉRIQUE agrandit mon seul aperçu — rien ne part (#8441)', async () => {
     fresh();
-    const view = mount(call(zoomCamera(false)));
+    setLocalZoom('call-0', 'user', 1);
+    const camera = zoomCamera(false);
+    const view = mount(call(camera));
     await view.full();
     expect(view.find('[data-test-row]')).not.toBeNull();
-    expect(view.find('[data-call-zoom]')).toBeNull();
-    expect(view.find('[data-call-self-gestures]')).toBeNull();
+    expect(view.find('[data-call-zoom]')?.getAttribute('data-call-zoom')).toBe('local');
+    view.press('[data-call-zoom-in]');
+    await act(async () => {});
+    expect(camera.applied).toEqual([]);
+    expect(view.find('[data-call-zoom-value]')?.textContent).toBe('1,3×');
+    expect((view.find('video[data-call-mirrored]') as HTMLVideoElement).style.transform).toBe('scaleX(-1) scale(1.3)');
+    expect((view.find('video[data-call-mirrored]') as HTMLVideoElement).parentElement?.classList.contains('overflow-hidden')).toBe(true);
+    view.done();
+  });
+
+  test('ma caméra arrière zoomée localement n’est pas retournée', async () => {
+    fresh();
+    setLocalZoom('call-1', 'environment', 2);
+    const view = mount(call(zoomCamera(false), { facing: 'environment' }));
+    expect((view.find('[data-call-corner] video') as HTMLVideoElement).style.transform).toBe('scale(2)');
     view.done();
   });
 
@@ -237,7 +262,7 @@ describe('ma vignette en coin se pince (#8577)', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
     const toggled: string[] = [];
-    const self = { full: false, onToggle: () => void toggled.push('toggle'), controls: true, row: () => null, column: () => null };
+    const self = { full: false, onToggle: () => void toggled.push('toggle'), controls: true, mine: MINE, row: () => null, column: () => null };
     act(() => root.render(<CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />));
     const corner = () => host.querySelector('[data-call-corner]') as HTMLElement;
     const frame = () => host.querySelector('[data-call-corner-frame]') as HTMLElement;

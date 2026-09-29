@@ -3,7 +3,8 @@ import { withEmailGate } from '../activation/email-gated-transport';
 
 import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
-import { sessionStore, type SessionState } from './session';
+import { endRevokedSession } from './account-caches';
+import { sessionIdentityKey, sessionStore, type SessionState } from './session';
 
 /**
  * LE TRANSPORT DE PRODUCTION — l'UNIQUE instance que toute l'application
@@ -72,8 +73,9 @@ export const httpTransport: HttpTransport = withEmailGate(
   createHttpTransport({
     base: apiConfig.base,
     credential: currentCredential,
+    identity: () => sessionIdentityKey(sessionStore.getState().session),
     deviceLocale: currentDeviceLocale,
-    onUnauthorized: () => sessionStore.getState().clearSession(),
+    onUnauthorized: () => endRevokedSession(sessionStore),
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );

@@ -98,10 +98,13 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     @ViewBuilder let cell: (Item, Bool) -> Cell
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #8736 — l'élément au centre, qui suit le doigt ; `selection` n'est
+    /// posée qu'au repos.
+    @State private var centred: Item? = nil
 
     var body: some View {
         VStack(spacing: 8) {
-            Text(name(selection))
+            Text(name(centred ?? selection))
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -119,7 +122,7 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
             GeometryReader { geo in
                 track(inset: CallModeCarouselRule.sideInset(containerWidth: geo.size.width, itemWidth: itemSize.width))
             }
-            .frame(height: itemSize.height)
+            .frame(height: CallModeCarouselRule.trackHeight(itemHeight: itemSize.height))
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: hint)
         .accessibilityElement(children: .ignore)
@@ -142,10 +145,11 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
 
     @ViewBuilder
     private func track(inset: CGFloat) -> some View {
+        let layout = CallModeTrackLayout(itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, isRecording: isRecording)
         if #available(iOS 17.0, *) {
-            CallModeSnappingTrack(items: items, selection: $selection, itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, isRecording: isRecording, onGesture: handle, cell: cell)
+            CallModeSnappingTrack(items: items, selection: $selection, live: $centred, layout: layout, onGesture: handle, cell: cell)
         } else {
-            CallModeLegacyTrack(items: items, selection: $selection, itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, isRecording: isRecording, onGesture: handle, cell: cell)
+            CallModeLegacyTrack(items: items, selection: $selection, live: $centred, layout: layout, onGesture: handle, cell: cell)
         }
     }
 
@@ -173,40 +177,69 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     }
 }
 
-@available(iOS 17.0, *)
-private struct CallModeSnappingTrack<Item: Hashable, Cell: View>: View {
-    let items: [Item]
-    @Binding var selection: Item
+private struct CallModeTrackLayout {
     let itemSize: CGSize
     let spacing: CGFloat
     let inset: CGFloat
     let reduceMotion: Bool
     let isRecording: Bool
+
+    var verticalMargin: CGFloat {
+        CallModeCarouselRule.verticalMargin(itemHeight: itemSize.height)
+    }
+
+    var followAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)
+    }
+
+    /// Deux tapes et l'appui long n'écoutent que sur le style CHOISI, et
+    /// seulement quand il est au centre : un élément qui défile ne porte
+    /// qu'un toucher.
+    func listens(isSelected: Bool, isCentred: Bool) -> Bool {
+        isCentred && CallModeGestureRule.listensForShots(isSelected: isSelected, isRecording: isRecording)
+    }
+}
+
+/// #8736 — iOS 17+ : l'accroche laisse le lancer aller aussi loin qu'il
+/// porte (`limitBehavior: .never`), le centre suit le doigt, et le choix ne
+/// part qu'au repos — jamais un effet par élément traversé, jamais un
+/// défilement programmé contre le doigt.
+@available(iOS 17.0, *)
+private struct CallModeSnappingTrack<Item: Hashable, Cell: View>: View {
+    let items: [Item]
+    @Binding var selection: Item
+    @Binding var live: Item?
+    let layout: CallModeTrackLayout
     let onGesture: (Item, CallModeGesture) -> Void
     let cell: (Item, Bool) -> Cell
 
     @State private var centred: Item?
+    @State private var motion = CallModeCarouselMotion<Item>()
 
-    init(items: [Item], selection: Binding<Item>, itemSize: CGSize, spacing: CGFloat, inset: CGFloat, reduceMotion: Bool, isRecording: Bool, onGesture: @escaping (Item, CallModeGesture) -> Void, cell: @escaping (Item, Bool) -> Cell) {
+    init(items: [Item], selection: Binding<Item>, live: Binding<Item?>, layout: CallModeTrackLayout, onGesture: @escaping (Item, CallModeGesture) -> Void, cell: @escaping (Item, Bool) -> Cell) {
         self.items = items
         self._selection = selection
-        self.itemSize = itemSize
-        self.spacing = spacing
-        self.inset = inset
-        self.reduceMotion = reduceMotion
-        self.isRecording = isRecording
+        self._live = live
+        self.layout = layout
         self.onGesture = onGesture
         self.cell = cell
         self._centred = State(initialValue: selection.wrappedValue)
     }
 
     var body: some View {
+        let shown = centred ?? selection
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: spacing) {
+            LazyHStack(spacing: layout.spacing) {
                 ForEach(items, id: \.self) { item in
-                    CallModeCarouselItem(isSelected: item == selection, isRecording: isRecording, size: itemSize, reduceMotion: reduceMotion) {
-                        cell(item, item == selection)
+                    CallModeCarouselItem(
+                        isSelected: item == shown,
+                        listens: layout.listens(isSelected: item == selection, isCentred: item == shown),
+                        size: layout.itemSize,
+                        reduceMotion: layout.reduceMotion
+                    ) {
+                        cell(item, item == shown)
                     } onGesture: { gesture in
+                        motion.tapped()
                         onGesture(item, gesture)
                     }
                     .id(item)
@@ -214,65 +247,191 @@ private struct CallModeSnappingTrack<Item: Hashable, Cell: View>: View {
             }
             .scrollTargetLayout()
         }
-        .contentMargins(.horizontal, inset, for: .scrollContent)
-        .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.horizontal, layout.inset, for: .scrollContent)
+        .contentMargins(.vertical, layout.verticalMargin, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
         .scrollPosition(id: $centred, anchor: .center)
+        .modifier(CallModeScrollRest(centred: centred, onUserScrolling: userScrolling, onRest: rest))
         .adaptiveOnChange(of: centred) { _, newValue in
-            guard let newValue, newValue != selection else { return }
-            selection = newValue
-            HapticFeedback.light()
+            live = newValue
+            motion.moved(to: newValue, infersInteraction: !CallModeScrollRestReader.readsPhases)
+            if motion.isInteracting { HapticFeedback.light() }
         }
         .adaptiveOnChange(of: selection) { _, newValue in
-            guard centred != newValue else { return }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
-                centred = newValue
-            }
+            follow(newValue)
+        }
+    }
+
+    private func userScrolling(_ scrolling: Bool) {
+        motion.userScrolling(scrolling)
+    }
+
+    private func rest() {
+        guard let chosen = motion.rests(on: centred, selection: selection) else {
+            follow(selection)
+            return
+        }
+        selection = chosen
+    }
+
+    private func follow(_ target: Item) {
+        guard motion.follows(target, from: centred) else { return }
+        withAnimation(layout.followAnimation) {
+            centred = target
         }
     }
 }
 
+/// #8736 — iOS 16 : ni accroche, ni position, ni phase. L'élément au
+/// centre se déduit du décalage de la piste, et il est choisi quand le
+/// centre ne bouge plus.
 private struct CallModeLegacyTrack<Item: Hashable, Cell: View>: View {
     let items: [Item]
     @Binding var selection: Item
-    let itemSize: CGSize
-    let spacing: CGFloat
-    let inset: CGFloat
-    let reduceMotion: Bool
-    let isRecording: Bool
+    @Binding var live: Item?
+    let layout: CallModeTrackLayout
     let onGesture: (Item, CallModeGesture) -> Void
     let cell: (Item, Bool) -> Cell
 
+    @State private var centred: Item? = nil
+    @State private var motion = CallModeCarouselMotion<Item>()
+    @State private var journey = 0
+
     var body: some View {
+        let shown = centred ?? selection
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: spacing) {
+                LazyHStack(spacing: layout.spacing) {
                     ForEach(items, id: \.self) { item in
-                        CallModeCarouselItem(isSelected: item == selection, isRecording: isRecording, size: itemSize, reduceMotion: reduceMotion) {
-                            cell(item, item == selection)
+                        CallModeCarouselItem(
+                            isSelected: item == shown,
+                            listens: layout.listens(isSelected: item == selection, isCentred: item == shown),
+                            size: layout.itemSize,
+                            reduceMotion: layout.reduceMotion
+                        ) {
+                            cell(item, item == shown)
                         } onGesture: { gesture in
+                            motion.tapped()
                             onGesture(item, gesture)
                         }
                         .id(item)
                     }
                 }
-                .padding(.horizontal, inset)
+                .padding(.horizontal, layout.inset)
+                .padding(.vertical, layout.verticalMargin)
+                .background(
+                    GeometryReader { content in
+                        Color.clear.preference(
+                            key: CallModeLegacyOffsetKey.self,
+                            value: -content.frame(in: .named(CallModeLegacyOffsetKey.space)).minX
+                        )
+                    }
+                )
             }
-            .onAppear { proxy.scrollTo(selection, anchor: .center) }
+            .coordinateSpace(name: CallModeLegacyOffsetKey.space)
+            .onPreferenceChange(CallModeLegacyOffsetKey.self) { moved(offset: $0) }
+            .modifier(CallModeScrollRest(centred: centred, onUserScrolling: userScrolling, onRest: rest))
+            .onAppear {
+                guard motion.follows(selection, from: centred) else { return }
+                proxy.scrollTo(selection, anchor: .center)
+            }
+            .adaptiveOnChange(of: centred) { _, newValue in
+                live = newValue
+                motion.moved(to: newValue, infersInteraction: true)
+                if motion.isInteracting { HapticFeedback.light() }
+            }
             .adaptiveOnChange(of: selection) { _, newValue in
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
-                    proxy.scrollTo(newValue, anchor: .center)
+                follow(newValue)
+            }
+            .adaptiveOnChange(of: journey) { _, _ in
+                withAnimation(layout.followAnimation) {
+                    proxy.scrollTo(selection, anchor: .center)
                 }
+            }
+        }
+    }
+
+    private func moved(offset: CGFloat) {
+        guard let index = CallModeCarouselRule.nearestIndex(offset: offset, itemWidth: layout.itemSize.width, spacing: layout.spacing, count: items.count),
+              items[index] != centred else { return }
+        centred = items[index]
+    }
+
+    private func userScrolling(_ scrolling: Bool) {
+        motion.userScrolling(scrolling)
+    }
+
+    private func rest() {
+        guard let chosen = motion.rests(on: centred, selection: selection) else {
+            follow(selection)
+            return
+        }
+        selection = chosen
+    }
+
+    private func follow(_ target: Item) {
+        guard motion.follows(target, from: centred) else { return }
+        journey += 1
+    }
+}
+
+private nonisolated struct CallModeLegacyOffsetKey: PreferenceKey {
+    static let space = "call-mode-legacy-track"
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private enum CallModeScrollRestReader {
+    static var readsPhases: Bool {
+        if #available(iOS 18.0, *) { return true }
+        return false
+    }
+}
+
+/// #8736 — le repos du défilement : la phase sous iOS 18 (un doigt qui
+/// glisse ou un élan qui décélère = l'utilisateur ; `idle` = le repos) ;
+/// avant, un centre qui ne bouge plus depuis 150 ms.
+private struct CallModeScrollRest<Item: Equatable>: ViewModifier {
+    let centred: Item?
+    let onUserScrolling: (Bool) -> Void
+    let onRest: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollPhaseChange { _, phase in
+                switch phase {
+                case .interacting, .decelerating:
+                    onUserScrolling(true)
+                case .idle:
+                    onUserScrolling(false)
+                    onRest()
+                case .tracking, .animating:
+                    return
+                @unknown default:
+                    return
+                }
+            }
+        } else {
+            content.task(id: centred) {
+                try? await Task.sleep(nanoseconds: CallModeCarouselRule.restDelayNanoseconds)
+                guard !Task.isCancelled else { return }
+                onUserScrolling(false)
+                onRest()
             }
         }
     }
 }
 
 /// #8625 — un élément du carrousel. Un simple toucher choisit un autre style ;
-/// sur le style choisi, deux tapes et l'appui long se déclenchent — et
-/// seulement là, pour qu'un toucher sur un voisin ne patiente jamais.
+/// sur le style choisi, au centre, deux tapes et l'appui long se déclenchent —
+/// et seulement là, pour qu'un toucher sur un voisin ne patiente jamais. #8736 —
+/// aucun geste de glissé : l'enfoncement ne vit que quand l'élément écoute.
 private struct CallModeCarouselItem<Content: View>: View {
     let isSelected: Bool
-    let isRecording: Bool
+    let listens: Bool
     let size: CGSize
     let reduceMotion: Bool
     @ViewBuilder let content: () -> Content
@@ -281,7 +440,6 @@ private struct CallModeCarouselItem<Content: View>: View {
     @GestureState private var isPressed = false
 
     var body: some View {
-        let listens = CallModeGestureRule.listensForShots(isSelected: isSelected, isRecording: isRecording)
         content()
             .frame(width: size.width, height: size.height)
             .scaleEffect(CallModeCarouselRule.scale(isSelected: isSelected) * (isPressed && listens ? 0.94 : 1))

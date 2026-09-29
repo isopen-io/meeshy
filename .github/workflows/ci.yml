@@ -1030,6 +1030,14 @@ jobs:
           cd apps/web
           node scripts/check-list-actions.mjs
 
+      # #8694 — une section repliée porte le compte de non-lus qu'elle cache,
+      # à jour sans la déplier (le câblage, que les témoins `bun test` ne voient pas).
+      - name: Gate section repliée (compte de non-lus)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-list-folded-unread.mjs
+
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
         if: ${{ !cancelled() }}
         run: |
@@ -1297,6 +1305,15 @@ jobs:
         run: |
           cd apps/web/android
           ./gradlew testDebugUnitTest
+
+      # #8669 — la variante RELEASE (celle du Play Store, lint vital compris)
+      # se construit à chaque changement de la coque : sans clé ni Firebase sur
+      # ce runner, gradle la rend NON signée, ce qui suffit à prouver qu'elle
+      # compile. La release signée part par `android-shell-release.yml`.
+      - name: Variante release de la coque (bundleRelease, non signée)
+        run: |
+          cd apps/web/android
+          ./gradlew bundleRelease -PmeeshyBuildNumber=${{ github.run_number }}
 
       # L'APK de recette, installable tel quel (`adb install -r`) : la
       # régression se voit sur le runner, et le build vert se pose sur le
@@ -2175,7 +2192,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.38.1
+        uses: github/codeql-action/upload-sarif@v4.38.2
         if: always()
         continue-on-error: true
         with:

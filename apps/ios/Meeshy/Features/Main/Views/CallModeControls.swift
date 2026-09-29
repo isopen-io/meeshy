@@ -210,6 +210,9 @@ struct CallMontageModeControls: View {
     @ObservedObject var capture: CallCaptureController
     let subjects: [CallCaptureSubject]
     let tracks: [String: Any]
+    /// #8743 — la conversation de l'appel, pour le nom du groupe et l'accent d'un cadre.
+    let call: CallFrameCallContext
+    var textsProvider: any CallFrameTextsProviding = CallFrameTextsResolver.shared
     let onExit: () -> Void
 
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
@@ -217,21 +220,32 @@ struct CallMontageModeControls: View {
     private static let thumbnailSize = CGSize(width: 48, height: 85)
 
     var body: some View {
+        let people = subjects.count
+        let selection = CallMontageFrameRule.reconcile(capture.choice, people: people)
+        let chip = CallMontageFrameRule.chip(of: selection)
         VStack(spacing: 14) {
+            CallFrameMoodChips(
+                chips: CallMontageFrameRule.chips(forPeople: people),
+                selected: chip,
+                isEnabled: !capture.isRecording
+            ) { tapped in
+                capture.show(tapped, people: people)
+            }
             CallModeCarousel(
-                items: CallMontageStyle.allCases,
-                selection: styleBinding,
+                items: CallMontageFrameRule.items(for: chip, people: people),
+                selection: choiceBinding(people: people),
                 title: CallModeCopy.montageTitle,
-                name: CallCaptureCopy.styleName,
+                name: CallFrameCopy.choiceName,
                 itemSize: Self.thumbnailSize,
                 spacing: 12,
                 isRecording: capture.isRecording,
                 hint: CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil,
                 onCapturePhoto: shoot,
                 onStartRecording: film
-            ) { style, isSelected in
-                CallModeThumbnail(image: capture.thumbnails[style], symbol: CallCaptureCopy.styleSymbol(style), isSelected: isSelected)
+            ) { item, isSelected in
+                CallModeThumbnail(image: thumbnail(item), symbol: CallFrameCopy.choiceSymbol(item), isSelected: isSelected)
             }
+            .id(CallMontageCarouselKey(chip: chip, people: people))
             CallModeActionBar(
                 exitHint: CallModeCopy.quitMontageHint,
                 onExit: onExit,
@@ -252,9 +266,22 @@ struct CallMontageModeControls: View {
         .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
             capture.start(subjects: subjects, tracks: tracks)
         }
+        .task(id: call) {
+            capture.setFrameTexts(textsProvider.immediateTexts(for: call))
+            let resolved = await textsProvider.texts(for: call)
+            guard !Task.isCancelled else { return }
+            capture.setFrameTexts(resolved)
+        }
         .onDisappear {
             hasSeenGestureHint = true
             capture.stop()
+        }
+    }
+
+    private func thumbnail(_ item: CallMontageChoice) -> CGImage? {
+        switch item {
+        case .classic(let style): return capture.thumbnails[style]
+        case .frame(let id): return capture.frameThumbnail(id)
         }
     }
 
@@ -268,12 +295,19 @@ struct CallMontageModeControls: View {
         Task { await capture.startRecording() }
     }
 
-    private var styleBinding: Binding<CallMontageStyle> {
+    private func choiceBinding(people: Int) -> Binding<CallMontageChoice> {
         Binding(
-            get: { capture.style },
-            set: { capture.select($0) }
+            get: { CallMontageFrameRule.reconcile(capture.choice, people: people) },
+            set: { capture.select(choice: $0) }
         )
     }
+}
+
+/// L'identité du carrousel : une autre ambiance ou un autre nombre, c'est une autre piste,
+/// qui se pose d'emblée sur son choix.
+private struct CallMontageCarouselKey: Hashable {
+    let chip: CallMontageMoodChip
+    let people: Int
 }
 
 /// #8625 — la scène du Montage lit l'aperçu sur son flux : à chaque trame,
@@ -284,7 +318,7 @@ struct CallMontageLiveStage: View {
     var body: some View {
         CallMontageFeedStage(
             feed: capture.previewFeed,
-            styleName: CallCaptureCopy.styleName(capture.style),
+            styleName: CallFrameCopy.choiceName(capture.choice),
             isWorking: capture.status == .working
         )
     }

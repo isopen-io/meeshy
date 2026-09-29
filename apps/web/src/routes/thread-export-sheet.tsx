@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { EXPORT_CARD_GLYPHS } from '@/components/glyphs-export-card';
 import { Sheet } from '@/components/sheet';
 import type { MessageCardDelivery, MessageCardIntent } from '@/lib/export/deliver-message-card';
 import {
@@ -10,77 +12,58 @@ import {
   type MessageCardFormat,
   type MessageCardToggle,
 } from '@/lib/export/message-card-format';
-import type { MessageCardInput } from '@/lib/export/message-card-layout';
-import { messageCardFileName, type MessageCardSubject } from '@/lib/export/message-card-subject';
-import {
-  CARD_LINKS,
-  CARD_PALETTES,
-  CARD_PALETTE_IDS,
-  CARD_TYPEFACE_IDS,
-  randomTemplateId,
-  templateIdOf,
-  templateOf,
-  type CardLinkId,
-  type CardTypefaceId,
-  type MessageCardTemplateId,
-} from '@/lib/export/message-card-templates';
+import type { CardPart, CardRegion, MessageCardInput, MessageCardPart } from '@/lib/export/message-card-layout';
+import { cardOutputsOf, extensionOfType, type CardOutput } from '@/lib/export/message-card-output';
+import type { CardSource } from '@/lib/export/message-card-paint';
+import { messageCardFileName, type MessageCardSubject, type MessageCardSubjectPart } from '@/lib/export/message-card-subject';
+import { randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
+import { createThumbnailCache } from '@/lib/export/message-card-thumbnails';
 import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-export-card-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
-import { spokenLanguageName } from '@/lib/view/language-name';
-import { ActionButton } from '@/routes/link-page-parts';
+
+import type { FrameChoice } from './thread-export-frame';
+import { ExportGallery } from './thread-export-gallery';
+import { OutputPicker, defaultMotionRecorder, defaultSourcesLoader, temporalItemOf, useCardSources, useMotionCache, type MotionRecorder, type SourcesLoader } from './thread-export-output';
+import type { ThumbSource } from './thread-export-thumb';
+import { ExportTray, TAB_OF_PART, type ExportTab } from './thread-export-tray';
 
 /**
- * **EXPORTER UN MESSAGE EN IMAGE — UN COMPOSER SIMPLIFIÉ.** La feuille ne
- * crée aucun contenu : elle choisit comment MONTRER ce qui existe (le
- * template, le titre de la conversation, les noms des auteurs ou leur
- * anonymat, la date), montre la carte telle qu'elle partira, et l'enregistre.
+ * **« IMAGINE » — IMAGER UN MESSAGE OU UN COMMENTAIRE, UN COMPOSER QUI SE
+ * TOUCHE** (#8667, #8693). La feuille ne crée aucun contenu : elle choisit
+ * comment MONTRER ce qui existe (le template, le format, le cadre, le titre de
+ * la conversation, les noms des auteurs, leur pseudo ou leur anonymat, la date
+ * et les heures, les médias), montre la carte telle qu'elle partira, et
+ * l'enregistre — en image, ou en GIF / vidéo quand le contenu est temporel.
  *
- * DES CENTAINES DE TEMPLATES (`message-card-templates.ts`) se choisissent
- * par leurs trois dimensions — couleurs, typographie, liaison — ou d'un geste :
- * les « Populaires » (les plus enregistrés sur l'appareil, puis la vitrine) et
- * « Au hasard ». Chaque carte enregistrée compte pour son template.
+ * L'APERÇU EST LE CONTRÔLE. Chaque partie peinte (en-tête, citation, liaison,
+ * réponse) est une zone qu'on touche, le fond aussi : le plateau en verre
+ * (`thread-export-tray.tsx`) ouvre alors le seul réglage de cette partie —
+ * jamais la longue liste de toutes les dimensions à la fois. La citation et la
+ * réponse y portent leur propre anonymat.
  *
- * APRÈS LE FORMAT, LA LANGUE : la carte part par défaut telle que le lecteur
- * la lit ; il peut choisir l'original ou une traduction servie du message.
- *
- * DEUX GESTES À LA FIN : « Sauvegarder » (la galerie d'abord) et
- * « Partager » (toujours la feuille du système, où l'utilisateur décide).
+ * DES CENTAINES DE TEMPLATES se choisissent par leurs trois dimensions, ou
+ * dans la GALERIE (`thread-export-gallery.tsx`) : toutes les cartes, peintes
+ * sur CE message, cherchables, les plus utilisées d'abord. « Au hasard » et
+ * « Format par défaut » vivent dans l'en-tête ; « Sauvegarder » et
+ * « Partager » en bas, toujours visibles. APRÈS LE FORMAT, LA LANGUE : son
+ * onglet n'apparaît que si le message existe dans plusieurs.
  *
  * LE FORMAT PAR DÉFAUT (`message-card-format.ts`) ouvre la feuille déjà
- * réglée, et « Utiliser comme format par défaut » le remplace. L'« Export
- * rapide » du menu monte cette même feuille en mode `quick` : la carte, peinte
- * dans le format par défaut, part dès qu'elle est prête — la feuille n'est
- * alors qu'un retour visuel, et reste ouverte si l'enregistrement demande un
- * nouveau geste (feuille de partage annulée, activation expirée).
+ * réglée. L'« Export rapide » du menu monte cette même feuille en mode
+ * `quick` : la carte, peinte dans le format par défaut, part dès qu'elle est
+ * prête — la feuille n'est alors qu'un retour visuel, et reste ouverte si
+ * l'enregistrement demande un nouveau geste.
  *
  * Le peintre et les polices qu'il réveille, comme les portes de livraison,
  * sont chargés À LA DEMANDE : le fil n'en paie rien.
  */
 
-const TYPEFACE_LABEL = {
-  rond: 'export.card.typeface.rond',
-  didone: 'export.card.typeface.didone',
-  plume: 'export.card.typeface.plume',
-  affiche: 'export.card.typeface.affiche',
-  futur: 'export.card.typeface.futur',
-  machine: 'export.card.typeface.machine',
-  marqueur: 'export.card.typeface.marqueur',
-  systeme: 'export.card.typeface.systeme',
-} as const satisfies Readonly<Record<CardTypefaceId, InterfaceCatalogKey>>;
-
-const LINK_LABEL = {
-  orbite: 'export.card.link.orbite',
-  filet: 'export.card.link.filet',
-  guillemets: 'export.card.link.guillemets',
-  fleche: 'export.card.link.fleche',
-  bulles: 'export.card.link.bulles',
-  fil: 'export.card.link.fil',
-  silence: 'export.card.link.silence',
-} as const satisfies Readonly<Record<CardLinkId, InterfaceCatalogKey>>;
-
 const POPULAR_COUNT = 6;
+
+/** La largeur d'une vignette peinte : deux fois sa plus grande largeur affichée, pour un écran dense. */
+const THUMB_WIDTH = 240;
 
 const DELIVERY_ANNOUNCE = {
   gallery: 'export.announce.gallery',
@@ -88,21 +71,47 @@ const DELIVERY_ANNOUNCE = {
   cancelled: 'export.announce.cancelled',
   expired: 'export.announce.expired',
   unavailable: 'export.announce.unavailable',
-} as const satisfies Readonly<Record<MessageCardDelivery, InterfaceCatalogKey>>;
+} as const satisfies Readonly<Record<MessageCardDelivery, ExportCardCatalogKey>>;
 
-const OPTION_LABEL = {
-  showConversationTitle: 'export.card.option.title',
-  showAuthors: 'export.card.option.authors',
-  showDate: 'export.card.option.date',
-  anonymizeQuoted: 'export.card.option.anonymizeQuoted',
-  anonymizeReply: 'export.card.option.anonymizeReply',
-} as const satisfies Readonly<Record<MessageCardToggle, InterfaceCatalogKey>>;
+/** Un GIF ou une vidéo n'est pas « une image » : ses deux issues heureuses le disent autrement. */
+const MOTION_ANNOUNCE = { ...DELIVERY_ANNOUNCE, gallery: 'export.announce.galleryMotion', shared: 'export.announce.sharedMotion' } as const satisfies Readonly<
+  Record<MessageCardDelivery, ExportCardCatalogKey>
+>;
 
-type Rendered = { readonly key: string; readonly blob: Blob; readonly url: string; readonly truncated: boolean };
+const PART_LABEL = {
+  header: 'export.card.part.header',
+  quote: 'export.card.part.quote',
+  link: 'export.card.part.link',
+  reply: 'export.card.part.reply',
+  media: 'export.card.part.media',
+  replies: 'export.card.part.replies',
+  background: 'export.card.part.background',
+} as const satisfies Readonly<Record<CardPart, ExportCardCatalogKey>>;
 
-type Painter = (input: MessageCardInput) => Promise<{ readonly blob: Blob; readonly truncated: boolean } | null>;
+type Rendered = {
+  readonly key: string;
+  readonly blob: Blob;
+  readonly url: string;
+  readonly truncated: boolean;
+  readonly width: number;
+  readonly height: number;
+  readonly regions: readonly CardRegion[];
+};
 
-const defaultPainter: Painter = async (input) => (await import('@/lib/export/message-card-paint')).renderMessageCard(input);
+type Painted = {
+  readonly blob: Blob;
+  readonly truncated: boolean;
+  readonly width?: number;
+  readonly height?: number;
+  readonly regions?: readonly CardRegion[];
+};
+
+type Painter = (input: MessageCardInput, sources: readonly (CardSource | null)[]) => Promise<Painted | null>;
+type Thumbnailer = (input: MessageCardInput, width: number, sources: readonly (CardSource | null)[]) => Promise<Blob | null>;
+
+const defaultPainter: Painter = async (input, sources) => (await import('@/lib/export/message-card-paint')).renderMessageCard(input, document, sources);
+const defaultThumbnailer: Thumbnailer = async (input, width, sources) =>
+  (await import('@/lib/export/message-card-paint')).renderMessageCardThumbnail(input, width, document, sources);
 
 /* La livraison (galerie, partage, téléchargement) est un `import()` au premier
    « Enregistrer », comme pour une pièce jointe : `budgets.json › story_export`
@@ -112,8 +121,10 @@ const defaultDeliver = async (blob: Blob, fileName: string, intent: MessageCardI
 
 /**
  * La carte telle que le format la demande — un titre absent ou vide n'est
- * jamais « affiché », et un auteur anonymisé cède son nom à `anonymousLabel`.
- * Le filigrane, lui, garde toujours le pseudo de qui exporte.
+ * jamais « affiché ». L'auteur d'un bloc est, dans cet ordre : « Anonyme » si
+ * on l'a voulu, son PSEUDO (« @awa ») si on le préfère au nom affiché et qu'on
+ * le connaît, sinon son nom. Le filigrane, lui, garde toujours le pseudo de qui
+ * exporte.
  */
 export function messageCardInputOf(params: {
   readonly subject: MessageCardSubject;
@@ -122,77 +133,40 @@ export function messageCardInputOf(params: {
   readonly conversationTitle: string | null;
   readonly anonymousLabel: string;
   readonly formatDate: (date: Date) => string;
+  /** L'heure d'un message, rédigée — absente : aucune heure n'est peinte. */
+  readonly formatTime?: (date: Date) => string;
 }): MessageCardInput {
   const { subject, format } = params;
-  const quoted = subject.quoted;
+  const time = (date: Date | null) => (format.showTimes && date !== null && params.formatTime !== undefined ? params.formatTime(date) : null);
+  const part = (source: MessageCardSubjectPart, anonymized: boolean, at: Date | null): MessageCardPart => ({
+    author: anonymized ? params.anonymousLabel : format.usePseudonyms && source.handle !== null ? `@${source.handle}` : source.author,
+    text: source.text,
+    time: time(at),
+  });
   return {
-    quoted: quoted === null || !format.anonymizeQuoted ? quoted : { ...quoted, author: params.anonymousLabel },
-    reply: format.anonymizeReply ? { ...subject.reply, author: params.anonymousLabel } : subject.reply,
+    quoted: subject.quoted === null ? null : part(subject.quoted, format.anonymizeQuoted, subject.quotedAt),
+    reply: part(subject.reply, format.anonymizeReply, subject.sentAt),
     handle: params.handle,
     template: format.template,
     title: format.showConversationTitle ? params.conversationTitle : null,
     date: format.showDate ? params.formatDate(subject.sentAt) : null,
     showAuthors: format.showAuthors,
+    aspect: format.aspect,
+    frame: { header: format.header, authors: format.authorsAt, tilt: format.tilt },
+    media: subject.media.map((item) => item.card),
+    mediaStyle: format.mediaStyle,
+    audioStyle: format.audioStyle,
+    /* Les réponses jointes (#8734) sont des « autres » : l'anonymat de la citation les couvre. */
+    ...(subject.followUps === undefined ? {} : { followUps: subject.followUps.map((follow) => part(follow, format.anonymizeQuoted, null)) }),
   };
 }
 
-const templateLabel = (language: InterfaceLanguage, id: MessageCardTemplateId): string => {
-  const template = templateOf(id);
-  return `${template.palette.name} · ${translate(language, TYPEFACE_LABEL[template.typefaceId])} · ${translate(language, LINK_LABEL[template.link])}`;
-};
-
 const formatKey = (format: MessageCardFormat): string => JSON.stringify(format);
 
-function Chip({
-  pressed,
-  onClick,
-  data,
-  children,
-  swatch,
-}: {
-  readonly pressed: boolean;
-  readonly onClick: () => void;
-  readonly data: Readonly<Record<`data-${string}`, string>>;
-  readonly children: string;
-  /** Une pastille de la palette, devant le libellé. */
-  readonly swatch?: string;
-}) {
-  return (
-    <button
-      {...data}
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className="inline-flex shrink-0 items-center gap-2 rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{
-        minHeight: 44,
-        color: pressed ? 'white' : 'var(--color-ios-ink)',
-        backgroundColor: pressed ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-ios-surface)',
-        border: `1px solid ${pressed ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-edge)'}`,
-        outlineColor: 'var(--accent, var(--color-ios-brand))',
-      }}
-    >
-      {swatch === undefined ? null : (
-        <span aria-hidden="true" className="inline-block shrink-0 rounded-full" style={{ width: 16, height: 16, background: swatch, border: '1px solid var(--color-edge)' }} />
-      )}
-      {children}
-    </button>
-  );
-}
+const percent = (value: number, of: number): string => `${(value / of) * 100}%`;
 
-function ChipRow({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <div role="group" aria-label={label} className="grid gap-2">
-      <p className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {label}
-      </p>
-      <div className="flex gap-2 overflow-x-auto pb-1">{children}</div>
-    </div>
-  );
-}
-
-const swatchOf = (palette: (typeof CARD_PALETTES)[keyof typeof CARD_PALETTES]): string =>
-  `linear-gradient(135deg, ${palette.background.map(([offset, color]) => `${color} ${Math.round(offset * 100)}%`).join(', ')})`;
+/** Le doigt ne vise pas au pixel : chaque zone déborde un peu de son texte. */
+const ZONE_SLOP = 10;
 
 export type MessageExportLanguages = {
   /** Les langues dans lesquelles la réponse existe — l'original d'abord. */
@@ -210,10 +184,13 @@ export function MessageExportSheet({
   announce,
   storage = safeLocalStorage(),
   paint = defaultPainter,
+  thumbnail = defaultThumbnailer,
   deliver = defaultDeliver,
   createObjectURL = (blob) => URL.createObjectURL(blob),
   revokeObjectURL = (url) => URL.revokeObjectURL(url),
   random = Math.random,
+  loadSources = defaultSourcesLoader,
+  recordMotion = defaultMotionRecorder,
 }: {
   /** La carte telle que le lecteur la lit. */
   readonly subject: MessageCardSubject;
@@ -228,10 +205,15 @@ export function MessageExportSheet({
   readonly announce: (message: string) => void;
   readonly storage?: SafeStorage;
   readonly paint?: Painter;
+  readonly thumbnail?: Thumbnailer;
   readonly deliver?: (blob: Blob, fileName: string, intent: MessageCardIntent) => Promise<MessageCardDelivery>;
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
   readonly random?: () => number;
+  /** Les pixels des médias de la carte (#8693) — injectés par les témoins. */
+  readonly loadSources?: SourcesLoader;
+  /** Le GIF ou la vidéo de la carte (#8693) — injecté par les témoins. */
+  readonly recordMotion?: MotionRecorder;
 }) {
   const language = currentInterfaceLanguage();
   const [savedDefault, setSavedDefault] = useState<MessageCardFormat | null>(() => readDefaultMessageCardFormat(storage));
@@ -240,13 +222,18 @@ export function MessageExportSheet({
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportLanguage, setExportLanguage] = useState<string | null>(null);
+  const [tab, setTab] = useState<ExportTab>('styles');
+  const [focus, setFocus] = useState<CardPart | null>(null);
+  const [touched, setTouched] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const subject = useMemo(
     () => (exportLanguage === null ? asRead : (exportLanguages.subjectIn(exportLanguage) ?? asRead)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [asRead, exportLanguage],
   );
   const quickSent = useRef(false);
-  const [popular] = useState(() => popularTemplates(readTemplateUsage(storage), POPULAR_COUNT));
+  const [usage] = useState(() => readTemplateUsage(storage));
+  const [popular] = useState(() => popularTemplates(usage, POPULAR_COUNT));
   const title = conversationTitle !== null && conversationTitle.trim() !== '' ? conversationTitle.trim() : null;
 
   /* Les portes sont PRÉCHARGÉES pendant que la carte se peint : sur iOS, le
@@ -257,21 +244,31 @@ export function MessageExportSheet({
     void import('@/lib/media/deliver-file').catch(() => undefined);
   }, []);
 
-  const key = formatKey(format);
+  const media = useCardSources(subject.media, loadSources);
+  const outputs = cardOutputsOf(subject.media.map((item) => item.card));
+  const [chosenOutput, setOutput] = useState<CardOutput>('image');
+  const output: CardOutput = outputs.includes(chosenOutput) ? chosenOutput : 'image';
+  const [motionBusy, setMotionBusy] = useState<Exclude<CardOutput, 'image'> | null>(null);
+  const motionCache = useMotionCache();
+
+  const inputFor = (template: MessageCardTemplateId): MessageCardInput =>
+    messageCardInputOf({
+      subject,
+      format: { ...format, template },
+      handle,
+      conversationTitle: title,
+      anonymousLabel: translateExportCard(language, 'export.card.anonymous'),
+      formatDate: (date) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date),
+      formatTime: (date) => new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(date),
+    });
+
+  const key = `${formatKey(format)}|${media.version}`;
 
   useEffect(() => {
     let live = true;
     let url: string | null = null;
     setFailed(false);
-    const input = messageCardInputOf({
-      subject,
-      format,
-      handle,
-      conversationTitle: title,
-      anonymousLabel: translate(language, 'export.card.anonymous'),
-      formatDate: (date) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date),
-    });
-    void paint(input)
+    void paint(inputFor(format.template), media.sources)
       .catch(() => null)
       .then((card) => {
         if (!live) return;
@@ -280,7 +277,7 @@ export function MessageExportSheet({
           return;
         }
         url = createObjectURL(card.blob);
-        setRendered({ key, blob: card.blob, url, truncated: card.truncated });
+        setRendered({ key, blob: card.blob, url, truncated: card.truncated, width: card.width ?? 1080, height: card.height ?? 1080, regions: card.regions ?? [] });
       });
     return () => {
       live = false;
@@ -289,14 +286,48 @@ export function MessageExportSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, subject, handle, title]);
 
-  const ready = rendered !== null && rendered.key === key;
+  /* Les vignettes : un cache par feuille, rendu à la fermeture. Leur clé suit
+     tout ce qui change la carte SAUF le template, qu'elle nomme elle-même. */
+  const [cache] = useState(() => createThumbnailCache({ createObjectURL, revokeObjectURL }));
+  useEffect(() => () => cache.dispose(), [cache]);
+  const context = `${JSON.stringify({ ...format, template: null })}|${exportLanguage ?? ''}|${media.version}`;
+  const thumbs = useMemo<ThumbSource>(
+    () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH, media.sources) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cache, context, subject],
+  );
+
+  /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
+  const ready = rendered !== null && rendered.key === key && !media.loading;
+
+  /** Le fichier à livrer : l'image peinte, ou le GIF / la vidéo fabriqués à la demande (et gardés pour un second geste). */
+  const fileFor = async (card: Rendered): Promise<Blob | null> => {
+    if (output === 'image') return card.blob;
+    const cacheKey = `${key}|${output}|${exportLanguage ?? ''}`;
+    const cached = motionCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    const temporal = temporalItemOf(subject.media);
+    if (temporal === null) return null;
+    setMotionBusy(output);
+    announce(translateExportCard(language, output === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video'));
+    const blob = await recordMotion({ input: inputFor(format.template), sources: media.sources, output, item: temporal.item, index: temporal.index }).catch(() => null);
+    setMotionBusy(null);
+    if (blob !== null) motionCache.set(cacheKey, blob);
+    return blob;
+  };
 
   const send = async (intent: MessageCardIntent) => {
     if (!ready || saving) return;
     setSaving(true);
-    const outcome = await deliver(rendered.blob, messageCardFileName(new Date()), intent).catch((): MessageCardDelivery => 'unavailable');
+    const file = await fileFor(rendered);
+    if (file === null) {
+      setSaving(false);
+      announce(translateExportCard(language, 'export.announce.motionUnavailable'));
+      return;
+    }
+    const outcome = await deliver(file, messageCardFileName(new Date(), extensionOfType(file.type)), intent).catch((): MessageCardDelivery => 'unavailable');
     setSaving(false);
-    announce(translate(language, DELIVERY_ANNOUNCE[outcome]));
+    announce(translateExportCard(language, (output === 'image' ? DELIVERY_ANNOUNCE : MOTION_ANNOUNCE)[outcome]));
     if (outcome !== 'gallery' && outcome !== 'shared') return;
     recordTemplateUse(storage, format.template);
     onClose();
@@ -310,133 +341,228 @@ export function MessageExportSheet({
   }, [quick, ready]);
 
   const toggle = (option: MessageCardToggle) => setFormat((current) => ({ ...current, [option]: !current[option] }));
+  const choose = (choice: FrameChoice) => setFormat((current) => ({ ...current, ...choice }));
   const pick = (template: MessageCardTemplateId) => setFormat((current) => ({ ...current, template }));
   const current = templateOf(format.template);
-  const pickPart = (part: { readonly palette?: typeof current.paletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) =>
+  const pickPart = (part: { readonly palette?: CardPaletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) =>
     pick(templateIdOf({ palette: part.palette ?? current.paletteId, typeface: part.typeface ?? current.typefaceId, link: part.link ?? current.link }));
 
   const isDefault = sameMessageCardFormat(format, savedDefault);
   const useAsDefault = () => {
     writeDefaultMessageCardFormat(storage, format);
     setSavedDefault(format);
-    announce(translate(language, 'export.announce.defaultSaved'));
+    announce(translateExportCard(language, 'export.announce.defaultSaved'));
   };
 
-  /* L'anonymat n'a de sens que pour un nom PEINT — et celui du message cité, que s'il y en a un. */
-  const options: readonly MessageCardToggle[] = [
-    ...(title === null ? [] : (['showConversationTitle'] as const)),
-    'showAuthors',
-    'showDate',
-    ...(format.showAuthors && subject.quoted !== null ? (['anonymizeQuoted'] as const) : []),
-    ...(format.showAuthors ? (['anonymizeReply'] as const) : []),
-  ];
+  const touchPart = (part: CardPart) => {
+    setTouched(true);
+    setFocus(part);
+    setTab(TAB_OF_PART[part]);
+  };
+
+  const openTab = (next: ExportTab) => {
+    setTab(next);
+    setFocus(
+      next === 'palette' ? 'background' : next === 'link' ? 'link' : next === 'media' ? 'media' : next === 'typeface' ? (focus === 'quote' ? 'quote' : 'reply') : null,
+    );
+  };
+
+  /* « Détails » garde ce qui S'AJOUTE à la carte (le titre, les noms) ; la date, les heures et l'anonymat vivent dans Frame. */
+  const options: readonly MessageCardToggle[] = [...(title === null ? [] : (['showConversationTitle'] as const)), 'showAuthors'];
+  const hasHeader = (format.showConversationTitle && title !== null) || format.showDate;
+  const hasVisual = subject.media.some((item) => item.card.kind !== 'audio');
+  const hasAudio = subject.media.some((item) => item.card.kind === 'audio');
+
+  const headerButton = { width: 44, height: 44, color: 'var(--color-ios-ink)' } as const;
+  const shown = rendered;
+  const focused = shown?.regions.find((region) => region.part === focus) ?? null;
 
   return (
-    <Sheet title={translate(language, 'export.card.title')} presentation="centered" bodyAs="div" onClose={onClose}>
-      <div className="grid gap-4 px-4 pb-6">
-        <div
-          className="grid place-items-center overflow-hidden rounded-card"
-          style={{ minHeight: 240, backgroundColor: 'var(--color-ios-surface)' }}
-          aria-live="polite"
-          aria-busy={!ready && !failed}
-        >
-          {failed ? (
-            <p className="px-4 py-6 text-center text-caption" style={{ color: 'var(--color-danger)' }} data-export-failed="">
-              {translate(language, 'export.announce.failed')}
+    <Sheet
+      title={translateExportCard(language, 'export.card.title')}
+      presentation="centered"
+      bodyAs="div"
+      onClose={onClose}
+      accessory={
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            data-export-random=""
+            onClick={() => pick(randomTemplateId(random))}
+            aria-label={translateExportCard(language, 'export.card.random')}
+            title={translateExportCard(language, 'export.card.random')}
+            className="grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={headerButton}
+          >
+            <GlyphSvg glyph={EXPORT_CARD_GLYPHS.shuffle} size={20} />
+          </button>
+          <button
+            type="button"
+            data-export-default=""
+            disabled={isDefault}
+            aria-pressed={isDefault}
+            onClick={useAsDefault}
+            aria-label={translateExportCard(language, isDefault ? 'export.card.default.current' : 'export.card.default.save')}
+            title={translateExportCard(language, isDefault ? 'export.card.default.current' : 'export.card.default.save')}
+            className="grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ ...headerButton, ...(isDefault ? { color: 'var(--accent, var(--color-ios-brand))' } : {}) }}
+          >
+            <GlyphSvg glyph={EXPORT_CARD_GLYPHS.bookmarkSimple} size={20} />
+          </button>
+        </div>
+      }
+    >
+      <div className="relative flex flex-col overflow-hidden" style={{ height: 'min(82dvh, 860px)' }}>
+        {shown === null ? null : (
+          <img aria-hidden="true" alt="" src={shown.url} className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ filter: 'blur(48px) saturate(1.5)', opacity: 0.5, transform: 'scale(1.25)' }} />
+        )}
+
+        <div className="relative min-h-0 flex-1" aria-live="polite" aria-busy={!ready && !failed}>
+          <div className="absolute inset-x-6 inset-y-3" style={{ containerType: 'size' }}>
+            <div className="grid h-full w-full place-items-center">
+              {failed ? (
+                <p className="px-4 py-6 text-center text-caption" style={{ color: 'var(--color-danger)' }} data-export-failed="">
+                  {translateExportCard(language, 'export.announce.failed')}
+                </p>
+              ) : shown === null ? (
+                <p className="px-4 py-6 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                  {translateExportCard(language, 'export.card.rendering')}
+                </p>
+              ) : (
+                <div
+                  className="relative"
+                  style={{
+                    width: `min(100cqw, calc(100cqh * ${shown.width / shown.height}))`,
+                    aspectRatio: `${shown.width} / ${shown.height}`,
+                    opacity: ready ? 1 : 0.6,
+                    transition: 'opacity 0.2s',
+                  }}
+                >
+                  <button
+                    type="button"
+                    data-export-part="background"
+                    aria-pressed={focus === 'background'}
+                    aria-label={translateExportCard(language, 'export.card.part.background')}
+                    onClick={() => touchPart('background')}
+                    className="absolute inset-0 block overflow-hidden rounded-[18px] focus-visible:outline-2 focus-visible:outline-offset-4"
+                    style={{ boxShadow: '0 18px 48px color-mix(in srgb, black 35%, transparent)' }}
+                  >
+                    <img src={shown.url} alt={translateExportCard(language, 'export.card.preview')} data-export-preview={ready ? format.template : ''} className="block h-full w-full" />
+                  </button>
+                  {shown.regions.map((region) => (
+                    <button
+                      key={region.part}
+                      type="button"
+                      data-export-part={region.part}
+                      aria-pressed={focus === region.part}
+                      aria-label={translateExportCard(language, PART_LABEL[region.part])}
+                      onClick={() => touchPart(region.part)}
+                      className="absolute rounded-[12px] focus-visible:outline-2 focus-visible:outline-offset-2"
+                      style={{
+                        left: `calc(${percent(region.x, shown.width)} - ${ZONE_SLOP}px)`,
+                        top: `calc(${percent(region.y, shown.height)} - ${ZONE_SLOP}px)`,
+                        width: `calc(${percent(region.width, shown.width)} + ${2 * ZONE_SLOP}px)`,
+                        height: `calc(${percent(region.height, shown.height)} + ${2 * ZONE_SLOP}px)`,
+                        outline: focus === region.part ? '2px solid white' : undefined,
+                        boxShadow: focus === region.part ? '0 0 0 4px color-mix(in srgb, black 25%, transparent)' : undefined,
+                      }}
+                    />
+                  ))}
+                  {focused === null && focus !== 'background' ? null : (
+                    <span
+                      aria-hidden="true"
+                      className="glass pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-3 py-1 text-caption font-semibold"
+                      style={{ top: focused === null ? -6 : `calc(${percent(focused.y, shown.height)} - ${ZONE_SLOP + 6}px)`, color: 'var(--color-ios-ink)' }}
+                    >
+                      {translateExportCard(language, PART_LABEL[focus ?? 'background'])}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {motionBusy !== null ? (
+            <p data-export-motion={motionBusy} className="glass pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+              {translateExportCard(language, motionBusy === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video')}
             </p>
-          ) : ready ? (
-            <img
-              src={rendered.url}
-              alt={translate(language, 'export.card.preview')}
-              data-export-preview={format.template}
-              className="block w-full"
-              style={{ maxHeight: '50vh', objectFit: 'contain' }}
-            />
-          ) : (
-            <p className="px-4 py-6 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(language, 'export.card.rendering')}
+          ) : touched || shown === null ? null : (
+            <p data-export-hint="" className="glass pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
+              {translateExportCard(language, media.loading ? 'export.card.media.loading' : 'export.card.hint')}
             </p>
           )}
         </div>
 
         {ready && rendered.truncated ? (
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'export.card.truncated')}
+          <p className="relative px-6 pb-1 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {translateExportCard(language, 'export.card.truncated')}
           </p>
         ) : null}
 
-        <ChipRow label={translate(language, 'export.card.popular')}>
-          <Chip pressed={false} onClick={() => pick(randomTemplateId(random))} data={{ 'data-export-random': '' }}>
-            {translate(language, 'export.card.random')}
-          </Chip>
-          {popular.map((id) => (
-            <Chip key={id} pressed={id === format.template} onClick={() => pick(id)} data={{ 'data-export-template': id }} swatch={swatchOf(templateOf(id).palette)}>
-              {templateLabel(language, id)}
-            </Chip>
-          ))}
-        </ChipRow>
-
-        <ChipRow label={translate(language, 'export.card.palette')}>
-          {CARD_PALETTE_IDS.map((palette) => (
-            <Chip key={palette} pressed={palette === current.paletteId} onClick={() => pickPart({ palette })} data={{ 'data-export-palette': palette }} swatch={swatchOf(CARD_PALETTES[palette])}>
-              {CARD_PALETTES[palette].name}
-            </Chip>
-          ))}
-        </ChipRow>
-
-        <ChipRow label={translate(language, 'export.card.typeface')}>
-          {CARD_TYPEFACE_IDS.map((typeface) => (
-            <Chip key={typeface} pressed={typeface === current.typefaceId} onClick={() => pickPart({ typeface })} data={{ 'data-export-typeface': typeface }}>
-              {translate(language, TYPEFACE_LABEL[typeface])}
-            </Chip>
-          ))}
-        </ChipRow>
-
-        <ChipRow label={translate(language, 'export.card.link')}>
-          {CARD_LINKS.map((link) => (
-            <Chip key={link} pressed={link === current.link} onClick={() => pickPart({ link })} data={{ 'data-export-link': link }}>
-              {translate(language, LINK_LABEL[link])}
-            </Chip>
-          ))}
-        </ChipRow>
-
-        <div role="group" aria-label={translate(language, 'export.card.options')} className="flex flex-wrap gap-2">
-          {options.map((option) => (
-            <Chip key={option} pressed={format[option]} onClick={() => toggle(option)} data={{ 'data-export-option': option }}>
-              {translate(language, OPTION_LABEL[option])}
-            </Chip>
-          ))}
+        <div className="relative shrink-0">
+          <ExportTray
+            language={language}
+            tab={tab}
+            onTab={openTab}
+            focus={focus}
+            format={format}
+            options={options}
+            hasQuote={subject.quoted !== null || (subject.followUps?.length ?? 0) > 0}
+            hasHeader={hasHeader}
+            hasVisual={hasVisual}
+            hasAudio={hasAudio}
+            popular={popular.includes(format.template) ? popular : [format.template, ...popular]}
+            thumbs={thumbs}
+            onTemplate={pick}
+            onPart={pickPart}
+            onToggle={toggle}
+            onChoice={choose}
+            onGallery={() => setGalleryOpen(true)}
+            languages={exportLanguages.codes}
+            exportLanguage={exportLanguage}
+            onLanguage={setExportLanguage}
+          />
         </div>
 
-        {exportLanguages.codes.length > 1 ? (
-          <ChipRow label={translate(language, 'export.card.language')}>
-            <Chip pressed={exportLanguage === null} onClick={() => setExportLanguage(null)} data={{ 'data-export-language': '' }}>
-              {translate(language, 'export.card.language.asRead')}
-            </Chip>
-            {exportLanguages.codes.map((code) => (
-              <Chip key={code} pressed={code === exportLanguage} onClick={() => setExportLanguage(code)} data={{ 'data-export-language': code }}>
-                {spokenLanguageName(code)}
-              </Chip>
-            ))}
-          </ChipRow>
+        <OutputPicker language={language} outputs={outputs} output={output} onOutput={setOutput} />
+
+        <div className="relative grid shrink-0 grid-cols-2 gap-2 px-3 pb-3 pt-2">
+          <button
+            type="button"
+            data-export-save=""
+            disabled={!ready || saving}
+            onClick={() => void send('save')}
+            className="glass-prominent glass-accent inline-flex items-center justify-center gap-2 rounded-full text-body font-bold transition-transform active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+            style={{ minHeight: 50, color: 'white' }}
+          >
+            <Glyph name="downloadSimple" size={18} />
+            {translateExportCard(language, 'export.card.save')}
+          </button>
+          <button
+            type="button"
+            data-export-share=""
+            disabled={!ready || saving}
+            onClick={() => void send('share')}
+            className="glass-prominent inline-flex items-center justify-center gap-2 rounded-full text-body font-bold transition-transform active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+            style={{ minHeight: 50, color: 'var(--color-ios-ink)' }}
+          >
+            <GlyphSvg glyph={EXPORT_CARD_GLYPHS.export} size={18} />
+            {translateExportCard(language, 'export.card.share')}
+          </button>
+        </div>
+
+        {galleryOpen ? (
+          <ExportGallery
+            language={language}
+            usage={usage}
+            selected={format.template}
+            thumbs={thumbs}
+            onPick={(id) => {
+              pick(id);
+              setGalleryOpen(false);
+            }}
+            onClose={() => setGalleryOpen(false)}
+          />
         ) : null}
-
-        <div className="grid gap-2 pt-2">
-          <div className="grid grid-cols-2 gap-2">
-            <ActionButton disabled={!ready || saving} onClick={() => void send('save')} data={{ 'data-export-save': '' }}>
-              {translate(language, 'export.card.save')}
-            </ActionButton>
-            <ActionButton disabled={!ready || saving} onClick={() => void send('share')} data={{ 'data-export-share': '' }}>
-              {translate(language, 'export.card.share')}
-            </ActionButton>
-          </div>
-          <ActionButton tone="secondary" disabled={isDefault} onClick={useAsDefault} data={{ 'data-export-default': '' }}>
-            {translate(language, isDefault ? 'export.card.default.current' : 'export.card.default.save')}
-          </ActionButton>
-          <ActionButton tone="secondary" onClick={onClose}>
-            {translate(language, 'common.cancel')}
-          </ActionButton>
-        </div>
       </div>
     </Sheet>
   );

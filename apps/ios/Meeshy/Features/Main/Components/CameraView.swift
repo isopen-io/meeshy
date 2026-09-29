@@ -346,7 +346,17 @@ final class CameraModel: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureMovieFileOutput()
-    private var currentPosition: AVCaptureDevice.Position = .back
+    /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
+    /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
+    /// redressée, bornée et améliorée, EXIF compris.
+    nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
+
+    init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
+        self.photoProcessor = photoProcessor
+        super.init()
+    }
+    /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
+    @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
 
     // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
@@ -453,6 +463,7 @@ final class CameraModel: NSObject, ObservableObject {
 
         session.addInput(input)
         currentPosition = position
+        zoomFactor = device.videoZoomFactor
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -494,6 +505,88 @@ final class CameraModel: NSObject, ObservableObject {
         }
         isTakingPhoto = true
         photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+
+    /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
+    /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
+    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse.
+    var isCaptureReady: Bool {
+        let connection = photoOutput.connection(with: .video)
+        return CameraRecordingReadiness.mayCapturePhoto(
+            sessionIsRunning: session.isRunning,
+            hasVideoConnection: connection != nil,
+            connectionIsActive: connection?.isActive ?? false,
+            connectionIsEnabled: connection?.isEnabled ?? false)
+    }
+
+    /// Attend que la session soit prête, au plus `timeout`. `false` ⇒ elle ne
+    /// l'a pas été (permission refusée, simulateur sans caméra, tâche annulée).
+    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool {
+        let limite = Date().addingTimeInterval(timeout)
+        while !isCaptureReady {
+            guard !Task.isCancelled, Date() < limite else { return false }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return !Task.isCancelled
+    }
+
+    /// **La torche de l'objectif actif** (#8653) — la lumière d'une VIDÉO, que
+    /// `flashMode` n'éclaire pas. Sans lampe, ou sur un mode refusé, rien ne
+    /// change : l'objectif avant n'en a pas, c'est l'écran qui l'éclaire.
+    ///
+    /// `level` vient du curseur d'intensité (#8671) : une torche ALLUMÉE prend
+    /// la puissance demandée, bornée à ce que l'appareil sert (une torche
+    /// chaude en sert moins).
+    func setTorch(_ mode: AVCaptureDevice.TorchMode, level: Double = ComposerFlashIntensity.defaultLevel) {
+        guard let device = activeVideoDevice,
+              device.hasTorch, device.isTorchModeSupported(mode)
+        else { return }
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            if mode == .on {
+                try device.setTorchModeOn(level: ComposerFlashIntensity.torchLevel(
+                    level, maxAvailable: AVCaptureDevice.maxAvailableTorchLevel))
+            } else if device.torchMode != mode {
+                device.torchMode = mode
+            }
+        } catch {
+            Logger.media.error("Torch configuration failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private var activeVideoDevice: AVCaptureDevice? {
+        session.inputs
+            .compactMap { ($0 as? AVCaptureDeviceInput)?.device }
+            .first { $0.hasMediaType(.video) }
+    }
+
+    /// **Le cadrage de l'objectif actif** (#8671) — publié pour le badge du
+    /// viseur, remis à 1 à chaque changement d'objectif.
+    @Published private(set) var zoomFactor: CGFloat = 1
+
+    /// Ce que l'objectif sert. Sans objectif (simulateur), `1...1` : le geste
+    /// de zoom n'y a aucun effet.
+    var zoomRange: ClosedRange<CGFloat> {
+        guard let device = activeVideoDevice else { return 1...1 }
+        return ComposerCaptureZoom.range(deviceMin: device.minAvailableVideoZoomFactor,
+                                         deviceMax: device.maxAvailableVideoZoomFactor)
+    }
+
+    /// Affectation directe sous `lockForConfiguration` : le doigt pilote déjà
+    /// la progressivité, une rampe ajouterait un retard au geste.
+    func setZoom(_ factor: CGFloat) {
+        let plage = zoomRange
+        let borne = min(plage.upperBound, max(plage.lowerBound, factor))
+        guard let device = activeVideoDevice, borne != device.videoZoomFactor else { return }
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = borne
+            device.unlockForConfiguration()
+            zoomFactor = borne
+        } catch {
+            Logger.media.error("Zoom configuration failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// **Peut-on demander un enregistrement à AVFoundation ?** La question est
@@ -755,19 +848,25 @@ final class CameraModel: NSObject, ObservableObject {
 
 extension CameraModel: AVCapturePhotoCaptureDelegate {
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
+        guard let original = photo.fileDataRepresentation() else {
+            Task { @MainActor in self.isTakingPhoto = false }
+            return
+        }
+        let processed = photoProcessor.process(encoded: original, settings: .capture)
+        let data = processed?.data ?? original
+        guard let image = processed.map({ UIImage(cgImage: $0.image) }) ?? UIImage(data: original) else {
             Task { @MainActor in self.isTakingPhoto = false }
             return
         }
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
-            // Les octets D'ORIGINE, publiés à côté de l'image : c'est eux qui
-            // portent l'EXIF, et une `UIImage` ne le rend pas.
+            // Les octets TRAITÉS, publiés à côté de l'image : ils portent
+            // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
             self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
-        // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
+        // Persist the processed encoded bytes (HEIC/JPEG, EXIF kept), not a
         // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
         // so its `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.

@@ -327,57 +327,28 @@ extension MeeshyComposerHost {
             sceneImagesVersion: viewModel.loadedImagesVersion,
             sceneLocalMediaAliases: viewModel.adoptedLocalMedia,
             onItemTapped: { id, kind in
+                // **Toucher un objet le SÉLECTIONNE et montre ses options à
+                // droite** (#8714, directive porteur 2026-09-29) — un son
+                // compris : sa « Création audio » est désormais l'entrée
+                // « Modifier » de la colonne, comme pour les quatre autres
+                // familles, au lieu de s'ouvrir sous le doigt (#4671).
                 selectedSceneItemId = id
                 selectedSceneItemKind = kind
-                // **« Toucher le chips sur le canvas ouvre la vue de création
-                // audio »** (directive porteur 2026-09-01, #4671) — le mot est
-                // TOUCHER, donc le tap simple, pas le double-tap réservé aux
-                // éditeurs dédiés. La sélection est posée d'abord : si le son
-                // refuse de s'ouvrir (emprunté, ou fichier local inconnu), le
-                // geste reste une sélection franche plutôt qu'un tap sans effet.
-                if kind == .audio { editSceneSound(id) }
             },
-            // **« Modifier » ouvre l'édition EN LIGNE du texte** (#4074, vue
-            // `1d`). Le meuble câble déjà les trois entrées de cette édition
-            // (`editingTextId`, `onInlineTextChanged`, `onInlineTextEditEnded`)
-            // — il ne manquait que la porte qui y mène depuis l'appui long.
-            //
-            // Le `switch` est exhaustif pour que l'ajout d'un éditeur MÉDIA
-            // (#4082) oblige à passer ici ET à élargir `editableSceneKinds` :
-            // servir l'un sans l'autre rendrait « Modifier » offert et inerte
-            // sur un média, exactement le défaut que ce lot ferme.
-            onItemEdit: { id, kind in
-                switch kind {
-                case .text:
-                    // **Le MÊME site que la création** (#4634) : `openObjectEditor`
-                    // est la seule façon d'éditer un texte, quelle que soit la
-                    // porte. Recopier ici les trois lignes qu'il contient était
-                    // exactement ce qui faisait diverger les deux chemins.
-                    openObjectEditor(id)
-                    HapticFeedback.medium()
-                case .audio:
-                    // **Toucher une pastille audio ouvre « Création audio » SUR
-                    // ce son** (#4671, directive porteur 2026-09-01). Le même
-                    // écran que les deux autres surfaces qui portent un son :
-                    // une seconde vue d'édition aurait divergé au premier
-                    // réglage.
-                    editSceneSound(id)
-                case .media, .sticker, .place:
-                    // **#4937 — l'éditeur d'objet sert les cinq familles.** Ces
-                    // trois-là n'y ont pas encore de panneau d'options propre,
-                    // mais elles y ont leur FENÊTRE et leur TIMELINE, ce qu'aucun
-                    // autre écran n'offrait : leur `break` ne protégeait plus
-                    // rien, il rendait le geste muet.
-                    openObjectEditor(id)
-                    HapticFeedback.medium()
-                }
-            },
+            // **« Modifier »** — le double toucher et l'action VoiceOver du même
+            // nom ouvrent la même édition que la colonne droite
+            // (`editSceneItem`).
+            onItemEdit: { id, kind in editSceneItem(id, kind: kind) },
             // **Rogner** ouvre l'éditeur sur les bornes de la source — le même
             // site que le rail des contrôleurs servait (#4082), atteint
             // désormais par l'appui long.
             onItemTrim: { id, _ in
                 openObjectEditor(id, section: .media(.trim))
                 HapticFeedback.light()
+            },
+            onItemMenu: { id, kind, point in
+                sceneObjectMenu = ComposerSceneMenuRequest(target: .object(id: id, kind: kind), anchor: point)
+                HapticFeedback.medium()
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
@@ -402,6 +373,7 @@ extension MeeshyComposerHost {
             // avec la vue qui les peignait : le socle étant le FRÈRE de la
             // surface, aucun overlay posé sur elle ne pouvait le couvrir.
             cameraStage: sceneCameraStage,
+            quickCaptureHint: sceneQuickCaptureHint,
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -432,18 +404,10 @@ extension MeeshyComposerHost {
             // `enterTextEditingMode` — et c'est précisément lui que la règle
             // apprend à ignorer, plutôt qu'un état qu'on interdirait.
             //
-            // **Depuis le 2026-09-28, la porte TEXTE saisit sur la scène** et
-            // ses options s'accrochent à elle (`anchorsToDoor`) — sauf quand
-            // l'éditeur plein écran est monté : c'est alors lui qui les porte.
-            railMode: ComposerRailMode.resolve(
-                drawing: viewModel.isDrawingActive,
-                textEditing: ComposerFirstView.railShowsTextTools(
-                    textEditing: sceneTextEditing),
-                expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
-                expandedTextTool: viewModel.textEditingMode.expandedTool,
-                doors: sceneDoors,
-                anchorsToDoor: true
-            ),
+            // **Depuis le 2026-09-28, la porte TEXTE saisit sur la scène** ;
+            // ses réglages REMPLACENT les portes (#8652) — sauf quand l'éditeur
+            // plein écran est monté : c'est alors lui qui les porte.
+            railMode: sceneRailMode,
             // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
             // ICI parce que les deux magasins vivent ici — la slide pour ce qui
             // se voit, l'état du meuble pour ce qui qualifie la publication.
@@ -484,9 +448,12 @@ extension MeeshyComposerHost {
             // plus que l'historique, le Cadre et la nouvelle slide.
             trailingActions: [],
             onTrailingAction: { action in handleTrailingRailAction(action) },
-            // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
-            // d'où sa place tout en haut du rail et son séparateur.
-            onAddSlide: returnsImageToConversation ? nil : { viewModel.addSlide(); HapticFeedback.light() },
+            // **Les options du moment, en haut du rail droit** (#8713, #8714) :
+            // les réglages de l'outil ouvert, ou ceux de l'objet touché.
+            trailingOptions: sceneTrailingOptions,
+            onTrailingOption: { handleSceneTrailingOption($0) },
+            // L'éclair et le Cadre, au rail gauche après le lieu (#8713).
+            sceneToggles: sceneToggleEntries,
             // **L'historique a quitté le socle** (#4586). La question posée est
             // la MÊME que celle que le socle posait — `ComposerHistoryService`
             // reste le juge unique de « cet écran sert-il l'historique ? » — et
@@ -540,9 +507,8 @@ extension MeeshyComposerHost {
             bandBackdrop: sceneBackdrop,
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
-            animatedToggle: returnsImageToConversation ? nil : sceneAnimatedToggle,
-            onFrameButton: sceneHasBackgroundMedia ? { toggleFrameBand() } : nil,
-            frameIsOpen: requestedSceneBand == .frame,
+            // Le `(+)` d'une nouvelle scène, à la place de l'éclair (#8713).
+            topBarAccessory: returnsImageToConversation ? nil : sceneAddSlideButton,
             onTimeButton: sceneIsAnimated && !returnsImageToConversation ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
@@ -575,7 +541,8 @@ extension MeeshyComposerHost {
             editingTextId: viewModel.textEditingMode.activeTextId,
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
             // TEXTE y ouvre la saisie en ligne. La requête `@` reste nourrie
-            // par l'éditeur plein écran seul — celui de « Modifier ».
+            // par l’éditeur plein écran seul (#8680 : la saisie sur scène ne
+            // la sert pas encore).
             //
             // L'écriture du TEXTE, elle, passe ici : une écriture idempotente
             // sur le modèle.
@@ -1027,8 +994,23 @@ extension MeeshyComposerHost {
             // (`ComposerMoodSurface.header`), et sans cette garde le socle se
             // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
             // un padding, l'espace exact que la consolidation vise à rendre.
-            if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+            // **Un outil ouvert efface le socle** (#8652) : audience et
+            // publication n'ont rien à faire pendant qu'on dessine ou qu'on
+            // écrit, et publier en plein tracé n'est pas un geste à offrir.
+            // Par l'OPACITÉ : l'encart garde sa hauteur, donc la scène ne
+            // grandit pas sous le doigt au moment où l'outil s'ouvre.
+            // **Le carrousel d'effets PREND la place du socle** (#8712) : la
+            // scène se recadre au-dessus de lui par la zone sûre du bas.
+            if let effet = activeSceneEffect {
+                sceneEffectCarousel(effet)
+            } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+                let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
                 socle
+                    .opacity(servi ? 1 : 0)
+                    .allowsHitTesting(servi)
+                    .accessibilityHidden(!servi)
+                    .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
+                               value: servi)
             }
         }
     }
@@ -1067,5 +1049,34 @@ extension MeeshyComposerHost {
     /// scène, couverte, n'a alors rien à montrer.
     var sceneTextEditing: Bool {
         viewModel.textEditingMode.activeTextId != nil && editedObject == nil
+    }
+
+    /// **Ce que le rail de la scène montre** — un site unique, lu par la
+    /// surface ET par le socle : les deux doivent céder au MÊME outil ouvert.
+    var sceneRailMode: ComposerRailMode {
+        ComposerRailMode.resolve(
+            drawing: viewModel.isDrawingActive,
+            textEditing: ComposerFirstView.railShowsTextTools(textEditing: sceneTextEditing),
+            expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
+            expandedTextTool: viewModel.textEditingMode.expandedTool,
+            doors: sceneDoors)
+    }
+
+    /// **Un outil de la SCÈNE occupe-t-il l'écran ?** (#8652) Faux sous toute
+    /// autre surface : le document et l'humeur gardent leur socle.
+    var sceneToolOwnsScreen: Bool {
+        mountedComposerView == .scene && sceneRailMode.opensTool
+    }
+
+    /// **L'indication grise de la capture rapide** (#8653) — la MÊME question
+    /// que celle que le toucher pose (`handleSceneQuickTap`) : l'indication ne
+    /// promet jamais un geste que la scène refuserait.
+    var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
+        guard ComposerSceneQuickCapture.offers(
+            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
+            format: selectedFormat,
+            stage: sceneCameraStage,
+            toolIsOpen: sceneToolOwnsScreen) else { return nil }
+        return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }

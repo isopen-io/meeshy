@@ -370,6 +370,7 @@ export function registerCommentRoutes(
               parentCommentId: parsed.data.parentId,
               replyPreview: parsed.data.content,
               parentCommentPreview: parentComment.content?.slice(0, 80),
+              postPreview: post?.content?.slice(0, 80),
               // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               postCreatedAt: post?.createdAt ?? undefined,
@@ -742,7 +743,7 @@ export function registerCommentRoutes(
           }),
           fastify.prisma?.post?.findUnique({
             where: { id: commentPostId },
-            select: { type: true },
+            select: { type: true, content: true },
           }),
         ]);
         notifService.createCommentLikeNotification({
@@ -752,6 +753,7 @@ export function registerCommentRoutes(
           commentAuthorId: result.authorId,
           emoji,
           commentPreview: likedComment?.content?.slice(0, 80),
+          postPreview: likedPost?.content?.slice(0, 80) ?? undefined,
           postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments/:commentId/like]: notify comment like failed', { err }));
       }

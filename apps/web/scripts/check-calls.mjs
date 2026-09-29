@@ -32,7 +32,10 @@
  *     journal, et « Raccrocher » l'en retire ;
  *  7. hors ligne, le journal reste lisible et le dit ; la pastille de
  *     synchronisation ne recouvre aucun filtre du rail (#6401, #6387) ;
- *  8. aucune erreur de page.
+ *  8. aucune erreur de page ;
+ *  9. un onglet NEUF ouvert par « Rappeler » d'une notification attend sa
+ *     connexion puis demande « Appeler » quand le son est bloqué, et le
+ *     toucher compose (#8199).
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -347,6 +350,62 @@ try {
       check(resumed && (await coldPage.$('[data-calls-offline]')) === null, `${label} : au retour du réseau, le journal se charge seul`);
       check(coldErrors.length === 0, `${label} : aucune erreur de page à cache froid — ${JSON.stringify(coldErrors)}`);
       await cold.close();
+
+      // ------------------------------------------------ 9. rappel depuis un onglet NEUF (#8199)
+      /* Le worker ouvre `/c/<id>?rappeler=<type>` dans un onglet que personne
+         n'a touché : le navigateur y bloque le son. L'appel attend la connexion
+         authentifiée, puis demande « Appeler » au lieu de partir muet ; le
+         toucher compose, et l'adresse a oublié l'intention. */
+      /* Chromium de Playwright lève la politique d'autoplay (page tenue pour
+         touchée, contexte audio « running ») : le blocage d'un vrai onglet
+         neuf s'émule comme la coupure réseau du § 8, par ce que la page LIT. */
+      const fresh = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      await fresh.addInitScript(() => {
+        Object.defineProperty(Navigator.prototype, 'userActivation', { configurable: true, get: () => ({ hasBeenActive: false, isActive: false }) });
+      });
+      const freshPage = await fresh.newPage();
+      freshPage.setDefaultTimeout(10_000);
+      const freshErrors = [];
+      freshPage.on('pageerror', (error) => freshErrors.push(error.message));
+      await freshPage.goto(`${BASE}/c/c-kwame?rappeler=video&appelant=${encodeURIComponent('Kwame Mensah')}`, { waitUntil: 'load' });
+      const prompted = await freshPage.waitForSelector('[data-call-back-prompt]', { timeout: 8000 }).then(() => true, () => false);
+      const prompt = prompted
+        ? await freshPage.$eval('[data-call-back-prompt]', (el) => ({
+            type: el.getAttribute('data-call-back-prompt'),
+            nom: el.getAttribute('aria-label'),
+            appeler: (el.querySelector('[data-call-back-prompt-action="call"]')?.textContent ?? '').trim(),
+          }))
+        : null;
+      check(
+        prompt !== null && prompt.type === 'video' && prompt.nom === 'Rappeler Kwame Mensah en vidéo ?' && prompt.appeler === 'Appeler',
+        `${label} : un onglet neuf sans geste demande « Appeler » avant de rappeler (${JSON.stringify(prompt)})`,
+      );
+      check((await freshPage.$('[data-call-screen]')) === null, `${label} : rien ne compose avant le geste`);
+      check(!new URL(freshPage.url()).search.includes('rappeler'), `${label} : l'adresse a oublié l'intention (${new URL(freshPage.url()).search})`);
+      await freshPage.click('[data-call-back-prompt-action="call"]').catch(() => undefined);
+      const calling = await freshPage.waitForSelector('[data-call-screen]', { timeout: 5000 }).then(() => true, () => false);
+      const freshScreen = calling ? await freshPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')) : null;
+      check(
+        calling && freshScreen === 'Appel avec Kwame Mensah' && (await freshPage.$('[data-call-back-prompt]')) === null,
+        `${label} : « Appeler » compose l'appel vers Kwame Mensah et retire la question (${freshScreen})`,
+      );
+      await capture(freshPage, `appels-rappel-onglet-neuf-${slug}`);
+      check(freshErrors.length === 0, `${label} : aucune erreur de page au rappel depuis un onglet neuf — ${JSON.stringify(freshErrors)}`);
+      await fresh.close();
+
+      /* Et quand le navigateur laisse partir le son, l'onglet neuf compose seul
+         dès sa connexion prête, sans question. */
+      const allowed = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      const allowedPage = await allowed.newPage();
+      allowedPage.setDefaultTimeout(10_000);
+      await allowedPage.goto(`${BASE}/c/c-kwame?rappeler=audio&appelant=${encodeURIComponent('Kwame Mensah')}`, { waitUntil: 'load' });
+      const direct = await allowedPage.waitForSelector('[data-call-screen]', { timeout: 8000 }).then(() => true, () => false);
+      const directScreen = direct ? await allowedPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')) : null;
+      check(
+        direct && directScreen === 'Appel avec Kwame Mensah' && (await allowedPage.$('[data-call-back-prompt]')) === null,
+        `${label} : son autorisé, l'onglet neuf rappelle Kwame Mensah sans question (${directScreen})`,
+      );
+      await allowed.close();
     }
   }
 } finally {

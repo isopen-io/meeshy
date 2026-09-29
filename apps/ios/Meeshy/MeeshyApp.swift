@@ -175,6 +175,9 @@ struct MeeshyApp: App {
                     if OnboardingPreviewLaunch.isActive {
                         OnboardingPreviewScreen().zIndex(2)
                     }
+                    if ConversationLinkCardPreviewLaunch.isActive {
+                        ConversationLinkCardPreviewScreen().zIndex(2)
+                    }
                     #endif
                 }
                 .meeshyAnimation(.easeInOut(duration: 0.35), value: arrivalCelebration.isShowing)
@@ -259,7 +262,7 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .onContinueUserActivity(CallBackRequest.startCallActivityType) { userActivity in
-                    guard authManager.isAuthenticated,
+                    guard CallDialReadinessSnapshot.mayQueueDial(sessionResolved: authManager.hasResolvedStoredSession, authenticated: authManager.isAuthenticated),
                           let request = CallBackRequest(userActivity: userActivity) else { return }
                     CallBackDialer.shared.dial(request)
                 }
@@ -303,6 +306,11 @@ struct MeeshyApp: App {
                     await NotificationActionHandler.sweepExpiredEphemeralBanners()
                     NotificationActionHandler.shared.observeForegroundSweep()
                     launchSplash.reach(.cache)
+                    // #8674 — le cache vivant est-il bien celui du compte qui
+                    // s'ouvre ? Sans effet dans le cas nominal ; après une
+                    // bascule interrompue, il est rendu ou effacé AVANT la
+                    // première lecture.
+                    await CacheAccountBinder.shared.bind(DependencyContainer.activeAccountStoreKey()).value
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`
@@ -807,11 +815,14 @@ struct MeeshyApp: App {
                         // IdentityKey and upload it under their own
                         // account — a hard cross-account identity leak.
                         Task { await SessionManager.shared.clearSessions() }
-                        // `reset()` purges every disk-backed store (GRDB +
-                        // media) — required because the stores are not
-                        // namespaced by userId and would otherwise expose
-                        // user A's data to user B on the next login.
-                        Task { await CacheCoordinator.shared.reset() }
+                        // #8674 — le cache n'est plus vidé ici : la sortie de
+                        // session le lie à « personne », en mettant de côté
+                        // celui d'un compte gardé et en effaçant celui d'un
+                        // compte déconnecté. Sans effet quand c'est déjà fait ;
+                        // le coordinateur est seulement démonté pour que le
+                        // `start()` suivant réarme.
+                        CacheAccountBinder.shared.bind(nil)
+                        Task { await CacheCoordinator.shared.stop() }
                         // Purge the device's VoIP registration (PushKit +
                         // keychain-backed token record) — without this, a
                         // different user logging in on this device inherits

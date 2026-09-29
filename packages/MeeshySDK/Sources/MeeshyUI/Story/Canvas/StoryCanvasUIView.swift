@@ -307,6 +307,15 @@ public final class StoryCanvasUIView: UIView {
     /// apparaître les actions possibles au long press ») ; non câblée,
     /// l'action n'est pas offerte.
     public var onItemTrimRequested: ((String, CanvasItemKind) -> Void)?
+    /// **L'hôte PEINT lui-même le menu d'appui long** (#8717). Câblée, elle
+    /// reçoit l'objet, sa famille et le point du doigt — NORMALISÉ (0…1) sur
+    /// la carte, car le canvas peut être projeté à une autre échelle que
+    /// l'écran — et le menu système n'est pas présenté. Non câblée, le canvas
+    /// garde son `UIMenu` : les autres hôtes ne changent pas.
+    public var onItemMenuRequested: ((String, CanvasItemKind, CGPoint) -> Void)?
+    /// **Un média de premier plan devient le fond** (#8716) — l'hôte décide ce
+    /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
+    public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state
@@ -1031,6 +1040,13 @@ public final class StoryCanvasUIView: UIView {
     /// stops as a unit (the « long-press = stop comme une vidéo »
     /// requirement).
     var isPlaybackPaused: Bool = false
+    /// Les deux causes dont `isPlaybackPaused` est la somme : la pause du
+    /// viewer (`setPaused`) et l'interruption de l'hôte (`PlaybackInterruption`,
+    /// #8725). Séparées pour que la fin d'un appel ne relance jamais une story
+    /// que l'utilisateur avait mise en pause.
+    var isPlaybackRequestedPaused: Bool = false
+    var isPlaybackInterrupted: Bool = false
+    nonisolated(unsafe) var playbackInterruptionCancellable: AnyCancellable?
 
     // MARK: - Playback health (unified timeline)
 

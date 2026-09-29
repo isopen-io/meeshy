@@ -317,7 +317,8 @@ public struct NotificationListView: View {
                                 onQuickAction: onQuickAction.map { perform in
                                     { action in runQuickAction(action, on: notification, perform: perform) }
                                 },
-                                isConnectRequested: notification.senderId.map(connectRequestedIds.contains) ?? false
+                                isConnectRequested: notification.senderId.map(connectRequestedIds.contains) ?? false,
+                                isFriend: notification.senderId.map { FriendshipCache.shared.isFriend($0) } ?? false
                             )
                             .equatable()
                         }

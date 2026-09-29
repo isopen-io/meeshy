@@ -2099,45 +2099,6 @@ extension StoryViewerView {
         }
     }
 
-    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> StoryCommentRowView {
-        StoryCommentRowView(
-            comment: comment,
-            userLang: userLang,
-            isLiked: storyCommentLikedIds.contains(comment.id),
-            likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
-            isInFlight: heartInFlightIds.contains(comment.id),
-            onReply: {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    replyingToStoryComment = comment
-                }
-                // Répondre à une réponse (niveau 2) : la réponse reste plate au niveau 2
-                // (parent racine, cf. submitStoryComment) — on injecte une @mention de
-                // l'auteur ciblé dans le composer pour qu'il soit notifié (`user_mentioned`).
-                if comment.parentId != nil, let username = comment.authorUsername, !username.isEmpty {
-                    emojiToInject = "@\(username) "
-                }
-                // Faire APPARAÎTRE l'universal composer bar : on déclenche le focus
-                // pour ouvrir le clavier immédiatement (spec 2026-06-23) — l'auteur
-                // (et tout viewer) peut répondre sans tap supplémentaire.
-                //
-                // Pour l'auteur de sa propre story, le composer n'existe PAS avant
-                // ce tap (cf. condition de rendu `!isOwnStory || replyingToStoryComment`
-                // dans +Canvas) : il est monté dans la même passe que `replyingToStoryComment`.
-                // Or `focusTrigger` est consommé via `onChange`, qui ne fire pas au
-                // montage initial — poser `true` synchroniquement serait ignoré et le
-                // drapeau resterait coincé. On force donc un front false→true sur le
-                // runloop suivant, une fois le composer monté et son `onChange` actif.
-                composerFocusTrigger = false
-                DispatchQueue.main.async { composerFocusTrigger = true }
-                HapticFeedback.light()
-            },
-            onToggleLike: {
-                HapticFeedback.light()
-                Task { await toggleStoryCommentLike(comment) }
-            }
-        )
-    }
-
     // MARK: - Story Comment Reactions
 
     /// Applique un événement socket `comment:reaction-added` ou
@@ -2236,16 +2197,9 @@ extension StoryViewerView {
             media: (data.comment.media ?? []).map { $0.toFeedMedia() },
             location: data.comment.location
         )
-        if let parentId = updated.parentId,
-           var replies = storyCommentRepliesMap[parentId],
-           let idx = replies.firstIndex(where: { $0.id == updated.id }) {
-            replies[idx] = updated
-            storyCommentRepliesMap[parentId] = replies
-            return
-        }
-        if let idx = storyComments.firstIndex(where: { $0.id == updated.id }) {
-            storyComments[idx] = updated
-        }
+        let applied = StoryCommentEditing.replacing(updated, comments: storyComments, replies: storyCommentRepliesMap)
+        storyComments = applied.comments
+        storyCommentRepliesMap = applied.replies
     }
 
     /// Traduction de commentaire arrivée pendant la lecture : pose

@@ -10,6 +10,9 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
+import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
+import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
   historyReaderFromAuthContext,
@@ -198,7 +201,24 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId, { historyFloor });
 
-      const formattedMessages = messages.map(formatLinkMessageWithDetails);
+      // #7451 × #8630 — ce qui est mort pour CE lecteur ne se sert pas : un
+      // éphémère échu, et toute réponse à ce qui l'est.
+      const readerParticipantId = member?.id ?? hybridRequest.anonymousParticipant?.id ?? undefined;
+      const now = new Date();
+      const readerPage = await keepAliveForReader(fastify.prisma, messages, readerParticipantId, now);
+
+      // #8562 — la citation d'un éphémère échu pour CE lecteur sort scellée.
+      const readers = {
+        deadlines: await loadQuotedEphemeralReaders(fastify.prisma, readerPage.alive, async () => readerParticipantId),
+        now
+      };
+      const formattedMessages = readerPage.alive.map((message) => withInheritedExpiry(
+        {
+          ...formatLinkMessageWithDetails(message, readers),
+          expiresAt: mapMessageProtectionFields(message, readerPage.deadlines.get(message.id)).expiresAt
+        },
+        readerPage.inherited
+      ));
 
       return sendSuccess(reply, {
           messages: formattedMessages.reverse(),

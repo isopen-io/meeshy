@@ -556,7 +556,7 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   };
 
   test('chaque relevé publie le niveau, le détail et le stade de survie ; le rapport part vers la passerelle, au plus toutes les 5 s', async () => {
-    const h = await connected([{ total: total({ level: 'poor', packetLoss: 9, rtt: 480 }), stage: 'frozen', codec: 'VP8' }]);
+    const h = await connected([{ total: total({ level: 'poor', packetLoss: 9, rtt: 480 }), stage: 'frozen', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     await h.sampleQuality();
     expect(h.call()?.quality).toEqual({ level: 'poor', packetLoss: 9, rtt: 480, jitter: 8, audioKbps: 32, videoKbps: 480, survival: 'frozen' });
     const reports = () => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_QUALITY_REPORT);
@@ -571,8 +571,8 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 
   test('un relevé mauvais, même hors fenêtre de rapport, fait demander la note d’après-appel (#8072)', async () => {
-    const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8' } as const;
-    const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8' }, good]);
+    const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' } as const;
+    const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, good]);
     await h.sampleQuality();
     h.advance(2_000);
     await h.sampleQuality();
@@ -584,7 +584,7 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 
   test('la boucle s’arrête avec l’appel : plus aucun relevé après le raccroché', async () => {
-    const h = await connected([{ total: total(), stage: 'sending', codec: 'opus' }]);
+    const h = await connected([{ total: total(), stage: 'sending', codec: 'opus', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     h.engine.hangup();
     const before = h.emitted.length;
     await h.sampleQuality();
@@ -614,7 +614,7 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 
   test('au raccroché, `call:analytics` part UNE fois, avec le codec lu, les reprises, les transitions réseau et la qualité', async () => {
-    const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8' }]);
+    const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     await h.sampleQuality();
     h.advance(2_000);
     await h.sampleQuality();
@@ -884,5 +884,148 @@ describe('les contrôles d’un appel en cours passent par le moteur (#8433, #84
     expect(h.call()?.members['u-b']?.link).toBe('ringing');
     expect(h.call()?.isGroup).toBe(true);
     expect(h.call()?.phase.kind).toBe('connected');
+  });
+});
+
+/**
+ * LA CAMÉRA RÉPOND AU PREMIER TOUCHER (#8735) — couper, allumer ou retourner
+ * la caméra attendait `getUserMedia`, les effets et chaque lien avant que
+ * l'écran ne bouge : rien ne changeait pendant des centaines de millisecondes,
+ * on touchait encore, et le second geste partait d'un état périmé. L'écran
+ * bascule désormais AUSSITÔT ; un geste en vol en ignore un second ; un échec
+ * rend l'état d'avant. Retourner relâche la caméra en cours quand l'appareil
+ * ne sait pas en ouvrir deux, et rouvre celle d'avant si l'autre ne vient pas.
+ */
+describe('la caméra bascule aussitôt, un geste à la fois (#8735)', () => {
+  type Pending = { readonly facing: string; readonly resolve: (camera: FakeTrack) => void; readonly reject: (error: Error) => void };
+
+  const deferredCameras = () => {
+    const pending: Pending[] = [];
+    const acquireCamera = (facing: string) =>
+      new Promise<MediaStreamTrack>((resolve, reject) => {
+        pending.push({ facing, resolve: (camera) => resolve(camera as unknown as MediaStreamTrack), reject });
+      });
+    return { pending, acquireCamera };
+  };
+
+  const connectedWith = async (acquireCamera: (facing: 'user' | 'environment') => Promise<MediaStreamTrack>) => {
+    const h = harness({ acquireCamera });
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    return h;
+  };
+
+  const videoToggles = (h: Awaited<ReturnType<typeof connectedWith>>) => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_TOGGLE_VIDEO);
+
+  test('allumer : l’écran montre la caméra allumée AVANT que getUserMedia ne réponde, et un second toucher en vol est ignoré', async () => {
+    const cameras = deferredCameras();
+    const h = await connectedWith(cameras.acquireCamera);
+    const first = h.engine.toggleCamera();
+    expect(h.call()?.cameraOn).toBe(true);
+    const second = h.engine.toggleCamera();
+    expect(h.call()?.cameraOn).toBe(true);
+    expect(cameras.pending).toHaveLength(1);
+    const camera = track('video');
+    cameras.pending[0]?.resolve(camera);
+    await Promise.all([first, second]);
+    expect(h.call()?.cameraOn).toBe(true);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([camera] as unknown as MediaStreamTrack[]);
+    expect(videoToggles(h)).toEqual([[CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: 'call-1', enabled: true }]]);
+  });
+
+  test('allumer : un refus rend l’état d’avant — caméra éteinte, appel vocal, rien d’annoncé', async () => {
+    const cameras = deferredCameras();
+    const h = await connectedWith(cameras.acquireCamera);
+    const pending = h.engine.toggleCamera();
+    expect(h.call()?.cameraOn).toBe(true);
+    cameras.pending[0]?.reject(new Error('NotAllowedError'));
+    await pending;
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.media).toBe('audio');
+    expect(videoToggles(h)).toEqual([]);
+    const retry = h.engine.toggleCamera();
+    expect(cameras.pending).toHaveLength(2);
+    cameras.pending[1]?.reject(new Error('NotAllowedError'));
+    await retry;
+  });
+
+  test('couper : l’écran montre la caméra coupée aussitôt', async () => {
+    const h = await connectedWith(async () => track('video') as unknown as MediaStreamTrack);
+    await h.engine.toggleCamera();
+    const off = h.engine.toggleCamera();
+    expect(h.call()?.cameraOn).toBe(false);
+    await off;
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([]);
+  });
+
+  test('l’appel fini pendant que la caméra s’ouvre : la caméra ouverte trop tard est relâchée', async () => {
+    const cameras = deferredCameras();
+    const h = await connectedWith(cameras.acquireCamera);
+    const pending = h.engine.toggleCamera();
+    h.engine.hangup();
+    const late = track('video');
+    cameras.pending[0]?.resolve(late);
+    await pending;
+    expect(late.readyState).toBe('ended');
+  });
+
+  test('retourner : l’écran se retourne aussitôt, un second toucher en vol est ignoré', async () => {
+    const cameras = deferredCameras();
+    const h = await connectedWith(cameras.acquireCamera);
+    const on = h.engine.toggleCamera();
+    cameras.pending[0]?.resolve(track('video'));
+    await on;
+    const flip = h.engine.switchCamera();
+    expect(h.call()?.facing).toBe('environment');
+    const again = h.engine.switchCamera();
+    expect(cameras.pending).toHaveLength(2);
+    const rear = track('video');
+    cameras.pending[1]?.resolve(rear);
+    await Promise.all([flip, again]);
+    expect(h.call()?.facing).toBe('environment');
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([rear] as unknown as MediaStreamTrack[]);
+  });
+
+  /* Un téléphone qui n'ouvre qu'une caméra à la fois refuse la seconde tant
+     que la première tourne : Retourner ne faisait RIEN, à chaque fois. */
+  const oneCameraAtATime = () => {
+    const opened: Array<{ readonly facing: string; readonly camera: FakeTrack }> = [];
+    const refusals: string[] = [];
+    const acquireCamera = async (facing: string) => {
+      if (opened.some((entry) => entry.camera.readyState === 'live')) {
+        refusals.push(facing);
+        throw new Error('NotReadableError');
+      }
+      const camera = track('video');
+      opened.push({ facing, camera });
+      return camera as unknown as MediaStreamTrack;
+    };
+    return { opened, refusals, acquireCamera };
+  };
+
+  test('retourner sur un appareil qui n’ouvre qu’une caméra : l’ancienne est relâchée, puis l’autre s’ouvre', async () => {
+    const device = oneCameraAtATime();
+    const h = await connectedWith(device.acquireCamera);
+    await h.engine.toggleCamera();
+    await h.engine.switchCamera();
+    expect(device.refusals).toEqual(['environment']);
+    expect(device.opened.map((entry) => [entry.facing, entry.camera.readyState])).toEqual([
+      ['user', 'ended'],
+      ['environment', 'live'],
+    ]);
+    expect(h.call()?.facing).toBe('environment');
+    expect(h.call()?.cameraOn).toBe(true);
+  });
+
+  test('retourner vers une caméra qui ne vient pas : celle d’avant se rouvre, et l’écran revient à elle', async () => {
+    const device = oneCameraAtATime();
+    const h = await connectedWith((facing) => (facing === 'environment' ? Promise.reject(new Error('NotFoundError')) : device.acquireCamera(facing)));
+    await h.engine.toggleCamera();
+    await h.engine.switchCamera();
+    expect(h.call()?.facing).toBe('user');
+    expect(h.call()?.cameraOn).toBe(true);
+    expect(h.call()?.localStream?.getVideoTracks()).toHaveLength(1);
+    expect(h.call()?.localStream?.getVideoTracks()[0]?.readyState).toBe('live');
   });
 });

@@ -322,3 +322,77 @@ describe('broadcastMessageMutation — la pastille de non-lus d\'une suppression
     ).resolves.toBeUndefined();
   });
 });
+
+describe('broadcastMessageMutation — message:edited d’une réponse dont la citation est échue pour un lecteur (#8562)', () => {
+  const CONSUMED = new Date('2026-09-29T09:00:00.000Z');
+  const payload = {
+    id: 'msg-1',
+    conversationId: 'conv-1',
+    content: 'réponse éditée',
+    replyTo: { id: 'flame-1', content: 'le code du coffre est 4271', attachments: [{ id: 'a1' }] },
+  };
+  const sealed = new Map([['user-B', CONSUMED]]);
+
+  const exceptingManager = (emitted: Array<Emitted & { excepted: string[] }>, enqueue: any) =>
+    makeManager(emitted, {
+      enqueue,
+      getIO: () => ({
+        to: (room: string) => {
+          const target = (excepted: string[]) => ({
+            except: (rooms: string[]) => target([...excepted, ...rooms]),
+            emit: (event: string, p: unknown) => {
+              emitted.push({ room, event, payload: p, excepted });
+            },
+          });
+          return target([]);
+        },
+      }),
+    });
+
+  it('la room sans le lecteur échu, et lui seul reçoit la citation SCELLÉE', async () => {
+    const emitted: Array<Emitted & { excepted: string[] }> = [];
+    const enqueue = jest.fn(async (_params: any) => {});
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: exceptingManager(emitted, enqueue),
+      ...base,
+      eventType: 'edited',
+      payload: payload as any,
+      sealedQuoteAudience: sealed,
+    });
+
+    const edited = emitted.filter((e) => e.event === SERVER_EVENTS.MESSAGE_EDITED);
+    const toRoom = edited.find((e) => e.room === 'conversation:conv-1');
+    expect(toRoom?.excepted).toEqual(['user:user-B']);
+    expect(toRoom?.payload.replyTo.content).toBe('le code du coffre est 4271');
+    const toB = edited.filter((e) => e.room === 'user:user-B');
+    expect(toB).toHaveLength(1);
+    expect(toB[0].payload.replyTo).toMatchObject({ content: '', deletedAt: CONSUMED, attachments: [] });
+    // #8630 — la réponse meurt avec ce qu'elle cite, pour B : l'édition ne la ressuscite pas.
+    expect(toB[0].payload.content).toBe('');
+    expect(toB[0].payload.expiresAt).toEqual(CONSUMED);
+    expect(toRoom?.payload.content).toBe('réponse éditée');
+
+    const resolve = (enqueue.mock.calls[0][0] as any).resolvePayloadForReader;
+    expect(resolve('user-B').replyTo.content).toBe('');
+    expect(resolve('user-C').replyTo.content).toBe('le code du coffre est 4271');
+  });
+
+  it('une cible qui ne sait pas exclure scelle pour TOUS — jamais le texte au lecteur échu', async () => {
+    const emitted: Emitted[] = [];
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: makeManager(emitted),
+      ...base,
+      eventType: 'edited',
+      payload: payload as any,
+      sealedQuoteAudience: sealed,
+    });
+
+    const edited = emitted.filter((e) => e.event === SERVER_EVENTS.MESSAGE_EDITED);
+    expect(edited).toHaveLength(1);
+    expect(JSON.stringify(edited[0].payload)).not.toContain('4271');
+  });
+});

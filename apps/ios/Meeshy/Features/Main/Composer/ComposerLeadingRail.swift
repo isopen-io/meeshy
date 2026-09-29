@@ -112,14 +112,14 @@ struct ComposerLeadingRail: View {
     /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
     var separateButtons: Bool = false
 
-    /// **La porte dont les options sont ouvertes À SA DROITE** (directive
-    /// porteur 2026-09-28). Elle se teinte, comme un contrôleur déplié, et
-    /// publie son cadre (`ComposerRailFlyoutAnchorKey`) pour que la colonne se
-    /// pose à côté d'elle. Lue sur le mode : une seule source.
-    private var anchoredDoor: ComposerRailDoor? {
-        if case .flyout(let volet) = mode { return volet.anchor }
-        return nil
-    }
+    /// **Les boutons de SCÈNE, après le lieu** (#8713, directive porteur
+    /// 2026-09-29) : l'éclair du mode Animé, puis le Cadre. Déjà servis et
+    /// ordonnés par `ComposerLeadingSceneToggles` ; `sceneTogglesAfter` dit la
+    /// porte qui les précède. Ce ne sont pas des portes — ils ne font entrer
+    /// aucune matière — mais ils vivent sur la même colonne, qui agit sur la
+    /// scène.
+    var sceneToggles: [ComposerSceneToggleEntry] = []
+    var sceneTogglesAfter: ComposerRailDoor?
 
     @State private var lastTapped: String?
 
@@ -131,8 +131,7 @@ struct ComposerLeadingRail: View {
 
     private var isEmpty: Bool {
         switch mode {
-        case .doors(let doors):   return doors.isEmpty
-        case .flyout(let volet):  return volet.doors.isEmpty
+        case .doors(let doors):   return doors.isEmpty && sceneToggles.isEmpty
         case .tool(let controls): return controls.isEmpty
         }
     }
@@ -166,9 +165,29 @@ struct ComposerLeadingRail: View {
     /// comportement d'avant, au pixel.
     @ViewBuilder
     private var verticalDoors: some View {
-        ViewThatFits(in: .vertical) {
-            railStack { railEntries }
-            ScrollView(.vertical, showsIndicators: false) { railStack { railEntries } }
+        if case .tool(let controls) = mode {
+            verticalToolColumn(controls)
+        } else {
+            ViewThatFits(in: .vertical) {
+                railStack { railEntries }
+                ScrollView(.vertical, showsIndicators: false) { railStack { railEntries } }
+            }
+        }
+    }
+
+    /// **Les contrôleurs d'un outil à la place des portes, le `(x)` HORS du
+    /// défilement** (#8652). Le clavier d'un texte en saisie ramène la colonne
+    /// à ~300 pt : les réglages défilent, la sortie reste sous le pouce — la
+    /// même promesse que la rangée horizontale (#4582).
+    private func verticalToolColumn(_ controls: [ComposerToolControl]) -> some View {
+        VStack(spacing: entrySpacing) {
+            ViewThatFits(in: .vertical) {
+                VStack(spacing: entrySpacing) { ForEach(controls) { toolButton($0) } }
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: entrySpacing) { ForEach(controls) { toolButton($0) } }
+                }
+            }
+            exitButton
         }
     }
 
@@ -191,10 +210,6 @@ struct ComposerLeadingRail: View {
         switch mode {
                 case .doors(let doors):
                     doorEntries(doors)
-                case .flyout(let volet):
-                    // Les portes RESTENT : la colonne d'options se pose à côté
-                    // de la sienne, elle ne la remplace pas.
-                    doorEntries(volet.doors)
                 case .tool(let controls):
                     // **La rangée DÉFILE, le `(x)` reste** (#4582, directive
                     // porteur « faire très attention aux décalages hors du
@@ -244,11 +259,29 @@ struct ComposerLeadingRail: View {
                     .frame(width: ComposerRailGeometry.railWidth,
                            height: ComposerRailGeometry.railWidth)
             }
+            if sceneTogglesAfter == door { sceneToggleEntries }
         }
         if let systemEntry, systemEntryAfter == nil {
             systemEntry
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
+        }
+        if sceneTogglesAfter.map({ !doors.contains($0) }) ?? true {
+            sceneToggleEntries
+        }
+    }
+
+    /// L'éclair puis le Cadre — teintés quand ce qu'ils règlent est actif.
+    @ViewBuilder
+    private var sceneToggleEntries: some View {
+        ForEach(sceneToggles) { bouton in
+            entry(id: "scene.\(bouton.id)",
+                  symbolName: bouton.toggle.symbol,
+                  label: bouton.label,
+                  tint: MeeshyColors.textPrimary(isDark: true),
+                  glassTint: bouton.isOn ? MeeshyColors.brandPrimary : nil,
+                  isOn: bouton.isOn,
+                  action: bouton.action)
         }
     }
 
@@ -276,24 +309,17 @@ struct ComposerLeadingRail: View {
             // une carte-colonne, ou rien quand chaque bouton porte le sien.
             .modifier(ComposerRailCard(separate: separateButtons, plateauTint: plateauTint))
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerRailCopy.railLabel))
+            .accessibilityLabel(Text(mode.opensTool ? ComposerRailCopy.toolRailLabel : ComposerRailCopy.railLabel))
         }
     }
 
     private func doorButton(_ door: ComposerRailDoor) -> some View {
-        let accroche = anchoredDoor == door
-        return entry(id: door.rawValue,
-                     symbolName: door.symbolName,
-                     label: ComposerRailCopy.label(door),
-                     tint: accroche
-                         ? MeeshyColors.brandPrimary
-                         : MeeshyColors.textSecondary(isDark: true),
-                     badge: badges[door]) {
+        entry(id: door.rawValue,
+              symbolName: door.symbolName,
+              label: ComposerRailCopy.label(door),
+              tint: MeeshyColors.textSecondary(isDark: true),
+              badge: badges[door]) {
             onDoor?(door)
-        }
-        .accessibilityAddTraits(accroche ? .isSelected : [])
-        .anchorPreference(key: ComposerRailFlyoutAnchorKey.self, value: .bounds) {
-            accroche ? $0 : nil
         }
     }
 
@@ -332,6 +358,8 @@ struct ComposerLeadingRail: View {
                        label: String,
                        tint: Color,
                        badge: Int? = nil,
+                       glassTint: Color? = nil,
+                       isOn: Bool = false,
                        action: @escaping () -> Void) -> some View {
         Button {
             lastTapped = id
@@ -343,7 +371,8 @@ struct ComposerLeadingRail: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundColor(tint)
                 .composerToolBounce(active: lastTapped == id)
-                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint))
+                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint,
+                                                  tint: glassTint))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 // **La pastille est posée SUR le glyphe, hors du flux** : dans
@@ -353,6 +382,7 @@ struct ComposerLeadingRail: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(label))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
         // **Le compte est une VALEUR, jamais une seconde étiquette.** Le
         // fondre dans le libellé remplacerait le VERBE que VoiceOver annonce
         // (« Ajouter du texte ») par une phrase composée — et un contrôle qui
@@ -403,6 +433,13 @@ nonisolated enum ComposerRailCopy {
                defaultValue: "Ajouter à la scène", bundle: .main)
     }
 
+    /// Le même rail quand un outil l'occupe (#8652) : VoiceOver annonce les
+    /// réglages de l'outil, plus « Ajouter à la scène ».
+    static var toolRailLabel: String {
+        String(localized: "composer.rail.tool.label",
+               defaultValue: "Réglages de l'outil", bundle: .main)
+    }
+
     static func label(_ door: ComposerRailDoor) -> String {
         switch door {
         case .description:
@@ -444,6 +481,24 @@ nonisolated enum ComposerRailCopy {
         case .text:
             return String(localized: "composer.rail.text",
                           defaultValue: "Ajouter du texte", bundle: .main)
+        }
+    }
+}
+
+/// **Un bouton de SCÈNE du rail gauche** (#8713) — l'éclair ou le Cadre, avec
+/// son état et son geste. Le glyphe vient de `ComposerSceneToggle`, le nom de
+/// la table de copie qui le nommait déjà à sa place d'avant.
+struct ComposerSceneToggleEntry: Identifiable {
+    let toggle: ComposerSceneToggle
+    let isOn: Bool
+    let action: () -> Void
+
+    var id: String { toggle.rawValue }
+
+    var label: String {
+        switch toggle {
+        case .animated: return ComposerAnimatedCopy.toggle
+        case .frame:    return ComposerFrameCopy.title
         }
     }
 }

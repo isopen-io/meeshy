@@ -16,10 +16,17 @@ import { chromeAfter, chromeHidden, CHROME_IDLE_MS, type ChromeCue, type ChromeV
  *
  * Un geste n'écrit qu'une référence : bouger la souris ne rend pas l'écran
  * d'appel à chaque pixel. Seul le passage caché ↔ visible est un état.
+ *
+ * Ce que fait un DOIGT réarme l'attente (#8735) : un doigt posé retient les
+ * commandes tant qu'il ne s'est pas levé, et un défilement (qui, au doigt,
+ * remplace les `pointermove` par un `pointercancel` puis des `scroll` qui ne
+ * remontent pas) compte comme un geste — sans quoi une rangée s'effaçait sous
+ * le doigt qui la faisait défiler, et le glissé suivant tombait sur la vidéo.
  */
 
 const STIRS = ['pointermove', 'wheel'] as const;
 const KEYS = ['keydown', 'focusin'] as const;
+const LIFTS = ['pointerup', 'pointercancel'] as const;
 
 /** Ce qui AGIT à l'endroit touché : le toucher lui appartient, il n'efface rien. */
 const INTERACTIVE = [
@@ -37,7 +44,10 @@ const INTERACTIVE = [
   '[role="radio"]',
   '[role="switch"]',
   '[role="alertdialog"]',
+  '[role="dialog"]',
+  '[role="toolbar"]',
   '[tabindex]:not([tabindex="-1"])',
+  '[data-call-header]',
   '[data-call-chrome-keep]',
 ].join(', ');
 
@@ -46,8 +56,18 @@ const INTERACTIVE = [
  * n'agisse : sous Preact, un bouton qui change d'état (« Couper le micro » →
  * « Activer le micro ») remplace son glyphe pendant son propre gestionnaire,
  * et à la remontée la cible, détachée, n'a plus de bouton parmi ses ancêtres.
+ *
+ * Un toucher qui rate de peu (le titre d'une feuille, l'espace entre deux
+ * boutons d'une rangée, un vide de l'en-tête — #8735) appartient à ce qu'il
+ * touche. L'écran d'appel étant lui-même un dialogue, seul ce qui agit À
+ * L'INTÉRIEUR de l'élément écouté (`currentTarget`) retient le toucher.
  */
-export const tapTogglesChrome = (event: Event): boolean => event.target instanceof Element && event.target.closest(INTERACTIVE) === null;
+export const tapTogglesChrome = (event: Event): boolean => {
+  if (!(event.target instanceof Element)) return false;
+  const hit = event.target.closest(INTERACTIVE);
+  const scope = event.currentTarget;
+  return hit === null || hit === scope || (scope instanceof Node && !scope.contains(hit));
+};
 
 const prefersReducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -56,12 +76,18 @@ const keyboardInside = (controls: HTMLElement | null): boolean => {
   return controls !== null && focused instanceof HTMLElement && controls.contains(focused) && focused.matches(':focus-visible');
 };
 
-/** `held` : un sous-menu est ouvert — on y regarde (l'aperçu d'une capture, un effet qu'on essaie) ; l'écran ne s'efface pas de lui-même. */
+/** `held` : un sous-menu, une feuille ou un détail est ouvert — on y regarde (l'aperçu d'une capture, un effet qu'on essaie, la sortie audio) ; l'écran ne s'efface pas de lui-même. */
 type ChromeInput = { readonly videoScene: boolean; readonly root: RefObject<HTMLElement | null>; readonly controls: RefObject<HTMLElement | null>; readonly held?: boolean };
 
-export function useCallChrome({ videoScene, root, controls, held = false }: ChromeInput): boolean {
+/**
+ * Ce que montrent les commandes : `shown` hors d'une scène vidéo, sinon
+ * l'état de `chromeAfter` — que l'écran projette en opacité (`resting` et
+ * `dismissed` s'effacent) et en réponse au doigt (`chromeInteractive`).
+ */
+export function useCallChrome({ videoScene, root, controls, held = false }: ChromeInput): ChromeVisibility {
   const [visibility, setVisibility] = useState<ChromeVisibility>('shown');
   const lastGesture = useRef(Date.now());
+  const fingerDown = useRef(false);
   const scene = useRef(videoScene);
   scene.current = videoScene;
 
@@ -77,18 +103,27 @@ export function useCallChrome({ videoScene, root, controls, held = false }: Chro
     const key = () => cue('key');
     const press = (event: Event) => {
       lastGesture.current = Date.now();
+      fingerDown.current = true;
       if (!tapTogglesChrome(event)) cue('stir');
+    };
+    const lift = () => {
+      lastGesture.current = Date.now();
+      fingerDown.current = false;
     };
     const tap = (event: Event) => {
       if (scene.current && tapTogglesChrome(event)) cue('tap');
     };
     STIRS.forEach((name) => element.addEventListener(name, stir, { passive: true }));
     KEYS.forEach((name) => element.addEventListener(name, key));
+    LIFTS.forEach((name) => element.addEventListener(name, lift, { passive: true, capture: true }));
+    element.addEventListener('scroll', stir, { passive: true, capture: true });
     element.addEventListener('pointerdown', press, { passive: true, capture: true });
     element.addEventListener('click', tap, { capture: true });
     return () => {
       STIRS.forEach((name) => element.removeEventListener(name, stir));
       KEYS.forEach((name) => element.removeEventListener(name, key));
+      LIFTS.forEach((name) => element.removeEventListener(name, lift, { capture: true }));
+      element.removeEventListener('scroll', stir, { capture: true });
       element.removeEventListener('pointerdown', press, { capture: true });
       element.removeEventListener('click', tap, { capture: true });
     };
@@ -100,9 +135,9 @@ export function useCallChrome({ videoScene, root, controls, held = false }: Chro
 
   useEffect(() => {
     if (!videoScene || held || visibility !== 'shown' || prefersReducedMotion()) return undefined;
-    const pending = { handle: setTimeout(() => undefined, 0) };
+    const pending: { handle: ReturnType<typeof setTimeout> | undefined } = { handle: undefined };
     const check = (): void => {
-      const idleMs = Date.now() - lastGesture.current;
+      const idleMs = fingerDown.current ? 0 : Date.now() - lastGesture.current;
       const hide = chromeHidden({ videoScene, idleMs, keyboardInside: keyboardInside(controls.current), reducedMotion: false });
       if (hide) {
         setVisibility((current) => chromeAfter(current, 'rest'));
@@ -114,5 +149,19 @@ export function useCallChrome({ videoScene, root, controls, held = false }: Chro
     return () => clearTimeout(pending.handle);
   }, [videoScene, held, visibility, controls]);
 
-  return videoScene && visibility !== 'shown';
+  return videoScene ? visibility : 'shown';
+}
+
+/**
+ * Une feuille ou un détail ouvert au-dessus de l'appel le DIT à l'écran
+ * (#8735), et le dit encore en partant — refermé comme démonté : l'écran
+ * compte ce qui le retient, et ne s'efface de lui-même que quand plus rien
+ * ne le retient.
+ */
+export function useChromeHold(open: boolean, onHold: ((held: boolean) => void) | undefined): void {
+  useEffect(() => {
+    if (!open || onHold === undefined) return undefined;
+    onHold(true);
+    return () => onHold(false);
+  }, [open, onHold]);
 }

@@ -167,14 +167,19 @@ final class ComposerObjectEditorTests: XCTestCase {
 
     /// **LE témoin de la directive.** Créer et modifier passent par le même
     /// site : recopier ses lignes chez l'un des deux est exactement ce qui les
-    /// faisait diverger.
+    /// faisait diverger. Pour un TEXTE, ce site est la saisie sur scène depuis
+    /// #8680 (`ComposerSceneTextEditingTests`) ; les autres familles gardent
+    /// l'éditeur d'objet.
     func test_creerEtModifier_empruntentLeMemeSite() throws {
-        let intake = compact(try hostUnit())
-        let surfaces = compact(try hostUnit())
-        XCTAssertTrue(intake.contains("funcopenObjectEditor("),
+        let code = compact(try hostUnit())
+        XCTAssertTrue(code.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(surfaces.contains("openObjectEditor(id)"),
-                      "L'appui long « Modifier » doit ouvrir le MÊME écran que la création.")
+        XCTAssertTrue(code.contains("openObjectEditor(id)"),
+                      "« Modifier » sur un média, un sticker ou un lieu ouvre l'éditeur d'objet.")
+        XCTAssertTrue(code.contains("ifletobjet=viewModel.addText(){beginSceneTextEditing(objet.id)}"),
+                      "Créer un texte ouvre la saisie sur scène.")
+        XCTAssertTrue(code.contains("case.text:beginSceneTextEditing(id)"),
+                      "Modifier un texte ouvre la MÊME saisie que sa création (#8680).")
     }
 
     /// Le site unique ferme le portail AVANT d'ouvrir : `fullScreenCover` et
@@ -447,7 +452,7 @@ final class ComposerObjectEditorTests: XCTestCase {
              ".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))",
              ".padding(.vertical,8)"),
             ("le couloir des PORTES", leading,
-             ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint))",
+             ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint,tint:glassTint))",
              ".padding(axis==.vertical?.vertical:.horizontal,ComposerRailGeometry.floatingColumnPadding)")
         ] {
             let nu = AppSourceGuard.stripComments(source)

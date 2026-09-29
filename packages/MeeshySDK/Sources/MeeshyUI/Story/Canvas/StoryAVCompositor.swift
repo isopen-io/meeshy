@@ -29,6 +29,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     private nonisolated let contextQueue = DispatchQueue(label: "me.meeshy.story.compositor.context")
     private nonisolated(unsafe) var _renderContext: AVVideoCompositionRenderContext?
     private nonisolated(unsafe) var _shouldCancelAllRequests = false
+    private nonisolated(unsafe) var _audioChipPainter: StoryAudioChipPainter?
 
     /// Layer-tree cache reused across the export's frames. AVFoundation
     /// instantiates one `StoryAVCompositor` per export session via
@@ -194,6 +195,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          },
                                          stickerImageURLs: instruction.stickerImageURLs,
                                          images: instruction.images,
+                                         animations: instruction.animations,
+                                         audioChipPainter: self.sharedAudioChipPainter(),
                                          watermark: instruction.watermark,
                                          brandUnderlay: introFrame,
                                          storyOpacity: storyAlpha,
@@ -205,6 +208,17 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                 }
             }
         }
+    }
+
+    /// Le peintre des puces de son de CETTE session d'export (#8611) : ses
+    /// gabarits — verre teinté, liseré, icône, crédit — se rasterisent une
+    /// fois pour toutes les images, pas une fois par image.
+    @MainActor
+    internal func sharedAudioChipPainter() -> StoryAudioChipPainter {
+        if let existing = _audioChipPainter { return existing }
+        let created = StoryAudioChipPainter()
+        _audioChipPainter = created
+        return created
     }
 
     /// Lazily creates (on first call) and returns the per-export shared
@@ -249,6 +263,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                                      stickerImageURLs: [String: URL] = [:],
                                      images: [String: UIImage] = [:],
+                                     animations: [String: Data] = [:],
+                                     audioChipPainter: StoryAudioChipPainter? = nil,
                                      watermark: StoryExportWatermark? = nil,
                                      brandUnderlay: CVPixelBuffer? = nil,
                                      storyOpacity: CGFloat = 1,
@@ -284,7 +300,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                             at: time,
                                             mode: .play,
                                             languages: languages,
-                                            imageCache: stickerImageCache(for: stickerImageURLs, images: images),
+                                            imageCache: stickerImageCache(for: stickerImageURLs, images: images,
+                                                                          animations: animations),
                                             cache: cache,
                                             backdropProvider: { frame in
                                                 backdropCapture.cropRegion(frame)
@@ -292,11 +309,9 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                             mediaFrameProvider: mediaFrameProvider,
                                             contentsScale: 1.0,
                                             reduceMotion: false)
-            // Les puces des sons posés sur la scène (#8599) : à l'écran une
-            // surcouche SwiftUI, absente de l'arbre — ajoutées ici au-dessus.
-            StoryRenderer.audioChipLayers(for: slide, into: geometry, at: time)
-                .forEach(tree.addSublayer)
-
+            // `render(in:)` ne fait tourner aucune animation : l'image de
+            // chaque GIF se pose ici, au temps de la frame (#8610).
+            StoryRenderer.advanceAnimatedStickers(in: tree, at: time)
             // Opening transition — only visible during the first
             // `StoryRenderer.slideTransitionDuration`. The live canvas uses
             // `CABasicAnimation`, but `layer.render(in:)` doesn't run the
@@ -461,6 +476,15 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
 
         layer.render(in: cg)
 
+        // Les puces des sons posés sur la scène (#8599, #8609) : à l'écran une
+        // surcouche SwiftUI, absente de l'arbre — peintes ici par-dessus, sur
+        // les pixels déjà posés, que leur verre floute. Dans un calque de
+        // transparence ouvert, ces pixels ne sont pas encore dans le tampon :
+        // la capsule prend alors sa teinte pleine.
+        (audioChipPainter ?? StoryAudioChipPainter())
+            .paint(slide: slide, into: CanvasGeometry(renderSize: renderSize), at: time,
+                   in: cg, samplesBackdrop: !blendsStory)
+
         if let watermark {
             watermark.draw(in: cg,
                            renderSize: canvasSize,
@@ -550,7 +574,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     @MainActor
     private static var backgroundImageMemo: (key: String, image: UIImage)?
 
-    /// Bitmaps des stickers IMAGE, décodés une fois par jeu d'adresses.
+    /// Bitmaps des stickers IMAGE, décodés une fois par jeu d'adresses — et,
+    /// pour un fichier ANIMÉ (GIF, APNG…), ses octets (#8610).
     ///
     /// Même contrat que `backgroundImageMemo` : appelé à CHAQUE frame, mémoïsé
     /// sur son entrée — le jeu d'adresses est constant pour toute la session
@@ -558,7 +583,12 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// Même contrepartie assumée : le dernier jeu de bitmaps reste retenu
     /// jusqu'à l'export suivant.
     @MainActor
-    private static var stickerImagesMemo: (urls: [String: URL], images: [String: UIImage])?
+    private static var stickerImagesMemo: (urls: [String: URL], files: StickerFiles)?
+
+    private struct StickerFiles {
+        let images: [String: UIImage]
+        let animations: [String: Data]
+    }
 
     /// Le lecteur SYNCHRONE des bitmaps de stickers pour une session d'export.
     ///
@@ -569,28 +599,38 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// la couche peint alors son repli 🖼️, jamais un trou. `nil` quand la
     /// story n'adresse aucun sticker image, pour que le rendu des autres
     /// stories reste celui d'avant.
+    ///
+    /// Les octets ANIMÉS voyagent à côté des bitmaps (#8610) : ceux d'un
+    /// fichier publié qui est un GIF, et ceux que le composer tient en mémoire
+    /// (`animations`, qui priment comme `images`).
     @MainActor
     internal static func stickerImageCache(for stickerImageURLs: [String: URL],
-                                           images: [String: UIImage] = [:]) -> ImageCacheReader? {
-        guard !stickerImageURLs.isEmpty || !images.isEmpty else { return nil }
-        let decoded = decodedStickerImages(for: stickerImageURLs)
+                                           images: [String: UIImage] = [:],
+                                           animations: [String: Data] = [:]) -> ImageCacheReader? {
+        guard !stickerImageURLs.isEmpty || !images.isEmpty || !animations.isEmpty else { return nil }
+        let files = decodedStickerFiles(for: stickerImageURLs)
         // Les bitmaps en mémoire PRIMENT (#8599) : c'est la version que
         // l'auteur voit, retouches comprises. La fusion n'est pas mémoïsée —
         // quelques entrées par frame, et aucune rétention au-delà de l'export.
-        return ComposerImageCacheReader(images: decoded.merging(images) { _, memoire in memoire },
+        return ComposerImageCacheReader(images: files.images.merging(images) { _, memoire in memoire },
+                                        animations: files.animations.merging(animations) { _, memoire in memoire },
                                         version: 0)
     }
 
     @MainActor
-    private static func decodedStickerImages(for stickerImageURLs: [String: URL]) -> [String: UIImage] {
-        guard !stickerImageURLs.isEmpty else { return [:] }
-        if let memo = stickerImagesMemo, memo.urls == stickerImageURLs { return memo.images }
-        let images = stickerImageURLs.reduce(into: [String: UIImage]()) { result, entry in
-            guard let image = UIImage(contentsOfFile: entry.value.path) else { return }
-            result[entry.key] = image
+    private static func decodedStickerFiles(for stickerImageURLs: [String: URL]) -> StickerFiles {
+        guard !stickerImageURLs.isEmpty else { return StickerFiles(images: [:], animations: [:]) }
+        if let memo = stickerImagesMemo, memo.urls == stickerImageURLs { return memo.files }
+        var images: [String: UIImage] = [:]
+        var animations: [String: Data] = [:]
+        for (key, url) in stickerImageURLs {
+            guard let bytes = try? Data(contentsOf: url), let image = UIImage(data: bytes) else { continue }
+            images[key] = image
+            if AnimatedImageDecoder.animates(bytes) { animations[key] = bytes }
         }
-        stickerImagesMemo = (stickerImageURLs, images)
-        return images
+        let files = StickerFiles(images: images, animations: animations)
+        stickerImagesMemo = (stickerImageURLs, files)
+        return files
     }
 
     /// Resolves the bitmap for a slide whose background is an image.
@@ -831,6 +871,8 @@ public final class StoryCompositionInstruction: NSObject,
     /// #8599) — ils priment sur les fichiers de `stickerImageURLs` et sur la
     /// `mediaURL` du fond image.
     public let images: [String: UIImage]
+    /// Octets ANIMÉS des stickers (`StoryExportInputs.animations`, #8610).
+    public let animations: [String: Data]
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     /// Pistes que ce segment consomme RÉELLEMENT.
@@ -856,8 +898,10 @@ public final class StoryCompositionInstruction: NSObject,
                             outroFade: CMTimeRange? = nil,
                             requiredSourceTrackIDs: [NSValue]? = nil,
                             stickerImageURLs: [String: URL] = [:],
-                            images: [String: UIImage] = [:]) {
+                            images: [String: UIImage] = [:],
+                            animations: [String: Data] = [:]) {
         self.requiredSourceTrackIDs = requiredSourceTrackIDs
+        self.animations = animations
         self.stickerImageURLs = stickerImageURLs
         self.images = images
         self.slide = slide

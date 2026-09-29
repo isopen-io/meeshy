@@ -915,7 +915,7 @@ struct ConversationView: View {
                     // par un grisé.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur
+                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
                 )
                 MessageMoreSheet(
                     message: msg,
@@ -968,7 +968,7 @@ struct ConversationView: View {
                         UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                         HapticFeedback.success()
                     },
-                    onShare: { overlayState.shareMessage = msg },
+                    onShare: { overlayState.shareMessage = msg }, onImagine: { beginMessageExport(msg, quick: false) },
                     onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
@@ -1536,6 +1536,7 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     composerState.composeMediaTarget = ComposerSeedTarget(message: msg)
                 },
+                onImagineFromMessage: { messageId in if let msg = viewModel.messages.first(where: { $0.id == messageId }) { beginMessageExport(msg, quick: false) } },
                 // « Plus… » ouvre le GRAND menu — `MessageMoreSheet`, présentée
                 // par `overlayState.detailSheetMessage` — et non l'overlay
                 // d'appui long. Directive porteur : « le plus doit ouvrir le
@@ -1544,8 +1545,7 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg
                 },
-                // La règle d'éditabilité est REMISE, pas recopiée : c'est la
-                // même expression que les trois autres sites de ce fichier.
+                // La règle d'éditabilité est REMISE, pas recopiée : même expression que les trois autres sites de ce fichier.
                 canEditMessage: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return false }
                     return msg.isMe || isCurrentUserAdminOrMod

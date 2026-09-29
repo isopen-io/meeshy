@@ -111,6 +111,7 @@ struct FloatingCallPillView: View {
     /// sur `CallManager`, qui ne concernent que la bulle repliée).
     @State private var pillDragOffset: CGFloat = 0
     @State private var pillLastDragSample: (time: Date, translationWidth: CGFloat)?
+    @State private var showQualityDetail = false
 
     private let pillHeight: CGFloat = 64
 
@@ -216,6 +217,7 @@ struct FloatingCallPillView: View {
         .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
             collapseToBubble(exitTranslation: 1)
         }
+        .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
 
     // MARK: - User Info
@@ -227,6 +229,18 @@ struct FloatingCallPillView: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
 
+            statusEntry
+        }
+    }
+
+    /// Une fois l'appel établi, la ligne d'état — durée et glyphe signal —
+    /// ouvre la feuille « Qualité » de l'écran d'appel (#8208), comme le
+    /// badge de durée qu'elle réduit. Avant, rien à mesurer : la toucher
+    /// revient au plein écran, comme le reste de la bannière.
+    @ViewBuilder private var statusEntry: some View {
+        if pillStatus.isConnected {
+            statusLine.callQualityDetailTrigger(isPresented: $showQualityDetail)
+        } else {
             statusLine
         }
     }
@@ -312,28 +326,28 @@ struct FloatingCallPillView: View {
         .toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
+    /// #8208 — le menu « Sortie » de l'écran d'appel, habillé pour l'aplat
+    /// indigo : toucher bascule le haut-parleur, maintenir ouvre le sélecteur
+    /// de sortie (AirPods, Bluetooth, AirPlay) sans quitter l'écran en cours.
     private var speakerButton: some View {
-        Button {
-            callManager.toggleSpeaker()
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
+        CallOutputMenu(
+            isSpeaker: callManager.isSpeaker,
+            onToggleSpeaker: {
+                callManager.toggleSpeaker()
+                HapticFeedback.light()
+            }
+        ) { route in
+            Image(systemName: route.outputSymbol(isSpeaker: callManager.isSpeaker))
                 .font(.subheadline.weight(.medium))
                 // indigo200, pas indigo400 : ce dernier ne tient que 2.1:1
                 // contre l'aplat indigo de la bannière (CallBannerContrastTests).
-                .foregroundColor(callManager.isSpeaker ? CallBannerContrast.speakerActiveTint : .white)
+                .foregroundColor(callManager.isSpeaker || route.routesExternally ? CallBannerContrast.speakerActiveTint : .white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(callManager.isSpeaker ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(callManager.isSpeaker || route.routesExternally ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
                 )
         }
-        .pressable()
-        .accessibilityLabel(callManager.isSpeaker
-            ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
-            : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
-        .accessibilityHint(String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main))
-        .toggleStateAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
     private var hangupButton: some View {

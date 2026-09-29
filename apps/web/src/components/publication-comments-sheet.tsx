@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { CommentThread } from '@/components/comment-thread';
 import { Glyph } from '@/components/glyph';
@@ -6,7 +6,9 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
+import type { WritingBar } from '@/lib/view/use-comments-sheet-host';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
+import { useKeyboardInset, useWritingBarReport } from '@/lib/view/use-writing-bar';
 
 /**
  * **LE FIL DE COMMENTAIRES D'UNE PUBLICATION**, posé en feuille au-dessus du
@@ -54,11 +56,21 @@ import { usePublicationRoom } from '@/lib/view/use-publication-room';
 export type PublicationCommentsSheetProps = {
   readonly postId: string;
   readonly onClose: () => void;
+  /** ON ÉCRIT (#8643) : la feuille rapporte sa barre à l'hôte, qui réduit sa
+   * scène au-dessus d'elle ; `null` quand on revient à la lecture. */
+  readonly onWritingBar?: (bar: WritingBar | null) => void;
 };
 
-export function PublicationCommentsSheet({ postId, onClose }: PublicationCommentsSheetProps) {
+export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: PublicationCommentsSheetProps) {
   const language = currentInterfaceLanguage();
   const panneau = useRef<HTMLDivElement | null>(null);
+  /* ÉCRIRE (#8643, jumelle de #8642) : la liste se retire — la scène réduite
+     prend sa place au-dessus du composeur —, la feuille se pose au-dessus du
+     clavier virtuel, et sa barre est rapportée à l'hôte. Replier (⌄) ou
+     envoyer rend la lecture. */
+  const [writing, setWriting] = useState(false);
+  const keyboardInset = useKeyboardInset(writing);
+  useWritingBarReport({ sheet: panneau, writing, keyboardInset, report: onWritingBar });
   /* LA SALLE DE LA STORY, tant que son fil est ouvert (#7395) — un contact DM
      qui n'est pas ami peut lire le fil d'une story `FRIENDS`
      (`canUserConsumePost`), mais il n'est dans aucun salon de fil : sans la
@@ -70,6 +82,11 @@ export function PublicationCommentsSheet({ postId, onClose }: PublicationComment
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
+      /* Un `<dialog>` ouvert PAR-DESSUS (motifs de « Signaler », atelier
+         « Imagine », #8734) possède son Échap : il se ferme seul (action par
+         défaut, que l'arrêt de propagation ne retient pas), et ni la feuille
+         ni le lecteur dessous ne se ferment avec lui. */
+      if (e.target instanceof Element && e.target.closest('dialog[open]') !== null) return;
       onClose();
     };
     document.addEventListener('keydown', onKey, true);
@@ -157,6 +174,7 @@ export function PublicationCommentsSheet({ postId, onClose }: PublicationComment
            feuille laissait son composeur SOUS l'indicateur d'accueil d'un
            iPhone. Le fond de la feuille s'étend dessous ; le contenu, non. */
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        bottom: writing ? keyboardInset : 0,
         borderTopLeftRadius: 18,
         borderTopRightRadius: 18,
         zIndex: 3,
@@ -177,7 +195,7 @@ export function PublicationCommentsSheet({ postId, onClose }: PublicationComment
           <Glyph name="x" size={16} />
         </button>
       </div>
-      <CommentThread postId={postId} />
+      <CommentThread postId={postId} onWritingChange={setWriting} foldOnSend listHidden={writing} />
     </div>
   );
 }

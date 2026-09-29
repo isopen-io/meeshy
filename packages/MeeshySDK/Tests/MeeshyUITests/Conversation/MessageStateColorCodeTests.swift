@@ -71,4 +71,25 @@ final class MessageStateColorCodeTests: XCTestCase {
         XCTAssertTrue(labels.contains(MessageProtectionChrome.viewOnceA11y))
         XCTAssertTrue(labels.contains(MessageProtectionChrome.blurredLabel))
     }
+
+    /// #8635 — la flamme-œil n'a pas de capsule (son filigrane est muet) :
+    /// VoiceOver doit quand même dire qu'elle disparaît après lecture.
+    func test_accessibilityLabels_announceTheAfterReadMessage() {
+        let descriptor = MessageProtectionDescriptor.resolve(
+            flags: [.ephemeral, .ephemeralAfterRead], servedExpiresAt: nil, ephemeralDuration: nil,
+            localReceivedAt: nil, now: deadline
+        )
+        let labels = MessageProtectionChrome.accessibilityLabels(for: descriptor, now: deadline)
+        XCTAssertEqual(labels, [MessageProtectionChrome.afterReadA11y])
+        XCTAssertFalse(MessageProtectionChrome.afterReadA11y.isEmpty)
+    }
+
+    func test_accessibilityLabels_afterReadWithBlur_saysBoth() {
+        let descriptor = MessageProtectionDescriptor.resolve(
+            flags: [.ephemeral, .ephemeralAfterRead, .blurred], servedExpiresAt: nil, ephemeralDuration: nil,
+            localReceivedAt: nil, now: deadline
+        )
+        let labels = MessageProtectionChrome.accessibilityLabels(for: descriptor, now: deadline)
+        XCTAssertEqual(labels, [MessageProtectionChrome.afterReadA11y, MessageProtectionChrome.blurredLabel])
+    }
 }

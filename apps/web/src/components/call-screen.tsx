@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
@@ -7,27 +7,30 @@ import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CallPeerAlerts } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
-import { CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, type SelfView } from '@/components/call-stage';
+import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
+import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { callControlSet, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
+import { callControlSet, chromeInteractive, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
-import { mineInMenu, selfControlsPlace } from '@/lib/calls/call-self-controls';
+import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
-import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
+import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from '@/lib/calls/video-effects';
+
+import type { EffectsCompanion } from './call-effects-companions';
 
 /**
  * **L'ÉCRAN D'APPEL** (#6382, #8045, #8391) — miroir de `CallView.swift` et
@@ -67,16 +70,6 @@ const INK_2 = 'rgba(255,255,255,0.72)';
 const BACKDROP = 'linear-gradient(180deg, #16131f 0%, #07060b 100%)';
 const HANGUP = '#ef4444';
 const ANSWER = '#22c55e';
-
-function useSecondTick(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return undefined;
-    const handle = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(handle);
-  }, [active]);
-  return now;
-}
 
 /* Refuser et Accepter gardent leur couleur de signal ; le neutre prend le verre d'appel. */
 const SIGNAL_TONE = { danger: { background: HANGUP, color: INK }, accept: { background: ANSWER, color: INK } } as const;
@@ -128,13 +121,25 @@ function RoundButton({
   );
 }
 
-const CallCaptionsPanel = lazy(() =>
-  import('./call-captions-panel').then((module) => ({
-    default: module.CallCaptionsPanel,
-  })),
-);
+/**
+ * Un chunk chargé UNE fois — et rechargé après un échec : un préchargement
+ * raté (réseau coupé) ne condamne pas le premier toucher qui en a besoin.
+ */
+function once<T>(load: () => Promise<T>): () => Promise<T> {
+  const memo: { pending: Promise<T> | null } = { pending: null };
+  return () => {
+    memo.pending ??= load().catch((error: unknown) => {
+      memo.pending = null;
+      throw error;
+    });
+    return memo.pending;
+  };
+}
 
-const loadActions = () => import('./call-control-actions');
+const loadCaptions = once(() => import('./call-captions-panel'));
+const CallCaptionsPanel = lazy(() => loadCaptions().then((module) => ({ default: module.CallCaptionsPanel })));
+
+const loadActions = once(() => import('./call-control-actions'));
 
 const CallPreview = lazy(() => import('./call-preview').then((module) => ({ default: module.CallPreview })));
 
@@ -144,22 +149,79 @@ const ROWS_KIT: CallRowsKit = { Button: CallButton, glyphs: CALL_VIEW_GLYPHS, on
 
 const CallCameraControls = lazy(() => loadActions().then((module) => ({ default: module.CallCameraControls })));
 
-const CallEffectsMode = lazy(() =>
+const loadEffectsMode = once(() =>
   import('./call-effects-mode').then(async (module) => {
     await module.loadEffectsModeText(currentInterfaceLanguage());
     return { default: module.CallEffectsMode };
   }),
 );
-const CallMontageMode = lazy(() =>
+const CallEffectsMode = lazy(loadEffectsMode);
+const loadMontageMode = once(() =>
   import('./call-montage-mode').then(async (module) => {
     await module.loadMontageModeText(currentInterfaceLanguage());
     return { default: module.CallMontageMode };
   }),
 );
-const CallReactionPalette = lazy(() => import('./call-control-panels').then((module) => ({ default: module.CallReactionPalette })));
-const CallRecordChoice = lazy(() => import('./call-control-panels').then((module) => ({ default: module.CallRecordChoice })));
-const CallPeopleSheet = lazy(() => import('./call-people-sheet').then((module) => ({ default: module.CallPeopleSheet })));
-const CallJournalPanel = lazy(() => import('./call-journal-panel').then((module) => ({ default: module.CallJournalPanel })));
+const CallMontageMode = lazy(loadMontageMode);
+/* L'atelier des cadres de capture (#8743) : son chunk à lui, que le mode Montage charge À SON ENTRÉE, jamais préchargé avec l'appel. */
+const loadFrameStudio = () => import('@/lib/calls/frames/frame-studio');
+const loadPanels = once(() => import('./call-control-panels'));
+const CallReactionPalette = lazy(() => loadPanels().then((module) => ({ default: module.CallReactionPalette })));
+const CallRecordChoice = lazy(() => loadPanels().then((module) => ({ default: module.CallRecordChoice })));
+const loadPeople = once(() => import('./call-people-sheet'));
+const CallPeopleSheet = lazy(() => loadPeople().then((module) => ({ default: module.CallPeopleSheet })));
+const loadJournal = once(() => import('./call-journal-panel'));
+const CallJournalPanel = lazy(() => loadJournal().then((module) => ({ default: module.CallJournalPanel })));
+
+/**
+ * CE QU'UN TOUCHER VA DEMANDER, CHARGÉ AVANT LUI (#8735) — chaque mode et
+ * chaque panneau vit dans son chunk ; le premier toucher sur « Effets »,
+ * « Réagir » ou « Sortie » attendait le réseau (et le catalogue du studio)
+ * devant un écran vidé, et se lisait comme un toucher « qui n'a pas pris ».
+ * L'appel vivant, ils se chargent quand le navigateur souffle, au plus tard
+ * quand `(…)` s'ouvre.
+ */
+const PREFETCH: readonly (() => Promise<unknown>)[] = [
+  loadActions,
+  loadEffectsMode,
+  loadMontageMode,
+  loadPanels,
+  loadPeople,
+  loadJournal,
+  loadCaptions,
+  () => import('./call-devices-sheet'),
+  () => import('./call-quality-detail'),
+];
+
+const prefetchCallChunks = (): void => PREFETCH.forEach((load) => void load().catch(() => undefined));
+
+/** Quand le navigateur souffle — `requestIdleCallback`, sinon un peu plus tard. */
+function whenIdle(run: () => void): () => void {
+  if (typeof requestIdleCallback === 'function') {
+    const handle = requestIdleCallback(run, { timeout: 2000 });
+    return () => cancelIdleCallback(handle);
+  }
+  const handle = setTimeout(run, 1200);
+  return () => clearTimeout(handle);
+}
+
+/** Le mode en chemin (#8735) : l'écran ne reste pas vide, et ✕ en sort avant même que le carrousel n'arrive. */
+export function CallModePending({ label, glyph, onExit }: { readonly label: string; readonly glyph: ReactNode; readonly onExit: () => void }) {
+  return (
+    <div className="flex w-full flex-col items-center gap-3" data-call-mode-pending="">
+      <div aria-hidden className="flex h-24 items-center gap-2">
+        {[0.82, 1.1, 0.82].map((scale, index) => (
+          <span key={index} className="size-16 rounded-full bg-white/15" style={{ scale: String(scale) }} />
+        ))}
+      </div>
+      <div className="flex w-full justify-start px-6">
+        <button type="button" aria-label={label} title={label} onClick={onExit} className="glass-call grid size-12 place-items-center rounded-full text-white">
+          {glyph}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** Le bouton qui a ouvert chaque panneau : le focus y revient quand on revient au menu. */
 const PANEL_OPENER: Readonly<Record<CallPanelKind, string>> = {
@@ -255,18 +317,19 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [selfFull, setSelfFull] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
+  const [holds, setHolds] = useState(0);
+  const hold = useCallback((held: boolean) => setHolds((count) => Math.max(0, count + (held ? 1 : -1))), []);
   const focusNext = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
-  const now = useSecondTick(call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
   const phase = call.phase.kind;
   const joined = phase === 'connected' || phase === 'reconnecting';
   const statusKey = callStatusKey(call);
   const layout = joined ? callLayout(call) : 'portrait';
   const live = phase !== 'ended' && phase !== 'incoming';
-  const clock = call.connectedAt === null ? null : formatCallClock(elapsedSeconds(call, now));
   const endedClock = phase === 'ended' && call.endedDurationSec !== null && call.endedDurationSec > 0 ? formatCallClock(call.endedDurationSec) : null;
   const spotlight =
     layout === 'grid'
@@ -284,6 +347,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const canFlip = useCanFlip(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip, videoScene });
   const place = selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
+  const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
     montage: set.call.includes('capture'),
@@ -294,7 +358,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   };
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
-  const chromeHidden = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, controls, held: !chrome.autoHide });
+  const visibility = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, controls, held: !chrome.autoHide || holds > 0 });
   const send = (event: CallLayerEvent) => {
     const next = nextLayer(shown, event);
     focusNext.current = focusTarget(shown, next);
@@ -306,8 +370,14 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
 
   useEffect(() => {
-    if (live) void loadActions().catch(() => undefined);
+    if (!live) return undefined;
+    void loadActions().catch(() => undefined);
+    return whenIdle(prefetchCallChunks);
   }, [live]);
+
+  useEffect(() => {
+    if (expanded) prefetchCallChunks();
+  }, [expanded]);
 
   useEffect(() => {
     if (shown !== layer) setLayer(shown);
@@ -352,7 +422,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         </p>
       ) : null}
       <p className="text-body" role="status" aria-live="polite" style={{ color: INK_2 }} data-call-status="">
-        {statusKey === null ? clock : t(statusKey)}
+        {statusKey === null ? <CallClock call={call} active={joined} /> : t(statusKey)}
         {endedClock === null ? null : ` · ${endedClock}`}
       </p>
     </div>
@@ -378,17 +448,28 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     full: selfFull,
     onToggle: () => setSelfFull((full) => !full),
     controls: chrome.selfControls,
-    row: () =>
+    mine: set.mine,
+    row: (group) =>
       place === 'menu' ? null : (
-        <div className={fade} aria-hidden={hidden ? true : undefined} data-call-self-controls-holder={place}>
+        <div className={fade} aria-hidden={unreachable ? true : undefined} data-call-self-controls-holder={place}>
           <Suspense fallback={null}>
-            <CallCameraControls call={call} set={set} language={language} panels={panels} kit={ROWS_KIT} place={place} />
+            <CallCameraControls
+              call={call}
+              set={set}
+              language={language}
+              panels={panels}
+              kit={ROWS_KIT}
+              place={place}
+              local={zoomControlIn(place) === 'step' && group !== 'effects' ? local : null}
+              group={group}
+              only={group === undefined ? undefined : SELF_CONTROL_GROUPS[group]}
+            />
           </Suspense>
         </div>
       ),
     column: (capsule) =>
       capsule === null ? null : (
-        <div className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-self-column="">
+        <div className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${fade}`} aria-hidden={unreachable ? true : undefined} data-call-self-column="">
           {capsule}
         </div>
       ),
@@ -424,7 +505,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   );
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
-  const hidden = chromeHidden || immersive;
+  const hidden = visibility !== 'shown' || immersive;
+  /* Effacées par l'attente, elles répondent encore au doigt (#8735) : seules
+     celles qu'un toucher a rangées — ou le plein écran — le laissent passer. */
+  const chromeState = immersive ? 'dismissed' : visibility;
+  const unreachable = !chromeInteractive(chromeState);
   /* Les sous-titres ne s'effacent JAMAIS avec les commandes : posés dans le
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
@@ -456,6 +541,18 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     }
   };
   const exitMode = () => send({ type: 'exit-mode' });
+  /* Les autres, qui accompagnent mon image en mode Effets (#8737), dans leur ordre d'arrivée. */
+  const companionOf = (member: CallMember): EffectsCompanion => {
+    const stream = call.remoteStreams[member.userId] ?? null;
+    const shows = (member.cameraOn || member.screenSharing) && hasVideo(stream);
+    return {
+      id: member.userId,
+      name: member.name,
+      color: speakerColor(member.userId),
+      render: (width) =>
+        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} />,
+    };
+  };
   const callAudio = (): readonly MediaStream[] => [call.localStream, ...Object.values(call.remoteStreams)].filter((stream): stream is MediaStream => stream !== null);
   const mode =
     chrome.mode === 'effects' ? (
@@ -463,16 +560,22 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         language={language}
         colorAvailable={support.color}
         blurAvailable={support.blur}
-        preview={<StreamVideo stream={call.localStream} mirrored={call.facing === 'user' && !call.screenSharing} className="size-full" />}
+        preview={<StreamVideo stream={call.localStream} mirrored={selfPreviewMirrored(call)} className="size-full" videoRef={myPreview} />}
+        selfVideo={() => myPreview.current}
+        companions={Object.values(call.members).map(companionOf)}
+        captions={call.captions}
         quitGlyph={closeGlyph}
         onExit={exitMode}
         onWheel={onRowWheel}
         audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} />
     ) : null;
-  const fade = `transition-opacity duration-300 motion-reduce:transition-none ${hidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`;
+  /* Le fondu ne retire JAMAIS le doigt à un bouton encore visible (#8735) :
+     rangées d'un toucher, les commandes deviennent `invisible` à la FIN du
+     fondu (la visibilité suit la transition), et reviennent d'un coup. */
+  const fade = `duration-300 motion-reduce:transition-none ${!hidden ? 'transition-opacity opacity-100' : unreachable ? 'transition-[opacity,visibility] opacity-0 invisible' : 'transition-opacity opacity-0'}`;
 
   return (
     <div
@@ -484,6 +587,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       style={{ background: BACKDROP, color: INK }}
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
+      data-call-chrome-state={chromeState}
       data-call-layer={shown.kind}
     >
       {call.preview === null ? null : (
@@ -499,14 +603,14 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         {chrome.header ? (
-          <div className={`relative z-20 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-plane="">
-            <CallScreenHeader call={call} language={language} clock={joined ? clock : null} prominent={sharedScreenShown} />
+          <div className={`relative z-20 ${fade}`} aria-hidden={unreachable ? true : undefined} data-call-plane="">
+            <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} onHold={hold} />
           </div>
         ) : null}
         {layout === 'grid' ? (
           <>
             {immersive || chrome.mode !== null ? null : (
-              <div className={fade} aria-hidden={hidden ? true : undefined}>
+              <div className={fade} aria-hidden={unreachable ? true : undefined}>
                 {pillRow}
               </div>
             )}
@@ -515,7 +619,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             </div>
           </>
         ) : overlayVideo ? (
-          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} aria-hidden={hidden || chrome.mode !== null ? true : undefined}>
+          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} aria-hidden={unreachable || chrome.mode !== null ? true : undefined}>
             {sharer === null ? null : (
               <span className="glass-call-prominent rounded-full px-3 py-1 text-mini" role="status" data-call-screen-banner="">
                 {translate(language, 'call.screen.peerSharing', {
@@ -536,7 +640,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           <div className="relative z-20 flex flex-col gap-3 pb-6" data-call-plane="">
             {captionsFramed ? null : <div className="relative z-10">{captions}</div>}
             {mode === null ? (
-              <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
+              <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={unreachable ? true : undefined} data-call-controls="">
                 <CallControlPill
                   call={call}
                   language={language}
@@ -548,10 +652,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                   panels={panels}
                   kit={ROWS_KIT}
                   panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
+                  onHold={hold}
                 />
               </div>
             ) : (
-              <Suspense fallback={null}>{mode}</Suspense>
+              <Suspense fallback={<CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>
             )}
           </div>
         ) : (

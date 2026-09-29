@@ -143,6 +143,22 @@ export function createAccountVault({ storage, now }: { readonly storage: Session
   };
 }
 
+/**
+ * « RETIRER CE COMPTE » EFFACE AUSSI CE QU'IL A LAISSÉ SUR L'APPAREIL (#8674)
+ * — son cache de requêtes rangé, ses brouillons, ses modes de lecture : un
+ * compte qui quitte la liste ne laisse rien derrière lui. Changer de compte,
+ * lui, n'appelle jamais `forget`.
+ */
+export function forgettingLocalData(vault: AccountVault, cleanup: (userId: string) => void): AccountVault {
+  return {
+    ...vault,
+    forget: (userId) => {
+      vault.forget(userId);
+      cleanup(userId);
+    },
+  };
+}
+
 export type SwitchOutcome = 'switched' | 'needs-password';
 
 export type AccountSwitcher = {
@@ -226,8 +242,8 @@ export function purgeAccountLocalData({
   readonly keys: readonly string[];
 }): void {
   const scope = `u_${userId}`;
-  const prefixes = [`meeshy.draft.${scope}.`, `meeshy.reading-mode.${scope}.`, `meeshy.last-opened.${scope}.`, `meeshy.composer-protection.${scope}.`];
-  const exact = new Set([`meeshy.draft.story.${userId}`, `meeshy.studio.audience.${userId}`]);
+  const prefixes = [`meeshy.draft.${scope}.`, `meeshy.reading-mode.${scope}.`, `meeshy.last-opened.${scope}.`, `meeshy.composer-protection.${scope}.`, `meeshy.call-journal.${scope}.`];
+  const exact = new Set([`meeshy.draft.story.${userId}`, `meeshy.studio.audience.${userId}`, `meeshy.call-journal.${scope}`]);
   keys
     .filter((key) => exact.has(key) || prefixes.some((prefix) => key.startsWith(prefix)))
     .forEach((key) => {

@@ -398,6 +398,16 @@ struct MeeshyComposerHost: View {
     /// partirait jamais sans qu'on bouge.
     @State var sceneHoldTask: Task<Void, Never>?
 
+    /// Le cadenas de l'appui long (#8671) : `nil` sans doigt, `.locked` dès que
+    /// le glissé l'atteint — et jusqu'au bouton stop, le doigt parti.
+    @State var sceneHoldPhase: ComposerCaptureHold.Phase?
+    @State var sceneLockProgress: Double = 0
+    /// L'ancrage du glissé de zoom en cours (#8671).
+    @State var sceneZoomAnchor: ComposerCaptureZoomAnchor?
+    /// L'intensité du flash, mémorisée d'un viseur à l'autre (#8671).
+    @AppStorage(ComposerFlashIntensity.storageKey)
+    var sceneFlashIntensity: Double = ComposerFlashIntensity.defaultLevel
+
     /// **Le fond dont le menu est ouvert**, `nil` quand aucun ne l'est (#5041).
     ///
     /// Un identifiant plutôt qu'un booléen : le menu agit sur UN objet, et un
@@ -472,8 +482,6 @@ struct MeeshyComposerHost: View {
 
     @State var soundSheetSession = UUID()
 
-
-    @State var showsMediaSourceChooser = false
 
 
 
@@ -615,6 +623,16 @@ struct MeeshyComposerHost: View {
     /// qui dépendent de CET objet — verrouillé ? au fond ? seul de son plan ? —
     /// et aucune ne se répond sans son id.
     @State var selectedSceneItemId: String?
+    /// La catégorie d'effets dont le carrousel est ouvert (#8712) — lue par
+    /// `ComposerSceneEffects.carousel`, jamais telle quelle.
+    @State var openSceneEffect: ComposerSceneEffect?
+    /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
+    /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
+    @State var sceneObjectMenu: ComposerSceneMenuRequest?
+    @State var sceneMenuSize: CGSize = .zero
+    /// Le fond que la prochaine prise du viseur REMPLACE (#8716) — posé par
+    /// « Reprendre une photo », consommé à la pose, oublié au désarmement.
+    @State var sceneCaptureReplacesBackgroundId: String?
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène (#4064).**
     ///
@@ -891,10 +909,16 @@ struct MeeshyComposerHost: View {
     /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
     /// zone contextuelle restant montée pour toujours.
     func handleSceneBackgroundTap() {
+        if handleSceneQuickTap() { return }
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
         )
+        // Toucher le fond QUITTE l'objet (#8714) : ses options quittent la
+        // colonne droite, comme sous le `(x)` — et referme le carrousel
+        // d'effets (#8712), qui rend l'audience et Publier.
+        selectedSceneItemId = nil
+        openSceneEffect = nil
     }
 
     var body: some View {

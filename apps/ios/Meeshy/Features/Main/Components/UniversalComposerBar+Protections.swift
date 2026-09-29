@@ -234,10 +234,8 @@ extension UniversalComposerBar {
     @ViewBuilder
     var viewOnceToggleButton: some View {
         let isActive = isViewOnceEnabled.wrappedValue
-        let isBarred = imposedProtection.blurred
 
         Button {
-            guard !isBarred else { return }
             onAnyInteraction?()
             HapticFeedback.light()
             toggleVeil(.viewOnce)
@@ -269,10 +267,7 @@ extension UniversalComposerBar {
                     )
             )
         }
-        .opacity(isBarred ? 0.4 : 1)
-        .accessibilityLabel(isBarred
-                            ? String(localized: "composer.viewonce.barred_by_imposed_blur", defaultValue: "Vue unique indisponible : flou imposé par le message cité", bundle: .main)
-                            : isActive
+        .accessibilityLabel(isActive
                             ? String(localized: "composer.viewonce.active", defaultValue: "Mode vue unique actif", bundle: .main)
                             : String(localized: "composer.viewonce.activate", defaultValue: "Activer le mode vue unique", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)

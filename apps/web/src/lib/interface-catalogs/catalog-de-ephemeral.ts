@@ -15,6 +15,10 @@ const deEphemeral = {
   'composer.ephemeral.rail': 'Zeit, bis die Nachricht verschwindet',
   'composer.protection.imposed.blur': 'Unschärfe durch die zitierte Nachricht vorgegeben',
   'composer.protection.imposed.ephemeral': 'Ephemerer Modus durch die zitierte Nachricht vorgegeben: {duration}',
+  'message.afterRead.a11y': 'Flüchtige Nachricht, verschwindet nach dem Lesen',
+  'message.ephemeral.label.a11y': 'Flüchtige Nachricht',
+  'message.blurred.a11y': 'Verschwommen',
+  'message.viewOnce.a11y': 'Einmalansicht',
 } satisfies EphemeralCatalogSlice;
 
 export default deEphemeral;

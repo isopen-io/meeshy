@@ -50,17 +50,17 @@ extension CallView {
         // commandes de ma caméra (vignette, haut de l'écran ou (…), #8626).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
         // §7.3 — auto-hide after 4s of no interaction, in duo AND group
-        // video. Re-arms whenever showControls flips to true (a reveal tap)
-        // or the (…) / a panel is used; never while a panel is open, on Mac,
-        // under VoiceOver or without video (shouldAutoHideControls).
-        .task(id: AutoHideKey(isVisible: showControls, layer: layer)) {
-            guard showControls, shouldAutoHideControls else { return }
+        // video. Re-arms whenever showControls flips to true (a reveal tap),
+        // the (…) / a panel is used, AND on every touch of the chrome (#8735:
+        // a pressed button, a scrolled row); never under a finger, never
+        // while a panel is open, on Mac, under VoiceOver or without video.
+        .task(id: AutoHideKey(isVisible: showControls, layer: layer, interactionRevision: chromeTouches.revision)) {
+            guard showControls, mayAutoHideNow else { return }
             try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
-            if !Task.isCancelled {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showControls = false
-                    isCameraMenuUnfolded = false
-                }
+            guard !Task.isCancelled, mayAutoHideNow else { return }
+            withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) {
+                showControls = false
+                isCameraMenuUnfolded = false
             }
         }
         // §7.1 — populate the camera list when video turns on so the « mon
@@ -72,6 +72,7 @@ extension CallView {
         .onDisappear {
             showControls = true
             layer = .idle
+            chromeTouches = chromeTouches.released()
         }
         .adaptiveOnChange(of: currentActionSet) { _, actions in
             let reconciled = layer.reconciled(with: actions)
@@ -174,23 +175,29 @@ extension CallView {
                     }
                 } else {
                     Spacer()
+                }
+
+                VStack(spacing: 12) {
                     // #8396 — le bandeau de sous-titres, juste au-dessus de la
                     // pilule ; il RESTE quand les actions sont rangées, et
                     // quand le chrome se masque.
-                    if showTranscript {
+                    if callManager.isVideoUIActive && showTranscript {
                         captionsBand(hasOwnGlass: true)
                             .padding(.horizontal, 16)
                             .transition(.opacity)
                     }
-                }
 
-                // §7.3 — la pilule et ses actions se masquent avec l'en-tête
-                // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
-                // VoiceOver. Masquées, elles ne captent aucun toucher.
-                callControlsPill
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, Self.chromeBottomInset)
-                    .callChromeVisibility(isChromeVisible)
+                    // §7.3 — la pilule et ses actions se masquent avec l'en-tête
+                    // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
+                    // VoiceOver. Masquées, elles ne captent aucun toucher.
+                    callControlsPill
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, Self.chromeBottomInset)
+                        .callChromeVisibility(isChromeVisible)
+                }
+                // #8735 — les invitations qui sonnent et le mot de retour se
+                // posent AU-DESSUS du bloc, jamais sur ses rangées.
+                .overlay(alignment: .top) { callControlsNoticesAbove }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showTranscript)
         }
@@ -252,7 +259,7 @@ extension CallView {
         VStack(spacing: 8) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
-            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
                 .padding(.horizontal, 12)
             if !isStageFullScreen {
                 ZStack(alignment: .bottom) {
@@ -263,13 +270,24 @@ extension CallView {
                             .transition(.opacity)
                     }
                 }
+                .overlay(alignment: .top) { callControlsNoticesAbove }
                 .padding(.horizontal, 12)
                 .padding(.bottom, Self.chromeBottomInset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.bottom, isStageFullScreen ? DeviceLayout.safeAreaBottom : 0)
+        // #8735 — chrome masqué, TOUTE la scène le rallume : l'en-tête et la
+        // pilule effacés ne laissaient que les 8 pt entre les vignettes.
+        .background(stageRevealTarget)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isStageFullScreen)
+    }
+
+    private var stageRevealTarget: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture { toggleControls() }
+            .accessibilityHidden(true)
     }
 
     /// §7.3 — controls auto-hide only on a video stage (duo or group, #8550),
@@ -281,6 +299,24 @@ extension CallView {
             isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
             isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
         )
+    }
+
+    /// #8735 — la même règle, jamais sous un doigt posé.
+    private var mayAutoHideNow: Bool {
+        CallChromeVisibility.mayAutoHide(
+            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
+            isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning,
+            isTouching: chromeTouches.isTouching
+        )
+    }
+
+    /// #8735 — la porte UNIQUE par laquelle un contrôle dit qu'il est touché
+    /// (`callChromeInteraction`) : chaque toucher réarme le compte à rebours ;
+    /// celui reçu pendant le fondu de disparition rallume le chrome.
+    func noteChromeInteraction(_ interaction: CallChromeInteraction) {
+        chromeTouches = chromeTouches.noting(interaction)
+        guard interaction.revealsChrome, !showControls else { return }
+        withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) { showControls = true }
     }
 
     func toggleControls() {
@@ -536,7 +572,7 @@ extension CallView {
         if local {
             // §7.7 — mirror ONLY the front camera (a mirrored back camera shows
             // reversed text/scene — bug k).
-            CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: contentMode)
+            LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: contentMode)
         } else if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
             CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
         } else if callManager.hasRemoteVideoTrack {

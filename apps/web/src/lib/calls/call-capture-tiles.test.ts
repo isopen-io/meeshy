@@ -6,7 +6,7 @@ import { visibleTiles } from './call-capture-tiles';
 
 /**
  * CE QUE L'ÉCRAN MONTRE (#8552) — seules les vidéos affichées se capturent,
- * chacune à sa place, avec son miroir et son cadrage ; la plus grande d'abord.
+ * chacune à sa place, avec son cadrage, jamais en miroir (#8696) ; la plus grande d'abord.
  */
 
 type Box = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
@@ -15,10 +15,12 @@ const place = (element: Element, box: Box): void => {
   Object.defineProperty(element, 'getBoundingClientRect', { value: () => ({ ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height }) });
 };
 
-const video = (options: { readonly box: Box; readonly width?: number; readonly fit?: string; readonly mirrored?: boolean }): HTMLVideoElement => {
+const video = (options: { readonly box: Box; readonly width?: number; readonly fit?: string; readonly mirrored?: boolean; readonly member?: string; readonly self?: boolean }): HTMLVideoElement => {
   const element = document.createElement('video');
   element.setAttribute('data-call-stream', options.fit ?? 'cover');
   if (options.mirrored === true) element.setAttribute('data-call-mirrored', '');
+  if (options.member !== undefined) element.setAttribute('data-call-member', options.member);
+  if (options.self === true) element.setAttribute('data-call-self', '');
   Object.defineProperty(element, 'videoWidth', { value: options.width ?? 1280 });
   Object.defineProperty(element, 'videoHeight', { value: options.width === 0 ? 0 : 720 });
   place(element, options.box);
@@ -36,13 +38,25 @@ describe('visibleTiles', () => {
     return stage;
   };
 
-  test('la plus grande d’abord, chacune à sa place normalisée, avec son miroir et son cadrage', () => {
+  test('la plus grande d’abord, chacune à sa place normalisée, avec son cadrage, jamais en miroir (#8696)', () => {
     const corner = video({ box: { left: 280, top: 40, width: 100, height: 160 }, mirrored: true });
     const main = video({ box: { left: 0, top: 0, width: 400, height: 800 }, fit: 'contain' });
     const tiles = visibleTiles(stageWith(corner, main));
     expect(tiles.map((tile) => tile.source)).toEqual([main, corner]);
-    expect(tiles[0]).toMatchObject({ fit: 'contain', mirrored: false, onScreen: { x: 0, y: 0, width: 1, height: 1 }, size: { width: 1280, height: 720 } });
-    expect(tiles[1]).toMatchObject({ fit: 'cover', mirrored: true, onScreen: { x: 0.7, y: 0.05, width: 0.25, height: 0.2 } });
+    expect(tiles[0]).toMatchObject({ fit: 'contain', onScreen: { x: 0, y: 0, width: 1, height: 1 }, size: { width: 1280, height: 720 } });
+    expect(tiles.some((tile) => 'mirrored' in tile)).toBe(false);
+    expect(tiles[1]).toMatchObject({ fit: 'cover', onScreen: { x: 0.7, y: 0.05, width: 0.25, height: 0.2 } });
+  });
+
+  test('chaque tuile sait À QUI elle est : le membre qu’elle montre, ou moi (#8743)', () => {
+    const peer = video({ box: { left: 0, top: 0, width: 400, height: 400 }, member: 'u-awa' });
+    const mine = video({ box: { left: 0, top: 400, width: 200, height: 200 }, self: true });
+    const anonymous = video({ box: { left: 200, top: 400, width: 100, height: 100 } });
+    expect(visibleTiles(stageWith(peer, mine, anonymous)).map((tile) => [tile.member, tile.self])).toEqual([
+      ['u-awa', false],
+      [null, true],
+      [null, false],
+    ]);
   });
 
   test('une vidéo sans image ou hors de l’écran ne se capture pas', () => {

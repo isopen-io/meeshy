@@ -160,7 +160,7 @@ final class NotificationBannerPresentationTests: XCTestCase {
                        "le nom SERVEUR ne doit pas survivre au nom local")
     }
 
-    func test_groupMessage_withAttachment_bodyPrefixesTheMediaLabel() throws {
+    func test_groupMessage_withoutServedPreview_fallsBackToTheMediaLabel() throws {
         let event = try makeEvent("""
         {
             "id": "n8", "userId": "u1", "type": "new_message",
@@ -172,6 +172,45 @@ final class NotificationBannerPresentationTests: XCTestCase {
         """)
 
         XCTAssertEqual(event.bannerPresentation().body, "\u{1F4F7} Photo")
+    }
+
+    /// #8723 — capture porteur : « 🎵 Audio • 🎵 Audio · 0:32 · 193 Ko ». La
+    /// passerelle a DÉJÀ composé le libellé du média dans l'aperçu
+    /// (`buildMessageNotificationBodyI18n`) ; le client le préfixait une
+    /// seconde fois. L'aperçu servi est le SEUL site de composition.
+    func test_bannerBody_voiceMessageWithServerComposedLabel_namesTheMediaOnce() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n8b", "userId": "u1", "type": "new_message",
+            "title": "Abed Dollar", "content": "🎵 Audio · 0:32 · 193 Ko",
+            "actor": { "id": "a1", "displayName": "Abed Dollar" },
+            "context": { "conversationType": "direct" },
+            "metadata": {
+                "commentPreview": "🎵 Audio · 0:32 · 193 Ko",
+                "attachments": { "count": 1, "firstType": "audio" }
+            }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.body, "🎵 Audio · 0:32 · 193 Ko")
+        XCTAssertEqual(banner.contentSymbol, "waveform")
+    }
+
+    func test_bannerBody_photoWithCaption_showsTheCaptionAlone_theTileNamesTheMedia() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n8c", "userId": "u1", "type": "new_message",
+            "title": "Alice", "content": "regarde ça",
+            "actor": { "id": "a1", "displayName": "Alice" },
+            "context": { "conversationType": "direct" },
+            "metadata": { "attachments": { "count": 1, "firstType": "image" } }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.body, "regarde ça")
+        XCTAssertEqual(banner.contentSymbol, "photo.fill")
     }
 
     /// Un message protégé (éphémère / vue unique / flouté / chiffré) arrive avec

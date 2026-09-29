@@ -83,6 +83,22 @@ const textOf = (page, selector) => page.$eval(selector, (el) => (el.textContent 
 const textsOf = (page, selector) => page.$$eval(selector, (els) => els.map((el) => (el.textContent ?? '').trim()));
 const shownLinks = (page) => page.$$eval('[data-share-link]', (els) => els.map((el) => el.getAttribute('data-share-link')));
 const actionsOf = (page) => page.$$eval('[data-share-link-action]', (els) => els.map((el) => el.getAttribute('data-share-link-action')));
+/**
+ * Les statistiques d'un lien arrivent par leur PROPRE requête, après la carte
+ * (#8621) : lues au premier rendu, elles rompaient en CI dès que la passerelle
+ * servait en second. On attend l'état SERVI — la valeur exacte, jamais un
+ * délai — et l'invariant reste le même : rien d'autre ne le satisfait.
+ */
+const servedText = (page, selector, expected, timeout = 8000) =>
+  page.waitForFunction(({ target, value }) => (document.querySelector(target)?.textContent ?? '').trim() === value, { target: selector, value: expected }, { timeout }).then(
+    () => true,
+    () => false,
+  );
+const servedCount = (page, selector, expected, timeout = 8000) =>
+  page.waitForFunction(({ target, value }) => document.querySelectorAll(target).length === value, { target: selector, value: expected }, { timeout }).then(
+    () => true,
+    () => false,
+  );
 const announced = (page, text, timeout = 1500) =>
   page.waitForFunction((expected) => document.querySelector('[data-links-announcement]')?.textContent === expected, text, { timeout }).then(
     () => true,
@@ -232,10 +248,10 @@ try {
         `${label} : Partager et Copier le lien sur la carte, Désactiver et Supprimer sous l'édition (#7797) — ${JSON.stringify(await actionsOf(page))}`,
       );
       check((await textOf(page, '[data-share-link-url]')) === 'meeshy.me/chat/equipe-deploiement', `${label} : l'adresse du lien se lit, sans protocole`);
-      check((await textOf(page, '[data-share-link-stat="arrivals"] strong')) === '412', `${label} : les arrivées servies se lisent`);
+      check(await servedText(page, '[data-share-link-stat="arrivals"] strong', '412'), `${label} : les arrivées servies se lisent (${await textOf(page, '[data-share-link-stat="arrivals"] strong')})`);
       check((await textOf(page, '[data-share-link-config="uses"] dd')) === '12 / 50', `${label} : utilisations et maximum dans la configuration`);
       check((await textOf(page, '[data-share-link-config="expires"] dd')) === 'Jamais', `${label} : aucune expiration inventée`);
-      check((await page.$$('[data-share-link-arrival]')).length === 3, `${label} : les trois derniers arrivés`);
+      check(await servedCount(page, '[data-share-link-arrival]', 3), `${label} : les trois derniers arrivés (${(await page.$$('[data-share-link-arrival]')).length})`);
       await capture(page, `detail-${slug}`);
       assertReach(
         label,

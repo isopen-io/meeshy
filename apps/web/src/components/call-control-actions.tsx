@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
@@ -8,9 +8,11 @@ import type { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
 import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
+import type { SelfControlGroup } from '@/lib/calls/call-self-controls';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
 import type { RowKeyHandler, RowWheelHandler } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import type { LocalZoom } from '@/lib/calls/self-zoom';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -264,29 +266,37 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
  * Le défilement d'une rangée : horizontal, LIBRE, sans barre visible (#8575).
  * Aucune accroche : `snap-start` sur chaque bouton ramenait à 0 toute rangée
  * qui ne débordait que d'un bouton, dont le dernier restait hors d'atteinte
- * au doigt.
+ * au doigt. Aucune élasticité non plus (`overscroll-x-none`, #8736) : sur une
+ * rangée courte, le bout est atteint à chaque glissé, et la fin du rebond
+ * local qu'autorisait `contain` terminait le glissé suivant (#8619).
  */
-export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
+export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 /** La légende d'une rangée, en petites capitales. */
 export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
 
 type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit };
 
+const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallZoomStep })));
+
 const CAMERA_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
 
 /**
  * LES COMMANDES DE MA CAMÉRA (#8576, #8626) — Retourner, Couper la caméra,
- * Effets (qui entre dans le mode), Partager l'écran, en une rangée compacte :
- * en bas de ma vignette (`tile`), ou en haut au centre quand mon image
- * remplit l'écran (`top`). ← et → y passent d'un bouton à l'autre.
+ * Effets (qui entre dans le mode), Partager l'écran, et dans ma vignette le
+ * cran du zoom (#8441 : `local`, que l'écran d'appel ne remet qu'à ma
+ * vignette, `zoomControlIn`), en une rangée compacte :
+ * autour de ma vignette (`tile`, #8747 : `group` en pose une moitié —
+ * Effets · Écran au-dessus, Retourner · Couper et le cran en dessous), ou en
+ * haut au centre quand mon image remplit l'écran (`top`). ← et → y passent
+ * d'un bouton à l'autre.
  */
-export function CallCameraControls({ call, set, language, panels, kit, place }: RowsProps & { readonly place: 'tile' | 'top' }) {
+export function CallCameraControls({ call, set, language, panels, kit, place, local, group, only }: RowsProps & { readonly place: 'tile' | 'top'; readonly local: LocalZoom | null; readonly group?: SelfControlGroup | undefined; readonly only?: readonly MineAction[] | undefined }) {
   const context = { call, language, panels, kit };
   const label = translateCallControls(language, 'callControls.camera.options');
   return (
-    <div role="toolbar" aria-label={label} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} className="glass-call flex w-max items-center gap-0.5 rounded-full p-0.5" data-call-self-controls={place}>
-      {CAMERA_ORDER.filter((action) => set.mine.includes(action)).map((action) => {
+    <div role="toolbar" aria-label={label} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} className="glass-call flex w-max items-center gap-0.5 rounded-full p-0.5" data-call-self-controls={place} data-call-self-group={group}>
+      {CAMERA_ORDER.filter((action) => set.mine.includes(action) && (only === undefined || only.includes(action))).map((action) => {
         const view = mineAction(action, context);
         return (
           <kit.Button
@@ -302,6 +312,11 @@ export function CallCameraControls({ call, set, language, panels, kit, place }: 
           />
         );
       })}
+      {local !== null ? (
+        <Suspense fallback={null}>
+          <CallZoomStep stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} Button={kit.Button} rowItem={kit.rowItem} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

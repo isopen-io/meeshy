@@ -111,3 +111,12 @@ export function chromeAfter(current: ChromeVisibility, cue: ChromeCue): ChromeVi
   if (cue === 'stir') return current === 'resting' ? 'shown' : current;
   return current === 'shown' ? 'resting' : current;
 }
+
+/**
+ * Les commandes répondent-elles au doigt (#8735) ? Montrées, oui ; effacées
+ * par l'ATTENTE aussi — le doigt qui revient vers un bouton qu'il sait là ne
+ * doit pas taper deux fois : ce toucher agit ET les rend. Seules les commandes
+ * qu'un toucher sur la scène a RANGÉES laissent passer le doigt à la vidéo
+ * (une fois leur fondu fini : un bouton encore visible répond toujours).
+ */
+export const chromeInteractive = (visibility: ChromeVisibility): boolean => visibility !== 'dismissed';

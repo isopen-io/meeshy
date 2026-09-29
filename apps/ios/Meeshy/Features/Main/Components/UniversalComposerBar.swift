@@ -42,6 +42,10 @@ struct UniversalComposerBar: View {
     /// Called when the composer collapses back to minimized state
     var onCollapse: (() -> Void)? = nil
 
+    /// **Le repli que l'hôte offre, posé DANS la plaque** (#8642) — au bout de
+    /// la rangée d'outils, angle intérieur haut-droit. `nil` = aucun repli.
+    var foldControl: ComposerFoldControl? = nil
+
     /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
     var onClipboardContent: ((ClipboardContent) -> Void)? = nil
 

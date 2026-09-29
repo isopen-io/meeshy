@@ -79,7 +79,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Copy',
       'Forward',
       'Reply',
-      'Export as image',
+      'Make an image',
       'More…',
     ]);
     expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
@@ -88,7 +88,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'نسخ',
       'إعادة توجيه',
       'رد',
-      'تصدير كصورة',
+      'تحويل إلى صورة',
       'المزيد…',
     ]);
   });
@@ -123,6 +123,25 @@ describe('messageMenuContextOf — dérivé du message, jamais une seconde loi d
       { now: 1000 },
     );
     expect(result.hasText).toBe(false);
+    expect(result.hasImageableMedia).toBe(false);
+  });
+
+  test('une photo, une vidéo ou un vocal non masqués s’imagent ; une pièce floutée ou un document, non (#8693)', () => {
+    const base = { content: '', isBlurred: false, isViewOnce: false, viewOnceCount: 0, translations: [] };
+    const piece = (mimeType: string, masked = false) => ({ mimeType, isBlurred: masked, isViewOnce: false });
+    expect(messageMenuContextOf({ ...base, attachments: [piece('image/png')] }, { now: 1000 }).hasImageableMedia).toBe(true);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('audio/mp4')] }, { now: 1000 }).hasImageableMedia).toBe(true);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('image/png', true)] }, { now: 1000 }).hasImageableMedia).toBe(false);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('application/pdf')] }, { now: 1000 }).hasImageableMedia).toBe(false);
+  });
+
+  test('« Composer » n’offre que ce que le studio sait poser : une photo ou une vidéo (#8693)', () => {
+    const base = { content: '', isBlurred: false, isViewOnce: false, viewOnceCount: 0, translations: [] };
+    const piece = (mimeType: string) => ({ mimeType, isBlurred: false, isViewOnce: false });
+    expect(messageMenuContextOf({ ...base, attachments: [piece('video/mp4')] }, { now: 1000 }).composableIndex).toBe(0);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('audio/mp4'), piece('image/jpeg')] }, { now: 1000 }).composableIndex).toBe(1);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('audio/mp4')] }, { now: 1000 }).composableIndex).toBeNull();
+    expect(messageMenuContextOf({ ...base, isBlurred: true, attachments: [piece('image/jpeg')] }, { now: 1000 }).composableIndex).toBeNull();
   });
 
   /** LE CACHE ALLÉGÉ NE PORTE PAS LE CHAMP (#7527) — le témoin le passe donc
@@ -191,8 +210,19 @@ describe('« Exporter en image » suit la garde de « Copier »', () => {
     expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).not.toContain('export');
   });
 
-  test('un message sans texte n’a rien à peindre', () => {
+  test('un message sans texte ni média n’a rien à peindre', () => {
     expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('« Imager » un message fait d’une seule photo, d’une vidéo ou d’un vocal (#8693)', () => {
+    expect(messageMenuItems(ctx({ hasText: false, hasImageableMedia: true })).map((i) => i.id)).toContain('export');
+    expect(messageMenuItems(ctx({ hasText: false, hasImageableMedia: true, isProtected: true })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('le menu rapide dit « Imager », jamais « Composer » (#8693)', () => {
+    const items = messageMenuItems(ctx({ hasImageableMedia: true }));
+    expect(items.find((i) => i.id === 'export')?.labelKey).toBe('message.menu.export');
+    expect(items.map((i) => i.id)).not.toContain('compose');
   });
 
   test('« Export rapide » n’apparaît qu’avec un format par défaut enregistré, juste après « Exporter en image »', () => {

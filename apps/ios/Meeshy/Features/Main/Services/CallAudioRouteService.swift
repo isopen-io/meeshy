@@ -83,6 +83,15 @@ struct CallAudioRouteState: Equatable, Sendable {
         guard inputs.contains(where: { $0.id == inputId }) else { return self }
         return CallAudioRouteState(inputs: inputs, selectedInputId: inputId, output: output)
     }
+
+    var routesExternally: Bool {
+        output?.kind.isExternalOutput ?? false
+    }
+
+    func outputSymbol(isSpeaker: Bool) -> String {
+        if routesExternally, let output { return output.kind.symbolName }
+        return isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"
+    }
 }
 
 enum CallAudioRouteError: Error, Equatable {

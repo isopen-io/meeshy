@@ -264,12 +264,11 @@ final class MessageListViewController: UIViewController {
     /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
     /// ce contrôleur ne fait que relayer l'id tapé.
     var onToggleSelection: ((String) -> Void)?
-    /// **Les trois opérations servies EN PREMIER par le menu système**
-    /// (#6117 — « les options qu'il faut en premier c'est editer, selectionner
-    /// et composer »), plus la porte du GRAND menu.
+    /// **Les opérations servies EN PREMIER par le menu système** (#6117 ; « Imager » y remplace « Composer », #8692), plus la porte du GRAND menu.
     var onEditMessage: ((String) -> Void)?
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
+    var onImagineFromMessage: ((String) -> Void)?
     /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
     /// l'overlay d'appui long. Les deux sont des menus distincts.
     var onOpenMoreSheet: ((String) -> Void)?
@@ -1405,6 +1404,7 @@ final class MessageListViewController: UIViewController {
             let editHandler = self.onEditMessage
             let selectHandler = self.onSelectMessage
             let composeHandler = self.onComposeFromMessage
+            let imagineHandler = self.onImagineFromMessage
             let moreSheetHandler = self.onOpenMoreSheet
             let canEdit = self.canEditMessage
             let openReactPickerHandler = self.onOpenReactPicker
@@ -1820,16 +1820,15 @@ final class MessageListViewController: UIViewController {
                     isSelectionModeActive: selectionModeActive,
                     isSelected: selectedIds.contains(messageId),
                     onToggleSelection: { toggleSelectionHandler?(messageId) },
-                    // Les opérations primaires du menu SYSTÈME, ouvert au
-                    // double tap. Elles sont composées ici parce que c'est le
-                    // seul étage qui tient à la fois le `messageId` et les
-                    // rappels déjà résolus par `ConversationView`.
+                    // Les opérations primaires du menu SYSTÈME (double tap), composées ici : seul étage qui
+                    // tient à la fois le `messageId` et les rappels déjà résolus par `ConversationView`.
                     editMenuActions: MessageEditMenuAction.primaires(
                         messageId: messageId,
                         peutEditer: canEdit?(messageId) ?? false,
                         editer: editHandler,
                         selectionner: selectHandler,
                         composer: message.holdsBlur ? nil : composeHandler,
+                        imager: message.holdsBlur || !MessageCardSubject.isExportable(message, now: Date()) ? nil : imagineHandler,
                         repondre: swipeReplyHandler,
                         transferer: message.holdsBlur ? nil : swipeForwardHandler,
                         plus: moreSheetHandler

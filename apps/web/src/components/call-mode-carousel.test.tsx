@@ -242,4 +242,120 @@ describe('ModeCarousel', () => {
     expect(view.chosen).toEqual(['gold']);
     view.done();
   });
+
+  /* LE DOIGT QUI SE POSE PUIS GLISSE (#8736) : un appui long sur un AUTRE
+     style le choisit — mais un défilement programmé SOUS le doigt encore
+     posé luttait contre lui, et le glissé qui suivait restait collé. Le
+     centrage attend que le doigt se lève. */
+  const mountRecorded = () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const chosen: string[] = [];
+    const captured: string[] = [];
+    const scrolls: number[] = [];
+    act(() =>
+      root.render(
+        <ModeCarousel
+          label="Montages"
+          items={IDS.map((id) => ({ id, label: id, visual: null }))}
+          selected="screen"
+          onSelect={(id) => void chosen.push(id)}
+          capture={{ recording: false, onCapture: (intent) => void captured.push(intent), hint: 'Deux tapes : photo · Appui long : vidéo', longPressMs: 30 }}
+        />,
+      ),
+    );
+    const track = host.querySelector('[data-call-row-scroll]') as Track;
+    track.scrollLeft = 0;
+    layout(track);
+    Object.defineProperty(track, 'scrollTo', { configurable: true, value: (options: { readonly left: number }) => void scrolls.push(options.left) });
+    const item = (id: string) => host.querySelector(`[data-carousel-item="${id}"]`) as HTMLElement;
+    const pointer = (id: string, type: string) => act(() => void item(id).dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, isPrimary: true, clientX: 10, clientY: 10 })));
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { host, track, item, pointer, chosen, captured, scrolls, done };
+  };
+
+  test('un appui long sur un autre style le choisit sans rien faire défiler sous le doigt ; il se centre quand le doigt se lève (#8736)', async () => {
+    const view = mountRecorded();
+    view.pointer('gold', 'pointerdown');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.chosen).toEqual(['gold']);
+    expect(view.scrolls).toEqual([]);
+    view.pointer('gold', 'pointerup');
+    expect(view.scrolls).toEqual([2 * PITCH]);
+    view.done();
+  });
+
+  test('un doigt posé qui se met à défiler n’est plus un appui long : la piste qui bouge le relâche (#8736)', async () => {
+    const view = mountRecorded();
+    view.pointer('screen', 'pointerdown');
+    view.track.scrollLeft = 20;
+    act(() => void view.track.dispatchEvent(new Event('scroll')));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.captured).toEqual([]);
+    view.done();
+  });
+
+  test('un glissé ne redemande pas le style déjà choisi à chaque image (#8736)', async () => {
+    const view = mountRecorded();
+    view.track.dispatchEvent(new Event('pointerdown'));
+    view.track.scrollLeft = 10;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    view.track.scrollLeft = 20;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    expect(view.chosen).toEqual([]);
+    view.track.scrollLeft = PITCH;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    view.track.scrollLeft = PITCH + 6;
+    view.track.dispatchEvent(new Event('scroll'));
+    await act(frame);
+    expect(view.chosen).toEqual(['cover']);
+    view.done();
+  });
+
+  test('la piste défile sans élasticité : overscroll-x-none (#8736)', () => {
+    const view = mountRecorded();
+    expect(view.track.className).toContain('overscroll-x-none');
+    expect(view.track.className).not.toContain('overscroll-x-contain');
+    view.done();
+  });
+
+  /* Chromium, sous `scroll-snap-type: mandatory`, recalcule les points
+     d'accroche à chaque mise en page de la piste ; s'ils ont bougé pendant un
+     glissé du doigt, il RÉACCROCHE sur-le-champ au dernier élément accroché et
+     le geste meurt (mesuré, #8619 : 288 → 558 → 288 au milieu du glissé). Or le
+     glissé choisit en direct : chaque élément qui passe au centre changeait
+     d'échelle (la zone d'accroche elle-même) et de nom (le texte sous la piste,
+     qui remettait la colonne en page). Choisir ne touche donc ni la boîte d'un
+     élément — l'accent vit dans sa FACE —, ni la mise en page de la colonne. */
+  test('choisir ne change ni la boîte d’un élément ni la mise en page autour de la piste : l’accent vit dans sa face, le nom dans une boîte fixe', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = (selected: string) => act(() => root.render(<ModeCarousel label="Montages" items={IDS.map((id) => ({ id, label: `Montage ${id}`, visual: null }))} selected={selected} onSelect={() => undefined} />));
+    const boxes = () => [...host.querySelectorAll<HTMLElement>('[data-carousel-item]')].map((item) => [item.className, item.getAttribute('style')]);
+    const face = (id: string) => host.querySelector<HTMLElement>(`[data-carousel-item="${id}"] [data-carousel-face]`);
+
+    render('screen');
+    const before = boxes();
+    render('gold');
+
+    expect(boxes()).toEqual(before);
+    expect(new Set(before.map(([className]) => className)).size).toBe(1);
+    expect(face('gold')?.className).toContain('scale-110');
+    expect(face('screen')?.className).not.toContain('scale-110');
+    const name = host.querySelector<HTMLElement>('[data-call-mode-selected]');
+    expect(name?.textContent).toBe('Montage gold');
+    expect(name?.className).toContain('[contain:strict]');
+    expect(name?.className).toContain('h-5');
+    expect(name?.className).toContain('w-full');
+    act(() => root.unmount());
+    host.remove();
+  });
 });

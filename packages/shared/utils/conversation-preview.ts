@@ -18,8 +18,10 @@
  *  - la PROTECTION : un message expiré, à vue unique, flouté ou chiffré ne
  *    transporte ni son texte, ni sa traduction, ni le moindre détail de ses
  *    pièces jointes — la valeur rendue est ce qui finit dans le cache disque de
- *    la liste. Préséance : expiré > vue unique > flou > chiffré > éphémère, et
- *    un effet comportemental ne s'affiche que sur un message non protégé.
+ *    la liste. La flamme-œil (disparaît après lecture) non plus (#8634) : la
+ *    lire dans la liste ne la consomme pas. Préséance : expiré > vue unique >
+ *    flou > chiffré > flamme-œil > éphémère, et un effet comportemental ne
+ *    s'affiche que sur un message non protégé.
  */
 
 import { arrivalsLineKey } from './arrivals-notice.js';
@@ -35,6 +37,7 @@ import type { AttachmentProtectionFlags } from './attachment-protection.js';
 import { resolvePrismTranslation } from './conversation-helpers.js';
 import { formatClock } from './duration-format.js';
 import { ephemeralDeadline } from './ephemeral-deadline.js';
+import { isAfterReadEphemeral } from './ephemeral-countdown.js';
 import { contactCardNameFromFileName, isContactCardAttachment } from './vcard.js';
 import { behavioralEffects, messageProtection, type BehavioralEffect } from './message-protection.js';
 import {
@@ -254,6 +257,7 @@ const PROTECTION_PLACEHOLDER: Readonly<Record<Exclude<PreviewProtection, 'epheme
   'view-once': 'protection.viewOnce',
   blurred: 'protection.hidden',
   encrypted: 'protection.encrypted',
+  'after-read': 'protection.afterRead',
 };
 
 /**
@@ -329,6 +333,8 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
       });
     case 'encrypted':
       return preview({ kind: 'message', author, icon: 'encrypted', segments: [label(str('protection.encrypted'))] });
+    case 'after-read':
+      return preview({ kind: 'message', author, icon: 'ephemeral', segments: [label(str('protection.afterRead'))] });
     case 'ephemeral': {
       const body = bodyOf(message, input, str);
       const countdown: readonly PreviewSegment[] = guard.expiresAt !== null
@@ -354,7 +360,7 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
 }
 
 type Guard =
-  | { readonly kind: 'none' | 'expired' | 'view-once' | 'hidden' | 'encrypted' }
+  | { readonly kind: 'none' | 'expired' | 'view-once' | 'hidden' | 'encrypted' | 'after-read' }
   | { readonly kind: 'ephemeral'; readonly expiresAt: number | null; readonly durationSeconds: number | null };
 
 function protectionOf(message: ConversationPreviewMessage, input: ConversationPreviewInput, now: number): Guard {
@@ -377,6 +383,7 @@ function protectionOf(message: ConversationPreviewMessage, input: ConversationPr
   if (flags.viewOnce || attachment.viewOnce) return { kind: 'view-once' };
   if (flags.blurred || attachment.blurred) return { kind: 'hidden' };
   if (flags.encrypted) return { kind: 'encrypted' };
+  if (isAfterReadEphemeral(message.effectFlags)) return { kind: 'after-read' };
   if (!flags.ephemeral) return { kind: 'none' };
   return {
     kind: 'ephemeral',

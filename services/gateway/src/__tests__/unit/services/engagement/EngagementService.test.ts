@@ -233,6 +233,27 @@ describe('EngagementService.recordActivity', () => {
     });
   });
 
+  it('names the invitee on an invite_joined badge so the row can offer to write to them (#8724)', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({});
+    const findUnique = jest.fn(async ({ where }: { where: { id: string } }) =>
+      where.id === 'newcomer'
+        ? { id: 'newcomer', username: 'awa', displayName: 'Awa', avatar: null }
+        : { systemLanguage: 'fr' });
+    const prisma = makePrisma({ upsert, create, findUnique });
+    const notificationService = makeSharedNotificationService();
+    mockGetSharedNotificationService.mockReturnValue(notificationService);
+
+    await new EngagementService(prisma).recordActivity('inviter', 'social.invite_joined', { actorId: 'newcomer' });
+
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'inviter',
+      type: 'badge_earned',
+      actor: { id: 'newcomer', username: 'awa', displayName: 'Awa', avatar: null },
+      metadata: expect.objectContaining({ axisKey: 'social.invite_joined', threshold: 1 }),
+    }));
+  });
+
   it('replays the same threshold with zero notifications (anti-replay via unique constraint)', async () => {
     const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, crosses threshold 1
     const create = jest.fn().mockRejectedValue(p2002Error());
