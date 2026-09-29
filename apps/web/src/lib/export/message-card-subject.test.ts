@@ -60,7 +60,7 @@ describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () =>
   });
 
   test('le pseudo de chaque auteur voyage avec son nom — « pseudo au lieu du nom affiché »', () => {
-    const subject = subjectOf(reply({ replyTo: quoted({ sender: { ...amina, username: 'amina.d' } as Message['sender'] }) }));
+    const subject = subjectOf(reply({ replyTo: quoted({ sender: { ...amina, username: 'amina.d' } as NonNullable<Message['sender']> }) }));
     expect(subject?.quoted?.handle).toBe('amina.d');
   });
 
@@ -116,7 +116,7 @@ describe('les médias qu’une carte peut montrer (#8693)', () => {
         attachments: [
           piece({ id: 'a-img' }),
           piece({ id: 'a-vid', mimeType: 'video/mp4', width: 1920, height: 1080, thumbnailUrl: '/thumb.jpg' }),
-          piece({ id: 'a-aud', mimeType: 'audio/mp4', originalName: 'note.m4a', duration: 12_000, width: undefined, height: undefined }),
+          piece({ id: 'a-aud', mimeType: 'audio/mp4', originalName: 'note.m4a', duration: 12_000 }),
           piece({ id: 'a-pdf', mimeType: 'application/pdf' }),
         ],
       }),

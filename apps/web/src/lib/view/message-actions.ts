@@ -2,7 +2,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { translationsOf } from '@/lib/view/message';
+import { kindOf, translationsOf } from '@/lib/view/message';
 import { forwardRefusalOf } from '@/lib/view/forward';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
@@ -94,7 +94,22 @@ export type MessageMenuContext = {
   readonly isViewOnce?: boolean;
   /** Un format d'export par défaut est enregistré sur l'appareil : « Export rapide » l'applique sans options. */
   readonly hasDefaultExportFormat?: boolean;
+  /**
+   * UNE PHOTO, UNE VIDÉO OU UN VOCAL NON MASQUÉS (#8693) — « Imager » un
+   * message sans texte a quelque chose à peindre. Une pièce à vue unique ou
+   * floutée n'en est pas une (leçon 275 : la protection se lit aussi au niveau
+   * de la pièce).
+   */
+  readonly hasImageableMedia?: boolean;
+  /** Le rang de la première photo ou vidéo que « Composer » peut poser dans le studio — `null` : rien à composer. */
+  readonly composableIndex?: number | null;
 };
+
+type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly effectFlags?: number | null };
+
+const MASKING_EFFECTS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
+
+const pieceOpen = (piece: MenuPiece): boolean => piece.isBlurred !== true && piece.isViewOnce !== true && ((piece.effectFlags ?? 0) & MASKING_EFFECTS) === 0;
 
 /**
  * Dérive le contexte d'UN message, à l'instant `now` — même discipline que
@@ -112,16 +127,21 @@ export function messageMenuContextOf(
     'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content' | 'effectFlags'
   > & {
     readonly translations?: readonly MessageTranslation[];
+    readonly attachments?: readonly MenuPiece[];
   },
   input: { readonly now: number },
 ): MessageMenuContext {
   const kind = protectionOf(message, input.now);
+  const open = kind === 'standard' ? (message.attachments ?? []).map((piece) => (pieceOpen(piece) ? kindOf(piece) : 'file')) : [];
+  const composable = open.findIndex((form) => form === 'image' || form === 'video');
   return {
     hasText: message.content.trim().length > 0,
     isProtected: kind !== 'standard',
     languageCount: 1 + translationsOf(message).length,
     canForward: forwardRefusalOf(message, input.now) === null,
     isViewOnce: message.isViewOnce === true,
+    hasImageableMedia: open.some((form) => form !== 'file'),
+    composableIndex: composable === -1 ? null : composable,
   };
 }
 
@@ -162,10 +182,13 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
-  /* « EXPORTER EN IMAGE » — même garde que « Copier » : une image est une
-     copie qu'on partage, ce qui ne se copie pas ne se peint pas
-     (`lib/export/message-card-subject.ts`). */
-  if (ctx.hasText && !ctx.isProtected) {
+  /* « IMAGER » (#8693, ex « Exporter en image ») — même garde que « Copier » :
+     une image est une copie qu'on partage, ce qui ne se copie pas ne se peint
+     pas (`lib/export/message-card-subject.ts`). Il tient dans le menu RAPIDE la
+     place qu'iOS donnait à « Composer » ; « Composer » ET « Imager » vivent
+     ensemble derrière le (>) de « Plus… » (`message-detail-sheet.tsx`). Un
+     message fait d'un seul média s'image aussi. */
+  if ((ctx.hasText || ctx.hasImageableMedia === true) && !ctx.isProtected) {
     items.push({ id: 'export', labelKey: MENU_LABEL_KEYS.export, glyph: 'imageSquare' });
     if (ctx.hasDefaultExportFormat === true) {
       items.push({ id: 'exportQuick', labelKey: MENU_LABEL_KEYS.exportQuick, glyph: 'lightning' });

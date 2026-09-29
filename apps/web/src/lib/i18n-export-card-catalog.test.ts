@@ -42,10 +42,16 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
     const french = await loadExportCardCatalog('fr');
     for (const [language, catalog] of await loadAll()) {
       if (language === 'fr') continue;
-      for (const key of ['export.card.title', 'export.card.hint', 'export.card.gallery.empty', 'export.announce.gallery'] as const) {
+      for (const key of ['export.card.hint', 'export.card.gallery.empty', 'export.announce.gallery', 'export.card.option.pseudonyms', 'export.announce.motionUnavailable'] as const) {
         expect({ language, key, copied: catalog[key] === french[key] }).toEqual({ language, key, copied: false });
       }
     }
+  });
+});
+
+describe('l’atelier s’appelle « Imagine » dans les sept langues (#8693)', () => {
+  test('un nom propre, comme celui d’une palette', async () => {
+    for (const [, catalog] of await loadAll()) expect(catalog['export.card.title']).toBe('Imagine');
   });
 });
 

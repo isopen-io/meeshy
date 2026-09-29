@@ -72,11 +72,11 @@ function paintFrame(stage: Stage, sources: readonly (CardSource | null)[], progr
 const withSource = (sources: readonly (CardSource | null)[], index: number | null, source: CardSource): readonly (CardSource | null)[] =>
   index === null ? sources : sources.map((current, i) => (i === index ? source : current));
 
-async function mediaElement(track: MotionTrack, doc: Document): Promise<HTMLMediaElement | null> {
-  if (track.kind === 'video') return videoAt(track.url, doc, 0);
+
+function audioOf(url: string, doc: Document): HTMLAudioElement {
   const audio = doc.createElement('audio');
   audio.preload = 'auto';
-  audio.src = track.url;
+  audio.src = url;
   return audio;
 }
 
@@ -95,7 +95,8 @@ export async function recordCardVideo(params: {
   if (type === null) return null;
   const stage = await stageOf(params.input, env.doc, null);
   if (stage === null || typeof stage.canvas.captureStream !== 'function') return null;
-  const element = await mediaElement(params.track, env.doc);
+  const video = params.track.kind === 'video' ? await videoAt(params.track.url, env.doc, 0) : null;
+  const element: HTMLMediaElement | null = params.track.kind === 'video' ? video : audioOf(params.track.url, env.doc);
   if (element === null) return null;
 
   const stream = stage.canvas.captureStream(30);
@@ -115,7 +116,7 @@ export async function recordCardVideo(params: {
     recorder.onstop = () => resolve();
   });
 
-  const sources = params.track.kind === 'video' ? withSource(params.sources, params.track.index, element) : params.sources;
+  const sources = video === null ? params.sources : withSource(params.sources, params.track.index, video);
   paintFrame(stage, sources, 0);
   element.currentTime = 0;
   try {

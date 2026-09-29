@@ -66,7 +66,7 @@ class ByteSink {
   bytes(values: ArrayLike<number>): void {
     for (let i = 0; i < values.length; i += 1) this.chunks.push((values[i] ?? 0) & 0xff);
   }
-  toUint8Array(): Uint8Array {
+  toUint8Array(): Uint8Array<ArrayBuffer> {
     return Uint8Array.from(this.chunks);
   }
 }
@@ -127,7 +127,7 @@ export function lzwEncode(indices: ArrayLike<number>, minCodeSize = 8): Uint8Arr
 export type GifFrame = { readonly indices: Uint8Array; readonly delayMs: number };
 
 /** Un GIF89a animé, en boucle, de frames déjà ramenées à `GIF_PALETTE`. */
-export function encodeGif(width: number, height: number, frames: readonly GifFrame[]): Uint8Array {
+export function encodeGif(width: number, height: number, frames: readonly GifFrame[]): Uint8Array<ArrayBuffer> {
   const sink = new ByteSink();
   sink.bytes([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
   sink.word(width);

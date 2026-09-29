@@ -32,7 +32,12 @@ function useVisible(ref: { readonly current: Element | null }): boolean {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const node = ref.current;
-    if (node === null || typeof IntersectionObserver === 'undefined') return;
+    if (node === null) return;
+    /* Sans observateur (vieux moteur), la vignette se peint tout de suite : jamais un « Aa » éternel. */
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
         setVisible(true);
@@ -100,7 +105,8 @@ export function CardThumb({
           Aa
         </span>
       ) : (
-        <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover object-top" />
+        /* La carte ENTIÈRE, jamais rognée (#8693) : une carte haute perdait sa liaison sous le bord de la vignette. */
+        <img src={url} alt="" className="absolute inset-0 h-full w-full object-contain" />
       )}
     </button>
   );
