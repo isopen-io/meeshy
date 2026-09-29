@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  CAPTIONS_JOURNAL_KEPT,
   captionLanguageLabel,
   captionText,
   captureAction,
@@ -112,12 +111,23 @@ describe('les sous-titres d’un appel (#8048)', () => {
     expect(mergeCaption(translated, caption())[0]?.translated).toBe('Bonjour');
   });
 
-  test('le journal se range par l’heure de capture et reste borné', () => {
+  test('le journal se range par l’heure de capture', () => {
     const journal = mergeCaption(mergeCaption([], caption({ id: 'b', at: 2_000 })), caption({ id: 'a', at: 1_000 }));
     expect(journal.map((line) => line.id)).toEqual(['a', 'b']);
-    const long = Array.from({ length: CAPTIONS_JOURNAL_KEPT + 5 }, (_, n) => n).reduce<readonly CallCaption[]>((acc, n) => mergeCaption(acc, caption({ id: `s${n}`, at: n })), []);
-    expect(long).toHaveLength(CAPTIONS_JOURNAL_KEPT);
-    expect(long[0]?.id).toBe('s5');
+    const between = mergeCaption(mergeCaption(journal, caption({ id: 'c', at: 3_000 })), caption({ id: 'm', at: 1_500 }));
+    expect(between.map((line) => line.id)).toEqual(['a', 'm', 'b', 'c']);
+  });
+
+  test('le journal garde TOUT l’appel : rien ne tombe, même après mille phrases (#8579)', () => {
+    const long = Array.from({ length: 1_200 }, (_, n) => n).reduce<readonly CallCaption[]>((acc, n) => mergeCaption(acc, caption({ id: `s${n}`, at: n })), []);
+    expect(long).toHaveLength(1_200);
+    expect(long[0]?.id).toBe('s0');
+    expect(long.at(-1)?.id).toBe('s1199');
+  });
+
+  test('une révision qui avance l’heure d’un énoncé le range à sa nouvelle place', () => {
+    const journal = [caption({ id: 'a', at: 1_000 }), caption({ id: 'b', at: 2_000 }), caption({ id: 'c', at: 3_000 })].reduce<readonly CallCaption[]>(mergeCaption, []);
+    expect(mergeCaption(journal, caption({ id: 'c', at: 500 })).map((line) => line.id)).toEqual(['c', 'a', 'b']);
   });
 
   test('le bandeau montre les deux dernières lignes dites', () => {

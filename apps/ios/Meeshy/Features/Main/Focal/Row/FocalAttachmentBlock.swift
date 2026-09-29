@@ -137,6 +137,13 @@ nonisolated enum FocalMediaProtectionState: Equatable {
     case blurred(isViewOnce: Bool)
 }
 
+nonisolated enum FocalCellTap: Equatable {
+    /// Lever le flou sur place.
+    case reveal
+    /// Ouvrir le plein écran ; `reblurs` : la case reprend son flou derrière.
+    case openFullscreen(reblurs: Bool)
+}
+
 nonisolated enum FocalMediaProtection {
     /// `attachment.isBlurred || attachment.isViewOnce`, ET pas encore
     /// révélé ⇒ `.blurred`. Une fois révélé (`isRevealed == true`), TOUJOURS
@@ -144,9 +151,28 @@ nonisolated enum FocalMediaProtection {
     /// temps de la fenêtre de révélation (portée par `BubbleBlurRevealController`,
     /// réutilisé tel quel côté vue, §WS-0-adjacent : lifecycle PUR, non
     /// `fileprivate`).
-    static func state(for attachment: MessageAttachment, isRevealed: Bool) -> FocalMediaProtectionState {
+    static func state(for attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool = false) -> FocalMediaProtectionState {
         guard !isRevealed, attachment.isBlurred || attachment.isViewOnce else { return .none }
+        guard !(messageRevealed && !attachment.isViewOnce) else { return .none }
         return .blurred(isViewOnce: attachment.isViewOnce)
+    }
+
+    /// **Ce que fait un toucher sur une case** (#8537, directive porteur
+    /// 2026-09-28 : « permettre au toucher d'afficher directement le contenu
+    /// flouté […] et de voir l'image en plein écran avant que le flou ne
+    /// revienne »). Une pièce floutée se révèle sur place ; révélée, elle
+    /// s'ouvre en plein écran et son flou revient DERRIÈRE lui — on retrouve la
+    /// case voilée à la sortie. Une pièce que le MESSAGE révèle s'ouvre
+    /// directement : le minuteur du message rendra le flou. La vue unique ouvre
+    /// son plein écran directement (#8009).
+    static func tap(on attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool) -> FocalCellTap {
+        guard case .blurred = state(for: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed) else {
+            return .openFullscreen(reblurs: isRevealed && attachment.isBlurred && !attachment.isViewOnce)
+        }
+        switch ProtectedContentTap.resolve(cell: attachment) {
+        case .revealInPlace: return .reveal
+        default: return .openFullscreen(reblurs: false)
+        }
     }
 
     /// Pastille de compte « vue unique » — miroir de `viewCountBadge`
@@ -226,9 +252,10 @@ struct FocalGridCell: View {
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
     @State private var isRevealed = false
+    @Environment(\.focalMessageRevealed) private var messageRevealed
 
     private var protectionState: FocalMediaProtectionState {
-        FocalMediaProtection.state(for: attachment, isRevealed: isRevealed)
+        FocalMediaProtection.state(for: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed)
     }
 
     var body: some View {
@@ -244,6 +271,7 @@ struct FocalGridCell: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture(perform: handleTap)
+        .task(id: isRevealed) { await reblurAfterVisibility() }
         .overlay { protectionOverlay }
         .overlay(alignment: .bottomTrailing) {
             if case .none = protectionState {
@@ -259,20 +287,27 @@ struct FocalGridCell: View {
     }
 
     /// Une pièce floutée se révèle SUR PLACE (#8389) ; révélée, à vue unique
-    /// ou claire, le toucher ouvre son plein écran sur CETTE pièce.
+    /// ou claire, le toucher ouvre son plein écran sur CETTE pièce — et le flou
+    /// d'une pièce révélée revient derrière lui (#8537).
     private func handleTap() {
-        guard case .none = protectionState else { return revealOrOpen() }
-        onTap?(attachment)
-    }
-
-    private func revealOrOpen() {
-        HapticFeedback.medium()
-        switch ProtectedContentTap.resolve(cell: attachment) {
-        case .revealInPlace:
+        switch FocalMediaProtection.tap(on: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed) {
+        case .reveal:
+            HapticFeedback.medium()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isRevealed = true }
-        default:
+        case .openFullscreen(let reblurs):
+            if protectionState != .none { HapticFeedback.medium() }
+            if reblurs { isRevealed = false }
             onTap?(attachment)
         }
+    }
+
+    /// La révélation d'une case a une FIN, comme celle d'un message : sans
+    /// toucher, le flou revient après la durée de visibilité.
+    private func reblurAfterVisibility() async {
+        guard isRevealed, attachment.isBlurred, !attachment.isViewOnce else { return }
+        try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) { isRevealed = false }
     }
 
     /// **Ce que la pièce a récolté** (#6793) — même coin et même dessin que la
@@ -379,7 +414,7 @@ struct FocalGridCell: View {
                 : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
             .accessibilityHint(ProtectedContentTap.resolve(cell: attachment).accessibilityHint ?? "")
             .accessibilityAddTraits(.isButton)
-            .onTapGesture(perform: revealOrOpen)
+            .onTapGesture(perform: handleTap)
         }
     }
 

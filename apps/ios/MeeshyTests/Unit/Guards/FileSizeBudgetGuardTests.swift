@@ -54,7 +54,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationListViewModel.swift",
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
-        "FeedPostCard.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
         // contre 1 391 avant le découpage. La feuille qui en est sortie
         // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
@@ -542,7 +541,17 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `CallManager.swift` pour `CallManager+SystemPiP.swift`, et la
     // resynchronisation du micro naît dans `CallManager+MuteSync.swift` sans
     // qu'une ligne nette n'entre dans le fichier hors budget.
-    private static let legacyLineCeiling = 45_292
+    //
+    // #8582 — 45 292 → 43 431 (−1 861), REMESURÉ. Le glissé « répondre » et
+    // les effets de commentaire devaient toucher trois hôtes hors budget ; ils
+    // ont payé leur place avant de la prendre. `ThreadedCommentSection` quitte
+    // `FeedCommentsSheet.swift` (−195), `StoryCommentRowView` quitte
+    // `StoryViewerView+Content.swift` (−316), et l'aperçu des commentaires
+    // quitte `FeedPostCard.swift`, qui repasse SOUS le budget et sort de
+    // `legacyOverBudget` ENTIER (−1 361). La feuille reçoit ensuite la cible de
+    // réponse amorcée depuis l'aperçu (+11) : le plafond baisse du NET du lot,
+    // pas de sa seule relocalisation — le mou antérieur reste à ses lots.
+    private static let legacyLineCeiling = 43_431
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -13,6 +13,8 @@ const itEphemeral = {
   'composer.ephemeral.active': 'Modalità effimera attiva: {duration}',
   'composer.ephemeral.off': 'Disattivato',
   'composer.ephemeral.rail': 'Tempo prima che il messaggio scompaia',
+  'composer.protection.imposed.blur': 'Sfocatura imposta dal messaggio citato',
+  'composer.protection.imposed.ephemeral': 'Modalità effimera imposta dal messaggio citato: {duration}',
 } satisfies EphemeralCatalogSlice;
 
 export default itEphemeral;

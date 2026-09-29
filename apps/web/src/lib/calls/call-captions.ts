@@ -36,9 +36,6 @@ export type CallCaption = {
   readonly mine: boolean;
 };
 
-/** Le journal est borné : un appel de dix heures ne grossit pas la mémoire au-delà. */
-export const CAPTIONS_JOURNAL_KEPT = 200;
-
 export const CAPTIONS_OVERLAY_LINES = 2;
 
 export const TRANSCRIPT_CHANNEL = 'transcription';
@@ -66,13 +63,25 @@ export function captionLanguageLabel(caption: CallCaption, mode: CaptionsMode): 
   return `${languageCode(caption.pair.from)} → ${languageCode(caption.pair.to)}`;
 }
 
+/** Range une ligne à sa place par l'heure de capture — le plus souvent à la fin, sans retrier tout le journal. */
+function placed(journal: readonly CallCaption[], line: CallCaption): readonly CallCaption[] {
+  const after = journal.findIndex((caption) => caption.at > line.at);
+  return after === -1 ? [...journal, line] : [...journal.slice(0, after), line, ...journal.slice(after)];
+}
+
 /**
  * Fusion par identifiant d'énoncé : une révision partielle remplace la
  * précédente, un final ne redevient jamais partiel, une traduction arrivée
- * une fois reste, et le journal se trie par l'heure de capture.
+ * une fois reste, et le journal se range par l'heure de capture.
+ *
+ * Le journal garde TOUT l'appel (#8579) : il est le Journal qu'on relit
+ * pendant l'appel, sans rien tronquer. Une ligne ne coûte que son texte ;
+ * une révision se remplace EN PLACE, une ligne nouvelle s'insère à sa place
+ * (en fin, le plus souvent), sans retrier.
  */
 export function mergeCaption(journal: readonly CallCaption[], incoming: CallCaption): readonly CallCaption[] {
-  const existing = journal.find((caption) => caption.id === incoming.id);
+  const index = journal.findIndex((caption) => caption.id === incoming.id);
+  const existing = index === -1 ? undefined : journal[index];
   const merged: CallCaption =
     existing === undefined
       ? incoming
@@ -85,8 +94,9 @@ export function mergeCaption(journal: readonly CallCaption[], incoming: CallCapt
           isFinal: existing.isFinal || incoming.isFinal,
           at: Math.min(existing.at, incoming.at),
         };
-  const others = journal.filter((caption) => caption.id !== incoming.id);
-  return [...others, merged].sort((left, right) => left.at - right.at).slice(-CAPTIONS_JOURNAL_KEPT);
+  if (existing === undefined) return placed(journal, merged);
+  if (merged.at === existing.at) return journal.map((caption, at) => (at === index ? merged : caption));
+  return placed([...journal.slice(0, index), ...journal.slice(index + 1)], merged);
 }
 
 /** Les lignes du bandeau : les dernières dites, quel que soit le locuteur. */

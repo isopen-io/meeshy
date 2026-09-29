@@ -1,5 +1,6 @@
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { DEFAULT_SCENE_BACKDROP, DEFAULT_SCENE_FIT_MODE, type SceneBackdrop, type SceneFitMode } from '@/lib/canvas/backdrop';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
@@ -74,6 +75,9 @@ export type StoryVisual = {
   /** LE CADRE d'un FOND (#8414, `lib/canvas/backdrop.ts`) — Ajuster ou
    * Remplir, et ce qui se peint autour. Absent ⇒ ajusté, flou. */
   readonly frame?: StoryFrame;
+  /** LE FILTRE de CE média (lot 7, #8474) — `payload.filter` de SON objet,
+   * aux valeurs de `StoryFilter` ; il ne peint que lui. */
+  readonly filter?: StoryFilterId;
 };
 
 export type StoryFrame = { readonly fitMode: SceneFitMode; readonly backdrop: SceneBackdrop };
@@ -187,6 +191,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               // FLOU est l'absence de `backdrop` — le contrat commun à iOS.
               transform: frameTransform(background.frame),
               ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
+              ...(background.filter !== undefined ? { filter: background.filter } : {}),
               ...(mutesVideo ? { muted: true, volume: 0 } : {}),
             },
           } satisfies ObjectV3,
@@ -235,6 +240,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               ...addressPayload(overlay.address),
               mediaType: overlay.mediaType,
               ...(overlay.aspectRatio !== undefined ? { aspectRatio: overlay.aspectRatio } : {}),
+              ...(overlay.filter !== undefined ? { filter: overlay.filter } : {}),
             },
           } satisfies ObjectV3,
         ]
@@ -272,7 +278,13 @@ export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
  * paramètre. C'est la loi 6 relue « le PLAYER est l'aperçu » : une seconde
  * description aurait divergé, et ce que l'auteur voit ne serait plus ce qui
  * part (le texte d'aperçu y avait déjà perdu `textStyle` et `fontFamily`). */
-type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly frame?: StoryFrame };
+type VisualSlot<A> = {
+  readonly source: A;
+  readonly mediaType: StudioMediaKind;
+  readonly aspectRatio?: number;
+  readonly frame?: StoryFrame;
+  readonly filter?: StoryFilterId;
+};
 type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose; readonly timing?: StudioTiming };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
 
@@ -296,6 +308,7 @@ function storyCompositionOf<A>(
     mediaType: slot.mediaType,
     ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
     ...(slot.frame !== undefined ? { frame: slot.frame } : {}),
+    ...(slot.filter !== undefined ? { filter: slot.filter } : {}),
   });
   return {
     texts: params.texts,

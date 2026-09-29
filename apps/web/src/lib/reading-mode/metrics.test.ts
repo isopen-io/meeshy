@@ -8,10 +8,9 @@ import {
   FOCUS_CARD_RADIUS,
   FOCUS_LOUPE_GAIN,
   SCENE_FLATTEN_DURATION_MS,
-  FOCUS_CHIP_HEIGHT,
+  FOCUS_CARD_INNER_MARGIN,
+  FOCUS_IDENTITY_GAP,
   IDENTITY_CHIP_HEIGHT,
-  IDENTITY_OVERHANG,
-  FOCUS_STRIP_OVERHANG,
   ROW_PADDING_HORIZONTAL,
   ROW_PADDING_VERTICAL,
   TEXT_INDENT,
@@ -38,7 +37,7 @@ describe('sceneStyleVars', () => {
       '--focus-chip-fill-light': '0.14',
       '--focus-card-radius': '18px',
       '--focus-card-inset-x': '10px',
-      '--focus-card-inset-y': '3px',
+      '--focus-card-margin': '10px',
       '--scene-flatten-ms': '450ms',
       '--reveal-fade-ms': '280ms',
       '--focus-chip-h': '24px',
@@ -46,17 +45,22 @@ describe('sceneStyleVars', () => {
       '--focus-chip-inset': '4px',
       '--focus-chip-pad-x': '7px',
       '--focus-text-indent': '41px',
-      '--focus-identity-overhang': '20px',
-      '--focus-strip-overhang': '15px',
+      '--focus-identity-h': '34px',
+      '--focus-identity-gap': '4px',
       '--unfold-dim': '0.62',
       '--unfold-enter-ms': '250ms',
     });
   });
 
   test('les formules restent des calculs, jamais des littéraux recopiés', () => {
-    expect(FOCUS_STRIP_OVERHANG).toBe(FOCUS_CHIP_HEIGHT / 2 + ROW_PADDING_VERTICAL);
-    expect(IDENTITY_OVERHANG).toBe(IDENTITY_CHIP_HEIGHT / 2 + ROW_PADDING_VERTICAL);
     const vars = sceneStyleVars() as Record<string, string>;
+    // #8506 — l'identité et la bande vivent DANS le cadre : plus de débord,
+    // une marge intérieure et la hauteur de la pastille d'identité.
+    expect(vars['--focus-card-margin']).toBe(`${FOCUS_CARD_INNER_MARGIN}px`);
+    expect(vars['--focus-identity-h']).toBe(`${IDENTITY_CHIP_HEIGHT}px`);
+    expect(vars['--focus-identity-gap']).toBe(`${FOCUS_IDENTITY_GAP}px`);
+    expect(vars['--focus-identity-overhang']).toBeUndefined();
+    expect(vars['--focus-strip-overhang']).toBeUndefined();
     expect(vars['--focus-card-inset-x']).toBe(`${ROW_PADDING_HORIZONTAL - FOCUS_CARD_HORIZONTAL_INSET}px`);
     // Le retrait qui ramène les superpositions sur le CORPS de la rangée
     // (gouttière d'avatar comprise) est la cote de la rangée elle-même, pas

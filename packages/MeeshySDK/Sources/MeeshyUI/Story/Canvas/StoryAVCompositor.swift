@@ -193,6 +193,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                              overlayFrames[media.id]
                                          },
                                          stickerImageURLs: instruction.stickerImageURLs,
+                                         images: instruction.images,
                                          watermark: instruction.watermark,
                                          brandUnderlay: introFrame,
                                          storyOpacity: storyAlpha,
@@ -247,6 +248,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      backdropCapture: any BackdropCapturing,
                                      mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                                      stickerImageURLs: [String: URL] = [:],
+                                     images: [String: UIImage] = [:],
                                      watermark: StoryExportWatermark? = nil,
                                      brandUnderlay: CVPixelBuffer? = nil,
                                      storyOpacity: CGFloat = 1,
@@ -282,7 +284,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                             at: time,
                                             mode: .play,
                                             languages: languages,
-                                            imageCache: stickerImageCache(for: stickerImageURLs),
+                                            imageCache: stickerImageCache(for: stickerImageURLs, images: images),
                                             cache: cache,
                                             backdropProvider: { frame in
                                                 backdropCapture.cropRegion(frame)
@@ -290,6 +292,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                             mediaFrameProvider: mediaFrameProvider,
                                             contentsScale: 1.0,
                                             reduceMotion: false)
+            // Les puces des sons posés sur la scène (#8599) : à l'écran une
+            // surcouche SwiftUI, absente de l'arbre — ajoutées ici au-dessus.
+            StoryRenderer.audioChipLayers(for: slide, into: geometry, at: time)
+                .forEach(tree.addSublayer)
 
             // Opening transition — only visible during the first
             // `StoryRenderer.slideTransitionDuration`. The live canvas uses
@@ -430,7 +436,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             // which reads the media object's local file URL OR fetches via
             // CacheCoordinator. Respect the user's videoFitMode override
             // (auto / "fit" / "fill") so the export matches the canvas.
-            if let bgImage = resolveBackgroundImage(for: slide) {
+            if let bgImage = resolveBackgroundImage(for: slide, images: images) {
                 let canvasSize = CGSize(width: width, height: height)
                 let mode = slide.effects.backgroundTransform?.videoFitMode
                 let gravity = StoryBackgroundLayer.resolveImageGravity(
@@ -552,7 +558,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// Même contrepartie assumée : le dernier jeu de bitmaps reste retenu
     /// jusqu'à l'export suivant.
     @MainActor
-    private static var stickerImagesMemo: (urls: [String: URL], reader: ComposerImageCacheReader)?
+    private static var stickerImagesMemo: (urls: [String: URL], images: [String: UIImage])?
 
     /// Le lecteur SYNCHRONE des bitmaps de stickers pour une session d'export.
     ///
@@ -564,16 +570,27 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// story n'adresse aucun sticker image, pour que le rendu des autres
     /// stories reste celui d'avant.
     @MainActor
-    internal static func stickerImageCache(for stickerImageURLs: [String: URL]) -> ImageCacheReader? {
-        guard !stickerImageURLs.isEmpty else { return nil }
-        if let memo = stickerImagesMemo, memo.urls == stickerImageURLs { return memo.reader }
+    internal static func stickerImageCache(for stickerImageURLs: [String: URL],
+                                           images: [String: UIImage] = [:]) -> ImageCacheReader? {
+        guard !stickerImageURLs.isEmpty || !images.isEmpty else { return nil }
+        let decoded = decodedStickerImages(for: stickerImageURLs)
+        // Les bitmaps en mémoire PRIMENT (#8599) : c'est la version que
+        // l'auteur voit, retouches comprises. La fusion n'est pas mémoïsée —
+        // quelques entrées par frame, et aucune rétention au-delà de l'export.
+        return ComposerImageCacheReader(images: decoded.merging(images) { _, memoire in memoire },
+                                        version: 0)
+    }
+
+    @MainActor
+    private static func decodedStickerImages(for stickerImageURLs: [String: URL]) -> [String: UIImage] {
+        guard !stickerImageURLs.isEmpty else { return [:] }
+        if let memo = stickerImagesMemo, memo.urls == stickerImageURLs { return memo.images }
         let images = stickerImageURLs.reduce(into: [String: UIImage]()) { result, entry in
             guard let image = UIImage(contentsOfFile: entry.value.path) else { return }
             result[entry.key] = image
         }
-        let reader = ComposerImageCacheReader(images: images, version: 0)
-        stickerImagesMemo = (stickerImageURLs, reader)
-        return reader
+        stickerImagesMemo = (stickerImageURLs, images)
+        return images
     }
 
     /// Resolves the bitmap for a slide whose background is an image.
@@ -592,11 +609,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// Retourne `nil` si l'image ne charge pas — l'appelant laisse alors le
     /// substrat intact.
     @MainActor
-    private static func resolveBackgroundImage(for slide: StorySlide) -> UIImage? {
+    private static func resolveBackgroundImage(for slide: StorySlide,
+                                               images: [String: UIImage] = [:]) -> UIImage? {
         let candidate: String?
         if let bg = slide.effects.mediaObjects?.first(where: {
             $0.isBackground && $0.kind == .image
         }) {
+            // Le bitmap en mémoire du composer prime (#8599) — même clé que
+            // `StoryMediaLayer` : `postMediaId`, sinon l'id de l'élément.
+            if let inMemory = [bg.postMediaId, bg.id].lazy.compactMap({ images[$0] }).first {
+                let key = "memory:\(ObjectIdentifier(inMemory).hashValue)"
+                if let memo = backgroundImageMemo, memo.key == key { return memo.image }
+                guard let redressee = upright(inMemory) else { return nil }
+                backgroundImageMemo = (key, redressee)
+                return redressee
+            }
             candidate = bg.mediaURL
         } else {
             candidate = slide.mediaURL
@@ -611,9 +638,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         } else {
             loaded = UIImage(contentsOfFile: candidate)
         }
-        guard let image = loaded else { return nil }
+        // Redressée UNE fois ici plutôt qu'à chaque frame par les peintres : un
+        // fond EXIF tourné coûterait sinon une passe de dessin plein cadre par
+        // frame exportée.
+        guard let image = loaded.flatMap(Self.upright) else { return nil }
         backgroundImageMemo = (candidate, image)
         return image
+    }
+
+    /// Le bitmap tel qu'il s'affiche, orientation `.up` — voir
+    /// `CanvasImageOrientation.displayCGImage` (#8600).
+    @MainActor
+    static func upright(_ image: UIImage) -> UIImage? {
+        guard image.imageOrientation != .up else { return image }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return nil }
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: .up)
     }
 
     /// Paints `image` in `cg` to fill `size`, preserving aspect ratio
@@ -621,7 +660,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// the slide's background image before the foreground tree renders on top.
     @MainActor
     private static func paintAspectFill(image: UIImage, in cg: CGContext, size: CGSize) {
-        guard let cgImage = image.cgImage else { return }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return }
         let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
         let imageAspect = imageSize.width / imageSize.height
         let targetAspect = size.width / size.height
@@ -673,7 +712,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// background color first so bands are coloured, not transparent.
     @MainActor
     private static func paintAspectFit(image: UIImage, in cg: CGContext, size: CGSize) {
-        guard let cgImage = image.cgImage else { return }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return }
         let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
         guard imageSize.width > 0, imageSize.height > 0 else { return }
         let scale = min(size.width / imageSize.width, size.height / imageSize.height)
@@ -702,15 +741,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                         slide: StorySlide,
                                         in cg: CGContext,
                                         size: CGSize) {
-        var ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        if !transform.isIdentity {
-            ciImage = ciImage.transformed(by: transform)
-            // Re-seat the extent at the origin after a rotating/translating
-            // preferredTransform so `createCGImage` captures the whole frame.
-            ciImage = ciImage.transformed(
-                by: CGAffineTransform(translationX: -ciImage.extent.origin.x,
-                                      y: -ciImage.extent.origin.y))
-        }
+        let ciImage = orientedFrame(CIImage(cvPixelBuffer: pixelBuffer), preferredTransform: transform)
         guard let cgImage = StoryRenderingContext.shared.ciContext.createCGImage(
             ciImage, from: ciImage.extent) else { return }
 
@@ -730,6 +761,29 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         } else {
             paintAspectFill(image: image, in: cg, size: size)
         }
+    }
+
+    /// **La frame redressée — `preferredTransform` appliquée dans SON repère**
+    /// (#8600).
+    ///
+    /// La transformation d'une piste est exprimée en repère IMAGE, Y vers le
+    /// BAS. Une `CIImage` vit en Y vers le HAUT : la poser telle quelle y
+    /// inverse le sens de chaque quart de tour, et un clip tourné en portrait
+    /// sortait retourné de 180°. On la conjugue donc par le retournement
+    /// vertical — vers le repère image avec la hauteur de STOCKAGE, retour
+    /// avec la hauteur AFFICHÉE — puis on reloge l'étendue à l'origine.
+    nonisolated static func orientedFrame(_ image: CIImage,
+                                          preferredTransform transform: CGAffineTransform) -> CIImage {
+        guard !transform.isIdentity else { return image }
+        let stored = image.extent
+        let displayed = stored.applying(transform)
+        let toImageSpace = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: stored.height)
+        let backToCoreImage = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: displayed.height)
+        let oriented = image.transformed(by: toImageSpace
+            .concatenating(transform)
+            .concatenating(backToCoreImage))
+        return oriented.transformed(by: CGAffineTransform(translationX: -oriented.extent.origin.x,
+                                                          y: -oriented.extent.origin.y))
     }
 }
 
@@ -773,6 +827,10 @@ public final class StoryCompositionInstruction: NSObject,
     /// la composition, comme il le fait pour `mediaURL`. Vide = les stickers
     /// image sortent sous leur repli 🖼️.
     public let stickerImageURLs: [String: URL]
+    /// Bitmaps en mémoire remis par l'appelant (`StoryExportInputs.images`,
+    /// #8599) — ils priment sur les fichiers de `stickerImageURLs` et sur la
+    /// `mediaURL` du fond image.
+    public let images: [String: UIImage]
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     /// Pistes que ce segment consomme RÉELLEMENT.
@@ -797,9 +855,11 @@ public final class StoryCompositionInstruction: NSObject,
                             introFade: CMTimeRange? = nil,
                             outroFade: CMTimeRange? = nil,
                             requiredSourceTrackIDs: [NSValue]? = nil,
-                            stickerImageURLs: [String: URL] = [:]) {
+                            stickerImageURLs: [String: URL] = [:],
+                            images: [String: UIImage] = [:]) {
         self.requiredSourceTrackIDs = requiredSourceTrackIDs
         self.stickerImageURLs = stickerImageURLs
+        self.images = images
         self.slide = slide
         self.languages = languages
         self.timeRange = timeRange

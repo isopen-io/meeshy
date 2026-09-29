@@ -19,7 +19,6 @@ import {
   AVATAR_FRAME,
   AVATAR_INSET,
   AVATAR_SIZE,
-  FLAG_LIMIT_PLAIN,
   GROUP_TOP_PADDING,
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
@@ -27,13 +26,14 @@ import {
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
-import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
+import { useFocusFrame } from '@/lib/view/use-focus-frame';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
+import { FocalBottomLine } from './focal-bottom-line';
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
 import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
@@ -48,10 +48,7 @@ import {
   Check,
   EditedMark,
   FailedSendBand,
-  Flags,
-  PrismPastille,
   Quote,
-  ReactionChip,
   reactionEntries,
   RowQuote,
 } from './message-blocks';
@@ -140,6 +137,7 @@ export const FocalRow = memo(function FocalRow({
   onPickLanguage,
   myReactions,
   onReact,
+  onOpenDetail,
   selected,
   onToggleSelect,
 }: {
@@ -169,6 +167,13 @@ export const FocalRow = memo(function FocalRow({
    * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
    * capsule reste un `<span>` inerte (loi 4). */
   onReact?: (emoji: string) => void;
+  /**
+   * OUVRE LA FICHE DU MESSAGE (#8536) — le MÊME panneau que « Plus… » au menu
+   * du message (`useMessageMenu.setDetailFor`). Le tampon de l'ÉLU le porte :
+   * « quand je touche la date : ça n'ouvre pas les détails du message ».
+   * `undefined` ⇒ le tampon reste une heure lisible, sans geste (loi 4).
+   */
+  onOpenDetail?: (messageId: string) => void;
   /** Mode sélection ACTIF (`undefined` hors sélection) — `false` = rangée
    * non cochée, `true` = cochée (#5814, question 5). */
   selected?: boolean;
@@ -243,11 +248,12 @@ export const FocalRow = memo(function FocalRow({
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
 
-  /** LA LOUPE (#6586/#6588) — avant tout retour anticipé (règle des Hooks) :
-   * un message expiré/système/supprimé n'est jamais élu, la rangée n'y
-   * grandit donc jamais, mais le hook doit tourner sur CHAQUE rendu. */
+  /** LA LOUPE ET SON CADRE (#6586/#6588, #8506) — avant tout retour anticipé
+   * (règle des Hooks) : un message expiré/système/supprimé n'est jamais élu,
+   * la rangée n'y grandit donc jamais, mais le hook doit tourner sur CHAQUE
+   * rendu. */
   const rowRef = useRef<HTMLDivElement>(null);
-  useFocalLoupe(rowRef, elected);
+  useFocusFrame(rowRef, elected);
 
   // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
   // (`data-message`) pour que les gates puissent constater l'absence.
@@ -707,13 +713,15 @@ export const FocalRow = memo(function FocalRow({
           débordait DANS le texte du message plutôt que dans la zone
           RÉSERVÉE par l'en-tête d'identité (désormais invisible,
           `opacity:0`, mais toujours présente dans le flux — donc encore
-          « à elle » l'espace que la superposition vient occuper). Sur une
-          rangée de CONTINUATION (sans tête), le débordement reste possible
-          — écart hors périmètre de #5648, à suivre si mesuré. */}
+          « à elle » l'espace que la superposition vient occuper). Depuis
+          #8506, la pastille s'y pose ENTIÈRE (plus de débord) ; sur une
+          rangée de CONTINUATION (sans tête), elle se pose AU-DESSUS de la
+          première ligne et le cadre monte d'autant (`continuation`). */}
       <div className="min-w-0 relative isolate">
-        {elected ? <FocusCard /> : null}
+        {elected ? <FocusCard continuation={!head} /> : null}
         {elected ? (
           <FocusIdentity
+            continuation={!head}
             initials={initialsOf(senderAvatarName)}
             name={senderName}
             accent="var(--accent)"
@@ -800,133 +808,49 @@ export const FocalRow = memo(function FocalRow({
               />
             ) : null}
 
-            {isProtected ? (
-              <ProtectedContent
-                messageId={message.id}
-                kind={kind}
-                isViewOnce={message.isViewOnce}
-                contentLength={message.content.length}
-                attachments={message.attachments}
-                surface="row"
-                revealable={revealable}
-                onConsumeViewOnce={onConsumeViewOnce}
-                media={{
-                  frame: 'tiles',
-                  languages,
-                  fallbackLanguage: message.originalLanguage,
-                  carrier: mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto }),
-                  isMine,
-                  ...(displayLanguage !== undefined ? { displayLanguage } : {}),
-                }}
-                now={now}
-              >
-                {contentBlock}
-              </ProtectedContent>
-            ) : (
-              contentBlock
-            )}
+            {/* LA LOUPE DE L'ÉLU NE GROSSIT QUE CE BLOC (#8536) — citation, médias,
+                texte, protégés ou non ; l'identité, la bande basse et le tampon
+                restent à l'échelle 1 (`use-focus-frame.ts`, `thread-scene.css`). */}
+            <div data-loupe>
+              {isProtected ? (
+                <ProtectedContent
+                  messageId={message.id}
+                  kind={kind}
+                  isViewOnce={message.isViewOnce}
+                  contentLength={message.content.length}
+                  attachments={message.attachments}
+                  surface="row"
+                  revealable={revealable}
+                  onConsumeViewOnce={onConsumeViewOnce}
+                  media={{
+                    frame: 'tiles',
+                    languages,
+                    fallbackLanguage: message.originalLanguage,
+                    carrier: mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto }),
+                    isMine,
+                    ...(displayLanguage !== undefined ? { displayLanguage } : {}),
+                  }}
+                  now={now}
+                >
+                  {contentBlock}
+                </ProtectedContent>
+              ) : (
+                contentBlock
+              )}
+            </div>
 
-            {/* LA LIGNE BASSE — drapeaux PUIS réactions, même ligne : c'est
-                l'arbitrage porteur du 2026-08-18 que `FocalRow.flagAndReactionsRow`
-                porte côté iOS. Conditionnelle (défaut 7) : elle ne monte plus
-                sur un message sans rien à dire.
-
-                S'EFFACE en focus par `visibility: hidden`, PAS par démontage
-                (correction de revue #5648, défaut bloquant 3) : la
-                DÉMONTER — comme une première version de ce lot le faisait —
-                réduit la rangée élue de la hauteur de cette ligne (26 px),
-                et fait remonter `.focus-strip`/`.focus-stamp`
-                (`bottom: calc(-1 * var(--focus-strip-overhang))`, ancrés au
-                bas du bloc de contenu) SUR la dernière ligne du texte que
-                l'élection vient de mettre en avant. `FocalRow.swift:317-322`
-                fait l'INVERSE mot pour mot — `.opacity(input.isFocused ? 0
-                : 1)` — « la bande SUR la ligne basse remplace visuellement
-                cette ligne, QUI GARDE SA PLACE ». `visibility: hidden` (et
-                non `opacity: 0`, le traitement de l'avatar/du nom deux blocs
-                plus haut) parce que CETTE ligne porte des `<button>` DE
-                PRISME : `opacity: 0` les aurait laissés dans l'ordre de
-                tabulation et l'arbre d'accessibilité — exactement l'anti-
-                motif WCAG que `FocusStrip` (le composant qui les REMPLACE
-                visuellement) documente avoir évité en restant hors
-                `aria-hidden`. `visibility: hidden` réserve la MÊME hauteur
-                sans y laisser de contrôle atteignable au clavier ni annoncé
-                deux fois. */}
-            {showsBottomLine ? (
-              <div
-                className="flex items-center gap-1 pt-1"
-                style={{ color: 'var(--color-meta)', visibility: elected ? 'hidden' : 'visible' }}
-              >
-                {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE (#6862) —
-                    voir la jumelle de `bubble.tsx`. */}
-                {/* LES DRAPEAUX DISENT DÉJÀ LA TRADUCTION (#7599, miroir iOS #7603) —
-                    la pastille 🌐 ne se pose que s'il n'y a aucun drapeau. */}
-                {onPickLanguage === undefined || footerLanguages.length === 0 ? (
-                  <PrismPastille
-                    language={currentInterfaceLanguage()}
-                    subject="message"
-                    servedLanguage={naturalServedLanguage}
-                    originalLanguage={message.originalLanguage}
-                    active={activeLanguage}
-                    {...(onPickLanguage === undefined
-                      ? {}
-                      : { onToggle: () => onPickLanguage(message.originalLanguage) })}
-                  />
-                ) : null}
-                {/* Une bande VIDE occupait une place du `gap` et décalait les
-                    réactions de 4 px de l'origine du contenu (#7929). */}
-                {onPickLanguage === undefined || footerLanguages.length === 0 ? null : (
-                  <Flags
-                    languages={footerLanguages}
-                    active={activeLanguage}
-                    onPick={onPickLanguage}
-                    limit={FLAG_LIMIT_PLAIN}
-                  />
-                )}
-                {reactions.map(([glyph, count]) => {
-                  const mine = myReactions?.includes(glyph) ?? false;
-                  return (
-                    <ReactionChip
-                      key={glyph}
-                      glyph={glyph}
-                      count={count}
-                      mine={mine}
-                      {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
-                    />
-                  );
-                })}
-              </div>
-            ) : elected ? (
-              /* DÉFAUT 1 (#5648, correction de revue) — le recouvrement du
-                 texte par le tampon n'était corrigé QUE pour les rangées qui
-                 montent une ligne basse (ci-dessus, `visibility: hidden`
-                 réserve sa hauteur). Une rangée ÉLUE SANS ligne basse
-                 (continuation `tail === false`, ou message sans traduction
-                 ni réaction) ne réservait AUCUNE hauteur : `.focus-strip`/
-                 `.focus-stamp` (ancrés `bottom: calc(-1 *
-                 var(--focus-strip-overhang))` sur cette colonne) débordaient
-                 alors de 9 px SUR la dernière ligne de texte qu'ils élisent
-                 — mesuré sur `riv-19` (continuation) et reproductible sur
-                 tout message sans traduction ni réaction
-                 (`fixtures.test.ts`, témoins `RIVER_CONTINUATION_WITNESS_ID`
-                 / `RIVER_NO_TRANSLATION_WITNESS_ID`).
-
-                 Ce `div` réserve la MÊME hauteur qu'une ligne basse réelle,
-                 avec les MÊMES classes que sa cible tactile
-                 (`pt-1` + `size-[22px]`, `PrismPastille`/`Flags` ci-dessus) —
-                 aucune cote nouvelle à garder par `check-curve.mjs`, la
-                 hauteur suit la géométrie déjà dérivée. `aria-hidden` : rien
-                 à annoncer, ni contrôle ni texte. Il ne se monte QUE sur la
-                 rangée ÉLUE (iOS porte le MÊME débord, `FocalRow.swift:202-
-                 211` — un défaut de la CIBLE, `targets/README.md` — ce
-                 réservoir est donc une divergence ASSUMÉE, documentée,
-                 jamais une recopie muette) : sur une rangée ORDINAIRE sans
-                 ligne basse, réserver cette hauteur ferait réapparaître la
-                 « ligne blanche inutile » que la directive porteur du
-                 2026-09-04 est venue supprimer (défaut 7, `meta.ts`). */
-              <div className="flex items-center gap-1 pt-1" aria-hidden>
-                <span data-focus-reserve className="size-[22px]" />
-              </div>
-            ) : null}
+            <FocalBottomLine
+              mounts={showsBottomLine}
+              elected={elected}
+              originalLanguage={message.originalLanguage}
+              naturalServedLanguage={naturalServedLanguage}
+              activeLanguage={activeLanguage}
+              footerLanguages={footerLanguages}
+              reactions={reactions}
+              {...(myReactions === undefined ? {} : { myReactions })}
+              {...(onPickLanguage === undefined ? {} : { onPickLanguage })}
+              {...(onReact === undefined ? {} : { onReact })}
+            />
           </div>
 
           {/* « MODIFIÉ » — HORS DU RÉVÉLÉ, et c'est la loi iOS elle-même
@@ -946,7 +870,7 @@ export const FocalRow = memo(function FocalRow({
               colonne méta et posée juste avant elle, comme sur iOS.
               `aria-hidden` : `composeMessageLabel` porte déjà « modifié ». */}
           {isEdited ? (
-            <div className="flex shrink-0 items-center pb-0.5" aria-hidden>
+            <div data-loupe-follow className="flex shrink-0 items-center pb-0.5" aria-hidden>
               <EditedMark onBrandBubble={false} />
             </div>
           ) : null}
@@ -1015,6 +939,8 @@ export const FocalRow = memo(function FocalRow({
                         onPickLanguage,
                       })}
                   reactions={reactions}
+                  {...(myReactions === undefined ? {} : { myReactions })}
+                  {...(onReact === undefined ? {} : { onToggleReaction: onReact })}
                 />
               ) : null}
               <FocusStamp
@@ -1025,6 +951,7 @@ export const FocalRow = memo(function FocalRow({
                 delivery={delivery}
                 isMine={isMine}
                 {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                {...(onOpenDetail === undefined || selected !== undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
               />
             </>
           ) : null}

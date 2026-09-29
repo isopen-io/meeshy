@@ -245,4 +245,16 @@ final class ComposerObjectEditorRailTests: XCTestCase {
         }
     }
 
+
+    /// **Une image n'offre pas « Rogner »** (retour porteur 2026-09-28) :
+    /// l'outil borne la lecture d'une source qui a une durée, et ouvrait sur
+    /// une image une plaque vide.
+    func test_sansSourceARogner_lOutilRognerNEstPasOffert() {
+        XCTAssertFalse(ComposerObjectEditorRail.entries(for: .media, hasTrimmableSource: false)
+            .contains(.media(.trim)))
+        XCTAssertTrue(ComposerObjectEditorRail.entries(for: .media, hasTrimmableSource: true)
+            .contains(.media(.trim)))
+        XCTAssertTrue(ComposerObjectEditorRail.entries(for: .media, hasTrimmableSource: false)
+            .contains(.media(.filter)), "Les autres outils de l'image restent.")
+    }
 }

@@ -16,6 +16,8 @@ const frEphemeral = {
   'composer.ephemeral.active': 'Mode éphémère actif : {duration}',
   'composer.ephemeral.off': 'Désactivé',
   'composer.ephemeral.rail': 'Durée avant disparition du message',
+  'composer.protection.imposed.blur': 'Flou imposé par le message cité',
+  'composer.protection.imposed.ephemeral': 'Mode éphémère imposé par le message cité : {duration}',
 } as const;
 
 export type EphemeralCatalogSlice = Readonly<Record<keyof typeof frEphemeral, string>>;

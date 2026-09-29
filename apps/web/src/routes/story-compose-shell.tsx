@@ -42,14 +42,15 @@ export function StudioShell({
 }) {
   const lang = currentInterfaceLanguage();
   return (
-    <main data-story-studio className="relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
+    <main data-story-studio className="studio-shell relative flex h-dvh flex-col overflow-hidden" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
       {floor}
-      {/* LA BARRE AU PLUS HAUT (lot 6) — ✕ et ⋯ collent à la zone sûre du haut
-          (`pt-safe`), sans marge en plus, et la scène monte avec eux. Ils ne passent pas DANS la barre d'état : iOS
-          l'efface, le web ne le peut pas (l'horloge y resterait dessous). */}
+      {/* LA BARRE AU PLUS HAUT (lot 6) — ✕ et ⋯ suivent la zone sûre du haut
+          (`pt-safe`), et la scène monte avec eux. Ils ne passent pas DANS la barre d'état : iOS
+          l'efface, le web ne le peut pas (l'horloge y resterait dessous). Lot 7 (#8482) :
+          ils redescendent un peu (6 px), pour ne plus coller au bord haut. */}
       <header
         data-story-studio-top
-        className="relative z-20 flex shrink-0 items-center gap-3 px-3 pt-safe pb-1"
+        className="relative z-20 mt-1.5 flex shrink-0 items-center gap-3 px-3 pt-safe pb-1"
       >
         {onCancel !== undefined ? (
           <button

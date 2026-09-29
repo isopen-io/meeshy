@@ -1174,8 +1174,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "ce qu'elle mesure."
         )
         XCTAssertTrue(
-            compacte.contains("performSoclePublish("),
+            compacte.contains("requestSoclePublish("),
             "… et un bouton qui ne déclenche rien est l'affordance sans effet que ce chantier retire partout."
+        )
+        guard let demande = declarationBody(startingAt: "func requestSoclePublish(", in: try hostCode()) else {
+            return XCTFail("La demande de publication (#8603) est introuvable — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(demande).contains("performSoclePublish("),
+            "La question « Publier en réel ? » (#8603) retombe sur l'aiguillage : sans lui, la flèche ne publierait plus rien."
         )
         // **Le GATE a déménagé dans l'habillage partagé le 2026-09-03**
         // (#4995) : les deux flèches — socle et en-tête du mood — passent par

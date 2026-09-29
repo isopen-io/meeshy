@@ -40,9 +40,12 @@ final class CallManagerHost: ObservableObject {
             self?.objectWillChange.send()
         }
         manager = candidate
-        // #3585 — la pile de PRODUCTION porte aussi le maillage de groupe ; un
-        // hôte de test n'y branche rien.
-        if self === CallManagerHost.shared { GroupCallMeshBinding.shared.bind(candidate) }
+        // #3585 — la pile de PRODUCTION porte aussi le maillage de groupe, et
+        // #8480 l'aperçu avant décroché ; un hôte de test n'y branche rien.
+        if self === CallManagerHost.shared {
+            GroupCallMeshBinding.shared.bind(candidate)
+            CallPreviewBinding.shared.bind(candidate)
+        }
         return candidate
     }
 

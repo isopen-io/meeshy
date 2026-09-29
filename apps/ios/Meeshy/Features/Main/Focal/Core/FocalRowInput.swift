@@ -332,6 +332,9 @@ struct FocalRowActions {
     var onOpenReactPicker: ((String) -> Void)?
     var onShowReactions: ((String) -> Void)?
     var onShowReadStatus: ((String) -> Void)?
+    /// La date de l'élu Focal ouvre les DÉTAILS du message (#8537) — la même
+    /// feuille qu'« Infos » dans la bulle, jamais une seconde.
+    var onShowMessageInfo: ((String) -> Void)?
     var onRetry: ((String) -> Void)?
     var onReplyTap: ((String) -> Void)?
     var onStoryReplyTap: ((String) -> Void)?

@@ -28,6 +28,8 @@ export type Session = {
   /** L'appel a souffert (qualité mauvaise ou reprise) : sa note est toujours demandée (#8072). */
   troubled: boolean;
   captions: CaptionsPort | null;
+  /** Le micro coupé pendant que l'appel sortant SONNE (#8480) : il se rouvre à la connexion. */
+  mutedWhileRinging: boolean;
 };
 
 export const emptySession = (): Session => ({
@@ -46,6 +48,7 @@ export const emptySession = (): Session => ({
   unwatchNetwork: null,
   troubled: false,
   captions: null,
+  mutedWhileRinging: false,
 });
 
 export function baseCall(request: StartCallRequest, direction: ActiveCall['direction'], phase: ActiveCall['phase']): ActiveCall {
@@ -76,5 +79,7 @@ export function baseCall(request: StartCallRequest, direction: ActiveCall['direc
     captionPeers: [],
     transcription: 'idle',
     quality: null,
+    preview: null,
+    previewed: false,
   };
 }

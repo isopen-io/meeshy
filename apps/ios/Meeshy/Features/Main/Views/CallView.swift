@@ -79,17 +79,23 @@ struct CallView: View {
     /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
     /// DANS l'écran d'appel, entre l'en-tête et la pilule.
     @ObservedObject var mesh: GroupCallMeshCoordinator
-    /// #8394 — le `(…)` de la pilule : replié à l'ouverture de l'écran.
-    @State var controlsDisclosure = CallControlsDisclosure()
+    @State var layer: CallScreenLayer = .idle
     /// #8395 — plein écran d'une vignette à la une : masque les commandes.
     @State var isStageFullScreen = false
+    @State var isSelfFeatured = false
+    @State var selfTileScale: CallSelfTileScale = .standard
+    @State var selfTilePinch: CGFloat = 1
+    /// #8626 — le bouton caméra d'une petite vignette a déployé sa grille.
+    @State var isCameraMenuUnfolded = false
+    let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
-    @State var showCaptionsJournal = false
-    /// #8433 · #8439 — le sélecteur d'amis et la palette des réactions.
-    @State var showAddPeople = false
-    @State var showReactionPalette = false
+    /// #8625 — l'écran d'appel TIENT la capture sans l'observer : ses états
+    /// (aperçu, chrono, résultat) se lisent dans des vues feuilles, sinon un
+    /// film redessinerait tout l'écran d'appel à chaque trame.
+    @StateObject var captureHost = CallCaptureHost()
+    var capture: CallCaptureController { captureHost.controller }
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).
@@ -107,10 +113,11 @@ struct CallView: View {
     /// racine ignore la safe area, la pilule la retrouve depuis la fenêtre.
     static var chromeBottomInset: CGFloat { DeviceLayout.safeAreaBottom + 12 }
 
-    init(callManager: CallManager, mesh: GroupCallMeshCoordinator) {
+    init(callManager: CallManager, mesh: GroupCallMeshCoordinator, selfTileMemory: (any CallSelfTileRemembering)? = nil) {
         self.callManager = callManager
         self.transcriptionService = callManager.transcriptionService
         self.mesh = mesh
+        self.selfTileMemory = selfTileMemory ?? CallSelfTileMemory.shared
     }
 
     /// #8276 — un appel de groupe (deux membres distants au moins) remplace la
@@ -119,11 +126,10 @@ struct CallView: View {
         GroupCallStage.isShown(isMeshActive: mesh.isGroupCallActive, roster: mesh.roster)
     }
 
-    /// #8394 — l'en-tête, la pilule et les rails se montrent et se masquent
-    /// ENSEMBLE : masquage automatique (vidéo, 4 s) ou plein écran d'une
-    /// vignette à la une.
+    /// #8394 · #8550 — l'en-tête, la pilule, ses rangées et le panneau ouvert
+    /// se montrent et se masquent ENSEMBLE (`CallChromeVisibility`).
     var isChromeVisible: Bool {
-        showControls && !isStageFullScreen
+        chromeVisibility.isVisible(.controls)
     }
 
     var body: some View {
@@ -207,6 +213,7 @@ struct CallView: View {
                 outgoingRingingView
             case .connecting:
                 connectingView
+                    .background { CallPreviewBackdrop(preview: .shared) }
             case .connected:
                 connectedView
             case .ended(let reason):
@@ -254,7 +261,7 @@ struct CallView: View {
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
             // est retiré (pipeline de capture audio inexistant — voir
             // CallEffectsOverlay), il ne reste que les filtres vidéo.
-            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
+            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
                     isVideoEnabled: callManager.isVideoEnabled,
@@ -301,6 +308,7 @@ struct CallView: View {
         // textes blancs deviennent illisibles (white-on-white).
         .environment(\.colorScheme, .dark)
         .onAppear {
+            showTranscript = transcriptionService.isShowingOverlay
             startPulseAnimation()
             // Expansion depuis la bannière PiP : le contenu démarre contracté
             // vers le haut (là où vivait la bannière) puis s'étire en plein
