@@ -61,7 +61,7 @@ function fakeConnection() {
   return { pc, calls, setState };
 }
 
-function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean } = {}) {
+function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string } = {}) {
   const fake = fakeConnection();
   const sent: OutgoingSignal[] = [];
   const states: LinkState[] = [];
@@ -76,6 +76,7 @@ function link(options: { readonly local?: string; readonly remote?: string; read
     iceServers: [],
     localStream,
     ...(options.receiveOnly === true ? { receiveOnly: true } : {}),
+    ...(options.shapeSdp === undefined ? {} : { shapeSdp: options.shapeSdp }),
     send: (signal) => void sent.push(signal),
     onRemoteStream: () => undefined,
     onState: (state) => void states.push(state),
@@ -122,6 +123,16 @@ describe('offre et réponse', () => {
     expect(fake.calls.slice(0, 2)).toEqual(['add:audio:sendrecv', 'add:video:recvonly']);
     expect(sent).toEqual([{ type: 'offer', sdp: 'offer-sdp', negotiationId: 1 }]);
     expect(states).toEqual(['connecting']);
+  });
+
+  test('la description envoyée passe par le réglage Opus, offre comme réponse ; la locale reste celle du navigateur (#8697)', async () => {
+    const offerer = link({ shapeSdp: (sdp) => `${sdp}+opus` });
+    await offerer.peer.offer();
+    expect(offerer.sent).toEqual([{ type: 'offer', sdp: 'offer-sdp+opus', negotiationId: 1 }]);
+    expect(offerer.fake.pc.localDescription?.sdp).toBe('offer-sdp');
+    const answerer = link({ local: 'u-b', remote: 'u-a', shapeSdp: (sdp) => `${sdp}+opus` });
+    await answerer.peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 2);
+    expect(answerer.sent).toEqual([{ type: 'answer', sdp: 'answer-sdp+opus', negotiationId: 2 }]);
   });
 
   test('avec la caméra, la ligne vidéo émet', async () => {

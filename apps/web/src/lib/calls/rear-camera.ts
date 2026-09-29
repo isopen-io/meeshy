@@ -1,4 +1,5 @@
 import { acquireCamera, videoConstraints, type MediaDevicesLike } from './call-media';
+import type { DataProfile } from './call-data-profile';
 
 /**
  * **LA CAMÉRA ARRIÈRE QUI ZOOME LE PLUS LOIN** (#8441) — un téléphone a
@@ -42,9 +43,9 @@ export async function rearCameraOf(devices: Enumerator | null): Promise<string |
 }
 
 /** La caméra arrière choisie, demandée par son identifiant (`ideal` : jamais un échec) ; sinon l'orientation. */
-export function rearVideoConstraints(deviceId: string | null): MediaTrackConstraints {
-  if (deviceId === null) return videoConstraints('environment');
-  const { facingMode: _facing, ...rest } = videoConstraints('environment');
+export function rearVideoConstraints(deviceId: string | null, profile?: DataProfile): MediaTrackConstraints {
+  if (deviceId === null) return videoConstraints('environment', profile);
+  const { facingMode: _facing, ...rest } = videoConstraints('environment', profile);
   return { ...rest, deviceId: { ideal: deviceId } };
 }
 
@@ -53,7 +54,7 @@ type RearDevices = MediaDevicesLike & Enumerator;
 const browserDevices = (): RearDevices | null => (typeof navigator === 'undefined' || navigator.mediaDevices === undefined ? null : navigator.mediaDevices);
 
 /** Se retourner vers l'arrière : la caméra qui zoome le plus loin, sinon celle que le navigateur choisit. */
-export async function acquireRearCamera({ mediaDevices = browserDevices() }: { readonly mediaDevices?: RearDevices | null } = {}): Promise<MediaStreamTrack> {
+export async function acquireRearCamera({ mediaDevices = browserDevices(), profile }: { readonly mediaDevices?: RearDevices | null; readonly profile?: DataProfile } = {}): Promise<MediaStreamTrack> {
   const deviceId = await rearCameraOf(mediaDevices);
-  return acquireCamera({ facing: 'environment', mediaDevices, video: rearVideoConstraints(deviceId) });
+  return acquireCamera({ facing: 'environment', mediaDevices, video: rearVideoConstraints(deviceId, profile) });
 }
