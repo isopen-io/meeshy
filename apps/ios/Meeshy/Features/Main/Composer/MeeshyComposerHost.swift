@@ -623,6 +623,16 @@ struct MeeshyComposerHost: View {
     /// qui dépendent de CET objet — verrouillé ? au fond ? seul de son plan ? —
     /// et aucune ne se répond sans son id.
     @State var selectedSceneItemId: String?
+    /// La catégorie d'effets dont le carrousel est ouvert (#8712) — lue par
+    /// `ComposerSceneEffects.carousel`, jamais telle quelle.
+    @State var openSceneEffect: ComposerSceneEffect?
+    /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
+    /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
+    @State var sceneObjectMenu: ComposerSceneMenuRequest?
+    @State var sceneMenuSize: CGSize = .zero
+    /// Le fond que la prochaine prise du viseur REMPLACE (#8716) — posé par
+    /// « Reprendre une photo », consommé à la pose, oublié au désarmement.
+    @State var sceneCaptureReplacesBackgroundId: String?
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène (#4064).**
     ///
@@ -904,6 +914,11 @@ struct MeeshyComposerHost: View {
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
         )
+        // Toucher le fond QUITTE l'objet (#8714) : ses options quittent la
+        // colonne droite, comme sous le `(x)` — et referme le carrousel
+        // d'effets (#8712), qui rend l'audience et Publier.
+        selectedSceneItemId = nil
+        openSceneEffect = nil
     }
 
     var body: some View {

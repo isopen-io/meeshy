@@ -81,9 +81,8 @@ nonisolated enum MessageCardMotionExporter {
         var painted = pictures
         if let generator, let videoID {
             let time = CMTime(seconds: plan.time(ofFrame: index), preferredTimescale: 600)
-            // L'appel SYNCHRONE : on est déjà hors du MainActor, et la forme
-            // `async` exigerait d'envoyer le générateur à un autre domaine d'isolement.
-            if let still = try? generator.copyCGImage(at: time, actualTime: nil) {
+            nonisolated(unsafe) let sequentialGenerator = generator
+            if let still = try? await sequentialGenerator.image(at: time).image {
                 painted = pictures.replacing(videoID, with: still)
             }
         }

@@ -75,6 +75,13 @@ nonisolated enum ComposerRailGeometry {
     /// cadre entier.
     static var floatingBottomInset: CGFloat { gutter + railWidth }
 
+    /// **La place de l'historique, gardée quand il se tait** (#8713) : la frise
+    /// masque annuler et rétablir, et « Temps », posé au-dessus d'eux, ne doit
+    /// pas descendre d'autant sous le doigt.
+    static func historyReserve(undo: Bool, redo: Bool) -> CGFloat {
+        CGFloat([undo, redo].filter { $0 }.count) * (railWidth + floatingEntrySpacing)
+    }
+
     /// La marge verticale d'une colonne flottante (`ComposerLeadingRail`).
     static let floatingColumnPadding: CGFloat = 8
 

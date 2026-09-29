@@ -50,12 +50,15 @@ final class ComposerToolFocusTests: XCTestCase {
 
     // MARK: - Le chrome : une bascule, sans reste
 
-    func test_isShown_outilOuvert_neLaisseQueSesControleurs() {
+    /// **Le rail droit RESTE** depuis #8713 (« en bas on a undo et redo
+    /// toujours, même pour les outils type dessin ») : les contrôleurs de
+    /// l'outil s'y posent au-dessus de l'historique.
+    func test_isShown_outilOuvert_neLaisseQueSesControleursEtLeRailDroit() {
         let servis = ComposerToolFocus.Chrome.allCases.filter {
             ComposerToolFocus.isShown($0, toolIsOpen: true)
         }
-        XCTAssertEqual(servis, [.toolControls],
-                       "en-tête, portes, rail droit et ses (+), socle, trace du son et description cèdent")
+        XCTAssertEqual(servis, [.trailingRail, .toolControls],
+                       "en-tête, portes, socle, trace du son et description cèdent")
     }
 
     func test_isShown_outilFerme_rendLeChromeDAvant_sansLesControleurs() {
@@ -89,10 +92,12 @@ final class ComposerToolFocusTests: XCTestCase {
         }
         for question in [".topBar", ".trailingRail", ".description"] {
             XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(\(question), toolIsOpen: toolIsOpen)"),
-                          "\(question) doit céder à l'outil par la règle")
+                          "\(question) doit répondre à l'outil par la règle")
         }
-        XCTAssertTrue(surface.contains("onExitTool: onRailExitTool"),
-                      "le rail de gauche porte le (x) de l'outil")
+        XCTAssertTrue(surface.contains("options: trailingOptions"),
+                      "le rail droit porte les réglages de l'outil et leur (x) (#8713)")
+        XCTAssertTrue(surface.contains("guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }"),
+                      "un outil ouvert vide le rail gauche : ses réglages vivent à droite")
     }
 
     func test_hote_effaceLeSocle_quandUnOutilDeLaSceneEstOuvert() throws {

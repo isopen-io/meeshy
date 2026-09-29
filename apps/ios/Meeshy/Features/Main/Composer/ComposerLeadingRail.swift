@@ -112,6 +112,15 @@ struct ComposerLeadingRail: View {
     /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
     var separateButtons: Bool = false
 
+    /// **Les boutons de SCÈNE, après le lieu** (#8713, directive porteur
+    /// 2026-09-29) : l'éclair du mode Animé, puis le Cadre. Déjà servis et
+    /// ordonnés par `ComposerLeadingSceneToggles` ; `sceneTogglesAfter` dit la
+    /// porte qui les précède. Ce ne sont pas des portes — ils ne font entrer
+    /// aucune matière — mais ils vivent sur la même colonne, qui agit sur la
+    /// scène.
+    var sceneToggles: [ComposerSceneToggleEntry] = []
+    var sceneTogglesAfter: ComposerRailDoor?
+
     @State private var lastTapped: String?
 
     /// L'écart entre deux cadres : resserré quand chaque bouton ne dessine
@@ -122,7 +131,7 @@ struct ComposerLeadingRail: View {
 
     private var isEmpty: Bool {
         switch mode {
-        case .doors(let doors):   return doors.isEmpty
+        case .doors(let doors):   return doors.isEmpty && sceneToggles.isEmpty
         case .tool(let controls): return controls.isEmpty
         }
     }
@@ -250,11 +259,29 @@ struct ComposerLeadingRail: View {
                     .frame(width: ComposerRailGeometry.railWidth,
                            height: ComposerRailGeometry.railWidth)
             }
+            if sceneTogglesAfter == door { sceneToggleEntries }
         }
         if let systemEntry, systemEntryAfter == nil {
             systemEntry
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
+        }
+        if sceneTogglesAfter.map({ !doors.contains($0) }) ?? true {
+            sceneToggleEntries
+        }
+    }
+
+    /// L'éclair puis le Cadre — teintés quand ce qu'ils règlent est actif.
+    @ViewBuilder
+    private var sceneToggleEntries: some View {
+        ForEach(sceneToggles) { bouton in
+            entry(id: "scene.\(bouton.id)",
+                  symbolName: bouton.toggle.symbol,
+                  label: bouton.label,
+                  tint: MeeshyColors.textPrimary(isDark: true),
+                  glassTint: bouton.isOn ? MeeshyColors.brandPrimary : nil,
+                  isOn: bouton.isOn,
+                  action: bouton.action)
         }
     }
 
@@ -331,6 +358,8 @@ struct ComposerLeadingRail: View {
                        label: String,
                        tint: Color,
                        badge: Int? = nil,
+                       glassTint: Color? = nil,
+                       isOn: Bool = false,
                        action: @escaping () -> Void) -> some View {
         Button {
             lastTapped = id
@@ -342,7 +371,8 @@ struct ComposerLeadingRail: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundColor(tint)
                 .composerToolBounce(active: lastTapped == id)
-                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint))
+                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint,
+                                                  tint: glassTint))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 // **La pastille est posée SUR le glyphe, hors du flux** : dans
@@ -352,6 +382,7 @@ struct ComposerLeadingRail: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(label))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
         // **Le compte est une VALEUR, jamais une seconde étiquette.** Le
         // fondre dans le libellé remplacerait le VERBE que VoiceOver annonce
         // (« Ajouter du texte ») par une phrase composée — et un contrôle qui
@@ -450,6 +481,24 @@ nonisolated enum ComposerRailCopy {
         case .text:
             return String(localized: "composer.rail.text",
                           defaultValue: "Ajouter du texte", bundle: .main)
+        }
+    }
+}
+
+/// **Un bouton de SCÈNE du rail gauche** (#8713) — l'éclair ou le Cadre, avec
+/// son état et son geste. Le glyphe vient de `ComposerSceneToggle`, le nom de
+/// la table de copie qui le nommait déjà à sa place d'avant.
+struct ComposerSceneToggleEntry: Identifiable {
+    let toggle: ComposerSceneToggle
+    let isOn: Bool
+    let action: () -> Void
+
+    var id: String { toggle.rawValue }
+
+    var label: String {
+        switch toggle {
+        case .animated: return ComposerAnimatedCopy.toggle
+        case .frame:    return ComposerFrameCopy.title
         }
     }
 }

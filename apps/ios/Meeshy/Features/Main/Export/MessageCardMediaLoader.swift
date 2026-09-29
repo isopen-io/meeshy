@@ -74,7 +74,7 @@ nonisolated enum MessageCardMediaLoader {
     /// ne reconnaît pas un fichier de cache nommé par son empreinte.
     static func localFile(_ fileURL: String, kind: MessageCardMediaKind) async -> URL? {
         let key = resolved(fileURL)
-        let store = kind == .audio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
+        let store = await (kind == .audio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video)
         guard let data = try? await store.data(for: key), !data.isEmpty else { return nil }
         let known = URL(string: key)?.pathExtension ?? ""
         let fallback = kind == .audio ? "m4a" : "mp4"
@@ -110,11 +110,11 @@ nonisolated enum MessageCardMediaLoader {
             guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
             let length = CMBlockBufferGetDataLength(block)
             guard length >= 2 else { continue }
-            let byteCount = (length / 2) * 2
-            var pcm = [Int16](repeating: 0, count: length / 2)
+            let sampleCount = length / 2
+            var pcm = [Int16](repeating: 0, count: sampleCount)
             let status = pcm.withUnsafeMutableBytes { raw -> OSStatus in
                 guard let base = raw.baseAddress else { return kCMBlockBufferBadCustomBlockSourceErr }
-                return CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: byteCount, destination: base)
+                return CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: sampleCount * 2, destination: base)
             }
             guard status == kCMBlockBufferNoErr else { continue }
             levels.append(pcm.reduce(0.0) { $0 + abs(Double($1)) } / Double(pcm.count))
