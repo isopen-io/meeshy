@@ -25,7 +25,11 @@ export type StatsRead = {
   readonly bytesSent: number;
   readonly bytesReceived: number;
   readonly codec: string | null;
+  /** Le chemin du média (#8698) : par un relais TURN, ou direct ; `null` avant qu'une paire soit élue. */
+  readonly path: MediaPath | null;
 };
+
+export type MediaPath = 'direct' | 'relay';
 
 export type PeerQuality = {
   readonly level: ConnectionQualityLevel;
@@ -60,6 +64,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const sending = (kind: string): StatsEntry | undefined => outbound.find((entry) => entry.kind === kind && numberOf(entry.bytesSent) > 0);
   const codecEntry = (sending('video') ?? sending('audio'))?.codecId;
   const codec = entries.find((entry) => entry.type === 'codec' && entry.id === codecEntry);
+  const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
   return {
     at,
     rtt: numberOf(pair?.currentRoundTripTime ?? remote?.roundTripTime) * 1000,
@@ -71,6 +76,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
     bytesSent: sum(outbound, 'bytesSent'),
     bytesReceived: sum(inbound, 'bytesReceived'),
     codec: subtype(codec?.mimeType),
+    path: local === undefined ? null : local.candidateType === 'relay' ? 'relay' : 'direct',
   };
 }
 
@@ -107,9 +113,9 @@ export type VideoTier = 'high' | 'medium' | 'low' | 'frozen' | 'suspended';
 
 export type TierEncoding = { readonly active: boolean; readonly maxBitrate: number; readonly scaleResolutionDownBy: number; readonly maxFramerate: number };
 
-/** Les paliers d'`applyVideoQuality` d'iOS ; `frozen` est `survivalFrozenFPS` au plancher `minVideoBitrate`. */
+/** Les paliers d'`applyVideoQuality` d'iOS ; `high` est le plafond Wi-Fi du barème (`call-data-profile.ts`), `frozen` `survivalFrozenFPS` au plancher `minVideoBitrate`. */
 export const TIER_ENCODING: Readonly<Record<VideoTier, TierEncoding>> = {
-  high: { active: true, maxBitrate: 1_500_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
+  high: { active: true, maxBitrate: 1_200_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
   medium: { active: true, maxBitrate: 600_000, scaleResolutionDownBy: 1.5, maxFramerate: 24 },
   low: { active: true, maxBitrate: 250_000, scaleResolutionDownBy: 2, maxFramerate: 15 },
   frozen: { active: true, maxBitrate: 100_000, scaleResolutionDownBy: 2, maxFramerate: 2 },

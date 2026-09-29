@@ -1,8 +1,12 @@
+import { captureShape, type DataProfile } from './call-data-profile';
+
 /**
  * **LE MICRO ET LA CAMÉRA** (#6382) — contraintes reprises de l'ancien web
  * (`call-media-constraints.ts`, tag `legacy-web-final`) : écho, bruit et gain
- * traités par le navigateur, caméra 640×480 visée (720p au plus), 24 i/s,
- * caméra avant par défaut comme iOS (§ 7.7 : caméra avant sur iPhone).
+ * traités par le navigateur, caméra avant par défaut comme iOS (§ 7.7 :
+ * caméra avant sur iPhone). La forme de la capture suit le profil de données
+ * (#8697, `captureShape`) : 720p et 30 i/s au plus en Wi-Fi, 640×480 à 24 i/s
+ * sans profil connu, moins encore en économie.
  */
 
 export type Facing = 'user' | 'environment';
@@ -17,13 +21,8 @@ export const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: true,
 };
 
-export function videoConstraints(facing: Facing): MediaTrackConstraints {
-  return {
-    width: { ideal: 640, max: 1280 },
-    height: { ideal: 480, max: 720 },
-    frameRate: { ideal: 24, max: 30 },
-    facingMode: facing,
-  };
+export function videoConstraints(facing: Facing, profile: DataProfile = 'cellular'): MediaTrackConstraints {
+  return { ...captureShape(profile), facingMode: facing };
 }
 
 export function audioInputConstraints(microphoneId: string | null): MediaTrackConstraints {
@@ -35,9 +34,9 @@ export function audioInputConstraints(microphoneId: string | null): MediaTrackCo
  * (`switchCamera`) cherche l'AUTRE face, sans identifiant. Garder les deux
  * dans une même contrainte laisserait le navigateur arbitrer entre elles.
  */
-export function videoInputConstraints(facing: Facing, cameraId: string | null): MediaTrackConstraints {
-  if (cameraId === null || facing !== 'user') return videoConstraints(facing);
-  const { facingMode: _facing, ...rest } = videoConstraints(facing);
+export function videoInputConstraints(facing: Facing, cameraId: string | null, profile?: DataProfile): MediaTrackConstraints {
+  if (cameraId === null || facing !== 'user') return videoConstraints(facing, profile);
+  const { facingMode: _facing, ...rest } = videoConstraints(facing, profile);
   return { ...rest, deviceId: { ideal: cameraId } };
 }
 
@@ -56,7 +55,7 @@ function devices(): MediaDevicesLike | null {
  * Le micro est EXIGÉ ; la caméra, si elle est refusée, rend un appel audio
  * (iOS répond en audio quand la caméra est refusée — `IncomingCallView`).
  */
-export type InputChoice = { readonly microphoneId?: string | null; readonly cameraId?: string | null };
+export type InputChoice = { readonly microphoneId?: string | null; readonly cameraId?: string | null; readonly profile?: DataProfile };
 
 export async function acquireCallMedia(options: { readonly video: boolean; readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null } & InputChoice): Promise<MediaStream> {
   const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
@@ -64,16 +63,16 @@ export async function acquireCallMedia(options: { readonly video: boolean; reado
   const audio = audioInputConstraints(options.microphoneId ?? null);
   if (!options.video) return source.getUserMedia({ audio, video: false });
   try {
-    return await source.getUserMedia({ audio, video: videoInputConstraints(options.facing, options.cameraId ?? null) });
+    return await source.getUserMedia({ audio, video: videoInputConstraints(options.facing, options.cameraId ?? null, options.profile) });
   } catch {
     return source.getUserMedia({ audio, video: false });
   }
 }
 
-export async function acquireCamera(options: { readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null; readonly cameraId?: string | null }): Promise<MediaStreamTrack> {
+export async function acquireCamera(options: { readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null; readonly cameraId?: string | null; readonly profile?: DataProfile }): Promise<MediaStreamTrack> {
   const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
   if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
-  const stream = await source.getUserMedia({ audio: false, video: videoInputConstraints(options.facing, options.cameraId ?? null) });
+  const stream = await source.getUserMedia({ audio: false, video: videoInputConstraints(options.facing, options.cameraId ?? null, options.profile) });
   const track = stream.getVideoTracks()[0];
   if (track === undefined) throw Object.assign(new Error('no-camera'), { name: 'NotFoundError' });
   return track;

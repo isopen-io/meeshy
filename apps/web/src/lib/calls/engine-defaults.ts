@@ -8,8 +8,10 @@ import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { createCameraEffects } from './camera-effects';
+import { browserConnection, dataProfileOf, opusShapeFor, type DataProfile } from './call-data-profile';
 import { preferredInputs } from './call-devices';
 import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
+import { shapeOpusSdp } from './call-opus-sdp';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
@@ -41,13 +43,16 @@ function watchBrowserNetwork(onChange: () => void): () => void {
   };
 }
 
+/** Le profil de données du moment (#8697) : relu à chaque négociation, capture et relevé. */
+const currentProfile = (): DataProfile => dataProfileOf(browserConnection());
+
 /**
  * La boucle de qualité est un chunk à part (`budgets.json` › `call_quality`),
  * chargé au premier relevé : `getStats`, paliers et survie ne pèsent que sur un
  * appel CONNECTÉ, jamais sur la sonnerie.
  */
 function lazyQualityLoop(deps: QualityLoopDeps): QualityLoop {
-  const loop = import('./call-quality-loop').then((module) => module.createQualityLoop(deps));
+  const loop = import('./call-quality-loop').then((module) => module.createQualityLoop({ ...deps, profile: currentProfile }));
   return { tick: () => loop.then((ready) => ready.tick()) };
 }
 
@@ -86,10 +91,10 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     transport: currentCallTransport,
     viewerId: () => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '',
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
-    acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs() }),
-    acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
+    acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
+    acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() }),
     acquireDisplay: () => acquireDisplay(),
-    createLink: createPeerLink,
+    createLink: (link) => createPeerLink({ ...link, shapeSdp: (sdp) => shapeOpusSdp(sdp, opusShapeFor(currentProfile())) }),
     cameraEffects,
     createStream: defaultCreateStream,
     now: Date.now,
