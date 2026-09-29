@@ -33,11 +33,23 @@ extension P2PWebRTCClient {
         return CaptureDeviceZoomTarget.richestBackCamera() ?? device
     }
 
-    /// #8441 — après chaque `startCapture` réussi : la caméra en service
-    /// repart à 1× (le grand-angle, pas l'ultra grand-angle de l'appareil virtuel).
-    func attachZoom(to camera: AVCaptureDevice) async {
+    /// Après chaque `startCapture` réussi. #8441 — la caméra en service repart
+    /// à 1× (le grand-angle, pas l'ultra grand-angle de l'appareil virtuel).
+    /// #8696 — elle devient la caméra CONFIRMÉE qui décide du miroir de l'aperçu.
+    func attachLiveCamera(_ camera: AVCaptureDevice) async {
         let target = CaptureDeviceZoomTarget(camera)
-        await MainActor.run { CameraZoomController.shared.attach(target) }
+        let facing = Self.facing(for: camera)
+        await MainActor.run {
+            CameraZoomController.shared.attach(target)
+            CallLiveCamera.shared.confirm(facing)
+        }
+    }
+
+    /// À la fin de la session : plus aucune caméra ne livre de trames.
+    @MainActor
+    static func releaseLiveCamera() {
+        CameraZoomController.shared.detach()
+        CallLiveCamera.shared.reset()
     }
 
     static func facing(for device: AVCaptureDevice) -> CameraFacing {

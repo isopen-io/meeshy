@@ -375,7 +375,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             await capturer.stopCapture()
             throw CancellationError()
         }
-        await attachZoom(to: camera)
+        await attachLiveCamera(camera)
         // applyVideoEncoding() is deferred — it runs once the video track is
         // attached to its transceiver; a sender does not exist yet at this point.
         Logger.webrtc.info("[WEBRTC] video track prepared (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
@@ -947,7 +947,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 await capturer.stopCapture()
                 return
             }
-            await attachZoom(to: camera)
+            await attachLiveCamera(camera)
             Logger.webrtc.info("[WEBRTC] capturer restarted on toggleVideo(true) (\(fps)fps)")
         } catch {
             Logger.webrtc.error("[WEBRTC] capturer restart failed: \(error.localizedDescription)")
@@ -1001,7 +1001,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             await capturer.stopCapture()
             return
         }
-        await attachZoom(to: camera)
+        await attachLiveCamera(camera)
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 
@@ -1044,7 +1044,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         usingFrontCamera = (camera.position == .front)
-        await attachZoom(to: camera)
+        await attachLiveCamera(camera)
         Logger.webrtc.info("[WEBRTC] switched to camera \(camera.localizedName, privacy: .public)")
     }
 
@@ -1229,7 +1229,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         audioTransceiver = nil
         videoTransceiver = nil
         videoCapturer = nil
-        Task { @MainActor in CameraZoomController.shared.detach() }
+        Task { @MainActor in P2PWebRTCClient.releaseLiveCamera() }
         stopObservingCaptureInterruptions()
         pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")

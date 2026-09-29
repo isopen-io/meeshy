@@ -174,7 +174,7 @@ struct GroupCallStageView: View {
     }
 
     private func selectableTile(_ tile: GroupCallStageTile) -> some View {
-        GroupCallTileView(tile: tile, track: track(for: tile), mirror: tile.isLocal && callManager.isUsingFrontCamera)
+        GroupCallTileView(tile: tile, track: track(for: tile), intendedFront: callManager.isUsingFrontCamera)
             .contentShape(Rectangle())
             .onTapGesture { choose(.tile(tile.id)) }
             .accessibilityAddTraits(.isButton)
@@ -212,7 +212,7 @@ struct GroupCallStageView: View {
         GroupCallTileView(
             tile: tile,
             track: track(for: tile),
-            mirror: tile.isLocal && callManager.isUsingFrontCamera,
+            intendedFront: callManager.isUsingFrontCamera,
             contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
             title: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
             zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
@@ -286,7 +286,8 @@ struct GroupCallStageView: View {
 struct GroupCallTileView: View {
     let tile: GroupCallStageTile
     let track: Any?
-    let mirror: Bool
+    /// Ma caméra voulue avant/arrière ; ignorée pour la vignette d'un autre.
+    let intendedFront: Bool
     var contentMode: UIView.ContentMode = .scaleAspectFill
     /// Remplace le nom sur la plaque (« Écran de X » à la une).
     var title: String? = nil
@@ -302,7 +303,7 @@ struct GroupCallTileView: View {
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .fill(MeeshyColors.indigo950)
                 if tile.showsVideo, track != nil {
-                    CallVideoView(track: track, mirror: mirror, contentMode: contentMode)
+                    tileVideo
                         .scaleEffect(zoom)
                 } else {
                     CachedAvatarImage(
@@ -333,6 +334,15 @@ struct GroupCallTileView: View {
         return tile.displayName.isEmpty
             ? String(localized: "call.group.tile.unknown", defaultValue: "Participant", bundle: .main)
             : tile.displayName
+    }
+
+    @ViewBuilder
+    private var tileVideo: some View {
+        if tile.isLocal {
+            LocalCameraVideoView(track: track, intendedFront: intendedFront, contentMode: contentMode)
+        } else {
+            CallVideoView(track: track, contentMode: contentMode)
+        }
     }
 
     private var nameplate: some View {
