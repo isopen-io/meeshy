@@ -130,6 +130,9 @@ final class CallCaptureController: ObservableObject {
 
     nonisolated static let previewIntervalNanoseconds: UInt64 = 200_000_000
     nonisolated static let thumbnailEveryPreviews = 5
+    /// #8736 — seules les vignettes autour du style choisi se refont : le
+    /// coût ne grandit plus avec le catalogue.
+    nonisolated static let thumbnailRadius = 3
     nonisolated static let statusDisplayNanoseconds: UInt64 = 2_500_000_000
     nonisolated static let previewMaxDimension: CGFloat = 640
     nonisolated static let thumbnailCanvas = CGSize(width: 108, height: 192)
@@ -147,6 +150,7 @@ final class CallCaptureController: ObservableObject {
     private var recordingTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
     private var previewsSinceThumbnails = 0
+    private var selectionRefresh: Task<Void, Never>?
 
     // Sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, la deinit synthétisée
     // est isolée et double-libère sur iOS 26.1 (abrt au démontage).
@@ -200,16 +204,26 @@ final class CallCaptureController: ObservableObject {
         if isRecording { Task { await stopRecording() } }
         previewTask?.cancel()
         previewTask = nil
+        selectionRefresh?.cancel()
+        selectionRefresh = nil
         grabber.detachAll()
         thumbnails = [:]
         previewFeed.image = nil
         previewsSinceThumbnails = 0
     }
 
+    /// #8736 — le style choisi se rend tout de suite, avec les vignettes de
+    /// son voisinage, sans attendre le prochain tour de l'aperçu.
     func select(_ newStyle: CallMontageStyle) {
         guard newStyle != style else { return }
         style = newStyle
-        previewFeed.image = thumbnails[newStyle]
+        previewFeed.image = thumbnails[newStyle] ?? previewFeed.image
+        previewsSinceThumbnails = Self.thumbnailEveryPreviews
+        guard isRunning, !isRecording else { return }
+        selectionRefresh?.cancel()
+        selectionRefresh = Task { [weak self] in
+            await self?.refreshPreviews()
+        }
     }
 
     func refreshPreviews() async {
@@ -223,13 +237,26 @@ final class CallCaptureController: ObservableObject {
         let rendered = await Task.detached(priority: .userInitiated) {
             Self.renderPreviews(portraits: portraits, selected: selected, caption: caption, includesThumbnails: includesThumbnails)
         }.value
-        guard !Task.isCancelled else { return }
-        if includesThumbnails { thumbnails = rendered.thumbnails }
+        guard !Task.isCancelled, !isRecording else { return }
+        if includesThumbnails { thumbnails.merge(rendered.thumbnails) { _, fresh in fresh } }
+        guard selected == style else { return }
         previewFeed.image = rendered.preview
     }
 
     nonisolated static func rendersThumbnails(hasThumbnails: Bool, previewsSinceThumbnails: Int) -> Bool {
         !hasThumbnails || previewsSinceThumbnails >= thumbnailEveryPreviews
+    }
+
+    /// Les styles dont la vignette se refait : `radius` de part et d'autre du
+    /// style choisi, jamais plus de `2 × radius + 1`, quel que soit le
+    /// catalogue.
+    nonisolated static func thumbnailWindow(selected: CallMontageStyle, in styles: [CallMontageStyle], radius: Int) -> [CallMontageStyle] {
+        guard !styles.isEmpty else { return [] }
+        let reach = max(radius, 0)
+        let centre = styles.firstIndex(of: selected) ?? 0
+        let lower = max(centre - reach, 0)
+        let upper = min(centre + reach, styles.count - 1)
+        return Array(styles[lower ... upper])
     }
 
     /// `style` impose un rendu (le mode Effets capture mon image seule) ;
@@ -334,7 +361,7 @@ final class CallCaptureController: ObservableObject {
 
     nonisolated static func renderPreviews(portraits: [CallMontagePortrait], selected: CallMontageStyle, caption: CallMontageCaption, includesThumbnails: Bool = true) -> CallMontagePreviews {
         guard !portraits.isEmpty else { return CallMontagePreviews(thumbnails: [:], preview: nil) }
-        let styles = includesThumbnails ? CallMontageStyle.allCases : []
+        let styles = includesThumbnails ? thumbnailWindow(selected: selected, in: CallMontageStyle.allCases, radius: thumbnailRadius) : []
         let thumbnails = styles.reduce(into: [CallMontageStyle: CGImage]()) { result, style in
             result[style] = CallMontageRenderer.render(style: style, portraits: portraits, canvas: thumbnailCanvas, caption: caption)
         }

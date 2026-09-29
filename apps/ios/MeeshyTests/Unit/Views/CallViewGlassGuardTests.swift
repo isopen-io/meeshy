@@ -82,23 +82,73 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
         )
         XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
-        XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned)"))
+        XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Un lancer va aussi loin qu'il porte (#8736)")
         XCTAssertFalse(row.contains("adaptiveGlass"), "Une rangée dans le bloc de verre n'a pas de verre à elle")
         XCTAssertFalse(row.contains("callChromeGlass"))
     }
 
-    /// #8575 — un geste de glissé posé sur les boutons d'une rangée capte le
-    /// doigt avant le `ScrollView` : la rangée ne défile plus. L'enfoncement
-    /// passe par un `ButtonStyle`, qui ne pose aucun geste.
-    func test_rowButtons_carryNoDragGesture_soEveryRowScrolls() throws {
-        let rows = try ["Meeshy/Features/Main/Views/CallPillRow.swift", "Meeshy/Features/Main/Views/CallModeCarousel.swift"]
-            .map { AppSourceGuard.stripComments(try AppSourceGuard.unit($0)) }
-            .joined(separator: "\n")
-        let code = try callViewCode() + rows
-        XCTAssertFalse(code.contains(".pressable()"), "pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
+    /// Les fichiers de l'écran d'appel qui portent un défilement horizontal
+    /// — balayés par GLOB, jamais par liste : un nouveau carrousel est gardé
+    /// dès qu'il existe.
+    private func horizontalScrollerSources() throws -> [String: String] {
+        let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/CallModeCarousel.swift").first)
+        let directory = anchor.deletingLastPathComponent()
+        let horizontal = try NSRegularExpression(pattern: #"ScrollView\([^)]*\.horizontal"#)
+        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { url in
+                let name = url.lastPathComponent
+                return url.pathExtension == "swift"
+                    && (name.hasPrefix("Call") || name.hasPrefix("GroupCall") || name == "VideoFiltersPanel.swift")
+            }
+            .reduce(into: [String: String]()) { result, url in
+                let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                let range = NSRange(code.startIndex ..< code.endIndex, in: code)
+                guard horizontal.firstMatch(in: code, range: range) != nil else { return }
+                result[url.lastPathComponent] = code
+            }
+    }
+
+    /// #8575 · #8736 — un geste de glissé posé sur les éléments d'un
+    /// défilement horizontal capte le doigt avant le `ScrollView` : la rangée
+    /// ne défile plus. L'enfoncement passe par un `ButtonStyle`, qui ne pose
+    /// aucun geste — dans TOUT fichier d'appel qui défile à l'horizontale.
+    func test_horizontalScrollers_carryNoDragGesture_soEveryRowScrolls() throws {
+        let scrollers = try horizontalScrollerSources()
+        let expected: Set<String> = ["CallModeCarousel.swift", "CallPillRow.swift", "VideoFiltersPanel.swift", "GroupCallStageView.swift"]
+        XCTAssertTrue(expected.isSubset(of: Set(scrollers.keys)), "La garde ne mesurerait rien : \(scrollers.keys.sorted())")
+        for (file, code) in scrollers {
+            XCTAssertFalse(code.contains(".pressable()"), "\(file) : pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
+            XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"), file)
+        }
+        let code = try callViewCode()
+        XCTAssertFalse(code.contains(".pressable()"))
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
-        XCTAssertTrue(rows.contains(".buttonStyle(CallPressButtonStyle())"))
+        for file in ["CallPillRow.swift", "CallModeCarousel.swift", "VideoFiltersPanel.swift"] {
+            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle())") == true, file)
+        }
+    }
+
+    /// #8736 — le carrousel et les rangées laissent le lancer aller aussi
+    /// loin qu'il porte ; le centre suit le doigt, et le choix ne part qu'au
+    /// repos, jamais un défilement programmé contre le doigt.
+    func test_carouselAndRows_followTheFingerWithoutBlocking() throws {
+        let carousel = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+        )
+        let row = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
+        )
+        for (file, code) in [("CallModeCarousel", carousel), ("CallPillRow", row)] {
+            XCTAssertTrue(code.contains(".viewAligned(limitBehavior: .never)"), "\(file) : l'accroche par défaut raccourcit le lancer")
+            XCTAssertFalse(code.contains("scrollTargetBehavior(.viewAligned)"), "\(file) : accroche sans limitBehavior")
+        }
+        XCTAssertEqual(carousel.components(separatedBy: "LazyHStack(spacing: layout.spacing)").count - 1, 2, "Les deux pistes, iOS 17+ et iOS 16, sont paresseuses")
+        XCTAssertTrue(carousel.contains("onScrollPhaseChange"), "iOS 18 : le choix part au repos du défilement")
+        XCTAssertTrue(carousel.contains(".task(id: centred)"), "Avant iOS 18 : le repos se lit après un court délai")
+        XCTAssertTrue(carousel.contains("CallModeCarouselRule.trackHeight(itemHeight:"), "La bande de glissé tient un pouce")
+        XCTAssertTrue(carousel.contains("motion.rests(on:"), "Le choix se lit par la règle pure")
+        XCTAssertTrue(carousel.contains("motion.follows("), "Le suivi programmé se lit par la règle pure")
     }
 
     /// #8578 — un mode libère l'écran : le chrome d'appel se masque par la
@@ -123,7 +173,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         let carousel = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
         )
-        XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned)"), "Le carrousel s'accroche")
+        XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Le carrousel s'accroche")
         XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
     }

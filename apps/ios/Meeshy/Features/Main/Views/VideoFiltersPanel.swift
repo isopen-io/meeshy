@@ -102,7 +102,7 @@ struct VideoFiltersPanel: View {
                 )
         }
         .meeshyTapTarget()
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 

@@ -73,11 +73,15 @@ final class CallCaptureControllerTests: XCTestCase {
 
     // MARK: - Aperçu en direct
 
-    func test_refreshPreviews_rendersEveryStyleAndTheSelectedPreview() async {
+    /// #8736 — les vignettes se refont autour du style choisi, jamais tout
+    /// le catalogue.
+    func test_refreshPreviews_rendersTheStylesAroundTheSelectionAndTheSelectedPreview() async {
         let (sut, grabber, _) = makeSUT()
         await sut.refreshPreviews()
-        XCTAssertEqual(Set(sut.thumbnails.keys), Set(CallMontageStyle.allCases))
-        XCTAssertEqual(sut.thumbnails[.heart]?.width, Int(CallCaptureController.thumbnailCanvas.width))
+        let window = CallCaptureController.thumbnailWindow(selected: sut.style, in: CallMontageStyle.allCases, radius: CallCaptureController.thumbnailRadius)
+        XCTAssertEqual(Set(sut.thumbnails.keys), Set(window))
+        XCTAssertLessThan(sut.thumbnails.count, CallMontageStyle.allCases.count)
+        XCTAssertEqual(sut.thumbnails[sut.style]?.width, Int(CallCaptureController.thumbnailCanvas.width))
         XCTAssertEqual(sut.preview?.height, Int(CallCaptureController.previewCanvas.height))
         XCTAssertEqual(grabber.requestedDimensions, [CallCaptureController.previewMaxDimension])
     }
@@ -87,11 +91,11 @@ final class CallCaptureControllerTests: XCTestCase {
     func test_refreshPreviews_betweenThumbnailRounds_keepsTheThumbnails_refreshesThePreview() async {
         let (sut, _, _) = makeSUT()
         await sut.refreshPreviews()
-        let firstThumbnail = sut.thumbnails[.grid]
+        let firstThumbnail = sut.thumbnails[.cover]
         XCTAssertNotNil(firstThumbnail)
         let firstPreview = sut.preview
         await sut.refreshPreviews()
-        XCTAssertTrue(sut.thumbnails[.grid] === firstThumbnail)
+        XCTAssertTrue(sut.thumbnails[.cover] === firstThumbnail)
         XCTAssertFalse(sut.preview === firstPreview)
     }
 
@@ -103,6 +107,50 @@ final class CallCaptureControllerTests: XCTestCase {
         let every = CallCaptureController.thumbnailEveryPreviews
         XCTAssertFalse(CallCaptureController.rendersThumbnails(hasThumbnails: true, previewsSinceThumbnails: every - 1))
         XCTAssertTrue(CallCaptureController.rendersThumbnails(hasThumbnails: true, previewsSinceThumbnails: every))
+    }
+
+    func test_thumbnailWindow_rendersAtMostTwiceTheRadiusPlusOne_whateverTheCatalogue() {
+        let styles = CallMontageStyle.allCases
+        for selected in styles {
+            let window = CallCaptureController.thumbnailWindow(selected: selected, in: styles, radius: 2)
+            XCTAssertLessThanOrEqual(window.count, 5, "\(selected)")
+            XCTAssertTrue(window.contains(selected), "\(selected)")
+        }
+    }
+
+    func test_thumbnailWindow_centredOnTheSelection() {
+        let styles = CallMontageStyle.allCases
+        XCTAssertEqual(CallCaptureController.thumbnailWindow(selected: .polaroid, in: styles, radius: 1), [.strip, .polaroid, .magazine])
+    }
+
+    func test_thumbnailWindow_atTheEnds_staysInsideTheCatalogue() {
+        let styles = CallMontageStyle.allCases
+        XCTAssertEqual(CallCaptureController.thumbnailWindow(selected: .screen, in: styles, radius: 2), [.screen, .cover, .gold])
+        XCTAssertEqual(CallCaptureController.thumbnailWindow(selected: .heart, in: styles, radius: 2), [.noir, .comic, .heart])
+    }
+
+    func test_thumbnailWindow_emptyCatalogue_rendersNothing() {
+        XCTAssertTrue(CallCaptureController.thumbnailWindow(selected: .grid, in: [], radius: 3).isEmpty)
+    }
+
+    func test_renderPreviews_rendersOnlyTheWindowAroundTheSelection() {
+        let portraits = [CallMontagePortrait(id: "a", name: "Awa", image: makeImage())]
+        let caption = CallMontageCaption(title: "Meeshy", subtitle: "")
+        let rendered = CallCaptureController.renderPreviews(portraits: portraits, selected: .heart, caption: caption)
+        let window = CallCaptureController.thumbnailWindow(selected: .heart, in: CallMontageStyle.allCases, radius: CallCaptureController.thumbnailRadius)
+        XCTAssertEqual(Set(rendered.thumbnails.keys), Set(window))
+    }
+
+    /// #8736 — les vignettes déjà rendues hors du voisinage restent : un
+    /// style lointain garde son image, il n'est seulement plus rafraîchi.
+    func test_refreshPreviews_afterSelectingAFarStyle_keepsTheEarlierThumbnails() async {
+        let (sut, _, _) = makeSUT()
+        await sut.refreshPreviews()
+        sut.select(.heart)
+        await sut.refreshPreviews()
+        XCTAssertNotNil(sut.thumbnails[.screen])
+        XCTAssertNotNil(sut.thumbnails[.heart])
+        XCTAssertEqual(sut.preview?.height, Int(CallCaptureController.previewCanvas.height))
     }
 
     func test_renderPreviews_withoutThumbnails_rendersOnlyThePreview() {
