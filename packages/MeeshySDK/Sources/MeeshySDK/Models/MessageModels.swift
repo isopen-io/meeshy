@@ -507,6 +507,11 @@ public struct APIMessage: Sendable {
     /// Défaut posé comme pour `trackingLinks` : l'init memberwise reste
     /// compatible avec les sites d'appel existants (fixtures de test).
     public var joinNotice: JoinNoticeMetadata? = nil
+    /// L'événement système d'un avis que le SERVEUR complète sur place (#8565
+    /// — la ligne d'arrivées de Meeshy Global, qui ne part qu'en
+    /// `message:edited`). Même forme que `lastMessageSystemEvent` de
+    /// `conversation:updated` : la ligne de liste en relit clé, noms et compte.
+    public var systemEvent: LastMessageSystemEvent? = nil
     /// Outbound-link tracking mappings minted by the gateway. Parsed from the
     /// top-level `trackingLinks` (socket `message:new`) OR from
     /// `metadata.trackingLinks` (REST). `nil` when the payload predates the
@@ -531,7 +536,7 @@ extension APIMessage: Decodable {
         case reactionSummary, reactionCount, currentUserReactions
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case effectFlags, translations, mentionedUsers
-        case metadata
+        case metadata, systemEvent
         case trackingLinks
         // MongoDB fallback
         case _id
@@ -621,6 +626,7 @@ extension APIMessage: Decodable {
         // whole message decode, so swallow shape mismatches into nil.
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .metadata)
+        systemEvent = try? c.decodeIfPresent(LastMessageSystemEvent.self, forKey: .systemEvent)
         // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
         // `message:new`); otherwise read it from the `metadata` envelope (REST).
         // Both decodes are tolerant so a malformed shape leaves the field nil

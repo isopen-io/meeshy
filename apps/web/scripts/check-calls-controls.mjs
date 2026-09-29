@@ -248,7 +248,16 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
   await touch(cdp, 'touchEnd', []);
 };
 
-/** Glisse chaque piste qui déborde, de droite à gauche, et rend son `scrollLeft` avant/après. */
+/**
+ * Glisse chaque piste qui déborde, de droite à gauche, et rend son `scrollLeft` avant/après.
+ *
+ * Le glissé ne dépasse pas ce que la piste peut défiler (#8619) : un doigt qui
+ * tire au-delà du bout lance l'élasticité de Chromium sur macOS, et la fin de
+ * cette animation TERMINE le défilement alors en cours — celui de la piste
+ * suivante, glissée une seconde plus tard (mesuré : `ClearCurrentlyScrollingNode`
+ * en plein glissé, 7 glissés sur 10 perdus après la rangée de 54 px tirée de
+ * 296 px, 0 sur 10 sans elle). Chaque invariant ne dépend ainsi que de sa piste.
+ */
 const dragEach = async (page, cdp, selector) => {
   const count = await page.locator(selector).count();
   const results = [];
@@ -262,7 +271,9 @@ const dragEach = async (page, cdp, selector) => {
     }
     await track.evaluate((element) => void (element.scrollLeft = 0));
     const y = box.y + box.height / 2;
-    await drag(cdp, { x: box.x + box.width - 12, y }, { x: box.x + 12, y });
+    const start = box.x + box.width - 12;
+    const span = Math.min(box.width - 24, room * 0.8);
+    await drag(cdp, { x: start, y }, { x: start - span, y });
     const moved = await track
       .evaluate((element) => new Promise((resolve) => {
         const started = performance.now();

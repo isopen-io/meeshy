@@ -441,7 +441,8 @@ extension ConversationSyncEngine {
         // If the edited message is the conversation's last message, the list-row
         // preview still shows the pre-edit text — refresh it in place.
         await refreshLastMessagePreviewIfEdited(
-            conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content)
+            conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content,
+            systemEvent: apiMessage.systemEvent)
     }
 
     /// `message:edited` ne sert que le texte : les réactions et les pièces
@@ -547,8 +548,13 @@ extension ConversationSyncEngine {
     /// drapeaux éphémères restent vrais, et ce chemin n'y touche pas. Seule la
     /// carte du Prisme devient fausse — elle traduit le texte remplacé — et
     /// c'est celle que le résolveur préfère.
+    ///
+    /// #8565 — un avis que le SERVEUR complète sur place (la ligne d'arrivées
+    /// de Meeshy Global) n'a pas d'autre diffusion que celle-ci : son
+    /// `systemEvent` servi remplace celui de la nature, que le composeur
+    /// préfère au texte stocké (un repli français).
     private func refreshLastMessagePreviewIfEdited(
-        conversationId: String, messageId: String, newContent: String
+        conversationId: String, messageId: String, newContent: String, systemEvent: LastMessageSystemEvent?
     ) async {
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard list.first(where: { $0.id == conversationId })?.lastMessageId == messageId else { return }
@@ -569,6 +575,10 @@ extension ConversationSyncEngine {
                 // changé d'identité, et sans carte le résolveur ne le consulte
                 // plus. Le prochain `conversation:updated` reposera les deux.
                 updated[idx].lastMessageTranslations = nil
+                if let systemEvent {
+                    updated[idx].lastMessageNature = (updated[idx].lastMessageNature
+                        ?? LastMessageNature(messageType: "system")).replacingSystemEvent(systemEvent)
+                }
             }
             return updated
         }
@@ -858,7 +868,8 @@ extension ConversationSyncEngine {
             return .edited(
                 messageId: apiMessage.id,
                 content: content,
-                editedAt: apiMessage.editedAt ?? Date()
+                editedAt: apiMessage.editedAt ?? Date(),
+                marksEdited: apiMessage.isEdited ?? true
             )
         }
         return .callNoticeUpdated(

@@ -10,6 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
+import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
 import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
   historyReaderFromAuthContext,
@@ -198,7 +199,14 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId, { historyFloor });
 
-      const formattedMessages = messages.map(formatLinkMessageWithDetails);
+      // #8562 — la citation d'un éphémère échu pour CE lecteur sort scellée.
+      const readers = {
+        deadlines: await loadQuotedEphemeralReaders(fastify.prisma, messages, async () =>
+          member?.id ?? hybridRequest.anonymousParticipant?.id ?? undefined
+        ),
+        now: new Date()
+      };
+      const formattedMessages = messages.map((message) => formatLinkMessageWithDetails(message, readers));
 
       return sendSuccess(reply, {
           messages: formattedMessages.reverse(),

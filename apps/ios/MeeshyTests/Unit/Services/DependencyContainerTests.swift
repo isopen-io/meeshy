@@ -550,6 +550,34 @@ extension DependencyContainerTests {
         XCTAssertNotNil(row?.deletedAt)
     }
 
+    /// #8633 — la ligne d'arrivées complétée par le serveur (`isEdited: false`)
+    /// change de contenu sans se graver « modifiée ».
+    func test_persist_editedNotMarkingEdited_updatesContentWithoutTheFlag() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-arrivals"))
+
+        await DependencyContainer.persist(
+            .edited(messageId: "m-arrivals", content: "Tom et Aïcha", editedAt: Date(), marksEdited: false),
+            into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-arrivals").fetchOne(db) }
+        XCTAssertEqual(row?.content, "Tom et Aïcha")
+        XCTAssertEqual(row?.isEdited, false)
+    }
+
+    func test_persist_editedMarkingEdited_setsTheFlag() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-edit"))
+
+        await DependencyContainer.persist(
+            .edited(messageId: "m-edit", content: "corrigé", editedAt: Date(), marksEdited: true),
+            into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-edit").fetchOne(db) }
+        XCTAssertEqual(row?.content, "corrigé")
+        XCTAssertEqual(row?.isEdited, true)
+    }
+
     /// #7969 — la story citée retirée : la citation gravée devient « Story
     /// indisponible », conversation ouverte (le fil observe GRDB) ou fermée.
     func test_persist_citedPostWithdrawn_rendersTheStoryCitationUnavailable() async throws {

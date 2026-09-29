@@ -67,3 +67,28 @@ describe('isLastMessageProtected', () => {
     expect(isLastMessageProtected({ expiresAt: PAST }, NOW)).toBe(true);
   });
 });
+
+describe('flamme-œil (#8634) — disparaît après lecture, jamais lisible dans une ligne de liste', () => {
+  const AFTER_READ = 1 | 8;
+
+  it('rend "afterRead" pour le bit EPHEMERAL_AFTER_READ, même quand la colonne porte le plafond de rétention', () => {
+    expect(resolveLastMessageSummaryKind({ effectFlags: AFTER_READ, expiresAt: FUTURE }, NOW)).toBe('afterRead');
+  });
+
+  it("n'expire pas sur la colonne : c'est l'heure INTERNE de destruction, pas l'échéance d'un lecteur", () => {
+    expect(resolveLastMessageSummaryKind({ effectFlags: AFTER_READ, expiresAt: PAST }, NOW)).toBe('afterRead');
+  });
+
+  it('laisse la vue unique et le flou passer devant', () => {
+    expect(resolveLastMessageSummaryKind({ effectFlags: AFTER_READ, isViewOnce: true }, NOW)).toBe('viewOnce');
+    expect(resolveLastMessageSummaryKind({ effectFlags: AFTER_READ, isBlurred: true }, NOW)).toBe('hidden');
+  });
+
+  it('est protégée : ni texte, ni traduction, ni pièce jointe ne partent', () => {
+    expect(isLastMessageProtected({ effectFlags: AFTER_READ, expiresAt: FUTURE }, NOW)).toBe(true);
+  });
+
+  it("un éphémère à DURÉE reste lisible jusqu'à son échéance", () => {
+    expect(isLastMessageProtected({ effectFlags: 1, ephemeralDuration: 300, expiresAt: FUTURE }, NOW)).toBe(false);
+  });
+});

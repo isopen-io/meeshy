@@ -13,21 +13,13 @@ import type { Attachment } from '@/lib/api/types';
  * Hors de l'ouverture, c'est juste : rien du contenu ne s'affiche avant le
  * toucher. Dans le plein écran que le lecteur vient d'ouvrir, c'était le
  * contraire de ce qu'il demandait. `ViewOnceStage` pose donc ce contexte, et
- * les blocs de pièces y lèvent le SEUL masque de vue unique ; un flou reste un
- * flou.
+ * les blocs de pièces y lèvent le masque de vue unique ET celui du flou
+ * (#8567, décision porteur du 2026-09-29 : « sauf si c'est un attachement
+ * directement, alors c'est ouvert en plein écran en clair »).
  */
 export const ViewOnceOpenedContext = createContext(false);
 
 type ProtectedAttachment = Attachment & { readonly effectFlags?: number };
-
-const withoutViewOnce = (attachment: ProtectedAttachment): ProtectedAttachment => {
-  const flags = attachment.effectFlags;
-  return {
-    ...attachment,
-    isViewOnce: false,
-    ...(typeof flags === 'number' ? { effectFlags: flags & ~MESSAGE_EFFECT_FLAGS.VIEW_ONCE } : {}),
-  };
-};
 
 /**
  * UN FLOU RÉVÉLÉ SUR PLACE EST LE DROIT DE VOIR SES PIÈCES (#8389).
@@ -57,7 +49,7 @@ const withoutBlur = (attachment: ProtectedAttachment): ProtectedAttachment => {
 export function useAttachmentMasked(): (attachment: Attachment) => boolean {
   const opened = useContext(ViewOnceOpenedContext);
   const veil = useContext(VeilRevealContext);
-  if (opened) return (attachment) => maskedAttachment(withoutViewOnce(attachment));
+  if (opened) return (attachment) => maskedAttachment(revealedAttachment(attachment));
   if (veil !== null) return (attachment) => maskedAttachment(withoutBlur(attachment));
   return maskedAttachment;
 }

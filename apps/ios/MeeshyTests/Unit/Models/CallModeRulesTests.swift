@@ -127,9 +127,16 @@ final class CallModeRulesTests: XCTestCase {
     }
 
     func test_clock_readsMinutesAndSeconds() {
-        XCTAssertEqual(CallModeGestureRule.clock(0), "0:00")
-        XCTAssertEqual(CallModeGestureRule.clock(9.7), "0:09")
-        XCTAssertEqual(CallModeGestureRule.clock(75), "1:15")
-        XCTAssertEqual(CallModeGestureRule.clock(-3), "0:00")
+        let latin = Locale(identifier: "en_US_POSIX")
+        XCTAssertEqual(CallModeGestureRule.clock(0, locale: latin), "0:00")
+        XCTAssertEqual(CallModeGestureRule.clock(9.7, locale: latin), "0:09")
+        XCTAssertEqual(CallModeGestureRule.clock(75, locale: latin), "1:15")
+        XCTAssertEqual(CallModeGestureRule.clock(-3, locale: latin), "0:00")
+    }
+
+    func test_clock_readsTheDigitsOfTheReadersLocale() {
+        let arabic = CallModeGestureRule.clock(75, locale: Locale(identifier: "ar-EG"))
+        XCTAssertNotEqual(arabic, "1:15")
+        XCTAssertTrue(arabic.contains("١"), arabic)
     }
 }

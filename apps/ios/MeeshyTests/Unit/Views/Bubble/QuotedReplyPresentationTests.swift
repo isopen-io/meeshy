@@ -50,6 +50,14 @@ final class QuotedReplyPresentationTests: XCTestCase {
         XCTAssertNil(shown.attachmentThumbnailUrl)
     }
 
+    func test_displayed_expiredQuote_readsEphemeralExpired_notDeleted() {
+        let expiredLabel = String(localized: "quote.ephemeral.expired", defaultValue: "Message éphémère expiré", bundle: .main)
+        let shown = QuotedReplyPresentation.displayed(Self.quote().tombstoned(at: Date(), expired: true))
+        XCTAssertEqual(shown.previewText, expiredLabel)
+        XCTAssertNotEqual(shown.previewText, Self.deletedLabel)
+        XCTAssertNil(shown.attachmentThumbnailUrl)
+    }
+
     func test_displayed_liveQuote_isUnchanged() {
         XCTAssertEqual(QuotedReplyPresentation.displayed(Self.quote()), Self.quote())
     }

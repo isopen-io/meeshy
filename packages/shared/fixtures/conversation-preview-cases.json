@@ -4357,6 +4357,228 @@
         ]
       },
       "text": "أنت: 🎤 رسالة صوتية · 0:12 · 48 KB"
+    },
+    {
+      "id": "after-read-received",
+      "matrix": "Flamme-œil reçue — ni texte ni traduction (#8634)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disparaît après lecture"
+          }
+        ]
+      },
+      "text": "Alice : 🔥 Disparaît après lecture"
+    },
+    {
+      "id": "after-read-mine",
+      "matrix": "Flamme-œil envoyée — même placeholder chez l'expéditeur",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "self",
+          "label": "Vous"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disparaît après lecture"
+          }
+        ]
+      },
+      "text": "Vous : 🔥 Disparaît après lecture"
+    },
+    {
+      "id": "after-read-photo",
+      "matrix": "Flamme-œil photo — aucun détail de pièce jointe",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "",
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "originalName": "secret.jpg",
+            "fileSize": 204800,
+            "width": 1200,
+            "height": 800
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disparaît après lecture"
+          }
+        ]
+      },
+      "text": "Alice : 🔥 Disparaît après lecture"
+    },
+    {
+      "id": "after-read-consumed",
+      "matrix": "Flamme-œil consommée — l'échéance servie au lecteur est passée",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-23T09:59:30.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "expired",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Message expiré"
+          }
+        ]
+      },
+      "text": "Alice : ⏱ Message expiré"
+    },
+    {
+      "id": "en-after-read-placeholder",
+      "matrix": "Flamme-œil — libellé dans la langue de cadrage, jamais traduit",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disappears after reading"
+          }
+        ]
+      },
+      "text": "Alice: 🔥 Disappears after reading"
     }
   ]
 }

@@ -391,7 +391,7 @@ struct ThemedMessageBubble: View {
                 // #8303 — la flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
                 .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
                                     edge: content.isMe ? .trailing : .leading, overhang: 10)
-                .viewOnceRetouch(isActive: content.isViewOnceRevealed) { [messageId = content.messageId, onConsumeViewOnce] in
+                .viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { [messageId = content.messageId, onConsumeViewOnce] in
                     onConsumeViewOnce?(messageId) { _ in }
                 }
                 .onAppear {

@@ -453,8 +453,7 @@ class ConversationListViewModel: ObservableObject {
         Task { [weak self] in
             defer { Task { @MainActor [weak self] in self?.pendingMissingFetches.remove(id) } }
             do {
-                let apiConv = try await service.getById(id)
-                let domain = apiConv.toConversation(currentUserId: userId)
+                let domain = try await ConversationDiscoveryRowFetcher(service: service).row(id: id, currentUserId: userId)
                 guard let self else { return }
                 // Defensive dedup: a concurrent fullSync / socket event
                 // may have surfaced the conversation between the fetch

@@ -6,11 +6,25 @@ public extension ReplyReference {
 
     var isQuotedMessageDeleted: Bool { quotedMessageDeletedAt != nil }
 
+    /// #8631 — la citation a été scellée parce que le message cité ÉPHÉMÈRE a
+    /// EXPIRÉ pour ce lecteur, pas parce qu'il a été supprimé : son échéance
+    /// est atteinte au plus tard à la date de scellement. C'est la forme que
+    /// sert la passerelle (`sealedQuotedMessage` : `expiresAt` = `deletedAt`).
+    var isQuotedMessageExpired: Bool {
+        guard let sealedAt = quotedMessageDeletedAt, let expiresAt = quotedExpiresAt else { return false }
+        return expiresAt <= sealedAt
+    }
+
     /// La citation d'un message SUPPRIMÉ : l'auteur et l'ancre du saut
     /// restent, rien de ce que le message contenait ne reste — ni texte, ni
     /// média, ni ses faits. Cas de confidentialité : un message supprimé ne
     /// doit plus être lisible dans aucune citation.
-    func tombstoned(at date: Date) -> ReplyReference {
+    ///
+    /// `expired` (#8631) : le scellement vient d'une EXPIRATION — la citation
+    /// garde alors son échéance (= `date`) pour se dire « expirée ». Une
+    /// échéance déjà atteinte à `date` est gardée pour la même raison ; une
+    /// échéance future ne dit rien d'une suppression et se perd.
+    func tombstoned(at date: Date, expired: Bool = false) -> ReplyReference {
         var sealed = ReplyReference(
             messageId: messageId,
             authorName: authorName,
@@ -20,6 +34,7 @@ public extension ReplyReference {
             authorAvatarUrl: authorAvatarUrl
         )
         sealed.quotedMessageDeletedAt = date
+        sealed.quotedExpiresAt = expired ? date : quotedExpiresAt.flatMap { $0 <= date ? $0 : nil }
         return sealed
     }
 
@@ -60,8 +75,9 @@ public extension ReplyReference {
 
     /// Le libellé localisé est l'affaire de l'app : le SDK ne porte que le
     /// fait. Une citation vivante se rend telle quelle.
-    func presentingDeletion(label: String) -> ReplyReference {
-        isQuotedMessageDeleted ? withPreviewText(label) : self
+    func presentingSeal(deleted: String, expired: String) -> ReplyReference {
+        guard isQuotedMessageDeleted else { return self }
+        return withPreviewText(isQuotedMessageExpired ? expired : deleted)
     }
 
     /// Le texte du parent MODIFIÉ peut-il remplacer celui de la citation ?

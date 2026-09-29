@@ -817,6 +817,7 @@ export const FocalRow = memo(function FocalRow({
                   messageId={message.id}
                   kind={kind}
                   isViewOnce={message.isViewOnce}
+                  isBlurred={message.isBlurred === true}
                   contentLength={message.content.length}
                   attachments={message.attachments}
                   surface="row"

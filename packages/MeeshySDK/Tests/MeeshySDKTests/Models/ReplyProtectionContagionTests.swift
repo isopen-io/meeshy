@@ -154,12 +154,42 @@ struct ReplyProtectionContagionTests {
         #expect(intent.isBlurred)
     }
 
-    @Test("Le flou imposé l'emporte sur la vue unique demandée (flou et vue unique exclusifs, #7667)")
-    func test_intentContaminated_flouImposé_éteintLaVueUnique() {
+    @Test("Sous un flou imposé, la vue unique demandée reste : la réponse porte les deux (#8567)")
+    func test_intentContaminated_flouImposé_garderLaVueUnique() {
         let intent = MessageProtectionIntent(ephemeral: nil, isViewOnce: true)
             .contaminated(by: .init(blurred: true, ephemeral: nil))
         #expect(intent.isBlurred)
-        #expect(!intent.isViewOnce)
+        #expect(intent.isViewOnce)
+        #expect(intent.lifecycleFlags == [.blurred, .viewOnce])
+        #expect(intent.wireIsBlurred == true)
+        #expect(intent.wireIsViewOnce == true)
+    }
+
+    @Test("Sous un flou imposé, le plafond d'ouvertures de la vue unique voyage avec elle (#8567)")
+    func test_intentContaminated_flouImposé_garderLePlafond() {
+        let intent = MessageProtectionIntent(isViewOnce: true, maxViewOnceCount: 2)
+            .contaminated(by: .init(blurred: true, ephemeral: .afterRead))
+        #expect(intent.isViewOnce)
+        #expect(intent.maxViewOnceCount == 2)
+        #expect(intent.isBlurred)
+        #expect(intent.ephemeralAfterRead)
+    }
+
+    @Test("La file hors ligne rejoue une réponse floue ET à vue unique telle qu'elle a été saisie (#8567)")
+    func test_fileHorsLigne_rejoueFlouEtVueUnique() {
+        let intent = MessageProtectionIntent(isViewOnce: true)
+            .contaminated(by: .init(blurred: true, ephemeral: nil))
+        let item = OfflineQueueItem(conversationId: "c1", content: "secret", protection: intent)
+        #expect(item.replayProtection.isBlurred)
+        #expect(item.replayProtection.isViewOnce)
+    }
+
+    @Test("Hors contagion, flou et vue unique restent exclusifs (#7667)")
+    func test_intent_horsContagion_restentExclusifs() {
+        let intent = MessageProtectionIntent(isBlurred: true, isViewOnce: true)
+            .contaminated(by: .init(blurred: false, ephemeral: .duration(seconds: 30)))
+        #expect(!intent.isBlurred)
+        #expect(intent.isViewOnce)
     }
 
     @Test("Rien d'imposé : l'intention passe telle quelle")
