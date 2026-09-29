@@ -37,11 +37,14 @@
  *  8. en vidéo : ma vignette en coin est à ×2, SANS zoom (#8576) ; un toucher
  *     sur la scène efface l'en-tête et la pilule, un second les rend ; un
  *     panneau ouvert ne s'efface pas tout seul (l'auto-masquage ne vaut qu'au
- *     repos et dans le menu) ; « Capturer » suit « Enregistrer » ; toucher ma
- *     vignette met MON image en plein écran : le rail vertical (Caméra ·
- *     Effets · Écran, 44 px) et la capsule du zoom sur le bord ; un toucher
- *     les efface avec le reste ; « Effets » du rail entre dans le MODE : en-
- *     tête, pilule et rail partent, le carrousel se centre en bas ; ✕ en sort ;
+ *     repos et dans le menu) ; « Capturer » suit « Enregistrer » ; les
+ *     commandes de MA caméra (Caméra · Effets · Écran, 44 px) sont une rangée
+ *     en bas de ma vignette, et le (…) ne les double pas (#8626) ; toucher ma
+ *     vignette met MON image en plein écran : la rangée monte en haut au
+ *     centre, sous l'en-tête, la vignette du pair descend sous elle, la
+ *     capsule du zoom se pose sur le bord ; un toucher les efface avec le
+ *     reste ; « Effets » de la rangée entre dans le MODE : en-tête, pilule et
+ *     rangée partent, le carrousel se centre en bas ; ✕ en sort ;
  *  9. au DOIGT (320 × 568) : un glissé fait défiler CHAQUE rangée débordante
  *     et les carrousels des deux modes (`scrollLeft` mesuré) ; un pincement à
  *     deux doigts sur ma vignette la passe à ×3, un pincement serré à ×1 ; la
@@ -419,6 +422,25 @@ try {
       const corner = await page.locator('[data-call-corner]').boundingBox();
       check(corner !== null && Math.round(corner.width) === 112 && Math.round(corner.height) === 160, `vidéo : ×2 mesure 112 × 160 (${corner && [Math.round(corner.width), Math.round(corner.height)]})`);
       check((await page.$('[data-call-zoom]')) === null, 'vidéo : aucun zoom sur la vignette en coin');
+      const tileRow = await page.$eval('[data-call-corner-frame]', (frame) => {
+        const row = frame.querySelector('[data-call-self-controls="tile"]');
+        if (row === null) return null;
+        const box = row.getBoundingClientRect();
+        const tile = frame.getBoundingClientRect();
+        const buttons = [...row.querySelectorAll('[data-call-self-control]')];
+        return {
+          orientation: row.getAttribute('aria-orientation'),
+          actions: buttons.map((button) => button.getAttribute('data-call-self-control')),
+          sizes: buttons.map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
+          inside: box.bottom <= tile.bottom + 1 && box.top >= tile.top && box.right <= tile.right + 1,
+          onScreen: box.left >= 0 && box.right <= window.innerWidth,
+        };
+      });
+      check(tileRow !== null && tileRow.orientation === 'horizontal', `vignette : les commandes de ma caméra sont DANS ma vignette, en rangée (${JSON.stringify(tileRow)})`);
+      check(tileRow !== null && JSON.stringify(tileRow.actions.filter((action) => action !== 'flip')) === JSON.stringify(['camera', 'effects', 'screen']), `vignette : (Retourner) · Caméra · Effets · Écran (${tileRow?.actions.join(' · ')})`);
+      check(tileRow !== null && tileRow.sizes.every((size) => size >= TAP_FLOOR) && tileRow.inside && tileRow.onScreen, `vignette : ${TAP_FLOOR} px chacun, en bas de ma vignette, à l’écran (${JSON.stringify(tileRow)})`);
+      check((await page.$('[data-call-row="mine"]')) === null && (await page.locator('[data-call-control="camera"]').count()) === 1, 'vignette : le (…) ne double pas les commandes de ma caméra');
+      await capture(page, 'controles-vignette-rangee-dark');
       const labels = await page.$$eval('[data-call-row="call"] [data-call-row-scroll] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? button.getAttribute('aria-label')));
       const record = labels.findIndex((name) => /Enregistrer/.test(name ?? ''));
       check(record >= 0 && labels[record + 1] === 'capture', `vidéo : « Capturer » suit « Enregistrer » dans la rangée de l’appel (${labels.join(' · ')})`);
@@ -432,40 +454,50 @@ try {
 
       await focusSettled(page, '[data-call-more]');
       check(await tapStage(page, false), 'vidéo : un toucher sur la scène efface les commandes');
-      const faded = await fadedAll(page, ['[data-call-header]', '[data-call-controls]']);
-      check(faded.done, `vidéo : l’en-tête et la pilule s’effacent (${JSON.stringify(faded.seen)})`);
+      const faded = await fadedAll(page, ['[data-call-header]', '[data-call-controls]', '[data-call-self-controls="tile"]']);
+      check(faded.done, `vidéo : l’en-tête, la pilule et la rangée de ma vignette s’effacent (${JSON.stringify(faded.seen)})`);
       await capture(page, 'controles-toucher-efface-dark');
       check(await tapStage(page, true), 'vidéo : un second toucher rend tout');
 
       await page.click('[data-call-corner]');
-      check(await appears(page, '[data-call-self-rail]'), 'plein écran : toucher ma vignette met mon image en plein écran, avec son rail');
-      const rail = await page.$eval('[data-call-self-rail]', (element) => ({
-        role: element.getAttribute('role'),
-        orientation: element.getAttribute('aria-orientation'),
-        actions: [...element.querySelectorAll('[data-call-rail]')].map((button) => button.getAttribute('data-call-rail')),
-        sizes: [...element.querySelectorAll('[data-call-rail]')].map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
-        left: element.getBoundingClientRect().left,
-      }));
-      const order = rail.actions.filter((action) => action !== 'flip');
-      check(rail.role === 'toolbar' && rail.orientation === 'vertical', `plein écran : le rail est une barre d’outils verticale (${rail.role}, ${rail.orientation})`);
-      check(JSON.stringify(order) === JSON.stringify(['camera', 'effects', 'screen']) && (rail.actions[0] === 'flip' || !rail.actions.includes('flip')), `plein écran : (Retourner) · Caméra · Effets · Écran (${rail.actions.join(' · ')})`);
-      check(rail.sizes.every((size) => size >= TAP_FLOOR) && rail.left < 40, `plein écran : ${TAP_FLOOR} px chacun, sur le bord gauche (${JSON.stringify(rail.sizes)}, ${Math.round(rail.left)})`);
-      check(await appears(page, '[data-call-zoom]'), 'plein écran : la capsule du zoom apparaît sous le rail');
-      await page.focus('[data-call-rail="camera"]');
-      await page.keyboard.press('ArrowDown');
-      check(await focused(page, '[data-call-rail="effects"]'), 'plein écran : ↓ passe au bouton suivant du rail');
+      check(await appears(page, '[data-call-self-controls="top"]'), 'plein écran : toucher ma vignette met mon image en plein écran, ses commandes en haut au centre');
+      const top = await page.$eval('[data-call-self-controls="top"]', (element) => {
+        const box = element.getBoundingClientRect();
+        const header = document.querySelector('[data-call-header]')?.getBoundingClientRect();
+        const corner = document.querySelector('[data-call-corner-frame]')?.getBoundingClientRect();
+        return {
+          role: element.getAttribute('role'),
+          orientation: element.getAttribute('aria-orientation'),
+          actions: [...element.querySelectorAll('[data-call-self-control]')].map((button) => button.getAttribute('data-call-self-control')),
+          sizes: [...element.querySelectorAll('[data-call-self-control]')].map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
+          center: box.left + box.width / 2,
+          top: box.top,
+          belowHeader: header === undefined || box.top >= header.bottom,
+          clearOfCorner: corner === undefined || corner.top >= box.bottom,
+        };
+      });
+      const order = top.actions.filter((action) => action !== 'flip');
+      check(top.role === 'toolbar' && top.orientation === 'horizontal', `plein écran : une barre d’outils horizontale (${top.role}, ${top.orientation})`);
+      check(JSON.stringify(order) === JSON.stringify(['camera', 'effects', 'screen']) && (top.actions[0] === 'flip' || !top.actions.includes('flip')), `plein écran : (Retourner) · Caméra · Effets · Écran (${top.actions.join(' · ')})`);
+      check(top.sizes.every((size) => size >= TAP_FLOOR) && Math.abs(top.center - 195) <= 2 && top.top < 160 && top.belowHeader, `plein écran : ${TAP_FLOOR} px chacun, en haut au centre, sous l’en-tête (${JSON.stringify(top)})`);
+      check(top.clearOfCorner, 'plein écran : la vignette du pair descend sous la rangée, sans la couvrir');
+      check((await page.$('[data-call-self-controls="tile"]')) === null, 'plein écran : la rangée a quitté la vignette (un seul endroit)');
+      check(await appears(page, '[data-call-zoom]'), 'plein écran : la capsule du zoom apparaît sur le bord');
+      await page.focus('[data-call-self-control="camera"]');
+      await page.keyboard.press('ArrowRight');
+      check(await focused(page, '[data-call-self-control="effects"]'), 'plein écran : → passe au bouton suivant de la rangée');
       await capture(page, 'controles-plein-ecran-dark');
       check(await tapStage(page, false), 'plein écran : un toucher efface tout');
-      const railFaded = await fadedAll(page, ['[data-call-self-rail]', '[data-call-zoom]', '[data-call-header]']);
-      check(railFaded.done, `plein écran : le rail et la capsule s’effacent avec le reste (${JSON.stringify(railFaded.seen)})`);
-      check((await page.$eval('[data-call-self-column]', (column) => getComputedStyle(column).pointerEvents)) === 'none', 'plein écran : effacés, ils ne captent plus le toucher');
+      const railFaded = await fadedAll(page, ['[data-call-self-controls="top"]', '[data-call-zoom]', '[data-call-header]']);
+      check(railFaded.done, `plein écran : la rangée et la capsule s’effacent avec le reste (${JSON.stringify(railFaded.seen)})`);
+      check((await page.$eval('[data-call-self-controls-holder]', (holder) => getComputedStyle(holder).pointerEvents)) === 'none' && (await page.$eval('[data-call-self-column]', (column) => getComputedStyle(column).pointerEvents)) === 'none', 'plein écran : effacées, elles ne captent plus le toucher');
       check(await tapStage(page, true), 'plein écran : un second toucher les rend');
 
-      await page.click('[data-call-rail="effects"]');
-      check(await appears(page, '[data-call-mode="effects"]'), 'mode : « Effets » du rail entre dans le mode Effets');
+      await page.click('[data-call-self-control="effects"]');
+      check(await appears(page, '[data-call-mode="effects"]'), 'mode : « Effets » de la rangée entre dans le mode Effets');
       check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'mode', 'mode : l’écran passe au mode');
-      const modeChrome = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-self-rail]', '[data-call-zoom]'].filter((selector) => document.querySelector(selector) !== null));
-      check(modeChrome.length === 0, `mode : en-tête, pilule, rail et zoom partent (${JSON.stringify(modeChrome)})`);
+      const modeChrome = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-self-controls]', '[data-call-zoom]'].filter((selector) => document.querySelector(selector) !== null));
+      check(modeChrome.length === 0, `mode : en-tête, pilule, rangée de ma caméra et zoom partent (${JSON.stringify(modeChrome)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
         const box = element.getBoundingClientRect();
         return { center: box.left + box.width / 2, bottom: box.bottom };
@@ -531,11 +563,11 @@ try {
       });
       const bigger = await tile();
       check(grown, `pincer : ×3 tient dans 320 × 568 — 144 × 206 (${bigger.box && [Math.round(bigger.box.width), Math.round(bigger.box.height)]})`);
-      check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) !== 'mode' && (await page.$('[data-call-self-rail]')) === null, 'pincer : un pincement n’est pas un toucher — mon image reste en coin');
+      check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) !== 'mode' && (await page.$('[data-call-self-controls="top"]')) === null, 'pincer : un pincement n’est pas un toucher — mon image reste en coin');
       check((await page.textContent('[data-call-self-tile-status]'))?.length > 0, `pincer : la taille se dit au lecteur d’écran (« ${await page.textContent('[data-call-self-tile-status]')} »)`);
       await capture(page, 'controles-vignette-x3-dark-320x568');
       await page.click('[data-call-corner]');
-      await appears(page, '[data-call-self-rail]');
+      await appears(page, '[data-call-self-controls="top"]');
       await page.click('[data-call-corner]');
       check(await until(page, () => document.querySelector('[data-call-corner]')?.getAttribute('data-call-self-tile') === '3'), 'pincer : la taille est retenue pour l’appel (plein écran puis retour)');
       const again = await tile();
@@ -560,4 +592,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log('\n  Pendant un appel, une chose à la fois : les rangées défilent au doigt, un panneau les remplace, un mode libère l’écran ; ma vignette se pince, mon image en plein écran porte son rail ; on ajoute, on modère, on réagit, on choisit ce qu’on enregistre.\n');
+console.log('\n  Pendant un appel, une chose à la fois : les rangées défilent au doigt, un panneau les remplace, un mode libère l’écran ; ma vignette se pince et porte les commandes de ma caméra, qui montent en haut au centre quand mon image remplit l’écran ; on ajoute, on modère, on réagit, on choisit ce qu’on enregistre.\n');

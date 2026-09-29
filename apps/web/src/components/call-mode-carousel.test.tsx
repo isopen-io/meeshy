@@ -121,4 +121,125 @@ describe('ModeCarousel', () => {
     expect(view.chosen).toEqual(['gold', 'cover', 'grid']);
     view.done();
   });
+
+  test('re-toucher l’élément qui se centre ne rend pas la main : sa seconde tape ne choisit pas le voisin qui passe (#8625)', async () => {
+    const view = mount();
+    const gold = view.host.querySelector('[data-carousel-item="gold"]') as HTMLElement;
+    await act(async () => gold.click());
+    gold.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await view.scrollTo(PITCH);
+    await view.scrollTo(2 * PITCH);
+    expect(view.chosen).toEqual(['gold']);
+    view.track.dispatchEvent(new Event('pointercancel'));
+    await view.scrollTo(4 * PITCH);
+    expect(view.chosen).toEqual(['gold', 'grid']);
+    view.done();
+  });
+
+  const mountCapture = (options: { readonly recording?: boolean } = {}) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const chosen: string[] = [];
+    const captured: string[] = [];
+    act(() =>
+      root.render(
+        <ModeCarousel
+          label="Montages"
+          items={IDS.map((id) => ({ id, label: id, visual: null }))}
+          selected="screen"
+          onSelect={(id) => void chosen.push(id)}
+          capture={{ recording: options.recording === true, onCapture: (intent) => void captured.push(intent), hint: 'Deux tapes : photo · Appui long : vidéo', longPressMs: 30 }}
+        />,
+      ),
+    );
+    const track = host.querySelector('[data-call-row-scroll]') as Track;
+    layout(track);
+    Object.defineProperty(track, 'scrollTo', { configurable: true, value: () => undefined });
+    const item = (id: string) => host.querySelector(`[data-carousel-item="${id}"]`) as HTMLElement;
+    const pointer = (id: string, type: string, x = 10) => act(() => void item(id).dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, isPrimary: true, clientX: x, clientY: 10 })));
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { host, item, pointer, chosen, captured, done };
+  };
+
+  test('deux tapes sur le style choisi prennent UNE photo ; une seule ne fait rien (#8625)', async () => {
+    const view = mountCapture();
+    await act(async () => view.item('screen').click());
+    expect(view.captured).toEqual([]);
+    expect(view.chosen).toEqual([]);
+    await act(async () => view.item('screen').click());
+    expect(view.captured).toEqual(['photo']);
+    await act(async () => view.item('screen').click());
+    expect(view.captured).toEqual(['photo']);
+    view.done();
+  });
+
+  test('une tape sur un AUTRE style le choisit, sans rien capturer (#8625)', async () => {
+    const view = mountCapture();
+    await act(async () => view.item('gold').click());
+    await act(async () => view.item('gold').click());
+    expect(view.chosen).toEqual(['gold', 'gold']);
+    expect(view.captured).toEqual([]);
+    view.done();
+  });
+
+  test('un appui long sur le style choisi lance la vidéo, et le clic qui le suit n’est pas une photo (#8625)', async () => {
+    const view = mountCapture();
+    view.pointer('screen', 'pointerdown');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.captured).toEqual(['record']);
+    view.pointer('screen', 'pointerup');
+    await act(async () => view.item('screen').click());
+    expect(view.captured).toEqual(['record']);
+    await act(async () => view.item('screen').click());
+    await act(async () => view.item('screen').click());
+    expect(view.captured).toEqual(['record', 'photo']);
+    expect(view.chosen).toEqual([]);
+    view.done();
+  });
+
+  test('un doigt qui glisse fait défiler : ce n’est pas un appui long (#8625)', async () => {
+    const view = mountCapture();
+    view.pointer('screen', 'pointerdown', 10);
+    view.pointer('screen', 'pointermove', 40);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.captured).toEqual([]);
+    view.done();
+  });
+
+  test('un appui long sur un autre style le choisit seulement (#8625)', async () => {
+    const view = mountCapture();
+    view.pointer('gold', 'pointerdown');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(view.captured).toEqual([]);
+    expect(view.chosen).toEqual(['gold']);
+    view.done();
+  });
+
+  test('au clavier, Entrée sur le style choisi prend la photo ; le geste est dit au lecteur d’écran (#8625)', async () => {
+    const view = mountCapture();
+    const selected = view.item('screen');
+    await act(async () => selected.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    expect(view.captured).toEqual(['photo']);
+    const described = selected.getAttribute('aria-describedby');
+    expect(described).not.toBeNull();
+    expect(view.host.querySelector(`#${described}`)?.textContent).toBe('Deux tapes : photo · Appui long : vidéo');
+    view.done();
+  });
+
+  test('pendant une vidéo, deux tapes ou un appui long attendent le stop ; changer de style reste possible (#8625)', async () => {
+    const view = mountCapture({ recording: true });
+    await act(async () => view.item('screen').click());
+    await act(async () => view.item('screen').click());
+    view.pointer('screen', 'pointerdown');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    view.pointer('screen', 'pointerup');
+    expect(view.captured).toEqual([]);
+    await act(async () => view.item('gold').click());
+    expect(view.chosen).toEqual(['gold']);
+    view.done();
+  });
 });

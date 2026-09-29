@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 
+import { captureIntent, keyIntent, LONG_PRESS_MS, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
 import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
 
 /**
@@ -13,11 +14,24 @@ import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
  * flèches passent au voisin (sens inversé en arabe), Début et Fin aux bouts ;
  * la molette d'une souris le fait défiler (`onWheel`, remis par l'écran).
  *
- * Sous le carrousel, la barre d'action du mode : ✕ Quitter à gauche, le
- * déclencheur (anneau de 72) au centre, une ou deux options discrètes à
- * droite (`CallModeBar`). Chunk partagé par les deux modes, qui n'importe rien
- * de l'écran d'appel.
+ * Plus de déclencheur (#8625) : sur le style CHOISI, deux tapes prennent la
+ * photo (Entrée au clavier) et un appui long lance la vidéo
+ * (`call-capture-gesture.ts`) ; un doigt qui glisse fait défiler, ce n'est
+ * pas un appui. Le geste est dit au lecteur d'écran (`aria-describedby`).
+ *
+ * Sous le carrousel, la barre d'action du mode : ✕ Quitter à gauche, une ou
+ * deux options discrètes à droite (`CallModeBar`). Chunk partagé par les deux
+ * modes, qui n'importe rien de l'écran d'appel.
  */
+
+/** Ce que le carrousel capture : `onCapture` reçoit la photo (deux tapes) ou la vidéo (appui long). */
+export type CarouselCapture = {
+  readonly recording: boolean;
+  readonly onCapture: (intent: 'photo' | 'record') => void;
+  /** Le geste, en une phrase, lu avec le style choisi. */
+  readonly hint: string;
+  readonly longPressMs?: number;
+};
 
 export type CarouselItem = { readonly id: string; readonly label: string; readonly visual: ReactNode };
 
@@ -27,21 +41,28 @@ type CarouselProps = {
   readonly selected: string;
   readonly onSelect: (id: string) => void;
   readonly onWheel?: ((event: WheelEvent<HTMLElement>) => void) | undefined;
+  readonly capture?: CarouselCapture | undefined;
 };
 
 const ITEM = 64;
 
-/** Ce qui rend la main à l'utilisateur pendant qu'un toucher centre son élément. */
-const TAKE_OVER = ['pointerdown', 'wheel'] as const;
+type Press = { readonly id: string; readonly x: number; readonly y: number; readonly timer: ReturnType<typeof setTimeout> };
+
+/** Ce qui rend la main à l'utilisateur pendant qu'un toucher centre son élément — sauf re-toucher cet élément : c'est une double tape (#8625). */
+const TAKE_OVER = ['pointerdown', 'pointercancel', 'wheel'] as const;
 
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function ModeCarousel({ label, items, selected, onSelect, onWheel }: CarouselProps) {
+export function ModeCarousel({ label, items, selected, onSelect, onWheel, capture }: CarouselProps) {
   const track = useRef<HTMLDivElement>(null);
   const settling = useRef<string | null>(null);
   const frame = useRef(0);
   const choose = useRef(onSelect);
   choose.current = onSelect;
+  const press = useRef<Press | null>(null);
+  const consumed = useRef<string | null>(null);
+  const lastTap = useRef<LastTap>(null);
+  const hintId = useId();
 
   const center = (id: string, smooth: boolean): void => {
     const row = track.current;
@@ -84,7 +105,10 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
     const settle = (): void => {
       if (settling.current !== null && centered() === settling.current) settling.current = null;
     };
-    const takeOver = (): void => void (settling.current = null);
+    const takeOver = (event: Event): void => {
+      const pressed = event.type === 'pointerdown' && event.target instanceof Element ? event.target.closest('[data-carousel-item]')?.getAttribute('data-carousel-item') : null;
+      if (pressed !== settling.current) settling.current = null;
+    };
     row.addEventListener('scroll', onScroll, { passive: true });
     row.addEventListener('scrollend', settle);
     TAKE_OVER.forEach((name) => row.addEventListener(name, takeOver, { passive: true }));
@@ -101,7 +125,63 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
     center(id, true);
   };
 
+  useEffect(() => () => clearTimeout(press.current?.timer), []);
+
+  const act = (id: string, gesture: PressGesture): void => {
+    if (capture === undefined) {
+      pick(id);
+      return;
+    }
+    const intent = captureIntent({ gesture, selected: id === selected, recording: capture.recording });
+    if (intent === 'select') pick(id);
+    else if (intent !== 'none') capture.onCapture(intent);
+  };
+
+  const release = (): void => {
+    clearTimeout(press.current?.timer);
+    press.current = null;
+  };
+
+  const pressStart = (id: string) => (event: PointerEvent<HTMLButtonElement>): void => {
+    if (capture === undefined || !event.isPrimary) return;
+    release();
+    consumed.current = null;
+    const timer = setTimeout(() => {
+      press.current = null;
+      consumed.current = id;
+      lastTap.current = null;
+      act(id, 'long-press');
+    }, capture.longPressMs ?? LONG_PRESS_MS);
+    press.current = { id, x: event.clientX, y: event.clientY, timer };
+  };
+
+  const pressMove = (event: PointerEvent<HTMLButtonElement>): void => {
+    const current = press.current;
+    if (current !== null && Math.hypot(event.clientX - current.x, event.clientY - current.y) > PRESS_SLOP_PX) release();
+  };
+
+  const tap = (id: string): void => {
+    if (consumed.current === id) {
+      consumed.current = null;
+      return;
+    }
+    if (capture === undefined) {
+      pick(id);
+      return;
+    }
+    const now = Date.now();
+    const gesture = tapGesture(lastTap.current, { id, at: now });
+    lastTap.current = gesture === 'double-tap' ? null : { id, at: now, selected: id === selected };
+    act(id, gesture);
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const focused = event.target instanceof HTMLElement ? event.target.getAttribute('data-carousel-item') : null;
+    if (capture !== undefined && keyIntent({ key: event.key, selected: focused === selected, recording: capture.recording }) === 'photo') {
+      event.preventDefault();
+      capture.onCapture('photo');
+      return;
+    }
     const rtl = typeof getComputedStyle === 'function' && getComputedStyle(event.currentTarget).direction === 'rtl';
     const next = carouselStep({ key: event.key, index: items.findIndex((item) => item.id === selected), count: items.length, rtl });
     const target = next === null ? undefined : items[next];
@@ -135,8 +215,19 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
               aria-checked={checked}
               aria-label={item.label}
               tabIndex={checked ? 0 : -1}
-              onClick={() => pick(item.id)}
-              className={`grid shrink-0 snap-center place-items-center overflow-hidden rounded-full transition-[transform,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
+              onClick={() => tap(item.id)}
+              {...(capture === undefined
+                ? {}
+                : {
+                    'aria-describedby': checked ? hintId : undefined,
+                    onPointerDown: pressStart(item.id),
+                    onPointerMove: pressMove,
+                    onPointerUp: release,
+                    onPointerCancel: release,
+                    onPointerLeave: release,
+                    onContextMenu: (event: { preventDefault: () => void }) => event.preventDefault(),
+                  })}
+              className={`grid shrink-0 touch-manipulation select-none snap-center [-webkit-touch-callout:none] place-items-center overflow-hidden rounded-full transition-[transform,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
               style={{ width: ITEM, height: ITEM, boxShadow: checked ? '0 0 0 3px white, 0 6px 18px rgb(0 0 0 / 0.45)' : 'inset 0 0 0 1px rgb(255 255 255 / 0.3)', background: 'rgb(0 0 0 / 0.35)' }}
               data-carousel-item={item.id}
             >
@@ -148,6 +239,11 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel }: Caro
       <p aria-hidden className="min-h-5 text-mini font-semibold text-white [text-shadow:0_1px_4px_rgb(0_0_0/0.6)]" data-call-mode-selected="">
         {current?.label ?? ''}
       </p>
+      {capture === undefined ? null : (
+        <span id={hintId} className="sr-only">
+          {capture.hint}
+        </span>
+      )}
     </div>
   );
 }
@@ -156,7 +252,8 @@ type Action = { readonly label: string; readonly onPress: () => void; readonly d
 
 type BarProps = {
   readonly quit: Action & { readonly glyph: ReactNode };
-  readonly shutter: Action & { readonly glyph: ReactNode; readonly busy?: boolean };
+  /** Au centre, rien de visible : la vidéo au clavier, qui ne se montre qu'au focus (#8625). */
+  readonly center?: ReactNode;
   readonly options: ReactNode;
 };
 
@@ -164,8 +261,8 @@ const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-tran
 
 const SIDE = `${SIDE_SHAPE} text-white`;
 
-/** La barre d'un mode : ✕ Quitter · le déclencheur · les options. */
-export function CallModeBar({ quit, shutter, options }: BarProps) {
+/** La barre d'un mode : ✕ Quitter · (la vidéo au clavier) · les options. */
+export function CallModeBar({ quit, center = null, options }: BarProps) {
   return (
     <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 px-6" data-call-mode-bar="">
       <div className="flex justify-start">
@@ -173,17 +270,7 @@ export function CallModeBar({ quit, shutter, options }: BarProps) {
           {quit.glyph}
         </button>
       </div>
-      <button
-        type="button"
-        aria-label={shutter.label}
-        aria-disabled={shutter.busy === true}
-        onClick={shutter.onPress}
-        className="grid size-[72px] place-items-center rounded-full border-4 border-white transition-transform active:scale-95 motion-reduce:transition-none"
-        style={{ boxShadow: '0 4px 20px rgb(0 0 0 / 0.45)' }}
-        {...(shutter.data ?? {})}
-      >
-        <span className="grid size-[56px] place-items-center rounded-full bg-white text-[var(--ios-indigo-950)]">{shutter.glyph}</span>
-      </button>
+      <div className="flex justify-center">{center}</div>
       <div className="flex justify-end gap-2">{options}</div>
     </div>
   );

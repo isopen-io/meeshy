@@ -1,6 +1,8 @@
+import AVFoundation
 import Combine
 import Foundation
 import MeeshySDK
+import UIKit
 @preconcurrency import WebRTC
 
 // L'aperçu avant décroché côté `CallManager` (#8480) : ce que le coordinateur
@@ -8,12 +10,18 @@ import MeeshySDK
 // le son pendant la sonnerie, rétablir le micro coupé pendant la sonnerie.
 
 extension CallManager: CallPreviewHostActing {
-    /// Les deux voies qui démarrent le moteur audio pendant la sonnerie : seule
-    /// la sonnerie in-app en a besoin, CallKit n'y montre pas d'aperçu.
+    /// Le moteur audio pendant la sonnerie. Sonnerie in-app : la session est
+    /// déjà active (la sonnerie l'a ouverte). Appel signalé à CallKit, app au
+    /// premier plan (#8627) : CallKit n'active la session qu'au décroché, on
+    /// l'ouvre donc soi-même pour entendre l'appelant.
     func setPreviewAudible(_ audible: Bool) {
+        let opensSession = audible && callUsesCallKit
         audioSessionQueue.sync {
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
+            if opensSession, (try? AVAudioSession.sharedInstance().setActive(true, options: [])) != nil {
+                rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
+            }
             rtc.isAudioEnabled = audible
             rtc.unlockForConfiguration()
         }
@@ -30,11 +38,23 @@ extension CallManager: CallPreviewHostActing {
             callId: currentCallId,
             localUserId: AuthManager.shared.currentUser?.id ?? "",
             peerUserId: remoteUserId,
-            phase: Self.previewPhase(of: callState, ringsInApp: !callUsesCallKit),
+            phase: Self.previewPhase(
+                of: callState,
+                ringsInApp: Self.previewRingsInApp(
+                    usesCallKit: callUsesCallKit,
+                    isAppActive: UIApplication.shared.applicationState == .active
+                )
+            ),
             isGroup: GroupCallMeshCoordinator.shared.isGroupConversation(conversationId),
             isMicMuted: isMuted,
             isVideoEnabled: isVideoEnabled
         )
+    }
+
+    /// #8627 — CallKit ne montre pas de vidéo, mais un appel qu'il signale
+    /// sonne aussi dans l'app dès qu'elle est au premier plan.
+    nonisolated static func previewRingsInApp(usesCallKit: Bool, isAppActive: Bool) -> Bool {
+        !usesCallKit || isAppActive
     }
 
     nonisolated static func previewPhase(of state: CallState, ringsInApp: Bool) -> CallPreviewPhase {
@@ -90,7 +110,9 @@ final class CallPreviewBinding {
         let muted = manager.$isMuted.map { _ in () }
         let video = manager.$isVideoEnabled.map { _ in () }
         let call = manager.$currentCallId.map { _ in () }
-        Publishers.Merge5(state, peer, muted, video, call)
+        let foreground = NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification).map { _ in () }
+        let background = NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification).map { _ in () }
+        Publishers.Merge(Publishers.Merge5(state, peer, muted, video, call), Publishers.Merge(foreground, background))
             .receive(on: DispatchQueue.main)
             .sink { [weak self, weak manager] in
                 guard let manager else { return }

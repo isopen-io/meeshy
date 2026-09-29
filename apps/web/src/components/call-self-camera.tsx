@@ -11,14 +11,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * - pincer mon image, ou la molette dessus, zoome la caméra, là où elle le
  *   propose (Chrome sur Android, la coque) ;
- * - le rail de ma caméra (Retourner, Couper la caméra, Effets, Partager
- *   l'écran — bâti par l'écran d'appel) se pose sur le bord, et la capsule
- *   `+  1×  −` du zoom s'y range dessous : elle le fait au clavier et au
- *   lecteur d'écran, et dit le facteur.
+ * - la capsule `+  1×  −` du zoom se pose sur le bord : elle le fait au
+ *   clavier et au lecteur d'écran, et dit le facteur. Les commandes de ma
+ *   caméra, elles, montent en haut au centre (#8626, `call-stage.tsx`).
  *
  * Chunk à part (`budgets.json` › `call_self_camera`), chargé quand mon image
  * passe en plein écran : il n'importe rien de l'écran d'appel (`call_overlay`),
- * qui lui remet ses glyphes et la colonne du rail (`column`).
+ * qui lui remet ses glyphes et la colonne de la capsule (`column`).
  */
 
 export type CameraZoom = { readonly range: ZoomRange; readonly value: number; readonly set: (value: number) => void };
@@ -102,7 +101,7 @@ type Glyphs = { readonly plus: ReactNode; readonly minus: ReactNode };
 
 const STEP = 'grid size-11 place-items-center rounded-full transition-transform active:scale-90 disabled:opacity-40 motion-reduce:transition-none';
 
-/** La capsule `+  1×  −`, debout sous le rail. */
+/** La capsule `+  1×  −`, debout sur le bord. */
 function ZoomCapsule({ zoom, language, glyphs }: { readonly zoom: CameraZoom; readonly language: InterfaceLanguage; readonly glyphs: Glyphs }) {
   const step = (direction: 1 | -1) => () => zoom.set(zoomNudge(zoom.range, zoom.value, direction));
   return (
@@ -124,7 +123,7 @@ type SelfCameraProps = {
   readonly stream: MediaStream | null;
   readonly language: InterfaceLanguage;
   readonly glyphs: Glyphs;
-  /** La colonne du rail, qui accueille la capsule — `null` quand les commandes de ma caméra sont retirées (un mode). */
+  /** La colonne qui accueille la capsule — `null` quand les commandes de ma caméra sont retirées (un mode). */
   readonly column: ((capsule: ReactNode) => ReactNode) | null;
 };
 

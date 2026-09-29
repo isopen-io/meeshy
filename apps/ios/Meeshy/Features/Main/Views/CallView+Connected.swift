@@ -41,12 +41,13 @@ extension CallView {
                 CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
                     .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
-                CallCaptureFlash(trigger: capture.flashCount, reduceMotion: reduceMotion)
+                CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
+                CallCaptureOutcomeAnnouncer(capture: capture)
             }
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en
-        // permanence, et en UN seul endroit : le bouton « Écran » n'existe que
-        // (…) déployé, dans la rangée du duo ou celle du groupe.
+        // permanence, et en UN seul endroit : le bouton « Écran » vit avec les
+        // commandes de ma caméra (vignette, haut de l'écran ou (…), #8626).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
         // §7.3 — auto-hide after 4s of no interaction, in duo AND group
         // video. Re-arms whenever showControls flips to true (a reveal tap)
@@ -56,7 +57,10 @@ extension CallView {
             guard showControls, shouldAutoHideControls else { return }
             try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
             if !Task.isCancelled {
-                withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showControls = false
+                    isCameraMenuUnfolded = false
+                }
             }
         }
         // §7.1 — populate the camera list when video turns on so the « mon
@@ -280,6 +284,9 @@ extension CallView {
     }
 
     func toggleControls() {
+        if CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: isCameraMenuUnfolded) {
+            return tapCameraMenu(.elsewhere)
+        }
         guard CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) else { return }
         withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
     }

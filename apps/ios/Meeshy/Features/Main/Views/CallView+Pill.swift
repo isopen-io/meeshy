@@ -74,6 +74,10 @@ enum CallControlsCopy {
         String(localized: "call.control.cameraRail", defaultValue: "Options de ma caméra", bundle: .main)
     }
 
+    static var cameraRailUnfoldHint: String {
+        String(localized: "call.control.cameraRail.unfold.hint", defaultValue: "Affiche les commandes de ma caméra par-dessus la vignette", bundle: .main)
+    }
+
     static func familyTitle(_ family: CallActionFamily) -> String {
         switch family {
         case .myImage: return myImage
@@ -138,7 +142,7 @@ extension CallView {
                         if let panel = layer.pillPanel {
                             panelRows(panel)
                         } else {
-                            familyRows(actions)
+                            familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))
                         }
                     }
                     pillHairline
@@ -251,9 +255,9 @@ extension CallView {
 
     // MARK: - Family rows
 
-    private func familyRows(_ actions: CallActionSet) -> some View {
+    private func familyRows(_ rows: [CallActionFamilyRow]) -> some View {
         VStack(spacing: 0) {
-            ForEach(actions.familyRows) { row in
+            ForEach(rows) { row in
                 CallPillRow(title: CallControlsCopy.familyTitle(row.family)) {
                     ForEach(row.actions, id: \.self) { action in
                         actionButton(action)

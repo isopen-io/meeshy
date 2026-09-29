@@ -3,16 +3,19 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { ClipEnv } from '@/lib/calls/call-capture-live';
+import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
-import { CallEffectsMode } from './call-effects-mode';
+import { CallEffectsMode, type FrameGrab } from './call-effects-mode';
 
 /**
  * LE MODE EFFETS (#8578) — l'écran se libère : ma vidéo en plein écran, un
  * seul carrousel en bas, la catégorie « Visage · Couleur » au-dessus, et la
- * barre ✕ · Valider · Réglages. Chaque choix part aussitôt ; ✕ rend les effets
- * d'avant, Valider les garde.
+ * barre ✕ · Réglages · Valider. Chaque choix part aussitôt ; ✕ rend les effets
+ * d'avant, Valider les garde. Plus de déclencheur (#8625) : deux tapes sur
+ * l'effet choisi capturent mon image, un appui long la filme.
  */
 
 describe('CallEffectsMode', () => {
@@ -34,6 +37,20 @@ describe('CallEffectsMode', () => {
     videoEffectsStore.setState({ effects: options.effects ?? NO_EFFECTS });
     const applied: Array<Partial<VideoEffects>> = [];
     const exits: string[] = [];
+    const saved: Array<readonly CaptureFile[]> = [];
+    const grabbed: string[] = [];
+    const released: string[] = [];
+    const grab: FrameGrab = {
+      still: async (video, style) => (grabbed.push(`${video.getAttribute('data-testid')}:${style}`), { blob: new Blob(['png']), fileName: `meeshy-appel-${style}.png` }),
+      film: () => ({ track: { kind: 'video' } as MediaStreamTrack, release: () => void released.push('video') }),
+    };
+    const clipEnv = (): ClipEnv => ({
+      isTypeSupported: (mime) => mime === 'video/webm',
+      record: (_stream, _mime, push, end) => ({ stop: () => queueMicrotask(() => (push(new Blob(['clip'])), end())) }),
+      mixAudio: () => ({ track: null, close: () => undefined }),
+      createStream: (tracks) => ({ getTracks: () => tracks }) as unknown as MediaStream,
+      now: () => new Date(2026, 8, 29, 18, 4, 9),
+    });
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -46,6 +63,9 @@ describe('CallEffectsMode', () => {
           preview={<video data-testid="self-preview" />}
           quitGlyph={null}
           onExit={() => void exits.push('exit')}
+          grab={grab}
+          clipEnv={clipEnv}
+          save={async (files) => (saved.push(files), { saved: files.length, failed: 0, cancelled: 0 })}
           apply={(patch) => {
             applied.push(patch);
             videoEffectsStore.setState((state) => ({ effects: { ...state.effects, ...patch } }));
@@ -56,11 +76,15 @@ describe('CallEffectsMode', () => {
     const find = (selector: string) => host.querySelector(selector);
     const all = (selector: string) => [...host.querySelectorAll(selector)];
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
+    const settle = async (selector: string) => {
+      await act(async () => (find(selector) as HTMLElement | null)?.click());
+      await act(async () => {});
+    };
     const done = () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { find, all, press, applied, exits, done };
+    return { find, all, press, settle, applied, exits, saved, grabbed, released, done };
   };
 
   test('une région nommée, ma vidéo en plein écran derrière, un seul carrousel', () => {
@@ -159,13 +183,38 @@ describe('CallEffectsMode', () => {
     view.done();
   });
 
-  test('la barre : Quitter, le déclencheur de 72, Réglages ; toutes les cibles font au moins 44 px', () => {
+  test('la barre : Quitter, Réglages, Valider — plus de déclencheur ; toutes les cibles font au moins 44 px (#8625)', () => {
     const view = mount({ blur: true });
     const bar = view.find('[data-call-mode-bar]');
     expect(bar?.querySelector('[data-call-mode-quit]')?.getAttribute('aria-label')).toBe('Quitter sans garder ces changements');
-    expect(bar?.querySelector('[data-call-effects-validate]')?.className).toContain('size-[72px]');
-    const small = view.all('[data-call-mode="effects"] button').filter((button) => !/min-h-11|size-12|size-\[72px\]/.test(button.className) && (button as HTMLElement).style.height !== '64px');
+    expect(bar?.querySelector('[data-call-effects-validate]')?.className).not.toContain('size-[72px]');
+    expect(view.find('[data-call-capture-shoot]')).toBeNull();
+    const small = view.all('[data-call-mode="effects"] button').filter((button) => !/min-h-11|size-12|size-\[72px\]|sr-only/.test(button.className) && (button as HTMLElement).style.height !== '64px');
     expect(small).toEqual([]);
+    view.done();
+  });
+
+  test('deux tapes sur l’effet choisi capturent MON image, avec son effet (#8625)', async () => {
+    const view = mount();
+    await view.settle('[data-carousel-item="angel"]');
+    expect(view.saved).toEqual([]);
+    await view.settle('[data-carousel-item="angel"]');
+    await view.settle('[data-carousel-item="angel"]');
+    expect(view.grabbed).toEqual(['self-preview:angel']);
+    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-angel.png']]);
+    expect(view.find('[data-call-capture-status]')?.textContent).toBe('Capture enregistrée');
+    expect(view.exits).toEqual([]);
+    view.done();
+  });
+
+  test('filmer mon image : stop, au centre, enregistre UNE vidéo et rend la piste (#8625)', async () => {
+    const view = mount();
+    await view.settle('[data-call-record-key]');
+    expect(view.find('[data-call-recording] [data-call-record-stop]')).not.toBeNull();
+    await view.settle('[data-call-record-stop]');
+    await act(async () => {});
+    expect(view.saved.map((files) => files.map((file) => [file.fileName, file.mimeType]))).toEqual([[['meeshy-appel-none-20260929-180409.webm', 'video/webm']]]);
+    expect(view.released).toEqual(['video']);
     view.done();
   });
 });

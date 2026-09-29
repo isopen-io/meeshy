@@ -23,6 +23,32 @@ enum CallModeCopy {
         String(localized: "call.mode.effects.title", defaultValue: "Effets de ma caméra", bundle: .main)
     }
 
+    static let gestureHintSeenKey = "call.mode.gestureHint.seen"
+
+    static var gestureHint: String {
+        String(localized: "call.mode.gesture.hint", defaultValue: "Deux tapes : photo · Appui long : vidéo", bundle: .main)
+    }
+
+    static var takePhoto: String {
+        String(localized: "call.mode.photo", defaultValue: "Prendre une photo", bundle: .main)
+    }
+
+    static var startRecording: String {
+        String(localized: "call.mode.record", defaultValue: "Filmer", bundle: .main)
+    }
+
+    static var stopRecording: String {
+        String(localized: "call.mode.record.stop", defaultValue: "Arrêter l'enregistrement", bundle: .main)
+    }
+
+    static var stopRecordingHint: String {
+        String(localized: "call.mode.record.stop.hint", defaultValue: "Enregistre la vidéo dans Photos", bundle: .main)
+    }
+
+    static var recording: String {
+        String(localized: "call.mode.recording", defaultValue: "Enregistrement en cours", bundle: .main)
+    }
+
     static var montageTitle: String {
         String(localized: "call.mode.montage.title", defaultValue: "Montage de l'appel", bundle: .main)
     }
@@ -65,6 +91,10 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     let name: (Item) -> String
     var itemSize = CGSize(width: 60, height: 60)
     var spacing: CGFloat = 14
+    var isRecording = false
+    var hint: String?
+    var onCapturePhoto: (() -> Void)?
+    var onStartRecording: (() -> Void)?
     @ViewBuilder let cell: (Item, Bool) -> Cell
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -76,14 +106,25 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .shadow(color: .black.opacity(0.5), radius: 3)
+            if let hint {
+                Text(hint)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.white.opacity(0.75))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .shadow(color: .black.opacity(0.5), radius: 3)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
             GeometryReader { geo in
                 track(inset: CallModeCarouselRule.sideInset(containerWidth: geo.size.width, itemWidth: itemSize.width))
             }
             .frame(height: itemSize.height)
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: hint)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue(name(selection))
+        .accessibilityValue(isRecording ? CallModeCopy.recording : name(selection))
         .accessibilityHint(CallModeCopy.carouselHint)
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -92,14 +133,35 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
             @unknown default: return
             }
         }
+        .modifier(CallModeShotActions(
+            isEnabled: !isRecording,
+            onCapturePhoto: onCapturePhoto,
+            onStartRecording: onStartRecording
+        ))
     }
 
     @ViewBuilder
     private func track(inset: CGFloat) -> some View {
         if #available(iOS 17.0, *) {
-            CallModeSnappingTrack(items: items, selection: $selection, itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, cell: cell)
+            CallModeSnappingTrack(items: items, selection: $selection, itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, isRecording: isRecording, onGesture: handle, cell: cell)
         } else {
-            CallModeLegacyTrack(items: items, selection: $selection, itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, cell: cell)
+            CallModeLegacyTrack(items: items, selection: $selection, itemSize: itemSize, spacing: spacing, inset: inset, reduceMotion: reduceMotion, isRecording: isRecording, onGesture: handle, cell: cell)
+        }
+    }
+
+    /// #8625 — la règle décide ; la vue n'exécute que ce qu'elle rend.
+    private func handle(_ item: Item, _ gesture: CallModeGesture) {
+        switch CallModeGestureRule.outcome(of: gesture, isSelected: item == selection, isRecording: isRecording) {
+        case .select:
+            guard item != selection else { return }
+            selection = item
+            HapticFeedback.light()
+        case .capturePhoto:
+            onCapturePhoto?()
+        case .startRecording:
+            onStartRecording?()
+        case .none:
+            return
         }
     }
 
@@ -119,17 +181,21 @@ private struct CallModeSnappingTrack<Item: Hashable, Cell: View>: View {
     let spacing: CGFloat
     let inset: CGFloat
     let reduceMotion: Bool
+    let isRecording: Bool
+    let onGesture: (Item, CallModeGesture) -> Void
     let cell: (Item, Bool) -> Cell
 
     @State private var centred: Item?
 
-    init(items: [Item], selection: Binding<Item>, itemSize: CGSize, spacing: CGFloat, inset: CGFloat, reduceMotion: Bool, cell: @escaping (Item, Bool) -> Cell) {
+    init(items: [Item], selection: Binding<Item>, itemSize: CGSize, spacing: CGFloat, inset: CGFloat, reduceMotion: Bool, isRecording: Bool, onGesture: @escaping (Item, CallModeGesture) -> Void, cell: @escaping (Item, Bool) -> Cell) {
         self.items = items
         self._selection = selection
         self.itemSize = itemSize
         self.spacing = spacing
         self.inset = inset
         self.reduceMotion = reduceMotion
+        self.isRecording = isRecording
+        self.onGesture = onGesture
         self.cell = cell
         self._centred = State(initialValue: selection.wrappedValue)
     }
@@ -138,10 +204,10 @@ private struct CallModeSnappingTrack<Item: Hashable, Cell: View>: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: spacing) {
                 ForEach(items, id: \.self) { item in
-                    CallModeCarouselItem(isSelected: item == selection, size: itemSize, reduceMotion: reduceMotion) {
+                    CallModeCarouselItem(isSelected: item == selection, isRecording: isRecording, size: itemSize, reduceMotion: reduceMotion) {
                         cell(item, item == selection)
-                    } action: {
-                        selection = item
+                    } onGesture: { gesture in
+                        onGesture(item, gesture)
                     }
                     .id(item)
                 }
@@ -172,6 +238,8 @@ private struct CallModeLegacyTrack<Item: Hashable, Cell: View>: View {
     let spacing: CGFloat
     let inset: CGFloat
     let reduceMotion: Bool
+    let isRecording: Bool
+    let onGesture: (Item, CallModeGesture) -> Void
     let cell: (Item, Bool) -> Cell
 
     var body: some View {
@@ -179,11 +247,10 @@ private struct CallModeLegacyTrack<Item: Hashable, Cell: View>: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: spacing) {
                     ForEach(items, id: \.self) { item in
-                        CallModeCarouselItem(isSelected: item == selection, size: itemSize, reduceMotion: reduceMotion) {
+                        CallModeCarouselItem(isSelected: item == selection, isRecording: isRecording, size: itemSize, reduceMotion: reduceMotion) {
                             cell(item, item == selection)
-                        } action: {
-                            selection = item
-                            HapticFeedback.light()
+                        } onGesture: { gesture in
+                            onGesture(item, gesture)
                         }
                         .id(item)
                     }
@@ -200,23 +267,40 @@ private struct CallModeLegacyTrack<Item: Hashable, Cell: View>: View {
     }
 }
 
+/// #8625 — un élément du carrousel. Un simple toucher choisit un autre style ;
+/// sur le style choisi, deux tapes et l'appui long se déclenchent — et
+/// seulement là, pour qu'un toucher sur un voisin ne patiente jamais.
 private struct CallModeCarouselItem<Content: View>: View {
     let isSelected: Bool
+    let isRecording: Bool
     let size: CGSize
     let reduceMotion: Bool
     @ViewBuilder let content: () -> Content
-    let action: () -> Void
+    let onGesture: (CallModeGesture) -> Void
+
+    @GestureState private var isPressed = false
 
     var body: some View {
-        Button(action: action) {
-            content()
-                .frame(width: size.width, height: size.height)
-                .scaleEffect(CallModeCarouselRule.scale(isSelected: isSelected))
-                .opacity(CallModeCarouselRule.opacity(isSelected: isSelected))
-                .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(CallPressButtonStyle())
+        let listens = CallModeGestureRule.listensForShots(isSelected: isSelected, isRecording: isRecording)
+        content()
+            .frame(width: size.width, height: size.height)
+            .scaleEffect(CallModeCarouselRule.scale(isSelected: isSelected) * (isPressed && listens ? 0.94 : 1))
+            .opacity(CallModeCarouselRule.opacity(isSelected: isSelected))
+            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isPressed)
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                TapGesture(count: 2).onEnded { onGesture(.doubleTap) },
+                including: listens ? .all : .subviews
+            )
+            .onTapGesture { onGesture(.tap) }
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: CallModeGestureRule.longPressDuration)
+                    .updating($isPressed) { value, state, _ in state = value }
+                    .onEnded { _ in onGesture(.longPress) },
+                including: listens ? .all : .subviews
+            )
+            .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -295,13 +379,12 @@ struct CallModeOption: Identifiable {
 struct CallModeActionBar: View {
     let exitHint: String
     let onExit: () -> Void
-    let shutter: CallModeShutter
     let options: [CallModeOption]
 
     private static let sideDiameter: CGFloat = 44
 
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
+        HStack(alignment: .center, spacing: 12) {
             CallPillButton(
                 symbol: "xmark",
                 kind: .normal,
@@ -311,61 +394,87 @@ struct CallModeActionBar: View {
                 diameter: Self.sideDiameter,
                 action: onExit
             )
-            .frame(maxWidth: .infinity)
-            shutter
-            HStack(spacing: 12) {
-                ForEach(options) { option in
-                    CallPillButton(
-                        symbol: option.symbol,
-                        kind: option.isOn == true ? .active : .normal,
-                        label: option.label,
-                        caption: option.caption,
-                        hint: option.hint,
-                        toggleState: option.isOn,
-                        diameter: Self.sideDiameter,
-                        action: option.action
-                    )
-                    .disabled(!option.isEnabled)
-                }
+            Spacer(minLength: 0)
+            ForEach(options) { option in
+                CallPillButton(
+                    symbol: option.symbol,
+                    kind: option.isOn == true ? .active : .normal,
+                    label: option.label,
+                    caption: option.caption,
+                    hint: option.hint,
+                    toggleState: option.isOn,
+                    diameter: Self.sideDiameter,
+                    action: option.action
+                )
+                .disabled(!option.isEnabled)
             }
-            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 24)
     }
 }
 
-struct CallModeShutter: View {
-    static let diameter: CGFloat = 72
+/// VoiceOver ne voit pas les deux tapes ni l'appui long d'un carrousel
+/// ajustable : la photo et le film lui sont offerts en actions nommées.
+private struct CallModeShotActions: ViewModifier {
+    let isEnabled: Bool
+    let onCapturePhoto: (() -> Void)?
+    let onStartRecording: (() -> Void)?
 
-    let symbol: String
-    let label: String
-    let hint: String
-    var isBusy = false
-    let action: () -> Void
+    func body(content: Content) -> some View {
+        content
+            .accessibilityAction(named: Text(CallModeCopy.takePhoto)) {
+                guard isEnabled else { return }
+                onCapturePhoto?()
+            }
+            .accessibilityAction(named: Text(CallModeCopy.startRecording)) {
+                guard isEnabled else { return }
+                onStartRecording?()
+            }
+    }
+}
+
+/// #8625 — pendant le film : un bouton stop rond au centre du gabarit, et le
+/// chrono, discret, au-dessus.
+struct CallModeRecordingStop: View {
+    static let diameter: CGFloat = 76
+
+    let startedAt: Date
+    let onStop: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            ZStack {
-                Circle()
-                    .stroke(Color.white, lineWidth: 4)
-                Circle()
-                    .fill(Color.white)
-                    .padding(8)
-                if isBusy {
-                    ProgressView()
-                        .tint(.black)
-                } else {
-                    Image(systemName: symbol)
-                        .font(MeeshyFont.relative(24, weight: .bold))
-                        .foregroundColor(.black)
+        VStack(spacing: 12) {
+            TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(MeeshyColors.error)
+                        .frame(width: 8, height: 8)
+                    Text(CallModeGestureRule.clock(context.date.timeIntervalSince(startedAt)))
+                        .font(.footnote.weight(.semibold).monospacedDigit())
+                        .foregroundColor(.white)
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.black.opacity(0.45)))
+                .accessibilityHidden(true)
             }
-            .frame(width: Self.diameter, height: Self.diameter)
-            .contentShape(Circle())
+            Button(action: onStop) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white, lineWidth: 4)
+                    Circle()
+                        .fill(Color.black.opacity(0.35))
+                        .padding(4)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(MeeshyColors.error)
+                        .frame(width: 28, height: 28)
+                }
+                .frame(width: Self.diameter, height: Self.diameter)
+                .contentShape(Circle())
+            }
+            .buttonStyle(CallPressButtonStyle())
+            .accessibilityLabel(CallModeCopy.stopRecording)
+            .accessibilityHint(CallModeCopy.stopRecordingHint)
         }
-        .buttonStyle(CallPressButtonStyle())
-        .disabled(isBusy)
-        .accessibilityLabel(label)
-        .accessibilityHint(hint)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 }

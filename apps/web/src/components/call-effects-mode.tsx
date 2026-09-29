@@ -2,11 +2,14 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type W
 import { useStore } from 'zustand/react';
 
 import { callActions } from '@/lib/calls/call-actions';
+import { captureStill, mirroredTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
+import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 
 /**
@@ -20,8 +23,11 @@ import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call
  * - « Réglages », à droite de la barre, remplace le carrousel par une rangée
  *   compacte (luminosité, flou d'arrière-plan là où la caméra l'offre) ; le
  *   re-toucher rend le carrousel ;
- * - le déclencheur « Valider » garde l'effet et rend l'appel ; ✕ (ou Échap)
- *   quitte en rendant les effets d'avant le mode.
+ * - « Valider », à droite, garde l'effet et rend l'appel ; ✕ (ou Échap)
+ *   quitte en rendant les effets d'avant le mode ;
+ * - plus de déclencheur (#8625) : DEUX TAPES sur l'effet choisi capturent mon
+ *   image, un APPUI LONG la filme avec le son de l'appel, jusqu'au stop posé
+ *   au centre (`call-capture-studio.tsx`).
  *
  * Chaque choix part aussitôt sur la piste envoyée. Chunk à part
  * (`budgets.json` › `call_effects_mode`) qui n'importe rien de l'écran
@@ -42,7 +48,27 @@ type ModeProps = {
   readonly onExit: () => void;
   readonly onWheel?: ((event: WheelEvent<HTMLElement>) => void) | undefined;
   readonly apply?: (patch: Partial<VideoEffects>) => void;
+  /** Le son de l'appel : mon micro et les voix des autres. */
+  readonly audio?: () => readonly MediaStream[];
+  readonly grab?: FrameGrab;
+  readonly save?: (files: readonly CaptureFile[]) => Promise<SaveOutcome>;
+  readonly clipEnv?: () => ClipEnv;
 };
+
+/** Ce qu'on tire de ma vidéo affichée : une image, ou une piste à filmer. */
+export type FrameGrab = {
+  readonly still: (video: HTMLVideoElement, style: string) => Promise<CaptureFile | null>;
+  readonly film: (video: HTMLVideoElement) => StudioVideo | null;
+};
+
+export const EFFECTS_RECORD_FPS = 30;
+
+const VIDEO_GRAB: FrameGrab = {
+  still: (video, style) => captureStill({ video, style, now: new Date() }),
+  film: (video) => mirroredTrack(video, EFFECTS_RECORD_FPS),
+};
+
+const NO_AUDIO = (): readonly MediaStream[] => [];
 
 const applyNow = (patch: Partial<VideoEffects>): void => {
   setVideoEffects(patch);
@@ -119,7 +145,7 @@ const faceVisual = (effect: FaceEffect): ReactNode => (
 const swatch = (preset: VideoPreset): ReactNode => <span aria-hidden className="size-full" style={{ background: SWATCH[preset] }} />;
 
 const check = (
-  <svg aria-hidden viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
     <path d="m5 12.5 4.5 4.5L19 7.5" />
   </svg>
 );
@@ -134,7 +160,7 @@ const sliders = (
 
 const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
 
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, quitGlyph, onExit, onWheel, apply = applyNow }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, quitGlyph, onExit, onWheel, apply = applyNow, audio = NO_AUDIO, grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const before = useRef(effects);
   const root = useRef<HTMLDivElement>(null);
@@ -142,6 +168,24 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const [settings, setSettings] = useState(!colorAvailable);
   const t = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>): string => translateCallStudio(language, key, ...params);
   const percent = Math.round(effects.brightness * 100);
+  const shown = useRef<HTMLDivElement>(null);
+  const style = useRef('none');
+  const video = (): HTMLVideoElement | null => shown.current?.querySelector('video') ?? null;
+  const studio = useCaptureStudio({
+    language,
+    still: async () => {
+      const mine = video();
+      return mine === null ? null : grab.still(mine, style.current);
+    },
+    video: () => {
+      const mine = video();
+      return mine === null ? null : grab.film(mine);
+    },
+    audio,
+    style: () => style.current,
+    ...(save === undefined ? {} : { save }),
+    ...(clipEnv === undefined ? {} : { clipEnv }),
+  });
 
   useEffect(() => {
     root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], [data-call-effects-validate]')?.focus();
@@ -162,6 +206,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       ? FACE_EFFECTS.map((effect) => ({ id: effect, label: t(`callStudio.face.${effect}`), visual: faceVisual(effect) }))
       : VIDEO_PRESETS.map((preset) => ({ id: preset, label: translate(language, `call.effects.preset.${preset}`), visual: swatch(preset) }));
   const selected = category === 'face' ? effects.faceEffect : effects.preset;
+  style.current = selected;
   const select = (id: string): void => {
     const face = FACE_EFFECTS.find((effect) => effect === id);
     const preset = VIDEO_PRESETS.find((entry) => entry === id);
@@ -171,10 +216,12 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
 
   return (
     <div ref={root} role="region" aria-label={t('callStudio.mode.effects')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="effects">
-      <div className="pointer-events-none fixed inset-0 z-0 bg-black" data-call-mode-preview="effects">
+      <div ref={shown} className="pointer-events-none fixed inset-0 z-0 bg-black" data-call-mode-preview="effects">
         {preview}
       </div>
+      {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
       <div className="relative z-10 flex w-full flex-col items-center gap-3">
+        <CaptureStatus status={studio.status} />
         {settings ? (
           <div role="group" aria-label={t('callStudio.effects.settings')} className="glass-call flex max-w-[calc(100%-2rem)] flex-wrap items-center justify-center gap-3 rounded-[24px] px-4 py-2" data-call-effects-settings="">
             {colorAvailable ? (
@@ -215,15 +262,30 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
                 </span>
               ))}
             </div>
-            <ModeCarousel key={category} label={t('callStudio.mode.pickEffect')} items={items} selected={selected} onSelect={select} onWheel={onWheel} />
+            <CaptureHint language={language} />
+            <ModeCarousel
+              key={category}
+              label={t('callStudio.mode.pickEffect')}
+              items={items}
+              selected={selected}
+              onSelect={select}
+              onWheel={onWheel}
+              capture={{ recording: studio.recording, onCapture: studio.capture, hint: t('callStudio.capture.gestures') }}
+            />
           </>
         )}
         <CallModeBar
           quit={{ label: t('callStudio.mode.quitEffects'), glyph: quitGlyph, onPress: quit, data: { 'data-call-mode-quit': '' } }}
-          shutter={{ label: t('callStudio.mode.validateLabel'), glyph: check, onPress: onExit, data: { 'data-call-effects-validate': '' } }}
-          options={colorAvailable ? <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={sliders} pressed={settings} onPress={() => setSettings((open) => !open)} data={{ 'data-call-effects-settings-toggle': '' }} /> : null}
+          center={<KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />}
+          options={
+            <>
+              {colorAvailable ? <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={sliders} pressed={settings} onPress={() => setSettings((open) => !open)} data={{ 'data-call-effects-settings-toggle': '' }} /> : null}
+              <ModeOption label={t('callStudio.mode.validateLabel')} glyph={check} onPress={onExit} data={{ 'data-call-effects-validate': '' }} />
+            </>
+          }
         />
       </div>
+      {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}
     </div>
   );
 }

@@ -26,14 +26,15 @@ struct CallPreviewBackdrop: View {
     }
 }
 
-/// Chez l'appelé : entendre l'appelant avant de décrocher. N'apparaît qu'une
-/// fois le lien d'aperçu établi — avant, il n'y a rien à entendre.
+/// Chez l'appelé : entendre l'appelant avant de décrocher. Proposé dès que
+/// l'appel 1:1 sonne (#8627) : un bouton plein, qu'on ne peut pas manquer,
+/// tant que le son est coupé ; le choix s'applique dès que l'appelant arrive.
 struct CallPreviewSoundButton: View {
     @ObservedObject var preview: CallPreviewCoordinator
 
     var body: some View {
         ZStack {
-            if preview.isPreviewConnected {
+            if preview.offersSound {
                 let audible = preview.isPreviewAudible
                 Button {
                     preview.toggleSound()
@@ -44,10 +45,11 @@ struct CallPreviewSoundButton: View {
                             : String(localized: "call.preview.sound.on", defaultValue: "Activer le son", bundle: .main),
                         systemImage: audible ? "speaker.wave.2.fill" : "speaker.slash.fill"
                     )
-                    .font(.callout.weight(.medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .frame(minHeight: 44)
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(audible ? .white : .black)
+                    .padding(.horizontal, 24)
+                    .frame(minHeight: 50)
+                    .background(Capsule().fill(audible ? Color.clear : Color.white))
                     .adaptiveGlass(in: Capsule())
                 }
                 .pressable()
@@ -56,7 +58,7 @@ struct CallPreviewSoundButton: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: preview.isPreviewConnected)
+        .animation(.easeInOut(duration: 0.25), value: preview.offersSound)
     }
 }
 

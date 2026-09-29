@@ -21,6 +21,7 @@ extension CallView {
                     modeControls(mode)
                 }
                 .padding(.bottom, Self.chromeBottomInset)
+                CallModeRecordingOverlay(capture: capture)
             }
             .transition(.opacity)
             .accessibilityElement(children: .contain)
@@ -36,11 +37,7 @@ extension CallView {
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
         case .montage:
-            CallMontageStage(
-                image: capture.preview,
-                styleName: CallCaptureCopy.styleName(capture.style),
-                isWorking: capture.status == .working
-            )
+            CallMontageLiveStage(capture: capture)
         }
     }
 
@@ -48,7 +45,7 @@ extension CallView {
     private func modeControls(_ mode: CallScreenMode) -> some View {
         switch mode {
         case .effects:
-            CallEffectsModeControls(callManager: callManager, onExit: exitMode)
+            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, onExit: exitMode)
         case .montage:
             CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, onExit: exitMode)
         }

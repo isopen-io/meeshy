@@ -123,19 +123,3 @@ enum CallScreenLayer: Equatable, Sendable {
         }
     }
 }
-
-enum CallCameraRail {
-    static let order: [CallAction] = [.flipCamera, .cameraPicker, .camera, .effects, .screenShare]
-
-    static func actions(from set: CallActionSet) -> [CallAction] {
-        order.filter { set.myImage.contains($0) }
-    }
-
-    static func isMyImageFullScreen(isGroupStage: Bool, isSelfFeatured: Bool, isLocalPrimary: Bool) -> Bool {
-        isGroupStage ? isSelfFeatured : isLocalPrimary
-    }
-
-    static func isShown(isMyImageFullScreen: Bool, chrome: CallChromeVisibility) -> Bool {
-        isMyImageFullScreen && chrome.isVisible(.controls)
-    }
-}

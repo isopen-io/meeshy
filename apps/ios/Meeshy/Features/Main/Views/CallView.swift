@@ -85,11 +85,17 @@ struct CallView: View {
     @State var isSelfFeatured = false
     @State var selfTileScale: CallSelfTileScale = .standard
     @State var selfTilePinch: CGFloat = 1
+    /// #8626 — le bouton caméra d'une petite vignette a déployé sa grille.
+    @State var isCameraMenuUnfolded = false
     let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).
     @State var revealedCaptionIds: Set<UUID> = []
-    @StateObject var capture = CallCaptureController()
+    /// #8625 — l'écran d'appel TIENT la capture sans l'observer : ses états
+    /// (aperçu, chrono, résultat) se lisent dans des vues feuilles, sinon un
+    /// film redessinerait tout l'écran d'appel à chaque trame.
+    @StateObject var captureHost = CallCaptureHost()
+    var capture: CallCaptureController { captureHost.controller }
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).
@@ -207,6 +213,7 @@ struct CallView: View {
                 outgoingRingingView
             case .connecting:
                 connectingView
+                    .background { CallPreviewBackdrop(preview: .shared) }
             case .connected:
                 connectedView
             case .ended(let reason):

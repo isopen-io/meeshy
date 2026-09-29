@@ -1,6 +1,6 @@
 /**
- * LE STUDIO D'UN APPEL VIDÉO, FRANÇAIS (#8551, #8552) — la SOURCE des clés :
- * les effets de visage, les montages et la capture. Les six autres langues
+ * LE STUDIO D'UN APPEL VIDÉO, FRANÇAIS (#8551, #8552, #8625) — la SOURCE des clés :
+ * les effets de visage, les montages, la photo et la vidéo. Les six autres langues
  * portent exactement ces clés (`satisfies CallStudioCatalog`,
  * `i18n-call-studio-catalog.test.ts`).
  */
@@ -21,8 +21,6 @@ const fr = {
   'callStudio.montage.comic': 'BD',
   'callStudio.montage.heart': 'Cœur',
   'callStudio.capture.preview': 'Aperçu du montage {style}',
-  'callStudio.capture.shoot': 'Capturer',
-  'callStudio.capture.shootLabel': 'Capturer le montage {style}',
   'callStudio.capture.faces': 'Chaque visage',
   'callStudio.capture.facesLabel': 'Enregistrer chaque visage séparément',
   'callStudio.capture.saved': 'Capture enregistrée',
@@ -46,13 +44,20 @@ const fr = {
   'callStudio.mode.montage': 'Capturer l’appel',
   'callStudio.mode.quit': 'Quitter',
   'callStudio.mode.quitEffects': 'Quitter sans garder ces changements',
-  'callStudio.mode.validate': 'Valider',
   'callStudio.mode.validateLabel': 'Garder cet effet et revenir à l’appel',
   'callStudio.mode.face': 'Visage',
   'callStudio.mode.categories': 'Catégorie',
   'callStudio.mode.pickEffect': 'Choisir un effet',
   'callStudio.mode.pickMontage': 'Choisir un montage',
   'callStudio.mode.settingsLabel': 'Afficher les réglages (luminosité, flou)',
+  'callStudio.capture.hint': 'Deux tapes : photo · Appui long : vidéo',
+  'callStudio.capture.gestures': 'Deux tapes, ou Entrée : une photo. Appui long : une vidéo, avec le son.',
+  'callStudio.record.start': 'Filmer, avec le son',
+  'callStudio.record.stop': 'Arrêter la vidéo et l’enregistrer',
+  'callStudio.record.saved': 'Vidéo enregistrée',
+  'callStudio.record.failed': 'La vidéo n’a pas pu être enregistrée',
+  'callStudio.record.unsupported': 'Ce navigateur ne sait pas filmer l’appel',
+  'callStudio.record.clock': 'Vidéo en cours, {time}',
 } as const;
 
 export default fr;

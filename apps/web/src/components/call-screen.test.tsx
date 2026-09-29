@@ -16,7 +16,9 @@ import { ThreadCallButton } from './thread-call-button';
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
+  renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming', preview: { getVideoTracks: () => [], getTracks: () => [] } as unknown as MediaStream })} />);
   await import('./call-control-actions');
+  await import('./call-preview');
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
@@ -142,7 +144,7 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
   test('(…) dit son état : actions rangées à l’ouverture de l’appel', () => {
     const html = screen({ members: { 'u-peer': member() } });
     expect(html).toContain('aria-expanded="false"');
-    expect(html).not.toContain('data-call-rail');
+    expect(html).not.toContain('data-call-self-controls');
     expect(html).not.toContain('data-call-row');
   });
 
@@ -255,7 +257,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       expect(rowLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
       expect(view.find('[data-call-row="call"] [data-call-captions]')).not.toBeNull();
       expect(view.find('[data-call-row="call"] [data-call-record]')).not.toBeNull();
-      expect(view.find('[data-call-rail]')).toBeNull();
+      expect(view.find('[data-call-self-controls]')).toBeNull();
       expect(view.find('[data-call-row] button')?.className).not.toContain('glass-call');
       view.press('[data-call-more]');
       expect(view.find('[data-call-row]')).toBeNull();
@@ -273,10 +275,36 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('caméra allumée, « Effets » vient dans la rangée de mon image, entre Retourner et Écran (#8442)', () => {
+  test('caméra allumée en duo, les commandes de MA caméra vivent dans ma vignette, et le (…) ne les double pas (#8626)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    const row = view.find('[data-call-corner-frame] [data-call-self-controls="tile"]');
+    expect(row?.getAttribute('role')).toBe('toolbar');
+    expect(row?.getAttribute('aria-orientation')).toBe('horizontal');
+    expect(row?.getAttribute('aria-label')).toBe('Options de ma caméra');
+    expect([...view.host.querySelectorAll('[data-call-self-control]')].map((button) => button.getAttribute('aria-label'))).toEqual(['Retourner la caméra', 'Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(view.find('[data-call-corner] [data-call-self-controls]')).toBeNull();
     view.press('[data-call-more]');
-    expect(rowLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(view.find('[data-call-row="mine"]')).toBeNull();
+    expect(view.host.querySelectorAll('[data-call-control="camera"]')).toHaveLength(1);
+    expect(view.host.querySelectorAll('[data-call-screen-share]')).toHaveLength(1);
+    view.done();
+  });
+
+  test('caméra coupée, les commandes de ma caméra restent dans le (…) pour la rallumer (#8626)', () => {
+    const view = mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) } });
+    expect(view.find('[data-call-self-controls]')).toBeNull();
+    view.press('[data-call-more]');
+    expect(rowLabels(view.host, 'mine')).toContain('Activer la caméra');
+    view.done();
+  });
+
+  test('toucher la scène efface la rangée de ma vignette avec le reste (#8626)', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    const holder = () => view.find('[data-call-self-controls]')?.closest('[data-call-self-controls-holder]');
+    expect(holder()?.className).toContain('opacity-100');
+    act(() => (view.find('[data-call-screen]') as HTMLElement).click());
+    expect(holder()?.className).toContain('opacity-0');
+    expect(holder()?.getAttribute('aria-hidden')).toBe('true');
     view.done();
   });
 
@@ -316,8 +344,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   test('« Effets » entre en MODE : en-tête, pilule et rangées s’effacent ; seul reste le carrousel, et ✕ rend l’appel (#8578)', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
-    view.press('[data-call-more]');
-    view.press('[data-call-control="effects"]');
+    view.press('[data-call-self-controls] [data-call-control="effects"]');
     await settle(() => import('./call-effects-mode'));
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
@@ -333,7 +360,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('« Capturer » entre en MODE montage : l’aperçu plein écran, les treize styles au carrousel, le déclencheur (#8552, #8578)', async () => {
+  test('« Capturer » entre en MODE montage : l’aperçu plein écran, les treize styles au carrousel, plus de déclencheur (#8552, #8578, #8625)', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
     view.press('[data-call-more]');
     view.press('[data-call-control="capture"]');
@@ -341,7 +368,8 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     expect(view.find('[data-call-mode-preview="montage"] [data-call-capture-preview]')?.tagName).toBe('CANVAS');
     expect(view.host.querySelectorAll('[data-call-capture-thumb]')).toHaveLength(13);
-    expect(view.find('[data-call-capture-shoot]')).not.toBeNull();
+    expect(view.find('[data-call-capture-shoot]')).toBeNull();
+    expect(view.find('[data-carousel-item="grid"]')?.getAttribute('aria-describedby')).not.toBeNull();
     expect(view.find('[data-call-control-pill]')).toBeNull();
     act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-mode="montage"]')).toBeNull();
@@ -363,21 +391,22 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('mon image en plein écran porte le rail de ma caméra ; « Effets » y entre dans le mode, qui le retire (#8576)', async () => {
+  test('mon image en plein écran : la rangée de ma caméra monte en haut au centre ; « Effets » y entre dans le mode, qui la retire (#8576, #8626)', async () => {
     const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } }, { color: true, blur: false });
-    expect(view.find('[data-call-self-rail]')).toBeNull();
+    expect(view.find('[data-call-self-controls="top"]')).toBeNull();
     view.press('[data-call-corner]');
     await settle(() => import('./call-self-camera'));
-    const rail = view.find('[data-call-self-rail]');
-    expect(rail?.getAttribute('role')).toBe('toolbar');
-    expect(rail?.getAttribute('aria-orientation')).toBe('vertical');
-    expect(rail?.getAttribute('aria-label')).toBe('Options de ma caméra');
-    expect([...view.host.querySelectorAll('[data-call-rail]')].map((button) => button.getAttribute('data-call-rail'))).toEqual(['flip', 'camera', 'effects', 'screen']);
-    view.press('[data-call-rail="effects"]');
+    const top = view.find('[data-call-self-controls="top"]');
+    expect(top?.getAttribute('aria-orientation')).toBe('horizontal');
+    expect(top?.closest('[data-call-self-controls-holder]')?.getAttribute('data-call-self-controls-holder')).toBe('top');
+    expect(view.find('[data-call-self-controls="tile"]')).toBeNull();
+    expect(view.find('[data-call-corner-frame] [data-call-self-controls]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-self-control]')].map((button) => button.getAttribute('data-call-self-control'))).toEqual(['flip', 'camera', 'effects', 'screen']);
+    view.press('[data-call-self-control="effects"]');
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     await settle(() => import('./call-effects-mode'));
     expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
-    expect(view.find('[data-call-self-rail]')).toBeNull();
+    expect(view.find('[data-call-self-controls]')).toBeNull();
     view.done();
   });
 
@@ -665,6 +694,27 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     view.press('[data-call-preview-sound]');
     expect(view.find('[data-call-preview-audio] audio')).toBeNull();
     view.done();
+  });
+
+  test('le bouton de son se lit d’emblée, en toutes lettres, au-dessus de l’identité (#8627)', () => {
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    const button = view.find('[data-call-preview-sound]');
+    expect(button?.textContent).toContain('Activer le son');
+    expect(button?.className).toContain('glass-call-prominent');
+    view.done();
+  });
+
+  test('activer le son de l’aperçu fait taire la sonnerie ; le couper ne la relance pas (#8627)', () => {
+    const original = callActions.hearPreview;
+    const heard: number[] = [];
+    callActions.hearPreview = () => void heard.push(1);
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    view.press('[data-call-preview-sound]');
+    expect(heard).toHaveLength(1);
+    view.press('[data-call-preview-sound]');
+    expect(heard).toHaveLength(1);
+    view.done();
+    callActions.hearPreview = original;
   });
 
   test('un appel vocal qui sonne s’écoute aussi, sans vidéo', () => {
