@@ -148,6 +148,8 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         "composer.camera.lock.done",
         "composer.camera.zoom",
         "composer.camera.flashIntensity",
+        "composer.camera.gesture.tapPhoto",
+        "composer.camera.gesture.holdFilm",
     ]
 
     func test_catalogue_serLesClesNeuvesDansLesSeptLangues() throws {
@@ -172,7 +174,28 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         let parle = ComposerSceneCameraCopy.emptySceneSpoken(.photoOrVideo)
         XCTAssertTrue(parle.hasPrefix(ComposerSceneCameraCopy.emptySceneTitle))
         XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.emptySceneInvite))
-        XCTAssertTrue(parle.hasSuffix(ComposerSceneCameraCopy.quickCaptureHint(.photoOrVideo)))
+        XCTAssertTrue(parle.hasSuffix(ComposerSceneCameraCopy.gestureLine(.holdFilm)))
+        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapPhoto)))
+    }
+
+    // MARK: - Les gestes : une ligne chacun, précédée de son icône (complément porteur)
+
+    func test_gestes_photoPuisVideo_chacunSaLigne() {
+        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.photoOrVideo), [.tapPhoto, .holdFilm])
+        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.videoOnly), [.holdFilm],
+                       "un réel n'offre pas la photo : sa ligne ne s'affiche pas")
+    }
+
+    func test_gestes_chaqueLigneASonIcone() {
+        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapPhoto.symbol, "camera")
+        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.holdFilm.symbol, "video")
+    }
+
+    func test_laSceneVide_nePorteAucunAppareilPhotoAuDessusDuTitre() throws {
+        let cadre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraFrame.swift")
+        XCTAssertFalse(cadre.contains("hint == .videoOnly ? \"video\" : \"camera\""),
+                       "l'appareil photo au-dessus du titre ne représente pas une scène")
+        XCTAssertTrue(cadre.contains("ComposerSceneQuickCapture.gestureLines(hint)"))
     }
 
     // MARK: - Le câblage

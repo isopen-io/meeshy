@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   cameraFlashPlan,
   cameraVideoMime,
-  quickCaptureHintKey,
+  quickCaptureHintLines,
   quickCaptureOffered,
   quickCaptureRelease,
   quickCaptureTap,
@@ -33,16 +33,19 @@ describe('quickCaptureOffered — le geste n’existe que sur une scène vide', 
   }
 });
 
-describe('quickCaptureTap / quickCaptureHintKey — un geste, une intention', () => {
+describe("quickCaptureTap / quickCaptureHintLines — un geste, une intention, une ligne chacun (#8672)", () => {
   test('story et post : le toucher ouvre ET prend la photo', () => {
     expect(quickCaptureTap('STORY')).toBe('photo');
     expect(quickCaptureTap('POST')).toBe('photo');
-    expect(quickCaptureHintKey('STORY')).toBe('story.studio.camera.quick.photoOrVideo');
+    expect(quickCaptureHintLines('STORY')).toEqual([
+      { glyph: 'camera', key: 'story.studio.camera.quick.tapPhoto' },
+      { glyph: 'video', key: 'story.studio.camera.quick.holdFilm' },
+    ]);
   });
 
   test('un réel attend du mouvement : le toucher ouvre sans rien prendre', () => {
     expect(quickCaptureTap('REEL')).toBe('arm');
-    expect(quickCaptureHintKey('REEL')).toBe('story.studio.camera.quick.videoOnly');
+    expect(quickCaptureHintLines('REEL')).toEqual([{ glyph: 'video', key: 'story.studio.camera.quick.videoOnly' }]);
   });
 });
 

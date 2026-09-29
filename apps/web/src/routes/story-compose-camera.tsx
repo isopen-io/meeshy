@@ -1,15 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { COMPOSER_GLYPHS } from '@/components/glyphs-composer';
-import { THREAD_MENU_GLYPHS } from '@/components/glyphs-thread-menu';
+import { GLYPHS } from '@/components/glyphs';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
+import { captureLock, flashFloorColor, flashSliderShown, zoomAfterDrag, type CameraZoomRange, type LayoutDirection } from '@/lib/stories/studio-capture-gestures';
 import { createBrowserCameraEngine, type CameraEngine } from '@/lib/stories/studio-camera-engine';
 import { cameraFlashPlan, quickCaptureRelease, quickCaptureTap, type CameraFacing } from '@/lib/stories/studio-quick-capture';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { StudioCameraFlash } from '@/routes/story-compose-camera-flash';
 import { ROUND_GLASS } from '@/routes/story-compose-chrome';
 
 /**
@@ -24,8 +26,21 @@ export type StudioCameraIntent = 'photo' | 'hold' | 'arm' | 'manual' | 'film';
 /** Au-delà, un appui sur le déclencheur FILME (miroir du geste de la scène). */
 const HOLD_MS = 350;
 
-type Recording = 'hold' | 'toggle' | null;
+/** `locked` : l'appui long a glissé jusqu'au cadenas — le doigt peut se
+ * lever, le film continue jusqu'au stop (#8672). */
+type Recording = 'hold' | 'locked' | 'toggle' | null;
 type ScreenFlash = 'off' | 'full' | 'ring';
+
+/** Le glisser du doigt qui a ouvert la caméra par un appui long sur la SCÈNE :
+ * il vit sous la caméra (capturé par la scène), l'hôte le relaie ici. */
+export type StudioHoldDrag = { current: ((dx: number, dy: number) => void) | null };
+
+const NO_ZOOM: CameraZoomRange = { mode: 'preview', min: 1, max: 1, step: 0 };
+
+function directionOf(element: Element | null): LayoutDirection {
+  if (element === null || typeof getComputedStyle !== 'function') return 'ltr';
+  return getComputedStyle(element).direction === 'rtl' ? 'rtl' : 'ltr';
+}
 
 /**
  * **LA CAMÉRA DU COMPOSER** (#8654, jumelle web du viseur iOS, #8653) — un
@@ -41,6 +56,13 @@ type ScreenFlash = 'off' | 'full' | 'ring';
  *    sol de l'écran devient BLANC brillant (plein écran pour une photo, un
  *    anneau autour du viseur pendant un film), luminosité au maximum quand la
  *    coque la sert, restituée ensuite.
+ *  - LE VERROU ET LE ZOOM (#8672) : pendant l'appui long qui filme, un
+ *    cadenas paraît du côté de début du déclencheur ; glisser jusqu'à lui
+ *    VERROUILLE (le doigt se lève, le déclencheur devient stop). Glisser vers
+ *    le haut zoome, vers le bas dézoome — maintenu, verrouillé, ou sur le
+ *    viseur pendant un film mains libres ;
+ *  - LE CURSEUR DU FLASH : flash activé et sol blanc, un curseur de verre
+ *    s'allonge collé au bouton et règle l'intensité du blanc.
  *
  * Ce qu'elle rend est POSÉ dans la scène par l'hôte (`onTake`) : la caméra
  * est une ENTRÉE, pas un mode.
@@ -52,6 +74,9 @@ export function StudioCamera({
   holding,
   flash,
   onFlash,
+  intensity = 1,
+  onIntensity = () => undefined,
+  holdDrag,
   engine: injected,
   onTake,
   onClose,
@@ -63,12 +88,18 @@ export function StudioCamera({
   readonly holding: boolean;
   readonly flash: boolean;
   readonly onFlash: (next: boolean) => void;
+  /** L'intensité du blanc du sol, de `FLASH_INTENSITY_MIN` à 1. */
+  readonly intensity?: number;
+  readonly onIntensity?: (next: number) => void;
+  /** Le relais du glisser de la scène — la caméra y branche sa loi. */
+  readonly holdDrag?: StudioHoldDrag;
   /** Injectable pour les témoins ; la production prend le moteur navigateur. */
   readonly engine?: CameraEngine;
   readonly onTake: (file: File) => void;
   readonly onClose: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const restoreRef = useRef<(() => void) | null>(null);
   const busyRef = useRef(false);
@@ -81,6 +112,15 @@ export function StudioCamera({
   const [torch, setTorch] = useState(false);
   const [recording, setRecording] = useState<Recording>(null);
   const [screenFlash, setScreenFlash] = useState<ScreenFlash>('off');
+  const [previewingFloor, setPreviewingFloor] = useState(false);
+  const [lockProgress, setLockProgress] = useState(0);
+  const [zoom, setZoomState] = useState(1);
+  const zoomRef = useRef(1);
+  const zoomRangeRef = useRef<CameraZoomRange>(NO_ZOOM);
+  /** Le zoom au début du glisser en cours — le geste est RELATIF à lui. */
+  const dragFromRef = useRef(1);
+  const pressRef = useRef<{ readonly x: number; readonly y: number; readonly already: boolean } | null>(null);
+  const viewDragRef = useRef<{ readonly y: number } | null>(null);
   const recordingRef = useRef<Recording>(null);
   recordingRef.current = recording;
   const holdingRef = useRef(holding);
@@ -110,6 +150,9 @@ export function StudioCamera({
       }
       streamRef.current = result.stream;
       setTorch(result.torch);
+      zoomRangeRef.current = result.zoom;
+      zoomRef.current = result.zoom.min;
+      setZoomState(result.zoom.min);
       const video = videoRef.current;
       if (video !== null) {
         video.srcObject = result.stream;
@@ -126,6 +169,44 @@ export function StudioCamera({
   }, [facing, engine]);
 
   const plan = () => cameraFlashPlan({ flash, facing, torch });
+
+  const applyZoom = (next: number) => {
+    if (next === zoomRef.current) return;
+    zoomRef.current = next;
+    setZoomState(next);
+    const stream = streamRef.current;
+    if (zoomRangeRef.current.mode === 'hardware' && stream !== null) void engine.setZoom(stream, next);
+  };
+
+  const resetZoom = () => {
+    applyZoom(zoomRangeRef.current.min);
+    setLockProgress(0);
+  };
+
+  /** LE DOIGT QUI FILME GLISSE : l'axe horizontal mène au cadenas, l'axe
+   * vertical zoome — relatif au zoom du début du geste. */
+  const dragWhileFilming = (dx: number, dy: number) => {
+    const mode = recordingRef.current;
+    if (mode !== 'hold' && mode !== 'locked') return;
+    if (mode === 'hold') {
+      const lock = captureLock({ dx, direction: directionOf(rootRef.current) });
+      setLockProgress(lock.progress);
+      if (lock.reached) {
+        recordingRef.current = 'locked';
+        setRecording('locked');
+        setLockProgress(0);
+      }
+    }
+    applyZoom(zoomAfterDrag({ from: dragFromRef.current, dy, range: zoomRangeRef.current }));
+  };
+
+  useEffect(() => {
+    if (holdDrag === undefined) return undefined;
+    holdDrag.current = dragWhileFilming;
+    return () => {
+      holdDrag.current = null;
+    };
+  });
 
   const lightOn = async (shape: ScreenFlash) => {
     const chosen = plan();
@@ -166,18 +247,25 @@ export function StudioCamera({
     finish(file);
   };
 
+  /** Relue APRÈS une attente : le mode a pu changer (relâché, verrouillé). */
+  const recordingNow = (): Recording => recordingRef.current;
+
   const startRecording = async (mode: 'hold' | 'toggle') => {
     const stream = streamRef.current;
     if (busyRef.current || stream === null || recordingRef.current !== null) return;
     recordingRef.current = mode;
     setRecording(mode);
+    dragFromRef.current = zoomRef.current;
     await lightOn('ring');
     // Relâché (ou quittée) pendant que la lumière montait : rien ne tourne.
-    if (recordingRef.current !== mode || streamRef.current !== stream) {
+    // Verrouillé pendant ce temps, le film, lui, doit tourner.
+    const current = recordingNow();
+    if ((current !== mode && !(mode === 'hold' && current === 'locked')) || streamRef.current !== stream) {
       await lightOff();
       return;
     }
-    engine.startRecording(stream);
+    const video = videoRef.current;
+    engine.startRecording(stream, zoomRangeRef.current.mode === 'recorded' && video !== null ? { video, zoom: () => zoomRef.current } : null);
     startedRef.current = true;
   };
 
@@ -185,12 +273,14 @@ export function StudioCamera({
     if (recordingRef.current === null) return;
     recordingRef.current = null;
     setRecording(null);
+    viewDragRef.current = null;
     // L'enregistreur n'a pas encore démarré : `startRecording` voit la levée
     // et éteint la lumière lui-même — il n'y a rien à clore.
     if (!startedRef.current) return;
     startedRef.current = false;
     const file = await engine.stopRecording();
     await lightOff();
+    resetZoom();
     finish(file);
   };
 
@@ -232,39 +322,89 @@ export function StudioCamera({
 
   const shutterLabel = recording !== null ? 'story.studio.camera.shutter.stop' : photoFirst ? 'story.studio.camera.shutter.photo' : 'story.studio.camera.shutter.start';
   const live = status === 'live';
+  const sliderShown = flashSliderShown({ flash, plan: plan() });
+  const floor: ScreenFlash = screenFlash !== 'off' ? screenFlash : previewingFloor && sliderShown ? 'ring' : 'off';
+  const handsFree = recording === 'locked' || recording === 'toggle';
+  const hintKey =
+    recording === 'hold'
+      ? 'story.studio.camera.hint.holding'
+      : handsFree
+        ? 'story.studio.camera.hint.locked'
+        : photoFirst
+          ? 'story.studio.camera.hint.photo'
+          : 'story.studio.camera.hint.video';
+  /** Le zoom de l'APERÇU : numérique (`recorded`, `preview`) — la piste
+   * matérielle zoome elle-même, l'aperçu ne grandit pas en plus. */
+  const previewScale = zoomRangeRef.current.mode === 'hardware' ? 1 : zoom;
+  const transforms = [facing === 'user' ? 'scaleX(-1)' : '', previewScale > 1 ? `scale(${previewScale})` : ''].filter((part) => part !== '');
+
+  /* LE VISEUR, PENDANT UN FILM MAINS LIBRES : glisser vers le haut zoome,
+     vers le bas dézoome. Les boutons gardent leurs propres gestes. */
+  const onViewDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!handsFree || event.button !== 0 || !(event.target instanceof Element) || event.target.closest('button, input') !== null) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    viewDragRef.current = { y: event.clientY };
+    dragFromRef.current = zoomRef.current;
+  };
+  const onViewMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = viewDragRef.current;
+    if (drag === null || recordingRef.current === null) return;
+    applyZoom(zoomAfterDrag({ from: dragFromRef.current, dy: event.clientY - drag.y, range: zoomRangeRef.current }));
+  };
+  const onViewEnd = () => {
+    viewDragRef.current = null;
+  };
 
   return (
     <div
+      ref={rootRef}
       data-story-camera={status}
       data-story-camera-facing={facing}
+      data-story-camera-zoom-mode={zoomRangeRef.current.mode}
       role="dialog"
       aria-modal="true"
       aria-label={translate(lang, 'story.studio.camera.title')}
       className="fixed inset-0 z-50 overflow-hidden bg-black"
       style={{ touchAction: 'none' }}
+      onPointerDown={onViewDown}
+      onPointerMove={onViewMove}
+      onPointerUp={onViewEnd}
+      onPointerCancel={onViewEnd}
     >
       {/* LE SOL BLANC s'allume d'un coup, jamais en fondu : la lumière doit
           être pleine au moment où l'image est prise. */}
-      {screenFlash !== 'off' ? (
-        <span aria-hidden="true" data-story-camera-screen-flash={screenFlash} className="absolute inset-0 block" style={{ backgroundColor: '#fff' }} />
+      {floor !== 'off' ? (
+        <span
+          aria-hidden="true"
+          data-story-camera-screen-flash={floor}
+          data-story-camera-screen-flash-preview={screenFlash === 'off' ? '' : undefined}
+          className="absolute inset-0 block"
+          style={{ backgroundColor: flashFloorColor(intensity) }}
+        />
       ) : null}
-      <video
-        ref={videoRef}
-        data-story-camera-preview
-        muted
-        playsInline
-        autoPlay
+      {/* La FENÊTRE du viseur borne l'image : un zoom numérique agrandit la
+          vidéo DANS elle, jamais par-dessus l'anneau blanc du flash. */}
+      <div
         aria-hidden="true"
-        className="absolute size-full object-cover"
+        className="absolute overflow-hidden"
         style={{
-          inset: screenFlash === 'ring' ? '14% 10%' : 0,
-          width: screenFlash === 'ring' ? '80%' : '100%',
-          height: screenFlash === 'ring' ? '72%' : '100%',
-          borderRadius: screenFlash === 'ring' ? 28 : 0,
-          transform: facing === 'user' ? 'scaleX(-1)' : undefined,
-          visibility: screenFlash === 'full' ? 'hidden' : 'visible',
+          inset: floor === 'ring' ? '14% 10%' : 0,
+          width: floor === 'ring' ? '80%' : '100%',
+          height: floor === 'ring' ? '72%' : '100%',
+          borderRadius: floor === 'ring' ? 28 : 0,
+          visibility: floor === 'full' ? 'hidden' : 'visible',
         }}
-      />
+      >
+        <video
+          ref={videoRef}
+          data-story-camera-preview
+          muted
+          playsInline
+          autoPlay
+          className="size-full object-cover"
+          style={{ transform: transforms.length > 0 ? transforms.join(' ') : undefined }}
+        />
+      </div>
       {status === 'unavailable' ? (
         <p data-story-camera-unavailable role="alert" className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-body" style={{ color: '#fff' }}>
           {translate(lang, 'story.studio.camera.unavailable')}
@@ -282,57 +422,96 @@ export function StudioCamera({
         >
           <GlyphSvg glyph={COMPOSER_GLYPHS.x} size={18} />
         </button>
-        <span className="flex-1" aria-hidden="true" />
-        {recording !== null ? (
-          <span data-story-camera-recording role="status" className="mt-1.5 rounded-full px-3 py-1 text-caption font-bold" style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}>
-            {translate(lang, 'story.studio.camera.recording')}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          data-story-camera-flash
-          aria-label={translate(lang, 'story.studio.camera.flash')}
-          aria-pressed={flash}
-          onClick={() => onFlash(!flash)}
-          className={`${ROUND_GLASS} mt-1.5`}
-          style={{ outlineColor: 'var(--color-ios-brand)', color: flash ? '#FACC15' : 'var(--color-ios-ink)' }}
-        >
-          <GlyphSvg glyph={THREAD_MENU_GLYPHS.lightning} size={18} />
-        </button>
+        {/* Le flash suit le (X) : son curseur s'allonge vers la fin de la
+            ligne, collé à lui — il a la place de le faire. */}
+        <StudioCameraFlash
+          lang={lang}
+          flash={flash}
+          sliderShown={sliderShown}
+          intensity={intensity}
+          onFlash={onFlash}
+          onIntensity={onIntensity}
+          onPreview={setPreviewingFloor}
+        />
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-3 px-3 pb-safe">
-        <p aria-hidden="true" className="text-caption" style={screenFlash === 'off' ? { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' } : { color: '#111' }}>
-          {translate(lang, photoFirst ? 'story.studio.camera.hint.photo' : 'story.studio.camera.hint.video')}
+        {/* L'ÉTAT DU FILM, au-dessus du déclencheur (la barre haute porte le
+            curseur du flash déplié) : enregistrement ou verrou, et le zoom. */}
+        {recording !== null ? (
+          <div className="flex items-center gap-2">
+            <span
+              data-story-camera-recording={recording === 'locked' ? 'locked' : ''}
+              role="status"
+              className="flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-caption font-bold"
+              style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
+            >
+              {recording === 'locked' ? <GlyphSvg glyph={GLYPHS.lock} size={14} /> : null}
+              {translate(lang, recording === 'locked' ? 'story.studio.camera.locked' : 'story.studio.camera.recording')}
+            </span>
+            {zoomRangeRef.current.max > zoomRangeRef.current.min ? (
+              <span data-story-camera-zoom={zoom.toFixed(1)} aria-hidden="true" dir="ltr" className="glass rounded-full px-2.5 py-1 text-caption font-bold tabular-nums" style={{ color: 'var(--color-ios-ink)' }}>
+                {`${zoom.toFixed(1)}×`}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        <p aria-hidden="true" data-story-camera-hint className="text-center text-caption" style={floor === 'off' ? { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' } : { color: '#111' }}>
+          {translate(lang, hintKey)}
         </p>
         <div className="mb-4 flex w-full items-center justify-center gap-10">
-          <span className="size-11" aria-hidden="true" />
+          {/* LE CADENAS — pendant l'appui long qui filme, du côté de début
+              du déclencheur ; il grandit à mesure que le doigt s'approche. */}
+          <span
+            aria-hidden="true"
+            data-story-camera-lock={recording === 'hold' ? (lockProgress > 0 ? 'near' : 'shown') : undefined}
+            className="glass grid size-11 place-items-center rounded-full motion-safe:transition-transform"
+            style={
+              recording === 'hold'
+                ? { color: 'var(--color-ios-ink)', transform: `scale(${1 + lockProgress * 0.25})` }
+                : { visibility: 'hidden' }
+            }
+          >
+            <GlyphSvg glyph={GLYPHS.lock} size={20} />
+          </span>
           <button
             type="button"
             data-story-camera-shutter
             disabled={!live}
             aria-label={translate(lang, shutterLabel)}
             className="grid size-20 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ border: '4px solid #fff', outlineColor: 'var(--color-ios-brand)', opacity: live ? 1 : 0.5, touchAction: 'none' }}
+            style={{ border: `4px solid ${floor === 'off' ? '#fff' : '#111'}`, outlineColor: 'var(--color-ios-brand)', opacity: live ? 1 : 0.5, touchAction: 'none' }}
             onPointerDown={(event) => {
-              if (!live || recordingRef.current !== null || event.button !== 0) return;
+              if (!live || event.button !== 0) return;
+              const already = recordingRef.current !== null;
+              pressRef.current = { x: event.clientX, y: event.clientY, already };
+              if (already) return;
               event.currentTarget.setPointerCapture?.(event.pointerId);
               holdTimer.current = setTimeout(() => {
                 holdTimer.current = null;
                 void startRecording('hold');
               }, HOLD_MS);
             }}
+            onPointerMove={(event) => {
+              const origin = pressRef.current;
+              if (origin === null || origin.already) return;
+              dragWhileFilming(event.clientX - origin.x, event.clientY - origin.y);
+            }}
             onPointerUp={() => {
+              const origin = pressRef.current;
+              pressRef.current = null;
               if (holdTimer.current !== null) {
                 clearTimeout(holdTimer.current);
                 holdTimer.current = null;
                 tap();
                 return;
               }
-              if (recordingRef.current === 'hold') void stopRecording();
-              else if (recordingRef.current === 'toggle') void stopRecording();
+              // Un toucher sur le stop (film verrouillé ou mains libres) le
+              // clôt ; le doigt qui VIENT de verrouiller se lève sans rien clore.
+              if (origin?.already === true || recordingRef.current === 'hold') void stopRecording();
             }}
             onPointerCancel={() => {
+              pressRef.current = null;
               if (holdTimer.current !== null) clearTimeout(holdTimer.current);
               holdTimer.current = null;
               if (recordingRef.current === 'hold') void stopRecording();

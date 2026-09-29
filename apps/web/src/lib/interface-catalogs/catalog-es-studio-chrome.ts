@@ -74,7 +74,8 @@ const esStudioChrome = {
   'composer.reelOffer.reel': 'Es un reel',
   'composer.reelOffer.post': 'Es una publicación',
   'story.studio.tool.close': 'Cerrar la herramienta',
-  'story.studio.camera.quick.photoOrVideo': 'Tocar: foto · Mantener: vídeo',
+  'story.studio.camera.quick.tapPhoto': 'Tocar: foto',
+  'story.studio.camera.quick.holdFilm': 'Mantener: grabar',
   'story.studio.camera.quick.videoOnly': 'Mantén para grabar',
   'story.studio.camera.quick.photo': 'Hacer una foto',
   'story.studio.camera.quick.video': 'Grabar',
@@ -89,6 +90,13 @@ const esStudioChrome = {
   'story.studio.camera.hint.video': 'Toca para grabar · toca de nuevo para colocar',
   'story.studio.camera.unavailable': 'La cámara no está disponible. Permítela en los ajustes del navegador.',
   'story.studio.camera.recording': 'Grabando',
+  'story.studio.scene.empty.title': 'Esta es tu escena',
+  'story.studio.scene.empty.invite': 'Añade texto, un dibujo, una imagen o un vídeo, y hazla tuya.',
+  'story.studio.camera.locked': 'Grabación bloqueada',
+  'story.studio.camera.hint.holding': 'Desliza hasta el candado para bloquear · hacia arriba para hacer zoom',
+  'story.studio.camera.hint.locked': 'Manos libres: desliza arriba o abajo para hacer zoom',
+  'story.studio.camera.flash.intensity': 'Intensidad del flash',
+  'story.studio.camera.flash.intensityValue': '{percent} %',
 } satisfies StudioChromeCatalogSlice;
 
 export default esStudioChrome;

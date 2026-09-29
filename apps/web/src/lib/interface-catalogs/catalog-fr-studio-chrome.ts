@@ -78,7 +78,8 @@ const frStudioChrome = {
   'composer.reelOffer.post': 'C’est un Post',
   // L'outil ouvert et la capture rapide (#8654).
   'story.studio.tool.close': 'Fermer l’outil',
-  'story.studio.camera.quick.photoOrVideo': 'Toucher : photo · Maintenir : vidéo',
+  'story.studio.camera.quick.tapPhoto': 'Toucher : photo',
+  'story.studio.camera.quick.holdFilm': 'Maintenir : filmer',
   'story.studio.camera.quick.videoOnly': 'Maintenir pour filmer',
   'story.studio.camera.quick.photo': 'Prendre une photo',
   'story.studio.camera.quick.video': 'Filmer',
@@ -93,6 +94,13 @@ const frStudioChrome = {
   'story.studio.camera.hint.video': 'Toucher pour filmer · toucher encore pour poser',
   'story.studio.camera.unavailable': 'La caméra n’est pas disponible. Autorisez-la dans les réglages du navigateur.',
   'story.studio.camera.recording': 'Enregistrement en cours',
+  'story.studio.scene.empty.title': 'Ceci est votre scène',
+  'story.studio.scene.empty.invite': 'Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.',
+  'story.studio.camera.locked': 'Enregistrement verrouillé',
+  'story.studio.camera.hint.holding': 'Glisser vers le cadenas pour verrouiller · vers le haut pour zoomer',
+  'story.studio.camera.hint.locked': 'Mains libres — glisser vers le haut ou le bas pour zoomer',
+  'story.studio.camera.flash.intensity': 'Intensité du flash',
+  'story.studio.camera.flash.intensityValue': '{percent} %',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

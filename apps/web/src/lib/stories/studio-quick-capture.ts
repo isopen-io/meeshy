@@ -40,10 +40,25 @@ export function quickCaptureTap(kind: PublicationKind): QuickCaptureTap {
   return kind === 'REEL' ? 'arm' : 'photo';
 }
 
-export type QuickCaptureHintKey = Extract<InterfaceCatalogKey, 'story.studio.camera.quick.photoOrVideo' | 'story.studio.camera.quick.videoOnly'>;
+/**
+ * **UN GESTE, UNE LIGNE, SON ICÔNE** (#8672, retour porteur 2026-09-29) :
+ * « L'instruction de taper photo peut avoir l'appareil photo au-devant, et à
+ * la ligne une caméra vidéo pour la partie long press pour filmer. » Un réel
+ * n'offre que la seconde.
+ */
+export type QuickCaptureHintLine = {
+  readonly glyph: 'camera' | 'video';
+  readonly key: Extract<InterfaceCatalogKey, 'story.studio.camera.quick.tapPhoto' | 'story.studio.camera.quick.holdFilm' | 'story.studio.camera.quick.videoOnly'>;
+};
 
-export function quickCaptureHintKey(kind: PublicationKind): QuickCaptureHintKey {
-  return quickCaptureTap(kind) === 'photo' ? 'story.studio.camera.quick.photoOrVideo' : 'story.studio.camera.quick.videoOnly';
+const PHOTO_AND_FILM: readonly QuickCaptureHintLine[] = [
+  { glyph: 'camera', key: 'story.studio.camera.quick.tapPhoto' },
+  { glyph: 'video', key: 'story.studio.camera.quick.holdFilm' },
+];
+const FILM_ONLY: readonly QuickCaptureHintLine[] = [{ glyph: 'video', key: 'story.studio.camera.quick.videoOnly' }];
+
+export function quickCaptureHintLines(kind: PublicationKind): readonly QuickCaptureHintLine[] {
+  return quickCaptureTap(kind) === 'photo' ? PHOTO_AND_FILM : FILM_ONLY;
 }
 
 /** Relâcher l'appui long : clore la prise, ou — la caméra ne filmait pas

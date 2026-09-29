@@ -74,7 +74,8 @@ const ptStudioChrome = {
   'composer.reelOffer.reel': 'É um reel',
   'composer.reelOffer.post': 'É uma publicação',
   'story.studio.tool.close': 'Fechar a ferramenta',
-  'story.studio.camera.quick.photoOrVideo': 'Tocar: foto · Manter: vídeo',
+  'story.studio.camera.quick.tapPhoto': 'Tocar: foto',
+  'story.studio.camera.quick.holdFilm': 'Manter: filmar',
   'story.studio.camera.quick.videoOnly': 'Mantenha para filmar',
   'story.studio.camera.quick.photo': 'Tirar uma foto',
   'story.studio.camera.quick.video': 'Filmar',
@@ -89,6 +90,13 @@ const ptStudioChrome = {
   'story.studio.camera.hint.video': 'Toque para filmar · toque de novo para colocar',
   'story.studio.camera.unavailable': 'A câmera não está disponível. Permita-a nas configurações do navegador.',
   'story.studio.camera.recording': 'Gravando',
+  'story.studio.scene.empty.title': 'Esta é a sua cena',
+  'story.studio.scene.empty.invite': 'Coloque um texto, um desenho, uma imagem ou um vídeo — e deixe do seu jeito.',
+  'story.studio.camera.locked': 'Gravação travada',
+  'story.studio.camera.hint.holding': 'Deslize até o cadeado para travar · para cima para dar zoom',
+  'story.studio.camera.hint.locked': 'Mãos livres: deslize para cima ou para baixo para dar zoom',
+  'story.studio.camera.flash.intensity': 'Intensidade do flash',
+  'story.studio.camera.flash.intensityValue': '{percent}%',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;
