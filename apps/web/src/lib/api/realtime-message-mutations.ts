@@ -79,9 +79,15 @@ const editedRow = (known: Message, data: SocketIOMessage): Message => ({
   ...(data.validatedMentions === undefined ? {} : { validatedMentions: data.validatedMentions }),
 });
 
-/** Une citation PROTÉGÉE porte un placeholder servi : le texte en clair n'y entre jamais. */
+/**
+ * Une citation PROTÉGÉE porte un placeholder servi : le texte en clair n'y entre jamais.
+ * Une citation SCELLÉE (supprimée, ou éphémère échu pour ce lecteur — #8562) non plus :
+ * une édition du message cité ne la ressuscite pas. Miroir de `followsParentEdits` (iOS).
+ */
+const isSealedQuote = (quote: Message): boolean => quote.deletedAt !== undefined && quote.deletedAt !== null;
+
 const editedQuote = (quote: Message, data: SocketIOMessage): Message =>
-  quotedIsProtected(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
+  quotedIsProtected(quote) || isSealedQuote(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
 
 
 
