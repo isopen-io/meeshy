@@ -79,6 +79,11 @@ struct ComposerSceneSurface: View {
     /// **« Rogner » dans l'appui long** (#8370, lot 6) : le rail des
     /// contrôleurs qui le portait est parti avec la directive du 2026-09-27.
     var onItemTrim: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
+    /// **Le menu d'appui long, peint par le meuble en verre** (#8717). Le
+    /// canvas remet l'objet et le point du doigt normalisé sur la carte ; une
+    /// puce sonore, que le canvas ne peint pas, le demande par son propre appui
+    /// long.
+    var onItemMenu: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil
     /// **Les familles dont l'hôte sait ouvrir l'éditeur** (#4937).
     ///
     /// Elle valait `[.text]` tant que l'éditeur d'objet ne savait éditer qu'un
@@ -163,8 +168,17 @@ struct ComposerSceneSurface: View {
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
 
-    /// La frame `[+]` du rail *trailing* — créer une slide.
-    var onAddSlide: (() -> Void)?
+    /// **Les options du moment, en haut du rail droit** (#8713, #8714) — les
+    /// contrôleurs de l'outil ouvert ou les options de l'objet touché, puis
+    /// leur `(x)`. Déjà composées par `ComposerTrailingColumn.options` :
+    /// cette vue ne re-filtre rien.
+    var trailingOptions: [ComposerTrailingColumn.Entry] = []
+    var onTrailingOption: ((ComposerTrailingColumn.Entry) -> Void)?
+
+    /// **L'éclair et le Cadre, au rail GAUCHE après le lieu** (#8713). Déjà
+    /// servis par `ComposerLeadingSceneToggles` ; le rail les range après la
+    /// porte que la même règle désigne.
+    var sceneToggles: [ComposerSceneToggleEntry] = []
 
     /// **L'HISTORIQUE, descendu du socle au rail droit** (#4586, directive
     /// porteur 2026-08-31). `nil` ⇒ rien à défaire, donc aucun bouton : la
@@ -229,13 +243,14 @@ struct ComposerSceneSurface: View {
     var onPickBandFitMode: ((String) -> Void)?
     var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
 
-    /// **Le mode Animé** (#8415) : la bascule de la barre haute, la frise qui
-    /// prend le bas tant qu'elle est ouverte, et le pont qui la laisse piloter
-    /// le canvas. Trois `nil` ⇒ une scène statique, comme avant.
-    var animatedToggle: AnyView?
-    /// Le bouton Cadre du rail droit (#8414) — `nil` sans média de fond.
-    var onFrameButton: (() -> Void)?
-    var frameIsOpen: Bool = false
+    /// **Ce que la barre haute porte avant le `⋯`** : le `(+)` d'une nouvelle
+    /// scène, à la place qu'occupait l'éclair (#8713, directive porteur
+    /// 2026-09-29). `nil` ⇒ rien — l'aller-retour d'une image vers une
+    /// conversation ne crée pas de scène.
+    var topBarAccessory: AnyView?
+    /// **Le mode Animé** (#8415) : la frise qui prend le bas tant qu'elle est
+    /// ouverte, et le pont qui la laisse piloter le canvas. Sa bascule vit au
+    /// rail gauche depuis #8713 (`sceneToggles`).
     var onTimeButton: (() -> Void)? = nil
     var timeIsOpen: Bool = false
     var timelinePanel: AnyView?
@@ -326,6 +341,13 @@ struct ComposerSceneSurface: View {
                     binding.wrappedValue = objet
                 }
             )
+            // L'appui long d'une puce ouvre le MÊME menu de verre que les
+            // autres objets (#8717) — la puce est une vue SwiftUI, hors du
+            // canvas qui reconnaît l'appui long des quatre autres familles.
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                let son = binding.wrappedValue
+                onItemMenu?(son.id, .audio, CGPoint(x: son.x, y: son.y))
+            })
         }
     }
 
@@ -441,27 +463,29 @@ struct ComposerSceneSurface: View {
     /// sélectionné avec (X) »). Une seule colonne, au même endroit : le doigt
     /// qui vient d'ouvrir l'outil y trouve ses réglages, et le `(x)` qui le
     /// referme rend les portes à la même place.
+    ///
+    /// **Les contrôleurs de l'outil ont quitté ce rail pour le DROIT** (#8713,
+    /// directive porteur 2026-09-29 : « en bas undo et redo toujours, même pour
+    /// les outils type dessin, et au-dessus les options de l'outil
+    /// sélectionné »). Un outil ouvert vide donc ce côté : les portes cèdent,
+    /// comme le reste du chrome, et ses réglages vivent au-dessus de
+    /// l'historique.
     private var floatingRail: AnyView {
-        let mode: ComposerRailMode
-        switch railMode {
-        case .doors(let servies):
-            mode = .doors(ComposerSceneFloatingRail.sideRow(from: servies, format: format))
-        case .tool:
-            mode = railMode
-        }
-        if case .doors(let portes) = mode, portes.isEmpty { return AnyView(EmptyView()) }
+        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
+        let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
+        if portes.isEmpty && sceneToggles.isEmpty { return AnyView(EmptyView()) }
         return AnyView(
-            ComposerLeadingRail(mode: mode,
+            ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
-                                onToolControl: onRailToolControl,
-                                onExitTool: onRailExitTool,
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
                                 pushesToThumb: false,
                                 badges: railBadges,
-                                separateButtons: true)
+                                separateButtons: true,
+                                sceneToggles: sceneToggles,
+                                sceneTogglesAfter: ComposerLeadingSceneToggles.anchor(in: portes))
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
                 // scène plein écran (#8370), elles le posent SUR la scène, à
                 // `outerMargin` du bord — et d'un bouton plus haut que la
@@ -520,6 +544,19 @@ struct ComposerSceneSurface: View {
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
 
+    /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
+    /// ouvert y occupe, et donc de combien la scène doit REMONTER.
+    @State private var lowerFloorsHeight: CGFloat = 0
+
+    private var sceneLiftInset: CGFloat {
+        ComposerSceneLift.bottomInset(
+            panelIsOpen: ComposerSceneLift.panelIsOpen(
+                lowZone: ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band),
+                toolOptionsServed: toolOptions != nil,
+                roomy: isRoomy),
+            panelHeight: lowerFloorsHeight)
+    }
+
     // MARK: - La scène PREND LE VIEWPORT, le chrome flotte dessus (#8370)
 
     /// **Deux calques, et c'est toute la disposition** (directive porteur
@@ -545,6 +582,7 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
         // curseur rejoint le rail qui porte désormais les réglages et le `(x)`.
@@ -688,6 +726,7 @@ struct ComposerSceneSurface: View {
             selectionBadge: selectionBadge,
             timelineBridge: timelineBridge,
             onItemTrimRequested: onItemTrim,
+            onItemMenuRequested: onItemMenu,
             localMediaAliases: sceneLocalMediaAliases
         )
         // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
@@ -732,7 +771,10 @@ struct ComposerSceneSurface: View {
         // se cadre dans ce qui reste. Le clavier, lui, ne la pousse pas — le
         // sol et le chrome montent, la scène reste où l'auteur la regarde.
         .padding(.top, ComposerTopBar.height + 4 - chromeLift)
-        .padding(.bottom, 4)
+        // **Un panneau ouvert en bas fait REMONTER la scène** (#8712) : la
+        // carte se cadre au-dessus de lui, le haut ne bouge pas.
+        .padding(.bottom, sceneLiftInset)
+        .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: sceneLiftInset)
         .ignoresSafeArea(.keyboard)
         .allowsHitTesting(timelinePanel == nil)
     }
@@ -744,7 +786,7 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 plateauTint: plateauTint,
-                trailingAccessory: animatedToggle,
+                trailingAccessory: topBarAccessory,
                 edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
             )
             .padding(.top, -chromeLift)
@@ -777,6 +819,12 @@ struct ComposerSceneSurface: View {
                 timelinePanel
             } else {
                 lowerFloors
+                    .background {
+                        GeometryReader { geo in
+                            Color.clear.preference(key: ComposerLowerFloorsHeightKey.self,
+                                                   value: geo.size.height)
+                        }
+                    }
             }
         }
     }
@@ -855,6 +903,10 @@ struct ComposerSceneSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
+    /// « Temps » reste où il était — AU-DESSUS de l'historique (#8713) : la
+    /// frise masque annuler et rétablir (elle réécrit la slide à sa fermeture),
+    /// mais leur place est gardée, sans quoi le bouton qui la RANGE descendrait
+    /// sous le doigt qui vient de l'ouvrir.
     private var friseRail: some View {
         HStack {
             Spacer(minLength: 0)
@@ -865,7 +917,8 @@ struct ComposerSceneSurface: View {
                                  onTime: onTimeButton,
                                  timeIsOpen: timeIsOpen)
                 .padding(.trailing, ComposerRailGeometry.outerMargin)
-                .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
+                .padding(.bottom, ComposerRailGeometry.floatingBottomInset
+                                  + ComposerRailGeometry.historyReserve(undo: onUndo != nil, redo: onRedo != nil))
         }
     }
 
@@ -878,18 +931,21 @@ struct ComposerSceneSurface: View {
                 floatingRail
                 Spacer(minLength: 0)
                 if ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen) {
+                // **Les options EN HAUT, l'historique EN BAS** (#8713, #8714) :
+                // la colonne prend la hauteur de la scène libre dès qu'elle a
+                // des options, et son pied reste au pouce.
                 ComposerTrailingRail(actions: trailingActions,
                                      plateauTint: plateauTint,
                                      onAction: onTrailingAction,
-                                     onAddSlide: onAddSlide,
                                      onUndo: onUndo,
                                      onRedo: onRedo,
                                      pushesToThumb: false,
                                      separateButtons: true,
-                                     onFrame: onFrameButton,
-                                     frameIsOpen: frameIsOpen,
-                                     onTime: onTimeButton,
+                                     options: trailingOptions,
+                                     onOption: onTrailingOption,
+                                     onTime: toolIsOpen ? nil : onTimeButton,
                                      timeIsOpen: timeIsOpen)
+                    .padding(.top, ComposerRailGeometry.gutter)
                     .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
                     .transition(.opacity)
@@ -965,6 +1021,14 @@ struct ComposerSceneFloorKey: Hashable {
 
 /// La zone sûre du haut de la surface — la barre haute s'y loge (#8370).
 struct ComposerSafeTopKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// La hauteur des étages du bas de la scène (#8712).
+struct ComposerLowerFloorsHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())

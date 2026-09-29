@@ -61,29 +61,39 @@ extension MeeshyComposerHost {
         }
     }
 
-    /// **Un toucher sur une scène VIDE ouvre le viseur ET prend la photo**
-    /// (#8653). Rend `true` quand il a pris le geste — le tap de sélection du
-    /// fond n'a alors rien à faire : il n'y a rien à sélectionner.
+    /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien**
+    /// (#8711, qui supplante le « ouvre et prend » de #8653). Le viseur paraît
+    /// avec ses contrôleurs habituels ; c'est le SECOND toucher qui prend la
+    /// photo (`handleArmedSceneTap`). Rend `true` quand il a pris le geste —
+    /// le tap de sélection du fond n'a alors rien à faire.
     func handleSceneQuickTap() -> Bool {
         guard ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
             toolIsOpen: sceneToolOwnsScreen),
-              let geste = ComposerSceneQuickCapture.tap(format: selectedFormat) else { return false }
+              ComposerSceneQuickCapture.tap(format: selectedFormat) != nil else { return false }
         HapticFeedback.light()
         armSceneCamera()
-        guard geste == .photo else { return true }
+        return true
+    }
+
+    /// **Le second toucher, n'importe où sur la scène, prend la photo** (#8711).
+    /// La nappe du viseur le reçoit hors de ses contrôleurs ; la loi décide.
+    /// Un toucher arrivé avant que la session écrive attend qu'elle le puisse,
+    /// plutôt que de se perdre.
+    func handleArmedSceneTap() {
+        guard ComposerSceneQuickCapture.armedTap(
+            stage: sceneCameraStage,
+            format: selectedFormat,
+            pendingSegments: sceneSegments.count) == .takePhoto else { return }
         sceneHoldTask?.cancel()
         sceneHoldTask = Task { @MainActor in
             guard await sceneCamera.waitUntilCaptureReady(
-                timeout: ComposerSceneQuickCapture.readinessTimeout) else { return }
-            try? await Task.sleep(nanoseconds:
-                UInt64(ComposerSceneQuickCapture.exposureSettle * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+                timeout: ComposerSceneQuickCapture.readinessTimeout),
+                  !Task.isCancelled else { return }
             takeScenePhoto()
         }
-        return true
     }
 
     /// **Le doigt glisse pendant la prise : à DROITE, il la verrouille.**
@@ -384,6 +394,14 @@ extension MeeshyComposerHost {
     /// mettre. L'étape d'arrivée vient de la loi
     /// (`ComposerSceneCamera.stageAfterCapture`), jamais d'un `.off` écrit ici.
     func poseSceneCapture(_ result: CameraResult) {
+        // **« Reprendre une photo » : l'ancien fond part À LA POSE** (#8716),
+        // avant l'ingestion — sur une scène sans fond, la prise DEVIENT le fond
+        // (`ComposerMediaPlacement.role`). Retirée ici et non à l'armement, elle
+        // ne se perd pas si l'auteur referme le viseur ; l'annulation la rend.
+        if let ancien = sceneCaptureReplacesBackgroundId {
+            sceneCaptureReplacesBackgroundId = nil
+            retractMedia(objectIds: [ancien])
+        }
         sceneCameraStage = ComposerSceneCamera.stageAfterCapture
         sceneCameraMode = nil
         extinguishSceneFlash()
@@ -396,6 +414,7 @@ extension MeeshyComposerHost {
     /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
     /// allumé que rien à l'écran n'explique.
     func disarmSceneCamera() {
+        sceneCaptureReplacesBackgroundId = nil
         sceneCameraStage = .off
         sceneCameraSize = .card
         sceneCameraMode = nil
@@ -530,8 +549,11 @@ extension MeeshyComposerHost {
             //
             // Cette nappe est sous la barre dans le ZStack, donc les boutons
             // gagnent sur leurs propres surfaces ; elle ne prend que le vide.
+            // **Le second toucher prend la photo** (#8711) : n'importe où sur
+            // la scène, hors des contrôleurs qui gagnent sur leurs surfaces.
             Color.clear
                 .contentShape(Rectangle())
+                .onTapGesture { handleArmedSceneTap() }
                 .gesture(
                     DragGesture(minimumDistance: 12)
                         .onChanged { valeur in

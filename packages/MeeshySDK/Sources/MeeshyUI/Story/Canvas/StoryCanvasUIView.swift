@@ -307,6 +307,15 @@ public final class StoryCanvasUIView: UIView {
     /// apparaître les actions possibles au long press ») ; non câblée,
     /// l'action n'est pas offerte.
     public var onItemTrimRequested: ((String, CanvasItemKind) -> Void)?
+    /// **L'hôte PEINT lui-même le menu d'appui long** (#8717). Câblée, elle
+    /// reçoit l'objet, sa famille et le point du doigt — NORMALISÉ (0…1) sur
+    /// la carte, car le canvas peut être projeté à une autre échelle que
+    /// l'écran — et le menu système n'est pas présenté. Non câblée, le canvas
+    /// garde son `UIMenu` : les autres hôtes ne changent pas.
+    public var onItemMenuRequested: ((String, CanvasItemKind, CGPoint) -> Void)?
+    /// **Un média de premier plan devient le fond** (#8716) — l'hôte décide ce
+    /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
+    public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state

@@ -23,11 +23,11 @@ final class ComposerSceneTextEditingTests: XCTestCase {
     /// empruntent tous trois (`onItemDoubleTapped`).
     private func textEditBranch() throws -> String {
         let code = compact(try hostUnit())
-        guard let porte = code.range(of: "onItemEdit:{id,kindin"),
+        guard let porte = code.range(of: "funceditSceneItem(_id:String,kind:StoryCanvasUIView.CanvasItemKind){"),
               let texte = code.range(of: "case.text:", range: porte.upperBound..<code.endIndex),
               let suivante = code.range(of: "case.audio:", range: texte.upperBound..<code.endIndex)
         else {
-            XCTFail("La branche texte de `onItemEdit` a changé de forme — re-pointer la garde.")
+            XCTFail("La branche texte de `editSceneItem` a changé de forme — re-pointer la garde.")
             return ""
         }
         return String(code[texte.upperBound..<suivante.lowerBound])

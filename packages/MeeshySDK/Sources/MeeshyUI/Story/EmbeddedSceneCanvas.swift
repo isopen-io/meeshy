@@ -176,6 +176,8 @@ public struct EmbeddedSceneCanvas: View {
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     /// « Rogner » dans l'appui long (#8370, lot 6).
     public var onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Le menu d'appui long peint par l'hôte (#8717).
+    public var onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)?
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind>
 
     public init(
@@ -204,6 +206,7 @@ public struct EmbeddedSceneCanvas: View {
         referenceViewport: CGSize = CGSize(width: 402, height: 874),
         timelineBridge: StoryCanvasTimelineBridge? = nil,
         onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+        onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
         localMediaAliases: [String: URL] = [:],
         inlineEditYieldsToManipulation: Bool = false
     ) {
@@ -211,6 +214,7 @@ public struct EmbeddedSceneCanvas: View {
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self.timelineBridge = timelineBridge
         self.onItemTrimRequested = onItemTrimRequested
+        self.onItemMenuRequested = onItemMenuRequested
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
@@ -272,6 +276,7 @@ public struct EmbeddedSceneCanvas: View {
                 onItemDoubleTapped: onItemDoubleTapped,
                 editableKinds: editableKinds,
                 onItemTrimRequested: onItemTrimRequested,
+                onItemMenuRequested: onItemMenuRequested,
                 editingTextId: editingTextId,
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,
