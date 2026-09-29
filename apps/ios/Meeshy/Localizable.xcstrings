@@ -52786,53 +52786,6 @@
         }
       }
     },
-    "call.control.speaker.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يبدّل خرج الصوت إلى مكبر صوت الهاتف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schaltet die Audioausgabe auf den Lautsprecher des Telefons um"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switches audio output to the phone's speaker"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambia la salida de audio al altavoz del teléfono"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bascule la sortie audio vers le haut-parleur du téléphone"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passa l'uscita audio all'altoparlante del telefono"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alterna a saída de áudio para o alto-falante do telefone"
-          }
-        }
-      }
-    },
     "call.control.transcript.caption": {
       "extractionState": "manual",
       "localizations": {
