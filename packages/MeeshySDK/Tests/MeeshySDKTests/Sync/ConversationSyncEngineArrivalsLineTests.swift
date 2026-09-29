@@ -66,6 +66,10 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
          "systemEvent":{"key":"system.members-arrived","params":{"first":"\(first)","second":"\(second)",
                         "third":"\(third)","others":\(names.count - named),"count":\(names.count)}}}
         """
+        return try decodeWire(json)
+    }
+
+    private func decodeWire(_ json: String) throws -> APIMessage {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -113,6 +117,81 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
         let row = try await relay(completion(names: ["Tom", "Aïcha"], messageId: "m-older"), into: arrivalsRow())
 
         XCTAssertEqual(row?.lastMessageNature?.systemEvent?.params["count"]?.rendered, "1")
+    }
+
+    // MARK: - #8633 — une ligne complétée n'est pas une édition
+
+    func test_mutation_arrivalsLineCompleted_updatesContentWithoutMarkingEdited() throws {
+        let mutation = ConversationSyncEngine.mutation(
+            for: try completion(names: ["Tom", "Aïcha"]), content: "Tom et Aïcha")
+
+        guard case let .edited(messageId, content, _, marksEdited) = mutation else {
+            return XCTFail("une ligne complétée garde le chemin d'écriture du contenu")
+        }
+        XCTAssertEqual(messageId, "m-arrivals")
+        XCTAssertEqual(content, "Tom et Aïcha")
+        XCTAssertFalse(marksEdited, "isEdited: false servi ⇒ la ligne ne se grave pas « modifiée »")
+    }
+
+    func test_mutation_userEditServedEdited_marksEdited() throws {
+        let edit = try decodeWire(#"{"id":"m","conversationId":"c","senderId":"u","content":"x","isEdited":true,"createdAt":"2026-09-28T09:00:00.000Z"}"#)
+
+        guard case let .edited(_, _, _, marksEdited) = ConversationSyncEngine.mutation(for: edit, content: "x") else {
+            return XCTFail("une édition reste une édition")
+        }
+        XCTAssertTrue(marksEdited)
+    }
+
+    func test_mutation_editWithoutTheFlag_staysAnEdit() throws {
+        let edit = try decodeWire(#"{"id":"m","conversationId":"c","senderId":"u","content":"x","createdAt":"2026-09-28T09:00:00.000Z"}"#)
+
+        guard case let .edited(_, _, _, marksEdited) = ConversationSyncEngine.mutation(for: edit, content: "x") else {
+            return XCTFail("une édition reste une édition")
+        }
+        XCTAssertTrue(marksEdited, "une charge sans drapeau garde le sens historique de message:edited")
+    }
+
+    func test_markEdited_notMarkingEdited_updatesContentAndLeavesTheFlagDown() async throws {
+        let (db, actor) = try makeStore()
+
+        try await actor.markEdited(localId: "m-arrivals", newContent: "Tom et Aïcha",
+                                   editedAt: now, marksEdited: false)
+
+        let row = try await db.read { try MessageRecord.fetchOne($0, key: "m-arrivals") }
+        XCTAssertEqual(row?.content, "Tom et Aïcha")
+        XCTAssertEqual(row?.isEdited, false)
+    }
+
+    func test_markEdited_notMarkingEdited_keepsTheOrderingGuard() async throws {
+        let (db, actor) = try makeStore()
+
+        try await actor.markEdited(localId: "m-arrivals", newContent: "Tom, Léa et Aïcha",
+                                   editedAt: now, marksEdited: false)
+        try await actor.markEdited(localId: "m-arrivals", newContent: "Tom et Aïcha",
+                                   editedAt: now.addingTimeInterval(-60), marksEdited: false)
+
+        let row = try await db.read { try MessageRecord.fetchOne($0, key: "m-arrivals") }
+        XCTAssertEqual(row?.content, "Tom, Léa et Aïcha", "une complétion en retard n'efface pas la plus récente")
+    }
+
+    func test_markEdited_byDefault_stillMarksEdited() async throws {
+        let (db, actor) = try makeStore()
+
+        try await actor.markEdited(localId: "m-arrivals", newContent: "corrigé", editedAt: now)
+
+        let row = try await db.read { try MessageRecord.fetchOne($0, key: "m-arrivals") }
+        XCTAssertEqual(row?.isEdited, true)
+    }
+
+    private func makeStore() throws -> (DatabaseQueue, MessagePersistenceActor) {
+        let db = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: db)
+        var record = MessageRecordFactory.make(localId: "m-arrivals", conversationId: "c-global",
+                                               content: "Aïcha vient d’arriver", state: .delivered)
+        record.messageType = "system"
+        record.messageSource = "system"
+        try db.write { try record.insert($0) }
+        return (db, MessagePersistenceActor(dbWriter: db))
     }
 
     func test_decode_systemEventAbsent_leavesItNil() throws {

@@ -17,7 +17,11 @@ extension MessagePersistenceActor {
     /// texte devient le nouveau texte, sauf citation protégée (placeholder)
     /// ou déjà scellée. Ce texte est l'ORIGINAL ; la descente du Prisme de la
     /// citation se refait au prochain passage REST, qui la recompose.
-    public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
+    /// `marksEdited: false` — un avis que le serveur complète sur place
+    /// (#8633) : le contenu et l'horloge d'ordre suivent, `isEdited` reste tel
+    /// quel. `editedAt` n'est ici que l'horloge de la garde d'ordre ; ce qui
+    /// dit « modifié » est `isEdited`.
+    public func markEdited(localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true) throws {
         let affectedConversationId: String? = try dbWriter.write { db -> String? in
             guard let existing = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
@@ -42,11 +46,11 @@ extension MessagePersistenceActor {
             }
             try db.execute(
                 sql: """
-                    UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
+                    UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [newContent, editedAt, Date(), localId, localId]
+                arguments: [newContent, marksEdited, editedAt, Date(), localId, localId]
             )
             if !Self.holdsProtectedContent(existing) {
                 try Self.followQuotes(of: existing, in: db) { quote in

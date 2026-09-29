@@ -167,8 +167,9 @@ final class DependencyContainer {
         await StarredMessagesStore.follow(mutation, persistence: persistence)
         do {
             switch mutation {
-            case let .edited(messageId, content, editedAt):
-                try await persistence.markEdited(localId: messageId, newContent: content, editedAt: editedAt)
+            case let .edited(messageId, content, editedAt, marksEdited):
+                try await persistence.markEdited(
+                    localId: messageId, newContent: content, editedAt: editedAt, marksEdited: marksEdited)
             case let .callNoticeUpdated(messageId, content, callSummaryJson, serverUpdatedAt):
                 try await persistence.applyCallNoticeUpdate(
                     localId: messageId, content: content,
