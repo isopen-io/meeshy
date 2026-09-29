@@ -421,6 +421,7 @@ export function Bubble({
       messageId={message.id}
       kind={kind}
       isViewOnce={message.isViewOnce}
+      isBlurred={message.isBlurred === true}
       contentLength={message.content.length}
       attachments={message.attachments}
       surface="bubble"
