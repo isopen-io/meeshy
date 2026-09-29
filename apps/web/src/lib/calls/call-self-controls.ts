@@ -27,3 +27,12 @@ export function selfControlsPlace({ layout, selfFull, selfTileShown }: PlaceInpu
 }
 
 export const mineInMenu = (set: CallControlSet, place: SelfControlsPlace): CallControlSet => (place === 'menu' ? set : { ...set, mine: [] });
+
+/**
+ * Le zoom de ma caméra (#8441) suit ses commandes : un CRAN « 1× · 2× · … »
+ * dans ma vignette, la capsule `+ 1× −` et le pincement quand mon image
+ * remplit l'écran. Sans vignette, pas de zoom : rien à regarder zoomer.
+ */
+export type ZoomControl = 'step' | 'capsule';
+
+export const zoomControlIn = (place: SelfControlsPlace): ZoomControl | null => (place === 'tile' ? 'step' : place === 'top' ? 'capsule' : null);

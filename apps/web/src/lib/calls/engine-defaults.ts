@@ -15,6 +15,7 @@ import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
 import { createPeerLink } from './peer-link';
+import { acquireRearCamera } from './rear-camera';
 import { browserColorSupport, videoEffectsStore } from './video-effects';
 
 /**
@@ -87,7 +88,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     viewerId: () => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '',
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs() }),
-    acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
+    acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera() : acquireCamera({ facing, cameraId: preferredInputs().cameraId })),
     acquireDisplay: () => acquireDisplay(),
     createLink: createPeerLink,
     cameraEffects,
