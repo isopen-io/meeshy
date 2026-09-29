@@ -264,7 +264,8 @@ export function CommentThread({
             mentionSource,
           }
         : undefined,
-    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource],
+    /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
+    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages],
   );
 
   const renderReplies = useCallback(
