@@ -36,8 +36,17 @@ import { StudioManipulationLimits } from '@/routes/story-compose-limits';
 const DRAG_THRESHOLD = 6;
 const LONG_PRESS_MS = 500;
 const DOUBLE_TAP_MS = 300;
+/** L'appui long qui FILME sur une scène vide — plus court que celui du menu :
+ * le doigt qui veut filmer n'attend pas (miroir du déclencheur de la caméra). */
+const CAPTURE_HOLD_MS = 350;
 
 export type StudioStageObject = { readonly id: string; readonly pose: StudioPose };
+
+export type StudioStageCapture = {
+  readonly onTap: () => void;
+  readonly onHoldStart: () => void;
+  readonly onHoldEnd: () => void;
+};
 
 /** Les propriétés que `SceneObjectFrame.applyPose` écrit — mêmes noms, même
  * ordre de composition : deux formules divergeraient au premier ajustement. */
@@ -63,6 +72,10 @@ type Press = {
   readonly start: Point;
   moved: boolean;
   menu: boolean;
+  /** L'appui long sur une scène vide a ouvert la caméra et filme (#8654) :
+   * le relâcher clôt la prise. Tenu depuis l'appui — la caméra ouverte, la
+   * scène ne l'offre plus, mais ce doigt-là doit encore pouvoir la clore. */
+  filming?: () => void;
   pose: StudioPose | null;
   timer: ReturnType<typeof setTimeout> | null;
   /** Né dans la SAISIE d'un texte en édition (#8535) : un toucher sans
@@ -101,6 +114,7 @@ export function StudioStageGestures({
   onMenu,
   onWrite,
   editing = null,
+  capture = null,
 }: {
   readonly stageRef: { readonly current: HTMLElement | null };
   /** Les objets SAISISSABLES (textes écrits, calque), avec leur pose. */
@@ -115,6 +129,10 @@ export function StudioStageGestures({
   /** Le texte EN ÉDITION (#8535) — sa saisie passe au-dessus du calque, et le
    * doigt qui la touche le déplace, le pince et le tourne quand même. */
   readonly editing?: string | null;
+  /** LA CAPTURE RAPIDE d'une scène vide (#8654) — toucher le vide ouvre la
+   * caméra et prend la photo, l'appui long ouvre et filme tant qu'il dure.
+   * `null` dès que la scène porte quelque chose. */
+  readonly capture?: StudioStageCapture | null;
 }) {
   const press = useRef<Press | null>(null);
   const pinch = useRef<Pinch | null>(null);
@@ -207,6 +225,12 @@ export function StudioStageGestures({
         onMenu(found.id, { x: current.x, y: current.y });
       }, LONG_PRESS_MS);
     }
+    if (found === null && capture !== null && !inField) {
+      current.timer = setTimeout(() => {
+        current.filming = capture.onHoldEnd;
+        capture.onHoldStart();
+      }, CAPTURE_HOLD_MS);
+    }
     press.current = current;
   };
 
@@ -267,6 +291,10 @@ export function StudioStageGestures({
     if (current.timer !== null) clearTimeout(current.timer);
     setEngaged(null);
     if (current.menu) return;
+    if (current.filming !== undefined) {
+      current.filming();
+      return;
+    }
     const found = current.hit;
     if (current.inField && !current.moved) return;
     if (found?.kind === 'invite') {
@@ -276,7 +304,8 @@ export function StudioStageGestures({
     }
     if (found === null) {
       lastTap.current = null;
-      onSelect(null);
+      if (capture !== null) capture.onTap();
+      else onSelect(null);
       return;
     }
     if (current.moved && current.pose !== null) {

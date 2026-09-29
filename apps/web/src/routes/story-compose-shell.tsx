@@ -4,7 +4,7 @@ import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind, StudioOrigin } from '@/lib/stories/publication-kind';
-import { ROUND_GLASS } from '@/routes/story-compose-chrome';
+import { chromeFade, ROUND_GLASS } from '@/routes/story-compose-chrome';
 import { Link } from '@/routes/route-table';
 
 const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
@@ -27,6 +27,7 @@ export function StudioShell({
   menu,
   floor,
   onCancel,
+  chromeHidden = false,
   children,
 }: {
   readonly kind: PublicationKind;
@@ -38,6 +39,8 @@ export function StudioShell({
   readonly floor?: ReactNode;
   /** ✕ d'une RETOUCHE (#8416) — l'hôte referme la couche, aucune navigation. */
   readonly onCancel?: () => void;
+  /** UN OUTIL OUVERT (#8654) — la barre haute cède en fondu (`studioChrome`). */
+  readonly chromeHidden?: boolean;
   readonly children: ReactNode;
 }) {
   const lang = currentInterfaceLanguage();
@@ -50,6 +53,7 @@ export function StudioShell({
           ils redescendent un peu (6 px), pour ne plus coller au bord haut. */}
       <header
         data-story-studio-top
+        {...chromeFade(!chromeHidden)}
         className="relative z-20 mt-1.5 flex shrink-0 items-center gap-3 px-3 pt-safe pb-1"
       >
         {onCancel !== undefined ? (

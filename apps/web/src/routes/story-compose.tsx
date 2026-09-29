@@ -21,7 +21,7 @@ import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudi
 import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import { composeStoryCanvas } from '@/lib/stories/story-document';
-import type { StudioDoor, StudioPage } from '@/lib/stories/studio-page';
+import { isStudioPageEmpty, type StudioDoor } from '@/lib/stories/studio-page';
 import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import {
   STUDIO_PAGE_MAX,
@@ -82,7 +82,7 @@ import { StudioAnimatedToggle, StudioMoreMenu, StudioPostTextButton, type Studio
 import { StudioRefusal } from '@/routes/story-compose-parts';
 import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
 import { StudioScene } from '@/routes/story-compose-scene';
-import { studioPlacer } from '@/routes/story-compose-place';
+import { revokePageMedia, studioPlacer } from '@/routes/story-compose-place';
 import { useStudioBackgroundSound } from '@/routes/use-studio-background-sound';
 import { useStudioCompositeHash } from '@/routes/use-studio-composite-hash';
 import { useStudioTextBox } from '@/routes/use-studio-text-box';
@@ -90,6 +90,9 @@ import { RETOUCH_DRAFTS, useStudioRetouchFinish, type StudioRetouch } from '@/ro
 import { useStudioObjects } from '@/routes/use-studio-objects';
 import { ALL_DOORS, uploadKey, useStudioUploads } from '@/routes/use-studio-uploads';
 import { useStudioTimeline } from '@/routes/use-studio-timeline';
+import { useStudioQuickCapture } from '@/routes/use-studio-quick-capture';
+import { studioChrome, studioOpenTool } from '@/lib/stories/studio-focus';
+import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 
 /**
  * **CRÉER UNE STORY** (#6900, devenue un PLATEAU par #6943/#6944) — plusieurs
@@ -172,6 +175,8 @@ export type StoryStudioDeps = {
   /** LE RENDU RÉDUIT de la scène pour le sol (#8425) — injectable pour les
    * témoins ; la production dessine dans un canvas hors écran. */
   readonly composite?: StudioCompositeDeps;
+  /** LA CAMÉRA de la capture rapide (#8654) — injectable pour les témoins. */
+  readonly camera?: CameraEngine;
 };
 
 const defaultStoryStudioDeps: StoryStudioDeps = {
@@ -185,19 +190,6 @@ const defaultStoryStudioDeps: StoryStudioDeps = {
  * VIDE, et CONSTANT — une nouvelle identité à chaque rendu re-rendrait le
  * moteur à chaque frappe. */
 const PREVIEW_CARRIER: SceneCarrier = { postId: 'story-studio-preview', media: [] };
-
-function revokeIfLocal(url: string | undefined): void {
-  if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
-}
-
-/** Les TROIS aperçus locaux d'UNE page — fond, calque, son — révoqués
- * ensemble : une page qui quitte le brouillon (retrait, publication) ne
- * laisse aucun `blob:` derrière elle. */
-function revokePageMedia(page: StudioPage): void {
-  revokeIfLocal(page.background?.previewUrl);
-  revokeIfLocal(page.overlay?.previewUrl);
-  revokeIfLocal(page.sound?.previewUrl);
-}
 
 /**
  * LE COMPOSER UNIQUE de la story, du post et du réel (#7497) — `initialKind`
@@ -662,7 +654,15 @@ function StoryStudio({
   const showsSocleCard = !retouching && (studioAssetsShown(page) || studioFooterSpeaks({ kind, placeRefusal, kindRefusal, publishFailure }));
   /** UN PANNEAU OUVERT EN BAS (Cadre, édition) — sur mobile, le socle se
    * retire le temps du panneau (lot 6). */
-  const panelOpen = (frameOpen && page.background !== null) || editing !== null;
+  const tool = studioOpenTool({ editing, frameOpen, hasBackground: page.background !== null, timelineOpen });
+  const chrome = studioChrome({ tool, timelineOpen });
+  const quick = useStudioQuickCapture({
+    lang,
+    kind,
+    scene: { pageBlank: isStudioPageEmpty(page), toolOpen: tool !== null, timelineOpen, retouching, locked: publishing },
+    onTake: (file) => place('visual', file),
+    ...(deps.camera !== undefined ? { engine: deps.camera } : {}),
+  });
   /** « Entre ici » / « Sort ici » — la fenêtre de l'objet SÉLECTIONNÉ, à la tête. */
   const moveSelectedEdge = (head: number, law: (timing: StudioTiming, head: number, duration: number) => StudioTiming) => {
     const track = studioTracks(page).find((candidate) => candidate.id === selectedId);
@@ -682,6 +682,7 @@ function StoryStudio({
     <StudioShell
       kind={kind}
       origin={origin}
+      chromeHidden={!chrome.header}
       floor={
         floor === null ? undefined : (
           <Suspense fallback={null}>
@@ -724,7 +725,7 @@ function StoryStudio({
         ) : null}
 
         {timelineOpen ? null : (
-          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} {...(retouching ? {} : { onImport: importMedia })} />
+          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia })} />
         )}
 
         {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
@@ -732,6 +733,7 @@ function StoryStudio({
         <StudioScene
           lang={lang}
           stageRef={stageRef}
+          capture={quick.capture}
           pageId={page.id}
           locked={publishing}
           preview={{ document: previewDocument, carrier: PREVIEW_CARRIER, preferredLanguages: reader.languages, onContentReady: remeasureText, onClock: setClock }}
@@ -788,6 +790,7 @@ function StoryStudio({
               : null
           }
           onAddPage={!timelineOpen && draft.pages.length < STUDIO_PAGE_MAX && !retouching ? () => edit((current) => withAddedPage(current, language)) : null}
+          hidden={!chrome.trailingRail}
         />
       </div>
 
@@ -878,8 +881,8 @@ function StoryStudio({
             pour le lecteur d'écran et le clavier (l'état « Prêt », « Retirer »). */}
         {!retouching ? (
           <div
-            {...(showsSocleCard && !timelineOpen && !panelOpen ? { 'data-story-studio-socle-card': '' } : {})}
-            className={showsSocleCard && !timelineOpen && !panelOpen ? 'glass flex flex-col gap-1 rounded-2xl px-2.5 py-2' : 'sr-only'}
+            {...(showsSocleCard && chrome.socleCard ? { 'data-story-studio-socle-card': '' } : {})}
+            className={showsSocleCard && chrome.socleCard ? 'glass flex flex-col gap-1 rounded-2xl px-2.5 py-2' : 'sr-only'}
           >
             <StudioPageAssets
               lang={lang}
@@ -893,7 +896,7 @@ function StoryStudio({
           </div>
         ) : null}
         {retouching ? (
-          <div data-story-socle-row className={`flex items-center justify-end gap-2.5 pb-3 ${panelOpen ? 'max-md:hidden' : ''}`}>
+          <div data-story-socle-row className={`flex items-center justify-end gap-2.5 pb-3 ${chrome.socleRow ? '' : 'hidden'}`}>
             {retouchFailed ? (
               <p role="alert" className="flex-1 text-caption" style={{ color: 'var(--color-error)' }}>
                 {translate(lang, 'story.studio.retouch.failed')}
@@ -917,7 +920,7 @@ function StoryStudio({
             </Suspense>
           </div>
         ) : (
-          <div data-story-socle-row className={`flex items-center gap-2.5 pb-3 ${panelOpen ? 'max-md:hidden' : ''}`}>
+          <div data-story-socle-row className={`flex items-center gap-2.5 pb-3 ${chrome.socleRow ? '' : 'hidden'}`}>
             <AudienceChip lang={lang} value={audienceValue} source={audienceSource} open={audienceOpen} onOpen={openAudience} disabled={publishing} />
             <span aria-hidden="true" className="flex-1" />
             {kind === 'POST' ? (
@@ -948,6 +951,7 @@ function StoryStudio({
       </footer>
 
       {reelOffer.dialog}
+      {quick.cameraLayer}
       {audienceOpen ? (
         <Suspense fallback={null}>
           <AudienceSheet

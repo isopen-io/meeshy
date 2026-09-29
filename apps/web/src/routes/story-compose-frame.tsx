@@ -14,7 +14,7 @@ import type { StoryFrame } from '@/lib/stories/story-document';
 import { pageWithVisualFilter } from '@/lib/stories/studio-page';
 import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
-import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
+import { STUDIO_PLATE, StudioToolClose } from '@/routes/story-compose-chrome';
 import { StudioAltField, StudioFilterSection } from '@/routes/story-compose-media-fields';
 
 /**
@@ -118,15 +118,7 @@ export function StudioFramePanel({
     >
       <div className="flex items-center gap-2">
         <h2 className="flex-1 text-body font-bold">{title}</h2>
-        <button
-          type="button"
-          data-story-frame-done
-          onClick={onClose}
-          className="h-11 rounded-xl px-4 text-caption font-bold"
-          style={{ backgroundColor: '#fff', color: '#111' }}
-        >
-          {translate(lang, 'story.studio.edit.done')}
-        </button>
+        <StudioToolClose lang={lang} probe="frame" onClose={onClose} />
       </div>
       {/* Le corps DÉFILE sous son titre (#8517) : le Cadre ne mange pas la
           scène qu'il règle, au téléphone comme au bureau. */}

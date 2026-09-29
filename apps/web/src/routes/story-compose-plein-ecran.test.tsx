@@ -375,15 +375,44 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     expect(el.querySelectorAll('[data-scene-text]')).toHaveLength(2);
   });
 
-  test('une plaque ouverte en bas retire le socle sur MOBILE', async () => {
+  /** #8654 (jumelle de #8652) — un outil ouvert prend toute la place : en-tête,
+   * rails et leurs (+), socle cèdent ; restent ses réglages et son (X). */
+  test('un outil ouvert efface en-tête, rails et socle ; son (X) rend exactement le chrome d’avant', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     const row = () => el.querySelector('[data-story-socle-row]')?.className ?? '';
-    expect(row()).not.toContain('max-md:hidden');
+    const chrome = () =>
+      ['[data-story-studio-top]', '[data-story-studio-rail="leading"]', '[data-story-studio-rail="trailing"]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome'));
+    expect(chrome()).toEqual(['shown', 'shown', 'shown']);
+    expect(row()).not.toContain('hidden');
+
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
-    expect(row()).toContain('max-md:hidden');
+    expect(chrome()).toEqual(['hidden', 'hidden', 'hidden']);
+    expect(el.querySelector('[data-story-studio-top]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(el.querySelector('[data-story-studio-rail="leading"]')?.hasAttribute('inert')).toBe(true);
+    expect(row().split(' ')).toContain('hidden');
+    const close = el.querySelector('[data-story-frame-panel] [data-story-tool-close]');
+    expect(close?.getAttribute('aria-label')).toBe('Fermer l’outil');
+
+    click(close);
+    await flush(() => el.querySelector('[data-story-frame-panel]') === null);
+    expect(chrome()).toEqual(['shown', 'shown', 'shown']);
+    expect(row().split(' ')).not.toContain('hidden');
+  });
+
+  test('l’édition d’un texte est un outil : le chrome cède aussi', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
+    click(el.querySelector('[data-story-object-edit="text-1"]'));
+    await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
+    expect(el.querySelector('[data-story-studio-top]')?.getAttribute('data-studio-chrome')).toBe('hidden');
+    expect(el.querySelector('[data-story-studio-rail="leading"]')?.getAttribute('data-studio-chrome')).toBe('hidden');
+    click(el.querySelector('[data-story-edit-done]'));
+    await flush(() => el.querySelector('[data-story-edit-plaque]') === null);
+    expect(el.querySelector('[data-story-studio-top]')?.getAttribute('data-studio-chrome')).toBe('shown');
   });
 
   test('le Cadre « sable » teinte AUSSI le sol autour de la carte', async () => {

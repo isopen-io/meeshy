@@ -595,6 +595,41 @@
   }
 }
 
+/* UN OUTIL OUVERT PREND TOUTE LA PLACE (#8654) — l'en-tete, les rails et
+   leurs (+) cedent en fondu, sans quitter leur place (la scene ne saute
+   pas). Le flash d'ecran de la camera s'allume en un eclair. */
+[data-studio-chrome] {
+  transition: opacity 200ms ease;
+}
+
+[data-studio-chrome='hidden'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes studioCameraFlash {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.studio-camera-flash {
+  animation: studioCameraFlash 90ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-studio-chrome] {
+    transition: none;
+  }
+
+  .studio-camera-flash {
+    animation: none;
+  }
+}
+
 /* LE SOL QUI CHANGE DE SOURCE (#8534) — l'image arrivee, deja decodee, se
    leve en fondu sur celle qui part (gardee dessous par `useDecodedSwap`) :
    aucune image perdue, aucun eclair de vide. */

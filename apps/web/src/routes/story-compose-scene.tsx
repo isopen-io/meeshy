@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentProps, type RefObject } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
+import { COMPOSER_GLYPHS } from '@/components/glyphs-composer';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import type { SceneClockHandle } from '@/components/scene-clock';
 import { backgroundCss } from '@/lib/canvas/background';
@@ -10,10 +11,50 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { keyboardPose } from '@/lib/stories/studio-grip';
 import { STORY_PLAIN_BACKGROUND } from '@/lib/stories/story-document';
-import { StudioStageGestures, type StudioStageObject } from '@/routes/story-compose-stage';
+import type { QuickCaptureHintKey } from '@/lib/stories/studio-quick-capture';
+import { StudioStageGestures, type StudioStageCapture, type StudioStageObject } from '@/routes/story-compose-stage';
 import { StudioTextInput } from '@/routes/story-compose-text-input';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
+
+export type StudioSceneCapture = StudioStageCapture & {
+  readonly hintKey: QuickCaptureHintKey;
+  /** La voie du CLAVIER et du lecteur d'écran — un lecteur d'écran ne tient
+   * pas un doigt : sans elle, la vidéo serait offerte à la main seule. */
+  readonly onPhoto: (() => void) | null;
+  readonly onFilm: () => void;
+};
+
+/**
+ * **L'INDICATION GRISE D'UNE SCÈNE VIDE** (#8654, jumelle de #8653) — elle
+ * nomme les deux gestes (toucher : photo · maintenir : vidéo), ou le seul
+ * qu'un réel sert. Elle ne se touche pas : c'est la scène entière qui répond
+ * (`StudioStageGestures`). Ses deux boutons invisibles portent les mêmes
+ * gestes au clavier et au lecteur d'écran.
+ */
+function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLanguage; readonly capture: StudioSceneCapture }) {
+  return (
+    <>
+      <p
+        aria-hidden="true"
+        data-story-quick-capture-hint
+        className="pointer-events-none absolute inset-x-3 bottom-6 flex items-center justify-center gap-1.5 text-center text-caption font-semibold"
+        style={{ color: 'rgba(156,163,175,0.95)', zIndex: 2 }}
+      >
+        <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
+        {translate(lang, capture.hintKey)}
+      </p>
+      {capture.onPhoto !== null ? (
+        <button type="button" className="sr-only" data-story-quick-capture="photo" onClick={capture.onPhoto}>
+          {translate(lang, 'story.studio.camera.quick.photo')}
+        </button>
+      ) : null}
+      <button type="button" className="sr-only" data-story-quick-capture="video" onClick={capture.onFilm}>
+        {translate(lang, 'story.studio.camera.quick.video')}
+      </button>
+    </>
+  );
+}
 
 /**
  * **LA SCÈNE DU STUDIO** — la carte 9:16 et tout ce qui s'y TOUCHE : l'aperçu
@@ -35,6 +76,7 @@ export function StudioScene({
   timeline,
   writing,
   objects,
+  capture = null,
 }: {
   readonly lang: InterfaceLanguage;
   readonly stageRef: RefObject<HTMLDivElement | null>;
@@ -60,7 +102,9 @@ export function StudioScene({
   readonly objects: {
     readonly items: readonly StudioStageObject[];
     readonly nameOf: (id: string) => string;
-  } & Omit<ComponentProps<typeof StudioStageGestures>, 'stageRef' | 'objects' | 'locked'>;
+  } & Omit<ComponentProps<typeof StudioStageGestures>, 'stageRef' | 'objects' | 'locked' | 'capture'>;
+  /** LA CAPTURE RAPIDE (#8654) — `null` dès que la scène porte quelque chose. */
+  readonly capture?: StudioSceneCapture | null;
 }) {
   return (
     <div className="absolute inset-0 grid place-items-center px-2.5 py-0.5" style={{ containerType: 'size' }}>
@@ -137,7 +181,9 @@ export function StudioScene({
               onMenu={objects.onMenu}
               onWrite={objects.onWrite}
               editing={objects.editing ?? null}
+              capture={capture}
             />
+            {capture !== null ? <StudioQuickCaptureHint lang={lang} capture={capture} /> : null}
             {/* La voie du CLAVIER et du lecteur d'écran : un bouton par objet. */}
             {objects.items.map((object) => (
               <button

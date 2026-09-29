@@ -18,16 +18,19 @@ describe('quickCaptureOffered — le geste n’existe que sur une scène vide', 
     expect(offered()).toBe(true);
   });
 
-  test.each([
+  const refusals: readonly (readonly [string, Partial<Parameters<typeof quickCaptureOffered>[0]>])[] = [
     ['une scène qui porte quelque chose', { pageBlank: false }],
     ['un outil ouvert', { toolOpen: true }],
     ['la frise ouverte', { timelineOpen: true }],
     ['une retouche d’image', { retouching: true }],
     ['l’envoi en cours', { locked: true }],
     ['la caméra déjà ouverte', { cameraOpen: true }],
-  ] as const)('refusé avec %s', (_, overrides) => {
-    expect(offered(overrides)).toBe(false);
-  });
+  ];
+  for (const [label, overrides] of refusals) {
+    test(`refusé avec ${label}`, () => {
+      expect(offered(overrides)).toBe(false);
+    });
+  }
 });
 
 describe('quickCaptureTap / quickCaptureHintKey — un geste, une intention', () => {
