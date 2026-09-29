@@ -31,6 +31,7 @@ import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
+import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
 
 const it = {
@@ -1031,14 +1032,6 @@ const it = {
   'comment.send.error': 'Non è stato possibile pubblicare il commento.',
   'comment.send.pending': 'Commento non confermato — offline',
   'comment.send.empty': 'Scrivi qualcosa prima di inviare.',
-  'comments.action.like': 'Mi piace',
-  'comments.action.unlike': 'Non mi piace più',
-  'comments.action.edit': 'Modifica',
-  'comments.action.delete': 'Elimina',
-  'comments.action.delete.confirm': 'Conferma',
-  'comments.edit.label': 'Modifica commento',
-  'comments.edit.save': 'Salva',
-  'comments.edit.cancel': 'Annulla',
   'comment.like.error': 'Il «mi piace» non è stato salvato.',
   'comment.edit.error': 'La modifica non è stata salvata.',
   'comment.delete.error': 'Non è stato possibile eliminare il commento.',
@@ -1171,6 +1164,7 @@ const it = {
   ...itStoriesMine,
   ...itContactCard,
   ...itQuote,
+  ...itCommentRow,
   ...itContactDiscovery,
 } satisfies InterfaceCatalog;
 

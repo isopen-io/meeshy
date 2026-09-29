@@ -31,6 +31,7 @@ import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
+import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
 
 const ar = {
@@ -1028,14 +1029,6 @@ const ar = {
   'comment.send.error': 'تعذّر نشر التعليق.',
   'comment.send.pending': 'لم يُؤكَّد التعليق — غير متصل',
   'comment.send.empty': 'اكتب شيئًا قبل الإرسال.',
-  'comments.action.like': 'أعجبني',
-  'comments.action.unlike': 'لم يعد يعجبني',
-  'comments.action.edit': 'تعديل',
-  'comments.action.delete': 'حذف',
-  'comments.action.delete.confirm': 'تأكيد',
-  'comments.edit.label': 'تعديل التعليق',
-  'comments.edit.save': 'حفظ',
-  'comments.edit.cancel': 'إلغاء',
   'comment.like.error': 'لم يُحفظ إعجابك.',
   'comment.edit.error': 'لم يُحفظ التعديل.',
   'comment.delete.error': 'تعذّر حذف التعليق.',
@@ -1168,6 +1161,7 @@ const ar = {
   ...arStoriesMine,
   ...arContactCard,
   ...arQuote,
+  ...arCommentRow,
   ...arContactDiscovery,
 } satisfies InterfaceCatalog;
 

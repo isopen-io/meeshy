@@ -31,6 +31,7 @@ import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
 import esQuote from './catalog-es-quote';
+import esCommentRow from './catalog-es-comment-row';
 import esContactDiscovery from './catalog-es-contact-discovery';
 
 const es = {
@@ -1031,14 +1032,6 @@ const es = {
   'comment.send.error': 'No se pudo publicar el comentario.',
   'comment.send.pending': 'Comentario sin confirmar: sin conexión',
   'comment.send.empty': 'Escribe algo antes de enviar.',
-  'comments.action.like': 'Me gusta',
-  'comments.action.unlike': 'Ya no me gusta',
-  'comments.action.edit': 'Editar',
-  'comments.action.delete': 'Eliminar',
-  'comments.action.delete.confirm': 'Confirmar',
-  'comments.edit.label': 'Editar comentario',
-  'comments.edit.save': 'Guardar',
-  'comments.edit.cancel': 'Cancelar',
   'comment.like.error': 'No se ha guardado tu «me gusta».',
   'comment.edit.error': 'No se ha guardado la modificación.',
   'comment.delete.error': 'No se ha podido eliminar el comentario.',
@@ -1171,6 +1164,7 @@ const es = {
   ...esStoriesMine,
   ...esContactCard,
   ...esQuote,
+  ...esCommentRow,
   ...esContactDiscovery,
 } satisfies InterfaceCatalog;
 
