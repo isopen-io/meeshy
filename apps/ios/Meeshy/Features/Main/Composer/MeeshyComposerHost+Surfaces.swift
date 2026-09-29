@@ -349,11 +349,13 @@ extension MeeshyComposerHost {
             onItemEdit: { id, kind in
                 switch kind {
                 case .text:
-                    // **Le MÊME site que la création** (#4634) : `openObjectEditor`
-                    // est la seule façon d'éditer un texte, quelle que soit la
-                    // porte. Recopier ici les trois lignes qu'il contient était
-                    // exactement ce qui faisait diverger les deux chemins.
-                    openObjectEditor(id)
+                    // **La MÊME édition que la porte TEXTE** (#8680, directive
+                    // porteur 2026-09-29 : « lorsqu'on double-touche un texte,
+                    // c'est cette scène qui doit s'afficher et non plus
+                    // l'ancienne »). Scène réduite, outils du texte et `(x)`
+                    // au rail : `beginSceneTextEditing` est le site que la
+                    // création emprunte, jamais l'éditeur plein écran.
+                    beginSceneTextEditing(id)
                     HapticFeedback.medium()
                 case .audio:
                     // **Toucher une pastille audio ouvre « Création audio » SUR
@@ -568,7 +570,8 @@ extension MeeshyComposerHost {
             editingTextId: viewModel.textEditingMode.activeTextId,
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
             // TEXTE y ouvre la saisie en ligne. La requête `@` reste nourrie
-            // par l'éditeur plein écran seul — celui de « Modifier ».
+            // par l’éditeur plein écran seul (#8680 : la saisie sur scène ne
+            // la sert pas encore).
             //
             // L'écriture du TEXTE, elle, passe ici : une écriture idempotente
             // sur le modèle.

@@ -408,8 +408,8 @@ extension MeeshyComposerHost {
             // porteur 2026-09-28 : « plutôt que d'ouvrir l'édition de texte,
             // affiche la liste des options directement à droite du bouton »).
             // Le clavier monte sur le texte posé, et ses options s'accrochent à
-            // cette porte (`ComposerRailMode.flyout`). L'éditeur plein écran
-            // reste celui de l'appui long « Modifier ».
+            // ce rail, à la place des portes (#8652). Le double-toucher et
+            // « Modifier » ouvrent la MÊME saisie (#8680).
             //
             // La porte BASCULE, comme le dessin : retouchée pendant la saisie,
             // elle la termine. La coquille restée vide est supprimée par
@@ -586,16 +586,11 @@ extension MeeshyComposerHost {
 
     /// Rend VRAI si un sélecteur est effectivement à l'écran — c'est ce que la
     /// porte du rail lit pour savoir si son intention a une sortie (#6008).
+    /// La porte va droit à la photothèque (#8680) : aucune feuille de choix.
     @discardableResult
     func presentMediaSources() -> Bool {
         HapticFeedback.light()
-        let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
-        guard sources.count > 1 else {
-            guard let seule = sources.first else { return false }
-            presentMediaIntake(seule)
-            return true
-        }
-        showsMediaSourceChooser = true
+        presentMediaIntake(ComposerMediaSourcePolicy.railDoorIntake)
         return true
     }
 

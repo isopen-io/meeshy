@@ -55,8 +55,9 @@ public final class StoryInlineTextEditor: UITextView {
                       geometry: CanvasGeometry,
                       setText: Bool) {
         let designFontSize = CGFloat(textObject.fontSize * textObject.scale)
+        let renderedFontSize = StoryTextLayer.renderedFontSize(of: textObject, in: geometry)
         let resolved = StoryTextFontResolver.resolveFont(forTextObject: textObject,
-                                                         size: geometry.render(designFontSize))
+                                                         size: renderedFontSize)
         let color = Self.color(hex: textObject.textColor) ?? .white
         let align = Self.alignment(from: textObject.textAlign)
 
@@ -88,7 +89,7 @@ public final class StoryInlineTextEditor: UITextView {
         // lui aussi — `NSShadow`, que TextKit rend en temps réel comme le
         // contour. Même site de conversion que le canvas et le composite.
         if let shadow = StoryTextEffectRendering.nsShadow(
-            for: textObject, fontSize: geometry.render(designFontSize), textColor: color) {
+            for: textObject, fontSize: renderedFontSize, textColor: color) {
             attrs[.shadow] = shadow
         }
         typingAttributes = attrs

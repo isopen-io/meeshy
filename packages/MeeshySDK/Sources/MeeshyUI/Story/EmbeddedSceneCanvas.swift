@@ -260,9 +260,12 @@ public struct EmbeddedSceneCanvas: View {
         GeometryReader { proxy in
             // Bounds intrinsèques FIXES au ratio, centrés (« fit ») dans la
             // zone bornée que le parent nous donne — jamais l'écran entier.
-            let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: aspectRatio)
-            let reference = CanvasGeometry.aspectFitSize(in: referenceViewport, ratio: aspectRatio)
-            let scale = reference.width > 0 ? fit.width / reference.width : 1
+            let projection = SceneCardProjection(container: proxy.size,
+                                                 ratio: aspectRatio,
+                                                 referenceViewport: referenceViewport)
+            let fit = projection.fit
+            let reference = projection.reference
+            let scale = projection.scale
             StoryComposerCanvasView(
                 slide: $slide,
                 onItemTapped: onItemTapped,
