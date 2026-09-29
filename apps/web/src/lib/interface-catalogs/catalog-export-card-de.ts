@@ -71,6 +71,7 @@ const de = {
   'export.card.tab.frame': 'Rahmen',
   'export.card.tab.media': 'Medien',
   'export.card.part.media': 'Medien',
+  'export.card.part.replies': 'Antworten',
   'export.card.aspect': 'Bildformat',
   'export.card.aspect.auto': 'Angepasst',
   'export.card.aspect.story': 'Story 9:16',

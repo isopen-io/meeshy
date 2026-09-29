@@ -19,6 +19,8 @@ export type CommentImageRequest = {
   readonly comment: PostComment;
   readonly servedText: string;
   readonly parent: { readonly comment: PostComment; readonly servedText: string } | null;
+  /** « Avec les réponses » (#8734) — absentes tant qu'elles ne sont pas lues. */
+  readonly replies?: readonly { readonly comment: PostComment; readonly servedText: string }[];
 };
 
 export default function CommentImageSheet({ request, handle, onClose }: { readonly request: CommentImageRequest; readonly handle: string | null; readonly onClose: () => void }) {

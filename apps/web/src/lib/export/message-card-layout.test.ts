@@ -290,3 +290,49 @@ describe('les zones touchables d’une carte', () => {
     }
   });
 });
+
+describe('les RÉPONSES d’un commentaire, sous lui (#8734)', () => {
+  const withReplies = cardInput({
+    quoted: null,
+    reply: { author: 'Awa', text: 'Joli coin' },
+    followUps: [
+      { author: 'Kwame', text: 'C’est où ?' },
+      { author: 'Lina', text: 'À Dakar' },
+    ],
+  });
+
+  test('chaque réponse se peint APRÈS le commentaire, dans l’ordre, avec son auteur', () => {
+    const { ops } = layoutMessageCard(withReplies, measure);
+    const root = opWithText(ops, 'Joli coin');
+    const first = opWithText(ops, 'C’est où ?');
+    const second = opWithText(ops, 'À Dakar');
+    expect(root).toBeDefined();
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect((first?.y ?? 0) > (root?.y ?? 0)).toBe(true);
+    expect((second?.y ?? 0) > (first?.y ?? 0)).toBe(true);
+    expect(opWithText(ops, 'Kwame')).toBeDefined();
+    expect(opWithText(ops, 'Lina')).toBeDefined();
+  });
+
+  test('en taille RÉDUITE — le commentaire imagé reste le sujet', () => {
+    const { ops } = layoutMessageCard(withReplies, measure);
+    const root = opWithText(ops, 'Joli coin');
+    const first = opWithText(ops, 'C’est où ?');
+    expect(sizeOf(first as CardTextOp)).toBeLessThan(sizeOf(root as CardTextOp));
+  });
+
+  test('la carte grandit pour les porter, et une zone « replies » les désigne, sous la réponse', () => {
+    const long = { author: 'Awa', text: 'Joli coin '.repeat(20) };
+    const alone = layoutMessageCard({ ...withReplies, reply: long, followUps: [] }, perChar(40));
+    const both = layoutMessageCard({ ...withReplies, reply: long }, perChar(40));
+    expect(alone.regions.some((region) => region.part === 'replies')).toBe(false);
+    expect(both.regions.map((region) => region.part)).toEqual(['reply', 'replies']);
+    expect(both.height).toBeGreaterThan(alone.height);
+  });
+
+  test('une réponse vide ne se peint pas', () => {
+    const { regions } = layoutMessageCard({ ...withReplies, followUps: [{ author: 'Kwame', text: '  ' }] }, measure);
+    expect(regions.some((region) => region.part === 'replies')).toBe(false);
+  });
+});

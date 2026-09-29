@@ -9,8 +9,15 @@ import { cardMediaOf, maskedByEffects, type MessageCardSubject, type MessageCard
  * Prisme des commentaires), passés par l'hôte qui les a déjà rendus.
  *
  * GARDE : un commentaire encore EN VOL n'a pas d'existence à partager, et un
- * commentaire masqué par ses effets (vue unique, flou) ne se peint pas.
+ * commentaire masqué par ses effets (vue unique, flou) ne se peint pas — ni
+ * comme sujet, ni comme citation, ni comme l'une de ses RÉPONSES, qu'on peut
+ * joindre à la carte d'une racine (« Imager avec les réponses », #8734).
  */
+
+type ServedComment = { readonly comment: PostComment; readonly servedText: string };
+
+const paintable = (entry: ServedComment): boolean =>
+  entry.comment.pending !== true && !maskedByEffects(entry.comment.effectFlags) && entry.servedText.trim() !== '';
 
 const nonBlank = (value: string | null | undefined): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null);
 
@@ -24,7 +31,9 @@ export function commentCardSubjectOf(params: {
   readonly comment: PostComment;
   /** Le texte SERVI du commentaire, tel que la rangée l'affiche. */
   readonly servedText: string;
-  readonly parent: { readonly comment: PostComment; readonly servedText: string } | null;
+  readonly parent: ServedComment | null;
+  /** Les réponses à joindre sous le commentaire, dans leur ordre — rien par défaut. */
+  readonly replies?: readonly ServedComment[];
 }): MessageCardSubject | null {
   const { comment, parent } = params;
   if (comment.pending === true || maskedByEffects(comment.effectFlags)) return null;
@@ -38,5 +47,6 @@ export function commentCardSubjectOf(params: {
     sentAt: new Date(comment.createdAt),
     quotedAt: parent === null || quotedText === '' ? null : new Date(parent.comment.createdAt),
     media,
+    followUps: (params.replies ?? []).filter(paintable).map((entry) => partOf(entry.comment, entry.servedText.trim())),
   };
 }

@@ -6,7 +6,6 @@ const esCommentRow = {
   'comments.action.unlike': 'Ya no me gusta',
   'comments.action.edit': 'Editar',
   'comments.action.delete': 'Eliminar',
-  'comments.action.delete.confirm': 'Confirmar',
   'comments.edit.label': 'Editar comentario',
   'comments.edit.save': 'Guardar',
   'comments.edit.cancel': 'Cancelar',
@@ -19,6 +18,8 @@ const esCommentRow = {
   'comments.replies.more': 'Ver más respuestas',
   'comments.replies.error': 'No se pudieron cargar las respuestas',
   'comments.replies.label': 'Respuestas a {name}',
+  'comments.action.image_with_replies': 'Crear imagen con las respuestas',
+  'comments.report.title': 'Denunciar este comentario',
 } satisfies CommentRowCatalogSlice;
 
 export default esCommentRow;

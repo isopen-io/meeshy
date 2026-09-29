@@ -77,6 +77,8 @@ export type MessageCardSubject = {
   /** L'heure du message cité, quand on la connaît. */
   readonly quotedAt: Date | null;
   readonly media: readonly MessageCardMediaItem[];
+  /** Ce qui suit la réponse sur la carte — les réponses d'un commentaire (#8734). */
+  readonly followUps?: readonly MessageCardSubjectPart[];
 };
 
 /** Ce qu'il faut d'une pièce — celle d'un message (`Attachment`) comme celle d'un commentaire (`FeedMedia`). */

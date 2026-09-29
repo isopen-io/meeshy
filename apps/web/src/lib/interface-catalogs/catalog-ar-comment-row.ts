@@ -6,7 +6,6 @@ const arCommentRow = {
   'comments.action.unlike': 'لم يعد يعجبني',
   'comments.action.edit': 'تعديل',
   'comments.action.delete': 'حذف',
-  'comments.action.delete.confirm': 'تأكيد',
   'comments.edit.label': 'تعديل التعليق',
   'comments.edit.save': 'حفظ',
   'comments.edit.cancel': 'إلغاء',
@@ -19,6 +18,8 @@ const arCommentRow = {
   'comments.replies.more': 'عرض المزيد من الردود',
   'comments.replies.error': 'تعذر تحميل الردود',
   'comments.replies.label': 'الردود على {name}',
+  'comments.action.image_with_replies': 'تحويل إلى صورة مع الردود',
+  'comments.report.title': 'الإبلاغ عن هذا التعليق',
 } satisfies CommentRowCatalogSlice;
 
 export default arCommentRow;

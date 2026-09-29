@@ -19,7 +19,10 @@ export type { CardBarOp, CardDotOp, CardMediaOp, CardOp, CardPanelOp, CardPlayOp
  *  2. la LIAISON du template, qui mène la question à la réponse ;
  *  3. la RÉPONSE, en bas, dans la police du template et en grand — ses MÉDIAS
  *     (images, première image des vidéos, représentation de l'audio) au-dessus
- *     de son texte, comme dans la bulle (`message-card-media.ts`).
+ *     de son texte, comme dans la bulle (`message-card-media.ts`) ;
+ *  4. les SUITES, quand on image un commentaire « avec ses réponses » (#8734) :
+ *     chacune en taille réduite, à la manière de la citation, trois lignes au
+ *     plus — le commentaire imagé reste le sujet.
  * Aucun pied : la carte est signée par son seul filigrane diagonal,
  * « Meeshy @pseudo », qui reste même quand les auteurs sont anonymisés.
  *
@@ -59,6 +62,8 @@ export type MessageCardInput = {
   readonly media?: readonly CardMedia[];
   readonly mediaStyle?: CardMediaStyle;
   readonly audioStyle?: CardAudioStyle;
+  /** Les réponses peintes SOUS la réponse (#8734), dans leur ordre. */
+  readonly followUps?: readonly MessageCardPart[];
 };
 
 /**
@@ -67,7 +72,7 @@ export type MessageCardInput = {
  * ailleurs. Le filigrane n'en est pas une : il signe toujours la carte, rien ne
  * le règle.
  */
-export type CardPart = 'header' | 'quote' | 'link' | 'reply' | 'media' | 'background';
+export type CardPart = 'header' | 'quote' | 'link' | 'reply' | 'media' | 'replies' | 'background';
 
 /** La zone d'une partie, en pixels de la carte. */
 export type CardRegion = {
@@ -121,6 +126,8 @@ const BUBBLE_PAD_Y = 34;
 const BUBBLE_RADIUS = 36;
 const MEDIA_GAP = 28;
 const SIDE_REGION = 64;
+const FOLLOW_GAP = 40;
+const FOLLOW_MAX_LINES = 3;
 
 /**
  * La géométrie de chaque liaison : la hauteur du bloc qui sépare la citation
@@ -145,6 +152,7 @@ type Sized = {
   readonly quoteFont: string;
   readonly replyLines: string[];
   readonly quoteLines: string[];
+  readonly followLines: readonly (readonly string[])[];
 };
 
 const replyLineHeight = (size: number) => Math.round(size * REPLY_LEADING);
@@ -199,6 +207,9 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const quoteMeta = hasQuote && input.quoted !== null ? metaOf(input.quoted) : null;
   const replyMeta = metaOf(input.reply);
   const replyHasText = input.reply.text.trim() !== '';
+  const followUps = (input.followUps ?? []).filter((part) => part.text.trim() !== '');
+  const followMetas = followUps.map(metaOf);
+  const followInset = geometry.quoteBar ? QUOTE_INDENT : 0;
   const mediaBlock: CardMediaBlock = layoutCardMedia({
     media: input.media ?? [],
     style: input.mediaStyle ?? DEFAULT_MEDIA_STYLE,
@@ -231,23 +242,32 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       quoteFont,
       replyLines: replyHasText ? wrapText(input.reply.text, replyWidth, replyFont, measure) : [],
       quoteLines: hasQuote ? wrapText(input.quoted?.text ?? '', quoteWidth, quoteFont, measure) : [],
+      followLines: followUps.map((part) => truncateLines(wrapText(part.text, quoteWidth, quoteFont, measure), FOLLOW_MAX_LINES, quoteWidth, quoteFont, measure)),
     };
   };
+
+  /** Les suites ne cèdent jamais au-delà de leurs trois lignes : leur hauteur s'ajoute, elle ne se négocie pas. */
+  const followHeight = (sized: Sized): number =>
+    sized.followLines.reduce(
+      (sum, lines, index) => sum + FOLLOW_GAP + metaHeight(followMetas[index] ?? null) + lines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble,
+      0,
+    );
+  const total = (sized: Sized): number => contentHeight(sized, hasQuote, chrome) + followHeight(sized);
 
   const atFloor = (sized: Sized) => sized.replySize <= REPLY_FLOOR * typeface.replyScale && sized.quoteSize <= QUOTE_FLOOR;
   let step = 0;
   let sized = sizeAt(step);
-  while (contentHeight(sized, hasQuote, chrome) > budget && !atFloor(sized)) {
+  while (total(sized) > budget && !atFloor(sized)) {
     step += 1;
     sized = sizeAt(step);
   }
 
   let truncated = false;
-  if (contentHeight(sized, hasQuote, chrome) > budget) {
+  if (total(sized) > budget) {
     truncated = true;
     const quoteLH = quoteLineHeight(sized.quoteSize);
     const replyLH = replyLineHeight(sized.replySize);
-    const fixed = contentHeight({ ...sized, quoteLines: [], replyLines: [] }, hasQuote, chrome) + (chrome.media > 0 && replyHasText ? MEDIA_GAP : 0);
+    const fixed = total({ ...sized, quoteLines: [], replyLines: [] }) + (chrome.media > 0 && replyHasText ? MEDIA_GAP : 0);
     const room = budget - fixed;
     /* La citation cède d'abord : au plus un tiers de la place, deux lignes au moins. */
     const quoteKeep = hasQuote ? Math.min(sized.quoteLines.length, Math.max(2, Math.floor((room * 0.3) / quoteLH))) : 0;
@@ -259,7 +279,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     };
   }
 
-  const content = contentHeight(sized, hasQuote, chrome);
+  const content = total(sized);
   const height = fixedHeight ?? (truncated ? CARD_MAX_HEIGHT : Math.min(CARD_MAX_HEIGHT, Math.max(CARD_MIN_HEIGHT, 2 * PAD_Y + content)));
   /* Un texte court flotte au milieu de l'espace libre, jamais collé en haut. */
   let y = PAD_Y + Math.max(0, Math.floor((height - 2 * PAD_Y - content) / 2));
@@ -384,6 +404,23 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   region('reply', reply.top, y);
   /* Les médias vivent DANS la réponse : leur zone vient après pour se poser au-dessus d'elle. */
   if (reply.mediaTop !== null) region('media', reply.mediaTop, reply.mediaTop + mediaBlock.height);
+
+  const followTop = y + FOLLOW_GAP;
+  followUps.forEach((part, index) => {
+    y += FOLLOW_GAP;
+    const follow = block(part, sized.followLines[index] ?? [], {
+      size: sized.quoteSize,
+      lineHeight: quoteLineHeight(sized.quoteSize),
+      font: sized.quoteFont,
+      ink: palette.quoteInk,
+      inset: followInset,
+      meta: followMetas[index] ?? null,
+      media: null,
+      bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel } : null,
+    });
+    if (geometry.quoteBar) ops.push({ kind: 'bar', x: follow.rtl ? width - PAD_X - BAR_WIDTH : PAD_X, y: follow.top, width: BAR_WIDTH, height: y - follow.top, color: palette.accent });
+  });
+  if (followUps.length > 0) region('replies', followTop, y);
 
   return { width, height, ops, regions, watermark: watermarkOf(input.handle), truncated, tilt: CARD_TILT_RADIANS[frame.tilt] };
 }

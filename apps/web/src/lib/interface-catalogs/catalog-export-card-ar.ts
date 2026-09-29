@@ -71,6 +71,7 @@ const ar = {
   'export.card.tab.frame': 'الإطار',
   'export.card.tab.media': 'الوسائط',
   'export.card.part.media': 'الوسائط',
+  'export.card.part.replies': 'الردود',
   'export.card.aspect': 'مقاس الصورة',
   'export.card.aspect.auto': 'مُلائم',
   'export.card.aspect.story': 'قصة 9:16',
