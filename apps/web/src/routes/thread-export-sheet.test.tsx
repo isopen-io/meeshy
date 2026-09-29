@@ -509,6 +509,27 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
     expect(harness.painted.length).toBeGreaterThanOrEqual(2);
   });
 
+  test('« Imager rapide » attend les pixels des médias : jamais une carte aux cadres vides', async () => {
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { harness } = await mountSheet({
+      subject: withVideo,
+      quick: true,
+      loadSources: async () => {
+        await gate;
+        return { sources: [null, null], dispose: () => undefined };
+      },
+    });
+    await mounter.settle();
+    expect(harness.delivered).toEqual([]);
+    (release as (() => void) | null)?.();
+    await mounter.settle();
+    await mounter.settle();
+    expect(harness.delivered).toHaveLength(1);
+  });
+
   test('Médias : disposition des images et représentation de l’audio', async () => {
     const video = await mountSheet({ subject: withVideo });
     await openTab(video.host, 'media');

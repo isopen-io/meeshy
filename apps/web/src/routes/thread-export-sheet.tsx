@@ -294,7 +294,8 @@ export function MessageExportSheet({
     [cache, context, subject],
   );
 
-  const ready = rendered !== null && rendered.key === key;
+  /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
+  const ready = rendered !== null && rendered.key === key && !media.loading;
 
   /** Le fichier à livrer : l'image peinte, ou le GIF / la vidéo fabriqués à la demande (et gardés pour un second geste). */
   const fileFor = async (card: Rendered): Promise<Blob | null> => {
