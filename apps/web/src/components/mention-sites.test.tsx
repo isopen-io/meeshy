@@ -137,7 +137,10 @@ describe('le fil de commentaires d’une publication', () => {
     const el = await mount(<CommentThread postId="post-text-rank2" />);
     await settle();
     act(() => {
-      required<HTMLButtonElement>(el, '[data-comment-gesture="edit"]').click();
+      required<HTMLButtonElement>(el, '[data-comment-gesture="more"]').click();
+    });
+    act(() => {
+      required<HTMLButtonElement>(document.body, '[data-comment-menu] [data-comment-gesture="edit"]').click();
     });
     typeInto(required<HTMLTextAreaElement>(el, '[data-comment-edit-field]'), 'Je l’ai testé avec @');
     expect(names(el)[0]).toBe('claire');

@@ -82,6 +82,11 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: Publ
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
+      /* Un `<dialog>` ouvert PAR-DESSUS (motifs de « Signaler », atelier
+         « Imagine », #8734) possède son Échap : il se ferme seul (action par
+         défaut, que l'arrêt de propagation ne retient pas), et ni la feuille
+         ni le lecteur dessous ne se ferment avec lui. */
+      if (e.target instanceof Element && e.target.closest('dialog[open]') !== null) return;
       onClose();
     };
     document.addEventListener('keydown', onKey, true);

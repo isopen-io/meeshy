@@ -2,6 +2,7 @@ import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
+import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { endRevokedSession } from './account-caches';
@@ -62,9 +63,12 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unbridge = bridgeCallEvents(next.socket);
   /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
   const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
+  const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
     unbridge();
     unwatch();
+    unrevoke();
   };
 }
 

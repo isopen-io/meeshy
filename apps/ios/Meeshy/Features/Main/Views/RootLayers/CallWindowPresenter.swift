@@ -34,7 +34,10 @@ enum CallWindowPresentation {
 /// joue la montée et le retrait sans scène réelle.
 @MainActor
 protocol CallWindowHosting: AnyObject {
-    func show(_ manager: CallManager)
+    /// `false` quand aucune scène n'est au premier plan (appel qui sonne
+    /// pendant que l'app est en arrière-plan) : la montée se rejoue à
+    /// l'activation de la scène.
+    func show(_ manager: CallManager) -> Bool
     func hide()
 }
 
@@ -48,6 +51,8 @@ final class CallWindowPresenter {
 
     private let hosting: CallWindowHosting
     private var subscription: AnyCancellable?
+    private var activation: AnyCancellable?
+    private weak var pendingManager: CallManager?
     private(set) var isShowing = false
 
     init(hosting: CallWindowHosting = CallOverlayWindowHost()) {
@@ -74,18 +79,27 @@ final class CallWindowPresenter {
             .sink { [weak self] update in
                 self?.apply(manager: update?.0, visible: update?.1 ?? false)
             }
+        activation = NotificationCenter.default
+            .publisher(for: UIScene.didActivateNotification)
+            .sink { [weak self] _ in self?.retryPendingShow() }
+    }
+
+    func retryPendingShow() {
+        guard let manager = pendingManager else { return }
+        apply(manager: manager, visible: true)
     }
 
     func apply(manager: CallManager?, visible: Bool) {
         guard let manager, visible else {
+            pendingManager = nil
             guard isShowing else { return }
             isShowing = false
             hosting.hide()
             return
         }
         guard !isShowing else { return }
-        isShowing = true
-        hosting.show(manager)
+        isShowing = hosting.show(manager)
+        pendingManager = isShowing ? nil : manager
     }
 }
 
@@ -97,9 +111,10 @@ final class CallOverlayWindowHost: CallWindowHosting {
     private var window: UIWindow?
     private weak var previousKeyWindow: UIWindow?
 
-    func show(_ manager: CallManager) {
-        guard window == nil, let scene = Self.activeScene() else { return }
-        let main = scene.windows.first { $0.isKeyWindow } ?? scene.windows.first { $0.windowLevel == .normal }
+    func show(_ manager: CallManager) -> Bool {
+        guard window == nil else { return true }
+        guard let scene = DeviceLayout.activeWindowScene else { return false }
+        let main = DeviceLayout.activeWindow
         previousKeyWindow = main
         // Un clavier ouvert dans l'écran d'en dessous (réponse à une story,
         // composer) vit dans une fenêtre système PLUS HAUTE que la nôtre : il
@@ -118,8 +133,9 @@ final class CallOverlayWindowHost: CallWindowHosting {
         let animated = !UIAccessibility.isReduceMotionEnabled
         overlay.alpha = animated ? 0 : 1
         overlay.makeKeyAndVisible()
-        guard animated else { return }
+        guard animated else { return true }
         UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut]) { overlay.alpha = 1 }
+        return true
     }
 
     func hide() {
@@ -139,12 +155,5 @@ final class CallOverlayWindowHost: CallWindowHosting {
         UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseIn]) {
             overlay.alpha = 0
         } completion: { _ in finish() }
-    }
-
-    private static func activeScene() -> UIWindowScene? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        return scenes.first { $0.activationState == .foregroundActive }
-            ?? scenes.first { $0.activationState == .foregroundInactive }
-            ?? scenes.first
     }
 }

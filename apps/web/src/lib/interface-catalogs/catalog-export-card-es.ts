@@ -71,6 +71,7 @@ const es = {
   'export.card.tab.frame': 'Marco',
   'export.card.tab.media': 'Medios',
   'export.card.part.media': 'Medios',
+  'export.card.part.replies': 'Respuestas',
   'export.card.aspect': 'Formato de imagen',
   'export.card.aspect.auto': 'Ajustado',
   'export.card.aspect.story': 'Historia 9:16',
