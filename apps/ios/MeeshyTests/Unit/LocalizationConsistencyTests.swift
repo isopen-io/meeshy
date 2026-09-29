@@ -436,7 +436,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15
         // #8582 — la ligne de commentaire de story a QUITTÉ l'hôte ci-dessus
         // avec ses quatre clés : le cliquet suit le code (leçon 578).
-        "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",  // 7
+        // #8709 — le menu « … » d'un commentaire (post ET story) naît certifié :
+        // ses dix clés, sept locales, `defaultValue` alignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/CommentMoreMenu.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CommentMenu.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/KeypadTab.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/DataExportView.swift",  // 14

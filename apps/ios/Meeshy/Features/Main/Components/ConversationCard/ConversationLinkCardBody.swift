@@ -177,10 +177,7 @@ struct ConversationInviteQuote: View {
                     }
                 }
                 if let text = trimmedMessage {
-                    Text(text)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
-                        .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
+                    inviteMessage(text)
                 }
             }
             Spacer(minLength: 0)
@@ -189,6 +186,33 @@ struct ConversationInviteQuote: View {
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("conversation-link-card-invite")
+    }
+
+    /// Le message du lien en CITATION mise en valeur (correction porteur
+    /// 2026-09-29, #8726) : un grand guillemet décoratif, puis le texte. Absent,
+    /// rien ne se dessine — aucune place réservée.
+    private func inviteMessage(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(verbatim: "\u{201C}")
+                .font(MeeshyFont.relative(60, weight: .black, design: .serif))
+                .foregroundColor(accent.opacity(0.7))
+                .frame(height: 34, alignment: .top)
+                .padding(.top, -2)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium).italic())
+                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
+        }
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(accent.opacity(isDark ? 0.16 : 0.08))
+        )
+        .accessibilityIdentifier("conversation-link-card-invite-message")
     }
 }
 

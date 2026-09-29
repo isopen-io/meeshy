@@ -115,6 +115,9 @@ extension StoryCanvasUIView {
                        selector: #selector(handleStoryPlayerResume),
                        name: .storyPlayerResume,
                        object: nil)
+        playbackInterruptionCancellable = PlaybackInterruption.shared.$isActive
+            .removeDuplicates()
+            .sink { [weak self] active in self?.setPlaybackInterrupted(active) }
     }
 
     @objc func handleDidEnterBackground() {

@@ -82,6 +82,20 @@ extension StoryCanvasUIView {
 
     func setStoryPlaybackPaused(_ paused: Bool) {
         guard mode == .play else { return }
+        isPlaybackRequestedPaused = paused
+        applyPlaybackPause()
+    }
+
+    /// L'hôte réclame l'audio (#8725) : le canvas gèle en place et reprend à
+    /// la fin de l'interruption — sauf si le viewer le tient lui-même en pause.
+    func setPlaybackInterrupted(_ interrupted: Bool) {
+        isPlaybackInterrupted = interrupted
+        guard mode == .play else { return }
+        applyPlaybackPause()
+    }
+
+    private func applyPlaybackPause() {
+        let paused = isPlaybackRequestedPaused || isPlaybackInterrupted
         guard isPlaybackPaused != paused else { return }
         isPlaybackPaused = paused
 

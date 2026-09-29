@@ -22,8 +22,19 @@ struct StoryCommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
+    /// La racine d'une réponse — « Imager » l'emporte en citation (#8709).
+    var root: FeedComment? = nil
+    /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
+    var loadedReplies: [FeedComment] = []
+    /// Enregistre le texte édité EN PLACE. Fourni par le lecteur de story ;
+    /// le menu ne l'offre qu'à l'auteur (`CommentMenuPolicy`).
+    var onCommitEdit: ((String) -> Void)? = nil
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
     @State private var rowFullscreenPlace: BubbleFullscreenPlace?
+    /// Édition en place (#8709) : le texte remplace la ligne le temps de la saisie.
+    @State private var isEditing = false
+    @State private var draft = ""
+    @FocusState private var editorFocused: Bool
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -35,7 +46,13 @@ struct StoryCommentRowView: View, Equatable {
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
         lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
         lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
-        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count
+        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count &&
+        // #8709 — le menu « … » : l'éligibilité à l'édition et l'arbre
+        // qu'« Imager » emporte font partie de ce que la ligne montre.
+        (lhs.onCommitEdit == nil) == (rhs.onCommitEdit == nil) &&
+        lhs.root?.id == rhs.root?.id &&
+        lhs.root?.displayContent == rhs.root?.displayContent &&
+        lhs.loadedReplies.map(\.id) == rhs.loadedReplies.map(\.id)
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -79,7 +96,11 @@ struct StoryCommentRowView: View, Equatable {
                 // Le CORPS — texte + média — porte les effets du commentaire, voile
                 // du flou compris (#8582), comme dans la feuille et le fil.
                 VStack(alignment: .leading, spacing: 4) {
-                    contentText
+                    if isEditing {
+                        editor
+                    } else {
+                        contentText
+                    }
                     // Média unique du commentaire (image/vidéo/audio) — inline + plein
                     // écran, identique aux autres surfaces de commentaires.
                     if let media = comment.media.first {
@@ -295,10 +316,85 @@ struct StoryCommentRowView: View, Equatable {
             .frame(minHeight: 44)
 
             Spacer()
+
+            // Le menu « … » des commentaires de post, à la même place — bout
+            // de la rangée d'actions (#8709) : Copier, Imager, Modifier (auteur),
+            // Signaler (les autres).
+            CommentMoreMenu(
+                comment: comment,
+                servedText: displayContent,
+                showOriginal: showOriginal,
+                accentColor: comment.authorColor,
+                root: root,
+                loadedReplies: loadedReplies,
+                onEdit: onCommitEdit == nil ? nil : { beginEditing() },
+                glyphSize: 13,
+                glyphColor: overlayColor.opacity(0.88)
+            )
         }
         .padding(.top, 2)
         // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
         .storyOverlayLegible(isLightText: colorScheme == .dark)
+    }
+}
+
+// MARK: - Édition en place (#8709)
+
+extension StoryCommentRowView {
+
+    private var editor: some View {
+        let textColor = Self.legibleOverlayColor(for: colorScheme)
+        let sendable = StoryCommentEditing.draftToSend(draft, original: comment.content) != nil
+        return VStack(alignment: .leading, spacing: 4) {
+            TextField("", text: $draft, axis: .vertical)
+                .font(MeeshyFont.relative(13.5))
+                .foregroundColor(textColor)
+                .tint(textColor)
+                .lineLimit(1...6)
+                .focused($editorFocused)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(textColor.opacity(0.12))
+                )
+                .accessibilityLabel(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
+            HStack(spacing: 16) {
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) {
+                    endEditing()
+                }
+                .font(MeeshyFont.relative(11, weight: .semibold))
+                .foregroundColor(textColor.opacity(0.8))
+                .frame(minHeight: 44)
+                Button(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .main)) {
+                    commitEditing()
+                }
+                .font(MeeshyFont.relative(11, weight: .bold))
+                .foregroundColor(textColor.opacity(sendable ? 1 : 0.4))
+                .disabled(!sendable)
+                .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+        }
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
+    }
+
+    private func beginEditing() {
+        draft = comment.content
+        isEditing = true
+        DispatchQueue.main.async { editorFocused = true }
+    }
+
+    private func endEditing() {
+        editorFocused = false
+        isEditing = false
+    }
+
+    private func commitEditing() {
+        guard let text = StoryCommentEditing.draftToSend(draft, original: comment.content) else { return endEditing() }
+        HapticFeedback.success()
+        onCommitEdit?(text)
+        endEditing()
     }
 }
 

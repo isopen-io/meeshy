@@ -30,6 +30,8 @@ enum ReportSheetPalette {
 
 struct ReportMessageSheet: View {
     let accentColor: String
+    /// La question posée — « ce message », « ce commentaire » (#8709).
+    var title: String? = nil
     let onSubmit: (String, String?) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -43,7 +45,7 @@ struct ReportMessageSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    Text(String(localized: "report.message.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
+                    Text(title ?? String(localized: "report.message.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                         .frame(maxWidth: .infinity, alignment: .leading)

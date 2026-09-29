@@ -203,23 +203,22 @@ public enum ConversationCardTarget: Hashable, Sendable {
 public enum ConversationCardActions: Equatable, Sendable {
     /// Aucune action : lien expiré, carte privée, ou jonction refusée.
     case none
-    /// Non-membre sur un lien actif : « Rejoindre », précédé de « Rejoindre en
-    /// anonyme » quand le lien l'autorise.
+    /// Non-membre sur un lien actif : « Rejoindre ? » puis « Anonyme » (quand le
+    /// lien l'autorise) et « Mon compte ».
     case join(identifier: String, allowsAnonymous: Bool)
     /// Membre : « Quitter » EN PREMIER, puis « Ouvrir ».
     case leaveOrOpen(conversationId: String)
 
-    /// `viewerHasAccount` : un lecteur CONNECTÉ ne rejoint qu'en son nom — la
-    /// page d'invitation du web ne lui offre rien d'autre, et « Rejoindre en
-    /// anonyme » n'est proposé qu'à un visiteur sans compte (loi 4 : un
-    /// contrôle n'existe que pour qui peut s'en servir).
-    public static func resolve(for card: ConversationCard, target: ConversationCardTarget,
-                               viewerHasAccount: Bool = false) -> ConversationCardActions {
+    /// « Anonyme » suit le SEUL verdict du lien (`viewer.canJoinAnonymously`),
+    /// que le lecteur ait un compte ou non : directive porteur 2026-09-29
+    /// (#8726), qui supplante la règle « connecté ⇒ en son nom seulement ». Un
+    /// lien qui exige un compte ne propose que « Mon compte » (loi 4).
+    public static func resolve(for card: ConversationCard, target: ConversationCardTarget) -> ConversationCardActions {
         if card.isLinkExpired { return .none }
         if card.viewer.isMember, let conversationId = card.conversationId ?? target.directConversationId {
             return .leaveOrOpen(conversationId: conversationId)
         }
-        let allowsAnonymous = card.viewer.canJoinAnonymously && !viewerHasAccount
+        let allowsAnonymous = card.viewer.canJoinAnonymously
         guard card.kind == .shareLink, card.viewer.canJoin || allowsAnonymous else { return .none }
         guard let identifier = card.link?.identifier ?? target.shareLinkIdentifier else { return .none }
         return .join(identifier: identifier, allowsAnonymous: allowsAnonymous)
