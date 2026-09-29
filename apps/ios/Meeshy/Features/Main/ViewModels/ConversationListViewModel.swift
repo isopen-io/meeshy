@@ -2277,53 +2277,22 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
+    /// Précharge les messages des premières conversations — voir
+    /// `ConversationListMessagePrefetcher` (#8651 : jamais pour un autre
+    /// compte que celui qui l'a lancé, jamais pour un identifiant vide).
     private func prefetchTopConversationMessages() {
-        let topConversations = Array(conversations.prefix(20))
-        let messageService = self.messageService
-        let userId = AuthManager.shared.currentUser?.id ?? ""
-        let username = AuthManager.shared.currentUser?.username; let prism = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-
-        Task.detached(priority: .utility) {
-            await withTaskGroup(of: Void.self) { group in
-                for conversation in topConversations {
-                    let conversationId = conversation.id
-                    // SWR: prefetch only when the cache cannot already serve a
-                    // preview. `.fresh` / `.stale` both surface usable data
-                    // (the row's preview path reads them directly), so we
-                    // skip the network round-trip. `.expired` / `.empty`
-                    // mean the row would render an empty preview — fetch.
-                    let result = await CacheCoordinator.shared.messages.load(for: conversationId)
-                    switch result {
-                    case .fresh(let cached, _) where !cached.isEmpty,
-                         .stale(let cached, _) where !cached.isEmpty:
-                        continue
-                    case .fresh, .stale, .expired, .empty:
-                        break
-                    }
-
-                    group.addTask {
-                        do {
-                            let response = try await messageService.list(
-                                conversationId: conversationId,
-                                offset: 0,
-                                limit: 20,
-                                includeReplies: true,
-                                includeTranslations: true
-                            )
-                            if response.success {
-                                let messages = response.data.reversed().map {
-                                    $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
-                                }
-                                try? await CacheCoordinator.shared.messages.save(messages, for: conversationId)
-                            }
-                        } catch {
-                            Logger.messages.warning("[ConversationList] prefetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
+        let userId = currentUserId
+        ConversationListMessagePrefetcher.start(
+            conversationIds: ConversationListMessagePrefetcher.targets(conversations),
+            messageService: messageService,
+            userId: userId,
+            username: authManager.currentUser?.username,
+            prism: authManager.currentUser?.preferredContentLanguages ?? [],
+            stillOwner: { [weak self] in
+                guard let self, !userId.isEmpty else { return false }
+                return self.currentUserId == userId
             }
-        }
+        )
     }
 
     // MARK: - Story Prefetch
