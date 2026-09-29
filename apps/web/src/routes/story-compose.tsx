@@ -62,6 +62,7 @@ import { studioPreviewDocument } from '@/lib/stories/studio-preview';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
+import { useStudioReelOffer } from '@/routes/story-compose-reel-offer';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
@@ -486,7 +487,7 @@ function StoryStudio({
    * entier (format et disposition) : un échec ou une intention armée hors
    * ligne repart avec les deux.
    */
-  async function publish(chosen: PublishChoice = choice) {
+  async function publish(chosen: PublishChoice = choice, promoted: boolean = reelOffer.promoted) {
     if (!canPublishStudioDraft(draft) || publishing) return;
     if (studioPublishRefusal(draft, chosen.kind) !== null) return;
     setChoice(chosen);
@@ -516,6 +517,7 @@ function StoryStudio({
       visibility: current.visibility,
       language,
       postText: current.postText,
+      promotedFromPost: promoted,
       signal: send.signal,
       onPublished: ({ pageIds, published, total }) => {
         dropPublishedPages(pageIds);
@@ -559,6 +561,7 @@ function StoryStudio({
     if (!send.signal.aborted) navigate(href('feed'), true);
   }
 
+  const reelOffer = useStudioReelOffer({ lang, draft, choice, setChoice, publish: (chosen, promoted) => void publish(chosen, promoted) });
   const publishRef = useRef(publish);
   publishRef.current = publish;
   useEffect(() => {
@@ -744,7 +747,7 @@ function StoryStudio({
                   textBox,
                   fontSize: textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null,
                   onText: onTextChange,
-                  onPublish: () => void publish(),
+                  onPublish: reelOffer.requestPublish,
                   locked: publishing,
                   editing: editing !== null && editing === inviteLayer?.id,
                 }
@@ -936,14 +939,15 @@ function StoryStudio({
               }}
               audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
               layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
-              onPrimary={() => void publish()}
-              onChoose={setChoice}
+              onPrimary={reelOffer.requestPublish}
+              onChoose={reelOffer.choose}
             />
             ) : null}
           </div>
         )}
       </footer>
 
+      {reelOffer.dialog}
       {audienceOpen ? (
         <Suspense fallback={null}>
           <AudienceSheet

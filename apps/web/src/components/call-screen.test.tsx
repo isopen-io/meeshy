@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
+import { callActions } from '@/lib/calls/call-actions';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
@@ -395,6 +396,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-captions-panel]')).toBeNull();
     view.press('[data-panel-back]');
     expect(document.activeElement?.getAttribute('data-call-control')).toBe('journal');
+    view.done();
+  });
+
+  test('Échap, un panneau ouvert, le ferme SANS réduire l’appel — même quand le focus a quitté le panneau (#8618)', async () => {
+    const original = callActions.minimize;
+    const minimized: number[] = [];
+    callActions.minimize = () => void minimized.push(1);
+    const view = mount({ members: { 'u-peer': member() } });
+    view.press('[data-call-more]');
+    view.press('[data-call-control="journal"]');
+    await settle(() => import('./call-journal-panel'));
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(view.find('[data-call-journal-panel]')).toBeNull();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
+    expect(minimized).toHaveLength(0);
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(minimized).toHaveLength(1);
+    callActions.minimize = original;
     view.done();
   });
 

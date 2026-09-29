@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
@@ -308,7 +308,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     if (shown !== layer) setLayer(shown);
   }, [shown.kind, shown.kind === 'panel' ? shown.panel : shown.kind === 'mode' ? shown.mode : '']);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const selector = focusNext.current;
     focusNext.current = null;
     if (selector !== null) root.current?.querySelector<HTMLElement>(selector)?.focus();
@@ -316,11 +316,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && live) callActions.minimize();
+      if (event.key !== 'Escape' || !live) return;
+      if (chrome.panel !== null) send({ type: 'close' });
+      else callActions.minimize();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [live]);
+  }, [live, chrome.panel]);
 
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">

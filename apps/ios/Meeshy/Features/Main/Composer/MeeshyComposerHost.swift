@@ -224,6 +224,8 @@ struct MeeshyComposerHost: View {
     /// capsule publie le format de la porte. Le chevron choisit ; seul Publier
     /// envoie (maquette plein écran, 2026-09-27). Lu par `armedChoice`.
     @State var armedPublishChoice: ComposerPublishChoice?
+    /// Le post à une seule vidéo qui attend « C'est un Réel / C'est un Post » (#8603).
+    @State var pendingReelOffer: ComposerPublishChoice?
     @State var composerVisibility: PostVisibility
     @State var composerVisibilityUserIds: [String] = []
 

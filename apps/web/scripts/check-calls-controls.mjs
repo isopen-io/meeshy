@@ -349,6 +349,7 @@ try {
       await capture(page, `controles-enregistrement-${slug}`);
       await page.keyboard.press('Escape');
       check(await gone(page, '[data-call-record-choice]'), `${label} : Échap ferme le choix`);
+      check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : Échap ferme le choix sans réduire l'appel`);
 
       // ------------------------------------------------ 4. ajouter
       await openActions(page);

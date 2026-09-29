@@ -69,6 +69,10 @@ const arStudioChrome = {
   'story.studio.objects.edit': 'تعديل {name}',
   'story.studio.media.alt': 'النص البديل',
   'story.studio.media.alt.placeholder': 'صِف هذه الوسائط لقارئات الشاشة',
+  'composer.reelOffer.title': 'النشر كريل؟',
+  'composer.reelOffer.body': 'منشورك يحتوي على فيديو واحد فقط: كريل، يُعرض بملء الشاشة في الريلز.',
+  'composer.reelOffer.reel': 'إنه ريل',
+  'composer.reelOffer.post': 'إنه منشور',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

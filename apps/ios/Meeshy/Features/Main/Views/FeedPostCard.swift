@@ -568,6 +568,7 @@ struct FeedPostCard: View {
                             else { onTapPost?(post) }
                         }
                     )
+                    .sceneZoomSource(postId: post.id)
                     // **La légende paraît dans TOUS les modes, tronquée**
                     // (directive porteur 2026-09-06, qui ABOLIT la règle « pas
                     // de légende en mosaïque ») — mais elle est peinte PAR
@@ -591,6 +592,7 @@ struct FeedPostCard: View {
                         // la voir en grand, pas à lire ses commentaires.
                         onTapScene: cardSceneOpensFullscreen ? { openSceneFullscreen() } : nil
                     )
+                        .sceneZoomSource(postId: post.id)
                         // **La légende PAR-DESSUS la scène** (directive porteur
                         // 2026-09-05). La carte de scène n'en affichait aucune :
                         // l'auteur composait sa légende, la retrouvait en plein
@@ -774,7 +776,9 @@ struct FeedPostCard: View {
             startMediaId: fullscreenMediaId,
             startSceneIndex: fullscreenSceneIndex,
             accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            zoomSourceID: SceneZoomTransition.destinationID(postId: post.id, hasScene: cardSceneDocument != nil,
+                                                            startMediaId: fullscreenMediaId)
         )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
