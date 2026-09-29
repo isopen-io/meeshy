@@ -255,3 +255,38 @@ describe('les liaisons — des façons variées de mener la question à la répo
     for (const link of CARD_LINKS) expect(layoutWith(link).height).toBe(CARD_MIN_HEIGHT);
   });
 });
+
+describe('les zones touchables d’une carte', () => {
+  test('une réponse citée se lit de haut en bas : citation, liaison, réponse — sans en-tête non demandé', () => {
+    const layout = layoutMessageCard(cardInput(), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['quote', 'link', 'reply']);
+    const [quote, link, reply] = layout.regions;
+    expect(quote!.y + quote!.height).toBeLessThanOrEqual(link!.y);
+    expect(link!.y + link!.height).toBeLessThanOrEqual(reply!.y);
+  });
+
+  test('le titre ou la date ouvrent une zone d’en-tête ; un message isolé n’a ni citation ni liaison', () => {
+    const layout = layoutMessageCard(cardInput({ quoted: null, title: 'Soirée', date: '28 septembre 2026' }), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['header', 'reply']);
+  });
+
+  test('chaque zone contient le texte qu’elle nomme', () => {
+    const layout = layoutMessageCard(cardInput({ template: templateIdOf({ palette: 'neige', typeface: 'systeme', link: 'bulles' }) }), measure);
+    const reply = layout.regions.find((r) => r.part === 'reply')!;
+    const line = opWithText(layout.ops, 'Chez Lina, à 20 h !')!;
+    expect(line.y).toBeGreaterThan(reply.y);
+    expect(line.y).toBeLessThanOrEqual(reply.y + reply.height);
+  });
+
+  test('les zones ne se chevauchent pas et restent dans la carte', () => {
+    const layout = layoutMessageCard(cardInput({ title: 'Soirée', date: '28 septembre 2026' }), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['header', 'quote', 'link', 'reply']);
+    for (const [i, zone] of layout.regions.entries()) {
+      expect(zone.x).toBeGreaterThanOrEqual(0);
+      expect(zone.x + zone.width).toBeLessThanOrEqual(CARD_WIDTH);
+      expect(zone.y + zone.height).toBeLessThanOrEqual(layout.height);
+      const next = layout.regions[i + 1];
+      if (next !== undefined) expect(zone.y + zone.height).toBeLessThanOrEqual(next.y);
+    }
+  });
+});

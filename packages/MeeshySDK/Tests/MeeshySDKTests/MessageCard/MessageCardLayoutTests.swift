@@ -248,4 +248,43 @@ struct MessageCardLayoutTests {
         #expect(Self.texts(silence).count == 4)
         #expect(Self.text(Self.with(.fleche).ops, "↳") != nil)
     }
+
+    // MARK: - Zones touchables
+
+    @Test func uneReponseCiteeSeLitDeHautEnBasSansEnTeteNonDemande() {
+        let layout = Self.layout(Self.input())
+        #expect(layout.regions.map(\.part) == [.quote, .link, .reply])
+        let quote = layout.regions[0], link = layout.regions[1], reply = layout.regions[2]
+        #expect(quote.y + quote.height <= link.y)
+        #expect(link.y + link.height <= reply.y)
+    }
+
+    @Test func leTitreOuLaDateOuvrentUneZoneDEnTeteEtUnMessageIsoleNAniCitationNiLiaison() {
+        let layout = Self.layout(Self.input(quoted: nil, title: "Soirée", date: "28 septembre 2026"))
+        #expect(layout.regions.map(\.part) == [.header, .reply])
+    }
+
+    @Test func chaqueZoneContientLeTexteQuElleNomme() {
+        let layout = Self.layout(Self.input(template: MessageCardTemplateID(palette: .neige, typeface: .systeme, link: .bulles)))
+        let reply = layout.regions.first { $0.part == .reply }
+        let line = Self.text(layout.ops, "Chez Lina, à 20 h !")
+        #expect(reply != nil && line != nil)
+        if let reply, let line {
+            #expect(line.y > reply.y)
+            #expect(line.y <= reply.y + reply.height)
+        }
+    }
+
+    @Test func lesZonesNeSeChevauchentPasEtRestentDansLaCarte() {
+        let layout = Self.layout(Self.input(title: "Soirée", date: "28 septembre 2026"))
+        #expect(layout.regions.map(\.part) == [.header, .quote, .link, .reply])
+        for (index, zone) in layout.regions.enumerated() {
+            #expect(zone.x >= 0)
+            #expect(zone.x + zone.width <= MessageCardLayout.cardWidth)
+            #expect(zone.y + zone.height <= layout.height)
+            if index + 1 < layout.regions.count {
+                #expect(zone.y + zone.height <= layout.regions[index + 1].y)
+            }
+        }
+    }
 }
