@@ -50,6 +50,39 @@ extension StoryComposerViewModel {
         return slide
     }
 
+    /// **Ce que la scène tient en mémoire et que la slide ne porte pas** (#8599)
+    /// — l'unique construction des entrées du moteur pour les DEUX chemins
+    /// d'export du composer (`⋯` → Enregistrer / Partager, et la timeline).
+    ///
+    /// - `images` : les bitmaps de `loadedImages` que la slide RÉFÉRENCE —
+    ///   médias (retouches comprises) et stickers collés, sous les clés que
+    ///   lisent les couches. Un bitmap d'une autre slide ne voyage pas.
+    /// - `stickerImageSources` : les stickers adossés à un `PostMedia` dont le
+    ///   fichier a été adopté localement (`adoptedLocalMedia`).
+    /// - `audioURLs` : les fichiers de session des sons, que la `mediaURL`
+    ///   d'un son pas encore téléversé ne sait pas adresser.
+    public func exportInputs(for slide: StorySlide) -> StoryExportInputs {
+        let medias = slide.effects.mediaObjects ?? []
+        let stickers = slide.effects.stickerObjects ?? []
+        let referenced = Set(medias.flatMap { [$0.id, $0.postMediaId] }
+            + stickers.flatMap(StoryStickerLayer.bitmapCacheKeys(for:)))
+        let images = loadedImages.filter { referenced.contains($0.key) }
+        let stickerSources = stickers.reduce(into: [String: String]()) { sources, sticker in
+            guard !sticker.postMediaId.isEmpty,
+                  let local = adoptedLocalMedia[sticker.postMediaId] else { return }
+            sources[sticker.postMediaId] = local.absoluteString
+        }
+        let audioURLs = (slide.effects.audioPlayerObjects ?? []).reduce(into: [String: URL]()) { urls, audio in
+            guard let url = resolveMediaURL(elementId: audio.id,
+                                            postMediaId: audio.postMediaId,
+                                            kind: .audio) else { return }
+            urls[audio.id] = url
+        }
+        return StoryExportInputs(stickerImageSources: stickerSources,
+                                 images: images,
+                                 audioURLs: audioURLs)
+    }
+
     /// Écrit le fond image composer en JPEG temporaire pour que le pipeline
     /// d'export (qui résout par `mediaURL` file://) puisse le peindre.
     /// Fichier stable par slide — un ré-export écrase la version précédente.

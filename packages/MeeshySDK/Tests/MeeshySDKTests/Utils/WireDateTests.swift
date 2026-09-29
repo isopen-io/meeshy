@@ -76,10 +76,16 @@ struct WireDateTests {
     /// La chaîne de repli posée par `ce94a0f71d` — heure seule, puis `.iso8601`
     /// sans fractions — ne relit PAS une date-heure à millisecondes : le
     /// checkpoint, l'heure serveur et le curseur servis étaient perdus.
+    ///
+    /// C'est une mesure de FOUNDATION, pas de `WireDate` : le runtime iOS 26
+    /// relit désormais ces fractions par `.iso8601`, celui de la CI (18.x) non.
+    /// La mesure reste écrite, sans faire rougir un runtime qui a corrigé.
     @Test func mesure_laChaineDeRepliDeCe94a0f_neRelitPasUneDateAMillisecondes() {
         let servie = "2026-09-15T09:34:23.563Z"
         let relue = (try? Date(servie, strategy: .iso8601.time(includingFractionalSeconds: true)))
             ?? (try? Date(servie, strategy: .iso8601))
-        #expect(relue.map(Self.millisecondes) != 1_789_464_863_563)
+        withKnownIssue("Foundation récente relit les fractions", isIntermittent: true) {
+            #expect(relue.map(Self.millisecondes) != 1_789_464_863_563)
+        }
     }
 }

@@ -15,8 +15,6 @@ const ptCallCaptions = {
   'callCaptions.listening': 'A sua voz está a ser transcrita',
   'callCaptions.unsupported': 'Este navegador não transcreve a sua voz: você lê os outros',
   'callCaptions.denied': 'Reconhecimento de voz recusado: você lê os outros',
-  'callCaptions.journal.show': 'Registo',
-  'callCaptions.journal.hide': 'Ocultar o registo',
   'callCaptions.journal.title': 'Registo da chamada',
   'callCaptions.participant': 'Participante',
   'callTranscript.show': 'Transcrição',

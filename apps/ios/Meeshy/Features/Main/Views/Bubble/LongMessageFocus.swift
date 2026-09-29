@@ -9,7 +9,7 @@ import SwiftUI
 /// dessin de mise en avant pour tous les modes. La loupe et l'atténuation
 /// des voisins sont posées par l'hôte, sur les layers.
 extension View {
-    func longMessageFocus(_ expansion: LongMessageExpansion, accentHex: String) -> some View {
+    func longMessageFocus(_ expansion: LongMessageExpansion) -> some View {
         environment(\.longMessageExpansion, expansion)
             .backgroundPreferenceValue(LongMessageBubbleBoundsKey.self) { bubble in
                 if expansion.isExpanded {
@@ -18,7 +18,7 @@ extension View {
                             bubble: bubble.map { proxy[$0] },
                             row: CGRect(origin: .zero, size: proxy.size)
                         )
-                        FocalGlassBlock(accentHex: accentHex)
+                        FocalGlassBlock()
                             .frame(width: frame.width, height: frame.height)
                             .offset(x: frame.minX, y: frame.minY)
                     }

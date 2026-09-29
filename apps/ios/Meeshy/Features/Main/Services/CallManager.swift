@@ -207,7 +207,7 @@ final class CallManager: ObservableObject {
     /// established call. The P2P media keeps flowing; CallView shows a
     /// discreet banner and signaling ops resync on the socket reconnect.
     @Published private(set) var isSignalingDegraded: Bool = false
-    @Published var isMuted: Bool = false
+    @Published var isMuted: Bool = false { didSet { if isMuted != oldValue { toggleTranscription() } } }
 
     /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
     /// needed to (a) ring a backgrounded/locked device woken by a VoIP push and
@@ -221,7 +221,7 @@ final class CallManager: ObservableObject {
     /// `rejoinActiveCall` (always `false` — a rejoin never has a CallKit
     /// transaction behind it); gates CallKit transactions + audio-session
     /// self-activation (when false, no CallKit means we own the session lifecycle).
-    private var callUsesCallKit = true
+    private(set) var callUsesCallKit = true
     @Published var isSpeaker: Bool = false
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
@@ -414,7 +414,7 @@ final class CallManager: ObservableObject {
     }
     /// Drives the graceful audio-only survival layer from quality samples.
     private let videoSurvivalController: VideoSurvivalController
-    private let ringbackPlayer = RingbackTonePlayer()
+    let ringbackPlayer = RingbackTonePlayer()
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
     // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
@@ -678,7 +678,7 @@ final class CallManager: ObservableObject {
     // here and replayed after the socket reconnects + emitCallJoin fires.
     private var pendingIceCandidates: [[String: Any]] = []
     private var cancellables = Set<AnyCancellable>()
-    fileprivate let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
 
     // Screen capture monitoring
     private var screenCaptureObserver: NSObjectProtocol?
@@ -2830,7 +2830,7 @@ final class CallManager: ObservableObject {
     /// devices s'entretenaient mutuellement (« l'autre est actif, je reste
     /// actif ») sans qu'aucun ne puisse plus s'arrêter. Piloté par le panneau,
     /// le signal reste la propriété du seul utilisateur local.
-    private func publishListeningIntentIfChanged() {
+    func publishListeningIntentIfChanged() {
         guard let callId = currentCallId else { return }
         let isListening = transcriptionService.isShowingOverlay
         guard isListening != publishedListeningIntent else { return }
@@ -2845,76 +2845,6 @@ final class CallManager: ObservableObject {
     private func reannounceListeningIntent() {
         guard publishedListeningIntent, let callId = currentCallId else { return }
         MessageSocketManager.shared.emitCallTranscriptionActive(callId: callId, active: true)
-    }
-
-    /// **Réconcilie la capture locale avec l'écoute RÉELLE de l'appel** —
-    /// le nom « toggle » est historique : ce n'est plus le panneau local seul
-    /// qui décide. Un device ne transcrit que son PROPRE micro (jamais l'audio
-    /// distant), donc lier la capture au seul panneau local faisait de celui
-    /// qui active les sous-titres un pur ÉMETTEUR : le pair recevait tout, lui
-    /// ne recevait rien tant que le pair n'avait pas activé de son côté. C'est
-    /// exactement le symptôme rapporté (« il reçoit mes transcriptions, je ne
-    /// reçois pas les siennes »). La règle vit dans
-    /// `TranscriptionCapturePolicy` ; appeler cette méthode est idempotent.
-    ///
-    /// Appelée par les DEUX entrées d'écoute : le panneau local
-    /// (`CallView.advanceCaptionsMode`) et le signal du pair
-    /// (`call:transcription-active`).
-    func toggleTranscription() {
-        publishListeningIntentIfChanged()
-        switch TranscriptionCapturePolicy.action(
-            localPanelOpen: transcriptionService.isShowingOverlay,
-            peerCaptionsActive: remoteTranscriptionActive,
-            isCapturing: transcriptionService.isTranscribing
-        ) {
-        case .stop:
-            transcriptionService.stopTranscribing()
-            return
-        case .none:
-            return
-        case .start:
-            break
-        }
-        guard let callId = currentCallId else { return }
-        let localUser = AuthManager.shared.currentUser
-        let localLang = CallManager.preferredCallLanguage(for: localUser)
-        let localUserId = localUser?.id ?? ""
-        let localDisplayName = localUser?.displayName ?? localUser?.username ?? ""
-        // Chemin P2P du journal : chaque segment final part aussi sur le data
-        // channel WebRTC quand il est ouvert (no-op silencieux sinon — le
-        // relais socket reste systématique et le pair fusionne par wireId).
-        transcriptionService.sendPeerEntry = { [weak self] entry in
-            self?.webRTCService.sendTranscriptEntry(entry)
-        }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            if self.transcriptionService.permission != .authorized {
-                _ = await self.transcriptionService.requestPermission()
-            }
-            // Audit gateway-calls (2026-08-15) — re-valider APRÈS l'await.
-            // `requestPermission()` suspend sur l'alerte système de
-            // reconnaissance vocale, que l'utilisateur peut laisser ouverte
-            // aussi longtemps qu'il veut : l'appel peut se terminer (ou être
-            // remplacé par un rappel) entre-temps. `endCallInternal` a alors
-            // déjà passé `resetForCallEnd`, et démarrer ici installerait un
-            // tap micro + un moteur on-device que PLUS RIEN n'arrête du reste
-            // de la session (ni appel, ni CallView, ni appelant de
-            // `stopTranscribing`), en estampillant `call:transcription-active`
-            // et chaque segment du callId d'un appel mort. Même garde
-            // d'identité que tous les autres chemins post-await de ce fichier
-            // (handleRemoteAnswer, answerCallReady, scheduleICERestart) et que
-            // `applyRecognitionResult` côté réception.
-            guard self.currentCallId == callId, self.callState.isActive else {
-                Logger.calls.info("toggleTranscription abandonné — appel plus actif après le prompt de permission (callId=\(callId))")
-                return
-            }
-            self.transcriptionService.startTranscribing(
-                callId: callId,
-                localLanguage: localLang,
-                localUserId: localUserId,
-                localDisplayName: localDisplayName
-            )
-        }
     }
 
     var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
@@ -5406,7 +5336,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                 }
             } else if state == .serious {
                 self.webRTCService.videoFilters.config.backgroundBlurEnabled = false
-                self.webRTCService.videoFilters.config.skinSmoothingEnabled = false
+                self.webRTCService.videoFilters.config = self.webRTCService.videoFilters.config.selectingFaceEffect(.none)
                 Logger.calls.warning("Thermal serious — disabled advanced filters")
             }
         }
@@ -5656,10 +5586,10 @@ extension CallManager: WebRTCServiceDelegate {
             self.analyticsPacketLossSum += packetLossPercent
             self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
             // Mirrors analyticsVideoFiltersUsed's polling above it: analyticsEffectsUsed
-            // was declared and serialized into the analytics payload but never actually
-            // populated (no call site ever inserted into it), so every call silently
+            // was declared and serialized but never populated, so every call silently
             // reported effectsUsed: []. Record the concrete effects the config exposes.
             let filterConfig = self.webRTCService.videoFilters.config
+            if let face = filterConfig.activeFaceEffect.analyticsName { self.analyticsEffectsUsed.insert(face) }
             if filterConfig.isEnabled {
                 self.analyticsVideoFiltersUsed = true
                 self.analyticsEffectsUsed.insert("colorFilter")

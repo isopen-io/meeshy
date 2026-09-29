@@ -9,6 +9,7 @@ import type { Message } from '@/lib/api/types';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
 import { afterReadSeenUpTo, isAfterReadMessage } from './after-read';
+import { destructionPhaseOf } from './ephemeral-destruction';
 import { resetEphemeralReception, resolveEphemeralDeadline } from './ephemeral-reception';
 
 /**
@@ -58,6 +59,26 @@ describe('aucun décompte, aucune pastille — dans TOUS les modes (site unique 
   test('expéditeur : ni « en attente de réception », ni décompte', () => {
     const message = messageOf({ effectFlags: AFTER_READ, senderId: 'u-me' });
     expect(resolveEphemeralDeadline({ message, isMine: true, now: NOW })).toEqual({ state: 'none' });
+  });
+});
+
+/**
+ * CONSOMMÉE, ELLE NE REVIENT PAS (#8556) — après la sortie, la passerelle sert
+ * encore le message une heure (grâce `D(u) + 1 h`) avec l'échéance du lecteur,
+ * déjà PASSÉE. Le fil rouvert doit le tenir pour parti, sans rejouer la
+ * combustion — jumelle web d'`ExpiredEphemeralRow.isGone` (iOS, #8352).
+ */
+describe('une flamme-œil consommée ne se repeint pas au retour du lecteur', () => {
+  test('destinataire, échéance servie PASSÉE ⇒ la rangée est partie', () => {
+    const message = messageOf({ effectFlags: AFTER_READ, expiresAt: new Date(NOW - 5 * 60_000) });
+    const deadline = resolveEphemeralDeadline({ message, isMine: false, now: NOW });
+    expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('gone');
+  });
+
+  test('expéditeur : la bulle reste, même si une échéance passée lui parvenait', () => {
+    const message = messageOf({ effectFlags: AFTER_READ, senderId: 'u-me', expiresAt: new Date(NOW - 5 * 60_000) });
+    const deadline = resolveEphemeralDeadline({ message, isMine: true, now: NOW });
+    expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('visible');
   });
 });
 

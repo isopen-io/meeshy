@@ -63,6 +63,10 @@ const frCall = {
   'call.spotlight.back': 'Revenir à la grille',
   'call.remove.named': 'Retirer {name} de l’appel',
   'call.remove.failed': 'Impossible de retirer ce participant',
+  'call.preview.soundOn': 'Activer le son',
+  'call.preview.soundOff': 'Couper le son',
+  'call.preview.seenBy': '{name} vous voit avant de décrocher',
+  'call.preview.heardBy': '{name} peut vous entendre avant de décrocher',
 } as const;
 
 export default frCall;

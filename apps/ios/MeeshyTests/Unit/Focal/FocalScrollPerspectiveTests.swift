@@ -280,14 +280,14 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         XCTAssertEqual(p.x, 0, accuracy: 0.001)
     }
 
-    // MARK: - Loupe du message élu (directive porteur 2026-09-15, #6586)
+    // MARK: - Loupe du message DÉPLIÉ (#8147) — hors Focal
 
-    /// L'élu grandit ; ses voisins restent à plat — la planche est fixe
-    /// (directive 2026-08-24 : « aucune animation entre les messages »).
+    /// Le déplié grandit ; ses voisins restent à plat. Sa loupe garde son gain
+    /// d'origine : l'agrandissement de #8506 ne vise que l'élu Focal.
     func test_loupeScale_magnifiesOnlyTheFocusedMessage() {
         let size = CGSize(width: 390, height: 60)
-        XCTAssertGreaterThan(FocalMetrics.Focus.loupeGain, 0)
-        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size), 1 + FocalMetrics.Focus.loupeGain, accuracy: 0.0001)
+        XCTAssertGreaterThan(FocalMetrics.Focus.expandedLoupeGain, 0)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size), 1 + FocalMetrics.Focus.expandedLoupeGain, accuracy: 0.0001)
         XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: false, reduceMotion: false, size: size), 1)
         XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: true, size: size), 1)
     }
@@ -316,8 +316,75 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         let host = AppSourceGuard.stripComments(try controllerClusterSource())
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         guard let election = host.range(of: "let electionChanged = focalFocusedLocalId != focused"),
-              let loupe = host.range(of: "FocalScrollPerspective.magnify(cell.contentView.layer, isFocused:")
-        else { return XCTFail("la passe doit élire PUIS poser la loupe sur la cellule élue") }
-        XCTAssertLessThan(election.lowerBound, loupe.lowerBound, "la loupe suit l'élection de la même frame")
+              let passage = host.range(of: "FocalScrollPerspective.poseElectionPassage(cell.contentView.layer, shift: shift, animated: electionChanged)")
+        else { return XCTFail("la passe doit élire PUIS poser le passage des voisines") }
+        XCTAssertLessThan(election.lowerBound, passage.lowerBound, "le passage suit l'élection de la même frame")
+        XCTAssertFalse(host.contains("magnifyElected"), "#8537 : plus aucune loupe sur le calque de la cellule — elle agrandissait l'identité et les contrôles")
+    }
+
+    // MARK: - Loupe de l'élu Focal (#8506 — « agrandis tout le contenu intérieur par ×1,2 encore »)
+
+    /// ×1,2 de plus que la loupe d'avant (1,05) : le gain vise 1,26.
+    func test_electedLoupe_targetsTwentyPercentMoreThanBefore() {
+        XCTAssertEqual(1 + FocalMetrics.Focus.loupeGain, (1 + FocalMetrics.Focus.expandedLoupeGain) * 1.2, accuracy: 0.001)
+    }
+
+    /// Le gain ne dépend plus de la HAUTEUR : un message de trois lignes grandit
+    /// autant qu'un message d'une ligne — l'écrêtage à la marge verticale, qui
+    /// rendait la loupe quasi nulle dès la deuxième ligne, a disparu. Seule la
+    /// largeur de l'écran la borne.
+    func test_electedScale_isFullOnANarrowScreen_andNeverDependsOnTheHeight() {
+        XCTAssertEqual(FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: 320), 1 + FocalMetrics.Focus.loupeGain, accuracy: 0.0001)
+        let phone = FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: 390)
+        XCTAssertGreaterThan(phone, 1.2, "iPhone 6,1 pouces : l'élu grandit d'au moins 20 %")
+        XCTAssertLessThanOrEqual(phone, 1 + FocalMetrics.Focus.loupeGain)
+    }
+
+    /// Le cadre agrandi ne sort JAMAIS de l'écran : il garde la gouttière du
+    /// cadre au repos de chaque côté. Depuis #8537, seul le contenu grossit,
+    /// autour du bord d'attaque de la colonne ; le cadre l'entoure à sa marge.
+    func test_electedScale_keepsTheScaledCardInsideTheScreen() {
+        let inset = FocalScrollPerspective.focusCardHorizontalInset
+        let margin = FocalScrollPerspective.electedCardMargin
+        for width: CGFloat in [320, 375, 390, 393, 430, 744, 1024] {
+            for rtl in [false, true] {
+                let scale = FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: width)
+                let card = FocalScrollPerspective.electedCardFrame(rowWidth: width, isRightToLeft: rtl)
+                let column = card.width - 2 * margin
+                let pivot = FocalScrollPerspective.electedPivotX(rowWidth: width, isRightToLeft: rtl)
+                let reach = scale * column + margin
+                let left = rtl ? pivot - reach : pivot - margin
+                let right = rtl ? pivot + margin : pivot + reach
+                XCTAssertGreaterThanOrEqual(left, inset - 0.001, "w=\(width), rtl=\(rtl) : le cadre sort à gauche")
+                XCTAssertLessThanOrEqual(right, width - inset + 0.001, "w=\(width), rtl=\(rtl) : le cadre sort à droite")
+                XCTAssertGreaterThanOrEqual(scale, 1)
+            }
+        }
+    }
+
+    /// Le cadre de l'élu épouse la colonne du MESSAGE, pas la rangée entière :
+    /// la colonne de méta (heure, coches) s'efface en focus, et c'est cette
+    /// largeur rendue au message qui lui permet de grandir sans sortir de
+    /// l'écran.
+    func test_electedCardFrame_hugsTheMessageColumn() {
+        let card = FocalScrollPerspective.electedCardFrame(rowWidth: 390, isRightToLeft: false)
+        XCTAssertEqual(card.minX, FocalScrollPerspective.focusCardHorizontalInset)
+        let column = 390 - 2 * FocalMetrics.Row.paddingHorizontal - FocalMetrics.MetaColumn.reservedWidth - FocalMetrics.MetaColumn.spacing
+        XCTAssertEqual(card.width, column + 2 * FocalScrollPerspective.electedCardMargin, accuracy: 0.001)
+        let mirrored = FocalScrollPerspective.electedCardFrame(rowWidth: 390, isRightToLeft: true)
+        XCTAssertEqual(mirrored.maxX, 390 - FocalScrollPerspective.focusCardHorizontalInset, "RTL : le cadre part du bord droit")
+    }
+
+    /// Reduce Motion : aucun agrandissement (le cadre et ses détails restent).
+    func test_electedScale_isOne_underReduceMotion() {
+        XCTAssertEqual(FocalScrollPerspective.electedScale(reduceMotion: true, rowWidth: 320), 1)
+    }
+
+    /// La loupe du contenu se pose sur le bord d'ATTAQUE de la colonne : la
+    /// première lettre reste à sa place, le message grandit vers le sens de
+    /// lecture (#8537).
+    func test_electedPivotX_isTheColumnsLeadingEdge() {
+        XCTAssertEqual(FocalScrollPerspective.electedPivotX(rowWidth: 390, isRightToLeft: false), FocalMetrics.Row.paddingHorizontal)
+        XCTAssertEqual(FocalScrollPerspective.electedPivotX(rowWidth: 390, isRightToLeft: true), 390 - FocalMetrics.Row.paddingHorizontal)
     }
 }

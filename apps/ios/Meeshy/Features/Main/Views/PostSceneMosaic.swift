@@ -606,8 +606,12 @@ struct PostSceneMosaic: View {
         // **Ce qui bouge s'annonce comme une vidéo.** Sans ce mot, VoiceOver
         // décrit une image là où l'écran montre un clip — et l'utilisateur qui
         // ne voit pas n'a aucun moyen d'apprendre qu'il y a du mouvement.
-        guard bouge else { return Text(place) }
-        return Text("\(place), \(String(localized: "feed.scene.mosaic.video", defaultValue: "vidéo", bundle: .main))")
+        // Le texte alternatif du média de la scène est LU (#6738).
+        let decrite = PostMediaAccessibility.sceneDescription(sceneIndex: tuile.sceneIndex,
+                                                              document: document, media: post.media)
+            .map { "\(place), \($0)" } ?? place
+        guard bouge else { return Text(decrite) }
+        return Text("\(decrite), \(String(localized: "feed.scene.mosaic.video", defaultValue: "vidéo", bundle: .main))")
     }
 
     /// Le porteur, construit ici comme dans `PostSceneCard` — les deux

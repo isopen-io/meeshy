@@ -191,51 +191,57 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHidden(true)
                 }
 
-                // `MessageTextRenderer` (et non `Text`) pour que `@mention` /
-                // `#hashtag` soient teintés comme partout ailleurs.
-                // `usesRelativeFont` conserve le scaling Dynamic Type du
-                // `MeeshyFont.relative(contentFont)` d'origine.
-                MessageTextRenderer.render(
-                    effectiveCommentContent,
-                    fontSize: contentFont,
-                    color: theme.textPrimary,
-                    mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
-                    hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
-                    accentColor: Color(hex: accentColor),
-                    usesRelativeFont: true
-                )
-                    .tint(Color(hex: accentColor))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .animation(.easeInOut(duration: 0.2), value: showOriginal)
-                    .messageEffects(comment.effects)
-                    .accessibilityLabel(String(format: String(localized: "a11y.comment.body", defaultValue: "%1$@ : %2$@", bundle: .main), RelativeTimeFormatter.shortString(for: comment.timestamp), effectiveCommentContent))
-
-                // Média unique du commentaire (image/vidéo/audio) — inline + plein
-                // écran « comme dans une conversation ». Le commentaire ne porte
-                // qu'un seul média (cf. backend commentId FK sur PostMedia).
-                // **CE DONT LE COMMENTAIRE PARLE**, au-dessus de ce qu'il APPORTE
-                // (#6578). L'ordre n'est pas cosmétique : la citation est le
-                // CONTEXTE de la phrase qu'on lit, les pièces jointes en sont
-                // la suite. L'inverse ferait lire la réponse avant la question.
-                if let citation = comment.quotedMedia {
-                    CommentQuotedMediaBanner(citation: citation, accentColor: accentColor)
-                        .padding(.bottom, 6)
-                }
-
-                if let media = comment.media.first {
-                    CommentMediaView(
-                        media: media,
-                        accentColor: accentColor,
-                        commentId: comment.id,
-                        carrierText: comment.displayContent,
-                        carrierOriginalLanguage: comment.originalLanguage,
-                        authorName: comment.author,
-                        authorAvatarURL: comment.authorAvatarURL,
-                        authorColor: comment.authorColor,
-                        sentAt: comment.timestamp
+                // **Le CORPS du commentaire** — texte, citation, média — porte ses
+                // effets d'un seul tenant (#8582) : le voile d'un commentaire
+                // flouté le couvre en entier, et un effet persistant (lueur,
+                // arc-en-ciel) épouse ce qu'on lit, pas la rangée d'actions.
+                VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
+                    // `MessageTextRenderer` (et non `Text`) pour que `@mention` /
+                    // `#hashtag` soient teintés comme partout ailleurs.
+                    // `usesRelativeFont` conserve le scaling Dynamic Type du
+                    // `MeeshyFont.relative(contentFont)` d'origine.
+                    MessageTextRenderer.render(
+                        effectiveCommentContent,
+                        fontSize: contentFont,
+                        color: theme.textPrimary,
+                        mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                        hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                        accentColor: Color(hex: accentColor),
+                        usesRelativeFont: true
                     )
-                    .padding(.top, 2)
+                        .tint(Color(hex: accentColor))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .animation(.easeInOut(duration: 0.2), value: showOriginal)
+                        .accessibilityLabel(String(format: String(localized: "a11y.comment.body", defaultValue: "%1$@ : %2$@", bundle: .main), RelativeTimeFormatter.shortString(for: comment.timestamp), effectiveCommentContent))
+
+                    // Média unique du commentaire (image/vidéo/audio) — inline + plein
+                    // écran « comme dans une conversation ». Le commentaire ne porte
+                    // qu'un seul média (cf. backend commentId FK sur PostMedia).
+                    // **CE DONT LE COMMENTAIRE PARLE**, au-dessus de ce qu'il APPORTE
+                    // (#6578). L'ordre n'est pas cosmétique : la citation est le
+                    // CONTEXTE de la phrase qu'on lit, les pièces jointes en sont
+                    // la suite. L'inverse ferait lire la réponse avant la question.
+                    if let citation = comment.quotedMedia {
+                        CommentQuotedMediaBanner(citation: citation, accentColor: accentColor)
+                            .padding(.bottom, 6)
+                    }
+
+                    if let media = comment.media.first {
+                        CommentMediaView(
+                            media: media,
+                            accentColor: accentColor,
+                            commentId: comment.id,
+                            carrierText: comment.displayContent,
+                            carrierOriginalLanguage: comment.originalLanguage,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp
+                        )
+                        .padding(.top, 2)
+                    }
                 }
+                .commentBody(effects: comment.effects)
 
                 // Lieu attaché au commentaire (`FeedComment.location`, hissé du
                 // gateway) — sticker cliquable → carte plein écran. Couvre la
@@ -380,6 +386,10 @@ struct CommentRowView: View, Equatable {
                 .padding(.top, isReply ? 2 : 4)
             }
         }
+        // Glisser à droite répond à CE commentaire (#8582) — racine ou réponse,
+        // dans la feuille comme dans la page détail. Posé avant le padding : le
+        // séparateur du bas reste en place pendant que la ligne glisse.
+        .commentSwipeToReply(onReply: onReply)
         .padding(.vertical, isReply ? 8 : 12)
         .overlay(
             Group {

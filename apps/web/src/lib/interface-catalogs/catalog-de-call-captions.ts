@@ -15,8 +15,6 @@ const deCallCaptions = {
   'callCaptions.listening': 'Deine Stimme wird transkribiert',
   'callCaptions.unsupported': 'Dieser Browser transkribiert deine Stimme nicht: Du liest die anderen',
   'callCaptions.denied': 'Spracherkennung abgelehnt: Du liest die anderen',
-  'callCaptions.journal.show': 'Protokoll',
-  'callCaptions.journal.hide': 'Protokoll ausblenden',
   'callCaptions.journal.title': 'Anrufprotokoll',
   'callCaptions.participant': 'Teilnehmer',
   'callTranscript.show': 'Transkript',

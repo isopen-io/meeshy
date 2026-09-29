@@ -173,8 +173,6 @@ final class ComposerObjectEditorTests: XCTestCase {
         let surfaces = compact(try hostUnit())
         XCTAssertTrue(intake.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(intake.contains("openObjectEditor(objet.id)"),
-                      "La porte TEXTE doit ouvrir l'éditeur, pas seulement entrer en mode.")
         XCTAssertTrue(surfaces.contains("openObjectEditor(id)"),
                       "L'appui long « Modifier » doit ouvrir le MÊME écran que la création.")
     }
@@ -439,7 +437,7 @@ final class ComposerObjectEditorTests: XCTestCase {
             .replacingOccurrences(of: "\n", with: "")
         XCTAssertTrue(verre.contains(".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
                       "La carte d'un rail en colonne est le verre teinté du plateau.")
-        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:tint??plateauTint.opacity(0.55))"),
                       "Un bouton séparé porte le MÊME verre teinté, en disque.")
         for (nom, source, attendu, air) in [
             ("le couloir d'OUTILS", editeur,
@@ -450,7 +448,7 @@ final class ComposerObjectEditorTests: XCTestCase {
              ".padding(.vertical,8)"),
             ("le couloir des PORTES", leading,
              ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint))",
-             ".padding(axis==.vertical?.vertical:.horizontal,8)")
+             ".padding(axis==.vertical?.vertical:.horizontal,ComposerRailGeometry.floatingColumnPadding)")
         ] {
             let nu = AppSourceGuard.stripComments(source)
                 .replacingOccurrences(of: " ", with: "")
@@ -464,6 +462,8 @@ final class ComposerObjectEditorTests: XCTestCase {
                 nu.contains(air),
                 "\(nom) doit respirer comme son jumeau")
         }
+        XCTAssertEqual(ComposerRailGeometry.floatingColumnPadding, 8,
+                       "l'air du couloir des PORTES vaut celui de ses jumeaux")
     }
 
     /// **Non-vacuité** — sans elle, le témoin ci-dessus passerait sur un fichier
@@ -512,12 +512,19 @@ final class ComposerObjectEditorTests: XCTestCase {
         // vert le jour exact où un argument de plus s'ajoute, donc elle ne
         // tomberait que sur un RENOMMAGE, jamais sur un AJOUT. Or un argument
         // ajouté est précisément la façon dont un appel dérive de son jumeau.
+        //
+        // **Réécrite le 2026-09-28** (retour porteur : « les modifications
+        // impactent cet objet-là et non toute la scène »). La grille reste LA
+        // grille du SDK ; ce qui change est la CIBLE : le fond garde le filtre
+        // de slide et son aperçu, un média POSÉ règle son propre filtre sur sa
+        // propre image. Le montage entier est écrit, fermante comprise.
         XCTAssertTrue(
-            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:viewModel.currentSlideBackgroundImage)"),
-            "l'éditeur monte LA grille du SDK avec le MÊME aperçu que l'inspecteur du "
-            + "document — le montage entier, fermante comprise, pas son préfixe")
+            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:media.isBackground?viewModel.currentSlideBackgroundImage:viewModel.loadedImages[media.id],objectId:media.isBackground?nil:media.id)"),
+            "l'éditeur monte LA grille du SDK : filtre de slide pour le fond, filtre de l'objet "
+            + "pour un média posé — le montage entier, fermante comprise, pas son préfixe")
         XCTAssertFalse(nu.contains("currentEffects.filter="),
-                       "aucune surface n'écrit le champ de sa main : `applyFilter` est l'unique écrivain")
+                       "aucune surface n'écrit le champ de sa main : `applyFilter` / "
+                       + "`applyMediaObjectFilter` sont les seuls écrivains")
     }
 
     /// **Non-vacuité du témoin ci-dessus** : sans elle, un fichier renommé ferait

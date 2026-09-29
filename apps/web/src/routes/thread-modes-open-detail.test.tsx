@@ -110,15 +110,17 @@ const monte = async (options: {
   readonly onOpenDetail: (messageId: string) => void;
   readonly onRowTap: (messageId: string) => void;
   readonly selection: SelectionState | null;
+  readonly mode?: 'bubbles' | 'focal';
+  readonly scene?: ThreadScene;
 }) =>
   mounter.mount(
     <ThreadModes
-      mode="bubbles"
+      mode={options.mode ?? 'bubbles'}
       viewer={VIEWER}
       readerLocale="fr"
       placed={PLACED}
       virtualizer={virtualizerOf(PLACED.length)}
-      scene={SCENE}
+      scene={options.scene ?? SCENE}
       readerLanguages={['fr']}
       group={false}
       highlightedId={null}
@@ -157,5 +159,28 @@ describe('la coche ouvre la fiche, montée sur ThreadModes', () => {
     host.querySelector<HTMLElement>('[data-row="m-1"] svg')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(opened).toEqual([]);
     expect(tapped).toEqual(['m-1']);
+  });
+});
+
+/**
+ * **EN FOCAL, LA DATE DE L'ÉLU OUVRE LA FICHE** (#8536, directive porteur
+ * 2026-09-28 : « quand je touche la date : ça n'ouvre pas les détails du
+ * message ») — le fil passait `onOpenDetail` à la bulle seule, jamais à la
+ * rangée plate : le tampon de l'élu ne pouvait RIEN ouvrir.
+ */
+describe('Focal : la date de l’élu ouvre la fiche, montée sur ThreadModes', () => {
+  test('taper le tampon de l’élu ouvre la fiche de CE message, sans basculer de sélection', async () => {
+    const opened: string[] = [];
+    const tapped: string[] = [];
+    const host = await monte({
+      mode: 'focal',
+      scene: { elected: 'm-1', noteProgrammaticScroll: () => {} } as unknown as ThreadScene,
+      onOpenDetail: (id) => opened.push(id),
+      onRowTap: (id) => tapped.push(id),
+      selection: null,
+    });
+    host.querySelector<HTMLButtonElement>('button.focus-stamp')?.click();
+    expect(opened).toEqual(['m-1']);
+    expect(tapped).toEqual([]);
   });
 });

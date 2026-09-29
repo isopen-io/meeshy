@@ -1,5 +1,6 @@
 import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
 
+import { anySignal, timeoutSignal } from './abort';
 import type { DataSource } from './config';
 import { credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
 
@@ -99,14 +100,14 @@ async function exchange(
   init: RequestInit,
   params: Pick<PostMediaUploadParams, 'signal' | 'fetchImpl'>,
 ): Promise<Exchange> {
-  const timeoutSignal = AbortSignal.timeout(TUS_REQUEST_TIMEOUT_MS);
-  const signal = params.signal === undefined ? timeoutSignal : AbortSignal.any([params.signal, timeoutSignal]);
+  const deadline = timeoutSignal(TUS_REQUEST_TIMEOUT_MS);
+  const signal = params.signal === undefined ? deadline : anySignal([params.signal, deadline]);
   try {
     const response = await (params.fetchImpl ?? fetch)(url, { ...init, signal });
     return { kind: 'response', response };
   } catch (error) {
     if (params.signal?.aborted === true) return { kind: 'failure', failure: failure(0, 'Téléversement annulé', 'ABORTED') };
-    if (timeoutSignal.aborted) return { kind: 'failure', failure: failure(0, 'La passerelle n’a pas répondu', 'TIMEOUT') };
+    if (deadline.aborted) return { kind: 'failure', failure: failure(0, 'La passerelle n’a pas répondu', 'TIMEOUT') };
     const message = error instanceof Error ? error.message : 'Réseau indisponible';
     return { kind: 'failure', failure: failure(0, message, 'NETWORK') };
   }

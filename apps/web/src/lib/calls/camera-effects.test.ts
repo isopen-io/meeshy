@@ -61,6 +61,16 @@ describe('sans effet', () => {
   });
 });
 
+describe('un effet de visage (#8551)', () => {
+  test('en couleur naturelle, il bâtit quand même le traitement, et l’analytique le nomme', async () => {
+    const h = harness({ effects: { ...NO_EFFECTS, faceEffect: 'volcano' } });
+    const raw = camera();
+    const sent = await h.port.wrap(asTrack(raw));
+    expect(sent).toBe(h.built[0]?.pipeline.output as MediaStreamTrack);
+    expect(h.port.used()).toEqual(['face:volcano']);
+  });
+});
+
 describe('un effet de couleur', () => {
   test('la piste envoyée est celle du traitement ; la caméra reste derrière elle', async () => {
     const h = harness({ effects: { ...NO_EFFECTS, preset: 'warm' } });

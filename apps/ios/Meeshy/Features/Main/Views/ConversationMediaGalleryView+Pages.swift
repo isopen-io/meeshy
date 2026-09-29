@@ -607,7 +607,7 @@ struct GalleryVideoPage: View, Equatable {
                 if MediaDownloadPolicyEngine.shouldAutoDownload(
                     kind: .video, condition: condition, prefs: prefs
                 ) {
-                    downloader.start(attachment: attachment, onShare: nil)
+                    downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
             await resolvePosterIfNeeded()
@@ -789,8 +789,7 @@ struct GalleryVideoPage: View, Equatable {
                 onCacheActivation()
                 HapticFeedback.light()
             case .needsDownload:
-                downloader.start(attachment: attachment, onShare: nil)
-                HapticFeedback.light()
+                downloader.start(attachment: attachment, origin: .manual, onShare: nil)
             case .downloading:
                 break
             }

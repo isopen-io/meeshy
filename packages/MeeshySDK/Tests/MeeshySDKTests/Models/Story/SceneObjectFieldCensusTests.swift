@@ -49,7 +49,12 @@ final class SceneObjectFieldCensusTests: XCTestCase {
     /// clients ne le lit encore**. Il entre donc dans les 47 % que rien ne
     /// compare, et c'est un fait à porter, pas à masquer — le reste de #5085
     /// (web, Android, renderer d'export) est ce qui l'en sortira.
-    private static let recensementEcrit = 121
+    ///
+    /// **122 depuis #8474** — `StoryMediaObject.filter`, le filtre PROPRE à un
+    /// objet posé (le filtre de slide reste celui du fond). À la question du
+    /// témoin : le gateway le valide (`StoryMediaObjectSchema.filter`) ; le web
+    /// le reçoit au lot 7 web (#8474, en cours) ; Android natif est gelé.
+    private static let recensementEcrit = 122
 
     private func champs<T>(_ instance: T) -> Int {
         Mirror(reflecting: instance).children.count

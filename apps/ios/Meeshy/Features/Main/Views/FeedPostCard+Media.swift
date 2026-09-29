@@ -49,6 +49,8 @@ extension FeedPostCard {
                 singleMediaCaption(media)
             }
             .contentShape(RoundedRectangle(cornerRadius: 12))
+            // Le texte alternatif du média est LU par VoiceOver (#6738).
+            .postMediaAccessibility(media)
         } else if mediaList.count > 1 {
             FeedPostCardCarousel(
                 media: mediaList,
