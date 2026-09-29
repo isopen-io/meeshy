@@ -64,7 +64,7 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
-import { resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { agentSenderIdentity } from './agentSenderIdentity.js';
 import {
   resolveForwardSourceBroadcastPayload,
   withoutForwardSourceOrItsPath,
@@ -428,15 +428,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          // #8604 — SSOT de l'ordre canonique : `displayName` de la
-          // participation → `displayName` du COMPTE → (dernier recours) le
-          // pseudo. `??` sautait le maillon du milieu et laissait passer une
-          // chaîne blanche ; `resolveParticipantDisplayName` traite le blanc
-          // comme absent. Le pseudo reste un repli VOULU — l'agent doit
-          // nommer l'auteur même sans aucun nom d'affichage — et il voyage
-          // de toute façon dans `senderUsername` juste en dessous.
-          senderDisplayName: resolveParticipantDisplayName(message.sender) ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
+          ...agentSenderIdentity(message.sender),
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
@@ -661,15 +653,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          // #8604 — SSOT de l'ordre canonique : `displayName` de la
-          // participation → `displayName` du COMPTE → (dernier recours) le
-          // pseudo. `??` sautait le maillon du milieu et laissait passer une
-          // chaîne blanche ; `resolveParticipantDisplayName` traite le blanc
-          // comme absent. Le pseudo reste un repli VOULU — l'agent doit
-          // nommer l'auteur même sans aucun nom d'affichage — et il voyage
-          // de toute façon dans `senderUsername` juste en dessous.
-          senderDisplayName: resolveParticipantDisplayName(message.sender) ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
+          ...agentSenderIdentity(message.sender),
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
