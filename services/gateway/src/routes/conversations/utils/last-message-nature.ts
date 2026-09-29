@@ -35,6 +35,11 @@ export interface PreviewProtectionFlags {
    * room l'ignore et laisse le client décompter depuis sa réception.
    */
   readonly servedExpiresAt?: Date | null;
+  /**
+   * #8630 — la mort, pour ce lecteur, de ce que le message CITE : une réponse
+   * meurt avec ce qu'elle cite, éphémère ou non.
+   */
+  readonly quotedDeathAt?: Date | null;
 }
 
 /**
@@ -85,6 +90,7 @@ export function resolvePreviewProtection(
 }
 
 function readerEphemeralExpired(flags: PreviewProtectionFlags, now: Date): boolean {
+  if (flags.quotedDeathAt != null && flags.quotedDeathAt.getTime() <= now.getTime()) return true;
   return hasPerReaderEphemeralDeadline(flags) && flags.servedExpiresAt != null && flags.servedExpiresAt.getTime() <= now.getTime();
 }
 

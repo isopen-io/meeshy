@@ -75,6 +75,12 @@ extension AuthManager {
     /// à quelle base locale des messages la session appartient (#8656).
     public var activeAccountId: String? { activeUserId }
 
+    /// Le compte tel que l'appareil range ses données : utilisateur +
+    /// environnement (#8656, #8674).
+    func accountKey(for userId: String?) -> MessageStoreAccountKey? {
+        MessageStoreAccountKey(userId: userId, serverOrigin: MeeshyConfig.shared.persistedServerOrigin)
+    }
+
     // MARK: - Ce que l'appareil garde
 
     /// Ce compte peut-il être repris sans mot de passe ?
@@ -107,7 +113,11 @@ extension AuthManager {
         // compte quitté restait monté. Une image à l'état « sorti » (écran
         // neutre, `isSwitchingAccount`) laisse chaque observateur la voir.
         try? await Task.sleep(for: .milliseconds(150))
+        // #8674 — le cache du compte qui revient est rendu AVANT que la session
+        // ne s'ouvre : le premier écran le lit, jamais un cache vide.
+        await CacheAccountBinder.shared.bind(accountKey(for: userId)).value
         guard restoreStoredSession(for: userId) else {
+            CacheAccountBinder.shared.bind(nil)
             activeUserId = nil
             isAuthenticated = false
             return false
@@ -144,10 +154,12 @@ extension AuthManager {
         // COURANTE : sans purge, un PATCH /users/me du compte A s'appliquerait
         // au profil du compte B.
         await SettingsActionQueue.shared.clearAll()
-        // sync-04 — les watermarks de delta-sync sont per-user en UserDefaults
-        // globaux : sans reset, le compte suivant hérite du checkpoint sortant.
-        ConversationSyncEngine.shared.resetSyncCheckpoints()
         guard let userId = activeUserId else {
+            // sync-04 — les watermarks de delta-sync sont per-user en
+            // UserDefaults globaux : sans reset, le compte suivant hérite du
+            // checkpoint sortant. Avec un compte actif, c'est la liaison du
+            // cache ci-dessous qui les met de côté ou les efface (#8674).
+            ConversationSyncEngine.shared.resetSyncCheckpoints()
             currentUser = nil
             return
         }
@@ -203,9 +215,15 @@ extension AuthManager {
         APIClient.shared.authToken = nil
         APIClient.shared.registeredSessionToken = nil
 
-        // D3 — wipe every cached store, AWAITED pour que le router ne voie pas
-        // isAuthenticated=false avant que le cache soit purgé.
-        await CacheCoordinator.shared.reset()
+        // D3 — le cache vivant est vidé, AWAITED pour que le router ne voie
+        // pas isAuthenticated=false avant. #8674 — un compte GARDÉ (jetons
+        // encore au trousseau : changement de compte, ajout d'un compte) voit
+        // son cache et son point de reprise mis de côté jusqu'à son retour ;
+        // un compte déconnecté (jetons effacés ci-dessus) les perd.
+        await CacheAccountBinder.shared.bind(nil).value
+        // sync-04 — le point de reprise vient d'être mis de côté avec le cache
+        // (ou effacé avec lui) : plus rien du compte quitté ne reste global.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
 
         // T15b — seconde purge HTTP (un store disque bufferisé peut atterrir
         // après la première).
@@ -244,6 +262,9 @@ extension AuthManager {
         // Le jeton de session suit le JWT (#4213).
         APIClient.shared.registeredSessionToken = currentSessionToken
         sessionOrigin = .restored
+        // #8674 — sans effet quand le cache est déjà le sien (démarrage à
+        // froid, changement de compte qui l'a déjà rendu).
+        CacheAccountBinder.shared.bind(accountKey(for: userId))
         isAuthenticated = true
         warmSessionScopedCaches()
 

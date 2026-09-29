@@ -22,12 +22,18 @@ private nonisolated let storeRouterLogger = Logger(subsystem: "me.meeshy.app", c
 ///  * une écriture ATTRIBUÉE à un compte (`session(ownedBy:)`) ne vise que la
 ///    base de ce compte, et rien si ce compte n'est plus actif.
 ///
-/// Une session QUITTÉE n'est plus tenue par le routeur : sa purge de sortie
-/// faite, son fichier est retiré du disque (`retire(_:)`). Mesuré au
-/// simulateur : un acteur capturé par un modèle de vue encore vivant écrivait
-/// APRÈS la purge de sortie dans la base du compte quitté. Le fichier délié,
-/// ces écritures tardives atterrissent dans un inode orphelin, et le compte qui
-/// revient rouvre une base neuve — jamais une base « purgée puis re-remplie ».
+/// Une session quittée par un compte GARDÉ sur l'appareil (changement de
+/// compte, ajout d'un compte) reste tenue, ouverte, jusqu'à son retour
+/// (`activate(_:keepingOutgoing:)`, #8674) : il retrouve sa base telle qu'il
+/// l'a laissée et ne resynchronise que l'écart.
+///
+/// Une session quittée par un compte DÉCONNECTÉ n'est plus tenue par le
+/// routeur : sa purge de sortie faite, son fichier est retiré du disque
+/// (`retire(_:)`). Mesuré au simulateur : un acteur capturé par un modèle de
+/// vue encore vivant écrivait APRÈS la purge de sortie dans la base du compte
+/// quitté. Le fichier délié, ces écritures tardives atterrissent dans un inode
+/// orphelin, et le compte qui revient rouvre une base neuve — jamais une base
+/// « purgée puis re-remplie ».
 nonisolated final class MessageStoreRouter: @unchecked Sendable {
     typealias Opener = (MessageStoreAccountKey?) -> MessageStoreSession
 
@@ -51,15 +57,16 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
     var current: MessageStoreSession { lock.withLock { _current } }
 
     /// Rend active la base de `key` (celle de personne pour `nil`) et rend la
-    /// session QUITTÉE quand elle change, pour que l'appelant la purge.
+    /// session QUITTÉE quand elle change. `keepingOutgoing` la garde ouverte
+    /// pour le retour de son compte ; sinon l'appelant la purge.
     @discardableResult
-    func activate(_ key: MessageStoreAccountKey?) -> MessageStoreSession? {
+    func activate(_ key: MessageStoreAccountKey?, keepingOutgoing: Bool = false) -> MessageStoreSession? {
         let (current, cached) = lock.withLock { (_current, lookup(key)) }
         guard current.key != key else { return nil }
         let incoming = cached ?? open(key)
         return lock.withLock {
             let outgoing = _current
-            if let outgoingKey = outgoing.key { sessions[outgoingKey] = nil }
+            if let outgoingKey = outgoing.key, !keepingOutgoing { sessions[outgoingKey] = nil }
             store(incoming, for: key)
             _current = incoming
             storeRouterLogger.info("Message store switched to \(incoming.fileName, privacy: .public)")
@@ -76,8 +83,20 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
         }
     }
 
-    /// Le fichier du compte actif — le seul qu'un balayage n'a pas le droit
-    /// de retirer.
+    /// Lâche les sessions gardées des comptes absents de `keys` — retirés de
+    /// l'appareil — et les rend pour que l'appelant les purge (#8674). La
+    /// session active n'est jamais lâchée.
+    func dropSessions(keeping keys: Set<MessageStoreAccountKey>) -> [MessageStoreSession] {
+        lock.withLock {
+            let activeKey = _current.key
+            let dropped = sessions.filter { key, _ in !keys.contains(key) && key != activeKey }
+            dropped.keys.forEach { sessions[$0] = nil }
+            return Array(dropped.values)
+        }
+    }
+
+    /// Les fichiers des comptes tenus ouverts — l'actif et ceux qui sont
+    /// gardés : aucun balayage n'a le droit de les retirer.
     var openAccountFileNames: Set<String> {
         lock.withLock { Set(sessions.values.map(\.fileName)) }
     }

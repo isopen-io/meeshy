@@ -369,7 +369,10 @@ describe('broadcastMessageMutation — message:edited d’une réponse dont la c
     const toB = edited.filter((e) => e.room === 'user:user-B');
     expect(toB).toHaveLength(1);
     expect(toB[0].payload.replyTo).toMatchObject({ content: '', deletedAt: CONSUMED, attachments: [] });
-    expect(toB[0].payload.content).toBe('réponse éditée');
+    // #8630 — la réponse meurt avec ce qu'elle cite, pour B : l'édition ne la ressuscite pas.
+    expect(toB[0].payload.content).toBe('');
+    expect(toB[0].payload.expiresAt).toEqual(CONSUMED);
+    expect(toRoom?.payload.content).toBe('réponse éditée');
 
     const resolve = (enqueue.mock.calls[0][0] as any).resolvePayloadForReader;
     expect(resolve('user-B').replyTo.content).toBe('');

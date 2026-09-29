@@ -163,6 +163,25 @@ final class ConversationViewModelElapsedEphemeralTests: XCTestCase {
         XCTAssertFalse(gone(flags: []))
     }
 
+    // MARK: - #8630 : une réponse part avec le message éphémère qu'elle cite
+
+    /// La passerelle sert à une réponse ORDINAIRE l'échéance du message cité
+    /// quand celui-ci est mort pour ce lecteur : aucune durée, aucun drapeau,
+    /// seule l'échéance servie dit qu'elle est morte.
+    func test_isGone_ordinaryReplyWithPassedInheritedDeadline_isGone() {
+        XCTAssertTrue(gone(flags: [], expiresAt: now.addingTimeInterval(-60)))
+    }
+
+    /// Ma propre réponse flamme-œil (contagion #8557) : la seule échéance que
+    /// son auteur puisse recevoir est celle de ce qu'elle cite.
+    func test_isGone_myAfterReadReplyWithPassedInheritedDeadline_isGone() {
+        XCTAssertTrue(gone(flags: [.ephemeral, .ephemeralAfterRead], expiresAt: now.addingTimeInterval(-60)))
+    }
+
+    func test_isGone_ordinaryReplyWithFutureInheritedDeadline_stays() {
+        XCTAssertFalse(gone(flags: [], expiresAt: now.addingTimeInterval(60)))
+    }
+
     func test_wiring_theStorePublishesNoDeadEphemeral() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

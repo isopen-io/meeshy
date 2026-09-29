@@ -11,6 +11,7 @@ import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
+import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
@@ -671,6 +672,12 @@ export default defineConfig({
                     cacheName: SW_RUNTIME_CACHES.api,
                     networkTimeoutSeconds: 3,
                     expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                    /* CHAQUE RÉPONSE SOUS L'IDENTITÉ QUI L'A DEMANDÉE (#8674) :
+                       sans lui, deux comptes du même appareil partageaient
+                       l'entrée d'une URL, et un réseau lent servait à B la
+                       réponse d'A. Autonome — Workbox le stringifie ;
+                       `check-sw-api-cache.mjs` le fait décider depuis sw.js. */
+                    plugins: [apiCacheIdentityPlugin],
                   },
                 },
                 /* AUDIO ET VIDÉO RESTENT HORS CACHE, ET C'EST UNE DÉCISION

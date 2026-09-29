@@ -4364,7 +4364,7 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Côté serveur : rien.** Une session par compte existe déjà (`UserSession`, `POST /auth/logout` sur les en-têtes du compte quitté).
 
-**Suivi assumé.** Le cache de requêtes est unique et purgé à chaque bascule : revenir à un compte recharge ses écrans depuis le réseau (dimension 2 — un cache partitionné par compte relève d'une issue à part). Miroir iOS : `apps/ios/decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md`. Kotlin natif : rien (gel).
+**Suivi assumé.** Le cache de requêtes est unique et purgé à chaque bascule : revenir à un compte recharge ses écrans depuis le réseau (dimension 2 — un cache partitionné par compte relève d'une issue à part). **Soldé par D-154 (#8674)** : chaque compte garde son cache. Miroir iOS : `apps/ios/decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md`. Kotlin natif : rien (gel).
 
 ## D-143 — L'inscription se déroule en phases vivantes : le téléphone en verre qui ondule, l'adresse, la carte d'identité qui porte son code, puis « Parler aux autres » (2026-09-27, #8288)
 
@@ -4505,3 +4505,16 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - La ligne basse de la rangée plate sort de `focal-row.tsx` vers `focal-bottom-line.tsx` (budget de taille).
 
 **Conséquences.** Le flou sur l'élu suit #8389 (un toucher révèle, le suivant ouvre le plein écran, la fenêtre repart à la fermeture) : un témoin le garde désormais sur l'élu réel. Le Salon Rivière porte une rangée réagie (`RIVER_REACTION_WITNESS_ID`). La jumelle iOS suit dans #8537.
+
+## D-154 — Changer de compte garde le cache de chaque compte ; aucune donnée d'un compte n'est lisible sous un autre, à aucun instant (2026-09-29, #8674)
+
+**Contexte.** Question du porteur : « sur webapp, Android, on recharge tout à chaque changement de compte ou on récupère sa base locale et on resynchronise ? » D-142 avait assumé le premier : un seul cache de requêtes, VIDÉ à chaque bascule. La cartographie a trouvé en plus quatre fuites entre comptes du même appareil, toutes antérieures : le seau `api` du service worker indexé par URL seule (un réseau lent servait à B la liste d'A, et une réponse d'A encore en vol s'y écrivait APRÈS la purge) ; une requête d'A en vol résolue sous B (son `queryFn` l'écrivait dans le cache de B, le rollback d'une mutation d'A y recopiait l'instantané d'A) ; un 401 d'A arrivé sous B qui DÉCONNECTAIT B ; l'outbox, les overrides de rangée et la frappe, jamais vidés — l'envoi en échec d'A s'affichait comme une bulle de B, et « Réessayer » l'aurait publié au nom de B.
+
+**Décision.**
+- **Le cache actif reste seul sous `meeshy.query-cache` ; l'ÉTAGÈRE (`lib/api/account-caches.ts`) porte celui des comptes quittés**, sous `meeshy.query-cache.u_<id>` — même partage que le coffre des jetons (D-142). Au changement d'identité, SYNCHRONE dans `establish`/`clearSession` : le cache d'A est rangé sous sa clé, la mémoire vidée (cache, « mes réactions », médias absents), puis le cache rangé de B repris s'il porte son `buster` — version, schéma, ORIGINE de l'API, compte. Revenir sur un compte repeint sa liste à l'instant, sans réseau ; les requêtes restaurées sont périmées, donc relues au montage : seul l'écart part au réseau.
+- **Bornée à trois comptes rangés**, le moins récemment quitté part le premier ; un stockage plein fait de la place en retirant les plus anciens. **Effacée** à la déconnexion (`signOutOfThisDevice`), à « retirer ce compte » (`forgettingLocalData`), à la révocation (401 sur le jeton courant, `auth:session-revoked` du socket, jonction refusée — `endRevokedSession`) et à la mise à jour de l'application. Un invité quitté n'est jamais rangé.
+- **Le transport ne résout JAMAIS une réponse obtenue sous une identité quittée** (`http.ts`, option `identity`, la clé `sessionIdentityKey` : le compte, pas son jeton). Ni succès ni échec : rien de ce qui l'attend ne s'exécute sous B. Un 401 ne déconnecte que l'identité qui l'a reçu.
+- **Le seau `api` range chaque réponse sous l'identité qui l'a demandée** (`net/api-cache-identity.ts`, greffon `cacheKeyWillBeUsed` : empreinte SHA-256 tronquée de `Authorization`/`X-Session-Token`, jamais le jeton en clair). Changer de compte ne purge donc plus les seaux ; la fin d'un compte les purge. Autonome parce que Workbox le stringifie ; `check-sw-api-cache.mjs` le fait décider depuis `dist/sw.js`.
+- **Outbox, overrides de rangée et frappe se vident au changement d'identité** (`identity-scoped-stores.ts`, branché par `realtime.ts`).
+
+**Ce qui reste hors périmètre.** Les brouillons, modes de lecture et dernières ouvertures étaient déjà rangés par identité (D-142). Un envoi en échec d'A est ABANDONNÉ à la bascule plutôt que rangé pour son retour ; les blobs de médias protégés (`protected-media.ts`) restent en mémoire de l'onglet, indexés par adresse. La coque Android n'a aucun service worker ni stockage natif de compte : elle suit le même code (le seau est simplement absent). iOS : #8674, partie iOS. Kotlin natif : rien (gel).

@@ -143,6 +143,22 @@ export function createAccountVault({ storage, now }: { readonly storage: Session
   };
 }
 
+/**
+ * « RETIRER CE COMPTE » EFFACE AUSSI CE QU'IL A LAISSÉ SUR L'APPAREIL (#8674)
+ * — son cache de requêtes rangé, ses brouillons, ses modes de lecture : un
+ * compte qui quitte la liste ne laisse rien derrière lui. Changer de compte,
+ * lui, n'appelle jamais `forget`.
+ */
+export function forgettingLocalData(vault: AccountVault, cleanup: (userId: string) => void): AccountVault {
+  return {
+    ...vault,
+    forget: (userId) => {
+      vault.forget(userId);
+      cleanup(userId);
+    },
+  };
+}
+
 export type SwitchOutcome = 'switched' | 'needs-password';
 
 export type AccountSwitcher = {

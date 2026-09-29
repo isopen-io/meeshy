@@ -5,6 +5,7 @@ import Combine
 import GRDB
 import MeeshySDK
 import os
+import UIKit
 
 private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
 
@@ -92,6 +93,7 @@ final class DependencyContainer {
         // pas DependencyContainer (qui est app-side).
         wireAccountStoreSwitch()
         wireOutboxLogoutHook()
+        wireRetainedAccountsSweep()
 
         // Mirror every API message the SyncEngine sees (global `message:new`
         // relay, push-driven `ensureMessages`, pagination) into the GRDB
@@ -168,14 +170,23 @@ final class DependencyContainer {
             activeKey: Self.activeAccountStoreKey()
         )
         guard case let .account(key) = target else { return }
-        let outgoing = storeRouter.activate(key)
-        if let outgoing, outgoing.key != nil {
+        // #8674 — un compte quitté SANS être déconnecté (changement de compte,
+        // ajout d'un compte) garde sa base ouverte pour son retour ; seul un
+        // compte dont les jetons sont partis (déconnexion, session révoquée,
+        // retrait) voit la sienne purgée.
+        let keepsLeaving = AccountDataRetention.keepsData(of: storeRouter.current.key) {
+            AuthManager.shared.hasPreservedSession(for: $0)
+        }
+        let outgoing = storeRouter.activate(key, keepingOutgoing: keepsLeaving)
+        if let outgoing, outgoing.key != nil, !keepsLeaving {
             sessionsAwaitingPurge.append(outgoing)
         }
         if key == nil {
             MessageStoreRouter.sweepDormantAccountStores(
                 in: storeDirectory,
-                keeping: storeRouter.openAccountFileNames.union(sessionsAwaitingPurge.map(\.fileName))
+                keeping: storeRouter.openAccountFileNames
+                    .union(sessionsAwaitingPurge.map(\.fileName))
+                    .union(retainedAccountKeys().map(\.databaseFileName))
             )
         }
         guard outgoing != nil else { return }
@@ -190,6 +201,70 @@ final class DependencyContainer {
     private func takeSessionsAwaitingPurge() -> [MessageStoreSession] {
         defer { sessionsAwaitingPurge = [] }
         return sessionsAwaitingPurge
+    }
+
+    // MARK: - #8674 — ce que l'appareil garde de chaque compte
+
+    private func retainedAccountKeys() -> Set<MessageStoreAccountKey> {
+        AccountDataRetention.retainedKeys(
+            savedAccountIds: AuthManager.shared.savedAccounts.map(\.id),
+            activeUserId: AuthManager.shared.activeAccountId,
+            serverOrigin: MeeshyConfig.shared.persistedServerOrigin
+        )
+    }
+
+    /// Les comptes absents du sélecteur n'ont plus rien sur l'appareil : au
+    /// démarrage (une fois le sélecteur relu) et à chaque retrait, leurs bases,
+    /// leurs caches mis de côté et leurs points de reprise partent.
+    ///
+    /// Jamais tant que les données protégées sont indisponibles (appareil
+    /// verrouillé au réveil en arrière-plan) : un sélecteur illisible ne dit
+    /// pas qu'il est vide.
+    private func wireRetainedAccountsSweep() {
+        Publishers.CombineLatest(
+            AuthManager.shared.$hasResolvedStoredSession,
+            AuthManager.shared.$savedAccounts.map { $0.map(\.id) }
+        )
+        .filter { resolved, _ in resolved }
+        .map { _, ids in ids }
+        .removeDuplicates()
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _ in self?.forgetAccountsNoLongerOnDevice() }
+        .store(in: &cancellables)
+    }
+
+    private func forgetAccountsNoLongerOnDevice() {
+        guard UIApplication.shared.isProtectedDataAvailable else { return }
+        let retained = retainedAccountKeys()
+        let dropped = storeRouter.dropSessions(keeping: retained)
+        MessageStoreRouter.sweepDormantAccountStores(
+            in: storeDirectory,
+            keeping: storeRouter.openAccountFileNames
+                .union(sessionsAwaitingPurge.map(\.fileName))
+                .union(retained.map(\.databaseFileName))
+        )
+        CacheAccountBinder.shared.sweep(keeping: retained)
+        guard !dropped.isEmpty else { return }
+        let router = storeRouter
+        Task {
+            for session in dropped {
+                await Self.purge(session)
+                router.retire(session)
+            }
+        }
+    }
+
+    private nonisolated static func purge(_ session: MessageStoreSession) async {
+        do {
+            try await session.messagePersistence.clearAllMessagesForLogout()
+        } catch {
+            containerLogger.error("Removed account message purge failed: \(error.localizedDescription, privacy: .public)")
+        }
+        do {
+            try await session.feedPersistence.clearAllForLogout()
+        } catch {
+            containerLogger.error("Removed account feed purge failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Auto-vacuum incrémental, une fois par base
