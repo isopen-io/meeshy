@@ -85,6 +85,8 @@ struct CallView: View {
     @State var isSelfFeatured = false
     @State var selfTileScale: CallSelfTileScale = .standard
     @State var selfTilePinch: CGFloat = 1
+    /// #8626 — le bouton caméra d'une petite vignette a déployé sa grille.
+    @State var isCameraMenuUnfolded = false
     let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
     /// sous une traduction, traduction sous un original dans le journal).

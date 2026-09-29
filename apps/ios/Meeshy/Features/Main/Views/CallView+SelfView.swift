@@ -93,8 +93,12 @@ extension CallView {
                 // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
                 // #8626 — les commandes de ma caméra vivent en bas de la
                 // vignette quand elle porte mon image ; leurs boutons gagnent
-                // le toucher, le reste de la vignette permute.
+                // le toucher, le reste de la vignette permute — ou replie la
+                // grille déployée d'une petite vignette.
                 .onTapGesture {
+                    if CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: isCameraMenuUnfolded) {
+                        return tapCameraMenu(.elsewhere)
+                    }
                     withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
                         swapStreams.toggle()
                     }
@@ -129,6 +133,7 @@ extension CallView {
         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
             selfTileScale = scale
             selfTilePinch = 1
+            if changed { isCameraMenuUnfolded = false }
         }
         guard changed else { return }
         HapticFeedback.light()

@@ -169,6 +169,21 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// vignette. #8626 — les commandes de ma caméra vivent dans ma vignette,
     /// et en haut au centre quand mon image est en plein écran, visibles avec
     /// le chrome.
+    /// #8626 — une vignette trop petite pour la grille pose UN bouton caméra
+    /// qui la déploie par-dessus elle ; un tap ailleurs, sur la vignette ou sur
+    /// une action la replie.
+    func test_smallSelfTile_foldsTheCameraControlsIntoOneButton() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(code.contains("CallCameraRail.tileLayout(tileSize: tileSize, count: actions.count)"))
+        XCTAssertTrue(code.contains("foldedCameraButton"))
+        XCTAssertTrue(code.contains("tapCameraMenu(.button)"))
+        XCTAssertTrue(code.contains("tapCameraMenu(.action)"))
+        let toggle = try block("func toggleControls() {", until: "\n    }\n", in: code)
+        XCTAssertTrue(toggle.contains("tapCameraMenu(.elsewhere)"), "Un tap ailleurs replie la grille")
+        let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
+        XCTAssertTrue(pip.contains("tapCameraMenu(.elsewhere)"), "Un tap sur la vignette replie la grille avant de permuter")
+    }
+
     func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)

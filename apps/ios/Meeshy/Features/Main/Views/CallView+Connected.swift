@@ -57,7 +57,10 @@ extension CallView {
             guard showControls, shouldAutoHideControls else { return }
             try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
             if !Task.isCancelled {
-                withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showControls = false
+                    isCameraMenuUnfolded = false
+                }
             }
         }
         // §7.1 — populate the camera list when video turns on so the « mon
@@ -281,6 +284,9 @@ extension CallView {
     }
 
     func toggleControls() {
+        if CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: isCameraMenuUnfolded) {
+            return tapCameraMenu(.elsewhere)
+        }
         guard CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) else { return }
         withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
     }

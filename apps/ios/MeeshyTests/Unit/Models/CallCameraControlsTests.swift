@@ -24,28 +24,68 @@ final class CallCameraControlsTests: XCTestCase {
     // MARK: - Placement
 
     func test_placement_myImageFullScreen_goesTopCenter() {
-        let placement = CallCameraRail.placement(isMyImageFullScreen: true, selfTileSize: CallSelfTileScale.x2.size, actionCount: cameraCount)
-        XCTAssertEqual(placement, .topCenter)
+        XCTAssertEqual(CallCameraRail.placement(isMyImageFullScreen: true, showsMyImageTile: true), .topCenter)
     }
 
-    func test_placement_myImageInAStandardTile_goesInTheTile() {
-        let placement = CallCameraRail.placement(isMyImageFullScreen: false, selfTileSize: CallSelfTileScale.x2.size, actionCount: cameraCount)
-        XCTAssertEqual(placement, .selfTile)
-    }
-
-    func test_placement_largeTile_goesInTheTile() {
-        let placement = CallCameraRail.placement(isMyImageFullScreen: false, selfTileSize: CallSelfTileScale.x3.size, actionCount: cameraCount)
-        XCTAssertEqual(placement, .selfTile)
-    }
-
-    func test_placement_tileTooSmallForTappableTargets_returnsToTheMenu() {
-        let placement = CallCameraRail.placement(isMyImageFullScreen: false, selfTileSize: CallSelfTileScale.x1.size, actionCount: cameraCount)
-        XCTAssertEqual(placement, .menu)
+    func test_placement_myImageInTheTile_goesInTheTileWhateverItsSize() {
+        XCTAssertEqual(CallCameraRail.placement(isMyImageFullScreen: false, showsMyImageTile: true), .selfTile)
     }
 
     func test_placement_noTile_returnsToTheMenu() {
-        let placement = CallCameraRail.placement(isMyImageFullScreen: false, selfTileSize: nil, actionCount: cameraCount)
-        XCTAssertEqual(placement, .menu)
+        XCTAssertEqual(CallCameraRail.placement(isMyImageFullScreen: false, showsMyImageTile: false), .menu)
+    }
+
+    // MARK: - La vignette : grille ou bouton qui la déploie
+
+    func test_tileLayout_everySize_carriesTheControls() {
+        for scale in CallSelfTileScale.allCases {
+            XCTAssertNotNil(CallCameraRail.tileLayout(tileSize: scale.size, count: cameraCount), "\(scale)")
+        }
+    }
+
+    func test_tileLayout_standardTile_showsTheGrid() {
+        XCTAssertEqual(CallCameraRail.tileLayout(tileSize: CallSelfTileScale.x2.size, count: 4), .grid(CallCameraTileGrid(columns: 2, rows: 2)))
+    }
+
+    func test_tileLayout_smallTile_foldsIntoOneButtonThatDeploysTheGrid() {
+        XCTAssertEqual(CallCameraRail.tileLayout(tileSize: CallSelfTileScale.x1.size, count: 4), .folded(expanded: CallCameraTileGrid(columns: 2, rows: 2)))
+    }
+
+    func test_tileLayout_smallTile_itsSingleButtonIsATappableTarget() {
+        let size = CallSelfTileScale.x1.size
+        XCTAssertLessThanOrEqual(CallCameraRail.targetSide + 2 * CallCameraRail.tileInset, size.width)
+        XCTAssertLessThanOrEqual(CallCameraRail.targetSide + 2 * CallCameraRail.tileInset, size.height)
+    }
+
+    func test_tileLayout_nothingToShow_isNil() {
+        XCTAssertNil(CallCameraRail.tileLayout(tileSize: CallSelfTileScale.x1.size, count: 0))
+    }
+
+    func test_expandedGrid_neverMoreThanTwoColumns() {
+        XCTAssertEqual(CallCameraRail.expandedGrid(count: 4), CallCameraTileGrid(columns: 2, rows: 2))
+        XCTAssertEqual(CallCameraRail.expandedGrid(count: 3), CallCameraTileGrid(columns: 2, rows: 2))
+        XCTAssertEqual(CallCameraRail.expandedGrid(count: 1), CallCameraTileGrid(columns: 1, rows: 1))
+    }
+
+    // MARK: - Le bouton plié
+
+    func test_foldedMenu_tapOnTheButton_opensThenCloses() {
+        XCTAssertTrue(CallCameraRail.foldedMenu(isOpen: false, after: .button))
+        XCTAssertFalse(CallCameraRail.foldedMenu(isOpen: true, after: .button))
+    }
+
+    func test_foldedMenu_tapOnAnAction_closes() {
+        XCTAssertFalse(CallCameraRail.foldedMenu(isOpen: true, after: .action))
+    }
+
+    func test_foldedMenu_tapElsewhere_closes() {
+        XCTAssertFalse(CallCameraRail.foldedMenu(isOpen: true, after: .elsewhere))
+        XCTAssertFalse(CallCameraRail.foldedMenu(isOpen: false, after: .elsewhere))
+    }
+
+    func test_foldedMenu_tapElsewhereWhileOpen_isConsumed() {
+        XCTAssertTrue(CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: true))
+        XCTAssertFalse(CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: false))
     }
 
     // MARK: - La grille de la vignette

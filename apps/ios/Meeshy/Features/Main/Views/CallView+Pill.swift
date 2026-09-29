@@ -74,6 +74,10 @@ enum CallControlsCopy {
         String(localized: "call.control.cameraRail", defaultValue: "Options de ma caméra", bundle: .main)
     }
 
+    static var cameraRailUnfoldHint: String {
+        String(localized: "call.control.cameraRail.unfold.hint", defaultValue: "Affiche les commandes de ma caméra par-dessus la vignette", bundle: .main)
+    }
+
     static func familyTitle(_ family: CallActionFamily) -> String {
         switch family {
         case .myImage: return myImage

@@ -214712,6 +214712,53 @@
         }
       }
     },
+    "call.control.cameraRail.unfold.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعرض عناصر التحكم في الكاميرا فوق الصورة المصغّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt die Steuerung meiner Kamera über der Miniatur"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows my camera controls over the thumbnail"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra los controles de mi cámara sobre la miniatura"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche les commandes de ma caméra par-dessus la vignette"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra i comandi della mia fotocamera sopra la miniatura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra os controles da minha câmera sobre a miniatura"
+          }
+        }
+      }
+    },
     "call.pip.size.small": {
       "extractionState": "manual",
       "localizations": {
