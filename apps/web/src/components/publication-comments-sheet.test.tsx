@@ -109,4 +109,33 @@ describe('PublicationCommentsSheet — retour matériel (Android)', () => {
     });
     expect(closed).toBe(true);
   });
+
+  /**
+   * ÉCHAP APPARTIENT À LA COUCHE DU DESSUS (#8734) — « Signaler » ouvre la
+   * feuille des motifs (un `<dialog>` modal) PAR-DESSUS ce fil, comme
+   * l'atelier « Imagine ». Échap y ferme le dialogue ; la feuille de
+   * commentaires, qui écoute en capture sur le document, ne doit pas se
+   * refermer AVEC lui — le lecteur perdrait son fil pour avoir renoncé à un
+   * signalement.
+   */
+  test('Échap dans un dialogue ouvert par-dessus ne ferme pas la feuille ; hors de lui, si', () => {
+    let closed = 0;
+    mount(() => {
+      closed += 1;
+    });
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    const inside = document.createElement('button');
+    dialog.append(inside);
+    document.body.append(dialog);
+    act(() => {
+      inside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(closed).toBe(0);
+    dialog.remove();
+    act(() => {
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(closed).toBe(1);
+  });
 });

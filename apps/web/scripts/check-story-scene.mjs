@@ -41,6 +41,9 @@
  *     au-dessus de la feuille ne doivent ni reprendre la lecture ni naviguer
  *     ni emporter le brouillon. « Une couche de saisie réclame le geste comme
  *     elle réclame la touche » (`screenGestureYields`, même module).
+ *     7 septies — LE « … » D'UN COMMENTAIRE DE STORY (#8734) : Copier,
+ *     Imager, Signaler sur celui d'autrui, posé au-dessus de la feuille ;
+ *     Échap ferme le menu seul, puis les motifs de « Signaler » sans le fil.
  *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *  9. LE RAIL AUTEUR COMPLET (#7116) — sur MA story (`/story/st-mienne`,
@@ -649,6 +652,64 @@ async function runScheme(colorScheme) {
        clic sur « muet » — un raccourci mort, pour corriger un vol de frappe.
        Un bouton ne réclame qu'Espace et Entrée ; les flèches restent à
        l'écran. */
+    /* ── 7 septies. #8734 — LE « … » D'UN COMMENTAIRE DE STORY ────────────
+       Le commentaire d'autrui offre Copier, Imager, Signaler — jamais
+       Modifier ni Supprimer. Le menu se pose AU-DESSUS de la feuille (le point
+       central de chaque entrée est à lui), dans l'écran, 44 px par entrée.
+       Échap ferme le MENU seul — la feuille, qui écoute Échap en capture,
+       reste — et rend le focus au « … ». « Signaler » ouvre les motifs, et
+       Échap les referme sans rien envoyer ni fermer le fil. */
+    const plus = '[data-comment-row="cm-st-2"] [data-comment-gesture="more"]';
+    await page.click(plus);
+    await page.waitForSelector('[data-comment-menu]', { timeout: 3000 }).catch(() => undefined);
+    const menu = await page.evaluate((selecteur) => {
+      const panneau = document.querySelector('[data-comment-menu]');
+      const declencheur = document.querySelector(selecteur)?.getBoundingClientRect();
+      const entrees = [...(panneau?.querySelectorAll('[role="menuitem"]') ?? [])];
+      const boite = panneau?.getBoundingClientRect();
+      return {
+        entrees: entrees.map((e) => e.getAttribute('data-comment-gesture')),
+        hauteurs: entrees.map((e) => Math.round(e.getBoundingClientRect().height)),
+        declencheur: declencheur === undefined ? null : [Math.round(declencheur.width), Math.round(declencheur.height)],
+        dessus: entrees.length > 0 && entrees.every((e) => {
+          const r = e.getBoundingClientRect();
+          return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('[data-comment-menu]') === panneau;
+        }),
+        dansEcran: boite !== undefined && boite.left >= 0 && boite.right <= innerWidth && boite.top >= 0 && boite.bottom <= innerHeight,
+      };
+    }, plus);
+    check(
+      JSON.stringify(menu.entrees) === '["copy","image","report"]' && menu.hauteurs.every((h) => h >= 44) && (menu.declencheur?.every((c) => c >= 44) ?? false),
+      `${tag} st-amie-2 : le « … » d'un commentaire d'autrui offre Copier, Imager, Signaler, cibles de 44 px (#8734) — ${JSON.stringify(menu)}`,
+    );
+    check(menu.dessus && menu.dansEcran, `${tag} st-amie-2 : le menu se pose AU-DESSUS de la feuille, dans l'écran (#8734) — ${JSON.stringify(menu)}`);
+    if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-comment-menu-${colorScheme}-${viewport.width}.png` });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('[data-comment-menu]') === null, null, { timeout: 1500 }).catch(() => undefined);
+    const apresEchap = await page.evaluate(() => ({
+      menu: document.querySelector('[data-comment-menu]') !== null,
+      feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+      focus: document.activeElement?.getAttribute('data-comment-gesture') ?? null,
+    }));
+    check(
+      !apresEchap.menu && apresEchap.feuille && apresEchap.focus === 'more',
+      `${tag} st-amie-2 : Échap ferme le MENU seul, la feuille reste et le focus revient au « … » (#8734) — ${JSON.stringify(apresEchap)}`,
+    );
+    await page.click(plus);
+    await page.click('[data-comment-menu] [data-comment-gesture="report"]');
+    await page.waitForSelector('[data-report-reason]', { timeout: 3000 }).catch(() => undefined);
+    const motifs = await page.evaluate(() => document.querySelectorAll('[data-report-reason]').length);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('[data-report-reason]') === null, null, { timeout: 1500 }).catch(() => undefined);
+    const apresMotifs = await page.evaluate(() => ({
+      motifs: document.querySelectorAll('[data-report-reason]').length,
+      feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+    }));
+    check(
+      motifs === 8 && apresMotifs.motifs === 0 && apresMotifs.feuille,
+      `${tag} st-amie-2 : « Signaler » ouvre les huit motifs, et Échap les referme sans fermer le fil (#8734) — ${motifs} ${JSON.stringify(apresMotifs)}`,
+    );
+
     /* ── 7 quater. #8601 — FEUILLE OUVERTE, LE CHROME CÈDE ─────────────────
        L'en-tête (barres, auteur, fermer) restait peint au-dessus de la
        feuille pendant qu'on écrivait. Une loi (`chromeYields`) : en-tête,
