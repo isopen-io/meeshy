@@ -460,4 +460,77 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut de Alice Autrice');
     });
   });
+
+  // #8724 — une notification sur un COMMENTAIRE décrit aussi le POST qui le
+  // porte : la ligne in-app pose en pied l'icône et l'extrait du post au lieu
+  // de redire le commentaire.
+  describe('le post qui porte le commentaire voyage en métadonnée (#8724)', () => {
+    const persistedMetadata = (type: string) =>
+      prisma.notification.create.mock.calls
+        .map((c: any[]) => c[0].data)
+        .find((d: any) => d.type === type)?.metadata;
+
+    it('comment_reaction porte postPreview et le média du post', async () => {
+      prisma.postMedia = {
+        findFirst: jest.fn().mockResolvedValue({ mimeType: 'image/jpeg', fileUrl: '/u/p.jpg', thumbnailUrl: null }),
+      };
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '❤️',
+        commentPreview: 'Superbe features',
+        postPreview: '  Nouvelle version de Meeshy  ',
+      });
+
+      const metadata = persistedMetadata('comment_reaction');
+      expect(metadata.postPreview).toBe('Nouvelle version de Meeshy');
+      expect(metadata.commentPreview).toBe('Superbe features');
+      expect(metadata.mediaType).toBe('image');
+      expect(metadata.postThumbnailUrl).toEqual(expect.stringContaining('p.jpg'));
+    });
+
+    it('comment_like porte postPreview', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({ notification: { commentLikeEnabled: true } });
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: RECIPIENT_ID,
+        emoji: '🔥',
+        commentPreview: 'Mon avis',
+        postPreview: 'Le post commenté',
+      });
+
+      expect(persistedMetadata('comment_like').postPreview).toBe('Le post commenté');
+    });
+
+    it('comment_reply porte postPreview', async () => {
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Merci !',
+        parentCommentPreview: 'Bravo',
+        postPreview: 'Lancement',
+      });
+
+      expect(persistedMetadata('comment_reply').postPreview).toBe('Lancement');
+    });
+
+    it('un post sans texte ne pose aucune clé postPreview', async () => {
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Merci !',
+        postPreview: '   ',
+      });
+
+      expect(persistedMetadata('comment_reply')).not.toHaveProperty('postPreview');
+    });
+  });
 });

@@ -297,6 +297,8 @@ export async function createCommentReplyNotification(
     replyPreview: string;
     /** Extrait du commentaire parent — identifie À QUOI on répond. */
     parentCommentPreview?: string;
+    /** Extrait du POST portant le fil (#8724) — le pied de ligne dit de QUEL contenu il s'agit. */
+    postPreview?: string;
     /** Type du contenu portant le commentaire — précise « sur votre story/réel ». Défaut POST. */
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Date de publication ISO du contenu (le client en dérive « du JJ/MM/AAAA HH:MM »). */
@@ -362,6 +364,7 @@ export async function createCommentReplyNotification(
       ...(trimmedParent !== ''
         ? { parentCommentPreview: deps.truncateMessage(trimmedParent) }
         : {}),
+      ...postPreviewField(deps, params.postPreview),
       ...(media ? { mediaType: media.mediaType } : {}),
       ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
     },
@@ -382,6 +385,8 @@ export async function createCommentLikeNotification(
     emoji: string;
     /** Extrait du commentaire liké — identifie QUEL commentaire reçoit la réaction. */
     commentPreview?: string;
+    /** Extrait du POST qui porte le commentaire (#8724) — le pied de ligne, jamais le commentaire redit. */
+    postPreview?: string;
     /**
      * Type de l'entité PORTANT le commentaire liké. Sans lui, le client ne peut
      * pas choisir la bonne surface (lecteur de réel / viewer éphémère / détail
@@ -441,6 +446,153 @@ export async function createCommentLikeNotification(
       ...(trimmedPreview !== ''
         ? { commentPreview: deps.truncateMessage(trimmedPreview) }
         : {}),
+      ...postPreviewField(deps, params.postPreview),
+      ...(media ? { mediaType: media.mediaType } : {}),
+      ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
+    },
+  });
+}
+
+/**
+ * L'extrait du POST visé, sous la clé que la réécriture d'édition connaît
+ * (`reproduceEditedSubjectNotifications` → `postPreview`) : une notification
+ * sur un COMMENTAIRE décrit aussi le contenu qui le porte (#8724). Vide ⇒ rien.
+ */
+export function postPreviewField(
+  deps: Pick<NotificationBuilderDependencies, 'truncateMessage'>,
+  postPreview: string | undefined,
+): { postPreview?: string } {
+  const trimmed = postPreview?.trim() ?? '';
+  return trimmed !== '' ? { postPreview: deps.truncateMessage(trimmed) } : {};
+}
+
+// ==============================================
+// SOCIAL — COMMENT_REACTION
+// ==============================================
+
+export async function createCommentReactionNotification(
+  deps: NotificationBuilderDependencies,
+  params: {
+  commentAuthorId: string;
+  reactorUserId: string;
+  commentId: string;
+  postId: string;
+  reactionEmoji: string;
+  /** Truncated comment content (≤ 80 chars) to inject into the body. */
+  commentPreview?: string;
+  /** Display name (fallback: username) of the post/story author. */
+  postAuthorName?: string;
+  /**
+   * Type d'entité portant le commentaire réagi. Mirror du sibling
+   * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
+   * dans la métadonnée ni dans le corps localisé.
+   */
+  postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+  /** Extrait du POST qui porte le commentaire (#8724) — le pied de ligne, jamais le commentaire redit. */
+  postPreview?: string;
+}): Promise<void> {
+  if (params.commentAuthorId === params.reactorUserId) return;
+
+  // Anti-spam: throttle reaction notifications per sender→recipient pair
+  if (!deps.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
+    return;
+  }
+
+  if (!(await deps.canNotifyAboutPost(params.postId, params.commentAuthorId))) return;
+
+  const reactor = await deps.prisma.user.findUnique({
+    where: { id: params.reactorUserId },
+    select: { username: true, displayName: true, avatar: true },
+  });
+
+  if (!reactor) return;
+
+  // Body verbeux (spec user 2026-05-28) : "[reactor] a réagi [emoji] à votre
+  // commentaire sur la story de [story_author]". Le précédent body
+  // ne contenait QUE `reactionEmoji` (e.g. "❤️"), trop sommaire — le
+  // destinataire ne savait pas QUI avait réagi NI sur QUEL commentaire /
+  // QUELLE story.
+  const reactorName = reactor.displayName?.trim()
+    || reactor.username?.trim()
+    || 'Quelqu’un';
+  const lang = await deps.resolveRecipientLang(params.commentAuthorId);
+  const body = notificationString(lang, 'reaction.commentVerbose', {
+    actor: reactorName,
+    emoji: params.reactionEmoji,
+    author: params.postAuthorName,
+    postType: params.postType,
+  });
+
+  // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
+  // commentaire qui a reçu la réaction. Permet au destinataire de savoir
+  // *quel* de ses commentaires reçoit l'engagement sans avoir à ouvrir la
+  // notification.
+  // Extrait NORMALISÉ une fois : il sert au sertissage du sous-titre ET, en
+  // métadonnée, de clé de réécriture quand le commentaire est édité. Les
+  // dériver deux fois les ferait diverger au premier changement de troncature,
+  // et la substitution ne retrouverait alors plus sa chaîne.
+  const trimmedCommentPreview = params.commentPreview?.trim() ?? '';
+  const subtitle = trimmedCommentPreview !== ''
+    ? `« ${trimmedCommentPreview} »`
+    : undefined;
+
+  // Vignette + nature du média du post (#8724) : la ligne montre DE QUOI il
+  // s'agit — même source que les quatre bâtisseurs voisins.
+  const media = await resolvePostMedia(deps.prisma, params.postId);
+
+  await deps.createNotification({
+    userId: params.commentAuthorId,
+    type: 'comment_reaction',
+    priority: 'low',
+    content: body,
+    subtitle,
+    lang,
+
+    actor: {
+      id: params.reactorUserId,
+      username: reactor.username,
+      displayName: reactor.displayName,
+      avatar: reactor.avatar,
+    },
+
+    // postId/commentId vivent dans context (cible de navigation = contexte
+    // central de la notif). Ils sont désormais exposés par le schema de
+    // réponse (notificationContextSchema) — plus de strip côté REST.
+    context: {
+      postId: params.postId,
+      commentId: params.commentId,
+      ...(media?.thumbnailUrl
+        ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+        : {}),
+    },
+
+    metadata: {
+      action: 'view_post',
+      reactionEmoji: params.reactionEmoji,
+      // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+      // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
+      // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
+      postType: params.postType ?? 'POST',
+      // L'extrait est SERTI dans le `subtitle` composé juste au-dessus
+      // (« « … » »), et le sertissage n'est pas inversible. Le ranger aussi
+      // ici rend la ligne AUTO-DESCRIPTIVE : c'est la seule chose qui permet
+      // à `reproduceEditedSubjectNotifications` de savoir quelle portion du
+      // sous-titre décrivait le commentaire, donc de la réécrire quand
+      // celui-ci est édité. Sans elle, ce type — et lui seul de toute la
+      // famille du fil — garderait l'ancien texte pour toujours. Même clé
+      // que ses voisins `comment_like` / `post_comment`.
+      //
+      // Stocké VERBATIM, et non re-tronqué : la réécriture cherche cette
+      // chaîne DANS le sous-titre, donc les deux doivent être identiques au
+      // caractère près. `truncateMessage` coupe aux MOTS — l'appliquer ici
+      // ferait diverger la copie du sertissage sur tout extrait long, et la
+      // substitution ne trouverait plus rien. Les appelants bornent déjà à
+      // ~80 caractères.
+      ...(trimmedCommentPreview !== ''
+        ? { commentPreview: trimmedCommentPreview }
+        : {}),
+      ...postPreviewField(deps, params.postPreview),
+      ...(media ? { mediaType: media.mediaType } : {}),
       ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
     },
   });

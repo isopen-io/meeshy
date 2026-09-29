@@ -2,9 +2,20 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+/// La bannière in-app — la notification qui descend du haut de l'écran.
+///
+/// #8723 (porteur, 2026-09-29) : « un design plus sexy avec du RELIEF ». La
+/// carte n'est plus un rectangle noir plat cerclé d'un liseré : c'est une
+/// plaque de verre (`adaptiveGlass` — Liquid Glass sur iOS 26, matériau
+/// translucide avant) posée sur un voile opaque qui garde le texte lisible
+/// quoi qu'il y ait dessous, bordée d'un reflet en haut, et détachée de
+/// l'écran par deux ombres — une large et douce (la hauteur), une courte
+/// teintée de l'accent (le contact). L'avatar porte la pastille du TYPE, la
+/// ligne de titre porte l'heure, et l'aperçu ne paraît qu'UNE fois.
 public struct NotificationToastView: View {
     public let event: SocketNotificationEvent
     public var onTap: (() -> Void)?
+    public var onDismiss: (() -> Void)?
 
     // Transient leaf toast — do not observe the ThemeManager singleton.
     // `colorScheme` keeps theme-flip reactivity; `theme` is accessed
@@ -17,31 +28,31 @@ public struct NotificationToastView: View {
 
     /// `ThemeManager.mode` et non `colorScheme` : le mode fait autorité sur
     /// TOUTES les couleurs du thème, y compris le `theme.textPrimary` posé sur
-    /// ce fond quelques lignes plus bas. Un thème forcé par l'utilisateur
-    /// (clair verrouillé sous un iOS en sombre) diverge de `colorScheme` — lire
-    /// deux sources différentes pour le fond et pour le texte y donnerait du
-    /// blanc sur blanc. `colorScheme` reste déclaré au-dessus : sa seule tâche
-    /// est de faire re-rendre la vue au basculement de thème.
+    /// ce fond. Un thème forcé par l'utilisateur (clair verrouillé sous un iOS
+    /// en sombre) diverge de `colorScheme` — lire deux sources différentes pour
+    /// le fond et pour le texte y donnerait du blanc sur blanc. `colorScheme`
+    /// reste déclaré au-dessus : sa seule tâche est de faire re-rendre la vue
+    /// au basculement de thème.
     private var isDark: Bool { theme.mode.isDark }
 
-    /// Fond OPAQUE aux couleurs de l'application — blanc en clair, `#09090B` en
-    /// sombre — et non plus `.ultraThinMaterial`.
-    ///
-    /// Le matériau translucide laissait remonter ce qui passait dessous : sur
-    /// un fil de conversation, une photo, un lecteur vidéo, le texte du toast
-    /// perdait son contraste et la bannière semblait appartenir à l'écran
-    /// qu'elle recouvre au lieu de s'en détacher. Une notification est un
-    /// message du système à l'utilisateur : elle doit se lire d'un coup d'œil,
-    /// quel que soit ce qu'elle masque.
-    ///
-    /// Fonction pure `static` : XCTest ne peut pas introspecter le `ShapeStyle`
-    /// passé à un modificateur SwiftUI — seule la DÉCISION est vérifiable.
-    /// Même pattern que `ConversationScrollControlsView.isCompactShape`.
+    /// La teinte du thème sous le verre. Une notification est un message du
+    /// système à l'utilisateur : elle doit se lire d'un coup d'œil quel que
+    /// soit ce qu'elle masque (photo, vidéo, fil) — le voile garde le
+    /// contraste, le verre au-dessus donne la matière.
     public static func backgroundColor(isDark: Bool) -> Color {
         MeeshyColors.backgroundPrimary(isDark: isDark)
     }
 
-    /// Bordure : l'accent du type de notification, franc sur fond opaque.
+    /// Opacité du voile sous le verre : assez dense pour que le texte du thème
+    /// garde son contraste sur n'importe quel fond, assez légère pour que la
+    /// matière du verre se voie. Fonction pure — XCTest ne peut pas
+    /// introspecter un `ShapeStyle`, seule la DÉCISION est vérifiable.
+    public static func scrimOpacity(isDark: Bool) -> Double {
+        isDark ? 0.78 : 0.82
+    }
+
+    /// Le liseré : un REFLET en haut (la lumière tombe sur l'arête), l'accent
+    /// du type en bas — c'est ce qui donne l'épaisseur.
     public static func borderColor(accent: Color, isDark: Bool) -> Color {
         accent.opacity(isDark ? 0.45 : 0.30)
     }
@@ -52,103 +63,146 @@ public struct NotificationToastView: View {
     public init(
         event: SocketNotificationEvent,
         presentation: NotificationBannerPresentation? = nil,
-        onTap: (() -> Void)? = nil
+        onTap: (() -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
     ) {
         self.event = event
         self.presentation = presentation ?? NotificationToastManager.shared.resolvedBannerPresentation(for: event)
         self.onTap = onTap
+        self.onDismiss = onDismiss
     }
 
     // MARK: - Présentation
     //
     // Headline, corps, vignette et réaction viennent d'UNE seule source :
-    // `NotificationToastManager.resolvedBannerPresentation(for:)`, qui compose
-    // la phrase d'action LOCALISÉE PAR LE SERVEUR et y injecte le nom LOCAL du
-    // groupe (renommage + emoji favori) que seul l'appareil connaît. La vue ne
+    // `NotificationToastManager.resolvedBannerPresentation(for:)`. La vue ne
     // décide de rien — elle place.
 
-    /// STOCKÉE, jamais calculée (#7167) : la résoudre dans le corps faisait une
-    /// lecture App Group et un décodage JSON complet à chaque rendu — pendant
-    /// l'animation de la bannière, sur le fil principal.
+    /// STOCKÉE, jamais calculée (#7167).
     private let presentation: NotificationBannerPresentation
 
+    /// L'heure d'arrivée, figée à la pose : la bannière vit quelques secondes,
+    /// une horloge qui tourne n'y dirait rien de plus.
+    private let receivedAt = Date()
+
     private var avatarColorHex: String {
-        // Deterministic from the sender id (stable across re-renders + matches
-        // the bubble's sender color) so the avatar fallback gradient looks the
-        // same as the bubble's sender chip.
         DynamicColorGenerator.colorForName(event.toastAvatarColorSeed)
     }
 
-    private static let thumbnailSide: CGFloat = 26
+    private static let thumbnailSide: CGFloat = 30
+    private static let cornerRadius: CGFloat = 22
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+    }
 
     // MARK: - Body
 
     public var body: some View {
         let banner = presentation
         return Button { onTap?() } label: {
-            HStack(spacing: 10) {
-                // Author avatar — uses the SDK's canonical MeeshyAvatar so
-                // we honour the uploaded photo when present (via
-                // CachedAvatarImage with disk caching) and fall back to
-                // the deterministic initials circle when not.
-                MeeshyAvatar(
-                    name: event.toastAvatarName,
-                    context: .notification,
-                    accentColor: avatarColorHex,
-                    avatarURL: event.toastAvatarURL
-                )
+            HStack(alignment: .center, spacing: 12) {
+                avatarWithTypeBadge
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(banner.headline)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(banner.headline)
+                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(receivedAt, style: .time)
+                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
 
                     if banner.body != nil || banner.thumbnailURL != nil || banner.reactionBadge != nil {
-                        HStack(spacing: 6) {
+                        HStack(alignment: .center, spacing: 8) {
                             contentPreview(banner)
                             if let body = banner.body {
                                 Text(body)
-                                    .font(.system(size: 12))
+                                    .font(MeeshyFont.relative(13))
                                     .foregroundColor(theme.textSecondary)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
                 }
-
-                Spacer(minLength: 4)
-
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Self.backgroundColor(isDark: isDark))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Self.borderColor(accent: accentColor, isDark: isDark), lineWidth: 1)
-                    )
-                    // Ombre portée plus dense en clair : un rectangle blanc sur
-                    // un fond clair ne se détache que par elle.
-                    .shadow(color: .black.opacity(isDark ? 0.45 : 0.18), radius: 18, y: 8)
-            )
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+            .overlay(alignment: .bottom) { grabber }
+            .background(cardShape.fill(Self.backgroundColor(isDark: isDark).opacity(Self.scrimOpacity(isDark: isDark))))
+            .adaptiveGlass(in: cardShape, tint: accentColor.opacity(isDark ? 0.16 : 0.10))
+            .overlay(cardShape.strokeBorder(rimGradient, lineWidth: 1))
+            .shadow(color: .black.opacity(isDark ? 0.50 : 0.18), radius: 24, y: 14)
+            .shadow(color: accentColor.opacity(isDark ? 0.30 : 0.20), radius: 6, y: 2)
+            .contentShape(cardShape)
         }
         .buttonStyle(.plain)
-        // #4028 — PLUS LARGE. La marge passe de 16 à 8 pt : +16 pt de largeur
-        // utile, ce qui tient un mot de plus par ligne d'aperçu. Un jeton du
-        // système plutôt qu'un nombre choisi — `MeeshySpacing.sm` est déjà la
-        // marge de bord des surfaces qui veulent occuper l'écran.
         .padding(.horizontal, MeeshySpacing.sm)
         // La bannière est UN élément pour VoiceOver : trois fragments lus
-        // séparément (« Alice a commenté votre réel », « super photo », l'image)
-        // font trois arrêts là où l'information est une.
+        // séparément font trois arrêts là où l'information est une.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(voiceOverLabel(banner))
         .accessibilityAddTraits(.isButton)
+        .accessibilityHint(onDismiss == nil ? "" : String(localized: "notifications.banner.dismissHint", defaultValue: "Balayez vers le haut pour fermer", bundle: .module))
+        .accessibilityAction(.escape) { onDismiss?() }
+    }
+
+    /// Le reflet du haut vers l'accent du bas — l'arête de la plaque.
+    private var rimGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(isDark ? 0.28 : 0.85),
+                Self.borderColor(accent: accentColor, isDark: isDark)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// La poignée : dit sans mot que la carte se balaie.
+    private var grabber: some View {
+        Capsule()
+            .fill(theme.textMuted.opacity(0.45))
+            .frame(width: 36, height: 4)
+            .padding(.bottom, 5)
+            .accessibilityHidden(true)
+    }
+
+    /// L'avatar de l'acteur et, en pastille, l'icône du TYPE dans sa couleur :
+    /// on sait QUI et QUOI avant d'avoir lu.
+    private var avatarWithTypeBadge: some View {
+        ZStack(alignment: .bottomTrailing) {
+            MeeshyAvatar(
+                name: event.toastAvatarName,
+                context: .notification,
+                accentColor: avatarColorHex,
+                avatarURL: event.toastAvatarURL
+            )
+            .shadow(color: .black.opacity(isDark ? 0.35 : 0.12), radius: 4, y: 2)
+
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [accentColor, accentColor.opacity(0.78)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    Image(systemName: notifType.systemIcon)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                )
+                .frame(width: 20, height: 20)
+                .overlay(Circle().stroke(Self.backgroundColor(isDark: isDark), lineWidth: 2))
+                .offset(x: 3, y: 3)
+        }
+        .accessibilityHidden(true)
     }
 
     /// La vignette du contenu visé, ou son icône typée quand il n'y a pas
@@ -162,19 +216,18 @@ public struct NotificationToastView: View {
                         url: thumbnail,
                         targetSize: CGSize(width: Self.thumbnailSide, height: Self.thumbnailSide),
                         // Une bannière vit sept secondes : un spinner puis un
-                        // bouton « réessayer » dans 26 points de côté ne
+                        // bouton « réessayer » dans une case de 30 points ne
                         // seraient jamais ni lisibles ni actionnables.
                         showsStatusOverlays: false,
-                        // 26 points de côté, une fois, pour dire QUEL contenu —
-                        // c'est le sens même de la vignette. La retenir derrière
-                        // la politique d'économie de données rendrait la case
-                        // vide dans le cas nominal.
+                        // La case dit QUEL contenu — la retenir derrière la
+                        // politique d'économie de données la rendrait vide
+                        // dans le cas nominal.
                         autoLoad: true
                     ) {
                         symbolTile(banner.contentSymbol)
                     }
                     .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     symbolTile(banner.contentSymbol)
                 }
@@ -184,9 +237,7 @@ public struct NotificationToastView: View {
                 Text(badge)
                     .font(.system(size: 11))
                     .padding(2)
-                    .background(
-                        Circle().fill(Self.backgroundColor(isDark: isDark))
-                    )
+                    .background(Circle().fill(Self.backgroundColor(isDark: isDark)))
                     .offset(x: 5, y: 4)
             }
         }
@@ -194,11 +245,11 @@ public struct NotificationToastView: View {
     }
 
     private func symbolTile(_ symbol: String) -> some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(accentColor.opacity(isDark ? 0.22 : 0.12))
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(accentColor.opacity(isDark ? 0.24 : 0.13))
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(accentColor)
             )
             .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
@@ -210,5 +261,22 @@ public struct NotificationToastView: View {
         [banner.headline, banner.reactionBadge, banner.body]
             .compactMap { $0 }
             .joined(separator: ", ")
+    }
+}
+
+// MARK: - Le geste de la bannière (#8723)
+
+/// Ce que décide un geste relâché sur la bannière. Vers le HAUT (ou lancé
+/// vers le haut) ferme ; vers le BAS ouvre l'aperçu ; en deçà, rien. Pur :
+/// c'est la seule partie du geste qu'un témoin peut tenir.
+public enum NotificationBannerSwipe: Equatable, Sendable {
+    case dismiss
+    case preview
+    case none
+
+    public static func outcome(translation: CGFloat, predictedEnd: CGFloat) -> NotificationBannerSwipe {
+        if translation < -30 || predictedEnd < -80 { return .dismiss }
+        if translation > 36 { return .preview }
+        return .none
     }
 }

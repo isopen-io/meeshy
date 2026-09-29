@@ -104,6 +104,7 @@ import {
   createPostRepostNotification,
   createCommentReplyNotification,
   createCommentLikeNotification,
+  createCommentReactionNotification,
 } from './builders/social-engagement';
 import {
   createConversationInviteNotification,
@@ -2031,118 +2032,10 @@ export class NotificationService {
     }
   }
 
-  async createCommentReactionNotification(params: {
-    commentAuthorId: string;
-    reactorUserId: string;
-    commentId: string;
-    postId: string;
-    reactionEmoji: string;
-    /** Truncated comment content (≤ 80 chars) to inject into the body. */
-    commentPreview?: string;
-    /** Display name (fallback: username) of the post/story author. */
-    postAuthorName?: string;
-    /**
-     * Type d'entité portant le commentaire réagi. Mirror du sibling
-     * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
-     * dans la métadonnée ni dans le corps localisé.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-  }): Promise<void> {
-    if (params.commentAuthorId === params.reactorUserId) return;
-
-    // Anti-spam: throttle reaction notifications per sender→recipient pair
-    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
-      return;
-    }
-
-    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return;
-
-    const reactor = await this.prisma.user.findUnique({
-      where: { id: params.reactorUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!reactor) return;
-
-    // Body verbeux (spec user 2026-05-28) : "[reactor] a réagi [emoji] à votre
-    // commentaire sur la story de [story_author]". Le précédent body
-    // ne contenait QUE `reactionEmoji` (e.g. "❤️"), trop sommaire — le
-    // destinataire ne savait pas QUI avait réagi NI sur QUEL commentaire /
-    // QUELLE story.
-    const reactorName = reactor.displayName?.trim()
-      || reactor.username?.trim()
-      || 'Quelqu’un';
-    const lang = await this.resolveRecipientLang(params.commentAuthorId);
-    const body = notificationString(lang, 'reaction.commentVerbose', {
-      actor: reactorName,
-      emoji: params.reactionEmoji,
-      author: params.postAuthorName,
-      postType: params.postType,
-    });
-
-    // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
-    // commentaire qui a reçu la réaction. Permet au destinataire de savoir
-    // *quel* de ses commentaires reçoit l'engagement sans avoir à ouvrir la
-    // notification.
-    // Extrait NORMALISÉ une fois : il sert au sertissage du sous-titre ET, en
-    // métadonnée, de clé de réécriture quand le commentaire est édité. Les
-    // dériver deux fois les ferait diverger au premier changement de troncature,
-    // et la substitution ne retrouverait alors plus sa chaîne.
-    const trimmedCommentPreview = params.commentPreview?.trim() ?? '';
-    const subtitle = trimmedCommentPreview !== ''
-      ? `« ${trimmedCommentPreview} »`
-      : undefined;
-
-    await this.createNotification({
-      userId: params.commentAuthorId,
-      type: 'comment_reaction',
-      priority: 'low',
-      content: body,
-      subtitle,
-      lang,
-
-      actor: {
-        id: params.reactorUserId,
-        username: reactor.username,
-        displayName: reactor.displayName,
-        avatar: reactor.avatar,
-      },
-
-      // postId/commentId vivent dans context (cible de navigation = contexte
-      // central de la notif). Ils sont désormais exposés par le schema de
-      // réponse (notificationContextSchema) — plus de strip côté REST.
-      context: {
-        postId: params.postId,
-        commentId: params.commentId,
-      },
-
-      metadata: {
-        action: 'view_post',
-        reactionEmoji: params.reactionEmoji,
-        // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
-        // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
-        // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
-        postType: params.postType ?? 'POST',
-        // L'extrait est SERTI dans le `subtitle` composé juste au-dessus
-        // (« « … » »), et le sertissage n'est pas inversible. Le ranger aussi
-        // ici rend la ligne AUTO-DESCRIPTIVE : c'est la seule chose qui permet
-        // à `reproduceEditedSubjectNotifications` de savoir quelle portion du
-        // sous-titre décrivait le commentaire, donc de la réécrire quand
-        // celui-ci est édité. Sans elle, ce type — et lui seul de toute la
-        // famille du fil — garderait l'ancien texte pour toujours. Même clé
-        // que ses voisins `comment_like` / `post_comment`.
-        //
-        // Stocké VERBATIM, et non re-tronqué : la réécriture cherche cette
-        // chaîne DANS le sous-titre, donc les deux doivent être identiques au
-        // caractère près. `truncateMessage` coupe aux MOTS — l'appliquer ici
-        // ferait diverger la copie du sertissage sur tout extrait long, et la
-        // substitution ne trouverait plus rien. Les appelants bornent déjà à
-        // ~80 caractères.
-        ...(trimmedCommentPreview !== ''
-          ? { commentPreview: trimmedCommentPreview }
-          : {}),
-      },
-    });
+  async createCommentReactionNotification(
+    params: Parameters<typeof createCommentReactionNotification>[1]
+  ): Promise<void> {
+    return createCommentReactionNotification(this.builderDependencies(), params);
   }
 
   // ==============================================

@@ -127,6 +127,15 @@ export function levelIndexOf(threshold: number): number {
   return index === -1 ? 0 : index + 1;
 }
 
+/**
+ * Ce que le GESTE sait de plus que l'axe : qui l'a déclenché quand ce n'est
+ * pas le crédité lui-même (`social.invite_joined` crédite l'inviteur pour
+ * l'inscription d'un AUTRE).
+ */
+export type EngagementActivityOptions = {
+  readonly actorId?: string;
+};
+
 export class EngagementService {
   /** Cache par compte des ENTRÉES de l'élan — voir `ELAN_CACHE_TTL_MS`. */
   private readonly elanCache = new Map<string, ElanInputs>();
@@ -223,7 +232,11 @@ export class EngagementService {
    * recalcul complet) — un compteur qui passe de N à N+1 ne peut rendre
    * neuf qu'un palier dans `]N, N+1]`.
    */
-  async recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void> {
+  async recordActivity(
+    userId: string,
+    axisKey: EngagementAxisKey,
+    options: EngagementActivityOptions = {},
+  ): Promise<void> {
     // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
     // compteur et le score : deux résolutions indépendantes pourraient tomber
     // de part et d'autre de la péremption du cache et créditer deux montants
@@ -246,7 +259,7 @@ export class EngagementService {
     );
 
     for (const threshold of crossedThresholds) {
-      await this.tryAwardBadge(userId, axisKey, threshold);
+      await this.tryAwardBadge(userId, axisKey, threshold, options.actorId);
     }
 
     await this.tryAwardAchievements(userId, axisKey, previousCount);
@@ -294,6 +307,7 @@ export class EngagementService {
     userId: string,
     axisKey: EngagementAxisKey,
     threshold: number,
+    actorId?: string,
   ): Promise<void> {
     try {
       await this.prisma.engagementMilestone.create({
@@ -311,6 +325,7 @@ export class EngagementService {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
       const lang = recipientLanguage(user, 'fr');
+      const actor = await this.loadBadgeActor(actorId);
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
       // Le MOT, jamais la clé : « Badge débloqué : conversation.private ·
       // palier 10 » a été servi en production (2026-09-08) parce que la clé
@@ -327,6 +342,7 @@ export class EngagementService {
           count: threshold,
         }),
         context: {},
+        ...(actor ? { actor } : {}),
         metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold },
       });
     } catch (err) {
@@ -337,6 +353,21 @@ export class EngagementService {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  /**
+   * La personne dont le geste a fait franchir le palier — pour
+   * `social.invite_joined`, l'invité qui vient de s'inscrire (#8724). La ligne
+   * de notification la NOMME et propose de lui écrire. Introuvable ⇒ le
+   * badge part sans acteur, comme avant.
+   */
+  private async loadBadgeActor(actorId: string | undefined) {
+    if (!actorId) return null;
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, username: true, displayName: true, avatar: true },
+    });
+    return actor ?? null;
   }
 
   /**
