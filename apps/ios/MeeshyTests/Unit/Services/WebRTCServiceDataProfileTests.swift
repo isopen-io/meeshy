@@ -4,10 +4,10 @@ import XCTest
 @MainActor
 final class WebRTCServiceDataProfileTests: XCTestCase {
 
-    private func makeSUT() -> (sut: WebRTCService, client: DataProfileRecordingClient, monitor: MockCallNetworkPathMonitor) {
+    private func makeSUT(faults: RecordingMediaFaults = RecordingMediaFaults()) -> (sut: WebRTCService, client: DataProfileRecordingClient, monitor: MockCallNetworkPathMonitor) {
         let client = DataProfileRecordingClient()
         let monitor = MockCallNetworkPathMonitor()
-        let sut = WebRTCService(client: client, pathMonitor: monitor)
+        let sut = WebRTCService(client: client, pathMonitor: monitor, mediaFaults: faults)
         return (sut, client, monitor)
     }
 
@@ -120,6 +120,56 @@ final class WebRTCServiceDataProfileTests: XCTestCase {
         XCTAssertEqual(client.audioEncodings.last, budget.audio.maxAverageBitrateBps)
     }
 
+    // MARK: - Media faults (#8698)
+
+    func test_startLocalMedia_failure_reportsTheCaptureFault() async {
+        let faults = RecordingMediaFaults()
+        let (sut, client, _) = makeSUT(faults: faults)
+        client.startLocalMediaError = WebRTCError.noPeerConnection
+
+        _ = try? await sut.startLocalMedia(isVideo: true)
+
+        XCTAssertEqual(faults.stages, ["local-media.video"])
+    }
+
+    func test_upgradeToVideo_failure_reportsTheCameraFault() async {
+        let faults = RecordingMediaFaults()
+        let (sut, client, _) = makeSUT(faults: faults)
+        client.enableLocalVideoError = WebRTCError.cameraPermissionDenied
+
+        _ = try? await sut.upgradeToVideo()
+
+        XCTAssertEqual(faults.stages, ["camera"])
+    }
+
+    func test_switchCamera_failure_reportsTheCameraSwitchFault() async {
+        let faults = RecordingMediaFaults()
+        let (sut, client, _) = makeSUT(faults: faults)
+        client.switchCameraError = WebRTCError.notSupported
+        let switched = expectation(description: "switch resolved")
+        let outcome = SwitchOutcome()
+
+        sut.switchCamera { succeeded in
+            outcome.succeeded = succeeded
+            switched.fulfill()
+        }
+        await fulfillment(of: [switched], timeout: 1)
+
+        XCTAssertEqual(outcome.succeeded, false)
+        XCTAssertEqual(faults.stages, ["camera-switch"])
+    }
+
+    func test_switchCamera_success_reportsNothing() async {
+        let faults = RecordingMediaFaults()
+        let (sut, _, _) = makeSUT(faults: faults)
+        let switched = expectation(description: "switch resolved")
+
+        sut.switchCamera { _ in switched.fulfill() }
+        await fulfillment(of: [switched], timeout: 1)
+
+        XCTAssertTrue(faults.stages.isEmpty)
+    }
+
     func test_close_stopsWatchingAndResetsToWifi() {
         let (sut, client, monitor) = makeSUT()
         _ = sut.configure(isVideo: true)
@@ -135,6 +185,18 @@ final class WebRTCServiceDataProfileTests: XCTestCase {
 }
 
 // MARK: - Doubles
+
+private final class SwitchOutcome: @unchecked Sendable {
+    var succeeded: Bool?
+}
+
+private final class RecordingMediaFaults: CallMediaFaultReporting {
+    private(set) var stages: [String] = []
+
+    func report(stage: String, error: Error) {
+        stages.append(stage)
+    }
+}
 
 private final class MockCallNetworkPathMonitor: CallNetworkPathProviding {
     private(set) var startCallCount = 0
@@ -172,6 +234,9 @@ private final class DataProfileRecordingClient: WebRTCClientProviding, CallDataP
     var hasLocalVideoTrack = false
 
     var configureError: Error?
+    var startLocalMediaError: Error?
+    var enableLocalVideoError: Error?
+    var switchCameraError: Error?
     private(set) var appliedProfiles: [CallDataProfile] = []
     private(set) var audioEncodings: [Int] = []
     private(set) var videoEncodings: [RecordedVideoEncoding] = []
@@ -191,7 +256,9 @@ private final class DataProfileRecordingClient: WebRTCClientProviding, CallDataP
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { SessionDescription(type: .answer, sdp: "answer") }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}
     func addIceCandidate(_ candidate: IceCandidate) async throws {}
-    func startLocalMedia(type: CallMediaType) async throws {}
+    func startLocalMedia(type: CallMediaType) async throws {
+        if let startLocalMediaError { throw startLocalMediaError }
+    }
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
 
@@ -208,9 +275,14 @@ private final class DataProfileRecordingClient: WebRTCClientProviding, CallDataP
         audioEncodings.append(maxBitrateBps)
     }
 
-    func enableLocalVideo() async throws -> Bool { false }
+    func enableLocalVideo() async throws -> Bool {
+        if let enableLocalVideoError { throw enableLocalVideoError }
+        return false
+    }
     func disableLocalVideo() async -> Bool { false }
-    func switchCamera() async throws {}
+    func switchCamera() async throws {
+        if let switchCameraError { throw switchCameraError }
+    }
     func availableCameras() -> [CameraDeviceOption] { [] }
     func switchToCamera(uniqueID: String) async throws {}
     func getStats() async -> CallStats? { nil }

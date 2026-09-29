@@ -336,6 +336,7 @@ final class WebRTCService {
                 completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
+                self?.mediaFaults.report(stage: "camera-switch", error: error)
                 completion?(false)
             }
         }
@@ -359,6 +360,7 @@ final class WebRTCService {
                 completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
+                self?.mediaFaults.report(stage: "camera-switch", error: error)
                 completion?(false)
             }
         }
