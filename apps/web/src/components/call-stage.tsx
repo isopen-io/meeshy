@@ -15,6 +15,7 @@ import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/c
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { cameraMirrored } from '@/lib/media/camera-mirror';
 
 /**
  * **LA SCÈNE DE L'APPEL** (#6382, #8063, #8392) — ce que l'écran d'appel montre
@@ -53,6 +54,9 @@ const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 
 
 const viewport = () => (typeof window === 'undefined' ? { width: 390, height: 844 } : { width: window.innerWidth, height: window.innerHeight });
 
+/** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
+export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing });
+
 const INK_2 = 'rgba(255,255,255,0.72)';
 
 type StageProps = {
@@ -75,7 +79,7 @@ const controlsTop = { top: 'calc(env(safe-area-inset-top) + 3.5rem)' } as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
-  const selfMirrored = call.facing === 'user' && !call.screenSharing;
+  const selfMirrored = selfPreviewMirrored(call);
   if (sharer === null) return null;
   return (
     <div className="absolute inset-0" data-call-shared-screen="">
@@ -112,7 +116,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const firstPeer = orderedMembers(call.members)[0];
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
-  const selfMirrored = call.facing === 'user' && !call.screenSharing;
+  const selfMirrored = selfPreviewMirrored(call);
   const you = translate(language, 'call.you');
   const main = swapped ? call.localStream : remoteStream;
   const corner = swapped ? remoteStream : call.localStream;
@@ -177,7 +181,7 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
       <CallGrid
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
-        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: call.facing === 'user' && !call.screenSharing }}
+        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call) }}
         choice={choice}
         onChoose={onChoose}
         immersive={immersive}

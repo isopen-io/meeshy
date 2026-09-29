@@ -8,7 +8,7 @@ import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-c
 import { CallPeerAlerts } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, type SelfView } from '@/components/call-stage';
+import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -463,7 +463,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         language={language}
         colorAvailable={support.color}
         blurAvailable={support.blur}
-        preview={<StreamVideo stream={call.localStream} mirrored={call.facing === 'user' && !call.screenSharing} className="size-full" />}
+        preview={<StreamVideo stream={call.localStream} mirrored={selfPreviewMirrored(call)} className="size-full" />}
         quitGlyph={closeGlyph}
         onExit={exitMode}
         onWheel={onRowWheel}
