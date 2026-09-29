@@ -868,7 +868,8 @@ extension ConversationSyncEngine {
             return .edited(
                 messageId: apiMessage.id,
                 content: content,
-                editedAt: apiMessage.editedAt ?? Date()
+                editedAt: apiMessage.editedAt ?? Date(),
+                marksEdited: apiMessage.isEdited ?? true
             )
         }
         return .callNoticeUpdated(

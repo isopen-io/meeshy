@@ -217,7 +217,7 @@ extension StarredMessagesStore {
             }
         case let .unstarred(messageId), let .deleted(messageId, _), let .expired(messageId, _):
             await MainActor.run { (store ?? .shared).remove(messageId: messageId) }
-        case let .edited(messageId, content, _):
+        case let .edited(messageId, content, _, _):
             await MainActor.run { (store ?? .shared).updatePreview(messageId: messageId, contentPreview: content) }
         case .callNoticeUpdated, .reactionAdded, .reactionRemoved, .consumed, .viewOnceOpened, .citedPostWithdrawn:
             return

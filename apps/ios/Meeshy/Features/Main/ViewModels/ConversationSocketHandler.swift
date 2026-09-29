@@ -666,9 +666,11 @@ final class ConversationSocketHandler {
                         // out-of-order edit events, which only works if every device
                         // is comparing the same (server) clock.
                         let editedAt = apiMsg.editedAt ?? Date()
+                        let marksEdited = apiMsg.isEdited ?? true
                         Task {
                             do {
-                                try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
+                                try await persistence.markEdited(
+                                    localId: msgId, newContent: content, editedAt: editedAt, marksEdited: marksEdited)
                             } catch {
                                 Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                             }

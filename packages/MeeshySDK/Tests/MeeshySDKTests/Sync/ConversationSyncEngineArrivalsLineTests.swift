@@ -185,7 +185,7 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
 
     private func makeStore() throws -> (DatabaseQueue, MessagePersistenceActor) {
         let db = try DatabaseQueue()
-        try AppDatabase.runMigrations(on: db)
+        try MessageDatabaseMigrations.runAll(on: db)
         var record = MessageRecordFactory.make(localId: "m-arrivals", conversationId: "c-global",
                                                content: "Aïcha vient d’arriver", state: .delivered)
         record.messageType = "system"
