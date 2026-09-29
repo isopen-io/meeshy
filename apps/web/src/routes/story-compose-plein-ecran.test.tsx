@@ -361,6 +361,35 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
   });
 
+  /** #8681 (jumelle de #8680) — le double-toucher d'un texte ÉCRIT ouvre la
+   * même édition que son AJOUT : scène réduite (chrome effacé), outils du
+   * texte, (X), saisie sur la scène à la pose de l'objet — aucun autre éditeur. */
+  test('double-toucher un texte écrit ouvre EXACTEMENT l’édition de son ajout, jamais un autre éditeur', async () => {
+    const el = mount(harness({}).deps);
+    const field = () => el.querySelector<HTMLTextAreaElement>('#story-studio-text');
+    const edition = () => ({
+      chrome: ['[data-story-studio-top]', '[data-story-studio-rail="leading"]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome')),
+      editors: [...el.querySelectorAll('[data-story-object-editor]')].map((editor) => editor.getAttribute('data-story-object-editor')),
+      plaques: el.querySelectorAll('[data-story-edit-plaque]').length,
+      close: el.querySelector('[data-story-edit-plaque] [data-story-tool-close]') !== null,
+      target: field()?.dataset.storyTextTarget ?? null,
+      focused: document.activeElement !== null && document.activeElement === field(),
+      onScene: (field()?.style.transform ?? '').startsWith('translate(-50%, -50%) rotate('),
+    });
+    click(el.querySelector('[data-story-option="add-text"]'));
+    await flush(() => el.querySelector('[data-story-object-editor]') !== null);
+    const added = edition();
+    expect(added).toEqual({ chrome: ['hidden', 'hidden'], editors: [added.target], plaques: 1, close: true, target: added.target, focused: true, onScene: true });
+    typeText(el, 'Écrit');
+    click(el.querySelector('[data-story-edit-done]'));
+    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    await flush(() => el.querySelector(`[data-scene-object-id="${added.target}"]`) !== null);
+    tapObject(el, added.target!);
+    tapObject(el, added.target!);
+    await flush(() => el.querySelector('[data-story-object-editor]') !== null);
+    expect(edition()).toEqual(added);
+  });
+
   test('le clic droit (appui long au doigt) ouvre le menu : Dupliquer pose une copie', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Un');
@@ -494,5 +523,24 @@ describe('lot 7 — le filtre d’un média posé ne s’applique qu’à lui', 
     click(el.querySelector('[data-story-object-edit="overlay"]'));
     await flush(() => el.querySelector('[data-story-overlay-editor]') !== null);
     expect(el.querySelector('[data-story-option^="trim"]')).toBeNull();
+  });
+});
+
+/** #8681 (jumelle de #8680, porteur 2026-09-29 : « lorsqu'on touche le premier
+ * outil image, ça doit ouvrir directement la photothèque »). */
+describe('la première porte ouvre directement la photothèque', () => {
+  test('le premier contrôle du couloir est le sélecteur de fichiers des photos et vidéos, sans menu intermédiaire', () => {
+    const el = mount(harness({}).deps);
+    const rail = el.querySelector('[data-story-studio-rail="leading"]')!;
+    const first = rail.querySelector('input, button, [role="button"], [aria-haspopup]');
+    expect(first?.tagName).toBe('INPUT');
+    expect(first?.getAttribute('type')).toBe('file');
+    expect(first?.getAttribute('data-door')).toBe('visual');
+    expect(first?.getAttribute('accept')).toBe('image/*,video/*');
+    // Le disque EST l'étiquette du champ : le toucher ouvre le sélecteur du
+    // système dans le même geste, sans feuille ni menu à traverser.
+    expect(first?.parentElement?.tagName).toBe('LABEL');
+    expect(first?.parentElement?.parentElement).toBe(rail);
+    expect(rail.querySelector('[aria-haspopup], [role="menu"]')).toBeNull();
   });
 });
