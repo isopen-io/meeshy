@@ -252,7 +252,10 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
             averageBrightness: averageBrightness,
             isConstrained: isAutoDegraded || isPowerConstrained()
         )
-        guard hasChosenFilters || lowLightBoost != nil else { return pixelBuffer }
+        guard hasChosenFilters || lowLightBoost != nil else {
+            updateAutoDegradation(elapsedMs: 0)
+            return pixelBuffer
+        }
 
         let start = CACurrentMediaTime()
 
