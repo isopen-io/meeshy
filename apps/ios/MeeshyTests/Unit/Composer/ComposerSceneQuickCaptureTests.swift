@@ -84,9 +84,9 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
 
     @MainActor
     func test_hintCopy_estServiDansLesSeptLangues() {
-        XCTAssertFalse(ComposerSceneCameraCopy.quickCaptureHint(.photoOrVideo).isEmpty)
-        XCTAssertNotEqual(ComposerSceneCameraCopy.quickCaptureHint(.photoOrVideo),
-                          ComposerSceneCameraCopy.quickCaptureHint(.videoOnly))
+        XCTAssertFalse(ComposerSceneCameraCopy.gestureLine(.tapPhoto).isEmpty)
+        XCTAssertNotEqual(ComposerSceneCameraCopy.gestureLine(.tapPhoto),
+                          ComposerSceneCameraCopy.gestureLine(.holdFilm))
     }
 
     // MARK: - Le flash
