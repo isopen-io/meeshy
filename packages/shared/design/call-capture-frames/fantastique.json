@@ -1,4 +1,593 @@
 {
   "mood": "fantastique",
-  "motifs": []
+  "motifs": [
+    {
+      "id": "fantastique.tarot",
+      "mood": "fantastique",
+      "name": "Tarot",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.18,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.04,
+          "stroke": {
+            "color": "#D4AF37",
+            "width": 0.008
+          },
+          "double": true,
+          "card": {
+            "color": "#241338",
+            "pad": 0.05,
+            "foot": 0.05
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#2E1A47",
+            "#140B24"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "stars",
+          "color": "#D4AF37",
+          "opacity": 0.18
+        },
+        "border": {
+          "kind": "baroque",
+          "color": "#D4AF37",
+          "width": 0.006,
+          "inset": 0.025
+        },
+        "ornaments": [
+          {
+            "kind": "stars",
+            "color": "#D4AF3766",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "moon",
+            "color": "#F3E2A9",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-right",
+          "color": "#D4AF37",
+          "size": "s"
+        },
+        "names": {
+          "show": "name",
+          "style": "plate",
+          "font": "fantasy",
+          "color": "#F3E2A9",
+          "fill": "#2E1A47E6"
+        },
+        "title": {
+          "source": "group",
+          "font": "fantasy",
+          "color": "#D4AF37",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "calligraphy",
+          "color": "#F3E2A9",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "cascade",
+            "margin": 0.08,
+            "gap": 0.03,
+            "top": 0.2,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.04,
+            "stroke": {
+              "color": "#D4AF37",
+              "width": 0.008
+            },
+            "double": true,
+            "card": {
+              "color": "#241338",
+              "pad": 0.05,
+              "foot": 0.05
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "warm"
+          },
+          "title": {
+            "source": "names",
+            "font": "fantasy",
+            "color": "#D4AF37",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          },
+          "names": {
+            "show": "name",
+            "style": "ribbon",
+            "font": "fantasy",
+            "color": "#2E1A47",
+            "fill": "#F3E2A9"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.2,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.04,
+            "stroke": {
+              "color": "#D4AF37",
+              "width": 0.008
+            },
+            "double": true,
+            "card": {
+              "color": "#241338",
+              "pad": 0.05,
+              "foot": 0.05
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "warm"
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.18,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "fantasy",
+            "color": "#F3E2A9",
+            "fill": "#140B24D9"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.04,
+            "stroke": {
+              "color": "#D4AF37",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "fantasy",
+            "color": "#F3E2A9"
+          },
+          "ornaments": [
+            {
+              "kind": "stars",
+              "color": "#D4AF3755",
+              "density": "low",
+              "layer": "back"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fantastique.grimoire",
+      "mood": "fantastique",
+      "name": "Grimoire",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.08,
+          "gap": 0.03,
+          "top": 0.2,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "arch",
+          "stroke": {
+            "color": "#5B3A1E",
+            "width": 0.006
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "sepia"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#E9D8B4",
+            "#CDB384"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "damask",
+          "color": "#7A5A2F",
+          "opacity": 0.08
+        },
+        "border": {
+          "kind": "baroque",
+          "color": "#5B3A1E",
+          "width": 0.007,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "runes",
+            "color": "#7A5A2F40",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "vignette",
+            "color": "#5B3A1E66",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "candles",
+            "color": "#B8862B",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#5B3A1E",
+          "size": "m",
+          "font": "calligraphy"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "calligraphy",
+          "color": "#3B2412"
+        },
+        "title": {
+          "source": "group",
+          "font": "calligraphy",
+          "color": "#3B2412",
+          "place": "top",
+          "size": "l",
+          "effect": "none"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "fantasy",
+          "color": "#7A5A2F",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.09,
+            "gap": 0.04,
+            "top": 0.2,
+            "bottom": 0.12
+          },
+          "title": {
+            "source": "names",
+            "font": "calligraphy",
+            "color": "#3B2412",
+            "place": "top",
+            "size": "l",
+            "effect": "none"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.08,
+            "gap": 0.03,
+            "top": 0.2,
+            "bottom": 0.12
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.07,
+            "gap": 0.025,
+            "top": 0.18,
+            "bottom": 0.16
+          },
+          "slot": {
+            "shape": "oval",
+            "stroke": {
+              "color": "#5B3A1E",
+              "width": 0.005
+            },
+            "double": true,
+            "tilt": "none",
+            "tone": "sepia"
+          },
+          "names": {
+            "show": "name",
+            "style": "list",
+            "font": "calligraphy",
+            "color": "#3B2412"
+          }
+        }
+      }
+    },
+    {
+      "id": "fantastique.portail",
+      "mood": "fantastique",
+      "name": "Portail",
+      "base": {
+        "layout": {
+          "arrangement": "orbit",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "circle",
+          "stroke": {
+            "color": "#D4AF37",
+            "width": 0.006
+          },
+          "glow": "#50C878",
+          "tilt": "none",
+          "tone": "duotone",
+          "duotone": [
+            "#1A0E2E",
+            "#C6F7DE"
+          ]
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#0E3B2E",
+            "#2E1A47",
+            "#0A0614"
+          ]
+        },
+        "ornaments": [
+          {
+            "kind": "orbits",
+            "color": "#D4AF3780",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "runes",
+            "color": "#50C87866",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#F3E2A9",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#D4AF37",
+          "size": "m"
+        },
+        "names": {
+          "show": "handle",
+          "style": "badge",
+          "font": "fantasy",
+          "color": "#F3E2A9",
+          "fill": "#140B24D9"
+        },
+        "title": {
+          "source": "group",
+          "font": "fantasy",
+          "color": "#F3E2A9",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "handle",
+            "style": "caption",
+            "font": "fantasy",
+            "color": "#F3E2A9"
+          },
+          "title": {
+            "source": "names",
+            "font": "fantasy",
+            "color": "#F3E2A9",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "scatter",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "circle",
+            "stroke": {
+              "color": "#D4AF37",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#1A0E2E",
+              "#C6F7DE"
+            ]
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "fantasy",
+            "color": "#F3E2A9"
+          }
+        }
+      }
+    },
+    {
+      "id": "fantastique.pacte",
+      "mood": "fantastique",
+      "name": "Pacte",
+      "base": {
+        "layout": {
+          "arrangement": "column",
+          "margin": 0.08,
+          "gap": 0.05,
+          "top": 0.22,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "diamond",
+          "stroke": {
+            "color": "#D4AF37",
+            "width": 0.007
+          },
+          "double": true,
+          "glow": "#50C87899",
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#0B3D2E",
+            "#062019"
+          ],
+          "angle": 20
+        },
+        "pattern": {
+          "kind": "damask",
+          "color": "#D4AF37",
+          "opacity": 0.07
+        },
+        "border": {
+          "kind": "double",
+          "color": "#D4AF37",
+          "width": 0.005,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "runes",
+            "color": "#D4AF3759",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "lightning",
+            "color": "#C6F7DE",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "watermark",
+          "color": "#D4AF3726",
+          "size": "s"
+        },
+        "names": {
+          "show": "both",
+          "style": "ribbon",
+          "font": "calligraphy",
+          "color": "#062019",
+          "fill": "#D4AF37"
+        },
+        "title": {
+          "source": "names",
+          "font": "calligraphy",
+          "color": "#F3E2A9",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "fantasy",
+          "color": "#D4AF37",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
 }
