@@ -23,9 +23,15 @@ enum ConversationLinkCardCopy {
     static var joinAnonymously: String {
         String(localized: "conversationCard.joinAnonymously", defaultValue: "Rejoindre en anonyme", bundle: .main)
     }
-    static var joinWithAccountA11y: String {
-        String(localized: "conversationCard.a11y.joinWithAccount",
-               defaultValue: "Rejoindre avec mon compte", bundle: .main)
+    /// « Rejoindre avec le compte @pseudo » ; faute de nom, « Rejoindre avec mon
+    /// compte ».
+    static func joinWithAccountA11y(_ account: String?) -> String {
+        guard let account else {
+            return String(localized: "conversationCard.a11y.joinWithAccount",
+                          defaultValue: "Rejoindre avec mon compte", bundle: .main)
+        }
+        return String(localized: "conversationCard.a11y.joinWithNamedAccount",
+                      defaultValue: "Rejoindre avec le compte \(account)", bundle: .main)
     }
     static var leave: String {
         String(localized: "conversationCard.leave", defaultValue: "Quitter", bundle: .main)

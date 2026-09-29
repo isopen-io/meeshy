@@ -64,6 +64,7 @@ struct ConversationLinkCard: View {
                     errorMessage: model.errorMessage,
                     accentHex: ConversationLinkCardBody.accentHex(for: card),
                     isDark: isDark,
+                    joinAccount: model.joinAccount,
                     onJoin: { Task { await model.join() } },
                     onJoinAnonymously: { model.joinAnonymously() },
                     onLeave: { confirmsLeave = true },

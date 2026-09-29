@@ -59,6 +59,8 @@ final class ConversationLinkCardViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     let target: ConversationCardTarget
+    /// Le compte que « Rejoindre » engage, nommé sur son bouton (#8726).
+    let joinAccount: ConversationCardJoinAccount?
     private let service: ConversationCardServiceProviding
     private let performer: ConversationCardActionPerforming
     private var isFresh: Bool
@@ -73,11 +75,13 @@ final class ConversationLinkCardViewModel: ObservableObject {
     init(
         target: ConversationCardTarget,
         service: ConversationCardServiceProviding = ConversationCardService.shared,
-        performer: ConversationCardActionPerforming = LiveConversationCardActions()
+        performer: ConversationCardActionPerforming = LiveConversationCardActions(),
+        joinAccount: ConversationCardJoinAccount? = ConversationCardJoinAccount.current()
     ) {
         self.target = target
         self.service = service
         self.performer = performer
+        self.joinAccount = joinAccount
         // Cache d'abord, à la construction : une carte déjà vue se rend dès la
         // première image, sans squelette.
         switch service.cached(target) {

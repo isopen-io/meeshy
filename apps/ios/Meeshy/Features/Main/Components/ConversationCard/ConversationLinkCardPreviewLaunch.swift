@@ -43,7 +43,8 @@ struct ConversationLinkCardPreviewScreen: View {
                         model: ConversationLinkCardViewModel(
                             target: item.target,
                             service: PreviewCardService(resolution: .card(item.card)),
-                            performer: PreviewCardActions(succeeds: ConversationLinkCardPreviewLaunch.joinSucceeds)
+                            performer: PreviewCardActions(succeeds: ConversationLinkCardPreviewLaunch.joinSucceeds),
+                            joinAccount: ConversationCardJoinAccount(title: "Moussa Traoré", handle: "@moussa")
                         )
                     )
                     .frame(maxWidth: 300, alignment: .leading)
@@ -84,7 +85,8 @@ struct ConversationLinkCardPreviewScreen: View {
                                                requiresAccount: self == .accountOnly,
                                                canJoinAnonymously: self == .guestFriendly),
                 link: ConversationCardLink(identifier: identifier, isActive: true, expiresAt: nil),
-                inviter: ConversationCardInviter(displayName: "Awa", username: "awa", avatarUrl: nil)
+                inviter: ConversationCardInviter(displayName: "Awa", username: "awa", avatarUrl: nil),
+                inviteMessage: self == .guestFriendly ? "On pratique l'espagnol le jeudi soir, viens avec tes questions !" : nil
             )
         }
 

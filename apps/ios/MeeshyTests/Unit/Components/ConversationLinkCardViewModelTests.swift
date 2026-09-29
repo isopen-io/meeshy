@@ -302,6 +302,13 @@ final class ConversationLinkCardViewModelTests: XCTestCase {
         XCTAssertEqual(actions.joinCount, 0)
     }
 
+    func test_joinAccount_isTheInjectedConnectedAccount() {
+        let account = ConversationCardJoinAccount(title: "Awa", handle: "@awa")
+        let sut = ConversationLinkCardViewModel(target: .shareLink(identifier: "abc"), service: MockConversationCardService(),
+                                                performer: MockConversationCardActions(), joinAccount: account)
+        XCTAssertEqual(sut.joinAccount, account)
+    }
+
     func test_conversationChange_ofAnotherConversation_isIgnored() async {
         let (sut, service, _) = makeSUT(target: .direct(conversationId: "c1"), cached: .fresh(.privateConversation, age: 1))
         NotificationCenter.default.post(name: ConversationCardChange.notification,

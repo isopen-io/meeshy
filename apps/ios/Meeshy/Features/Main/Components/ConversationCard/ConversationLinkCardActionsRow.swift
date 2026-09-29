@@ -4,8 +4,8 @@ import MeeshyUI
 
 /// Les boutons de la carte, choisis par la règle pure du SDK
 /// (`ConversationCardActions`) :
-/// - non-membre ⇒ **Rejoindre ?** suivi de deux choix compacts, **Anonyme**
-///   (quand le lien l'autorise) et **Mon compte** (#8726) ;
+/// - non-membre ⇒ **Rejoindre ?** puis **Anonyme** (quand le lien l'autorise)
+///   | le **compte connecté**, nommé (#8726) ;
 /// - membre ⇒ **Quitter** EN PREMIER, puis **Ouvrir** ;
 /// - lien expiré ⇒ la mention « Lien expiré », aucun bouton.
 struct ConversationLinkCardActionsRow: View {
@@ -15,6 +15,7 @@ struct ConversationLinkCardActionsRow: View {
     let errorMessage: String?
     let accentHex: String
     let isDark: Bool
+    var joinAccount: ConversationCardJoinAccount? = nil
     let onJoin: () -> Void
     let onJoinAnonymously: () -> Void
     let onLeave: () -> Void
@@ -48,22 +49,14 @@ struct ConversationLinkCardActionsRow: View {
             case .none:
                 EmptyView()
             case .join(_, let allowsAnonymous):
-                // « Rejoindre ? » puis deux choix COMPACTS (directive porteur
-                // 2026-09-29, #8726) : question et réponses sur une ligne quand
-                // elles tiennent, la question au-dessus sinon.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: MeeshySpacing.sm) {
-                        joinPrompt
-                        Spacer(minLength: 0)
-                        joinChoices(allowsAnonymous: allowsAnonymous)
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        joinPrompt
+                // « Rejoindre ? » puis « Anonyme » | le compte, dans le gabarit
+                // arrondi de Quitter | Ouvrir (#8726, correction porteur
+                // 2026-09-29) : côte à côte quand ils tiennent, empilés sinon.
+                VStack(alignment: .leading, spacing: 6) {
+                    joinPrompt
+                    ViewThatFits(in: .horizontal) {
                         HStack(spacing: MeeshySpacing.sm) { joinChoices(allowsAnonymous: allowsAnonymous) }
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        joinPrompt
-                        joinChoices(allowsAnonymous: allowsAnonymous)
+                        VStack(spacing: MeeshySpacing.sm) { joinChoices(allowsAnonymous: allowsAnonymous) }
                     }
                 }
             case .leaveOrOpen:
@@ -94,57 +87,28 @@ struct ConversationLinkCardActionsRow: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// « Anonyme » (quand le lien l'autorise) puis « Mon compte ». Des capsules
-    /// légères, plus petites que les boutons pleine largeur de Quitter | Ouvrir ;
-    /// la cible reste de 44 pt par la zone de contact, pas par le dessin.
+    /// « Anonyme » (quand le lien l'autorise) puis le COMPTE, nommé par son nom
+    /// d'affichage ou son pseudo — « Mon compte » seulement faute de nom.
+    /// VoiceOver lit la phrase entière : un « Anonyme » ou un nom lu hors de sa
+    /// question ne dit pas ce qu'il fait.
     @ViewBuilder
     private func joinChoices(allowsAnonymous: Bool) -> some View {
         if allowsAnonymous {
-            compactChoice(ConversationLinkCardCopy.joinAsGuest, icon: "theatermasks.fill", filled: false,
-                          busy: false, a11yLabel: ConversationLinkCardCopy.joinAnonymously,
-                          id: "conversation-link-card-join-anonymous", action: onJoinAnonymously)
+            secondary(ConversationLinkCardCopy.joinAsGuest, icon: "theatermasks.fill", tint: accent,
+                      a11yLabel: ConversationLinkCardCopy.joinAnonymously,
+                      id: "conversation-link-card-join-anonymous", action: onJoinAnonymously)
         }
-        compactChoice(ConversationLinkCardCopy.joinWithAccount, icon: "person.crop.circle", filled: true,
-                      busy: pending == .joining, a11yLabel: ConversationLinkCardCopy.joinWithAccountA11y,
-                      id: "conversation-link-card-join", action: onJoin)
+        primary(joinAccount?.title ?? ConversationLinkCardCopy.joinWithAccount, icon: "person.crop.circle",
+                busy: pending == .joining, truncates: joinAccount != nil,
+                a11yLabel: ConversationLinkCardCopy.joinWithAccountA11y(joinAccount?.handle ?? joinAccount?.title),
+                id: "conversation-link-card-join", action: onJoin)
     }
 
-    private func compactChoice(_ title: String, icon: String, filled: Bool, busy: Bool, a11yLabel: String,
-                               id: String, action: @escaping () -> Void) -> some View {
-        let foreground: Color = filled ? .white : accent
-        return Button(action: action) {
-            HStack(spacing: 4) {
-                if busy {
-                    ProgressView()
-                        .tint(foreground)
-                        .controlSize(.mini)
-                } else {
-                    Image(systemName: icon)
-                        .accessibilityHidden(true)
-                }
-                Text(title)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .font(MeeshyFont.relative(13, weight: .semibold))
-            .foregroundColor(foreground)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(filled ? accent : accent.opacity(isDark ? 0.18 : 0.10)))
-            .overlay(Capsule().stroke(accent.opacity(filled ? 0 : 0.55), lineWidth: 1))
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(pending != .none)
-        .accessibilityLabel(busy ? ConversationLinkCardCopy.inProgress : a11yLabel)
-        .accessibilityIdentifier(id)
-    }
-
-    private func primary(_ title: String, icon: String, busy: Bool, id: String,
+    private func primary(_ title: String, icon: String, busy: Bool, truncates: Bool = false,
+                         a11yLabel: String? = nil, id: String,
                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            label(title, icon: icon, busy: busy, foreground: .white)
+            label(title, icon: icon, busy: busy, foreground: .white, truncates: truncates)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(LinearGradient(colors: [accent, accent.opacity(0.8)],
@@ -153,11 +117,12 @@ struct ConversationLinkCardActionsRow: View {
         }
         .buttonStyle(.plain)
         .disabled(pending != .none)
-        .accessibilityLabel(busy ? ConversationLinkCardCopy.inProgress : title)
+        .accessibilityLabel(busy ? ConversationLinkCardCopy.inProgress : (a11yLabel ?? title))
         .accessibilityIdentifier(id)
     }
 
-    private func secondary(_ title: String, icon: String, tint: Color, busy: Bool = false, id: String,
+    private func secondary(_ title: String, icon: String, tint: Color, busy: Bool = false,
+                           a11yLabel: String? = nil, id: String,
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             label(title, icon: icon, busy: busy, foreground: tint)
@@ -168,11 +133,14 @@ struct ConversationLinkCardActionsRow: View {
         }
         .buttonStyle(.plain)
         .disabled(pending != .none)
-        .accessibilityLabel(busy ? ConversationLinkCardCopy.inProgress : title)
+        .accessibilityLabel(busy ? ConversationLinkCardCopy.inProgress : (a11yLabel ?? title))
         .accessibilityIdentifier(id)
     }
 
-    private func label(_ title: String, icon: String, busy: Bool, foreground: Color) -> some View {
+    /// `truncates` : un NOM de compte peut être long ; il se coupe en fin de
+    /// ligne au lieu de déborder du bouton empilé.
+    private func label(_ title: String, icon: String, busy: Bool, foreground: Color,
+                       truncates: Bool = false) -> some View {
         HStack(spacing: 6) {
             if busy {
                 ProgressView()
@@ -184,7 +152,8 @@ struct ConversationLinkCardActionsRow: View {
             }
             Text(title)
                 .lineLimit(1)
-                .fixedSize()
+                .truncationMode(.tail)
+                .fixedSize(horizontal: !truncates, vertical: false)
         }
         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
         .foregroundColor(foreground)
