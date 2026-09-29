@@ -47,7 +47,7 @@ extension ConversationView {
             // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
             // unique, et la clause O13 tomberait par un simple défaut.
             isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur,
-            hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat
+            hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide
