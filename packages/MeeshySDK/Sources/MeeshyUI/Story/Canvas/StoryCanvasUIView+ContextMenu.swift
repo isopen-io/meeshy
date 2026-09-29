@@ -181,12 +181,27 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // sur autre chose.
         guard let kind = itemKind(forId: id) else { return nil }
 
+        // **L'hôte qui peint son propre menu le reçoit ici** (#8717) — l'appui
+        // long est reconnu, le système ne présente rien.
+        if let onItemMenuRequested {
+            onItemMenuRequested(id, kind, Self.normalized(location, in: bounds.size))
+            return nil
+        }
+
         return UIContextMenuConfiguration(
             identifier: id as NSString,
             previewProvider: nil
         ) { [weak self] _ in
             self?.contextMenu(for: id, kind: kind)
         }
+    }
+
+    /// Le point du doigt rapporté à la carte (0…1) — indépendant de l'échelle
+    /// à laquelle l'hôte projette le canvas.
+    nonisolated static func normalized(_ point: CGPoint, in size: CGSize) -> CGPoint {
+        guard size.width > 0, size.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
+        return CGPoint(x: min(max(point.x / size.width, 0), 1),
+                       y: min(max(point.y / size.height, 0), 1))
     }
 
     /// Construit le menu de l'élément `id`. Séparé de la configuration UIKit,

@@ -346,6 +346,10 @@ extension MeeshyComposerHost {
                 openObjectEditor(id, section: .media(.trim))
                 HapticFeedback.light()
             },
+            onItemMenu: { id, kind, point in
+                sceneObjectMenu = ComposerSceneMenuRequest(target: .object(id: id, kind: kind), anchor: point)
+                HapticFeedback.medium()
+            },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
             // **Le geste de la scène EST celui de l'obturateur** (directive

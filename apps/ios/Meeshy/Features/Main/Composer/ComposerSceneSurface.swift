@@ -79,6 +79,11 @@ struct ComposerSceneSurface: View {
     /// **« Rogner » dans l'appui long** (#8370, lot 6) : le rail des
     /// contrôleurs qui le portait est parti avec la directive du 2026-09-27.
     var onItemTrim: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
+    /// **Le menu d'appui long, peint par le meuble en verre** (#8717). Le
+    /// canvas remet l'objet et le point du doigt normalisé sur la carte ; une
+    /// puce sonore, que le canvas ne peint pas, le demande par son propre appui
+    /// long.
+    var onItemMenu: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil
     /// **Les familles dont l'hôte sait ouvrir l'éditeur** (#4937).
     ///
     /// Elle valait `[.text]` tant que l'éditeur d'objet ne savait éditer qu'un
@@ -336,6 +341,13 @@ struct ComposerSceneSurface: View {
                     binding.wrappedValue = objet
                 }
             )
+            // L'appui long d'une puce ouvre le MÊME menu de verre que les
+            // autres objets (#8717) — la puce est une vue SwiftUI, hors du
+            // canvas qui reconnaît l'appui long des quatre autres familles.
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                let son = binding.wrappedValue
+                onItemMenu?(son.id, .audio, CGPoint(x: son.x, y: son.y))
+            })
         }
     }
 
@@ -714,6 +726,7 @@ struct ComposerSceneSurface: View {
             selectionBadge: selectionBadge,
             timelineBridge: timelineBridge,
             onItemTrimRequested: onItemTrim,
+            onItemMenuRequested: onItemMenu,
             localMediaAliases: sceneLocalMediaAliases
         )
         // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur

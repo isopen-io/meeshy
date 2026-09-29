@@ -626,6 +626,10 @@ struct MeeshyComposerHost: View {
     /// La catégorie d'effets dont le carrousel est ouvert (#8712) — lue par
     /// `ComposerSceneEffects.carousel`, jamais telle quelle.
     @State var openSceneEffect: ComposerSceneEffect?
+    /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
+    /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
+    @State var sceneObjectMenu: ComposerSceneMenuRequest?
+    @State var sceneMenuSize: CGSize = .zero
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène (#4064).**
     ///
