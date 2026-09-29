@@ -207,6 +207,7 @@ struct CallView: View {
                 outgoingRingingView
             case .connecting:
                 connectingView
+                    .background { CallPreviewBackdrop(preview: .shared) }
             case .connected:
                 connectedView
             case .ended(let reason):

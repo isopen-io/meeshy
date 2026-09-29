@@ -10,7 +10,8 @@ enum CallPreviewPhase: Equatable, Sendable {
     case incomingRinging
     /// L'appel sortant attend que l'appelé décroche (`.ringing` puis `.offering`).
     case outgoingRinging
-    /// Décroché, la connexion s'établit : le vrai lien prend le relais.
+    /// Décroché, la connexion s'établit : l'aperçu tient jusqu'à ce que le
+    /// vrai lien soit connecté (#8627).
     case answering
     case connected
     case ended
@@ -60,7 +61,8 @@ protocol CallPreviewHostActing: AnyObject {
 ///
 /// Tout passe par `call:preview-signal`, jamais par `call:signal`, où une
 /// réponse décrocherait l'appel. CallKit ne sait pas montrer de vidéo : sur
-/// l'écran verrouillé, il n'y a pas d'aperçu.
+/// l'écran verrouillé, il n'y a pas d'aperçu — mais un appel signalé à CallKit
+/// dont l'app est au premier plan sonne aussi dans l'app, et s'y montre (#8627).
 @MainActor
 final class CallPreviewCoordinator: ObservableObject {
     nonisolated deinit {}
@@ -71,8 +73,11 @@ final class CallPreviewCoordinator: ObservableObject {
     @Published private(set) var previewVideoTrack: Any?
     /// Chez l'appelé : le lien d'aperçu est établi, on peut l'écouter.
     @Published private(set) var isPreviewConnected = false
-    /// Chez l'appelé : il a choisi d'entendre l'appelant.
+    /// Chez l'appelé : il a choisi d'entendre l'appelant — un choix qui peut
+    /// précéder le lien, et s'applique dès qu'il s'établit (#8627).
     @Published private(set) var isPreviewAudible = false
+    /// Chez l'appelé : le bouton son est proposé dès que l'appel 1:1 sonne.
+    @Published private(set) var offersSound = false
     /// Chez l'appelant : l'appelé le voit (ou l'entend) avant de décrocher.
     @Published private(set) var isSeenByCallee = false
 
@@ -86,6 +91,7 @@ final class CallPreviewCoordinator: ObservableObject {
     private var linkGeneration = 0
     private var requestedCallId: String?
     private var mutedWhileRinging = false
+    private var hostHearsPreview = false
     private var iceServers: [String: [IceServer]] = [:]
 
     init(
@@ -112,20 +118,28 @@ final class CallPreviewCoordinator: ObservableObject {
         case .outgoingRinging:
             followLocalMedia(previous: previous)
         case .answering:
-            closeLink(silencing: false)
+            break
         case .connected:
-            closeLink(silencing: false)
+            endPreview(silencing: false)
             restoreMicIfMutedWhileRinging()
         case .ended, .none:
-            closeLink(silencing: true)
+            endPreview(silencing: true)
             mutedWhileRinging = false
         }
+        offersSound = next.phase == .incomingRinging && !next.isGroup
     }
 
-    /// Le bouton son de l'écran de sonnerie.
+    /// Le bouton son de l'écran de sonnerie : proposé d'emblée, il retient le
+    /// choix tant que l'appelant n'est pas encore arrivé.
     func toggleSound() {
-        guard state.phase == .incomingRinging, isPreviewConnected else { return }
+        guard offersSound else { return }
         isPreviewAudible.toggle()
+        applySound()
+    }
+
+    private func applySound() {
+        guard isPreviewConnected, isPreviewAudible != hostHearsPreview else { return }
+        hostHearsPreview = isPreviewAudible
         host?.setPreviewAudible(isPreviewAudible)
     }
 
@@ -241,7 +255,12 @@ final class CallPreviewCoordinator: ObservableObject {
                 fields: signal.payload(from: local, to: peer)
             )
         case .state(let linkState):
-            if receiveOnly { isPreviewConnected = linkState == .connected } else { isSeenByCallee = linkState == .connected }
+            guard receiveOnly else {
+                isSeenByCallee = linkState == .connected
+                return
+            }
+            isPreviewConnected = linkState == .connected
+            applySound()
         case .remoteVideo:
             guard receiveOnly else { return }
             previewVideoTrack = link.remoteVideoTrack
@@ -258,13 +277,18 @@ final class CallPreviewCoordinator: ObservableObject {
         previewVideoTrack = nil
         isPreviewConnected = false
         isSeenByCallee = false
-        guard isPreviewAudible else { return }
-        isPreviewAudible = false
+        guard hostHearsPreview else { return }
+        hostHearsPreview = false
         if silencing { host?.setPreviewAudible(false) }
     }
 
+    private func endPreview(silencing: Bool) {
+        closeLink(silencing: silencing)
+        isPreviewAudible = false
+    }
+
     private func resetCall(previous: CallPreviewHostState) {
-        closeLink(silencing: true)
+        endPreview(silencing: true)
         requestedCallId = nil
         mutedWhileRinging = false
         if let callId = previous.callId { iceServers[callId] = nil }
