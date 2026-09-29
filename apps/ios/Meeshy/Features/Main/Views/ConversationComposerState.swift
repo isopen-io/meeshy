@@ -156,4 +156,20 @@ extension ConversationComposerState {
         }
         return staleURL == editedURL ? nil : staleURL
     }
+
+    /// **La vidéo éditée REMPLACE la pièce jointe en attente** (#8443) — même
+    /// contrat que l'audio : remplacement par id, jamais un second chip. Le
+    /// résultat de l'éditeur était jeté et la vidéo d'origine partait.
+    ///
+    /// `didEdit == false` ⇒ rien ne change : l'éditeur rend alors la source
+    /// elle-même. Rend l'URL devenue orpheline pour que l'appelant la supprime.
+    @discardableResult
+    mutating func applyEditedVideo(attachmentId: String, result: VideoEditResult) -> URL? {
+        let issue = PendingVideoEditReplacement.apply(result, to: attachmentId,
+                                                      files: pendingMediaFiles,
+                                                      attachments: pendingAttachments)
+        pendingMediaFiles = issue.files
+        pendingAttachments = issue.attachments
+        return issue.staleURL
+    }
 }

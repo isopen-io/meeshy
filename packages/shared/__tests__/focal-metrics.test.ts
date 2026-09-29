@@ -16,9 +16,9 @@ describe('FOCAL_METRICS', () => {
     expect(JSON.parse(readFileSync(MIRROR_PATH, 'utf8'))).toEqual(FOCAL_METRICS);
   });
 
-  it('reprend les valeurs iOS de référence (rayon 18, gain 0,05)', () => {
+  it('reprend les valeurs iOS de référence (rayon 18, gain 0,26 = 1,05 × 1,2 − 1, #8506)', () => {
     expect(FOCAL_METRICS.glassRadius).toBe(18);
-    expect(FOCAL_METRICS.loupeGain).toBe(0.05);
+    expect(FOCAL_METRICS.loupeGain).toBe(0.26);
   });
 });
 
@@ -35,11 +35,29 @@ describe('le tempo du dépliage (#8232)', () => {
 
 describe('focalLoupeScale', () => {
   it('grossit le message élu du gain plein quand il tient dans ses marges', () => {
-    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 300, height: 60 })).toBeCloseTo(1.05);
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 100, height: 60 })).toBeCloseTo(1.26);
   });
 
-  it("écrête la loupe d'un message haut à la marge verticale du verre", () => {
-    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 300, height: 800 })).toBeCloseTo(1 + 16 / 800);
+  it("ne s'écrête plus sur la hauteur : le cadre grandit avec un message haut (#8506)", () => {
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 100, height: 800 })).toBeCloseTo(1.26);
+  });
+
+  it("s'écrête à la marge verticale quand le verre reste à sa taille (message déplié)", () => {
+    expect(
+      focalLoupeScale({ isFocused: true, reducedMotion: false, width: 100, height: 800, fixedGlass: true }),
+    ).toBeCloseTo(1 + 16 / 800);
+  });
+
+  it("s'écrête à la place dont dispose le contenu une fois grossi", () => {
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 200, height: 60, room: 220 })).toBeCloseTo(1.1);
+  });
+
+  it('sans place déclarée, grossit par son centre dans la gouttière de la rangée', () => {
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 320, height: 60 })).toBeCloseTo(1 + 32 / 320);
+  });
+
+  it('ne rétrécit jamais un contenu plus large que sa place', () => {
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, width: 300, height: 60, room: 250 })).toBe(1);
   });
 
   it('ne grossit rien hors focus, sous Réduire le mouvement, ou sur une boîte vide', () => {

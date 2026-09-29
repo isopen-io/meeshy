@@ -64,6 +64,7 @@ function lazyCaptions(ctx: CaptionsContext): CaptionsPort {
   return {
     receive: (event, payload) => run((port) => port.receive(event, payload)),
     toggle: () => run((port) => port.toggle()),
+    micChanged: () => run((port) => port.micChanged()),
     attach: (userId, channel) => run((port) => port.attach(userId, channel)),
     stop: (bye) => run((port) => port.stop(bye)),
   };

@@ -389,9 +389,14 @@ export function convertV1ToV3(
     objects.push(o);
   }
 
+  // Le filtre de SLIDE est celui du FOND (#8502) : il va au média de fond, et
+  // jamais sur un média posé qui porte déjà SON filtre — la clé
+  // `payload.filter` est partagée, et l'écraser effaçait le réglage de l'objet.
+  // Même règle que le pont Swift (`CanvasV3Migration`).
   const filterTarget =
-    objects.find(o => o.kind === 'media' && o.plane === 'content') ??
-    objects.find(o => o.kind === 'media' && o.plane === 'bg');
+    objects.find(o => o.kind === 'media' && o.payload?.isBackground === true) ??
+    objects.find(o => o.kind === 'media' && o.plane === 'bg') ??
+    objects.find(o => o.kind === 'media' && o.plane === 'content' && !str(o.payload?.filter));
   if (filterTarget && str(blob.filter)) {
     filterTarget.payload = {
       ...filterTarget.payload,

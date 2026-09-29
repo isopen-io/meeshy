@@ -70,7 +70,9 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// carrousel dont la première vue est vide.
     func test_sync_reusesTheVirginFirstSlide_beforeAddingAny() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("ifslideIdByMediaURL.isEmpty,"),
+        // Une SÉRIE (#8540) a sa propre règle de réemploi, juste au-dessus :
+        // elle remplit la scène courante si elle n'a pas de fond.
+        XCTAssertTrue(compacted.contains("ifporte!=.sceneSeries,slideIdByMediaURL.isEmpty,"),
             "La dérivation doit d'abord regarder si AUCUN média n'a encore sa slide…")
         XCTAssertTrue(compacted.contains("(viewModel.currentSlide.effects.mediaObjects??[]).isEmpty{"),
             "…ET si la slide courante est vierge, pour la réemployer au lieu d'en ajouter une.")

@@ -85,12 +85,7 @@ struct VideoFiltersPanel: View {
     private func presetChip(_ preset: VideoFilterPreset) -> some View {
         let isActive = activePreset == preset
         return Button {
-            var config = preset.config
-            config.backgroundBlurEnabled = filterConfig.backgroundBlurEnabled
-            config.backgroundBlurRadius = filterConfig.backgroundBlurRadius
-            config.skinSmoothingEnabled = filterConfig.skinSmoothingEnabled
-            config.skinSmoothingIntensity = filterConfig.skinSmoothingIntensity
-            filterConfig = config
+            filterConfig = filterConfig.applyingPreset(preset)
         } label: {
             Text(presetLabel(preset))
                 .font(MeeshyFont.relative(12, weight: .medium))

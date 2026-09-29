@@ -37,21 +37,27 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(glass.contains("struct CallButtonGlass"), "Le verre par bouton a quitté l'écran d'appel")
     }
 
-    /// #8459 — UN seul bloc de verre réel : la pilule ; les actions du (…) s'y
-    /// déploient, au-dessus de la rangée de base, sans second bloc.
+    /// #8459 · #8550 — UN seul bloc de verre réel : la pilule ; les familles
+    /// OU le panneau ouvert s'y déploient, au-dessus de la rangée de base,
+    /// sans second bloc — en duo comme en groupe, par le MÊME chemin. #8578 —
+    /// le panneau REMPLACE les rangées : jamais les deux à la fois.
     func test_actions_unfoldInsideTheSingleGlassBlock_aboveTheBaseRow() throws {
         let code = try callViewCode()
-        let pill = try block("var callControlsPill: some View {", until: "private var pillHairline", in: code)
+        let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: code)
         XCTAssertEqual(pill.components(separatedBy: ".callControlsGlass(in:").count - 1, 1, "Un seul verre pour tout le bloc")
-        let duo = try XCTUnwrap(pill.range(of: "duoActionRows(actions)"))
-        let group = try XCTUnwrap(pill.range(of: "groupActionRows(actions)"))
+        let panel = try XCTUnwrap(pill.range(of: "panelRows(panel)"))
+        let families = try XCTUnwrap(pill.range(of: "familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
-        XCTAssertLessThan(duo.lowerBound, base.lowerBound)
-        XCTAssertLessThan(group.lowerBound, base.lowerBound)
-        XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les actions ET la rangée de base")
+        XCTAssertTrue(pill.contains("if let panel = layer.pillPanel {"), "Le panneau se lit dans CallScreenLayer")
+        let alternative = String(pill[panel.upperBound ..< families.lowerBound])
+        XCTAssertTrue(alternative.contains("} else {"), "Le panneau REMPLACE les familles, il ne s'empile pas (#8578)")
+        XCTAssertLessThan(families.lowerBound, base.lowerBound)
+        XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les rangées ET la rangée de base")
+        XCTAssertFalse(pill.contains("isGroupStage ?"), "Duo et groupe partagent la même disposition")
         XCTAssertFalse(code.contains("callLegibilityVeil"), "Plus de voile non vitré : le bloc est du verre")
         XCTAssertFalse(code.contains("actionRails"), "Les rails latéraux ont quitté l'écran d'appel")
+        XCTAssertFalse(code.contains("CallReactionPalette"), "La palette flottante a rejoint la pilule")
     }
 
     /// Le bloc de verre est un verre RÉEL sous iOS 26 (`adaptiveGlass`, qui
@@ -65,14 +71,137 @@ final class CallViewGlassGuardTests: XCTestCase {
     }
 
     /// Les rangées d'actions ne portent plus aucun fond propre : elles sont
-    /// DANS le bloc.
+    /// DANS le bloc, et elles défilent à l'horizontale.
     func test_actionRows_carryNoBackgroundOfTheirOwn() throws {
         let code = try callViewCode()
-        let rows = try block("private func groupActionRows(", until: "func actionRow(", in: code)
+        let rows = try block("private func familyRows(", until: "func actionButton(", in: code)
         XCTAssertFalse(rows.contains("callChromeGlass"))
-        let duo = try block("private func duoActionRows(", until: "func actionButton(", in: code)
-        XCTAssertFalse(duo.contains("callChromeGlass"))
+        XCTAssertTrue(rows.contains("CallPillRow("))
         XCTAssertFalse(code.contains("glassEffectID"), "Plus de morphing : les actions naissent dans le bloc qui grandit")
+        let row = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
+        )
+        XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned)"))
+        XCTAssertFalse(row.contains("adaptiveGlass"), "Une rangée dans le bloc de verre n'a pas de verre à elle")
+        XCTAssertFalse(row.contains("callChromeGlass"))
+    }
+
+    /// #8575 — un geste de glissé posé sur les boutons d'une rangée capte le
+    /// doigt avant le `ScrollView` : la rangée ne défile plus. L'enfoncement
+    /// passe par un `ButtonStyle`, qui ne pose aucun geste.
+    func test_rowButtons_carryNoDragGesture_soEveryRowScrolls() throws {
+        let rows = try ["Meeshy/Features/Main/Views/CallPillRow.swift", "Meeshy/Features/Main/Views/CallModeCarousel.swift"]
+            .map { AppSourceGuard.stripComments(try AppSourceGuard.unit($0)) }
+            .joined(separator: "\n")
+        let code = try callViewCode() + rows
+        XCTAssertFalse(code.contains(".pressable()"), "pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
+        XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
+        XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
+        XCTAssertTrue(rows.contains(".buttonStyle(CallPressButtonStyle())"))
+    }
+
+    /// #8578 — un mode libère l'écran : le chrome d'appel se masque par la
+    /// MÊME règle que le toucher (`CallChromeVisibility`), et le mode ne pose
+    /// qu'UN carrousel, centré en bas, et sa barre d'action.
+    func test_mode_freesTheScreen_withASingleCarouselAndItsActionBar() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(code.contains("isModeActive: layer.freesTheScreen"))
+        XCTAssertTrue(code.contains("callModeLayer"))
+        XCTAssertFalse(code.contains("CallEffectsPanel("), "Le panneau Effets empilé a laissé place au mode")
+        XCTAssertFalse(code.contains("CallCapturePanel("), "Le panneau Capture empilé a laissé place au mode")
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeControls.swift")
+        )
+        let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
+        XCTAssertTrue(effects.contains("if showsSettings {"), "Réglages REMPLACE le carrousel")
+        XCTAssertTrue(effects.contains("switch category {"), "Un seul carrousel, Visage OU Couleur")
+        XCTAssertEqual(effects.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        XCTAssertEqual(montage.components(separatedBy: "CallModeCarousel(").count - 1, 1)
+        XCTAssertEqual(montage.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        let carousel = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+        )
+        XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned)"), "Le carrousel s'accroche")
+        XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
+        XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
+    }
+
+    /// #8625 — aucun déclencheur : deux tapes sur le style choisi prennent la
+    /// photo, un appui long filme, et l'arrêt se pose au centre du gabarit.
+    func test_mode_shootsFromTheSelectedStyle_withoutAShutter() throws {
+        let code = try callViewCode()
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeControls.swift")
+        )
+        let carousel = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+        )
+        XCTAssertFalse(controls.contains("CallModeShutter"), "Le déclencheur a quitté Effets et Montage")
+        XCTAssertFalse(carousel.contains("struct CallModeShutter"))
+        XCTAssertTrue(carousel.contains("CallModeGestureRule.outcome("), "Le geste se lit par la règle pure")
+        XCTAssertTrue(code.contains("CallModeRecordingOverlay(capture: capture)"), "L'arrêt de l'enregistrement se pose sur la scène")
+        XCTAssertTrue(controls.contains("CallModeRecordingStop(startedAt:"))
+        XCTAssertTrue(code.contains("CallCaptureOutcomeAnnouncer(capture: capture)"), "Le résultat s'annonce même après la sortie du mode")
+    }
+
+    /// #8625 — une lenteur est un bug : l'écran d'appel TIENT la capture sans
+    /// l'observer. Aperçu, chrono, flash et résultat se lisent dans des vues
+    /// feuilles ; sinon un film redessinerait tout l'écran à chaque trame.
+    func test_callView_holdsTheCaptureWithoutObservingIt() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(code.contains("@StateObject var captureHost = CallCaptureHost()"))
+        XCTAssertFalse(code.contains("@StateObject var capture "), "Observer le contrôleur redessine l'écran d'appel à chaque trame")
+        XCTAssertFalse(code.contains("@ObservedObject var capture"))
+        for published in ["preview", "previewFeed", "recordingStartedAt", "flashCount", "status", "style", "thumbnails", "isRecording"] {
+            XCTAssertFalse(code.contains("capture.\(published)"), "capture.\(published) se lit dans une vue feuille, jamais dans CallView")
+        }
+        let service = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCaptureController.swift")
+        )
+        let host = try block("final class CallCaptureHost: ObservableObject {", until: "final class CallCaptureController", in: service)
+        XCTAssertFalse(host.contains("@Published"), "Le propriétaire ne publie rien")
+        XCTAssertFalse(service.contains("@Published private(set) var preview"), "L'aperçu se publie sur son flux, pas sur le contrôleur")
+    }
+
+    /// #8576 — le zoom caméra suit MON image en plein écran, jamais la
+    /// vignette. #8626 — les commandes de ma caméra vivent dans ma vignette,
+    /// et en haut au centre quand mon image est en plein écran, visibles avec
+    /// le chrome.
+    /// #8626 — une vignette trop petite pour la grille pose UN bouton caméra
+    /// qui la déploie par-dessus elle ; un tap ailleurs, sur la vignette ou sur
+    /// une action la replie.
+    func test_smallSelfTile_foldsTheCameraControlsIntoOneButton() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(code.contains("CallCameraRail.tileLayout(tileSize: tileSize, count: actions.count)"))
+        XCTAssertTrue(code.contains("foldedCameraButton"))
+        XCTAssertTrue(code.contains("tapCameraMenu(.button)"))
+        XCTAssertTrue(code.contains("tapCameraMenu(.action)"))
+        let toggle = try block("func toggleControls() {", until: "\n    }\n", in: code)
+        XCTAssertTrue(toggle.contains("tapCameraMenu(.elsewhere)"), "Un tap ailleurs replie la grille")
+        let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
+        XCTAssertTrue(pip.contains("tapCameraMenu(.elsewhere)"), "Un tap sur la vignette replie la grille avant de permuter")
+    }
+
+    func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
+        let code = try callViewCode()
+        let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
+        XCTAssertFalse(pip.contains("callCameraZoom"), "Pincer la vignette la redimensionne, il ne zoome pas")
+        XCTAssertTrue(pip.contains("selfTileCameraControls(tileSize: size)"), "Les commandes de ma caméra vivent dans ma vignette")
+        XCTAssertTrue(code.contains(".callCameraZoom(isEnabled: effectiveSwapStreams)"))
+        let rail = try block("var cameraRail: some View {", until: "\n    }\n}", in: code)
+        XCTAssertTrue(rail.contains("CallCameraRail.actions(from: currentActionSet)"))
+        XCTAssertTrue(rail.contains("CallCameraRail.isShown("))
+        XCTAssertTrue(rail.contains("CallCameraZoomAccessibilityElement()"))
+        XCTAssertTrue(rail.contains("alignment: .top"), "Mon image en plein écran : les commandes en haut au centre")
+        XCTAssertFalse(rail.contains("alignment: .trailing"), "Le rail vertical de droite a laissé place à la rangée du haut")
+        XCTAssertTrue(code.contains("cameraRail\n"), "Le rail est monté dans l'appel établi")
+        let stage = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/GroupCallStageView.swift")
+        )
+        XCTAssertTrue(stage.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"))
+        XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))
     }
 
     /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si

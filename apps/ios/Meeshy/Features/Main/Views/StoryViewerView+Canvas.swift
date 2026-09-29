@@ -1484,7 +1484,7 @@ struct StoryCardView: View {
             // point d'entrée des traductions. Plus de badge flottant ici.
 
             // === Layer 5: voiles de lisibilité — ils suivent le chrome (#6701) ===
-            StoryReaderScrims(topInset: topInset, chromeVisible: chromeVisible)
+            StoryReaderScrims(topInset: topInset, chromeVisible: readerChromeShown)
 
             // === Layer 6: Gesture overlay (tap left/right, long press) ===
             StoryGestureOverlayView(
@@ -1542,7 +1542,7 @@ struct StoryCardView: View {
                     slideDuration: currentSlideDuration,
                     fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
                 )
-                .allowsHitTesting(!isComposerEngaged)
+                .storyFocusFade(readerDecorationsShown)
             }
 
             // === Layer 6.6: Location badge tap targets ===
@@ -1565,7 +1565,7 @@ struct StoryCardView: View {
                 .scaleEffect(readerCanvasFraming.scale)
                 .offset(y: readerCanvasFraming.offset.height)
                 .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
-                .allowsHitTesting(!isComposerEngaged)
+                .storyFocusFade(readerDecorationsShown)
             }
 
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
@@ -1647,8 +1647,7 @@ struct StoryCardView: View {
             // invisible lorsqu'il est positionné juste en dehors du safe area
             // (sinon un sliver pixelé peut traîner sur certaines tailles).
             .offset(y: chromeVisible ? 0 : -(topInset + 120))
-            .opacity(chromeVisible ? 1 : 0)
-            .allowsHitTesting(chromeVisible)
+            .storyFocusFade(readerChromeShown)
             .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
 
@@ -1763,8 +1762,7 @@ struct StoryCardView: View {
             // bord arrondi. Hit-testing désactivé en plus de l'opacité 0 pour
             // éviter qu'un tap fantôme atterrisse sur un bouton invisible.
             .offset(x: chromeVisible ? 0 : 110)
-            .opacity(chromeVisible ? 1 : 0)
-            .allowsHitTesting(chromeVisible)
+            .storyFocusFade(readerChromeShown)
             .environment(\.colorScheme, readerChromeScheme)
             // **Le rail passe AU-DESSUS du corpus déplié** (#4831).
             //
@@ -1793,6 +1791,7 @@ struct StoryCardView: View {
                     onArrived: { heartBouncePulse += 1 },
                     onFinished: { reactionFlight = nil }
                 )
+                .storyFocusFade(readerDecorationsShown)
                 // Identité PAR VOL : sans elle, une deuxième réaction envoyée
                 // dans les 750ms de la première ne fait que muter la vue déjà
                 // montée (structural identity) — `@State progress` reste à 1,

@@ -139,6 +139,15 @@ describe('la fiche d’un appel', () => {
     expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-row="participants"');
   });
 
+  test('après l’appel, sa transcription se relit dans la fiche, sous ses détails (#8579) ; un appel manqué n’en a pas', () => {
+    const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />);
+    expect(html).toContain('data-call-detail-transcript="call-amina"');
+    expect(html).toContain('Transcription de l’appel');
+    expect(html.indexOf('data-call-detail-transcript')).toBeGreaterThan(html.indexOf('data-call-detail-row="type"'));
+    expect(html.indexOf('data-call-detail-transcript')).toBeLessThan(html.indexOf('data-call-detail-open'));
+    expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail({ direction: 'missed' })} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-transcript');
+  });
+
   test('un appel manqué se lit sans la couleur', () => {
     const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail({ direction: 'missed' })} now={NOW} onCall={noop} />);
     expect(html).toContain('data-call-detail-status="missed"');

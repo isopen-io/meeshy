@@ -92,6 +92,9 @@ export const StoryMediaObjectSchema = z.object({
   fadeOut: z.number().min(0).max(60).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
   thumbHash: z.string().max(STORY_THUMBHASH_MAX).optional(),
+  // Le filtre PROPRE a l'objet (2026-09-28) : memes valeurs que le filtre de
+  // slide (`StoryEffects.filter`, celui du fond). Borne comme ses freres.
+  filter: z.string().max(32).optional(),
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({
