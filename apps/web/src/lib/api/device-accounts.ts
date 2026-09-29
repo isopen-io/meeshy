@@ -3,6 +3,7 @@ import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 import { draftStore } from '../send/draft-store';
 import { safeLocalStorage } from '../storage';
 
+import { forgetAccountCaches } from './account-caches';
 import { createAccountSwitcher, createAccountVault, purgeAccountLocalData } from './accounts';
 import { logout } from './auth';
 import { httpTransport } from './client';
@@ -45,7 +46,7 @@ function storedKeys(): readonly string[] {
 
 /**
  * « DÉCONNEXION » (#8286) — la session finit (serveur compris) et les données
- * locales du compte partent ; le compte RESTE listé, et y revenir exige le mot
+ * locales du compte partent, cache de requêtes compris (#8674) ; le compte RESTE listé, et y revenir exige le mot
  * de passe ou un lien magique. Changer de compte, lui, ne passe jamais ici.
  */
 export async function signOutOfThisDevice(): Promise<void> {
@@ -56,4 +57,7 @@ export async function signOutOfThisDevice(): Promise<void> {
   if (userId === null) return;
   draftStore.forgetScope(`u_${userId}`);
   purgeAccountLocalData({ storage: safeLocalStorage(), userId, keys: storedKeys() });
+  /* Son cache de requêtes, rangé par `clearSession()` le temps de la
+     déconnexion, et les seaux du service worker (#8674). */
+  forgetAccountCaches({ userId });
 }

@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
-import { createAccountCacheShelf, type CacheStorageLike } from './account-caches';
+import { createAccountCacheShelf } from './account-caches';
 import { ApiError } from './client';
 import { apiConfig } from './config';
 import { resetAbsentMedia } from './media-absent';

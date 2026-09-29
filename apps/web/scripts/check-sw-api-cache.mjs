@@ -459,6 +459,58 @@ export function auditRoutage(source) {
   return violations;
 }
 
+/**
+ * LE SEAU `api` RANGE CHAQUE RÉPONSE SOUS L'IDENTITÉ QUI L'A DEMANDÉE (#8674).
+ *
+ * Sans le greffon `cacheKeyWillBeUsed` (`src/lib/net/api-cache-identity.ts`),
+ * deux comptes du même appareil partagent l'entrée d'une URL : un réseau lent
+ * sert à B la liste d'A. Le gate l'EXTRAIT de l'artefact et le FAIT DÉCIDER
+ * dans un contexte nu — une fonction non autonome, ou qui rendrait la même
+ * clé pour deux comptes, rougit ici.
+ */
+export async function auditIdentiteDuSeauApi(source) {
+  const appel = appelDuSeau(source, 'api');
+  if (appel === null) return ['aucun seau `api` dans le service worker construit'];
+
+  const marqueur = 'cacheKeyWillBeUsed:';
+  const debut = appel.strategie.indexOf(marqueur);
+  if (debut === -1) {
+    return [
+      'le seau `api` ne porte aucun `cacheKeyWillBeUsed` : deux comptes du même appareil ' +
+        'partagent l’entrée d’une URL, et un réseau lent sert à B la réponse d’A (#8674)',
+    ];
+  }
+  const texte = decoupePremierArgument(appel.strategie, debut + marqueur.length);
+
+  let cle;
+  try {
+    cle = new Function(`"use strict"; return (${texte});`)();
+  } catch (err) {
+    return [`le greffon d’identité du seau \`api\` ne s’évalue pas : ${err.message}`];
+  }
+
+  const url = `${PASSERELLE}/api/v1/conversations?limit=30`;
+  const demande = (entetes) => cle({ request: new Request(url, { headers: entetes }) });
+
+  try {
+    const a = await demande({ Authorization: 'Bearer jeton-de-a' });
+    const b = await demande({ Authorization: 'Bearer jeton-de-b' });
+    const encoreA = await demande({ Authorization: 'Bearer jeton-de-a' });
+    const personne = await demande({});
+    const violations = [];
+    if (a === b) violations.push('A et B reçoivent la MÊME clé de cache pour la même URL — B lirait la réponse d’A');
+    if (a !== encoreA) violations.push('un même compte ne relit pas sa propre clé — le seau ne sert plus hors ligne');
+    if (a.includes('jeton-de-a')) violations.push('la clé porte le jeton EN CLAIR — elle est écrite sur le disque');
+    if (personne !== url) violations.push(`une requête sans identité ne garde pas son URL nue : ${personne}`);
+    return violations;
+  } catch (err) {
+    return [
+      `greffon d’identité NON AUTONOME : ${err.message}. ` +
+        'Workbox le stringifie — il ne peut dépendre d’aucun identifiant importé.',
+    ];
+  }
+}
+
 function applique(matcher, href, destination = '') {
   const url = new URL(href);
   if (matcher instanceof RegExp) return matcher.test(url.href);
@@ -722,6 +774,7 @@ async function main() {
     ['le seau `api`', auditSeauApi(source)],
     ['le seau `medias`', auditSeauMedias(source)],
     ['le routage', auditRoutage(source)],
+    ['l’identité du seau `api`', await auditIdentiteDuSeauApi(source)],
   ];
 
   if (process.argv.includes(DRAPEAU_NAVIGATEUR)) {
@@ -739,7 +792,8 @@ async function main() {
 
   console.log(
     '  sw.js : le seau `api` décide tout seul, garde le JSON hors ligne, et laisse ' +
-      'hors du disque TOUTE réponse /api/v1/admin/**.\n' +
+      'hors du disque TOUTE réponse /api/v1/admin/**, et range chaque réponse sous ' +
+      'l’identité qui l’a demandée (#8674).\n' +
       '  sw.js : le seau `medias` prend les images de la passerelle AVANT le seau `api` ' +
       '(`statuses: [0, 200]`) ; audio et vidéo restent hors cache, par décision.',
   );
