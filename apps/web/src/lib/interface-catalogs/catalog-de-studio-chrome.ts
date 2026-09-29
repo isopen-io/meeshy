@@ -74,7 +74,8 @@ const deStudioChrome = {
   'composer.reelOffer.reel': 'Es ist ein Reel',
   'composer.reelOffer.post': 'Es ist ein Beitrag',
   'story.studio.tool.close': 'Werkzeug schließen',
-  'story.studio.camera.quick.photoOrVideo': 'Tippen: Foto · Halten: Video',
+  'story.studio.camera.quick.tapPhoto': 'Tippen: Foto',
+  'story.studio.camera.quick.holdFilm': 'Halten: filmen',
   'story.studio.camera.quick.videoOnly': 'Zum Filmen halten',
   'story.studio.camera.quick.photo': 'Foto aufnehmen',
   'story.studio.camera.quick.video': 'Filmen',
@@ -89,6 +90,13 @@ const deStudioChrome = {
   'story.studio.camera.hint.video': 'Zum Filmen tippen · erneut tippen zum Platzieren',
   'story.studio.camera.unavailable': 'Die Kamera ist nicht verfügbar. Erlaube sie in den Browsereinstellungen.',
   'story.studio.camera.recording': 'Aufnahme läuft',
+  'story.studio.scene.empty.title': 'Das ist deine Szene',
+  'story.studio.scene.empty.invite': 'Füge Text, eine Zeichnung, ein Bild oder ein Video hinzu – und mach sie zu deiner.',
+  'story.studio.camera.locked': 'Aufnahme gesperrt',
+  'story.studio.camera.hint.holding': 'Zum Schloss wischen, um zu sperren · nach oben zum Zoomen',
+  'story.studio.camera.hint.locked': 'Freihändig – nach oben oder unten wischen zum Zoomen',
+  'story.studio.camera.flash.intensity': 'Blitzstärke',
+  'story.studio.camera.flash.intensityValue': '{percent} %',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "@meeshy/web",
-      "version": "2.7.0",
+      "version": "2.9.0",
       "dependencies": {
         "@capacitor-community/media": "9.1.0",
         "@capacitor/push-notifications": "8.1.2",
@@ -57,7 +57,7 @@
     },
     "packages/shared": {
       "name": "@meeshy/shared",
-      "version": "1.28.0",
+      "version": "1.29.0",
       "dependencies": {
         "@prisma/client": "^6.15.0",
         "zod": "^4.4.3",
@@ -75,7 +75,7 @@
     },
     "services/agent": {
       "name": "@meeshy/agent",
-      "version": "1.0.56",
+      "version": "1.0.57",
       "dependencies": {
         "@langchain/core": "^1.2.9",
         "@langchain/langgraph": "^1.4.12",
@@ -106,11 +106,11 @@
     },
     "services/gateway": {
       "name": "@meeshy/gateway",
-      "version": "1.73.0",
+      "version": "1.75.0",
       "dependencies": {
         "@fastify/cors": "^11.3.0",
         "@fastify/helmet": "^13.1.1",
-        "@fastify/jwt": "^10.2.1",
+        "@fastify/jwt": "^10.2.2",
         "@fastify/multipart": "^10.1.1",
         "@fastify/rate-limit": "^11.2.0",
         "@fastify/sensible": "^6.0.5",
@@ -190,7 +190,7 @@
     },
     "services/translator": {
       "name": "@meeshy/translator",
-      "version": "1.72.0",
+      "version": "1.74.0",
     },
   },
   "overrides": {
@@ -584,7 +584,7 @@
 
     "@fastify/helmet": ["@fastify/helmet@13.1.1", "", { "dependencies": { "fastify-plugin": "^6.0.0", "helmet": "^8.0.0" } }, "sha512-bSat5DTq8geASv8G6P0KW1UbltZ+xGD/zyd9S72pT7ogAHehcsWL85GdjMRCjDsExJvaEvgEZ52qU/2HXirVCw=="],
 
-    "@fastify/jwt": ["@fastify/jwt@10.2.1", "", { "dependencies": { "@fastify/error": "4.2.0", "@lukeed/ms": "2.0.2", "fast-jwt": "6.3.1", "fastify-plugin": "6.0.0", "steed": "1.1.3" } }, "sha512-8FHalB082a6HFj+neP9TdJZrUa65Aq6mtozVjd3vH3Yy7hmjRJUDKLPdxYRYF9S077JeN9RgimsautqnijbDlQ=="],
+    "@fastify/jwt": ["@fastify/jwt@10.2.2", "", { "dependencies": { "@fastify/error": "^4.2.0", "@lukeed/ms": "^2.0.2", "fast-jwt": "^6.2.4", "fastify-plugin": "^6.0.0", "steed": "^1.1.3" } }, "sha512-UOYY5db2ttuWk2FcN5L6rawE0OFa4+QRJdsYEiHCBmf1GFLC9/k73f/mmv2dxIhS0b/02/62T0Hs6sk+w18Tyg=="],
 
     "@fastify/merge-json-schemas": ["@fastify/merge-json-schemas@0.2.1", "", { "dependencies": { "dequal": "2.0.3" } }, "sha512-OA3KGBCy6KtIvLf8DINC5880o5iBlDX4SxzLQS8HorJAbqluzLRn80UXU0bxZn7UOFhFgpRJDasfwn9nG4FG4A=="],
 

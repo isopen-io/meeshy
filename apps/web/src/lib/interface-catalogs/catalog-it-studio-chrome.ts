@@ -74,7 +74,8 @@ const itStudioChrome = {
   'composer.reelOffer.reel': 'È un reel',
   'composer.reelOffer.post': 'È un post',
   'story.studio.tool.close': 'Chiudi lo strumento',
-  'story.studio.camera.quick.photoOrVideo': 'Tocca: foto · Tieni premuto: video',
+  'story.studio.camera.quick.tapPhoto': 'Tocca: foto',
+  'story.studio.camera.quick.holdFilm': 'Tieni premuto: filma',
   'story.studio.camera.quick.videoOnly': 'Tieni premuto per filmare',
   'story.studio.camera.quick.photo': 'Scatta una foto',
   'story.studio.camera.quick.video': 'Filma',
@@ -89,6 +90,13 @@ const itStudioChrome = {
   'story.studio.camera.hint.video': 'Tocca per filmare · tocca di nuovo per posare',
   'story.studio.camera.unavailable': 'La fotocamera non è disponibile. Consentila nelle impostazioni del browser.',
   'story.studio.camera.recording': 'Registrazione in corso',
+  'story.studio.scene.empty.title': 'Questa è la tua scena',
+  'story.studio.scene.empty.invite': 'Aggiungi un testo, un disegno, un’immagine o un video: rendila tua.',
+  'story.studio.camera.locked': 'Registrazione bloccata',
+  'story.studio.camera.hint.holding': 'Scorri fino al lucchetto per bloccare · verso l’alto per lo zoom',
+  'story.studio.camera.hint.locked': 'Mani libere: scorri su o giù per lo zoom',
+  'story.studio.camera.flash.intensity': 'Intensità del flash',
+  'story.studio.camera.flash.intensityValue': '{percent}%',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

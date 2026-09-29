@@ -15,10 +15,13 @@ registerStudioBench();
 function camera(): { readonly engine: CameraEngine; readonly journal: string[] } {
   const journal: string[] = [];
   const engine: CameraEngine = {
-    open: async () => ({ ok: true, stream: new MediaStream(), torch: false }),
+    open: async () => ({ ok: true, stream: new MediaStream(), torch: false, zoom: { mode: 'hardware', min: 1, max: 8, step: 0.1 } }),
     live: async () => undefined,
     lit: async () => undefined,
     setTorch: async () => undefined,
+    setZoom: async (_stream, value) => {
+      journal.push(`zoom:${value.toFixed(1)}`);
+    },
     photo: async () => {
       journal.push('photo');
       return new File(['jpg'], 'photo.jpg', { type: 'image/jpeg' });
@@ -39,26 +42,43 @@ function camera(): { readonly engine: CameraEngine; readonly journal: string[] }
 const EMPTY_POINT = { clientX: 300, clientY: 500 } as const;
 const hint = (host: ParentNode) => host.querySelector('[data-story-quick-capture-hint]');
 
-function press(host: ParentNode, type: 'pointerdown' | 'pointerup') {
+function press(host: ParentNode, type: 'pointerdown' | 'pointermove' | 'pointerup', offset: { readonly dx: number; readonly dy: number } = { dx: 0, dy: 0 }) {
   const layer = host.querySelector<HTMLElement>('[data-story-stage-gestures]');
   if (layer === null) throw new Error('aucun calque des gestes');
   layer.setPointerCapture = () => undefined;
-  act(() => layer.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, ...EMPTY_POINT })));
+  const point = { clientX: EMPTY_POINT.clientX + offset.dx, clientY: EMPTY_POINT.clientY + offset.dy };
+  act(() => layer.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, ...point })));
 }
+
+const emptyScene = (host: ParentNode) => host.querySelector('[data-story-empty-scene]');
 
 describe('la scène vide dit ses gestes', () => {
   test('une indication grise nomme la photo et la vidéo ; le clavier a ses deux boutons', async () => {
     const el = mount({ ...harness({}).deps, camera: camera().engine });
     await flush(() => hint(el) !== null);
-    expect(hint(el)?.textContent).toBe('Toucher : photo · Maintenir : vidéo');
+    const lines = [...el.querySelectorAll('[data-story-quick-capture-line]')];
+    expect(lines.map((line) => [line.getAttribute('data-story-quick-capture-line'), line.textContent])).toEqual([
+      ['camera', 'Toucher : photo'],
+      ['video', 'Maintenir : filmer'],
+    ]);
+    // Aucun pictogramme au-dessus du titre : le bloc s'ouvre sur lui.
+    expect(emptyScene(el)?.firstElementChild?.hasAttribute('data-story-empty-scene-title')).toBe(true);
     expect(el.querySelector('[data-story-quick-capture="photo"]')?.textContent).toBe('Prendre une photo');
     expect(el.querySelector('[data-story-quick-capture="video"]')?.textContent).toBe('Filmer');
+  });
+
+  test('elle donne envie (#8672) : un titre, une invitation à y poser texte, dessin, image, vidéo', async () => {
+    const el = mount({ ...harness({}).deps, camera: camera().engine });
+    await flush(() => emptyScene(el) !== null);
+    expect(el.querySelector('[data-story-empty-scene-title]')?.textContent).toBe('Ceci est votre scène');
+    expect(el.querySelector('[data-story-empty-scene-invite]')?.textContent).toBe('Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.');
+    expect(emptyScene(el)?.contains(hint(el))).toBe(true);
   });
 
   test('un réel ne propose que de filmer', async () => {
     const el = mount({ ...harness({}).deps, camera: camera().engine }, 'REEL');
     await flush(() => hint(el) !== null);
-    expect(hint(el)?.textContent).toBe('Maintenir pour filmer');
+    expect([...el.querySelectorAll('[data-story-quick-capture-line]')].map((line) => [line.getAttribute('data-story-quick-capture-line'), line.textContent])).toEqual([['video', 'Maintenir pour filmer']]);
     expect(el.querySelector('[data-story-quick-capture="photo"]')).toBeNull();
   });
 
@@ -67,6 +87,7 @@ describe('la scène vide dit ses gestes', () => {
     selectFile(withMedia, 'visual', image());
     await flush(() => withMedia.querySelector('[data-story-option="frame"]') !== null);
     expect(hint(withMedia)).toBeNull();
+    expect(emptyScene(withMedia)).toBeNull();
 
     const writing = mount({ ...harness({}).deps, camera: camera().engine });
     tapInvite(writing);
@@ -100,6 +121,48 @@ describe('toucher = photo, appui long = vidéo', () => {
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     expect(journal).toEqual(['record', 'stop']);
     expect(document.querySelector('[data-story-camera]')).toBeNull();
+  });
+
+  test('l’appui long glissé jusqu’au cadenas verrouille (#8672) : relâcher ne clôt pas, le stop pose la vidéo', async () => {
+    const { engine, journal } = camera();
+    const el = mount({ ...harness({}).deps, camera: engine });
+    await flush(() => hint(el) !== null);
+    press(el, 'pointerdown');
+    await flush(() => journal.includes('record'));
+    press(el, 'pointermove', { dx: 0, dy: -140 });
+    expect(journal).toContain('zoom:2.0');
+    press(el, 'pointermove', { dx: -120, dy: -140 });
+    expect(document.querySelector('[data-story-camera-recording]')?.textContent).toBe('Enregistrement verrouillé');
+    press(el, 'pointerup', { dx: -120, dy: -140 });
+    await flush(() => document.querySelector('[data-story-camera-shutter]') !== null);
+    expect(journal).not.toContain('stop');
+    act(() => document.querySelector<HTMLButtonElement>('[data-story-camera-shutter]')?.click());
+    await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
+    expect(journal.filter((entry) => entry === 'record' || entry === 'stop')).toEqual(['record', 'stop']);
+  });
+
+  test('l’intensité du flash choisie est mémorisée d’une ouverture à l’autre (#8672)', async () => {
+    const first = mount({ ...harness({}).deps, camera: camera().engine });
+    await flush(() => hint(first) !== null);
+    act(() => first.querySelector<HTMLButtonElement>('[data-story-quick-capture="video"]')?.click());
+    await flush(() => document.querySelector('[data-story-camera-flash]') !== null);
+    act(() => document.querySelector<HTMLButtonElement>('[data-story-camera-flash]')?.click());
+    act(() => document.querySelector<HTMLButtonElement>('[data-story-camera-flip]')?.click());
+    await flush(() => document.querySelector('[data-story-camera-flash-capsule="open"]') !== null);
+    const slider = document.querySelector<HTMLInputElement>('[data-story-camera-flash-intensity]');
+    if (slider === null) throw new Error('aucun curseur');
+    act(() => {
+      slider.value = '0.55';
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => document.querySelector<HTMLButtonElement>('[data-story-camera-close]')?.click());
+    await flush(() => document.querySelector('[data-story-camera]') === null);
+
+    const second = mount({ ...harness({}).deps, camera: camera().engine });
+    await flush(() => hint(second) !== null);
+    act(() => second.querySelector<HTMLButtonElement>('[data-story-quick-capture="video"]')?.click());
+    await flush(() => document.querySelector('[data-story-camera-flash-intensity]') !== null);
+    expect(document.querySelector<HTMLInputElement>('[data-story-camera-flash-intensity]')?.getAttribute('aria-valuetext')).toBe('55 %');
   });
 
   test('le (X) quitte la caméra à tout moment : la scène revient vide, rien n’est posé', async () => {

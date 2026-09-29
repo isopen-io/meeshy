@@ -106,16 +106,17 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Revenir à la scène", bundle: .main)
     }
 
-    /// **L'indication grise d'une scène vide** (#8653) : elle nomme les deux
-    /// gestes, ou le seul que le format sert.
-    static func quickCaptureHint(_ hint: ComposerSceneQuickCapture.Hint) -> String {
-        switch hint {
-        case .photoOrVideo:
-            return String(localized: "composer.camera.quickHint.photoOrVideo",
-                          defaultValue: "Toucher : photo · Maintenir : vidéo", bundle: .main)
-        case .videoOnly:
-            return String(localized: "composer.camera.quickHint.videoOnly",
-                          defaultValue: "Maintenir pour filmer", bundle: .main)
+    /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671) : la
+    /// photo au toucher, la vidéo au maintien — le format décide lesquels
+    /// paraissent (`ComposerSceneQuickCapture.gestureLines`).
+    static func gestureLine(_ line: ComposerSceneQuickCapture.GestureLine) -> String {
+        switch line {
+        case .tapPhoto:
+            return String(localized: "composer.camera.gesture.tapPhoto",
+                          defaultValue: "Toucher : photo", bundle: .main)
+        case .holdFilm:
+            return String(localized: "composer.camera.gesture.holdFilm",
+                          defaultValue: "Maintenir : filmer", bundle: .main)
         }
     }
 
@@ -136,7 +137,9 @@ enum ComposerSceneCameraCopy {
     /// Ce que VoiceOver lit de la scène vide : les trois lignes, dans l'ordre
     /// où l'œil les parcourt.
     static func emptySceneSpoken(_ hint: ComposerSceneQuickCapture.Hint) -> String {
-        [emptySceneTitle, emptySceneInvite, quickCaptureHint(hint)].joined(separator: ". ")
+        ([emptySceneTitle, emptySceneInvite]
+            + ComposerSceneQuickCapture.gestureLines(hint).map(gestureLine))
+            .joined(separator: ". ")
     }
 
     /// **Le cadenas** (#8671) — dit ce que le glissé FAIT.

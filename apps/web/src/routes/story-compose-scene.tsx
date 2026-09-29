@@ -11,14 +11,14 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { keyboardPose } from '@/lib/stories/studio-grip';
 import { STORY_PLAIN_BACKGROUND } from '@/lib/stories/story-document';
-import type { QuickCaptureHintKey } from '@/lib/stories/studio-quick-capture';
+import type { QuickCaptureHintLine } from '@/lib/stories/studio-quick-capture';
 import { StudioStageGestures, type StudioStageCapture, type StudioStageObject } from '@/routes/story-compose-stage';
 import { StudioTextInput } from '@/routes/story-compose-text-input';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
 
 export type StudioSceneCapture = StudioStageCapture & {
-  readonly hintKey: QuickCaptureHintKey;
+  readonly hintLines: readonly QuickCaptureHintLine[];
   /** La voie du CLAVIER et du lecteur d'écran — un lecteur d'écran ne tient
    * pas un doigt : sans elle, la vidéo serait offerte à la main seule. */
   readonly onPhoto: (() => void) | null;
@@ -26,24 +26,51 @@ export type StudioSceneCapture = StudioStageCapture & {
 };
 
 /**
- * **L'INDICATION GRISE D'UNE SCÈNE VIDE** (#8654, jumelle de #8653) — elle
- * nomme les deux gestes (toucher : photo · maintenir : vidéo), ou le seul
- * qu'un réel sert. Elle ne se touche pas : c'est la scène entière qui répond
- * (`StudioStageGestures`). Ses deux boutons invisibles portent les mêmes
- * gestes au clavier et au lecteur d'écran.
+ * **UNE SCÈNE VIDE QUI DONNE ENVIE** (#8654 puis #8672, jumelle de #8671) —
+ * un titre (« Ceci est votre scène »), une invitation à y poser texte,
+ * dessin, image ou vidéo, puis les gestes en PLUS GRAND qu'une légende, UN
+ * PAR LIGNE, chacun précédé de son icône : l'appareil photo devant
+ * « Toucher : photo », la caméra vidéo devant « Maintenir : filmer » (un
+ * réel n'a que la seconde). Aucun pictogramme au-dessus du titre (retour
+ * porteur 2026-09-29 : « soit rien, soit une scène »). Le bloc ne
+ * se touche pas : c'est la scène entière qui répond (`StudioStageGestures`).
+ * Titre et invitation se lisent au lecteur d'écran ; les gestes, qu'un doigt
+ * seul accomplit, y sont portés par les deux boutons invisibles.
  */
 function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLanguage; readonly capture: StudioSceneCapture }) {
   return (
     <>
-      <p
-        aria-hidden="true"
-        data-story-quick-capture-hint
-        className="pointer-events-none absolute inset-x-3 bottom-6 flex items-center justify-center gap-1.5 text-center text-caption font-semibold"
-        style={{ color: 'rgba(156,163,175,0.95)', zIndex: 2 }}
+      <div
+        data-story-empty-scene
+        // Au-dessus du (+) de scène qui flotte sur le coin bas de la carte ;
+        // la carte vide est TOUJOURS sombre (`STORY_PLAIN_BACKGROUND`) : les
+        // gris sont fixes, jamais ceux du schéma. Les tailles suivent la
+        // LARGEUR de la carte (`cqw`) : sur un petit écran, le bloc tient sous
+        // l'invite d'écriture centrale, sans jamais descendre sous la légende
+        // d'avant (14 px) pour les gestes.
+        className="pointer-events-none absolute inset-x-4 flex flex-col items-center gap-1.5 text-center leading-snug"
+        style={{ color: 'rgba(156,163,175,0.95)', zIndex: 2, bottom: 'clamp(24px, 15.2cqw, 56px)' }}
       >
-        <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
-        {translate(lang, capture.hintKey)}
-      </p>
+        <p data-story-empty-scene-title className="font-bold" style={{ color: 'rgba(243,244,246,0.92)', fontSize: 'clamp(16px, 5.9cqw, 22px)' }}>
+          {translate(lang, 'story.studio.scene.empty.title')}
+        </p>
+        <p data-story-empty-scene-invite className="text-balance" style={{ fontSize: 'clamp(12px, 4cqw, 15px)' }}>
+          {translate(lang, 'story.studio.scene.empty.invite')}
+        </p>
+        <div
+          aria-hidden="true"
+          data-story-quick-capture-hint
+          className="mt-2 flex flex-col items-center gap-1 font-semibold"
+          style={{ color: 'rgba(209,213,219,0.95)', fontSize: 'clamp(14px, 4.6cqw, 17px)' }}
+        >
+          {capture.hintLines.map((line) => (
+            <p key={line.key} data-story-quick-capture-line={line.glyph} className="flex items-center gap-2">
+              <GlyphSvg glyph={line.glyph === 'camera' ? COMPOSER_GLYPHS.camera : COMPOSER_GLYPHS.videoCamera} size={20} />
+              {translate(lang, line.key)}
+            </p>
+          ))}
+        </div>
+      </div>
       {capture.onPhoto !== null ? (
         <button type="button" className="sr-only" data-story-quick-capture="photo" onClick={capture.onPhoto}>
           {translate(lang, 'story.studio.camera.quick.photo')}
