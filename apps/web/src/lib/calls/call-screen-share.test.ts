@@ -70,6 +70,8 @@ describe('l’écran partagé hors de l’écran d’appel', () => {
       members: { a: member({ cameraOn: true }), b: member({ userId: 'u-b', screenSharing: true }) },
       remoteStreams: { 'u-a': camera, 'u-b': liveVideo },
       localStream: null,
+      facing: 'user',
+      screenSharing: false,
       cameraOn: false,
       phase: { kind: 'connected' },
     });

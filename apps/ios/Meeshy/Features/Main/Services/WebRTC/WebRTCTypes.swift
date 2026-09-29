@@ -1041,12 +1041,11 @@ nonisolated enum QualityThresholds {
     /// persisting after a transient blip self-heals.
     static let remoteQualityResetSeconds: TimeInterval = 15
 
-    // MARK: Opus fmtp codec hints (mungeOpusSDP in P2PWebRTCClient)
+    // MARK: Opus fmtp codec hints (OpusFmtpMunger, CallDataProfile)
 
-    /// `maxaveragebitrate` fmtp hint for Opus. 64 kbps matches the
-    /// `defaultBitrate` adaptation target — the SDP hint is the absolute
-    /// encoder ceiling; the RtpEncoding max handles the dynamic range.
-    static let opusFmtpMaxAverageBitrate: Int = 64_000
+    /// `maxaveragebitrate` fmtp hint for Opus VOICE on Wi-Fi (#8697): 32 kbps
+    /// mono is transparent for speech; leaner profiles lower it further.
+    static let opusFmtpMaxAverageBitrate: Int = 32_000
     /// `maxplaybackrate` fmtp hint for Opus. 48 kHz = full wideband audio,
     /// the native sample rate of the Opus codec and WebRTC's internal APM.
     static let opusFmtpMaxPlaybackRate: Int = 48_000

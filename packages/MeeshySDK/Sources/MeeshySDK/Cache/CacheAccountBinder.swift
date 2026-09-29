@@ -85,6 +85,10 @@ public final class CacheAccountBinder {
     private let isPreserved: @Sendable @concurrent (String) async -> Bool
     private var tail: Task<Void, Never>?
 
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage.
+    // Garde : test_everyExplicitMainActorCoreClass_declaresADeinit.
+    nonisolated deinit {}
+
     init(
         cache: CacheCoordinator = .shared,
         vault: SyncCheckpointVault = SyncCheckpointVault(),

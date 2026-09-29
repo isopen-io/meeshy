@@ -79,6 +79,16 @@ final class WebRTCService {
     /// would thaw without anyone deciding it. `applyVideoQuality` therefore reads
     /// this flag FIRST and substitutes the floor for the computed tier.
     private(set) var survivalFloorActive = false
+    /// #8697 — how much data the call may spend, from the OS path (Wi-Fi,
+    /// cellular, Low Data Mode) and the RTT/loss heuristic. Caps both the
+    /// ladder's audio and video targets and shapes the Opus fmtp of the next
+    /// local description.
+    private(set) var dataProfile: CallDataProfile = .wifi
+    private(set) var networkPath: CallNetworkPath = .unrestricted
+    private var ladderAudioBitrate: Int = QualityThresholds.defaultBitrate
+    private var lastHeuristicLevel: VideoQualityLevel = .excellent
+    private let pathMonitor: any CallNetworkPathProviding
+    private let mediaFaults: any CallMediaFaultReporting
     // Audit P1-4 — replace Timer.scheduledTimer with cancellable Task to
     // align with PERF-011 (heartbeat / duration migrated; this monitor was
     // missed). Timers run on RunLoop.main, are App-Nap-unfriendly, and have
@@ -102,8 +112,14 @@ final class WebRTCService {
     // (`.failed`/`.closed`, which fire `webRTCServiceDidDisconnect` at once).
     private var disconnectDebounceTask: Task<Void, Never>?
 
-    init(client: (any WebRTCClientProviding)? = nil) {
+    init(
+        client: (any WebRTCClientProviding)? = nil,
+        pathMonitor: (any CallNetworkPathProviding)? = nil,
+        mediaFaults: (any CallMediaFaultReporting)? = nil
+    ) {
         self.client = client ?? P2PWebRTCClient()
+        self.pathMonitor = pathMonitor ?? CallNetworkPathMonitor()
+        self.mediaFaults = mediaFaults ?? CallMediaFaultFeed.shared
         self.client.delegate = self
         Logger.webrtc.info("WebRTCService initialized")
     }
@@ -143,6 +159,7 @@ final class WebRTCService {
             let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
+            startNetworkPathMonitoring()
             return true
         } catch {
             Logger.webrtc.error("WebRTC configuration failed: \(error.localizedDescription)")
@@ -169,6 +186,7 @@ final class WebRTCService {
         _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
+            applyEncoderCeilings()
             Logger.webrtc.info("Created SDP offer")
             return offer
         } catch {
@@ -182,6 +200,7 @@ final class WebRTCService {
             let answer = try await client.createAnswer(for: offer)
             hasRemoteDescription = true
             flushBufferedCandidates()
+            applyEncoderCeilings()
             Logger.webrtc.info("Created SDP answer")
             return answer
         } catch {
@@ -253,7 +272,13 @@ final class WebRTCService {
     }
 
     func startLocalMedia(isVideo: Bool) async throws {
-        try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
+        do {
+            try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
+        } catch {
+            mediaFaults.report(stage: isVideo ? "local-media.video" : "local-media.audio", error: error)
+            throw error
+        }
+        applyEncoderCeilings()
         Logger.webrtc.info("Local media started - video: \(isVideo)")
     }
 
@@ -273,7 +298,13 @@ final class WebRTCService {
     /// track, attaches it to the reserved video transceiver and flips to
     /// sendRecv. Returns true when a renegotiation (createOffer) is required.
     func upgradeToVideo() async throws -> Bool {
-        let needsRenegotiation = try await client.enableLocalVideo()
+        let needsRenegotiation: Bool
+        do {
+            needsRenegotiation = try await client.enableLocalVideo()
+        } catch {
+            mediaFaults.report(stage: "camera", error: error)
+            throw error
+        }
         // `enableLocalVideo` repose l'encodage PAR DÉFAUT (2,5 Mbps / 30 fps) :
         // il n'a aucune connaissance du gel de survie. Repasser par le SITE qui
         // consulte `survivalFloorActive`, sinon une ré-acquisition (unhold,
@@ -305,6 +336,7 @@ final class WebRTCService {
                 completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
+                self?.mediaFaults.report(stage: "camera-switch", error: error)
                 completion?(false)
             }
         }
@@ -328,6 +360,7 @@ final class WebRTCService {
                 completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
+                self?.mediaFaults.report(stage: "camera-switch", error: error)
                 completion?(false)
             }
         }
@@ -406,6 +439,8 @@ final class WebRTCService {
         // estimator has converged (audio-only calls sit at ~64 kbps forever
         // and would read as .poor/.critical on a perfectly healthy link).
         let heuristicLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
+        lastHeuristicLevel = heuristicLevel
+        refreshDataProfile()
         let bweLevel: VideoQualityLevel? = stats.availableOutgoingBitrateBps > 0
             ? VideoQualityLevel.from(availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps)
             : nil
@@ -434,7 +469,9 @@ final class WebRTCService {
             jitterMs: stats.jitterMs,
             thresholdMs: QualityThresholds.highJitterThresholdMs
         )
-        let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate
+        let ladderBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate
+        ladderAudioBitrate = ladderBitrate
+        let effectiveBitrate = dataProfile.budget.audio.capping(ladderBitrate)
 
         if effectiveBitrate != currentBitrate {
             currentBitrate = effectiveBitrate
@@ -504,11 +541,19 @@ final class WebRTCService {
             scaleDownBy: scale,
             thermalState: ProcessInfo.processInfo.thermalState
         )
-        client.applyVideoEncoding(
+        // #8697 — the data profile is a third, independent ceiling: a healthy
+        // cellular link still must not spend Wi-Fi megabits.
+        let capped = dataProfile.budget.video.capping(CallVideoBudget(
             maxBitrateBps: thermal.bitrateBps,
             maxFramerate: thermal.framerate,
             scaleResolutionDownBy: thermal.scaleDownBy,
             degradationPreference: .maintainFramerate
+        ))
+        client.applyVideoEncoding(
+            maxBitrateBps: capped.maxBitrateBps,
+            maxFramerate: capped.maxFramerate,
+            scaleResolutionDownBy: capped.scaleResolutionDownBy,
+            degradationPreference: capped.degradationPreference
         )
     }
 
@@ -606,6 +651,12 @@ final class WebRTCService {
         // would otherwise pin the next call's encoder at 2 fps for its whole
         // duration, with nothing left to thaw it (the controller is reset too).
         survivalFloorActive = false
+        pathMonitor.stop()
+        networkPath = .unrestricted
+        dataProfile = .wifi
+        ladderAudioBitrate = QualityThresholds.defaultBitrate
+        lastHeuristicLevel = .excellent
+        (client as? CallDataProfileApplying)?.applyDataProfile(.wifi)
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()
@@ -625,6 +676,46 @@ final class WebRTCService {
         hasRemoteDescription = false
         connectionState = .closed
         Logger.webrtc.info("WebRTC connection closed")
+    }
+
+    // MARK: - Data profile (#8697)
+
+    /// Feeds the OS path into the data profile. Internal so the path monitor's
+    /// callback — and the tests — reach it.
+    func updateNetworkPath(_ path: CallNetworkPath) {
+        guard path != networkPath else { return }
+        networkPath = path
+        refreshDataProfile()
+    }
+
+    private func startNetworkPathMonitoring() {
+        pathMonitor.start { [weak self] path in
+            self?.updateNetworkPath(path)
+        }
+    }
+
+    /// libwebrtc builds (offerer) or attaches (answerer) the senders while the
+    /// SDP is made, at the client's defaults (2.5 Mbps video): the ceilings
+    /// must reach them then, not at the next tier or path change.
+    private func applyEncoderCeilings() {
+        currentBitrate = dataProfile.budget.audio.capping(ladderAudioBitrate)
+        client.applyAudioEncoding(maxBitrateBps: currentBitrate)
+        applyVideoQuality(currentQualityLevel)
+    }
+
+    private func refreshDataProfile() {
+        let next = CallDataProfile.resolve(path: networkPath, heuristic: lastHeuristicLevel, current: dataProfile)
+        guard next != dataProfile else { return }
+        let previous = dataProfile
+        dataProfile = next
+        (client as? CallDataProfileApplying)?.applyDataProfile(next)
+        let capped = next.budget.audio.capping(ladderAudioBitrate)
+        if capped != currentBitrate {
+            currentBitrate = capped
+            client.applyAudioEncoding(maxBitrateBps: capped)
+        }
+        applyVideoQuality(currentQualityLevel)
+        Logger.webrtc.info("Data profile \(previous.rawValue, privacy: .public) → \(next.rawValue, privacy: .public)")
     }
 
     // MARK: - Private

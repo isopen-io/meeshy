@@ -556,7 +556,7 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   };
 
   test('chaque relevé publie le niveau, le détail et le stade de survie ; le rapport part vers la passerelle, au plus toutes les 5 s', async () => {
-    const h = await connected([{ total: total({ level: 'poor', packetLoss: 9, rtt: 480 }), stage: 'frozen', codec: 'VP8' }]);
+    const h = await connected([{ total: total({ level: 'poor', packetLoss: 9, rtt: 480 }), stage: 'frozen', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     await h.sampleQuality();
     expect(h.call()?.quality).toEqual({ level: 'poor', packetLoss: 9, rtt: 480, jitter: 8, audioKbps: 32, videoKbps: 480, survival: 'frozen' });
     const reports = () => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_QUALITY_REPORT);
@@ -571,8 +571,8 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 
   test('un relevé mauvais, même hors fenêtre de rapport, fait demander la note d’après-appel (#8072)', async () => {
-    const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8' } as const;
-    const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8' }, good]);
+    const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' } as const;
+    const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, good]);
     await h.sampleQuality();
     h.advance(2_000);
     await h.sampleQuality();
@@ -584,7 +584,7 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 
   test('la boucle s’arrête avec l’appel : plus aucun relevé après le raccroché', async () => {
-    const h = await connected([{ total: total(), stage: 'sending', codec: 'opus' }]);
+    const h = await connected([{ total: total(), stage: 'sending', codec: 'opus', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     h.engine.hangup();
     const before = h.emitted.length;
     await h.sampleQuality();
@@ -614,7 +614,7 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
   });
 
   test('au raccroché, `call:analytics` part UNE fois, avec le codec lu, les reprises, les transitions réseau et la qualité', async () => {
-    const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8' }]);
+    const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     await h.sampleQuality();
     h.advance(2_000);
     await h.sampleQuality();

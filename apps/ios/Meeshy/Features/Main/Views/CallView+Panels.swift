@@ -84,7 +84,7 @@ extension CallView {
             CallCaptureSubject(
                 id: tile.id,
                 name: tile.displayName,
-                isMirrored: tile.isLocal && callManager.isUsingFrontCamera,
+                isMirrored: tile.isLocal && isMyCaptureMirrored,
                 showsVideo: tile.showsVideo
             )
         }
@@ -112,8 +112,17 @@ extension CallView {
         CallCaptureSubject(
             id: Self.localCaptureId,
             name: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main),
-            isMirrored: callManager.isUsingFrontCamera,
+            isMirrored: isMyCaptureMirrored,
             showsVideo: callManager.isVideoEnabled && callManager.hasLocalVideoTrack
+        )
+    }
+
+    /// #8696 — une capture montre ce que l'autre voit : la règle de symétrie,
+    /// rôle capture, jamais le drapeau de l'aperçu.
+    private var isMyCaptureMirrored: Bool {
+        CallCameraMirror.isMirrored(
+            facing: CallCameraMirror.displayedFacing(live: CallLiveCamera.shared.facing, intendedFront: callManager.isUsingFrontCamera),
+            role: .capture
         )
     }
 

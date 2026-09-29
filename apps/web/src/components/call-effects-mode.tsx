@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type W
 import { useStore } from 'zustand/react';
 
 import { callActions } from '@/lib/calls/call-actions';
-import { captureStill, mirroredTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
+import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
@@ -65,7 +65,7 @@ export const EFFECTS_RECORD_FPS = 30;
 
 const VIDEO_GRAB: FrameGrab = {
   still: (video, style) => captureStill({ video, style, now: new Date() }),
-  film: (video) => mirroredTrack(video, EFFECTS_RECORD_FPS),
+  film: (video) => filmedTrack(video, EFFECTS_RECORD_FPS),
 };
 
 const NO_AUDIO = (): readonly MediaStream[] => [];

@@ -39,6 +39,10 @@ protocol CallCapturePhotoSaving: AnyObject {
     func saveVideo(at url: URL) async -> Bool
 }
 
+nonisolated struct CallCaptureFrame: @unchecked Sendable {
+    let image: CGImage
+}
+
 protocol CallFaceLocating: AnyObject, Sendable {
     nonisolated func faceRect(in image: CGImage) -> CGRect?
 }
@@ -47,14 +51,29 @@ protocol CallFaceLocating: AnyObject, Sendable {
 final class PhotoLibraryCaptureSaver: CallCapturePhotoSaving {
     static let shared = PhotoLibraryCaptureSaver()
 
+    private let photoProcessor: any PhotoCaptureProcessorProviding
+
     nonisolated deinit {}
+
+    init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
+        self.photoProcessor = photoProcessor
+    }
 
     func requestAccess() async -> Bool {
         await PhotoLibraryManager.shared.requestAuthorization()
     }
 
+    /// #8695 — une capture d'appel est une prise photo : le même traitement,
+    /// hors du thread principal, puis les octets encodés tels quels.
     func save(_ image: CGImage) async -> Bool {
-        await PhotoLibraryManager.shared.saveImage(UIImage(cgImage: image))
+        let processor = photoProcessor
+        let frame = CallCaptureFrame(image: image)
+        let processed = await Task.detached(priority: .userInitiated) {
+            processor.process(image: frame.image, settings: .callCapture)
+        }.value
+        guard let processed else { return await PhotoLibraryManager.shared.saveImage(UIImage(cgImage: image)) }
+        let name = "Meeshy-\(UUID().uuidString).\(processed.format.fileExtension)"
+        return await PhotoLibraryManager.shared.saveImageFile(processed.data, fileName: name)
     }
 
     func saveVideo(at url: URL) async -> Bool {
