@@ -218,6 +218,7 @@ describe('mon image pendant un appel', () => {
     expect(camera.applied).toEqual([]);
     expect(view.find('[data-call-zoom-value]')?.textContent).toBe('1,3×');
     expect((view.find('video[data-call-mirrored]') as HTMLVideoElement).style.transform).toBe('scaleX(-1) scale(1.3)');
+    expect((view.find('video[data-call-mirrored]') as HTMLVideoElement).parentElement?.classList.contains('overflow-hidden')).toBe(true);
     view.done();
   });
 

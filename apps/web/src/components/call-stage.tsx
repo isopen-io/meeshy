@@ -130,7 +130,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   return (
     <div className="absolute inset-0">
       {mainOn ? (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 overflow-hidden">
           <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? local.value : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
         </div>
       ) : (
