@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { amina, message, translation } from '@/lib/api/fixtures-base';
-import type { Message } from '@/lib/api/types';
+import { amina, attachmentDefaults, message, translation } from '@/lib/api/fixtures-base';
+import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { cardAuthorOf, messageCardFileName, messageCardLanguagesOf, messageCardSubjectOf } from './message-card-subject';
@@ -11,7 +11,7 @@ beforeAll(async () => {
 });
 
 const NOW = new Date('2026-09-28T12:00:00.000Z').getTime();
-const VIEWER = { id: 'u-jacques', displayName: 'Jacques' };
+const VIEWER = { id: 'u-jacques', displayName: 'Jacques', handle: 'jacques' };
 
 const quoted = (overrides: Partial<Message> = {}): Message =>
   message({
@@ -51,10 +51,17 @@ const subjectOf = (target: Message, servedText?: string) =>
 describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () => {
   test('une réponse porte sa citation, servie dans la langue du lecteur', () => {
     expect(subjectOf(reply())).toEqual({
-      quoted: { author: amina.displayName ?? '', text: 'On se retrouve où ce soir ?' },
-      reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !' },
+      quoted: { author: amina.displayName ?? '', text: 'On se retrouve où ce soir ?', handle: null },
+      reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !', handle: 'jacques' },
       sentAt: new Date('2026-09-28T11:01:00.000Z'),
+      quotedAt: new Date('2026-09-28T11:00:00.000Z'),
+      media: [],
     });
+  });
+
+  test('le pseudo de chaque auteur voyage avec son nom — « pseudo au lieu du nom affiché »', () => {
+    const subject = subjectOf(reply({ replyTo: quoted({ sender: { ...amina, username: 'amina.d' } as Message['sender'] }) }));
+    expect(subject?.quoted?.handle).toBe('amina.d');
   });
 
   test('le texte de la réponse est celui que le lecteur VOIT (traduction imposée comprise)', () => {
@@ -86,6 +93,53 @@ describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () =>
   });
 });
 
+describe('les médias qu’une carte peut montrer (#8693)', () => {
+  const piece = (overrides: Partial<Attachment>): Attachment => ({
+    ...attachmentDefaults,
+    id: 'a-1',
+    messageId: 'm-reply',
+    fileName: 'photo.jpg',
+    originalName: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    fileSize: 1000,
+    fileUrl: '/api/v1/attachments/a-1/file',
+    uploadedBy: VIEWER.id,
+    createdAt: '2026-09-28T11:01:00.000Z',
+    width: 1200,
+    height: 900,
+    ...overrides,
+  });
+
+  test('images, vidéos et audios deviennent des médias de carte ; un document n’en est pas un', () => {
+    const subject = subjectOf(
+      standalone({
+        attachments: [
+          piece({ id: 'a-img' }),
+          piece({ id: 'a-vid', mimeType: 'video/mp4', width: 1920, height: 1080, thumbnailUrl: '/thumb.jpg' }),
+          piece({ id: 'a-aud', mimeType: 'audio/mp4', originalName: 'note.m4a', duration: 12_000, width: undefined, height: undefined }),
+          piece({ id: 'a-pdf', mimeType: 'application/pdf' }),
+        ],
+      }),
+    );
+    expect(subject?.media.map((item) => item.card.kind)).toEqual(['image', 'video', 'audio']);
+    const voice = subject?.media[2]?.card;
+    expect(voice?.kind === 'audio' ? [voice.durationMs, voice.name, voice.peaks.length > 0] : null).toEqual([12_000, 'note.m4a', true]);
+    expect(subject?.media[1]?.posterUrl).toBe('/thumb.jpg');
+  });
+
+  test('un message fait d’une seule photo s’image, même sans texte', () => {
+    const subject = subjectOf(standalone({ content: '', attachments: [piece({})] }));
+    expect(subject?.reply.text).toBe('');
+    expect(subject?.media).toHaveLength(1);
+  });
+
+  test('une pièce à VUE UNIQUE ou FLOUTÉE n’est jamais peinte — et seule, elle ne donne pas de carte', () => {
+    const subject = subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-once', isViewOnce: true }), piece({ id: 'a-blur', isBlurred: true })] }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['a-open']);
+    expect(subjectOf(standalone({ content: '', attachments: [piece({ isBlurred: true })] }))).toBeNull();
+  });
+});
+
 describe('cardAuthorOf — qui signe chaque bloc', () => {
   test('le lecteur est nommé par SON nom, jamais « Vous »', () => {
     expect(cardAuthorOf({ senderId: VIEWER.id }, VIEWER)).toBe('Jacques');
@@ -100,6 +154,7 @@ describe('cardAuthorOf — qui signe chaque bloc', () => {
 describe('messageCardFileName — un nom lisible, rien du contenu', () => {
   test('horodaté, en .png', () => {
     expect(messageCardFileName(new Date(2026, 8, 28, 9, 5, 7))).toBe('meeshy-20260928-090507.png');
+    expect(messageCardFileName(new Date(2026, 8, 28, 9, 5, 7), 'mp4')).toBe('meeshy-20260928-090507.mp4');
   });
 });
 
