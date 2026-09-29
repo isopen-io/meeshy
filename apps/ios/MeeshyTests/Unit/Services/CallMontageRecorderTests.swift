@@ -95,7 +95,8 @@ final class CallMontageRecorderTests: XCTestCase {
             await settle()
         }
 
-        let url = try XCTUnwrap(await sut.finish())
+        let finished = await sut.finish()
+        let url = try XCTUnwrap(finished)
 
         let tracks = try await AVURLAsset(url: url).loadTracks(withMediaType: .video)
         XCTAssertEqual(tracks.count, 1)
@@ -145,7 +146,8 @@ final class CallMontageRecorderTests: XCTestCase {
             await settle()
         }
 
-        let url = try XCTUnwrap(await sut.finish())
+        let finished = await sut.finish()
+        let url = try XCTUnwrap(finished)
 
         let tracks = try await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
         XCTAssertEqual(tracks.count, 1)
@@ -163,7 +165,8 @@ final class CallMontageRecorderTests: XCTestCase {
             await settle()
         }
 
-        let url = try XCTUnwrap(await sut.finish())
+        let finished = await sut.finish()
+        let url = try XCTUnwrap(finished)
 
         let video = try await AVURLAsset(url: url).loadTracks(withMediaType: .video)
         XCTAssertEqual(video.count, 1)
