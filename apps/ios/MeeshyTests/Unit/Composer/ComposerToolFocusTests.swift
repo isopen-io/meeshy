@@ -70,6 +70,15 @@ final class ComposerToolFocusTests: XCTestCase {
         XCTAssertNotNil(ComposerToolFocus.transition(reduceMotion: false))
     }
 
+    /// VoiceOver annonce les RÉGLAGES de l'outil quand ils occupent le rail —
+    /// plus « Ajouter à la scène », qui serait faux à cet instant.
+    @MainActor
+    func test_leRail_occupeParUnOutil_sAnnonceCommeSesReglages() throws {
+        XCTAssertNotEqual(ComposerRailCopy.toolRailLabel, ComposerRailCopy.railLabel)
+        let rail = try source("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+        XCTAssertTrue(rail.contains("mode.opensTool ? ComposerRailCopy.toolRailLabel : ComposerRailCopy.railLabel"))
+    }
+
     // MARK: - Les sites de montage demandent à la règle
 
     func test_surface_neMonteAucuneColonneEnSurplus_etCedeSonChrome() throws {

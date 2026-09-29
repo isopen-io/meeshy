@@ -282,7 +282,7 @@ struct ComposerLeadingRail: View {
             // une carte-colonne, ou rien quand chaque bouton porte le sien.
             .modifier(ComposerRailCard(separate: separateButtons, plateauTint: plateauTint))
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerRailCopy.railLabel))
+            .accessibilityLabel(Text(mode.opensTool ? ComposerRailCopy.toolRailLabel : ComposerRailCopy.railLabel))
         }
     }
 
@@ -400,6 +400,13 @@ nonisolated enum ComposerRailCopy {
     static var railLabel: String {
         String(localized: "composer.rail.leading.label",
                defaultValue: "Ajouter à la scène", bundle: .main)
+    }
+
+    /// Le même rail quand un outil l'occupe (#8652) : VoiceOver annonce les
+    /// réglages de l'outil, plus « Ajouter à la scène ».
+    static var toolRailLabel: String {
+        String(localized: "composer.rail.tool.label",
+               defaultValue: "Réglages de l'outil", bundle: .main)
     }
 
     static func label(_ door: ComposerRailDoor) -> String {
