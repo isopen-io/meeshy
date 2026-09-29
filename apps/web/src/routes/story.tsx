@@ -792,7 +792,7 @@ export default function StoryScreen() {
             className="pointer-events-none absolute start-0 top-0 block w-px"
             style={{ height: 'var(--safe-top, 0px)' }}
           />
-          <div data-story-scene-layer="" className="absolute inset-0" {...scene}>
+          <div data-story-scene-yield="" className="absolute inset-0" {...scene}>
           {sceneDocument !== null ? (
             <Suspense fallback={null}>
               <StorySceneLayer

@@ -498,14 +498,14 @@ async function runScheme(colorScheme) {
        angle haut-droit. Replier rend la lecture : la liste revient, la scène
        reprend sa taille et se floute. */
     await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
       .catch(() => undefined);
     /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
     await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAnimations().length === 0, null, { timeout: 1500 })
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
       .catch(() => undefined);
     const ecriture = await page.evaluate(() => {
-      const layer = document.querySelector('[data-story-scene-layer]');
+      const layer = document.querySelector('[data-story-scene-yield]');
       const sheet = document.querySelector('[data-story-comments-sheet]');
       const plate = document.querySelector('[data-comment-plate]');
       const fold = document.querySelector('[data-comment-fold]');
@@ -534,14 +534,14 @@ async function runScheme(colorScheme) {
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-ecrire-${colorScheme}-${viewport.width}.png` });
     await page.click('[data-comment-fold]');
     await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
       .catch(() => undefined);
     /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
     await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-layer]')?.getAnimations().length === 0, null, { timeout: 1500 })
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
       .catch(() => undefined);
     const lecture = await page.evaluate(() => {
-      const layer = document.querySelector('[data-story-scene-layer]');
+      const layer = document.querySelector('[data-story-scene-yield]');
       return {
         etat: layer?.getAttribute('data-scene-yields') ?? null,
         filtre: layer === null ? null : getComputedStyle(layer).filter,
