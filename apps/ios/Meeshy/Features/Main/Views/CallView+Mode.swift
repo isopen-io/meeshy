@@ -21,13 +21,7 @@ extension CallView {
                     modeControls(mode)
                 }
                 .padding(.bottom, Self.chromeBottomInset)
-                if let startedAt = capture.recordingStartedAt {
-                    CallModeRecordingStop(startedAt: startedAt) {
-                        Task { await capture.stopRecording() }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
-                }
+                CallModeRecordingOverlay(capture: capture)
             }
             .transition(.opacity)
             .accessibilityElement(children: .contain)
@@ -43,11 +37,7 @@ extension CallView {
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
         case .montage:
-            CallMontageStage(
-                image: capture.preview,
-                styleName: CallCaptureCopy.styleName(capture.style),
-                isWorking: capture.status == .working
-            )
+            CallMontageLiveStage(capture: capture)
         }
     }
 

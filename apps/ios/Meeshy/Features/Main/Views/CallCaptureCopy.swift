@@ -98,7 +98,7 @@ struct CallCaptureSourceKey: Equatable {
 }
 
 struct CallCaptureFlash: View {
-    let trigger: Int
+    @ObservedObject var capture: CallCaptureController
     let reduceMotion: Bool
 
     @State private var opacity: Double = 0
@@ -109,8 +109,8 @@ struct CallCaptureFlash: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .task(id: trigger) {
-                guard trigger > 0 else { return }
+            .task(id: capture.flashCount) {
+                guard capture.flashCount > 0 else { return }
                 opacity = reduceMotion ? 0.35 : 0.85
                 try? await Task.sleep(nanoseconds: 30_000_000)
                 withAnimation(.easeOut(duration: reduceMotion ? 0.3 : 0.45)) { opacity = 0 }

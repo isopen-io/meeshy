@@ -1,3 +1,4 @@
+import Combine
 import CoreGraphics
 import XCTest
 @testable import Meeshy
@@ -274,6 +275,38 @@ final class CallCaptureControllerTests: XCTestCase {
         XCTAssertTrue(recorder.appended.allSatisfy { $0.width == Int(CallCaptureController.recordingCanvas.width) })
         XCTAssertEqual(sut.preview?.height, Int(CallCaptureController.recordingCanvas.height))
         sut.stop()
+    }
+
+    /// Une lenteur est un bug : l'écran d'appel observe le contrôleur, jamais
+    /// l'image qui change à chaque trame — seul le flux d'aperçu la publie.
+    func test_recordFrame_publishesTheFrameOnThePreviewFeedOnly() async {
+        let (sut, _, _) = makeSUT()
+        await sut.startRecording()
+        var controllerChanges = 0
+        var feedChanges = 0
+        let controllerWatch = sut.objectWillChange.sink { _ in controllerChanges += 1 }
+        let feedWatch = sut.previewFeed.objectWillChange.sink { _ in feedChanges += 1 }
+
+        for _ in 0 ..< 3 { await sut.recordFrame(style: nil) }
+
+        XCTAssertEqual(controllerChanges, 0)
+        XCTAssertEqual(feedChanges, 3)
+        controllerWatch.cancel()
+        feedWatch.cancel()
+        sut.stop()
+    }
+
+    func test_refreshPreviews_publishesThePreviewOnTheFeedOnly() async {
+        let (sut, _, _) = makeSUT()
+        await sut.refreshPreviews()
+        var controllerChanges = 0
+        let controllerWatch = sut.objectWillChange.sink { _ in controllerChanges += 1 }
+
+        await sut.refreshPreviews()
+
+        XCTAssertEqual(controllerChanges, 0)
+        XCTAssertNotNil(sut.previewFeed.image)
+        controllerWatch.cancel()
     }
 
     func test_recordFrame_notRecording_appendsNothing() async {

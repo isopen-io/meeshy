@@ -75,11 +75,34 @@ nonisolated final class VisionFaceLocator: CallFaceLocating, @unchecked Sendable
     }
 }
 
+/// L'aperçu du montage change à chaque trame (5 i/s, 15 pendant le film) : il
+/// se publie à part, pour que seule la scène qui l'affiche se redessine —
+/// jamais l'écran d'appel qui tient le contrôleur (#8625).
+@MainActor
+final class CallCapturePreviewFeed: ObservableObject {
+    @Published fileprivate(set) var image: CGImage?
+
+    nonisolated deinit {}
+}
+
+/// Le propriétaire de la capture pour l'écran d'appel : il ne publie RIEN, donc
+/// l'écran d'appel ne se redessine jamais au rythme de la capture.
+@MainActor
+final class CallCaptureHost: ObservableObject {
+    let controller: CallCaptureController
+
+    init(controller: CallCaptureController = CallCaptureController()) {
+        self.controller = controller
+    }
+
+    nonisolated deinit {}
+}
+
 @MainActor
 final class CallCaptureController: ObservableObject {
     @Published private(set) var style: CallMontageStyle = .screen
     @Published private(set) var thumbnails: [CallMontageStyle: CGImage] = [:]
-    @Published private(set) var preview: CGImage?
+    let previewFeed = CallCapturePreviewFeed()
     @Published private(set) var status: CallCaptureStatus = .idle
     @Published private(set) var flashCount = 0
     /// #8625 — l'instant où l'appui long a lancé le film ; `nil` hors film.
@@ -128,6 +151,8 @@ final class CallCaptureController: ObservableObject {
 
     var isRecording: Bool { recordingStartedAt != nil }
 
+    var preview: CGImage? { previewFeed.image }
+
     var caption: CallMontageCaption {
         CallMontageCaption(title: Self.brand, subtitle: now().formatted(date: .abbreviated, time: .shortened))
     }
@@ -158,14 +183,14 @@ final class CallCaptureController: ObservableObject {
         previewTask = nil
         grabber.detachAll()
         thumbnails = [:]
-        preview = nil
+        previewFeed.image = nil
         previewsSinceThumbnails = 0
     }
 
     func select(_ newStyle: CallMontageStyle) {
         guard newStyle != style else { return }
         style = newStyle
-        preview = thumbnails[newStyle]
+        previewFeed.image = thumbnails[newStyle]
     }
 
     func refreshPreviews() async {
@@ -181,7 +206,7 @@ final class CallCaptureController: ObservableObject {
         }.value
         guard !Task.isCancelled else { return }
         if includesThumbnails { thumbnails = rendered.thumbnails }
-        preview = rendered.preview
+        previewFeed.image = rendered.preview
     }
 
     nonisolated static func rendersThumbnails(hasThumbnails: Bool, previewsSinceThumbnails: Int) -> Bool {
@@ -245,7 +270,7 @@ final class CallCaptureController: ObservableObject {
         }.value
         guard isRecording, let frame = rendered.images.first else { return }
         recorder.append(frame)
-        if fixed == nil { preview = frame }
+        if fixed == nil { previewFeed.image = frame }
     }
 
     func stopRecording() async {

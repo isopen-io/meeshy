@@ -141,8 +141,28 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(controls.contains("CallModeShutter"), "Le déclencheur a quitté Effets et Montage")
         XCTAssertFalse(carousel.contains("struct CallModeShutter"))
         XCTAssertTrue(carousel.contains("CallModeGestureRule.outcome("), "Le geste se lit par la règle pure")
-        XCTAssertTrue(code.contains("CallModeRecordingStop(startedAt:"), "L'arrêt de l'enregistrement se pose sur la scène")
+        XCTAssertTrue(code.contains("CallModeRecordingOverlay(capture: capture)"), "L'arrêt de l'enregistrement se pose sur la scène")
+        XCTAssertTrue(controls.contains("CallModeRecordingStop(startedAt:"))
         XCTAssertTrue(code.contains("CallCaptureOutcomeAnnouncer(capture: capture)"), "Le résultat s'annonce même après la sortie du mode")
+    }
+
+    /// #8625 — une lenteur est un bug : l'écran d'appel TIENT la capture sans
+    /// l'observer. Aperçu, chrono, flash et résultat se lisent dans des vues
+    /// feuilles ; sinon un film redessinerait tout l'écran à chaque trame.
+    func test_callView_holdsTheCaptureWithoutObservingIt() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(code.contains("@StateObject var captureHost = CallCaptureHost()"))
+        XCTAssertFalse(code.contains("@StateObject var capture "), "Observer le contrôleur redessine l'écran d'appel à chaque trame")
+        XCTAssertFalse(code.contains("@ObservedObject var capture"))
+        for published in ["preview", "previewFeed", "recordingStartedAt", "flashCount", "status", "style", "thumbnails", "isRecording"] {
+            XCTAssertFalse(code.contains("capture.\(published)"), "capture.\(published) se lit dans une vue feuille, jamais dans CallView")
+        }
+        let service = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCaptureController.swift")
+        )
+        let host = try block("final class CallCaptureHost: ObservableObject {", until: "final class CallCaptureController", in: service)
+        XCTAssertFalse(host.contains("@Published"), "Le propriétaire ne publie rien")
+        XCTAssertFalse(service.contains("@Published private(set) var preview"), "L'aperçu se publie sur son flux, pas sur le contrôleur")
     }
 
     /// #8576 — le zoom caméra suit MON image en plein écran, jamais la

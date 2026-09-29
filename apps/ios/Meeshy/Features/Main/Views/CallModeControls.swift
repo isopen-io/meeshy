@@ -276,6 +276,45 @@ struct CallMontageModeControls: View {
     }
 }
 
+/// #8625 — la scène du Montage lit l'aperçu sur son flux : à chaque trame,
+/// seule l'image se redessine, ni l'écran d'appel ni les commandes.
+struct CallMontageLiveStage: View {
+    @ObservedObject var capture: CallCaptureController
+
+    var body: some View {
+        CallMontageFeedStage(
+            feed: capture.previewFeed,
+            styleName: CallCaptureCopy.styleName(capture.style),
+            isWorking: capture.status == .working
+        )
+    }
+}
+
+private struct CallMontageFeedStage: View {
+    @ObservedObject var feed: CallCapturePreviewFeed
+    let styleName: String
+    let isWorking: Bool
+
+    var body: some View {
+        CallMontageStage(image: feed.image, styleName: styleName, isWorking: isWorking)
+    }
+}
+
+/// Pendant le film : le bouton stop et le chrono, seuls à suivre le film.
+struct CallModeRecordingOverlay: View {
+    @ObservedObject var capture: CallCaptureController
+
+    var body: some View {
+        if let startedAt = capture.recordingStartedAt {
+            CallModeRecordingStop(startedAt: startedAt) {
+                Task { await capture.stopRecording() }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity)
+        }
+    }
+}
+
 struct CallMontageStage: View {
     let image: CGImage?
     let styleName: String
