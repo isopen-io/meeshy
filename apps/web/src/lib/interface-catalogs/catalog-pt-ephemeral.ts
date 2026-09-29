@@ -15,6 +15,10 @@ const ptEphemeral = {
   'composer.ephemeral.rail': 'Tempo até a mensagem desaparecer',
   'composer.protection.imposed.blur': 'Desfoque imposto pela mensagem citada',
   'composer.protection.imposed.ephemeral': 'Modo efêmero imposto pela mensagem citada: {duration}',
+  'message.afterRead.a11y': 'Mensagem efêmera, desaparece após a leitura',
+  'message.ephemeral.label.a11y': 'Mensagem efêmera',
+  'message.blurred.a11y': 'Desfocado',
+  'message.viewOnce.a11y': 'Visualização única',
 } satisfies EphemeralCatalogSlice;
 
 export default ptEphemeral;

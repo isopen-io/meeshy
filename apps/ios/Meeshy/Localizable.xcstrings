@@ -21984,6 +21984,102 @@
         }
       }
     },
+    "protection.afterRead": {
+      "comment": "Ligne d'aperçu d'une conversation (#8634) — flamme-œil : catalogue partagé packages/shared/utils/conversation-preview-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يختفي بعد القراءة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschwindet nach dem Lesen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disappears after reading"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desaparece tras leerlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disparaît après lecture"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scompare dopo la lettura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desaparece após a leitura"
+          }
+        }
+      }
+    },
+    "quote.ephemeral.expired": {
+      "comment": "Citation d'un message éphémère échu pour le lecteur (#8631) — même libellé que message.expired.a11y du web.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتهت صلاحية الرسالة المؤقتة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flüchtige Nachricht abgelaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ephemeral message expired"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje efímero caducado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message éphémère expiré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggio effimero scaduto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagem efêmera expirada"
+          }
+        }
+      }
+    },
     "reveal.badge.achievement": {
       "extractionState": "manual",
       "localizations": {
@@ -79476,65 +79572,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modo de visualização única ativo"
-          }
-        }
-      }
-    },
-    "composer.viewonce.barred_by_imposed_blur": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "العرض لمرة واحدة غير متاح: التمويه مفروض من الرسالة المقتبسة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einmalansicht nicht verfügbar: Unschärfe von der zitierten Nachricht vorgegeben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View once unavailable: blur set by the quoted message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver una vez no disponible: desenfoque impuesto por el mensaje citado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vue unique indisponible : flou imposé par le message cité"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visualizzazione singola non disponibile: sfocatura imposta dal messaggio citato"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visualização única indisponível: desfocagem imposta pela mensagem citada"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visualização única indisponível: desfoque imposto pela mensagem citada"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法使用单次查看：模糊由引用的消息强制设置"
           }
         }
       }

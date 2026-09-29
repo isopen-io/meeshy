@@ -13,7 +13,10 @@ import os
 /// handler, and replaying it must not double-count a reaction or resurrect a
 /// stale edit.
 public enum RealtimeMessageMutation: Sendable, Equatable {
-    case edited(messageId: String, content: String, editedAt: Date)
+    /// `marksEdited` recopie l'`isEdited` servi : `false` pour un avis que le
+    /// SERVEUR complète sur place (la ligne d'arrivées, #8633) — le contenu
+    /// suit, le drapeau « modifié » ne se pose pas.
+    case edited(messageId: String, content: String, editedAt: Date, marksEdited: Bool = true)
     /// `message:edited` porteur d'un résumé d'appel : la transition live →
     /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».

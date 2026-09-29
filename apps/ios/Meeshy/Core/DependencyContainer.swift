@@ -167,8 +167,9 @@ final class DependencyContainer {
         await StarredMessagesStore.follow(mutation, persistence: persistence)
         do {
             switch mutation {
-            case let .edited(messageId, content, editedAt):
-                try await persistence.markEdited(localId: messageId, newContent: content, editedAt: editedAt)
+            case let .edited(messageId, content, editedAt, marksEdited):
+                try await persistence.markEdited(
+                    localId: messageId, newContent: content, editedAt: editedAt, marksEdited: marksEdited)
             case let .callNoticeUpdated(messageId, content, callSummaryJson, serverUpdatedAt):
                 try await persistence.applyCallNoticeUpdate(
                     localId: messageId, content: content,
@@ -180,7 +181,7 @@ final class DependencyContainer {
                 // Même écriture que la conversation OUVERTE
                 // (`ConversationSocketHandler`) : contenu vidé, citations
                 // scellées — une vue unique n'y est pas épargnée (#7960).
-                try await persistence.markDeleted(localId: messageId, deletedAt: expiredAt)
+                try await persistence.markDeleted(localId: messageId, deletedAt: expiredAt, expired: true)
             case let .citedPostWithdrawn(postId, conversationId, _):
                 try await persistence.markCitedPostWithdrawn(postId: postId, conversationId: conversationId)
             case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount, ownerUserId):

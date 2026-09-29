@@ -600,3 +600,52 @@ describe('GET threads — la pièce NOMMÉE de la citation (#6164)', () => {
     expect(elue).not.toHaveProperty('thumbnailUrl');
   });
 });
+
+describe('GET threads — la citation d’un éphémère échu POUR CE LECTEUR est scellée (#8562)', () => {
+  const READER_PARTICIPANT = '507f1f77bcf86cd799439055';
+  const CONSUMED = new Date(Date.now() - 60_000);
+  const flamme = {
+    id: '507f1f77bcf86cd799439066',
+    senderId: 'part-author',
+    content: 'le code du coffre est 4271',
+    messageType: 'text',
+    effectFlags: 8,
+    ephemeralDuration: null,
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
+    deletedAt: null,
+    sender: null,
+  };
+  const reponse = { ...mockReplyMessage, replyToId: flamme.id, replyTo: flamme };
+
+  const prismaFor = (entries: Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date }>) =>
+    makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>().mockResolvedValueOnce([reponse]).mockResolvedValueOnce([]),
+      },
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER_PARTICIPANT }) },
+      messageStatusEntry: { findMany: jest.fn<any>().mockResolvedValue(entries) },
+    });
+
+  it('flamme-œil consommée par ce lecteur ⇒ citation scellée, datée de SON échéance', async () => {
+    const app = await buildApp({
+      prisma: prismaFor([{ messageId: flamme.id, participantId: READER_PARTICIPANT, ephemeralExpiresAt: CONSUMED }]),
+    });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const quote = res.json().data.replies[0].replyTo;
+    expect(quote.content).toBe('');
+    expect(quote.deletedAt).toBe(CONSUMED.toISOString());
+    expect(quote.expiresAt).toBe(CONSUMED.toISOString());
+    expect(res.body).not.toContain('4271');
+    await app.close();
+  });
+
+  it('pas encore lue par ce lecteur ⇒ lisible, sans l’heure interne de destruction', async () => {
+    const app = await buildApp({ prisma: prismaFor([]) });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const quote = res.json().data.replies[0].replyTo;
+    expect(quote.content).toBe('le code du coffre est 4271');
+    expect(quote.expiresAt).toBeUndefined();
+    await app.close();
+  });
+});

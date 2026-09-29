@@ -41,14 +41,34 @@ public struct MessageProtectionIntent: Equatable, Sendable {
         isViewOnce: Bool = false,
         maxViewOnceCount: Int? = nil
     ) {
+        // Flou et vue unique sont EXCLUSIFS au choix de l'auteur (directive
+        // porteur 2026-09-24, #7667) : le composeur éteint l'un quand on allume
+        // l'autre, et ce site-ci est le second verrou que traverse tout chemin
+        // d'envoi. La vue unique, plus forte, gagne. Seul un flou IMPOSÉ par le
+        // message cité s'y ajoute (`contaminated(by:)`, #8567).
+        self.init(ephemeralDurationSeconds: ephemeralDurationSeconds,
+                  ephemeralAfterRead: ephemeralAfterRead,
+                  isBlurred: isBlurred && !isViewOnce,
+                  isViewOnce: isViewOnce,
+                  maxViewOnceCount: maxViewOnceCount,
+                  veilsMayCombine: ())
+    }
+
+    /// Le seul chemin où flou et vue unique cohabitent : un flou IMPOSÉ par
+    /// la contagion d'une citation (#8567, directive porteur 2026-09-29 —
+    /// « une réponse floutée par contagion peut être vue unique »).
+    init(
+        ephemeralDurationSeconds: Int?,
+        ephemeralAfterRead: Bool,
+        isBlurred: Bool,
+        isViewOnce: Bool,
+        maxViewOnceCount: Int?,
+        veilsMayCombine: Void
+    ) {
         self.ephemeralAfterRead = ephemeralAfterRead
         self.ephemeralDurationSeconds = !ephemeralAfterRead && (ephemeralDurationSeconds ?? 0) > 0
             ? ephemeralDurationSeconds : nil
-        // Flou et vue unique sont EXCLUSIFS (directive porteur 2026-09-24,
-        // #7667) : le composeur éteint l'un quand on allume l'autre, et ce
-        // site-ci est le second verrou que traverse tout chemin d'envoi. La vue
-        // unique, plus forte, gagne.
-        self.isBlurred = isBlurred && !isViewOnce
+        self.isBlurred = isBlurred
         self.isViewOnce = isViewOnce
         self.maxViewOnceCount = maxViewOnceCount
     }

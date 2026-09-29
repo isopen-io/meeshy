@@ -19,6 +19,13 @@ import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
  * (`call-capture-gesture.ts`) ; un doigt qui glisse fait défiler, ce n'est
  * pas un appui. Le geste est dit au lecteur d'écran (`aria-describedby`).
  *
+ * Choisir en direct ne remet RIEN en page autour de la piste (#8619) : sous
+ * `scroll-snap-type: mandatory`, Chromium recalcule les points d'accroche à
+ * chaque mise en page et, s'ils ont bougé, réaccroche au dernier élément
+ * accroché — en plein glissé, le geste meurt. L'échelle et l'anneau vivent
+ * donc dans la FACE d'un élément (la zone d'accroche garde sa boîte), et le
+ * nom sous la piste est une boîte fixe, contenue.
+ *
  * Sous le carrousel, la barre d'action du mode : ✕ Quitter à gauche, une ou
  * deux options discrètes à droite (`CallModeBar`). Chunk partagé par les deux
  * modes, qui n'importe rien de l'écran d'appel.
@@ -227,16 +234,22 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
                     onPointerLeave: release,
                     onContextMenu: (event: { preventDefault: () => void }) => event.preventDefault(),
                   })}
-              className={`grid shrink-0 touch-manipulation select-none snap-center [-webkit-touch-callout:none] place-items-center overflow-hidden rounded-full transition-[transform,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
-              style={{ width: ITEM, height: ITEM, boxShadow: checked ? '0 0 0 3px white, 0 6px 18px rgb(0 0 0 / 0.45)' : 'inset 0 0 0 1px rgb(255 255 255 / 0.3)', background: 'rgb(0 0 0 / 0.35)' }}
+              className="grid shrink-0 touch-manipulation select-none snap-center [-webkit-touch-callout:none] place-items-center rounded-full"
+              style={{ width: ITEM, height: ITEM }}
               data-carousel-item={item.id}
             >
-              {item.visual}
+              <span
+                className={`grid size-full place-items-center overflow-hidden rounded-full transition-[scale,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
+                style={{ boxShadow: checked ? '0 0 0 3px white, 0 6px 18px rgb(0 0 0 / 0.45)' : 'inset 0 0 0 1px rgb(255 255 255 / 0.3)', background: 'rgb(0 0 0 / 0.35)' }}
+                data-carousel-face=""
+              >
+                {item.visual}
+              </span>
             </button>
           );
         })}
       </div>
-      <p aria-hidden className="min-h-5 text-mini font-semibold text-white [text-shadow:0_1px_4px_rgb(0_0_0/0.6)]" data-call-mode-selected="">
+      <p aria-hidden className="h-5 w-full truncate px-4 text-center text-mini font-semibold text-white [contain:strict] [text-shadow:0_1px_4px_rgb(0_0_0/0.6)]" style={{ height: '1lh' }} data-call-mode-selected="">
         {current?.label ?? ''}
       </p>
       {capture === undefined ? null : (

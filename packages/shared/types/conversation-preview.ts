@@ -124,14 +124,16 @@ export interface LastMessageSystemEvent {
 /**
  * Pourquoi un contenu est retenu. L'ORDRE est celui du cumul d'effets validé
  * par le porteur (#7546) : la sécurité l'emporte — `expired` > `view-once` >
- * `blurred` > `encrypted` > `ephemeral`.
+ * `blurred` > `encrypted` > `after-read` > `ephemeral`.
  *
  * `ephemeral` ne RETIENT rien : le texte d'un éphémère encore actif reste
  * servi (« 🔥 4 min · texte ») et son décompte part de la réception de chaque
- * lecteur (#7451). Les quatre autres retiennent texte, traductions et pièces
- * jointes.
+ * lecteur (#7451). Les autres retiennent texte, traductions et pièces
+ * jointes — `after-read` (la flamme-œil, #8634) compris : la lire dans la
+ * liste ne la consommerait pas. Un client qui ne connaît pas une valeur la
+ * rend comme `blurred`, jamais en clair.
  */
-export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted' | 'ephemeral';
+export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted' | 'after-read' | 'ephemeral';
 
 /**
  * La DERNIÈRE réaction posée dans la conversation, résolue pour le lecteur.

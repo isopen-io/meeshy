@@ -140,6 +140,16 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         self.attachmentSummary = attachmentSummary
     }
 
+    /// La même nature, son événement système remplacé — un avis complété sur
+    /// place par le serveur reste le même message (#8565).
+    public func replacingSystemEvent(_ event: LastMessageSystemEvent) -> LastMessageNature {
+        LastMessageNature(
+            messageType: messageType, effectFlags: effectFlags, ephemeralDuration: ephemeralDuration,
+            isEncrypted: isEncrypted, isForwarded: isForwarded, systemEvent: event,
+            callSummary: callSummary, attachmentSummary: attachmentSummary
+        )
+    }
+
     /// `nil` quand le fil ne dit RIEN de la nature — un serveur antérieur à
     /// #7545. Une nature vide n'est pas une information : la garder distincte
     /// de « texte simple » évite de peindre en texte ce qu'on ne connaît pas.

@@ -135,6 +135,7 @@ export function isListProtected(message: Message, now: Date = new Date()): boole
       isViewOnce: message.isViewOnce,
       expiresAt: message.expiresAt ?? null,
       ephemeralDuration: message.ephemeralDuration ?? null,
+      effectFlags: message.effectFlags ?? null,
     },
     now,
   );
@@ -236,17 +237,30 @@ export function expireLastMessage(queryClient: QueryClient, conversationId: stri
  * modifié et perd sa carte (elle traduisait l'ANCIEN texte ; la retraduction
  * revient par `message:translation` / `conversation:updated`). Une ligne
  * protégée ne reçoit jamais de texte en clair. Le rang ne bouge pas.
+ *
+ * Un avis que le serveur COMPLÈTE sur place (#8565 — la ligne d'arrivées de
+ * Meeshy Global, qui ne part qu'en `message:edited`) porte `isEdited: false`
+ * et son `systemEvent` recomposé : la ligne en reprend la clé, les noms et le
+ * compte, et ne se dit jamais « modifiée ».
  */
 export function editLastMessage(
   queryClient: QueryClient,
   conversationId: string,
-  edit: { readonly messageId: string; readonly content: string; readonly editedAt?: Date | string },
+  edit: {
+    readonly messageId: string;
+    readonly content: string;
+    readonly isEdited: boolean;
+    readonly editedAt?: Date | string;
+    readonly systemEvent?: LastMessageSystemEvent;
+  },
 ): void {
   patchConversation(queryClient, conversationId, (c) => {
     const last = c.lastMessage;
     if (last === undefined || last === null || last.id !== edit.messageId || isListProtected(last)) return c;
     const editedAt = edit.editedAt === undefined ? {} : { editedAt: edit.editedAt as unknown as Date };
-    return { ...withoutCard(c), lastMessage: { ...last, content: edit.content, isEdited: true, ...editedAt } };
+    const systemEvent = edit.systemEvent === undefined ? {} : { systemEvent: edit.systemEvent };
+    const next: ListLastMessage = { ...last, content: edit.content, isEdited: edit.isEdited, ...editedAt, ...systemEvent };
+    return { ...withoutCard(c), lastMessage: next };
   });
 }
 

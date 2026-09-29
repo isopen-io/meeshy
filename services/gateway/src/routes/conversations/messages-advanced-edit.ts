@@ -46,7 +46,8 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
-import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { servedQuotedMessage, withSealedQuote } from '../../services/messaging/servedQuotedMessage';
+import { loadSealedQuoteAudience } from '../../socketio/quotedEphemeralAudience';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -474,6 +475,11 @@ export function registerEditMessagePutRoute(
 
       logger.info(`Edit - Response includes ${(updatedMessage.validatedMentions || []).length} validated mentions`);
 
+      // #8562 — la citation d'un éphémère déjà échu pour un lecteur lui part
+      // scellée ; l'éditeur, lecteur du message cité comme les autres, aussi.
+      const sealedQuoteAudience = await loadSealedQuoteAudience(prisma, updatedMessage.replyTo);
+      const editorSealedAt = sealedQuoteAudience.get(userId);
+
       // Diffuser la mise à jour via Socket.IO (room + aperçu de liste + file
       // de livraison hors ligne — voir broadcastMessageMutation)
       await broadcastMessageMutation({
@@ -483,6 +489,7 @@ export function registerEditMessagePutRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        sealedQuoteAudience,
         // Le NOYAU du contrat vient de `buildMessageEditedCore` (voir le
         // sibling `PUT /messages/:messageId`) : le `as unknown as
         // Record<string, unknown>` qui vivait ici n'était pas une commodité de
@@ -500,7 +507,7 @@ export function registerEditMessagePutRoute(
         onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
       });
 
-      return sendSuccess(reply, messageResponse);
+      return sendSuccess(reply, editorSealedAt ? withSealedQuote(messageResponse, editorSealedAt) : messageResponse);
 
     } catch (error) {
       // P2025 = la garde `deletedAt: null` de l'écriture a mordu : le message a
