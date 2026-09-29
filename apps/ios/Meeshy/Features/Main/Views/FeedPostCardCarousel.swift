@@ -125,8 +125,11 @@ struct FeedPostCardCarousel: View {
             format: String(localized: "feed.carousel.a11y.position",
                            defaultValue: "Média %1$d sur %2$d", bundle: .main),
             offset + 1, media.count)
-        guard let caption = captions[item.id], !caption.isEmpty else { return position }
-        return "\(position). \(caption)"
+        // Le texte ALTERNATIF de l'auteur prime sur la légende (#6738) : il est
+        // écrit pour VoiceOver, la légende pour tout le monde.
+        let texte = PostMediaAccessibility.alt(item) ?? captions[item.id]
+        guard let texte, !texte.isEmpty else { return position }
+        return "\(position). \(texte)"
     }
 
     // MARK: - Les affordances

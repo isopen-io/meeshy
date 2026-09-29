@@ -114,13 +114,69 @@ main[data-scene='idle'] .focus-stamp {
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
   box-shadow: 0 8px 28px color-mix(in srgb, var(--color-ios-ink) 10%, transparent);
 }
+/* LE CADRE ENGLOBE TOUT (#8506, directive porteur 2026-09-28) — identité,
+   bande basse et tampon vivent DANS le verre, à `--focus-card-margin` de ses
+   quatre bords. En largeur, il garde sa place (la gouttière de la rangée
+   moins `--focus-card-inset-x`) ; en hauteur, il déborde du bloc de contenu
+   de sa marge, et une SUITE de groupe le fait monter de la pastille
+   d'identité posée au-dessus de sa première ligne.
+
+   SEUL LE CONTENU GRANDIT (#8536, directive porteur 2026-09-28) : la loupe se
+   pose sur `[data-loupe]` (citation, médias, texte), jamais sur la rangée —
+   identité, pastille, drapeaux, réactions et tampon restent à l'échelle 1.
+   Le contenu grossit par son coin haut du bord de DÉBUT et descend de
+   `--loupe-air` ; ce qui le suit (la ligne basse réservée, `.focus-strip`,
+   `.focus-stamp`, « modifié ») descend de `--loupe-grow` + deux fois l'air,
+   et le verre s'allonge d'autant par son bord BAS — un calque absolu :
+   aucune hauteur de rangée ne change (`use-focus-frame.ts`). */
 .focus-card {
   inset-inline-start: calc(-1 * (var(--focus-text-indent) + var(--focus-card-inset-x)));
   inset-inline-end: calc(-1 * var(--focus-card-inset-x));
-  inset-block: calc(-1 * var(--focus-card-inset-y));
+  top: calc(-1 * var(--focus-card-margin));
+  bottom: calc(-1 * (var(--focus-card-margin) + var(--loupe-grow, 0px) + 2 * var(--loupe-air, 0px)));
   border-radius: var(--focus-card-radius);
   z-index: -1;
 }
+.focus-card[data-continuation] {
+  top: calc(-1 * (var(--focus-identity-h) + var(--focus-identity-gap) + var(--focus-card-margin)));
+}
+[data-elected='true'] [data-loupe] {
+  transform: scale(var(--loupe-s, 1));
+  transform-origin: left top;
+  translate: 0 var(--loupe-air, 0px);
+}
+[data-elected='true'] [data-loupe]:dir(rtl) {
+  transform-origin: right top;
+}
+[data-elected='true'] [data-loupe-follow],
+.focus-strip,
+.focus-stamp {
+  translate: 0 calc(var(--loupe-grow, 0px) + 2 * var(--loupe-air, 0px));
+}
+
+/* LES VOISINES S'ÉCARTENT (#8506) — de ce que le cadre grossi déborde de sa
+   rangée (`--focus-push-up` / `--focus-push-down`, posées sur la liste par
+   `use-focus-frame.ts`). `translate` et non `transform` : il se COMPOSE avec
+   le `translateY` du virtualiseur sans le réécrire, et ne change aucune
+   hauteur — zéro relayout, rien à remesurer. Au-dessus : les rangées
+   précédentes ET ce qui précède l'élue dans son propre `li` (pilule de jour,
+   séparateur « non lus »). Sans transition, comme la loupe
+   (`use-focal-loupe.ts`). */
+ol > li:has(~ li [data-elected='true']),
+ol > li:has([data-elected='true']) > :not(:has([data-elected='true'])) {
+  translate: 0 calc(-1 * var(--focus-push-up, 0px));
+}
+ol > li:has([data-elected='true']) ~ li {
+  translate: 0 var(--focus-push-down, 0px);
+}
+/* PLUS D'`overflow-x: clip` SUR LA RANGÉE ÉLUE (#8536) — il était là pour
+   qu'un débord horizontal de la loupe n'ouvre aucun défilement ; mesuré dans
+   Chromium, il rognait AUSSI le test d'impact VERTICAL de la rangée : la
+   bande et le tampon, que la loupe pousse sous son bas, restaient peints
+   mais ne recevaient plus le doigt — le « rien ne se passe » du porteur. La
+   loupe du contenu est bornée par la largeur du cadre (`focus-frame.ts`) et
+   `lib/check-focal-elected.mjs` garde les deux faits : aucun défilement
+   horizontal, et chaque contrôle atteignable sur toute sa surface. */
 
 /* LE MESSAGE LONG DÉPLIÉ (#8147, `unfold-stage.tsx`) reçoit le même verre ;
    le contenu, positionné APRÈS lui, se peint dessus. Les voisins
@@ -158,22 +214,43 @@ ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
   }
 }
 
+/* DANS le cadre, à sa marge (#8506) : l'identité sur la ligne d'identité
+   réservée (tête de groupe) ou au-dessus de la première ligne (suite) ; la
+   bande et le tampon sur la ligne basse réservée de l'élue
+   (`focal-row.tsx`, `visibility: hidden` ou `[data-focus-reserve]`), qu'ils
+   suivent quand le contenu grossi la fait descendre (#8536, ci-dessus). */
 .focus-identity {
   position: absolute;
-  top: calc(-1 * var(--focus-identity-overhang));
-  inset-inline-start: calc(var(--focus-chip-inset) - var(--focus-text-indent));
+  top: 0;
+  inset-inline-start: calc(var(--focus-card-margin) - var(--focus-text-indent) - var(--focus-card-inset-x));
+}
+.focus-identity[data-continuation] {
+  top: calc(-1 * (var(--focus-identity-h) + var(--focus-identity-gap)));
 }
 
 .focus-strip {
   position: absolute;
-  bottom: calc(-1 * var(--focus-strip-overhang));
-  inset-inline-start: calc(var(--focus-chip-inset) - var(--focus-text-indent));
+  bottom: 0;
+  inset-inline-start: calc(var(--focus-card-margin) - var(--focus-text-indent) - var(--focus-card-inset-x));
 }
 
 .focus-stamp {
   position: absolute;
-  bottom: calc(-1 * var(--focus-strip-overhang));
-  inset-inline-end: var(--focus-chip-inset);
+  bottom: 0;
+  inset-inline-end: calc(var(--focus-card-margin) - var(--focus-card-inset-x));
+}
+/* LE TAMPON OUVRE LA FICHE (#8536) : sa capsule dessine 24 px, sa zone
+   tactile en couvre 44 — même débord que `tap-target-chip`, écrit ici parce
+   que ce bouton est déjà positionné (`absolute`) et que l'utilitaire le
+   reposerait en `relative`. */
+button.focus-stamp {
+  cursor: pointer;
+}
+button.focus-stamp::after {
+  content: '';
+  position: absolute;
+  inset-block: -10px;
+  inset-inline: -2px;
 }
 
 /* LA CAPSULE DE CHIP — opaque `--color-ios-card`, voilée par l'accent de la

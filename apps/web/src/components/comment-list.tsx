@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { CommentRow, type CommentGestureHandlers } from '@/components/comment-row';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
@@ -8,10 +10,11 @@ import type { PostComment } from '@/lib/api/publication-comments';
  * **LA LISTE DES COMMENTAIRES D'UNE PUBLICATION** — miroir de
  * `CommentListView.swift` réduit à ce que la v3.1 sait faire : les QUATRE
  * états dessinés, la pagination, et une rangée par commentaire
- * (`comment-row.tsx`, qui porte le texte, l'auteur, l'heure et les trois
- * gestes). Répondre à un commentaire (`parentId`), les réponses imbriquées et
- * leurs médias restent des marches à part (#7118) — leurs boutons n'existent
- * donc pas ici (loi 4), et aucune n'est annoncée.
+ * (`comment-row.tsx`, qui porte le texte, l'auteur, l'heure et ses gestes).
+ * RÉPONDRE (#8583) : chaque rangée se glisse vers la droite ou offre
+ * « Répondre », et les réponses d'une racine se déplient SOUS elle
+ * (`renderReplies`, que l'hôte fournit parce qu'elles se CHARGENT). Les
+ * médias d'un commentaire restent une marche à part (#7118).
  *
  * **LE PRISME PASSE PAR LE SITE PARTAGÉ** — `resolveFeedText` (`lib/feed/text.ts`
  * → `served()`, `lib/api/prism.ts`), la MÊME descente que le corps d'une carte
@@ -53,6 +56,8 @@ export type CommentListProps = {
    * le composeur).
    */
   readonly gestures?: CommentGestureHandlers | undefined;
+  /** LES RÉPONSES d'une racine, rendues dans sa rangée — absent ⇒ aucune. */
+  readonly renderReplies?: ((comment: PostComment) => ReactNode) | undefined;
 };
 
 function CommentState({
@@ -106,6 +111,7 @@ export function CommentList({
   onRetry,
   onMore,
   gestures,
+  renderReplies,
 }: CommentListProps) {
   /* CACHE D'ABORD — le squelette n'apparaît que sur une liste VIDE. Une
      relecture en fond sur une liste déjà peinte ne détruit rien : c'est la
@@ -162,7 +168,9 @@ export function CommentList({
             locale={locale}
             now={now}
             {...(gestures === undefined ? {} : { gestures })}
-          />
+          >
+            {renderReplies?.(comment)}
+          </CommentRow>
         ))}
       </ul>
       {state.hasMore ? (

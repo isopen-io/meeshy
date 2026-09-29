@@ -752,29 +752,19 @@ struct ComposerDocumentSurface: View {
             lastTappedTool = tool
             onTool?(tool)
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: tool.symbolName)
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .composerToolBounce(active: lastTappedTool == tool)
-                Text(ComposerDocumentCopy.label(tool))
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            // **Fixe, plus minimale** (#5082). `minWidth` servait la RANGÉE :
-            // une tuile large y passait inaperçue, les voisines défilant. La
-            // colonne est le seul consommateur restant, et elle dessine un bord
-            // droit — « Mentionner » y dépassait ses voisines de douze points.
-            .frame(width: ComposerDocumentToolRowFit.minimumTileWidth)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 6)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(MeeshyColors.textSecondary(isDark: true).opacity(0.22),
-                                  lineWidth: 1)
-            )
+            // **Un petit bouton de verre, SANS légende** (directive porteur
+            // 2026-09-27 : « enlève les captions partout »), le même dessin que
+            // les rails de la scène. Le nom de l'outil reste celui que
+            // VoiceOver annonce.
+            Image(systemName: tool.symbolName)
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .composerToolBounce(active: lastTappedTool == tool)
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
+                       height: ComposerDocumentToolRowFit.minimumTileWidth)
+                .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
+                .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
     }
@@ -792,32 +782,16 @@ struct ComposerDocumentSurface: View {
             // Même TUILE que ses voisines (#4071) : la rangée se lit comme une
             // famille, et un bouton qui porterait seul un glyphe nu au milieu de
             // six tuiles nommées se lirait comme un accident, pas comme un choix.
-            VStack(spacing: 6) {
-                Image(systemName: "paintpalette")
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                Text(ComposerDocumentCopy.backgroundShort)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(showColorPalette
-                ? Color(hex: MeeshyColors.brandPrimaryHex)
-                : MeeshyColors.textSecondary(isDark: true))
-            // **Fixe, plus minimale** (#5082). `minWidth` servait la RANGÉE :
-            // une tuile large y passait inaperçue, les voisines défilant. La
-            // colonne est le seul consommateur restant, et elle dessine un bord
-            // droit — « Mentionner » y dépassait ses voisines de douze points.
-            .frame(width: ComposerDocumentToolRowFit.minimumTileWidth)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 6)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(showColorPalette
-                        ? Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.55)
-                        : MeeshyColors.textSecondary(isDark: true).opacity(0.22),
-                                  lineWidth: 1)
-            )
+            Image(systemName: "paintpalette")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(showColorPalette
+                    ? Color(hex: MeeshyColors.brandPrimaryHex)
+                    : MeeshyColors.textSecondary(isDark: true))
+                .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
+                       height: ComposerDocumentToolRowFit.minimumTileWidth)
+                .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
+                .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
         // Le doc-comment ci-dessus écrivait la règle à l'envers — « Active

@@ -65,7 +65,7 @@ struct AudioAvailabilityResolver<Content: View>: View {
 
     var body: some View {
         content(availability) {
-            downloader.start(attachment: attachment, onShare: nil)
+            downloader.start(attachment: attachment, origin: .manual, onShare: nil)
         }
         .task(id: attachment.fileUrl) {
             // Branché sur le registre partagé : un téléchargement de ce fichier
@@ -78,7 +78,7 @@ struct AudioAvailabilityResolver<Content: View>: View {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
                 if Self.shouldAutoStart(autoDownload: autoDownload, condition: condition, prefs: prefs) {
-                    downloader.start(attachment: attachment, onShare: nil)
+                    downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
         }

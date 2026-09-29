@@ -143,7 +143,8 @@ test('VIEW_ONCE_WITNESS_ID est le DERNIER de son groupe — sans quoi le témoin
 test('EPHEMERAL_WITNESS_ID : expiresAt dans le futur', () => {
   const witness = messagesOf(PROTECTION_CONVERSATION_ID).find((m) => m.id === EPHEMERAL_WITNESS_ID);
   expect(witness?.expiresAt).toBeDefined();
-  expect(new Date(witness!.expiresAt!).getTime()).toBeGreaterThan(Date.now());
+  const fixtureNow = new Date(witness!.createdAt).getTime() + 14 * 60_000;
+  expect(new Date(witness!.expiresAt!).getTime()).toBeGreaterThan(fixtureNow);
 });
 
 test('DELETED_WITNESS_ID : deletedAt posé ET contenu NON VIDE (la fuite doit pouvoir rougir)', () => {

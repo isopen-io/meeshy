@@ -195,7 +195,7 @@
 // d'une SCÈNE, pas le contexte d'une conversation : `accentColor` n'y aurait
 // aucun sens.
 const REFERENCE_LITERAL_COLOR_COUNT = 120;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 441;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

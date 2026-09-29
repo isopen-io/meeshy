@@ -51,6 +51,18 @@ const fr = {
   'callControls.record.audioDetail': 'Les voix de tous',
   'callControls.record.video': 'Audio et vidéo',
   'callControls.record.videoDetail': 'Les images visibles et les voix',
+  'callControls.capture': 'Capturer',
+  'callControls.capture.label': 'Capturer l’appel',
+  'callControls.back': 'Retour',
+  'callControls.journal': 'Journal',
+  'callControls.journal.label': 'Ouvrir le journal de l’appel',
+  'callControls.journal.live': 'Revenir au direct',
+  'callControls.journal.empty': 'Rien n’est encore transcrit. Activez les sous-titres : chaque phrase dite s’inscrit ici avec sa traduction, pour tout l’appel.',
+  'callControls.journal.original': 'Original',
+  'callControls.camera.options': 'Options de ma caméra',
+  'callControls.selfTile.small': 'Ma vignette : petite',
+  'callControls.selfTile.medium': 'Ma vignette : moyenne',
+  'callControls.selfTile.large': 'Ma vignette : grande',
 } as const;
 
 export default fr;

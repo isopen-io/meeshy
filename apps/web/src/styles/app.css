@@ -571,6 +571,70 @@
   }
 }
 
+/* LA MONTEE D'UNE PLAQUE DU STUDIO (#8517) — l'edition d'un objet et le
+   Cadre entrent comme le texte du post : un cadre de verre qui glisse de
+   16 px vers le haut en s'eclairant. `prefers-reduced-motion` la coupe. */
+@keyframes studioPlaqueRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.studio-plaque-rise {
+  animation: studioPlaqueRise 240ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-plaque-rise {
+    animation: none;
+  }
+}
+
+/* LE SOL QUI CHANGE DE SOURCE (#8534) — l'image arrivee, deja decodee, se
+   leve en fondu sur celle qui part (gardee dessous par `useDecodedSwap`) :
+   aucune image perdue, aucun eclair de vide. */
+@keyframes studioFloorIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.studio-floor-in {
+  animation: studioFloorIn 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-floor-in {
+    animation: none;
+  }
+}
+
+/* LES RAILS AUTOUR DE LA CARTE, AU BUREAU (#8517) — la zone de la scene
+   s'etirait sur tout l'ecran : les rails, poses a 10 px de ses bords, restaient
+   colles au bord de la fenetre, a plusieurs centaines de pixels de la carte.
+   Au-dela d'un telephone, la zone se borne a la largeur d'une carte 9:16 de la
+   hauteur de l'ecran, plus un couloir de rail de chaque cote, et se centre :
+   les rails flottent a cote de la carte, jamais dessus. La carte, qui se cadre
+   dans la zone, ne change pas de hauteur. */
+@media (min-width: 768px) {
+  .studio-shell {
+    container-type: size;
+  }
+
+  .studio-shell > [data-story-studio-plateau] {
+    width: min(100%, calc(100cqh * 9 / 16 + 8rem));
+    margin-inline: auto;
+  }
+}
+
 /* LA RESPIRATION DE MA PASTILLE D'HUMEUR (#6150) — trame de `MeeshyMoodBadge`
    (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/MoodBadge.swift`) : repos
    1.0, crete 1.18, puis la pastille SE POSE. Deux bornes portees depuis iOS,

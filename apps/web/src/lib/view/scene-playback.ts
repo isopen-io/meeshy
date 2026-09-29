@@ -36,6 +36,13 @@ export function scenePlaybackToggled(state: ScenePlaybackState): ScenePlaybackSt
   return { ...state, paused: !state.paused };
 }
 
+/** LE CURSEUR A PARCOURU LA SCÈNE (#8598) : `seek` réarme la fin d'une scène
+ * qui ne boucle pas (`SceneClockHandle.seek`), donc la scène n'est plus
+ * terminée — elle reprend DEPUIS le temps pointé, sans être remontée (le
+ * `run` ne change pas : remonter la ferait repartir de zéro). Une pause
+ * choisie survit au glissé. */
+export const scenePlaybackScrubbed = (state: ScenePlaybackState): ScenePlaybackState => ({ ...state, ended: false });
+
 /** Un appui long entre en plein cadre EN PAUSE (`stageAfter`) — il ne remet
  * rien à zéro, il ARRÊTE. */
 export const scenePlaybackPaused = (state: ScenePlaybackState): ScenePlaybackState => ({ ...state, paused: true });

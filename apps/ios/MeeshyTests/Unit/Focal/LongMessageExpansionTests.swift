@@ -144,7 +144,7 @@ final class LongMessageExpansionTests: XCTestCase {
         let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("expansion: expansion"), "Script/Focal : la rangée plate déplie en place")
         let host = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        XCTAssertTrue(host.contains("messageBubble.longMessageFocus(self.longMessageExpansion(for: localId), accentHex: accent)"), "Bulles : la bulle reçoit l'état de l'hôte")
+        XCTAssertTrue(host.contains("messageBubble.longMessageFocus(self.longMessageExpansion(for: localId))"), "Bulles : la bulle reçoit l'état de l'hôte")
         XCTAssertTrue(host.contains("focalActions.onToggleExpanded"), "Script/Focal : la rangée remonte le geste à l'hôte")
         let river = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
         XCTAssertTrue(river.contains(".longMessageFocus(expansion(for: bubble.messageId)"), "Rivière : même dépliage, même effet")

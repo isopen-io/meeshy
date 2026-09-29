@@ -162,13 +162,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     nonisolated deinit {}
 
     private enum Constants {
-        static let segmentRetentionLimit = 50
-        /// Safety ceiling for the PERSISTENCE accumulator (`persistedSegments`)
-        /// — never hit in normal use (a multi-hour call at continuous speech
-        /// is still well under this), just a memory guard against pathological
-        /// growth. NOT the live display cap, which stays 50 — see
-        /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §2.
-        static let persistedSegmentCeiling = 2000
+        static let persistedSegmentCeiling = CallTranscriptJournal.ceiling
     }
 
     @Published private(set) var segments: [TranscriptionSegment] = []
@@ -181,11 +175,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// emitted regardless, since they also feed the other participant's view.
     @Published var isShowingOverlay: Bool = false
 
-    /// The full retained history (bounded only by `segmentRetentionLimit`),
-    /// not a short tail — the transcript panel is a real scrollable surface
-    /// now (not a floating overlay with limited space), so segments must
-    /// scroll out of view rather than vanish once more than a handful pile
-    /// up. User-reported 2026-07-11.
+    /// #8579 — l'historique COMPLET de l'appel, sans troncature (plafond
+    /// mémoire `CallTranscriptJournal.ceiling`), trié par heure de capture.
     var displayedSegments: [TranscriptionSegment] {
         segments
     }
@@ -872,8 +863,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             return
         }
         let merged = mergedSegment(existing: allSegments[index], incoming: segment)
-        allSegments[index] = merged
-        segments = allSegments.sorted { $0.capturedAt < $1.capturedAt }
+        let others = Array(allSegments[..<index]) + Array(allSegments[(index + 1)...])
+        allSegments = CallTranscriptJournal.inserting(merged, into: others)
+        segments = allSegments
         guard merged.isFinal else { return }
         if let persistedIndex = persistedSegments.firstIndex(where: { $0.wireId == wireId }) {
             persistedSegments[persistedIndex] = merged
@@ -958,16 +950,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     // MARK: - Private — Result Handling
 
     private func appendSegment(_ segment: TranscriptionSegment) {
-        allSegments.removeAll { $0.speakerId == segment.speakerId && !$0.isFinal }
-        allSegments.append(segment)
-        if allSegments.count > Constants.segmentRetentionLimit {
-            allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))
-        }
-        // Sorted on capturedAt (wall clock), not startTime — startTime is
-        // ASR-buffer-relative and resets on every recognition-request
-        // rotation, which would scramble the order of a local speaker's own
-        // consecutive utterances once more than one final segment has fired.
-        segments = allSegments.sorted { $0.capturedAt < $1.capturedAt }
+        let others = allSegments.filter { !($0.speakerId == segment.speakerId && !$0.isFinal) }
+        allSegments = CallTranscriptJournal.bounded(CallTranscriptJournal.inserting(segment, into: others))
+        segments = allSegments
 
         if segment.isFinal {
             persistedSegments.append(segment)

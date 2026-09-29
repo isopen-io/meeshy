@@ -78,33 +78,6 @@ extension CallControlsCopy {
     }
 }
 
-/// Les huit réactions, en verre, 44 pt chacune.
-struct CallReactionPalette: View {
-    let onPick: (CallReactionEmoji) -> Void
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(CallReactionEmoji.allCases, id: \.self) { emoji in
-                Button {
-                    HapticFeedback.light()
-                    onPick(emoji)
-                } label: {
-                    Text(emoji.rawValue)
-                        .font(.title2)
-                        .frame(width: 44, height: 44)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(emoji.rawValue)
-            }
-        }
-        .padding(6)
-        .callChromeGlass(in: Capsule())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(CallControlsCopy.react)
-    }
-}
-
 /// L'envol des réactions : chacune monte et s'efface ; sous Réduire les
 /// animations, elle apparaît et s'efface sur place.
 struct CallFloatingReactionsLayer: View, Equatable {

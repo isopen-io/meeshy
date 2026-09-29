@@ -67,6 +67,10 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     /// `toMessageAttachment()` : le décodeur la jetait, et le plein écran d'un
     /// média de post ou de commentaire ne pouvait structurellement rien montrer.
     public var caption: String?
+    /// Texte alternatif du média (`PostMedia.alt`, #6738), écrit par l'auteur
+    /// pour les lecteurs d'écran. Il était décodé sur `APIPostMedia` puis jeté
+    /// ici : aucune surface ne pouvait le rendre à VoiceOver.
+    public var alt: String?
     /// Langue SOURCE de `caption` (`PostMedia.captionLanguage`, #6280).
     public var captionLanguage: String?
     /// Traductions de `caption`, aplaties `langue → texte` — même dialecte que
@@ -104,6 +108,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
                 caption: String? = nil,
+                alt: String? = nil,
                 captionLanguage: String? = nil,
                 captionTranslations: [String: String]? = nil,
                 transcription: MessageTranscription? = nil,
@@ -113,6 +118,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.caption = caption
+        self.alt = alt
         self.captionLanguage = captionLanguage
         self.captionTranslations = captionTranslations
         self.transcription = transcription
@@ -132,6 +138,18 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
             translations: captionTranslations,
             preferredLanguages: preferredLanguages
         )?.text ?? caption
+    }
+
+    /// **Ce que VoiceOver lit pour ce média** (#6738) : le texte alternatif de
+    /// l'auteur, sinon sa légende (servie dans la langue du lecteur), sinon
+    /// `nil` — l'appelant pose alors son libellé générique par type.
+    public func accessibilityDescription(preferredLanguages: [String]) -> String? {
+        let texte = alt?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let texte, !texte.isEmpty { return texte }
+        let legende = resolvedCaption(preferredLanguages: preferredLanguages)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let legende, !legende.isEmpty else { return nil }
+        return legende
     }
 
     public static func image(color: String = "4ECDC4") -> FeedMedia {
@@ -166,7 +184,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
         case width, height, duration, fileName, fileSize, pageCount
-        case caption, captionLanguage, captionTranslations
+        case caption, alt, captionLanguage, captionTranslations
         case transcription, translatedAudios, imageVariants
     }
 
@@ -185,6 +203,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         fileSize = try c.decodeIfPresent(String.self, forKey: .fileSize)
         pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
         caption = try c.decodeIfPresent(String.self, forKey: .caption)
+        alt = try c.decodeIfPresent(String.self, forKey: .alt)
         captionLanguage = try c.decodeIfPresent(String.self, forKey: .captionLanguage)
         captionTranslations = try c.decodeIfPresent([String: String].self, forKey: .captionTranslations)
         transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
@@ -207,6 +226,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         try c.encodeIfPresent(fileSize, forKey: .fileSize)
         try c.encodeIfPresent(pageCount, forKey: .pageCount)
         try c.encodeIfPresent(caption, forKey: .caption)
+        try c.encodeIfPresent(alt, forKey: .alt)
         try c.encodeIfPresent(captionLanguage, forKey: .captionLanguage)
         try c.encodeIfPresent(captionTranslations, forKey: .captionTranslations)
         try c.encodeIfPresent(transcription, forKey: .transcription)
@@ -227,6 +247,7 @@ extension FeedMedia {
             mimeType: mimeTypeFromFeedType,
             fileSize: 0,
             fileUrl: url ?? "",
+            alt: alt,
             caption: caption,
             width: width,
             height: height,

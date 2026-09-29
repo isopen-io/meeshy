@@ -45,6 +45,13 @@ extension MeeshyComposerHost {
         guard let onReturnImage else { return }
         HapticFeedback.light()
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
+        // **Rien n'a changé ⇒ l'image d'origine reste** (#8524). Rendre la
+        // scène d'une retouche vide remplaçait l'original par un rendu : une
+        // perte de définition sans le moindre geste de l'auteur.
+        guard viewModel.canUndoGlobal else {
+            onDismiss()
+            return
+        }
         let slide = viewModel.currentSlide
         guard let image = StorySlideRenderer.renderComposite(
             slide: slide,

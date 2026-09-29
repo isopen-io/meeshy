@@ -109,6 +109,8 @@ export function StudioTextInput({
           ...(fontSize !== null ? { fontSize } : {}),
           lineHeight: 1.2,
           zIndex: editing ? 5 : 2,
+          // En édition, le doigt DÉPLACE le texte (#8535) : aucun défilement ne le vole.
+          ...(editing ? { touchAction: 'none' } : {}),
         }}
       />
     </>
