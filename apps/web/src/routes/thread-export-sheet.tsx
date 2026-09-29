@@ -12,8 +12,10 @@ import {
   type MessageCardFormat,
   type MessageCardToggle,
 } from '@/lib/export/message-card-format';
-import type { CardPart, CardRegion, MessageCardInput } from '@/lib/export/message-card-layout';
-import { messageCardFileName, type MessageCardSubject } from '@/lib/export/message-card-subject';
+import type { CardPart, CardRegion, MessageCardInput, MessageCardPart } from '@/lib/export/message-card-layout';
+import { cardOutputsOf, extensionOfType, type CardOutput } from '@/lib/export/message-card-output';
+import type { CardSource } from '@/lib/export/message-card-paint';
+import { messageCardFileName, type MessageCardSubject, type MessageCardSubjectPart } from '@/lib/export/message-card-subject';
 import { randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
 import { createThumbnailCache } from '@/lib/export/message-card-thumbnails';
 import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
@@ -21,15 +23,19 @@ import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-expor
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
+import type { FrameChoice } from './thread-export-frame';
 import { ExportGallery } from './thread-export-gallery';
+import { OutputPicker, defaultMotionRecorder, defaultSourcesLoader, temporalItemOf, useCardSources, useMotionCache, type MotionRecorder, type SourcesLoader } from './thread-export-output';
 import type { ThumbSource } from './thread-export-thumb';
 import { ExportTray, TAB_OF_PART, type ExportTab } from './thread-export-tray';
 
 /**
- * **EXPORTER UN MESSAGE EN IMAGE — UN COMPOSER QUI SE TOUCHE** (#8667). La
- * feuille ne crée aucun contenu : elle choisit comment MONTRER ce qui existe
- * (le template, le titre de la conversation, les noms des auteurs ou leur
- * anonymat, la date), montre la carte telle qu'elle partira, et l'enregistre.
+ * **« IMAGINE » — IMAGER UN MESSAGE OU UN COMMENTAIRE, UN COMPOSER QUI SE
+ * TOUCHE** (#8667, #8693). La feuille ne crée aucun contenu : elle choisit
+ * comment MONTRER ce qui existe (le template, le format, le cadre, le titre de
+ * la conversation, les noms des auteurs, leur pseudo ou leur anonymat, la date
+ * et les heures, les médias), montre la carte telle qu'elle partira, et
+ * l'enregistre — en image, ou en GIF / vidéo quand le contenu est temporel.
  *
  * L'APERÇU EST LE CONTRÔLE. Chaque partie peinte (en-tête, citation, liaison,
  * réponse) est une zone qu'on touche, le fond aussi : le plateau en verre
@@ -67,11 +73,17 @@ const DELIVERY_ANNOUNCE = {
   unavailable: 'export.announce.unavailable',
 } as const satisfies Readonly<Record<MessageCardDelivery, ExportCardCatalogKey>>;
 
+/** Un GIF ou une vidéo n'est pas « une image » : ses deux issues heureuses le disent autrement. */
+const MOTION_ANNOUNCE = { ...DELIVERY_ANNOUNCE, gallery: 'export.announce.galleryMotion', shared: 'export.announce.sharedMotion' } as const satisfies Readonly<
+  Record<MessageCardDelivery, ExportCardCatalogKey>
+>;
+
 const PART_LABEL = {
   header: 'export.card.part.header',
   quote: 'export.card.part.quote',
   link: 'export.card.part.link',
   reply: 'export.card.part.reply',
+  media: 'export.card.part.media',
   background: 'export.card.part.background',
 } as const satisfies Readonly<Record<CardPart, ExportCardCatalogKey>>;
 
@@ -93,11 +105,12 @@ type Painted = {
   readonly regions?: readonly CardRegion[];
 };
 
-type Painter = (input: MessageCardInput) => Promise<Painted | null>;
-type Thumbnailer = (input: MessageCardInput, width: number) => Promise<Blob | null>;
+type Painter = (input: MessageCardInput, sources: readonly (CardSource | null)[]) => Promise<Painted | null>;
+type Thumbnailer = (input: MessageCardInput, width: number, sources: readonly (CardSource | null)[]) => Promise<Blob | null>;
 
-const defaultPainter: Painter = async (input) => (await import('@/lib/export/message-card-paint')).renderMessageCard(input);
-const defaultThumbnailer: Thumbnailer = async (input, width) => (await import('@/lib/export/message-card-paint')).renderMessageCardThumbnail(input, width);
+const defaultPainter: Painter = async (input, sources) => (await import('@/lib/export/message-card-paint')).renderMessageCard(input, document, sources);
+const defaultThumbnailer: Thumbnailer = async (input, width, sources) =>
+  (await import('@/lib/export/message-card-paint')).renderMessageCardThumbnail(input, width, document, sources);
 
 /* La livraison (galerie, partage, téléchargement) est un `import()` au premier
    « Enregistrer », comme pour une pièce jointe : `budgets.json › story_export`
@@ -107,8 +120,10 @@ const defaultDeliver = async (blob: Blob, fileName: string, intent: MessageCardI
 
 /**
  * La carte telle que le format la demande — un titre absent ou vide n'est
- * jamais « affiché », et un auteur anonymisé cède son nom à `anonymousLabel`.
- * Le filigrane, lui, garde toujours le pseudo de qui exporte.
+ * jamais « affiché ». L'auteur d'un bloc est, dans cet ordre : « Anonyme » si
+ * on l'a voulu, son PSEUDO (« @awa ») si on le préfère au nom affiché et qu'on
+ * le connaît, sinon son nom. Le filigrane, lui, garde toujours le pseudo de qui
+ * exporte.
  */
 export function messageCardInputOf(params: {
   readonly subject: MessageCardSubject;
@@ -117,17 +132,29 @@ export function messageCardInputOf(params: {
   readonly conversationTitle: string | null;
   readonly anonymousLabel: string;
   readonly formatDate: (date: Date) => string;
+  /** L'heure d'un message, rédigée — absente : aucune heure n'est peinte. */
+  readonly formatTime?: (date: Date) => string;
 }): MessageCardInput {
   const { subject, format } = params;
-  const quoted = subject.quoted;
+  const time = (date: Date | null) => (format.showTimes && date !== null && params.formatTime !== undefined ? params.formatTime(date) : null);
+  const part = (source: MessageCardSubjectPart, anonymized: boolean, at: Date | null): MessageCardPart => ({
+    author: anonymized ? params.anonymousLabel : format.usePseudonyms && source.handle !== null ? `@${source.handle}` : source.author,
+    text: source.text,
+    time: time(at),
+  });
   return {
-    quoted: quoted === null || !format.anonymizeQuoted ? quoted : { ...quoted, author: params.anonymousLabel },
-    reply: format.anonymizeReply ? { ...subject.reply, author: params.anonymousLabel } : subject.reply,
+    quoted: subject.quoted === null ? null : part(subject.quoted, format.anonymizeQuoted, subject.quotedAt),
+    reply: part(subject.reply, format.anonymizeReply, subject.sentAt),
     handle: params.handle,
     template: format.template,
     title: format.showConversationTitle ? params.conversationTitle : null,
     date: format.showDate ? params.formatDate(subject.sentAt) : null,
     showAuthors: format.showAuthors,
+    aspect: format.aspect,
+    frame: { header: format.header, authors: format.authorsAt, tilt: format.tilt },
+    media: subject.media.map((item) => item.card),
+    mediaStyle: format.mediaStyle,
+    audioStyle: format.audioStyle,
   };
 }
 
@@ -159,6 +186,8 @@ export function MessageExportSheet({
   createObjectURL = (blob) => URL.createObjectURL(blob),
   revokeObjectURL = (url) => URL.revokeObjectURL(url),
   random = Math.random,
+  loadSources = defaultSourcesLoader,
+  recordMotion = defaultMotionRecorder,
 }: {
   /** La carte telle que le lecteur la lit. */
   readonly subject: MessageCardSubject;
@@ -178,6 +207,10 @@ export function MessageExportSheet({
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
   readonly random?: () => number;
+  /** Les pixels des médias de la carte (#8693) — injectés par les témoins. */
+  readonly loadSources?: SourcesLoader;
+  /** Le GIF ou la vidéo de la carte (#8693) — injecté par les témoins. */
+  readonly recordMotion?: MotionRecorder;
 }) {
   const language = currentInterfaceLanguage();
   const [savedDefault, setSavedDefault] = useState<MessageCardFormat | null>(() => readDefaultMessageCardFormat(storage));
@@ -208,6 +241,13 @@ export function MessageExportSheet({
     void import('@/lib/media/deliver-file').catch(() => undefined);
   }, []);
 
+  const media = useCardSources(subject.media, loadSources);
+  const outputs = cardOutputsOf(subject.media.map((item) => item.card));
+  const [chosenOutput, setOutput] = useState<CardOutput>('image');
+  const output: CardOutput = outputs.includes(chosenOutput) ? chosenOutput : 'image';
+  const [motionBusy, setMotionBusy] = useState<Exclude<CardOutput, 'image'> | null>(null);
+  const motionCache = useMotionCache();
+
   const inputFor = (template: MessageCardTemplateId): MessageCardInput =>
     messageCardInputOf({
       subject,
@@ -216,15 +256,16 @@ export function MessageExportSheet({
       conversationTitle: title,
       anonymousLabel: translateExportCard(language, 'export.card.anonymous'),
       formatDate: (date) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date),
+      formatTime: (date) => new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(date),
     });
 
-  const key = formatKey(format);
+  const key = `${formatKey(format)}|${media.version}`;
 
   useEffect(() => {
     let live = true;
     let url: string | null = null;
     setFailed(false);
-    void paint(inputFor(format.template))
+    void paint(inputFor(format.template), media.sources)
       .catch(() => null)
       .then((card) => {
         if (!live) return;
@@ -246,21 +287,44 @@ export function MessageExportSheet({
      tout ce qui change la carte SAUF le template, qu'elle nomme elle-même. */
   const [cache] = useState(() => createThumbnailCache({ createObjectURL, revokeObjectURL }));
   useEffect(() => () => cache.dispose(), [cache]);
-  const context = `${JSON.stringify({ ...format, template: null })}|${exportLanguage ?? ''}`;
+  const context = `${JSON.stringify({ ...format, template: null })}|${exportLanguage ?? ''}|${media.version}`;
   const thumbs = useMemo<ThumbSource>(
-    () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH) }),
+    () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH, media.sources) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cache, context, subject],
   );
 
-  const ready = rendered !== null && rendered.key === key;
+  /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
+  const ready = rendered !== null && rendered.key === key && !media.loading;
+
+  /** Le fichier à livrer : l'image peinte, ou le GIF / la vidéo fabriqués à la demande (et gardés pour un second geste). */
+  const fileFor = async (card: Rendered): Promise<Blob | null> => {
+    if (output === 'image') return card.blob;
+    const cacheKey = `${key}|${output}|${exportLanguage ?? ''}`;
+    const cached = motionCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    const temporal = temporalItemOf(subject.media);
+    if (temporal === null) return null;
+    setMotionBusy(output);
+    announce(translateExportCard(language, output === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video'));
+    const blob = await recordMotion({ input: inputFor(format.template), sources: media.sources, output, item: temporal.item, index: temporal.index }).catch(() => null);
+    setMotionBusy(null);
+    if (blob !== null) motionCache.set(cacheKey, blob);
+    return blob;
+  };
 
   const send = async (intent: MessageCardIntent) => {
     if (!ready || saving) return;
     setSaving(true);
-    const outcome = await deliver(rendered.blob, messageCardFileName(new Date()), intent).catch((): MessageCardDelivery => 'unavailable');
+    const file = await fileFor(rendered);
+    if (file === null) {
+      setSaving(false);
+      announce(translateExportCard(language, 'export.announce.motionUnavailable'));
+      return;
+    }
+    const outcome = await deliver(file, messageCardFileName(new Date(), extensionOfType(file.type)), intent).catch((): MessageCardDelivery => 'unavailable');
     setSaving(false);
-    announce(translateExportCard(language, DELIVERY_ANNOUNCE[outcome]));
+    announce(translateExportCard(language, (output === 'image' ? DELIVERY_ANNOUNCE : MOTION_ANNOUNCE)[outcome]));
     if (outcome !== 'gallery' && outcome !== 'shared') return;
     recordTemplateUse(storage, format.template);
     onClose();
@@ -274,6 +338,7 @@ export function MessageExportSheet({
   }, [quick, ready]);
 
   const toggle = (option: MessageCardToggle) => setFormat((current) => ({ ...current, [option]: !current[option] }));
+  const choose = (choice: FrameChoice) => setFormat((current) => ({ ...current, ...choice }));
   const pick = (template: MessageCardTemplateId) => setFormat((current) => ({ ...current, template }));
   const current = templateOf(format.template);
   const pickPart = (part: { readonly palette?: CardPaletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) =>
@@ -294,17 +359,16 @@ export function MessageExportSheet({
 
   const openTab = (next: ExportTab) => {
     setTab(next);
-    setFocus(next === 'palette' ? 'background' : next === 'link' ? 'link' : next === 'typeface' ? (focus === 'quote' ? 'quote' : 'reply') : null);
+    setFocus(
+      next === 'palette' ? 'background' : next === 'link' ? 'link' : next === 'media' ? 'media' : next === 'typeface' ? (focus === 'quote' ? 'quote' : 'reply') : null,
+    );
   };
 
-  /* L'anonymat n'a de sens que pour un nom PEINT — et celui du message cité, que s'il y en a un. */
-  const options: readonly MessageCardToggle[] = [
-    ...(title === null ? [] : (['showConversationTitle'] as const)),
-    'showAuthors',
-    'showDate',
-    ...(format.showAuthors && subject.quoted !== null ? (['anonymizeQuoted'] as const) : []),
-    ...(format.showAuthors ? (['anonymizeReply'] as const) : []),
-  ];
+  /* « Détails » garde ce qui S'AJOUTE à la carte (le titre, les noms) ; la date, les heures et l'anonymat vivent dans Frame. */
+  const options: readonly MessageCardToggle[] = [...(title === null ? [] : (['showConversationTitle'] as const)), 'showAuthors'];
+  const hasHeader = (format.showConversationTitle && title !== null) || format.showDate;
+  const hasVisual = subject.media.some((item) => item.card.kind !== 'audio');
+  const hasAudio = subject.media.some((item) => item.card.kind === 'audio');
 
   const headerButton = { width: 44, height: 44, color: 'var(--color-ios-ink)' } as const;
   const shown = rendered;
@@ -414,9 +478,13 @@ export function MessageExportSheet({
               )}
             </div>
           </div>
-          {touched || shown === null ? null : (
+          {motionBusy !== null ? (
+            <p data-export-motion={motionBusy} className="glass pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+              {translateExportCard(language, motionBusy === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video')}
+            </p>
+          ) : touched || shown === null ? null : (
             <p data-export-hint="" className="glass pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
-              {translateExportCard(language, 'export.card.hint')}
+              {translateExportCard(language, media.loading ? 'export.card.media.loading' : 'export.card.hint')}
             </p>
           )}
         </div>
@@ -436,17 +504,23 @@ export function MessageExportSheet({
             format={format}
             options={options}
             hasQuote={subject.quoted !== null}
+            hasHeader={hasHeader}
+            hasVisual={hasVisual}
+            hasAudio={hasAudio}
             popular={popular.includes(format.template) ? popular : [format.template, ...popular]}
             thumbs={thumbs}
             onTemplate={pick}
             onPart={pickPart}
             onToggle={toggle}
+            onChoice={choose}
             onGallery={() => setGalleryOpen(true)}
             languages={exportLanguages.codes}
             exportLanguage={exportLanguage}
             onLanguage={setExportLanguage}
           />
         </div>
+
+        <OutputPicker language={language} outputs={outputs} output={output} onOutput={setOutput} />
 
         <div className="relative grid shrink-0 grid-cols-2 gap-2 px-3 pb-3 pt-2">
           <button

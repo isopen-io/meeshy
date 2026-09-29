@@ -68,6 +68,12 @@ export type CommentGestureHandlers = {
    * mention) : deux portes, un seul geste. Absent ⇒ ni bouton ni glissé.
    */
   readonly onReply?: (target: CommentReplyTarget) => void;
+  /**
+   * « IMAGER » (#8693) — le commentaire ET le texte que la rangée en AFFICHE
+   * (le Prisme, ou l'original que le lecteur a demandé) : la carte montre ce
+   * qu'on lit. Absent ⇒ aucun bouton.
+   */
+  readonly onImage?: (comment: PostComment, servedText: string) => void;
   /** Le dernier geste EN ÉCHEC sur cette rangée, avec SA classe d'issue. */
   readonly failureOf: (commentId: string) => CommentGestureRowFailure | undefined;
   /** Rejoue ce geste-là — l'hôte se souvient duquel il s'agit. */
@@ -143,6 +149,7 @@ function GestureBar({
   onStartEdit,
   onDelete,
   onReply,
+  onImage,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
@@ -151,6 +158,7 @@ function GestureBar({
   readonly onStartEdit: () => void;
   readonly onDelete: () => void;
   readonly onReply: (() => void) | undefined;
+  readonly onImage: (() => void) | undefined;
 }) {
   const isLiked = comment.isLikedByMe === true;
   const likes = countOf(comment.likeCount);
@@ -231,6 +239,18 @@ function GestureBar({
           style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
         >
           {translate(language, 'comments.action.reply')}
+        </button>
+      )}
+      {/* « IMAGER » (#8693) — le commentaire devient une carte, comme un message. */}
+      {onImage === undefined ? null : (
+        <button
+          type="button"
+          data-comment-gesture="image"
+          onClick={onImage}
+          className={`${GESTURE_BUTTON} text-check`}
+          style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'comments.action.image')}
         </button>
       )}
       {isMine ? (
@@ -538,6 +558,8 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
         : () => onReplyHandler(replyTargetOf(comment, { authorName: name, displayedText: lu.text })),
     [onReplyHandler, editing, comment, name, lu.text],
   );
+  const onImageHandler = actionable?.onImage;
+  const image = onImageHandler === undefined || editing ? undefined : () => onImageHandler(comment, lu.text);
 
   return (
     <li
@@ -614,6 +636,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                 onStartEdit={() => setEditing(true)}
                 onDelete={requestDelete}
                 onReply={reply}
+                onImage={image}
               />
             ) : null}
             {actionable !== undefined && failure !== undefined ? (

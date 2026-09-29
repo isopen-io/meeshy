@@ -21,11 +21,16 @@ public struct LentilleSticker: View {
 
     public let title: String
     public var isExpanded: Bool
+    /// #8694 — le compte de non-lus que la section cache quand elle est
+    /// repliée (`SectionFoldedUnread.count` : zéro dépliée, donc aucune
+    /// pastille — le portillon `count > 0` vit dans `UnreadCountBadge`).
+    public var foldedUnread: Int
     public var onToggle: (() -> Void)?
 
-    public init(title: String, isExpanded: Bool = true, onToggle: (() -> Void)? = nil) {
+    public init(title: String, isExpanded: Bool = true, foldedUnread: Int = 0, onToggle: (() -> Void)? = nil) {
         self.title = title
         self.isExpanded = isExpanded
+        self.foldedUnread = foldedUnread
         self.onToggle = onToggle
     }
 
@@ -38,6 +43,8 @@ public struct LentilleSticker: View {
             Button(action: onToggle) { label }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+                // « Épingles » · « Réduite, 12 messages non lus » (#8694).
+                .accessibilityValue(SectionFoldedUnread.accessibilityValue(isExpanded: isExpanded, foldedUnread: foldedUnread))
         } else {
             label
         }
@@ -65,6 +72,15 @@ public struct LentilleSticker: View {
             // suit le sens de lecture, donc il s'inverse de lui-même en RTL —
             // là où `.right` resterait à droite en arabe.
             if onToggle != nil {
+                // #8694 — repliée, la pastille de non-lus des rangs cachés, À
+                // CÔTÉ du chevron. Même atome que la rangée ; décorative pour
+                // VoiceOver, qui lit le compte dans la valeur du bouton.
+                if UnreadCountBadge.isVisible(count: foldedUnread) {
+                    UnreadCountBadge(count: foldedUnread, isDark: isDark)
+                        .fixedSize()
+                        .padding(.trailing, 6)
+                        .accessibilityHidden(true)
+                }
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.forward")
                     .font(MeeshyFont.relative(LentilleMetrics.Sticker.size, weight: LentilleMetrics.Sticker.weight))
                     .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))

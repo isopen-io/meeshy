@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
+import { CommentImagePortal } from '@/components/comment-image-sheet-lazy';
 import { CommentList } from '@/components/comment-list';
 import { CommentReplies } from '@/components/comment-replies';
 import type { CommentGestureHandlers } from '@/components/comment-row';
@@ -9,6 +10,7 @@ import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/com
 import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
+import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -17,6 +19,7 @@ import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useViewer } from '@/lib/view/use-viewer';
+import type { CommentImageRequest } from '@/routes/comment-image-sheet';
 
 /**
  * **LE FIL DE COMMENTAIRES, MONTÉ** — la liste (`comment-list.tsx`), son
@@ -93,6 +96,25 @@ export function CommentThread({
    * frères : c'est leur hôte commun qui les relie.
    */
   const [replyTarget, setReplyTarget] = useState<CommentReplyTarget | null>(null);
+  /**
+   * « IMAGER » UN COMMENTAIRE (#8693) — une réponse cite sa racine, dans le
+   * texte que le lecteur y lit (le Prisme des commentaires, `resolveFeedText`).
+   */
+  const [imaging, setImaging] = useState<CommentImageRequest | null>(null);
+  const imageRequestOf = (comment: PostComment, servedText: string): CommentImageRequest => {
+    const root = typeof comment.parentId === 'string' ? comments.find((candidate) => candidate.id === comment.parentId) : undefined;
+    return {
+      comment,
+      servedText,
+      parent:
+        root === undefined
+          ? null
+          : {
+              comment: root,
+              servedText: resolveFeedText({ preferredLanguages: reader.languages, originalLanguage: root.originalLanguage, translations: root.translations, content: root.content }).text,
+            },
+    };
+  };
   /** LES RACINES DÉPLIÉES — une réponse qu'on vient de poser déplie la sienne, pour qu'elle se VOIE. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const toggleReplies = useCallback((rootId: string) => {
@@ -208,6 +230,7 @@ export function CommentThread({
                 ...(parentId === undefined ? {} : { parentId }),
               }),
             onReply: setReplyTarget,
+            onImage: (comment, servedText) => setImaging(imageRequestOf(comment, servedText)),
             failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
@@ -283,6 +306,7 @@ export function CommentThread({
         {...(onWritingChange === undefined ? {} : { onWritingChange })}
         foldOnSend={foldOnSend}
       />
+      <CommentImagePortal request={imaging} handle={viewer.handle} onClose={() => setImaging(null)} />
     </section>
   );
 }

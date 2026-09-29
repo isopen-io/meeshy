@@ -1030,6 +1030,14 @@ jobs:
           cd apps/web
           node scripts/check-list-actions.mjs
 
+      # #8694 — une section repliée porte le compte de non-lus qu'elle cache,
+      # à jour sans la déplier (le câblage, que les témoins `bun test` ne voient pas).
+      - name: Gate section repliée (compte de non-lus)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-list-folded-unread.mjs
+
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
         if: ${{ !cancelled() }}
         run: |

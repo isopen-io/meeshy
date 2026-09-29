@@ -62,6 +62,7 @@ export function MessageDetailSheet({
   messageId,
   attachments,
   star,
+  create = { onCompose: null, onImage: null },
   onPickLanguage,
   onClose,
 }: {
@@ -76,14 +77,44 @@ export function MessageDetailSheet({
   readonly attachments: readonly Attachment[];
   /** Le favori du message, CONNU — `null` quand rien ne peut être offert sans mentir. */
   readonly star: MessageStarEntry | null;
+  /**
+   * « CRÉER » (#8693) — le (>) de « Plus… » déplie « Composer » ET « Imager ».
+   * `null` : l'entrée n'a pas d'effet sur CE message (pas de photo ni de vidéo
+   * à composer ; rien à imager, ou message protégé) et ne s'offre pas.
+   */
+  readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
   readonly onPickLanguage: (code: string) => void;
   readonly onClose: () => void;
 }) {
   const fullDate = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'short' }).format(sentAt);
   const language = currentInterfaceLanguage();
 
+  const creations = [
+    { id: 'compose', run: create.onCompose, labelKey: 'message.menu.compose', glyph: THREAD_MENU_GLYPHS.magicWand },
+    { id: 'image', run: create.onImage, labelKey: 'message.menu.export', glyph: THREAD_MENU_GLYPHS.imageSquare },
+  ] as const;
+
   return (
     <Sheet title={translate(language, 'message.detail.title')} onClose={onClose}>
+      {creations.map((entry) =>
+        entry.run === null ? null : (
+          <li key={entry.id}>
+            <button
+              type="button"
+              data-message-create={entry.id}
+              onClick={() => {
+                entry.run?.();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2.5 px-4 text-left text-body"
+              style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
+            >
+              <GlyphSvg glyph={entry.glyph} size={18} style={{ color: 'var(--accent)' }} />
+              <span className="flex-1">{translate(language, entry.labelKey)}</span>
+            </button>
+          </li>
+        ),
+      )}
       {star === null ? null : (
         <li>
           <button
