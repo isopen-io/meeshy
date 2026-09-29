@@ -254,9 +254,9 @@ try {
 
       // ------------------------------------------------ 3. la rangée de mon image
       check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
-      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-row] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
-      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
+      check(JSON.stringify(labels) === JSON.stringify(['Effets de ma vidéo', 'Partager l’écran', 'Couper la caméra', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
       check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
@@ -364,7 +364,7 @@ try {
 
       // ------------------------------------------------ 7. pas de zoom proposé : le zoom numérique de mon seul aperçu
       check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche pas de capsule sur ma vignette`);
-      const step = '[data-call-corner-frame] [data-call-self-control="zoom"]';
+      const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
       check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette zoome mon seul aperçu (#8441)`);
       await page.$eval(step, (button) => button.click());
       check(await until(page, () => (document.querySelector('[data-call-corner] video')?.style.transform ?? '').includes('scale(2)')), `${label} : un cran agrandit mon image à 2×, à l'écran seulement`);

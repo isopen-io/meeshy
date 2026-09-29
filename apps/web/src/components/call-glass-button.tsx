@@ -14,6 +14,10 @@ import type { ReactNode } from 'react';
  * La cible fait 44 au moins. Sans légende visible, le libellé accessible est
  * doublé d'une infobulle (`title`) ; avec légende (rangées d'un groupe), la
  * légende est la chose lue et l'infobulle serait un doublon.
+ *
+ * Légendé, le bouton EST l'unité icône + légende (#8735) : la légende posée à
+ * côté du bouton était une zone morte, et le doigt qui visait « Caméra » ne
+ * déclenchait rien. Le rond (verre, tenue, taille) vit dans le bouton.
  */
 
 export type CallButtonTone = 'bare' | 'glass' | 'active' | 'danger';
@@ -42,29 +46,32 @@ const TONE_STYLE: Readonly<Record<Exclude<CallButtonTone, 'glass'>, { readonly b
 
 export function CallButton({ label, glyph, onPress, tone = 'bare', prominent = false, pressed, expanded, controls, popup = false, disabled = false, caption, size = 48, data = {} }: CallButtonProps) {
   const glass = tone === 'glass';
+  const round = `${glass ? (prominent ? 'glass-call-prominent ' : 'glass-call ') : ''}grid shrink-0 place-items-center rounded-full`;
+  const roundStyle = glass ? { width: size, height: size } : { width: size, height: size, ...TONE_STYLE[tone] };
+  const press = 'transition-transform active:scale-95 disabled:opacity-40 motion-reduce:transition-none';
+  const aria = {
+    'aria-label': label,
+    ...(pressed === undefined ? {} : { 'aria-pressed': pressed }),
+    ...(expanded === undefined ? {} : { 'aria-expanded': expanded }),
+    ...(controls === undefined ? {} : { 'aria-controls': controls }),
+    ...(popup ? { 'aria-haspopup': 'dialog' as const } : {}),
+  };
+  if (caption === undefined)
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <button type="button" {...aria} title={label} onClick={onPress} disabled={disabled} {...data} className={`${round} ${press}`} style={roundStyle}>
+          {glyph}
+        </button>
+      </div>
+    );
   return (
-    <div className="flex flex-col items-center gap-1">
-      <button
-        type="button"
-        aria-label={label}
-        {...(caption === undefined ? { title: label } : {})}
-        {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
-        {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
-        {...(controls === undefined ? {} : { 'aria-controls': controls })}
-        {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
-        onClick={onPress}
-        disabled={disabled}
-        {...data}
-        className={`${glass ? (prominent ? 'glass-call-prominent ' : 'glass-call ') : ''}grid shrink-0 place-items-center rounded-full transition-transform active:scale-95 disabled:opacity-40 motion-reduce:transition-none`}
-        style={glass ? { width: size, height: size } : { width: size, height: size, ...TONE_STYLE[tone] }}
-      >
+    <button type="button" {...aria} onClick={onPress} disabled={disabled} {...data} className={`flex shrink-0 flex-col items-center gap-1 rounded-2xl ${press}`}>
+      <span className={round} style={roundStyle}>
         {glyph}
-      </button>
-      {caption === undefined ? null : (
-        <span aria-hidden className="max-w-[4.5rem] truncate text-mini text-white">
-          {caption}
-        </span>
-      )}
-    </div>
+      </span>
+      <span aria-hidden className="max-w-[4.5rem] truncate text-mini text-white">
+        {caption}
+      </span>
+    </button>
   );
 }

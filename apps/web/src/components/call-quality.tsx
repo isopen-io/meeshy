@@ -2,6 +2,7 @@ import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { lazy, Suspense, useState } from 'react';
 
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
+import { useChromeHold } from '@/lib/calls/use-call-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -46,6 +47,8 @@ type CallQualityChipProps = {
   readonly language: InterfaceLanguage;
   /** Teinte plus sombre au-dessus d'un fond clair (écran partagé à la une). */
   readonly prominent: boolean;
+  /** Le détail ouvert retient l'écran (#8735) : `true` à l'ouverture, `false` à la fermeture. */
+  readonly onHold?: (held: boolean) => void;
 };
 
 /**
@@ -54,9 +57,12 @@ type CallQualityChipProps = {
  * ouvre le détail. Son nom accessible DIT ce qu'elle montre puis le niveau :
  * la légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la
  * puce n'est qu'une étiquette : aucun bouton ne promet un détail absent.
+ * Le détail ouvert RETIENT l'écran d'appel (`onHold`, #8735) : il ne s'efface
+ * pas sous qui le lit.
  */
-export function CallQualityChip({ title, clock, quality, language, prominent }: CallQualityChipProps) {
+export function CallQualityChip({ title, clock, quality, language, prominent, onHold }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
+  useChromeHold(open && quality !== null, onHold);
   const shown = clock === null ? title : `${title} · ${clock}`;
   const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
   if (quality === null) {

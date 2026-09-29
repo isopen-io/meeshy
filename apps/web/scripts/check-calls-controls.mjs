@@ -46,7 +46,9 @@
  *     capsule du zoom se pose sur le bord ; un toucher les efface avec le
  *     reste ; « Effets » de la rangée entre dans le MODE : en-tête, pilule et
  *     rangée partent, le carrousel se centre en bas ; ✕ en sort ;
- *  9. au DOIGT (320 × 568) : un glissé fait défiler CHAQUE rangée débordante
+ *  9. au DOIGT (320 × 568) : effacé par l'attente, `(…)` reste sous le doigt,
+ *     et UN toucher agit et rend les commandes (#8735) ; un glissé, qui
+ *     réarme l'attente (#8736), fait défiler CHAQUE rangée débordante
  *     et les carrousels des deux modes (`scrollLeft` mesuré) ; un pincement à
  *     deux doigts sur ma vignette la passe à ×3, un pincement serré à ×1 ; la
  *     taille est retenue pour l'appel.
@@ -434,23 +436,29 @@ try {
       const corner = await page.locator('[data-call-corner]').boundingBox();
       check(corner !== null && Math.round(corner.width) === 112 && Math.round(corner.height) === 160, `vidéo : ×2 mesure 112 × 160 (${corner && [Math.round(corner.width), Math.round(corner.height)]})`);
       check((await page.$('[data-call-zoom]')) === null, 'vidéo : aucune capsule de zoom sur la vignette en coin');
-      const tileRow = await page.$eval('[data-call-corner-frame]', (frame) => {
-        const row = frame.querySelector('[data-call-self-controls="tile"]');
-        if (row === null) return null;
-        const box = row.getBoundingClientRect();
-        const tile = frame.getBoundingClientRect();
-        const buttons = [...row.querySelectorAll('[data-call-self-control]')];
-        return {
-          orientation: row.getAttribute('aria-orientation'),
-          actions: buttons.map((button) => button.getAttribute('data-call-self-control')),
-          sizes: buttons.map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
-          inside: box.bottom <= tile.bottom + 1 && box.top >= tile.top && box.right <= tile.right + 1,
-          onScreen: box.left >= 0 && box.right <= window.innerWidth,
+      const tileRows = await page.$eval('[data-call-corner-frame]', (frame) => {
+        const tile = frame.querySelector('[data-call-corner]')?.getBoundingClientRect();
+        const read = (group) => {
+          const row = frame.querySelector(`[data-call-self-row="${group}"] [data-call-self-controls="tile"]`);
+          if (row === null || tile === undefined) return null;
+          const box = row.getBoundingClientRect();
+          const buttons = [...row.querySelectorAll('[data-call-self-control]')];
+          return {
+            orientation: row.getAttribute('aria-orientation'),
+            actions: buttons.map((button) => button.getAttribute('data-call-self-control')),
+            sizes: buttons.map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
+            above: box.bottom <= tile.top,
+            below: box.top >= tile.bottom,
+            onScreen: box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight,
+          };
         };
+        return { effects: read('effects'), camera: read('camera') };
       });
-      check(tileRow !== null && tileRow.orientation === 'horizontal', `vignette : les commandes de ma caméra sont DANS ma vignette, en rangée (${JSON.stringify(tileRow)})`);
-      check(tileRow !== null && JSON.stringify(tileRow.actions.filter((action) => action !== 'flip')) === JSON.stringify(['camera', 'effects', 'screen', 'zoom']), `vignette : (Retourner) · Caméra · Effets · Écran · cran du zoom, #8441 (${tileRow?.actions.join(' · ')})`);
-      check(tileRow !== null && tileRow.sizes.every((size) => size >= TAP_FLOOR) && tileRow.inside && tileRow.onScreen, `vignette : ${TAP_FLOOR} px chacun, en bas de ma vignette, à l’écran (${JSON.stringify(tileRow)})`);
+      const { effects: aboveRow, camera: belowRow } = tileRows;
+      check(aboveRow !== null && belowRow !== null && aboveRow.orientation === 'horizontal' && belowRow.orientation === 'horizontal', `vignette : les commandes de ma caméra sont AUTOUR de ma vignette, en deux rangées (#8747) (${JSON.stringify(tileRows)})`);
+      check(aboveRow !== null && JSON.stringify(aboveRow.actions) === JSON.stringify(['effects', 'screen']) && aboveRow.above, `vignette : Effets · Écran au-dessus d’elle (${JSON.stringify(aboveRow)})`);
+      check(belowRow !== null && JSON.stringify(belowRow.actions.filter((action) => action !== 'flip')) === JSON.stringify(['camera', 'zoom']) && belowRow.below, `vignette : (Retourner) · Caméra · cran du zoom (#8441) en dessous d’elle (${JSON.stringify(belowRow)})`);
+      check([aboveRow, belowRow].every((row) => row !== null && row.sizes.every((size) => size >= TAP_FLOOR) && row.onScreen), `vignette : ${TAP_FLOOR} px chacun, hors de ma vignette, à l’écran (${JSON.stringify(tileRows)})`);
       check((await page.$('[data-call-row="mine"]')) === null && (await page.locator('[data-call-control="camera"]').count()) === 1, 'vignette : le (…) ne double pas les commandes de ma caméra');
       await capture(page, 'controles-vignette-rangee-dark');
       const labels = await page.$$eval('[data-call-row="call"] [data-call-row-scroll] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? button.getAttribute('aria-label')));
@@ -466,7 +474,7 @@ try {
 
       await focusSettled(page, '[data-call-more]');
       check(await tapStage(page, false), 'vidéo : un toucher sur la scène efface les commandes');
-      const faded = await fadedAll(page, ['[data-call-header]', '[data-call-controls]', '[data-call-self-controls="tile"]']);
+      const faded = await fadedAll(page, ['[data-call-header]', '[data-call-controls]', '[data-call-self-row="effects"] [data-call-self-controls="tile"]', '[data-call-self-row="camera"] [data-call-self-controls="tile"]']);
       check(faded.done, `vidéo : l’en-tête, la pilule et la rangée de ma vignette s’effacent (${JSON.stringify(faded.seen)})`);
       await capture(page, 'controles-toucher-efface-dark');
       check(await tapStage(page, true), 'vidéo : un second toucher rend tout');
@@ -502,7 +510,10 @@ try {
       check(await tapStage(page, false), 'plein écran : un toucher efface tout');
       const railFaded = await fadedAll(page, ['[data-call-self-controls="top"]', '[data-call-zoom]', '[data-call-header]']);
       check(railFaded.done, `plein écran : la rangée et la capsule s’effacent avec le reste (${JSON.stringify(railFaded.seen)})`);
-      check((await page.$eval('[data-call-self-controls-holder]', (holder) => getComputedStyle(holder).pointerEvents)) === 'none' && (await page.$eval('[data-call-self-column]', (column) => getComputedStyle(column).pointerEvents)) === 'none', 'plein écran : effacées, elles ne captent plus le toucher');
+      check(
+        await until(page, () => ['[data-call-self-controls-holder]', '[data-call-self-column]'].every((selector) => document.querySelector(selector) !== null && getComputedStyle(document.querySelector(selector)).visibility === 'hidden'), undefined, 2000),
+        'plein écran : rangées d’un toucher, elles ne captent plus le toucher une fois leur fondu fini (invisibles, #8735)',
+      );
       check(await tapStage(page, true), 'plein écran : un second toucher les rend');
 
       await page.click('[data-call-self-control="effects"]');
@@ -541,11 +552,24 @@ try {
     const cdp = await context.newCDPSession(page);
     try {
       check(await startVideo(page), 'doigt : l’appel vidéo se connecte à 320 × 568');
+      check(await appears(page, '[data-call-chrome-state="resting"]', 7000), 'doigt : sans geste, les commandes s’effacent d’elles-mêmes');
+      const underFinger = await page.evaluate(() => {
+        const more = document.querySelector('[data-call-more]');
+        if (more === null) return false;
+        const box = more.getBoundingClientRect();
+        return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('[data-call-more]') === more;
+      });
+      check(underFinger, 'doigt : effacé par l’attente, (…) reste sous le doigt (#8735)');
+      const layerBefore = await page.getAttribute('[data-call-screen]', 'data-call-layer');
+      await page.tap('[data-call-more]');
+      const layerAfter = await page.getAttribute('[data-call-screen]', 'data-call-layer');
+      check((await appears(page, '[data-call-chrome="shown"]', 2000)) && layerAfter !== layerBefore, `doigt : UN toucher sur (…) effacé agit ET rend les commandes (#8735 — ${layerBefore} → ${layerAfter})`);
       await openActions(page);
       const rows = await dragEach(page, cdp, '[data-call-row] [data-call-row-scroll]');
       const overflowing = rows.filter((row) => row.moved !== null);
       check(overflowing.length >= 1, `doigt : au moins une rangée déborde à 320 (${JSON.stringify(rows)})`);
       check(overflowing.every((row) => row.moved > 4), `doigt : un glissé fait défiler CHAQUE rangée qui déborde (${JSON.stringify(rows)})`);
+      check((await page.getAttribute('[data-call-screen]', 'data-call-chrome')) === 'shown', 'doigt : faire défiler les rangées réarme l’attente — elles ne s’effacent pas sous le doigt (#8736)');
       await capture(page, 'controles-doigt-rangees-dark-320x568');
 
       await page.click('[data-call-control="effects"]');

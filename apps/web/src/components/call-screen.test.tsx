@@ -9,7 +9,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
-import { CallScreen } from './call-screen';
+import { CallModePending, CallScreen } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
 
 /* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
@@ -275,13 +275,20 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('caméra allumée en duo, les commandes de MA caméra vivent dans ma vignette, et le (…) ne les double pas (#8626)', () => {
+  test('caméra allumée en duo, les commandes de MA caméra vivent AUTOUR de ma vignette — Effets · Écran au-dessus, Retourner · Couper en dessous — et le (…) ne les double pas (#8626, #8747)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
-    const row = view.find('[data-call-corner-frame] [data-call-self-controls="tile"]');
-    expect(row?.getAttribute('role')).toBe('toolbar');
-    expect(row?.getAttribute('aria-orientation')).toBe('horizontal');
-    expect(row?.getAttribute('aria-label')).toBe('Options de ma caméra');
-    expect([...view.host.querySelectorAll('[data-call-self-control]')].map((button) => button.getAttribute('aria-label'))).toEqual(['Retourner la caméra', 'Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    for (const group of ['effects', 'camera']) {
+      const row = view.find(`[data-call-corner-frame] [data-call-self-row="${group}"] [data-call-self-controls="tile"]`);
+      expect(row?.getAttribute('role')).toBe('toolbar');
+      expect(row?.getAttribute('aria-orientation')).toBe('horizontal');
+      expect(row?.getAttribute('aria-label')).toBe('Options de ma caméra');
+      expect(row?.getAttribute('data-call-self-group')).toBe(group);
+    }
+    const labels = (group: string) => [...view.host.querySelectorAll(`[data-call-self-row="${group}"] [data-call-self-control]`)].map((button) => button.getAttribute('aria-label'));
+    expect(labels('effects')).toEqual(['Effets de ma vidéo', 'Partager l’écran']);
+    expect(labels('camera')).toEqual(['Retourner la caméra', 'Couper la caméra']);
+    expect(view.find('[data-call-self-row="effects"]')?.getAttribute('data-call-self-row-side')).toBe('above');
+    expect(view.find('[data-call-self-row="camera"]')?.getAttribute('data-call-self-row-side')).toBe('below');
     expect(view.find('[data-call-corner] [data-call-self-controls]')).toBeNull();
     view.press('[data-call-more]');
     expect(view.find('[data-call-row="mine"]')).toBeNull();
@@ -290,7 +297,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('ma vignette porte le cran du zoom de ma caméra, à côté de ses commandes (#8441)', async () => {
+  test('ma vignette porte le cran du zoom de ma caméra, dans la rangée du dessous (#8441, #8747)', async () => {
     const camera = { kind: 'video', readyState: 'live', getCapabilities: () => ({ zoom: { min: 1, max: 10, step: 0.1 } }), getSettings: () => ({ zoom: 1 }), applyConstraints: async () => undefined };
     const stream = Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getVideoTracks: () => [camera], getAudioTracks: () => [], getTracks: () => [camera] });
     const view = mount({ cameraOn: true, localStream: stream, members: { 'u-peer': member() } });
@@ -298,7 +305,8 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       await import('./call-self-camera');
     });
     await act(async () => {});
-    expect(view.find('[data-call-corner-frame] [data-call-self-controls="tile"] [data-call-self-control="zoom"]')?.textContent).toBe('1×');
+    expect(view.find('[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]')?.textContent).toBe('1×');
+    expect(view.find('[data-call-self-row="effects"] [data-call-self-control="zoom"]')).toBeNull();
     view.done();
   });
 
@@ -310,13 +318,14 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('toucher la scène efface la rangée de ma vignette avec le reste (#8626)', () => {
+  test('toucher la scène efface les deux rangées autour de ma vignette avec le reste (#8626, #8747)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    const holder = () => view.find('[data-call-self-controls]')?.closest('[data-call-self-controls-holder]');
-    expect(holder()?.className).toContain('opacity-100');
+    const holders = () => [...view.host.querySelectorAll('[data-call-self-controls-holder]')];
+    expect(holders()).toHaveLength(2);
+    expect(holders().every((holder) => holder.className.includes('opacity-100'))).toBe(true);
     act(() => (view.find('[data-call-screen]') as HTMLElement).click());
-    expect(holder()?.className).toContain('opacity-0');
-    expect(holder()?.getAttribute('aria-hidden')).toBe('true');
+    expect(holders().every((holder) => holder.className.includes('opacity-0'))).toBe(true);
+    expect(holders().every((holder) => holder.getAttribute('aria-hidden') === 'true')).toBe(true);
     view.done();
   });
 
@@ -585,6 +594,178 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
     jest.useRealTimers();
   });
+
+  /* UN BOUTON VISIBLE RÉPOND AU PREMIER TOUCHER (#8735). Le fondu posait
+     `pointer-events-none` à l'instant où l'opacité COMMENÇAIT à baisser : un
+     bouton encore bien visible laissait passer le doigt à la vidéo, qui ne
+     faisait que rendre les commandes — il fallait toucher deux fois. */
+  const onFakeClock = (run: () => void) => {
+    jest.useFakeTimers();
+    try {
+      run();
+    } finally {
+      jest.useRealTimers();
+    }
+  };
+
+  const chromeOf = (view: ReturnType<typeof mount>) => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+
+  const controlsClasses = (view: ReturnType<typeof mount>) => (view.find('[data-call-controls]') as HTMLElement | null)?.className.split(' ') ?? [];
+
+  test('effacées par l’attente, les commandes restent sous le doigt : un toucher agit et les rend (#8735)', () =>
+    onFakeClock(() => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+      act(() => jest.advanceTimersByTime(4100));
+      expect(chromeOf(view)).toBe('hidden');
+      expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome-state')).toBe('resting');
+      expect(controlsClasses(view)).toContain('opacity-0');
+      expect(controlsClasses(view)).not.toContain('pointer-events-none');
+      expect(controlsClasses(view)).not.toContain('invisible');
+      expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBeNull();
+      const more = view.find('[data-call-more]') as HTMLElement;
+      act(() => {
+        more.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        more.dispatchEvent(new Event('pointerup', { bubbles: true }));
+        more.click();
+      });
+      expect(chromeOf(view)).toBe('shown');
+      expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
+      view.done();
+    }));
+
+  test('rangées d’un toucher sur la scène, elles laissent passer le doigt — une fois leur fondu fini, jamais pendant (#8735)', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    expect(controlsClasses(view)).toContain('transition-opacity');
+    tapStage(view);
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome-state')).toBe('dismissed');
+    expect(controlsClasses(view)).toContain('invisible');
+    expect(controlsClasses(view)).toContain('transition-[opacity,visibility]');
+    expect(controlsClasses(view)).not.toContain('pointer-events-none');
+    tapStage(view);
+    expect(controlsClasses(view)).not.toContain('invisible');
+    view.done();
+  });
+
+  /* L'ATTENTE SE RÉARME AU DOIGT (#8735, #8736). Au doigt, un glissé ne rend
+     plus de `pointermove` (le navigateur annule le pointeur et fait défiler) :
+     la rangée qu'on faisait défiler s'effaçait sous le doigt. */
+  test('le menu ouvert, faire défiler une rangée réarme l’attente : il ne s’efface pas sous le doigt (#8736)', () =>
+    onFakeClock(() => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+      view.press('[data-call-more]');
+      act(() => jest.advanceTimersByTime(3000));
+      act(() => void view.find('[data-call-row="call"] [data-call-row-scroll]')?.dispatchEvent(new Event('scroll')));
+      act(() => jest.advanceTimersByTime(3000));
+      expect(chromeOf(view)).toBe('shown');
+      act(() => jest.advanceTimersByTime(1100));
+      expect(chromeOf(view)).toBe('hidden');
+      view.done();
+    }));
+
+  test('un doigt posé retient les commandes tant qu’il ne s’est pas levé (#8736)', () =>
+    onFakeClock(() => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+      view.press('[data-call-more]');
+      const row = view.find('[data-call-row="call"] [data-call-row-scroll]') as HTMLElement;
+      act(() => void row.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+      act(() => jest.advanceTimersByTime(9000));
+      expect(chromeOf(view)).toBe('shown');
+      act(() => void row.dispatchEvent(new Event('pointercancel', { bubbles: true })));
+      act(() => jest.advanceTimersByTime(4100));
+      expect(chromeOf(view)).toBe('hidden');
+      view.done();
+    }));
+
+  test('la feuille « Sortie » ouverte retient l’écran : elle ne s’efface pas sous qui la lit (#8735)', () =>
+    onFakeClock(() => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+      view.press('[data-call-devices-open]');
+      act(() => jest.advanceTimersByTime(8000));
+      expect(chromeOf(view)).toBe('shown');
+      view.done();
+    }));
+
+  test('le détail de la qualité ouvert retient l’écran ; refermé, l’attente reprend (#8735)', () =>
+    onFakeClock(() => {
+      const quality = { level: 'good', packetLoss: 0, rtt: 40, jitter: 3, audioKbps: 32, videoKbps: 600, survival: 'sending' } as const;
+      const view = mount({ cameraOn: true, quality, members: { 'u-peer': member() } });
+      view.press('[data-call-chip]');
+      act(() => jest.advanceTimersByTime(8000));
+      expect(chromeOf(view)).toBe('shown');
+      view.press('[data-call-chip]');
+      act(() => jest.advanceTimersByTime(4100));
+      expect(chromeOf(view)).toBe('hidden');
+      view.done();
+    }));
+
+  /* LE GLISSÉ NE REBONDIT PAS (#8736) : `overscroll-x-contain` laisse
+     l'élasticité locale d'une piste, dont la fin d'animation termine le
+     défilement suivant (#8619, 10 glissés perdus sur 10). */
+  test('chaque rangée et chaque panneau défile sans élasticité : overscroll-x-none (#8736)', async () => {
+    const view = mount({ members: { 'u-peer': member() } });
+    view.press('[data-call-more]');
+    const rows = [...view.host.querySelectorAll<HTMLElement>('[data-call-row] [data-call-row-scroll]')];
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => {
+      expect(row.className).toContain('overscroll-x-none');
+      expect(row.className).not.toContain('overscroll-x-contain');
+    });
+    view.press('[data-call-control="react"]');
+    await act(async () => {
+      await import('./call-control-panels');
+    });
+    await act(async () => {});
+    expect((view.find('[data-call-react-panel] [data-call-row-scroll]') as HTMLElement | null)?.className).toContain('overscroll-x-none');
+    view.done();
+  });
+
+  /* LE PREMIER TOUCHER N'ATTEND PAS LE RÉSEAU (#8735) : chaque mode et
+     chaque panneau vit dans son chunk ; l'appel vivant, ils se chargent quand
+     le navigateur souffle. Et un mode encore en chemin ne laisse pas un écran
+     vide : sa barre est là, et ✕ en sort déjà. */
+  test('l’appel vivant, les modes et les panneaux se préchargent quand le navigateur souffle — pas pendant la sonnerie (#8735)', () => {
+    const globals = globalThis as typeof globalThis & { requestIdleCallback?: unknown; cancelIdleCallback?: unknown };
+    const saved = { request: globals.requestIdleCallback, cancel: globals.cancelIdleCallback };
+    const scheduled: IdleRequestCallback[] = [];
+    globals.requestIdleCallback = (run: IdleRequestCallback) => scheduled.push(run);
+    globals.cancelIdleCallback = () => undefined;
+    try {
+      const ringing = mount({ phase: { kind: 'incoming' }, direction: 'incoming' });
+      expect(scheduled).toHaveLength(0);
+      ringing.done();
+      const view = mount({ members: { 'u-peer': member() } });
+      expect(scheduled).toHaveLength(1);
+      expect(() => scheduled[0]?.({ didTimeout: false, timeRemaining: () => 50 })).not.toThrow();
+      view.done();
+    } finally {
+      globals.requestIdleCallback = saved.request;
+      globals.cancelIdleCallback = saved.cancel;
+    }
+  });
+
+  test('un mode en chemin montre sa barre, et ✕ en sort avant qu’il n’arrive (#8735)', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const exits: string[] = [];
+    act(() => root.render(<CallModePending label="Fermer" glyph={null} onExit={() => void exits.push('exit')} />));
+    const quit = host.querySelector('[data-call-mode-pending] button[aria-label="Fermer"]') as HTMLElement | null;
+    expect(quit).not.toBeNull();
+    act(() => quit?.click());
+    expect(exits).toEqual(['exit']);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  test('la durée de la puce avance chaque seconde (#8735)', () =>
+    onFakeClock(() => {
+      const view = mount({ connectedAt: Date.now(), members: { 'u-peer': member() } });
+      const chip = () => view.find('[data-call-chip]')?.textContent ?? '';
+      expect(chip()).toContain('0:00');
+      act(() => jest.advanceTimersByTime(2000));
+      expect(chip()).toContain('0:02');
+      view.done();
+    }));
 
   test('en audio, toucher ne cache rien', () => {
     const view = mount({ members: { 'u-peer': member() } });
