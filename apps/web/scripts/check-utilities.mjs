@@ -140,7 +140,7 @@ export const usedClasses = (files) => {
   return found;
 };
 
-export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:]/g, (c) => `\\${c}`);
+export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"]/g, (c) => `\\${c}`);
 
 /** Le corps `{ ... }` de la règle `.name{...}` dans `css`, ou `null` si absente. */
 export const findRuleBody = (css, name) => {

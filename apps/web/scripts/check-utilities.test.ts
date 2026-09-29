@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
 // interroge son API publique exactement comme le pilote le fait.
-import { findRuleBody, sizelessTextClasses, textSizeRoles, usedClasses } from './check-utilities.mjs';
+import { escapeForCss, findRuleBody, sizelessTextClasses, textSizeRoles, usedClasses } from './check-utilities.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { unlinkSync, writeFileSync } from 'node:fs';
@@ -134,5 +134,12 @@ describe('sizelessTextClasses — la taille promise mais masquée par une couleu
     const used = new Map([['placeholder:text-meta', 'src/institutional/page.tsx']]);
     const css = '.placeholder\\:text-meta::placeholder{color:#000}';
     expect(sizelessTextClasses(used, css, new Set(['meta']))).toEqual([]);
+  });
+});
+
+describe('escapeForCss — le sélecteur tel que Tailwind l’écrit dans la feuille', () => {
+  test('échappe l’apostrophe d’une valeur arbitraire `content-[\'\']`, comme la feuille compilée', () => {
+    const css = ".before\\:content-\\[\\'\\'\\]:before{--tw-content:\"\";content:var(--tw-content)}";
+    expect(css.includes(`.${escapeForCss("before:content-['']")}`)).toBe(true);
   });
 });
