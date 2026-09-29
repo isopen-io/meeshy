@@ -648,4 +648,43 @@ describe('GET threads — la citation d’un éphémère échu POUR CE LECTEUR e
     expect(quote.expiresAt).toBeUndefined();
     await app.close();
   });
+
+  /**
+   * #8630 — la réponse MEURT avec ce qu'elle cite, pour ce lecteur : servie
+   * dans la grâce avec l'échéance du cité, retirée au-delà. Le double répond
+   * à la remontée de la chaîne citée (`where.id.in`) comme une vraie base.
+   */
+  const cascadePrisma = (consumedAt: Date) =>
+    makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>().mockImplementation(async ({ where }: any) => {
+          if (where?.id?.in) return where.id.in.includes(flamme.id) ? [{ ...flamme, replyToId: null }] : [];
+          if (where?.replyToId?.in?.includes(MSG_ID)) return [reponse];
+          return [];
+        }),
+      },
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER_PARTICIPANT }) },
+      messageStatusEntry: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { messageId: flamme.id, participantId: READER_PARTICIPANT, ephemeralExpiresAt: consumedAt },
+        ]),
+      },
+    });
+
+  it('#8630 — la réponse part avec la flamme-œil consommée, une fois la grâce passée', async () => {
+    const app = await buildApp({ prisma: cascadePrisma(new Date(Date.now() - 2 * 3600_000)) });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.replies).toEqual([]);
+    expect(res.json().data.totalCount).toBe(0);
+    await app.close();
+  });
+
+  it('#8630 — dans la grâce, la réponse porte l’échéance du message cité', async () => {
+    const app = await buildApp({ prisma: cascadePrisma(CONSUMED) });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.json().data.replies[0].expiresAt).toBe(CONSUMED.toISOString());
+    await app.close();
+  });
 });

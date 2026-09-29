@@ -274,11 +274,33 @@ export function sealedQuotedMessage(sealedAt: Date): Record<string, unknown> {
  * La variante SCELLÉE d'une charge déjà composée (`message:new`,
  * `message:edited`), pour les lecteurs qu'une diffusion de room ne peut pas
  * distinguer : l'identité et l'auteur de la citation restent, rien d'autre.
+ *
+ * #8630 — et la RÉPONSE meurt avec ce qu'elle cite (décision porteur
+ * 2026-09-29) : elle part vidée, datée de la mort du cité, que les clients
+ * retirent comme un éphémère échu. Aucun `deletedAt` : ce n'est pas une
+ * suppression, que les clients peindraient en « Message supprimé ».
  */
 export function withSealedQuote<T extends object>(payload: T, sealedAt: Date): T {
   const quote = (payload as { replyTo?: unknown }).replyTo;
   if (!quote || typeof quote !== 'object') return payload;
-  return { ...payload, replyTo: { ...(quote as Record<string, unknown>), ...sealedQuotedMessage(sealedAt) } };
+  const ownExpiry = (payload as { expiresAt?: unknown }).expiresAt;
+  const expiresAt = ownExpiry instanceof Date && ownExpiry.getTime() < sealedAt.getTime() ? ownExpiry : sealedAt;
+  return {
+    ...payload,
+    content: '',
+    translations: [],
+    attachments: [],
+    metadata: undefined,
+    location: undefined,
+    sticker: undefined,
+    validatedMentions: [],
+    encryptedContent: undefined,
+    encryptedPayload: undefined,
+    encryptionMetadata: undefined,
+    postReplyTo: undefined,
+    expiresAt,
+    replyTo: { ...(quote as Record<string, unknown>), ...sealedQuotedMessage(sealedAt) },
+  };
 }
 
 /**
