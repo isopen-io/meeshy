@@ -71,6 +71,7 @@ const en = {
   'export.card.tab.frame': 'Frame',
   'export.card.tab.media': 'Media',
   'export.card.part.media': 'Media',
+  'export.card.part.replies': 'Replies',
   'export.card.aspect': 'Image format',
   'export.card.aspect.auto': 'Fitted',
   'export.card.aspect.story': 'Story 9:16',

@@ -36,6 +36,24 @@ describe('commentCardSubjectOf — un commentaire s’image comme un message (#8
     expect(subject?.media.map((item) => item.card.kind)).toEqual(['image']);
   });
 
+  test('« avec les réponses » (#8734) : elles suivent, dans le texte servi, sans les masquées, les vides ni celles en vol', () => {
+    const reply = (id: string, overrides: Partial<PostComment> = {}) => ({
+      comment: comment({ id, parentId: 'c-1', author: { id: `u-${id}`, displayName: id.toUpperCase(), username: id }, ...overrides }),
+      servedText: `texte ${id}`,
+    });
+    const subject = commentCardSubjectOf({
+      comment: comment(),
+      servedText: 'C’est où ?',
+      parent: null,
+      replies: [reply('r1'), reply('r2', { effectFlags: 2 }), reply('r3', { pending: true }), { ...reply('r4'), servedText: ' ' }, reply('r5')],
+    });
+    expect(subject?.followUps).toEqual([
+      { author: 'R1', text: 'texte r1', handle: 'r1' },
+      { author: 'R5', text: 'texte r5', handle: 'r5' },
+    ]);
+    expect(commentCardSubjectOf({ comment: comment(), servedText: 'x', parent: null })?.followUps).toEqual([]);
+  });
+
   test('un commentaire EN VOL, masqué par ses effets ou vide ne s’image pas', () => {
     expect(commentCardSubjectOf({ comment: comment({ pending: true }), servedText: 'x', parent: null })).toBeNull();
     expect(commentCardSubjectOf({ comment: comment({ effectFlags: 2 }), servedText: 'x', parent: null })).toBeNull();

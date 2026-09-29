@@ -84,6 +84,7 @@ const PART_LABEL = {
   link: 'export.card.part.link',
   reply: 'export.card.part.reply',
   media: 'export.card.part.media',
+  replies: 'export.card.part.replies',
   background: 'export.card.part.background',
 } as const satisfies Readonly<Record<CardPart, ExportCardCatalogKey>>;
 
@@ -155,6 +156,8 @@ export function messageCardInputOf(params: {
     media: subject.media.map((item) => item.card),
     mediaStyle: format.mediaStyle,
     audioStyle: format.audioStyle,
+    /* Les réponses jointes (#8734) sont des « autres » : l'anonymat de la citation les couvre. */
+    ...(subject.followUps === undefined ? {} : { followUps: subject.followUps.map((follow) => part(follow, format.anonymizeQuoted, null)) }),
   };
 }
 
@@ -503,7 +506,7 @@ export function MessageExportSheet({
             focus={focus}
             format={format}
             options={options}
-            hasQuote={subject.quoted !== null}
+            hasQuote={subject.quoted !== null || (subject.followUps?.length ?? 0) > 0}
             hasHeader={hasHeader}
             hasVisual={hasVisual}
             hasAudio={hasAudio}

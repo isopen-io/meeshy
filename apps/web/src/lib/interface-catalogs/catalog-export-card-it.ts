@@ -71,6 +71,7 @@ const it = {
   'export.card.tab.frame': 'Cornice',
   'export.card.tab.media': 'Media',
   'export.card.part.media': 'Media',
+  'export.card.part.replies': 'Risposte',
   'export.card.aspect': 'Formato immagine',
   'export.card.aspect.auto': 'Adattato',
   'export.card.aspect.story': 'Storia 9:16',

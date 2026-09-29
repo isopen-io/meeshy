@@ -71,6 +71,7 @@ const pt = {
   'export.card.tab.frame': 'Moldura',
   'export.card.tab.media': 'Mídia',
   'export.card.part.media': 'Mídia',
+  'export.card.part.replies': 'Respostas',
   'export.card.aspect': 'Formato da imagem',
   'export.card.aspect.auto': 'Ajustado',
   'export.card.aspect.story': 'Story 9:16',

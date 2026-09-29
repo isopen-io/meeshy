@@ -40,6 +40,7 @@ export const TAB_OF_PART: Readonly<Record<CardPart, ExportTab>> = {
   header: 'frame',
   quote: 'typeface',
   reply: 'typeface',
+  replies: 'typeface',
   link: 'link',
   media: 'media',
 };
@@ -188,7 +189,7 @@ export function ExportTray(props: ExportTrayProps) {
     language: props.exportLanguage === null ? translateExportCard(language, 'export.card.language.asRead') : spokenLanguageName(props.exportLanguage),
   };
 
-  const anonymizing = props.focus === 'quote' ? (props.hasQuote ? 'anonymizeQuoted' : null) : props.focus === 'reply' ? 'anonymizeReply' : null;
+  const anonymizing = props.focus === 'quote' || props.focus === 'replies' ? (props.hasQuote ? 'anonymizeQuoted' : null) : props.focus === 'reply' ? 'anonymizeReply' : null;
   const panelLayout = STACKED.includes(tab) ? 'max-h-[38dvh] flex-col items-stretch overflow-y-auto' : WRAPPED.includes(tab) ? 'flex-wrap' : 'overflow-x-auto';
 
   return (
