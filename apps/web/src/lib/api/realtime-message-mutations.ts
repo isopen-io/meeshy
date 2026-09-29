@@ -69,11 +69,25 @@ const isServedAttachment = (value: unknown): value is Attachment =>
 const servedAttachments = (data: SocketIOMessage): Pick<Message, 'attachments'> | Record<string, never> =>
   Array.isArray(data.attachments) ? { attachments: data.attachments.filter(isServedAttachment).map(decodeAttachment) } : {};
 
+/**
+ * Un avis que le SERVEUR complète sur place (la ligne d'arrivées de Meeshy
+ * Global, #8565) arrive avec `isEdited: false` et son `metadata` à jour :
+ * personne ne l'a modifié, et la rangée le relit depuis `metadata`. Une
+ * charge qui tait `isEdited` reste une édition d'utilisateur.
+ */
+const wasEdited = (data: SocketIOMessage): boolean => data.isEdited !== false;
+
+const servedMetadata = (data: SocketIOMessage): Pick<Message, 'metadata'> | Record<string, never> =>
+  typeof data.metadata === 'object' && data.metadata !== null
+    ? { metadata: data.metadata as NonNullable<Message['metadata']> }
+    : {};
+
 const editedRow = (known: Message, data: SocketIOMessage): Message => ({
   ...known,
   ...servedAttachments(data),
+  ...servedMetadata(data),
   content: data.content,
-  isEdited: true,
+  isEdited: wasEdited(data),
   translations: servedTranslations(data),
   ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
   ...(data.validatedMentions === undefined ? {} : { validatedMentions: data.validatedMentions }),
@@ -106,7 +120,9 @@ export function applyMessageEdited(queryClient: QueryClient, data: SocketIOMessa
   editLastMessage(queryClient, data.conversationId, {
     messageId: data.id,
     content: data.content,
+    isEdited: wasEdited(data),
     ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
+    ...(data.systemEvent === undefined ? {} : { systemEvent: data.systemEvent }),
   });
 }
 
