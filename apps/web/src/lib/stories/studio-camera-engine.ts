@@ -1,4 +1,5 @@
 import { appelNatifMethode, coqueCourante } from '@/lib/native-shell';
+import { digitalZoomCrop, zoomRangeOf, type CameraZoomRange } from '@/lib/stories/studio-capture-gestures';
 import { cameraVideoMime, type CameraFacing } from '@/lib/stories/studio-quick-capture';
 
 /**
@@ -8,8 +9,12 @@ import { cameraVideoMime, type CameraFacing } from '@/lib/stories/studio-quick-c
  * un `CameraEngine` de test.
  */
 export type CameraOpenResult =
-  | { readonly ok: true; readonly stream: MediaStream; readonly torch: boolean }
+  | { readonly ok: true; readonly stream: MediaStream; readonly torch: boolean; readonly zoom: CameraZoomRange }
   | { readonly ok: false };
+
+/** Le zoom NUMÉRIQUE d'un film (#8672) : la caméra n'expose pas `zoom`, un
+ * canvas recadre chaque image au zoom courant et c'est LUI qui est filmé. */
+export type DigitalZoomSource = { readonly video: HTMLVideoElement; readonly zoom: () => number };
 
 export type CameraEngine = {
   readonly open: (facing: CameraFacing) => Promise<CameraOpenResult>;
@@ -21,7 +26,11 @@ export type CameraEngine = {
   readonly lit: () => Promise<void>;
   readonly setTorch: (stream: MediaStream, on: boolean) => Promise<void>;
   readonly photo: (video: HTMLVideoElement, mirrored: boolean) => Promise<File | null>;
-  readonly startRecording: (stream: MediaStream) => void;
+  /** Zoom MATÉRIEL (`applyConstraints({ advanced: [{ zoom }] })`) ; les
+   * réglages rapprochés se fondent — seul le dernier part à la piste. */
+  readonly setZoom: (stream: MediaStream, zoom: number) => Promise<void>;
+  /** `digital` : le film passe par le canvas du zoom numérique (`recorded`). */
+  readonly startRecording: (stream: MediaStream, digital: DigitalZoomSource | null) => void;
   /** `null` : rien d'enregistré (arrêt immédiat, format refusé). */
   readonly stopRecording: () => Promise<File | null>;
   readonly release: (stream: MediaStream) => void;
@@ -51,10 +60,63 @@ function brightnessOf(value: unknown): number {
 /** `torch` n'est pas encore dans la bibliothèque DOM de TypeScript : la
  * contrainte (et la capacité) sont déclarées ici, lues telles quelles. */
 type TorchConstraint = MediaTrackConstraintSet & { readonly torch?: boolean };
+type ZoomConstraint = MediaTrackConstraintSet & { readonly zoom?: number };
+
+function hardwareZoomOf(capabilities: unknown): { readonly min: number; readonly max: number; readonly step: number } | null {
+  if (typeof capabilities !== 'object' || capabilities === null || !('zoom' in capabilities)) return null;
+  const zoom: unknown = capabilities.zoom;
+  if (typeof zoom !== 'object' || zoom === null || !('min' in zoom) || !('max' in zoom)) return null;
+  const { min, max } = zoom;
+  const step = 'step' in zoom && typeof zoom.step === 'number' ? zoom.step : 0;
+  return typeof min === 'number' && typeof max === 'number' ? { min, max, step } : null;
+}
+
+function canvasCaptures(): boolean {
+  return typeof HTMLCanvasElement !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function';
+}
+
+/** Le canvas qui FILME le zoom numérique : chaque image de l'aperçu, recadrée
+ * au zoom du moment, plus les pistes audio de la caméra. */
+function zoomedRecording(stream: MediaStream, { video, zoom }: DigitalZoomSource): { readonly stream: MediaStream; readonly stop: () => void } | null {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (width === 0 || height === 0 || context === null) return null;
+  canvas.width = width;
+  canvas.height = height;
+  let running = true;
+  let frame = 0;
+  const draw = () => {
+    if (!running) return;
+    const crop = digitalZoomCrop({ width, height, zoom: zoom() });
+    context.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, width, height);
+    frame = requestAnimationFrame(draw);
+  };
+  draw();
+  const output = canvas.captureStream(30);
+  stream.getAudioTracks().forEach((track) => output.addTrack(track));
+  return {
+    stream: output,
+    stop: () => {
+      running = false;
+      cancelAnimationFrame(frame);
+      output.getVideoTracks().forEach((track) => track.stop());
+    },
+  };
+}
 
 export function createBrowserCameraEngine(): CameraEngine {
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
+  let zoomed: { readonly stop: () => void } | null = null;
+  let zoomTarget: number | null = null;
+  let zoomBusy = false;
+
+  const stopZoomed = () => {
+    zoomed?.stop();
+    zoomed = null;
+  };
 
   return {
     async open(facing) {
@@ -65,8 +127,9 @@ export function createBrowserCameraEngine(): CameraEngine {
           audio: true,
         });
         const track = stream.getVideoTracks()[0];
-        const capabilities = (track?.getCapabilities?.() ?? {}) as { readonly torch?: boolean };
-        return { ok: true, stream, torch: capabilities.torch === true };
+        const capabilities: unknown = track?.getCapabilities?.() ?? {};
+        const torch = typeof capabilities === 'object' && capabilities !== null && 'torch' in capabilities && capabilities.torch === true;
+        return { ok: true, stream, torch, zoom: zoomRangeOf({ hardware: hardwareZoomOf(capabilities), canvasCapture: canvasCaptures() }) };
       } catch {
         return { ok: false };
       }
@@ -103,10 +166,25 @@ export function createBrowserCameraEngine(): CameraEngine {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
       return blob === null ? null : new File([blob], `photo-${stamp()}.jpg`, { type: 'image/jpeg' });
     },
-    startRecording(stream) {
+    async setZoom(stream, zoom) {
+      zoomTarget = zoom;
+      if (zoomBusy) return;
+      zoomBusy = true;
+      const track = stream.getVideoTracks()[0];
+      while (zoomTarget !== null) {
+        const next: ZoomConstraint = { zoom: zoomTarget };
+        zoomTarget = null;
+        await track?.applyConstraints({ advanced: [next] }).catch(() => undefined);
+      }
+      zoomBusy = false;
+    },
+    startRecording(stream, digital) {
       const mimeType = typeof MediaRecorder.isTypeSupported === 'function' ? cameraVideoMime((type) => MediaRecorder.isTypeSupported(type)) : undefined;
       chunks = [];
-      recorder = new MediaRecorder(stream, mimeType !== undefined ? { mimeType } : undefined);
+      stopZoomed();
+      const source = digital === null ? null : zoomedRecording(stream, digital);
+      zoomed = source;
+      recorder = new MediaRecorder(source?.stream ?? stream, mimeType !== undefined ? { mimeType } : undefined);
       recorder.addEventListener('dataavailable', (event) => {
         if (event.data.size > 0) chunks.push(event.data);
       });
@@ -115,11 +193,15 @@ export function createBrowserCameraEngine(): CameraEngine {
     stopRecording() {
       const active = recorder;
       recorder = null;
-      if (active === null || active.state === 'inactive') return Promise.resolve(null);
+      if (active === null || active.state === 'inactive') {
+        stopZoomed();
+        return Promise.resolve(null);
+      }
       return new Promise((resolve) => {
         active.addEventListener(
           'stop',
           () => {
+            stopZoomed();
             const type = (active.mimeType || 'video/webm').split(';')[0] ?? 'video/webm';
             const blob = new Blob(chunks, { type });
             chunks = [];
@@ -133,6 +215,7 @@ export function createBrowserCameraEngine(): CameraEngine {
     release(stream) {
       if (recorder !== null && recorder.state !== 'inactive') recorder.stop();
       recorder = null;
+      stopZoomed();
       stream.getTracks().forEach((track) => track.stop());
     },
     async maxBrightness() {

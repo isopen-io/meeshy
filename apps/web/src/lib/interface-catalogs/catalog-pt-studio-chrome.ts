@@ -89,6 +89,13 @@ const ptStudioChrome = {
   'story.studio.camera.hint.video': 'Toque para filmar · toque de novo para colocar',
   'story.studio.camera.unavailable': 'A câmera não está disponível. Permita-a nas configurações do navegador.',
   'story.studio.camera.recording': 'Gravando',
+  'story.studio.scene.empty.title': 'Esta é a sua cena',
+  'story.studio.scene.empty.invite': 'Dê vida a ela com texto, desenhos, imagens ou vídeos.',
+  'story.studio.camera.locked': 'Gravação travada',
+  'story.studio.camera.hint.holding': 'Deslize até o cadeado para travar · para cima para dar zoom',
+  'story.studio.camera.hint.locked': 'Mãos livres: deslize para cima ou para baixo para dar zoom',
+  'story.studio.camera.flash.intensity': 'Intensidade do flash',
+  'story.studio.camera.flash.intensityValue': '{percent}%',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

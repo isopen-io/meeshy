@@ -89,6 +89,13 @@ const enStudioChrome = {
   'story.studio.camera.hint.video': 'Tap to film · tap again to place',
   'story.studio.camera.unavailable': 'The camera isn’t available. Allow it in your browser settings.',
   'story.studio.camera.recording': 'Recording',
+  'story.studio.scene.empty.title': 'This is your scene',
+  'story.studio.scene.empty.invite': 'Bring it to life with text, drawings, images or video.',
+  'story.studio.camera.locked': 'Recording locked',
+  'story.studio.camera.hint.holding': 'Slide to the lock to keep filming · up to zoom',
+  'story.studio.camera.hint.locked': 'Hands-free — slide up or down to zoom',
+  'story.studio.camera.flash.intensity': 'Flash intensity',
+  'story.studio.camera.flash.intensityValue': '{percent}%',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

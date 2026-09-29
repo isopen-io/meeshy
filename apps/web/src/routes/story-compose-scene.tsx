@@ -26,24 +26,33 @@ export type StudioSceneCapture = StudioStageCapture & {
 };
 
 /**
- * **L'INDICATION GRISE D'UNE SCÈNE VIDE** (#8654, jumelle de #8653) — elle
- * nomme les deux gestes (toucher : photo · maintenir : vidéo), ou le seul
- * qu'un réel sert. Elle ne se touche pas : c'est la scène entière qui répond
- * (`StudioStageGestures`). Ses deux boutons invisibles portent les mêmes
- * gestes au clavier et au lecteur d'écran.
+ * **UNE SCÈNE VIDE QUI DONNE ENVIE** (#8654 puis #8672, jumelle de #8671) —
+ * un titre (« Ceci est votre scène »), une invitation à y poser texte,
+ * dessin, image ou vidéo, puis les gestes (toucher : photo · maintenir :
+ * vidéo, ou le seul qu'un réel sert) en PLUS GRAND qu'une légende. Le bloc ne
+ * se touche pas : c'est la scène entière qui répond (`StudioStageGestures`).
+ * Titre et invitation se lisent au lecteur d'écran ; les gestes, qu'un doigt
+ * seul accomplit, y sont portés par les deux boutons invisibles.
  */
 function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLanguage; readonly capture: StudioSceneCapture }) {
   return (
     <>
-      <p
-        aria-hidden="true"
-        data-story-quick-capture-hint
-        className="pointer-events-none absolute inset-x-3 bottom-6 flex items-center justify-center gap-1.5 text-center text-caption font-semibold"
+      <div
+        data-story-empty-scene
+        className="pointer-events-none absolute inset-x-4 bottom-6 flex flex-col items-center gap-1.5 text-center"
         style={{ color: 'rgba(156,163,175,0.95)', zIndex: 2 }}
       >
-        <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
-        {translate(lang, capture.hintKey)}
-      </p>
+        <p data-story-empty-scene-title className="text-thread font-bold" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(lang, 'story.studio.scene.empty.title')}
+        </p>
+        <p data-story-empty-scene-invite className="text-secondary text-balance">
+          {translate(lang, 'story.studio.scene.empty.invite')}
+        </p>
+        <p aria-hidden="true" data-story-quick-capture-hint className="mt-2.5 flex items-center justify-center gap-2 text-body font-semibold">
+          <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={20} />
+          {translate(lang, capture.hintKey)}
+        </p>
+      </div>
       {capture.onPhoto !== null ? (
         <button type="button" className="sr-only" data-story-quick-capture="photo" onClick={capture.onPhoto}>
           {translate(lang, 'story.studio.camera.quick.photo')}

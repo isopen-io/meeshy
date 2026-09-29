@@ -89,6 +89,13 @@ const itStudioChrome = {
   'story.studio.camera.hint.video': 'Tocca per filmare · tocca di nuovo per posare',
   'story.studio.camera.unavailable': 'La fotocamera non è disponibile. Consentila nelle impostazioni del browser.',
   'story.studio.camera.recording': 'Registrazione in corso',
+  'story.studio.scene.empty.title': 'Questa è la tua scena',
+  'story.studio.scene.empty.invite': 'Dalle vita con testo, disegni, immagini o video.',
+  'story.studio.camera.locked': 'Registrazione bloccata',
+  'story.studio.camera.hint.holding': 'Scorri fino al lucchetto per bloccare · verso l’alto per lo zoom',
+  'story.studio.camera.hint.locked': 'Mani libere: scorri su o giù per lo zoom',
+  'story.studio.camera.flash.intensity': 'Intensità del flash',
+  'story.studio.camera.flash.intensityValue': '{percent}%',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

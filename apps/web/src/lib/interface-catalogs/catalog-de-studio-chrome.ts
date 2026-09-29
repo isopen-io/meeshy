@@ -89,6 +89,13 @@ const deStudioChrome = {
   'story.studio.camera.hint.video': 'Zum Filmen tippen · erneut tippen zum Platzieren',
   'story.studio.camera.unavailable': 'Die Kamera ist nicht verfügbar. Erlaube sie in den Browsereinstellungen.',
   'story.studio.camera.recording': 'Aufnahme läuft',
+  'story.studio.scene.empty.title': 'Das ist deine Szene',
+  'story.studio.scene.empty.invite': 'Erwecke sie zum Leben – mit Text, Zeichnungen, Bildern oder Videos.',
+  'story.studio.camera.locked': 'Aufnahme gesperrt',
+  'story.studio.camera.hint.holding': 'Zum Schloss wischen zum Sperren · nach oben zum Zoomen',
+  'story.studio.camera.hint.locked': 'Freihändig – nach oben oder unten wischen zum Zoomen',
+  'story.studio.camera.flash.intensity': 'Blitzintensität',
+  'story.studio.camera.flash.intensityValue': '{percent} %',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

@@ -89,6 +89,13 @@ const arStudioChrome = {
   'story.studio.camera.hint.video': 'المس للتصوير · المس مجددًا للوضع',
   'story.studio.camera.unavailable': 'الكاميرا غير متاحة. اسمح بها في إعدادات المتصفح.',
   'story.studio.camera.recording': 'جارٍ التسجيل',
+  'story.studio.scene.empty.title': 'هذا مشهدك',
+  'story.studio.scene.empty.invite': 'امنحه الحياة بنص أو رسم أو صورة أو فيديو.',
+  'story.studio.camera.locked': 'التسجيل مثبّت',
+  'story.studio.camera.hint.holding': 'اسحب إلى القفل للتثبيت · إلى الأعلى للتكبير',
+  'story.studio.camera.hint.locked': 'بدون يدين — اسحب للأعلى أو للأسفل للتكبير',
+  'story.studio.camera.flash.intensity': 'شدة الفلاش',
+  'story.studio.camera.flash.intensityValue': '{percent}٪',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;
