@@ -52,7 +52,8 @@ async function stageOf(input: MessageCardInput, doc: Document, width: number | n
   const template = templateOf(input.template);
   await loadCardFonts(template, doc.fonts);
   const canvas = doc.createElement('canvas');
-  const ctx = canvas.getContext('2d');
+  /* Le GIF relit chaque image (`getImageData`) : le contexte le sait d'avance, et garde ses pixels côté processeur. */
+  const ctx = canvas.getContext('2d', { willReadFrequently: width !== null });
   if (ctx === null) return null;
   const layout = layoutMessageCard(input, (text, font) => {
     ctx.font = font;

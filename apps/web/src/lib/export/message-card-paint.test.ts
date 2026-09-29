@@ -170,6 +170,16 @@ describe('la MINIATURE et l’IMAGE — un seul moteur (#8693)', () => {
     expect(calls).toContain('closePath');
   });
 
+  test('dans un export ANIMÉ, la vidéo joue : son bouton « lecture » n’est plus peint', () => {
+    const layout = layoutOf({ quoted: null, media: [{ kind: 'video', width: 16, height: 9 }] });
+    const still = recordingContext();
+    paintMessageCard(still.ctx, layout, templateOf(input.template));
+    const moving = recordingContext();
+    paintMessageCard(moving.ctx, layout, templateOf(input.template), { progress: 0.5 });
+    expect(still.calls).toContain('closePath');
+    expect(moving.calls).not.toContain('closePath');
+  });
+
   test('la rotation du message tourne le contenu, pas le fond', () => {
     const { ctx, calls } = recordingContext();
     paintMessageCard(ctx, layoutOf({ frame: { header: 'horizontal', authors: 'top', tilt: 'right' } }), templateOf(input.template));

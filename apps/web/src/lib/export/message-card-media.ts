@@ -173,8 +173,8 @@ export function shortName(name: string): string {
 function playBadge(cx: number, cy: number, size: number): readonly CardOp[] {
   const radius = Math.max(28, Math.min(56, size * 0.14));
   return [
-    { kind: 'dot', x: cx, y: cy, radius, color: 'rgba(0, 0, 0, 0.5)' },
-    { kind: 'play', x: cx + radius * 0.08, y: cy, size: radius * 0.9, color: '#FFFFFF' },
+    { kind: 'dot', x: cx, y: cy, radius, color: 'rgba(0, 0, 0, 0.5)', still: true },
+    { kind: 'play', x: cx + radius * 0.08, y: cy, size: radius * 0.9, color: '#FFFFFF', still: true },
   ];
 }
 

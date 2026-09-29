@@ -58,6 +58,8 @@ export type CardDotOp = {
   readonly y: number;
   readonly radius: number;
   readonly color: string;
+  /** Une marque de l'image FIXE (le bouton « lecture » posé sur une vidéo) : un export animé ne la peint pas, la vidéo y joue. */
+  readonly still?: true;
 };
 
 /** Le triangle « lecture » d'un média temporel, centré sur (`x`, `y`). */
@@ -67,6 +69,7 @@ export type CardPlayOp = {
   readonly y: number;
   readonly size: number;
   readonly color: string;
+  readonly still?: true;
 };
 
 /**

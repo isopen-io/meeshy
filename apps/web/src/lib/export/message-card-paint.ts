@@ -212,6 +212,7 @@ function paintSeparator(ctx: Paintable, op: Extract<CardOp, { kind: 'separator' 
 }
 
 function paintOp(ctx: Paintable, op: CardOp, options: ResolvedOptions): void {
+  if (options.progress !== null && (op.kind === 'dot' || op.kind === 'play') && op.still === true) return;
   switch (op.kind) {
     case 'text':
       paintText(ctx, op);
