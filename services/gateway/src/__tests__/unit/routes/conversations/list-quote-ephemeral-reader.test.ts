@@ -13,6 +13,7 @@ import { mapMessageRowForList } from '../../../../routes/conversations/messages-
 import {
   loadEphemeralReaderDeadlines,
   withQuotedMessages,
+  withQuoteServedToReader,
 } from '../../../../routes/conversations/ephemeralReaderDeadlines';
 
 const READER = 'reader-participant';
@@ -101,6 +102,18 @@ describe('liste REST — citation d’un éphémère, par lecteur (#8562)', () =
     expect(served.replyTo.content).toBe('le code du coffre est 4271');
     expect(served.replyTo.deletedAt ?? null).toBeNull();
     expect(served.replyTo.expiresAt).toBeUndefined();
+  });
+
+  it('réponse HTTP d’un envoi : la citation passe la garde avec l’échéance de l’expéditeur', async () => {
+    const sent = { ...reponse(), senderId: READER, metadata: null };
+    const served = await withQuoteServedToReader(prismaWith(consumedByReader) as never, sent, READER);
+    expect(served.replyTo).toMatchObject({ content: '', deletedAt: CONSUMED, attachments: [] });
+    expect(JSON.stringify(served)).not.toContain('4271');
+    expect(sent.replyTo.content).toBe('le code du coffre est 4271');
+
+    const alive = await withQuoteServedToReader(prismaWith([]) as never, sent, READER);
+    expect((alive.replyTo as Record<string, unknown>)['content']).toBe('le code du coffre est 4271');
+    expect((alive.replyTo as Record<string, unknown>)['expiresAt']).toBeUndefined();
   });
 
   it('l’auteur du message cité le relit toujours dans la citation', async () => {

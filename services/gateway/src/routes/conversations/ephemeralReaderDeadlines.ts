@@ -5,6 +5,8 @@ import {
   servedEphemeralExpiresAt,
 } from '@meeshy/shared/utils/ephemeral-countdown';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 
 const logger = enhancedLogger.child({ module: 'ephemeralReaderDeadlines' });
 
@@ -163,6 +165,32 @@ export async function loadQuotedEphemeralReaders(
   const quoted = quotedRowsOf(messages).filter((row) => hasPerReaderEphemeralDeadline(row));
   if (quoted.length === 0) return new Map();
   return loadEphemeralReaderDeadlines(prisma, quoted, await readerParticipantId());
+}
+
+/**
+ * #8562 — un message rendu à UN lecteur nommé (la réponse HTTP d'un envoi) :
+ * sa citation passe par la garde unique, avec l'échéance de ce lecteur. La
+ * ligne relue par `saveMessage` porte le message cité ENTIER — texte,
+ * traductions, pièces, transcription — et partait telle quelle.
+ */
+export async function withQuoteServedToReader<T extends { readonly replyTo?: unknown; readonly metadata?: unknown }>(
+  prisma: EphemeralDeadlinesPrisma,
+  message: T,
+  readerParticipantId: string | undefined,
+): Promise<T> {
+  const quoted = message.replyTo as (QuotedMessageRow & Record<string, unknown>) | null | undefined;
+  if (!quoted || typeof quoted !== 'object') return message;
+  const deadlines = await loadQuotedEphemeralReaders(prisma, [{ replyTo: quoted as EphemeralRow }], async () => readerParticipantId);
+  return {
+    ...message,
+    replyTo: {
+      ...quoted,
+      ...servedQuotedMessage(quoted, {
+        attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+        ephemeralReader: { resolution: quoted.id ? deadlines.get(quoted.id) : undefined, now: new Date() },
+      }),
+    },
+  };
 }
 
 /**
