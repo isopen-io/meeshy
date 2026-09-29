@@ -151,7 +151,10 @@ nonisolated enum ComposerToolFocus {
         case topBar
         /// Le rail des PORTES — ce qui fait entrer de la matière.
         case sceneDoors
-        /// Le rail droit : historique, Cadre, Temps, et le `(+)` d'une scène.
+        /// Le rail droit : les options du moment, puis Temps et l'historique.
+        /// Il RESTE quand un outil s'ouvre (#8713) : « en bas on a undo et
+        /// redo toujours, même pour les outils type dessin », et les
+        /// contrôleurs de l'outil s'y posent au-dessus.
         case trailingRail
         /// Le socle : audience et publication.
         case socle
@@ -167,7 +170,9 @@ nonisolated enum ComposerToolFocus {
         switch chrome {
         case .toolControls:
             return toolIsOpen
-        case .topBar, .sceneDoors, .trailingRail, .socle, .soundTrace, .description:
+        case .trailingRail:
+            return true
+        case .topBar, .sceneDoors, .socle, .soundTrace, .description:
             return !toolIsOpen
         }
     }

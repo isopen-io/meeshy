@@ -72,20 +72,34 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
                        "le seuil de l'obturateur n'appartient plus au geste de la scène")
     }
 
-    /// **Le toucher d'une scène vide ouvre ET prend la photo**, et le tap du
-    /// fond le lui demande d'abord.
-    func test_leToucher_ouvreEtPhotographie_parLaLoi() throws {
+    /// **Le toucher d'une scène vide ARME le viseur, sans rien prendre**
+    /// (#8711), et le tap du fond le lui demande d'abord.
+    func test_lePremierToucher_armeSansPhotographier_parLaLoi() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let début = code.range(of: "funchandleSceneQuickTap()->Bool{"),
-              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged", range: début.upperBound..<code.endIndex)
+              let fin = code.range(of: "funchandleArmedSceneTap()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le toucher a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.offers("))
         XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.tap(format:selectedFormat)"))
         XCTAssertTrue(corps.contains("armSceneCamera()"))
-        XCTAssertTrue(corps.contains("takeScenePhoto()"))
+        XCTAssertFalse(corps.contains("takeScenePhoto()"), "le premier toucher ne prend plus la photo")
         let hote = try source("MeeshyComposerHost.swift")
         XCTAssertTrue(hote.contains("funchandleSceneBackgroundTap(){ifhandleSceneQuickTap(){return}"))
+    }
+
+    /// **Le second toucher, n'importe où sur la scène, prend la photo** (#8711)
+    /// — la nappe du viseur le reçoit, et la loi décide.
+    func test_leSecondToucher_prendLaPhoto_parLaLoi() throws {
+        let code = try source("MeeshyComposerHost+Viewfinder.swift")
+        guard let début = code.range(of: "funchandleArmedSceneTap(){"),
+              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le second toucher a disparu") }
+        let corps = String(code[début.upperBound..<fin.lowerBound])
+        XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.armedTap("))
+        XCTAssertTrue(corps.contains("takeScenePhoto()"))
+        XCTAssertTrue(code.contains(".onTapGesture{handleArmedSceneTap()}"),
+                      "la nappe du viseur ne transmet pas le second toucher")
     }
 
     /// **La levée sans début ne fait RIEN.** Le canvas émet sa fin même quand

@@ -58,12 +58,33 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
 
     // MARK: - Ce que chaque geste fait
 
-    func test_tap_prendUnePhoto_saufLaOuLeFormatNeSertQueLaVideo() {
-        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .story), .photo)
-        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .post), .photo)
-        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .reel), .armOnly,
-                       "un réel n'a pas de photo : le toucher ouvre le viseur, sans rien prendre")
+    /// **La photo se prend en DEUX temps** (#8711, directive porteur
+    /// 2026-09-29 : « le premier tap arme et affiche avec les contrôleurs
+    /// habituels, second tap n'importe où sur la scène prend la photo »).
+    func test_tap_premierToucher_armeLeViseurSansRienPrendre() {
+        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .story), .arm)
+        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .post), .arm)
+        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .reel), .arm,
+                       "un réel arme aussi son viseur : c'est l'appui long qui filme")
         XCTAssertNil(ComposerSceneQuickCapture.tap(format: .status))
+    }
+
+    func test_armedTap_viseurArmeDansUnFormatPhoto_prendLaPhoto() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 0),
+                       .takePhoto)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .post, pendingSegments: 0),
+                       .takePhoto)
+    }
+
+    func test_armedTap_refuseHorsDuViseurArme() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .off, format: .story, pendingSegments: 0),
+                       .ignore, "viseur éteint : le premier toucher appartient à l'armement")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .recording, format: .story, pendingSegments: 0),
+                       .ignore, "une prise en cours ne se coupe pas d'une photo")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .reel, pendingSegments: 0),
+                       .ignore, "un réel n'a pas de photo")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 2),
+                       .ignore, "des segments en attente de ✓ ne se perdent pas sous une photo")
     }
 
     /// La levée d'un appui long se lit désormais sur le cadenas (#8671) —
@@ -84,9 +105,9 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
 
     @MainActor
     func test_hintCopy_estServiDansLesSeptLangues() {
-        XCTAssertFalse(ComposerSceneCameraCopy.gestureLine(.tapPhoto).isEmpty)
-        XCTAssertNotEqual(ComposerSceneCameraCopy.gestureLine(.tapPhoto),
-                          ComposerSceneCameraCopy.gestureLine(.holdFilm))
+        let lignes = ComposerSceneQuickCapture.gestureLines(.photoOrVideo).map(ComposerSceneCameraCopy.gestureLine)
+        XCTAssertFalse(lignes.contains(where: \.isEmpty))
+        XCTAssertEqual(Set(lignes).count, lignes.count, "chaque temps a ses propres mots")
     }
 
     // MARK: - Le flash

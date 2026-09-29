@@ -68,16 +68,22 @@ struct ComposerTrailingRail: View {
 
     /// **Des boutons séparés, sans libellé** (directive porteur 2026-09-27 :
     /// « fais des boutons séparés sans caption […] de petite taille »). Chaque
-    /// entrée porte son disque de verre ; l'ordre est celui de la maquette
-    /// (`Main.dc.html`) : annuler, rétablir, cadre, nouvelle slide. Les actions
-    /// d'un OBJET n'y sont pas — elles vivent dans son appui long.
+    /// entrée porte son disque de verre. Depuis #8713 : les OPTIONS du moment en
+    /// haut, puis « Temps », annuler et rétablir en bas — le Cadre est parti au
+    /// rail gauche, la nouvelle scène à la barre haute.
     var separateButtons: Bool = false
 
-    /// **Le Cadre**, présent seulement quand la scène a un média de fond : un
-    /// bouton sans objet n'est pas affiché (« n'afficher que les outils
-    /// utiles »). `frameIsOpen` le marque actif.
-    var onFrame: (() -> Void)? = nil
-    var frameIsOpen: Bool = false
+    /// **Le Cadre a quitté ce rail pour le rail GAUCHE** (#8713, directive
+    /// porteur 2026-09-29 : « l'icône qui est au-dessus du (+) tu la mets après
+    /// l'icône éclair »), et le `(+)` d'une nouvelle scène pour la barre haute.
+    /// Ce qui reste en bas est l'historique — toujours — sous « Temps ».
+    ///
+    /// **Les OPTIONS du moment, au-dessus** (#8713, #8714) : les contrôleurs de
+    /// l'outil ouvert, ou les options de l'objet touché, puis leur `(x)`. Déjà
+    /// composées par `ComposerTrailingColumn.options` — cette vue ne décide de
+    /// rien. Vide ⇒ la colonne se réduit à son pied.
+    var options: [ComposerTrailingColumn.Entry] = []
+    var onOption: ((ComposerTrailingColumn.Entry) -> Void)? = nil
 
     /// **« Temps »** — présent seulement quand la scène est ANIMÉE (maquette
     /// `Main.dc.html`, couloir droit : le bouton n'existe qu'en mode
@@ -87,12 +93,11 @@ struct ComposerTrailingRail: View {
 
     @State private var lastTapped: String?
 
-    /// **Le rail EXISTE dès qu'il a le `[+]`**, même sans objet sélectionné.
-    /// C'est ce qui distingue les deux côtés depuis la directive : le gauche
-    /// suit ce que l'auteur FAIT, le droit ce que la SCÈNE offre — et créer une
-    /// slide s'offre en permanence.
+    /// **Le rail n'existe que s'il porte quelque chose** : une option, un
+    /// historique, « Temps », ou le `[+]` que seul l'atelier plein écran lui
+    /// passe encore. Sur la scène, le `[+]` vit à la barre haute (#8713).
     private var isEmpty: Bool {
-        actions.isEmpty && onAddSlide == nil && onUndo == nil && onRedo == nil && onFrame == nil
+        actions.isEmpty && onAddSlide == nil && onUndo == nil && onRedo == nil && options.isEmpty
             && onTime == nil
     }
 
@@ -102,8 +107,70 @@ struct ComposerTrailingRail: View {
         }
     }
 
+    /// **Les options EN HAUT, l'historique EN BAS** (#8713, #8714).
+    ///
+    /// Les options défilent quand elles ne tiennent pas — dix sections d'un
+    /// texte et ses quatre actions dépassent la hauteur d'un téléphone clavier
+    /// levé — et le pied, lui, ne défile JAMAIS : la place que le doigt apprend
+    /// pour défaire ne dépend pas du nombre d'options. `ViewThatFits`, comme
+    /// le rail gauche (#6131) : le débordement est une question de PLACE.
+    @ViewBuilder
     private var tiles: some View {
+        if options.isEmpty {
+            footStack
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text(ComposerTrailingRailCopy.sceneRailLabel))
+        } else {
+            // **Le `(x)` est HORS du défilement** — la promesse du rail gauche
+            // (#4582, #8652) portée à droite : la sortie reste visible quand
+            // les options débordent, c'est-à-dire quand on en a le plus besoin.
+            ViewThatFits(in: .vertical) {
+                VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
+                    optionStack
+                    exitStack
+                    Spacer(minLength: ComposerRailGeometry.floatingEntrySpacing)
+                    footStack
+                }
+                VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
+                    ScrollView(.vertical, showsIndicators: false) { optionStack }
+                    exitStack
+                    footStack
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(ComposerTrailingColumnPaint.groupLabel(options)))
+        }
+    }
+
+    private var optionStack: some View {
+        entryStack(options.filter { !$0.isExit })
+    }
+
+    private var exitStack: some View {
+        entryStack(options.filter(\.isExit))
+    }
+
+    private func entryStack(_ entrees: [ComposerTrailingColumn.Entry]) -> some View {
         VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
+            ForEach(entrees) { entree in
+                let peint = ComposerTrailingColumnPaint(entree)
+                tile(symbol: peint.symbol, label: peint.label, key: entree.id,
+                     isOn: peint.isOn, tint: peint.tint) {
+                    onOption?(entree)
+                }
+            }
+        }
+    }
+
+    /// Le pied : « Temps » d'une scène animée, puis annuler et rétablir — ces
+    /// deux-là au plus bas, sous le pouce.
+    private var footStack: some View {
+        VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
+            if let onTime {
+                tile(symbol: "timeline.selection", label: ComposerSceneFriseCopy.timeButton,
+                     key: "time", isOn: timeIsOpen, action: onTime)
+            }
             if let onUndo {
                 tile(symbol: "arrow.uturn.backward", label: ComposerHistoryCopy.undo,
                      key: "undo", isOn: false, action: onUndo)
@@ -112,24 +179,11 @@ struct ComposerTrailingRail: View {
                 tile(symbol: "arrow.uturn.forward", label: ComposerHistoryCopy.redo,
                      key: "redo", isOn: false, action: onRedo)
             }
-            if let onTime {
-                tile(symbol: "timeline.selection", label: ComposerSceneFriseCopy.timeButton,
-                     key: "time", isOn: timeIsOpen, action: onTime)
-            }
-            if let onFrame {
-                tile(symbol: "crop", label: ComposerFrameCopy.title,
-                     key: "frame", isOn: frameIsOpen, action: onFrame)
-            }
             if let onAddSlide {
                 tile(symbol: "plus.rectangle.on.rectangle", label: ComposerTrailingRailCopy.addSlide,
                      key: "slide.add", isOn: false, action: onAddSlide)
             }
         }
-        .accessibilityElement(children: .contain)
-        // Les boutons séparés sont ceux de la SCÈNE (historique, temps,
-        // cadre, slide) : aucun ne modifie « l'objet sélectionné », dont les
-        // actions vivent dans l'appui long.
-        .accessibilityLabel(Text(ComposerTrailingRailCopy.sceneRailLabel))
     }
 
     /// Un bouton SÉPARÉ : l'icône seule, petite, dans son disque de verre —
@@ -139,6 +193,7 @@ struct ComposerTrailingRail: View {
                       label: String,
                       key: String,
                       isOn: Bool,
+                      tint: Color = MeeshyColors.textPrimary(isDark: true),
                       action: @escaping () -> Void) -> some View {
         Button {
             lastTapped = key
@@ -148,7 +203,7 @@ struct ComposerTrailingRail: View {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .foregroundColor(tint)
                 .composerToolBounce(active: lastTapped == key)
                 .modifier(ComposerRailButtonGlass(active: true, plateauTint: plateauTint,
                                                   tint: isOn ? MeeshyColors.brandPrimary : nil))
@@ -296,6 +351,93 @@ nonisolated enum ComposerTrailingRailCopy {
         String(localized: "composer.rail.slide.add",
                defaultValue: "Nouvelle slide", bundle: .main)
     }
+
+    /// Le `(x)` d'une sélection (#8714) : il ne détruit rien, il rend la scène.
+    static var exitObject: String {
+        String(localized: "composer.rail.object.exit",
+               defaultValue: "Quitter l'objet", bundle: .main)
+    }
+}
+
+/// Les mots des EFFETS de la scène (#8712). Le filtre garde le mot de
+/// l'éditeur d'objet : deux libellés pour une seule grille se contrediraient.
+nonisolated enum ComposerSceneEffectCopy {
+    static func label(_ effect: ComposerSceneEffect) -> String {
+        switch effect {
+        case .filter:
+            return ComposerObjectEditorCopy.media(.filter)
+        case .opening:
+            return String(localized: "composer.scene.effect.opening",
+                          defaultValue: "Effet d'ouverture", bundle: .main)
+        }
+    }
+
+    static var column: String {
+        String(localized: "composer.scene.effects",
+               defaultValue: "Effets de la scène", bundle: .main)
+    }
+
+    static var close: String {
+        String(localized: "composer.scene.effect.close",
+               defaultValue: "Fermer les effets", bundle: .main)
+    }
+}
+
+/// **Ce qu'une entrée de la colonne PEINT** — glyphe, nom, état, teinte — lu
+/// des inventaires qui la décrivent déjà : le contrôleur de l'outil, la table
+/// de l'éditeur d'objet, l'action du SDK. Aucun libellé n'est réécrit ici.
+struct ComposerTrailingColumnPaint {
+    let symbol: String
+    let label: String
+    let isOn: Bool
+    let tint: Color
+
+    /// Ce que VoiceOver annonce en entrant dans la colonne : les effets de la
+    /// scène, les réglages d'un outil, ou l'objet touché.
+    static func groupLabel(_ options: [ComposerTrailingColumn.Entry]) -> String {
+        if options.contains(where: { if case .sceneEffect = $0 { return true }; return false }) {
+            return ComposerSceneEffectCopy.column
+        }
+        if options.contains(.exitTool) { return ComposerRailCopy.toolRailLabel }
+        return ComposerTrailingRailCopy.railLabel
+    }
+
+    init(_ entry: ComposerTrailingColumn.Entry) {
+        let neutre = MeeshyColors.textPrimary(isDark: true)
+        switch entry {
+        case .toolControl(let control):
+            symbol = control.symbolName
+            label = control.label
+            isOn = control.isExpanded
+            tint = neutre
+        case .sceneEffect(let effet, let ouvert):
+            symbol = effet.symbol
+            label = ComposerSceneEffectCopy.label(effet)
+            isOn = ouvert
+            tint = neutre
+        case .editorSection(let section):
+            symbol = ComposerObjectEditorRail.symbolName(section)
+            label = ComposerObjectEditorCopy.entry(section)
+            isOn = false
+            tint = neutre
+        case .objectAction(let action):
+            symbol = action.systemImage
+            label = action.title
+            isOn = false
+            // La seule action DESTRUCTRICE porte la couleur sémantique d'erreur.
+            tint = action == .delete ? MeeshyColors.error : neutre
+        case .exitTool:
+            symbol = "xmark"
+            label = ComposerToolExitCopy.label
+            isOn = false
+            tint = neutre
+        case .exitObject:
+            symbol = "xmark"
+            label = ComposerTrailingRailCopy.exitObject
+            isOn = false
+            tint = neutre
+        }
+    }
 }
 
 /// **Ce que le rail *trailing* offre pour l'objet sélectionné** — une règle
@@ -343,7 +485,11 @@ nonisolated enum ComposerTrailingRailPolicy {
             // interroge le MODELE, comme ses trois voisins ci-dessus. Ce que
             // l'HOTE sait faire reste dans `served`, une ligne plus bas.
             hasTrimmableSource: StorySceneObjectPredicates.hasTrimmableSource(
-                slide: slide, id: selectedId)
+                slide: slide, id: selectedId),
+            // **Devenir le fond** (#8716) : une image ou une vidéo POSÉE — le
+            // modèle le dit, le SDK en décide le mot (mettre / remplacer).
+            canBecomeBackground: slide.sceneObject(id: selectedId)?.kind == .media,
+            sceneHasBackground: slide.effects.hasVisualBackgroundMedia
         )
         .filter(served.contains)
     }
