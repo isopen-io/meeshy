@@ -247,7 +247,7 @@ export function CommentThread({
          accessible annonce « Commentaires » plutôt qu'un retour muet au haut
          du document. */
       tabIndex={-1}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col outline-none"
       style={tone === 'onDark' ? { colorScheme: 'dark' } : undefined}
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-3" hidden={listHidden} data-comment-thread-list="">

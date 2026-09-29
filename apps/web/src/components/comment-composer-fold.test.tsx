@@ -143,6 +143,21 @@ describe('CommentComposer — le repli ⌄ dans la plaque, en rédaction seuleme
     expect(document.activeElement).toBe(champ(host));
   });
 
+  test('en réponse, la liste s’efface mais la CIBLE reste lisible : son extrait tient sur trois lignes, pas une', async () => {
+    const host = await monter(
+      <CommentComposer
+        language="fr"
+        canWrite
+        onSend={async () => ({ ok: true })}
+        replyTo={{ commentId: 'c1', rootId: 'c1', authorName: 'Noa', excerpt: 'Un long commentaire auquel on répond.', mention: null }}
+      />,
+    );
+    const extrait = host.querySelector<HTMLElement>('[data-comment-reply-excerpt]');
+    expect(extrait?.textContent).toBe('Un long commentaire auquel on répond.');
+    expect(extrait?.classList.contains('truncate')).toBe(false);
+    expect(extrait?.classList.contains('line-clamp-3')).toBe(true);
+  });
+
   test('sans `foldOnSend` (détail d’une publication), l’envoi garde le champ : on enchaîne', async () => {
     const host = await monter(hote({ writes: [] }));
     await act(async () => champ(host).focus());

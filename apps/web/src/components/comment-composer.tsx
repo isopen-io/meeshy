@@ -199,7 +199,15 @@ export function CommentComposer({
               {translate(language, 'comments.reply.to', { name: replyTo.authorName })}
             </p>
             {replyTo.excerpt === null ? null : (
-              <p className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              /* LA CIBLE RESTE LISIBLE (#8644) : pendant qu'on écrit dans une
+                 feuille de lecteur, la liste s'efface — l'extrait est alors ce
+                 qui garde en vue le commentaire auquel on répond. Trois lignes,
+                 jamais une (140 caractères au plus, `comment-reply-target`). */
+              <p
+                data-comment-reply-excerpt=""
+                className="line-clamp-3 text-caption"
+                style={{ color: 'var(--color-ios-ink-2)' }}
+              >
                 {replyTo.excerpt}
               </p>
             )}
