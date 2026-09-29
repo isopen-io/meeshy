@@ -164,7 +164,7 @@ export class AffiliateTrackingService {
       // axes, et c'est voulu : inviter quelqu'un qui vient VAUT plus que se
       // lier à quelqu'un qu'on connaît déjà.
       new EngagementService(prisma)
-        .recordActivity(affiliateToken.createdBy, 'social.invite_joined')
+        .recordActivity(affiliateToken.createdBy, 'social.invite_joined', { actorId: userId })
         .catch((err: unknown) => logger.warn('engagement social.invite_joined failed', { err } as never));
 
       // Créer automatiquement une demande d'amitié entre les utilisateurs (ou

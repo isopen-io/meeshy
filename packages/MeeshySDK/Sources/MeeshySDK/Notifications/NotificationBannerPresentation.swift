@@ -148,13 +148,14 @@ public extension SocketNotificationEvent {
             return nil
 
         case .conversation:
-            if let label = attachmentLabel {
-                if let preview = nonBlank(messagePreview) ?? nonBlank(content) {
-                    return "\(label) \u{2022} \(preview)"
-                }
-                return label
-            }
-            return nonBlank(messagePreview) ?? nonBlank(content)
+            // L'aperçu SERVI est le seul site de composition (#8723) : la
+            // passerelle y met déjà le libellé détaillé du média quand le
+            // message n'a pas de texte (`buildMessageNotificationBodyI18n` →
+            // « 🎵 Audio · 0:32 · 193 Ko »). Le préfixer ici du libellé client
+            // disait « 🎵 Audio • 🎵 Audio · 0:32 · 193 Ko ». Quand il y a un
+            // texte, c'est la case typée (`bannerContentSymbol`) qui nomme le
+            // média. Le libellé client ne sert que si le serveur n'a rien servi.
+            return nonBlank(messagePreview) ?? nonBlank(content) ?? attachmentLabel
 
         case .action:
             // Le serveur garantit que la LIGNE DE LISTE n'est jamais vide : à
@@ -222,10 +223,11 @@ public extension SocketNotificationEvent {
     /// L'icône dit l'ENTITÉ visée quand on la connaît (story / réel / humeur /
     /// publication), le MÉDIA sinon, et à défaut l'action.
     var bannerContentSymbol: String {
-        switch metadata?.mediaType?.lowercased() {
+        switch (metadata?.mediaType ?? metadata?.attachments?.firstType)?.lowercased() {
         case "image": return "photo.fill"
         case "video": return "play.rectangle.fill"
         case "audio": return "waveform"
+        case "document": return "doc.fill"
         default: break
         }
         switch postType?.uppercased() {

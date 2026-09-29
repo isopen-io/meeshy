@@ -160,7 +160,7 @@ final class NotificationBannerPresentationTests: XCTestCase {
                        "le nom SERVEUR ne doit pas survivre au nom local")
     }
 
-    func test_groupMessage_withAttachment_bodyPrefixesTheMediaLabel() throws {
+    func test_groupMessage_withoutServedPreview_fallsBackToTheMediaLabel() throws {
         let event = try makeEvent("""
         {
             "id": "n8", "userId": "u1", "type": "new_message",
