@@ -121,4 +121,37 @@ describe('ModeCarousel', () => {
     expect(view.chosen).toEqual(['gold', 'cover', 'grid']);
     view.done();
   });
+
+  /* Chromium, sous `scroll-snap-type: mandatory`, recalcule les points
+     d'accroche à chaque mise en page de la piste ; s'ils ont bougé pendant un
+     glissé du doigt, il RÉACCROCHE sur-le-champ au dernier élément accroché et
+     le geste meurt (mesuré, #8619 : 288 → 558 → 288 au milieu du glissé). Or le
+     glissé choisit en direct : chaque élément qui passe au centre changeait
+     d'échelle (la zone d'accroche elle-même) et de nom (le texte sous la piste,
+     qui remettait la colonne en page). Choisir ne touche donc ni la boîte d'un
+     élément — l'accent vit dans sa FACE —, ni la mise en page de la colonne. */
+  test('choisir ne change ni la boîte d’un élément ni la mise en page autour de la piste : l’accent vit dans sa face, le nom dans une boîte fixe', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = (selected: string) => act(() => root.render(<ModeCarousel label="Montages" items={IDS.map((id) => ({ id, label: `Montage ${id}`, visual: null }))} selected={selected} onSelect={() => undefined} />));
+    const boxes = () => [...host.querySelectorAll<HTMLElement>('[data-carousel-item]')].map((item) => [item.className, item.getAttribute('style')]);
+    const face = (id: string) => host.querySelector<HTMLElement>(`[data-carousel-item="${id}"] [data-carousel-face]`);
+
+    render('screen');
+    const before = boxes();
+    render('gold');
+
+    expect(boxes()).toEqual(before);
+    expect(new Set(before.map(([className]) => className)).size).toBe(1);
+    expect(face('gold')?.className).toContain('scale-110');
+    expect(face('screen')?.className).not.toContain('scale-110');
+    const name = host.querySelector<HTMLElement>('[data-call-mode-selected]');
+    expect(name?.textContent).toBe('Montage gold');
+    expect(name?.className).toContain('[contain:strict]');
+    expect(name?.className).toContain('h-5');
+    expect(name?.className).toContain('w-full');
+    act(() => root.unmount());
+    host.remove();
+  });
 });
