@@ -196,10 +196,9 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
 
     func test_decode_systemEventAbsent_leavesItNil() throws {
         let json = #"{"id":"m","conversationId":"c","senderId":"u","content":"x","createdAt":"2026-09-28T09:00:00.000Z"}"#
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let message = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+        // Le décodeur de la PRODUCTION : un `.iso8601` local refuse les fractions
+        // de seconde sur le runtime iOS 18 de la CI (iOS 26 les accepte).
+        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
 
         XCTAssertNil(message.systemEvent)
     }
