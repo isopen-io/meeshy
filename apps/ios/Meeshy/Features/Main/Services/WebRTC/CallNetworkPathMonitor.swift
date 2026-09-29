@@ -1,30 +1,45 @@
+import Combine
 import Foundation
-import Network
+import MeeshySDK
 
 protocol CallNetworkPathProviding: AnyObject {
     func start(onChange: @escaping @MainActor @Sendable (CallNetworkPath) -> Void)
     func stop()
 }
 
-/// Watches the OS path for the length of one call (#8697): a fresh
-/// `NWPathMonitor` per `start`, since a cancelled monitor cannot restart.
+extension CallNetworkPath {
+    init(snapshot: NetworkPathSnapshot) {
+        self.init(isExpensive: snapshot.isExpensive, isConstrained: snapshot.isConstrained)
+    }
+}
+
+/// Watches the OS path for the length of one call (#8697), through the SDK's
+/// single `NetworkPathSource` rather than a second `NWPathMonitor`. `start`
+/// hands over the path already known, so the first offer — built right after
+/// `configure` — carries the right Opus fmtp instead of the Wi-Fi one.
 final class CallNetworkPathMonitor: CallNetworkPathProviding {
-    private var monitor: NWPathMonitor?
-    private let queue = DispatchQueue(label: "me.meeshy.app.call-network-path", qos: .utility)
+    nonisolated deinit {}
+
+    private let source: NetworkPathSource
+    private var subscription: AnyCancellable?
+
+    init(source: NetworkPathSource = .shared) {
+        self.source = source
+    }
 
     func start(onChange: @escaping @MainActor @Sendable (CallNetworkPath) -> Void) {
         stop()
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { path in
-            let snapshot = CallNetworkPath(isExpensive: path.isExpensive, isConstrained: path.isConstrained)
-            Task { @MainActor in onChange(snapshot) }
-        }
-        monitor.start(queue: queue)
-        self.monitor = monitor
+        onChange(CallNetworkPath(snapshot: source.current))
+        subscription = source.publisher
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { snapshot in
+                onChange(CallNetworkPath(snapshot: snapshot))
+            }
     }
 
     func stop() {
-        monitor?.cancel()
-        monitor = nil
+        subscription?.cancel()
+        subscription = nil
     }
 }

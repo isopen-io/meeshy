@@ -1,4 +1,6 @@
 import XCTest
+import Combine
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -132,5 +134,59 @@ final class CallDataProfileTests: XCTestCase {
         CallDataProfile.allCases.forEach { profile in
             XCTAssertFalse(profile.label.isEmpty)
         }
+    }
+}
+
+@MainActor
+final class CallNetworkPathMonitorTests: XCTestCase {
+
+    private let cellular = NetworkPathSnapshot(isSatisfied: true, isExpensive: true, usesCellular: true)
+    private let lowData = NetworkPathSnapshot(isSatisfied: true, isConstrained: true, usesWiFi: true)
+
+    private final class Received: @unchecked Sendable {
+        var paths: [CallNetworkPath] = []
+    }
+
+    func test_start_deliversTheKnownPathAtOnce() {
+        let source = NetworkPathSource.makeForTesting()
+        source.publish(cellular)
+        let monitor = CallNetworkPathMonitor(source: source)
+        let received = Received()
+
+        monitor.start { received.paths.append($0) }
+
+        XCTAssertEqual(received.paths, [CallNetworkPath(isExpensive: true, isConstrained: false)],
+                       "the first offer is built right after configure: the path must be known before it")
+    }
+
+    func test_pathChange_afterStart_isDelivered() async {
+        let source = NetworkPathSource.makeForTesting()
+        let monitor = CallNetworkPathMonitor(source: source)
+        let received = Received()
+        let delivered = expectation(description: "path change delivered")
+        monitor.start { path in
+            received.paths.append(path)
+            if received.paths.count == 2 { delivered.fulfill() }
+        }
+
+        source.publish(lowData)
+        await fulfillment(of: [delivered], timeout: 1)
+
+        XCTAssertEqual(received.paths.last, CallNetworkPath(isExpensive: false, isConstrained: true))
+    }
+
+    func test_stop_silencesLaterChanges() async {
+        let source = NetworkPathSource.makeForTesting()
+        let monitor = CallNetworkPathMonitor(source: source)
+        let received = Received()
+        monitor.start { received.paths.append($0) }
+
+        monitor.stop()
+        source.publish(cellular)
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 1)
+
+        XCTAssertEqual(received.paths.count, 1)
     }
 }
