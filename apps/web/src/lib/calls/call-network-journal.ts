@@ -38,6 +38,40 @@ export type JournalEvent =
   | { readonly at: number; readonly kind: 'profile'; readonly profile: DataProfile; readonly audioBitrate: number }
   | { readonly at: number; readonly kind: 'path'; readonly path: MediaPath };
 
+const one = <T extends string>(values: Readonly<Record<T, true>>) => (value: unknown): value is T => typeof value === 'string' && Object.hasOwn(values, value);
+
+const isLevel = one<ConnectionQualityLevel>({ excellent: true, good: true, fair: true, poor: true });
+const isReason = one<CallEndReason>({ local: true, remote: true, rejected: true, missed: true, connectionLost: true, failed: true, busy: true, permission: true, removed: true });
+const isLink = one<CallMember['link']>({ ringing: true, waiting: true, connecting: true, connected: true, reconnecting: true });
+const isStage = one<SurvivalStage>({ sending: true, frozen: true, suspended: true });
+const isProfile = one<DataProfile>({ wifi: true, cellular: true, economy: true });
+const isPath = one<MediaPath>({ direct: true, relay: true });
+const isLivePhase = one<Exclude<JournalPhase, 'ended'>>({ connecting: true, connected: true, reconnecting: true });
+const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+/** Ce que le stockage rend n'est cru qu'une fois reconnu : un genre, une raison ou un niveau que ce client ne sait pas dire est écarté. */
+export function isJournalEvent(value: unknown): value is JournalEvent {
+  if (typeof value !== 'object' || value === null) return false;
+  const event = value as Readonly<Record<string, unknown>>;
+  if (!isNumber(event.at)) return false;
+  switch (event.kind) {
+    case 'phase':
+      return event.phase === 'ended' ? isReason(event.reason) && (event.detail === null || typeof event.detail === 'string') : isLivePhase(event.phase);
+    case 'link':
+      return typeof event.name === 'string' && isLink(event.state);
+    case 'quality':
+      return isLevel(event.level) && [event.loss, event.rtt, event.jitter, event.audioKbps, event.videoKbps].every(isNumber);
+    case 'survival':
+      return isStage(event.stage);
+    case 'profile':
+      return isProfile(event.profile) && isNumber(event.audioBitrate);
+    case 'path':
+      return isPath(event.path);
+    default:
+      return false;
+  }
+}
+
 export const QUALITY_SAMPLE_MS = 30_000;
 export const MAX_JOURNAL_EVENTS = 150;
 

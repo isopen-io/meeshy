@@ -1,6 +1,6 @@
 import type { SafeStorage } from '../storage';
 
-import { boundedJournal, type JournalEvent } from './call-network-journal';
+import { boundedJournal, isJournalEvent, type JournalEvent } from './call-network-journal';
 import { callJournalKeys, readJournalIndex, type JournalIndexEntry } from './call-network-journal-keys';
 
 export { callJournalKeys, forgetCallJournal } from './call-network-journal-keys';
@@ -21,13 +21,10 @@ export type CallJournalStore = {
   readonly read: (userId: string, callId: string) => readonly JournalEvent[];
 };
 
-const isEvent = (value: unknown): value is JournalEvent =>
-  typeof value === 'object' && value !== null && 'at' in value && typeof value.at === 'number' && 'kind' in value && typeof value.kind === 'string';
-
 function readEvents(storage: SafeStorage, key: string): readonly JournalEvent[] {
   try {
     const parsed: unknown = JSON.parse(storage.getItem(key) ?? '[]');
-    return Array.isArray(parsed) ? parsed.filter(isEvent) : [];
+    return Array.isArray(parsed) ? parsed.filter(isJournalEvent) : [];
   } catch {
     return [];
   }

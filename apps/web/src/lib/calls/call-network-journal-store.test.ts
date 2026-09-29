@@ -82,4 +82,21 @@ describe('le journal réseau persisté, rangé par compte (#8698)', () => {
     expect([...storage.items.keys()].some((key) => key.startsWith(callJournalKeys('u-a').index))).toBe(false);
     expect(store.read('u-b', 'call-3')).toEqual([phase(3)]);
   });
+
+  test('un événement que ce client ne sait pas dire (genre, raison, niveau inconnus) est écarté à la relecture', () => {
+    const storage = memoryStorage();
+    const kept: readonly JournalEvent[] = [phase(10), { at: 11, kind: 'phase', phase: 'ended', reason: 'local', detail: null }];
+    const stored = [
+      kept[0],
+      { at: 12, kind: 'phase', phase: 'ended', reason: 'hologram', detail: null },
+      { at: 13, kind: 'teleport' },
+      { at: 14, kind: 'quality', level: 'cosmic', loss: 0, rtt: 0, jitter: 0, audioKbps: 0, videoKbps: 0 },
+      { at: 15, kind: 'profile', profile: '6g', audioBitrate: 1 },
+      { at: 16, kind: 'link', name: 'Kwame', state: 'dancing' },
+      kept[1],
+    ];
+    storage.setItem(callJournalKeys('u-a').call('call-1'), JSON.stringify(stored));
+    expect(createCallJournalStore({ storage, now: () => 0 }).read('u-a', 'call-1')).toEqual(kept);
+  });
 });
+
