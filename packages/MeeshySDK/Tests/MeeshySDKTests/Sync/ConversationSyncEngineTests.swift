@@ -1680,7 +1680,7 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
 
     /// Répondeur prioritaire — permet à un témoin de SUSPENDRE une page ou de
     /// changer de compte PENDANT la requête (#8651).
-    var listResponder: (@Sendable (Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>)?
+    var listResponder: ((Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>)?
 
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         listCallCount += 1
