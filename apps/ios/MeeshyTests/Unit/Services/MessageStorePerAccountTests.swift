@@ -154,16 +154,43 @@ final class MessageStorePerAccountTests: XCTestCase {
                        "la base de personne ne vit pas parmi les bases de compte")
     }
 
-    func test_activate_sameAccountTwice_keepsTheSameSessionSoItsPurgeIsSerialisedBeforeItsWrites() throws {
+    /// Mesuré au simulateur : un modèle de vue du compte quitté, encore vivant,
+    /// écrivait dans SA base après la purge de sortie. La purge faite, le
+    /// fichier quitté est délié — une écriture tardive échoue ou tombe dans un
+    /// inode orphelin, et le compte qui revient rouvre une base neuve.
+    func test_retire_aStragglerWriteOfTheOutgoingSession_neverReachesTheAccountWhenItReturns() async throws {
         let dir = try makeDirectory()
         let router = makeRouter(in: dir, initialKey: key("alice"))
-        let first = router.current
+        let straggler = router.current
+
+        router.activate(nil)
+        try await straggler.messagePersistence.insertOptimistic(
+            record(id: "m-before", senderId: "bob", content: "écrit entre la bascule et la purge")
+        )
+        try await straggler.messagePersistence.clearAllMessagesForLogout()
+        router.retire(straggler)
+        try? await straggler.messagePersistence.insertOptimistic(
+            record(id: "m-after", senderId: "bob", content: "écrit après la purge")
+        )
+        router.activate(key("alice"))
+
+        XCTAssertFalse(router.current === straggler, "un compte qui revient rouvre sa base, il ne reprend pas l'ancienne session")
+        XCTAssertEqual(try contents(of: router.current), [])
+        XCTAssertNil(router.activate(key("alice")), "réactiver le compte actif ne bascule rien")
+    }
+
+    func test_retire_whenTheAccountWasReopenedMeanwhile_leavesItsBaseOnDisk() async throws {
+        let dir = try makeDirectory()
+        let router = makeRouter(in: dir, initialKey: key("alice"))
+        let outgoing = router.current
 
         router.activate(nil)
         router.activate(key("alice"))
+        try await router.current.messagePersistence.insertOptimistic(record(id: "m-new", senderId: "alice", content: "nouvelle session"))
+        router.retire(outgoing)
 
-        XCTAssertTrue(router.current === first)
-        XCTAssertNil(router.activate(key("alice")), "réactiver le compte actif ne bascule rien")
+        XCTAssertEqual(try contents(of: router.current), ["nouvelle session"],
+                       "une purge en retard ne retire jamais la base d'un compte revenu entre-temps")
     }
 
     // MARK: - #8657 — même compte, deux environnements

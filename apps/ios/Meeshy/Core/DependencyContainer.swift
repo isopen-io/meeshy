@@ -174,7 +174,8 @@ final class DependencyContainer {
         }
         if key == nil {
             MessageStoreRouter.sweepDormantAccountStores(
-                in: storeDirectory, keeping: storeRouter.openAccountFileNames
+                in: storeDirectory,
+                keeping: storeRouter.openAccountFileNames.union(sessionsAwaitingPurge.map(\.fileName))
             )
         }
         guard outgoing != nil else { return }
@@ -354,6 +355,7 @@ final class DependencyContainer {
                 // synchrone a déjà retirées de la lecture : la session suivante
                 // ne les voit plus, qu'elle démarre avant ou après ce nettoyage.
                 let outgoing = self?.takeSessionsAwaitingPurge() ?? []
+                let router = self?.storeRouter
                 Task {
                     var pendingCount = 0
                     for session in outgoing {
@@ -372,6 +374,10 @@ final class DependencyContainer {
                         } catch {
                             containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
                         }
+                        // #8656 — purgée, la base quittée quitte aussi le disque :
+                        // un acteur encore capturé n'y réécrira jamais rien que
+                        // le compte retrouverait en revenant.
+                        router?.retire(session)
                     }
                     // #5913 — la purge SQL ci-dessus vide la TABLE ; l'acteur
                     // `OfflineQueue` garde, lui, ses `items` et ses

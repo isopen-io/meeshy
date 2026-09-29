@@ -22,9 +22,12 @@ private nonisolated let storeRouterLogger = Logger(subsystem: "me.meeshy.app", c
 ///  * une écriture ATTRIBUÉE à un compte (`session(ownedBy:)`) ne vise que la
 ///    base de ce compte, et rien si ce compte n'est plus actif.
 ///
-/// Les sessions ouvertes restent en cache : un compte qui revient retrouve le
-/// MÊME acteur, qui sérialise donc sa purge de sortie avant ses nouvelles
-/// écritures — deux pools sur un même fichier se marcheraient dessus.
+/// Une session QUITTÉE n'est plus tenue par le routeur : sa purge de sortie
+/// faite, son fichier est retiré du disque (`retire(_:)`). Mesuré au
+/// simulateur : un acteur capturé par un modèle de vue encore vivant écrivait
+/// APRÈS la purge de sortie dans la base du compte quitté. Le fichier délié,
+/// ces écritures tardives atterrissent dans un inode orphelin, et le compte qui
+/// revient rouvre une base neuve — jamais une base « purgée puis re-remplie ».
 nonisolated final class MessageStoreRouter: @unchecked Sendable {
     typealias Opener = (MessageStoreAccountKey?) -> MessageStoreSession
 
@@ -56,6 +59,7 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
         let incoming = cached ?? open(key)
         return lock.withLock {
             let outgoing = _current
+            if let outgoingKey = outgoing.key { sessions[outgoingKey] = nil }
             store(incoming, for: key)
             _current = incoming
             storeRouterLogger.info("Message store switched to \(incoming.fileName, privacy: .public)")
@@ -72,10 +76,21 @@ nonisolated final class MessageStoreRouter: @unchecked Sendable {
         }
     }
 
-    /// Les fichiers de compte ouverts par ce processus — les seuls qu'un
-    /// balayage n'a pas le droit de retirer.
+    /// Le fichier du compte actif — le seul qu'un balayage n'a pas le droit
+    /// de retirer.
     var openAccountFileNames: Set<String> {
         lock.withLock { Set(sessions.values.map(\.fileName)) }
+    }
+
+    /// Retire du disque la base d'une session QUITTÉE, une fois sa purge de
+    /// sortie faite — et seulement si son compte n'a pas été rouvert entre-temps.
+    /// Une écriture tardive d'un acteur capturé tombe ensuite dans un inode
+    /// orphelin, jamais dans la base que le compte rouvrira.
+    func retire(_ session: MessageStoreSession) {
+        lock.withLock {
+            guard let key = session.key, _current.key != key, sessions[key] == nil else { return }
+            Self.removeDatabaseFiles(at: session.path, fileManager: .default)
+        }
     }
 
     private func lookup(_ key: MessageStoreAccountKey?) -> MessageStoreSession? {
@@ -143,7 +158,7 @@ nonisolated extension MessageStoreRouter {
             .forEach { removeDatabaseFiles(at: directory.appendingPathComponent($0).path, fileManager: fileManager) }
     }
 
-    private static func removeDatabaseFiles(at path: String, fileManager: FileManager) {
+    static func removeDatabaseFiles(at path: String, fileManager: FileManager) {
         for suffix in sidecarSuffixes where fileManager.fileExists(atPath: path + suffix) {
             do {
                 try fileManager.removeItem(atPath: path + suffix)
