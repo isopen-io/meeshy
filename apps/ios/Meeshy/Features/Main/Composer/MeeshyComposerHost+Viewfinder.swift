@@ -49,11 +49,13 @@ extension MeeshyComposerHost {
         // écrire, et dure tant que le doigt reste. La photo a son propre geste,
         // le toucher (`handleSceneQuickTap`).
         sceneHoldStartedAt = Date()
+        sceneHoldPhase = .holding
+        sceneLockProgress = 0
         sceneHoldTask?.cancel()
         sceneHoldTask = Task { @MainActor in
             guard await sceneCamera.waitUntilCaptureReady(
                 timeout: ComposerSceneQuickCapture.readinessTimeout),
-                  sceneHoldStartedAt != nil else { return }
+                  sceneHoldStartedAt != nil || sceneHoldPhase == .locked else { return }
             HapticFeedback.medium()
             startSceneFilming()
         }
@@ -94,38 +96,104 @@ extension MeeshyComposerHost {
     /// la barre applique à son obturateur. Le verrou est IDEMPOTENT : le
     /// reconnaisseur émet `.changed` à chaque image tant que le doigt bouge, et
     /// `lockSceneTake` se garde déjà d'un stage qui n'enregistre pas.
+    ///
+    /// **Et VERTICALEMENT, il zoome** (#8671, directive porteur 2026-09-29 :
+    /// « swipe vers le haut et swipe vers le bas »). Le cadenas se remplit
+    /// pendant le glissé — la barre lit `sceneLockProgress` — et prend dès
+    /// l'appui, avant même que la caméra soit prête : un verrou posé pendant
+    /// l'ouverture vaut intention (`ComposerCaptureHold.release`).
     func handleSceneCaptureLongPressChanged(_ translation: CGPoint) {
-        guard sceneHoldStartedAt != nil,
-              ComposerShutterGesture.locks(translationX: translation.x) else { return }
-        guard sceneCameraMode != ComposerShutterGesture.mode(locked: true) else { return }
-        HapticFeedback.light()
+        guard sceneHoldStartedAt != nil else { return }
+        if sceneCameraStage == .recording { dragSceneZoom(translationY: translation.y) }
+        guard sceneHoldPhase != .locked else { return }
+        sceneLockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
+        guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
+        sceneHoldPhase = .locked
+        sceneLockProgress = 1
+        HapticFeedback.medium()
+        UIAccessibility.post(notification: .announcement,
+                             argument: ComposerSceneCameraCopy.lockedAnnouncement)
         lockSceneTake()
     }
 
-    /// **La levée décide** — et c'est la même loi que la barre, à un fait près :
-    /// ici le « verrouillé » se LIT sur le mode courant plutôt que sur un
-    /// booléen de vue. `ComposerShutterGesture.mode(locked:)` est l'unique
-    /// producteur de ce mode, donc le lire est équivalent à le tenir — et évite
-    /// un second état à garder d'accord avec le premier.
+    /// **La levée décide** — tenu, verrouillé ou annulé, selon la loi du
+    /// cadenas (`ComposerCaptureHold.release`).
     func handleSceneCaptureLongPressEnded() {
-        sceneHoldTask?.cancel()
-        sceneHoldTask = nil
+        endSceneZoomDrag()
         // La fin arrive AUSSI quand l'hôte a refusé l'armement : le canvas
         // n'applique que ses trois gardes, la clause « scène vide » vit ici.
         // Sans ce témoin de début, cette fin poserait une photo que personne
         // n'a armée — et sur une scène qui a déjà un fond.
-        guard sceneHoldStartedAt != nil else { return }
+        guard sceneHoldStartedAt != nil else {
+            sceneHoldTask?.cancel()
+            sceneHoldTask = nil
+            return
+        }
         sceneHoldStartedAt = nil
-        switch ComposerSceneQuickCapture.release(
-            isRecording: sceneCameraStage == .recording,
-            locked: sceneCameraMode == ComposerShutterGesture.mode(locked: true)) {
+        let phase = sceneHoldPhase ?? .holding
+        switch ComposerCaptureHold.release(isRecording: sceneCameraStage == .recording, phase: phase) {
         case .closeTake:
+            sceneHoldTask?.cancel()
+            sceneHoldTask = nil
+            sceneHoldPhase = nil
+            sceneLockProgress = 0
             closeSceneTake()
-        case .keepFilming, .cancelPending:
+        case .keepFilming:
+            // Verrouillé : si la caméra s'ouvre encore, la tâche d'attente
+            // démarrera la prise — en mode verrouillé — sans le doigt. La
+            // phase reste posée jusqu'au bouton stop.
+            break
+        case .cancelPending:
             // Parti avant que la caméra soit prête : le viseur reste ouvert,
             // son déclencheur prend le relais — rien n'est pris à sa place.
-            break
+            sceneHoldTask?.cancel()
+            sceneHoldTask = nil
+            sceneHoldPhase = nil
+            sceneLockProgress = 0
         }
+    }
+
+    // MARK: - Le zoom au glisser (#8671)
+
+    /// Le premier glissé d'une prise s'ANCRE sur le facteur courant et la
+    /// course déjà faite : l'appui long a pu bouger avant que la caméra filme,
+    /// et ce déplacement-là n'a rien demandé.
+    func dragSceneZoom(translationY: CGFloat) {
+        guard ComposerCaptureHold.verticalDrag(stage: sceneCameraStage) == .zoom else { return }
+        let ancre = sceneZoomAnchor ?? ComposerCaptureZoomAnchor(
+            factor: sceneCamera.zoomFactor, translationY: translationY)
+        sceneZoomAnchor = ancre
+        sceneCamera.setZoom(ComposerCaptureZoom.factor(
+            from: ancre.factor,
+            translationY: translationY - ancre.translationY,
+            range: sceneCamera.zoomRange))
+    }
+
+    func endSceneZoomDrag() {
+        sceneZoomAnchor = nil
+    }
+
+    /// VoiceOver ne glisse pas : il incrémente.
+    func stepSceneZoom(up: Bool) {
+        sceneCamera.setZoom(ComposerCaptureZoom.stepped(
+            sceneCamera.zoomFactor, up: up, range: sceneCamera.zoomRange))
+    }
+
+    // MARK: - L'intensité du flash (#8671)
+
+    /// Le curseur règle la lumière qui BRILLE déjà : l'écran s'il est allumé,
+    /// la torche si elle éclaire une prise à l'arrière.
+    func setSceneFlashIntensity(_ level: Double) {
+        sceneFlashIntensity = ComposerFlashIntensity.clamped(level)
+        ComposerScreenFlash.shared.adjust(level: sceneFlashIntensity)
+        guard sceneCameraStage == .recording, sceneCamera.currentPosition == .back else { return }
+        sceneCamera.setTorch(ComposerFrontFlash.torch(flash: sceneCameraFlash, position: .back),
+                             level: sceneFlashIntensity)
+    }
+
+    /// Le blanc du sol, à l'intensité choisie.
+    var sceneFloorWhite: Double {
+        ComposerFlashIntensity.floorWhite(sceneFlashIntensity)
     }
 
     /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080).
@@ -179,7 +247,7 @@ extension MeeshyComposerHost {
         }
         // **Objectif avant : l'ÉCRAN est le flash** (#8653). La luminosité
         // monte, l'image part sous elle, puis l'écran rend la sienne.
-        ComposerScreenFlash.shared.light()
+        ComposerScreenFlash.shared.light(level: sceneFlashIntensity)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
             sceneCamera.takePhoto(flash: flash)
@@ -205,13 +273,17 @@ extension MeeshyComposerHost {
     /// `ComposerShutterGesture`, et la vue le compte — elle seule voit le doigt.
     func startSceneFilming() {
         guard sceneCameraStage == .armed else { return }
-        sceneCameraMode = ComposerShutterGesture.mode(locked: false)
+        // Un cadenas atteint pendant l'ouverture de la caméra (#8671) fait
+        // partir la prise DÉJÀ verrouillée.
+        sceneCameraMode = ComposerShutterGesture.mode(locked: sceneHoldPhase == .locked)
         sceneCameraStage = .recording
         // **La vidéo s'éclaire aussi** (#8653) : torche à l'arrière, écran
-        // blanc à pleine luminosité à l'avant, le temps de la prise.
+        // blanc à l'avant, le temps de la prise — à l'intensité du curseur
+        // (#8671).
         sceneCamera.setTorch(ComposerFrontFlash.torch(flash: sceneCameraFlash,
-                                                      position: sceneCamera.currentPosition))
-        if sceneFloorIsLit { ComposerScreenFlash.shared.light() }
+                                                      position: sceneCamera.currentPosition),
+                             level: sceneFlashIntensity)
+        if sceneFloorIsLit { ComposerScreenFlash.shared.light(level: sceneFlashIntensity) }
         Task { @MainActor in
             await sceneCamera.enableAudioCaptureIfNeeded()
             sceneCamera.startRecording()
@@ -233,6 +305,9 @@ extension MeeshyComposerHost {
     func closeSceneTake() {
         guard sceneCameraStage == .recording else { return }
         sceneCameraStage = .armed
+        sceneHoldPhase = nil
+        sceneLockProgress = 0
+        sceneZoomAnchor = nil
         pendingSegmentDuration = sceneCamera.recordingDuration
         sceneCamera.stopRecording()
         extinguishSceneFlash()
@@ -327,6 +402,9 @@ extension MeeshyComposerHost {
         sceneHoldTask?.cancel()
         sceneHoldTask = nil
         sceneHoldStartedAt = nil
+        sceneHoldPhase = nil
+        sceneLockProgress = 0
+        sceneZoomAnchor = nil
         extinguishSceneFlash()
         sceneCamera.stop()
     }
@@ -366,7 +444,8 @@ extension MeeshyComposerHost {
                         // **Le sol en BLANC brillant** (#8653) : objectif
                         // avant, flash actif — tout ce qui entoure l'aperçu
                         // devient la lumière qui éclaire le visage.
-                        if sceneFloorIsLit { Color.white }
+                        // Son intensité suit le curseur de verre (#8671).
+                        if sceneFloorIsLit { Color(white: sceneFloorWhite) }
                         sceneCameraPreview(
                             rect: ComposerFrontFlash.previewRect(
                                 ComposerSceneCameraFrame.rect(
@@ -445,8 +524,21 @@ extension MeeshyComposerHost {
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 12)
-                        .onChanged { valeur in sceneCameraDismissDrag = valeur.translation.height }
+                        .onChanged { valeur in
+                            // **Pendant une prise, le glissé vertical ZOOME**
+                            // (#8671) — il ne range pas la caméra au milieu
+                            // d'un enregistrement verrouillé.
+                            switch ComposerCaptureHold.verticalDrag(stage: sceneCameraStage) {
+                            case .zoom: dragSceneZoom(translationY: valeur.translation.height)
+                            case .dismiss: sceneCameraDismissDrag = valeur.translation.height
+                            }
+                        }
                         .onEnded { valeur in
+                            endSceneZoomDrag()
+                            guard ComposerCaptureHold.verticalDrag(stage: sceneCameraStage) == .dismiss else {
+                                sceneCameraDismissDrag = 0
+                                return
+                            }
                             let course = valeur.translation.height
                             sceneCameraDismissDrag = 0
                             guard ComposerSceneCameraFrame.dismisses(translationY: course) else { return }
@@ -473,7 +565,18 @@ extension MeeshyComposerHost {
                 // comptait que les segments CLOS — donc restait figé pendant
                 // toute la prise et ne repartait qu'au relâchement, au moment
                 // exact où il cesse de servir.
-                liveDuration: sceneCamera.recordingDuration)
+                liveDuration: sceneCamera.recordingDuration,
+                capture: ComposerSceneCameraBar.Capture(
+                    holding: sceneHoldStartedAt != nil,
+                    lockProgress: sceneLockProgress,
+                    locked: sceneHoldPhase == .locked
+                        || sceneCameraMode == ComposerShutterGesture.mode(locked: true),
+                    zoomFactor: sceneCamera.zoomFactor,
+                    flashIntensity: sceneFlashIntensity),
+                onZoomDrag: { dragSceneZoom(translationY: $0) },
+                onZoomDragEnded: { endSceneZoomDrag() },
+                onZoomStep: { stepSceneZoom(up: $0) },
+                onFlashIntensity: { setSceneFlashIntensity($0) })
         }
         .frame(width: rect.width, height: rect.height)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: sceneCameraDismissDrag))

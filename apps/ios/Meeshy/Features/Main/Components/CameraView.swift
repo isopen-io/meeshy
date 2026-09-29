@@ -454,6 +454,7 @@ final class CameraModel: NSObject, ObservableObject {
 
         session.addInput(input)
         currentPosition = position
+        zoomFactor = device.videoZoomFactor
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -523,18 +524,59 @@ final class CameraModel: NSObject, ObservableObject {
     /// **La torche de l'objectif actif** (#8653) — la lumière d'une VIDÉO, que
     /// `flashMode` n'éclaire pas. Sans lampe, ou sur un mode refusé, rien ne
     /// change : l'objectif avant n'en a pas, c'est l'écran qui l'éclaire.
-    func setTorch(_ mode: AVCaptureDevice.TorchMode) {
-        guard let device = session.inputs
-            .compactMap({ ($0 as? AVCaptureDeviceInput)?.device })
-            .first(where: { $0.hasMediaType(.video) }),
-              device.hasTorch, device.isTorchModeSupported(mode), device.torchMode != mode
+    ///
+    /// `level` vient du curseur d'intensité (#8671) : une torche ALLUMÉE prend
+    /// la puissance demandée, bornée à ce que l'appareil sert (une torche
+    /// chaude en sert moins).
+    func setTorch(_ mode: AVCaptureDevice.TorchMode, level: Double = ComposerFlashIntensity.defaultLevel) {
+        guard let device = activeVideoDevice,
+              device.hasTorch, device.isTorchModeSupported(mode)
         else { return }
         do {
             try device.lockForConfiguration()
-            device.torchMode = mode
-            device.unlockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            if mode == .on {
+                try device.setTorchModeOn(level: ComposerFlashIntensity.torchLevel(
+                    level, maxAvailable: AVCaptureDevice.maxAvailableTorchLevel))
+            } else if device.torchMode != mode {
+                device.torchMode = mode
+            }
         } catch {
             Logger.media.error("Torch configuration failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private var activeVideoDevice: AVCaptureDevice? {
+        session.inputs
+            .compactMap { ($0 as? AVCaptureDeviceInput)?.device }
+            .first { $0.hasMediaType(.video) }
+    }
+
+    /// **Le cadrage de l'objectif actif** (#8671) — publié pour le badge du
+    /// viseur, remis à 1 à chaque changement d'objectif.
+    @Published private(set) var zoomFactor: CGFloat = 1
+
+    /// Ce que l'objectif sert. Sans objectif (simulateur), `1...1` : le geste
+    /// de zoom n'y a aucun effet.
+    var zoomRange: ClosedRange<CGFloat> {
+        guard let device = activeVideoDevice else { return 1...1 }
+        return ComposerCaptureZoom.range(deviceMin: device.minAvailableVideoZoomFactor,
+                                         deviceMax: device.maxAvailableVideoZoomFactor)
+    }
+
+    /// Affectation directe sous `lockForConfiguration` : le doigt pilote déjà
+    /// la progressivité, une rampe ajouterait un retard au geste.
+    func setZoom(_ factor: CGFloat) {
+        let plage = zoomRange
+        let borne = min(plage.upperBound, max(plage.lowerBound, factor))
+        guard let device = activeVideoDevice, borne != device.videoZoomFactor else { return }
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = borne
+            device.unlockForConfiguration()
+            zoomFactor = borne
+        } catch {
+            Logger.media.error("Zoom configuration failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

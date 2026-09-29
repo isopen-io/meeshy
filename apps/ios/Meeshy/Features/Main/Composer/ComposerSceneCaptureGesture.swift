@@ -139,11 +139,6 @@ nonisolated enum ComposerSceneQuickCapture {
         return modes.contains(.photo) ? .photo : .armOnly
     }
 
-    static func release(isRecording: Bool, locked: Bool) -> Release {
-        guard isRecording else { return .cancelPending }
-        return locked ? .keepFilming : .closeTake
-    }
-
     static func hint(format: ComposerFormat) -> Hint? {
         switch tap(format: format) {
         case .photo:   return .photoOrVideo
