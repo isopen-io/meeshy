@@ -43,12 +43,21 @@ nonisolated enum ComposerBackgroundMenuAction: String, CaseIterable, Equatable, 
     /// Le fond est retiré ; la scène retrouve sa couleur.
     case delete
 
+    /// **Reprendre une photo** (#8716, directive porteur 2026-09-29 : « le
+    /// longpress sur la scène qui a déjà un fond doit proposer, en plus du menu
+    /// actuel, l'option reprendre une photo pour lancer l'objectif et montrer
+    /// l'objectif »). Le viseur s'ouvre ARMÉ, avec ses contrôleurs (#8711) ;
+    /// la prise REMPLACE le fond — l'ancien ne part qu'à la pose, jamais si
+    /// l'auteur referme le viseur.
+    case retakePhoto
+
     /// Le glyphe SF Symbols. Il annonce l'effet, jamais l'état.
     var symbol: String {
         switch self {
         case .edit:         return "slider.horizontal.below.rectangle"
         case .bringForward: return "square.3.layers.3d.top.filled"
         case .delete:       return "trash"
+        case .retakePhoto:  return "camera"
         }
     }
 
@@ -61,7 +70,13 @@ nonisolated enum ComposerBackgroundMenuAction: String, CaseIterable, Equatable, 
     /// garantirait qu'un cas ajouté au milieu n'atterrisse pas entre l'édition
     /// et la suppression. Une liste explicite se relit ; un ordre implicite se
     /// découvre à l'écran.
-    static let served: [ComposerBackgroundMenuAction] = [.edit, .bringForward, .delete]
+    static let served: [ComposerBackgroundMenuAction] = [.edit, .retakePhoto, .bringForward, .delete]
+
+    /// Ce que CE format sert : sans photo au viseur (un réel), « reprendre une
+    /// photo » serait un geste sans effet (loi 4).
+    static func served(offersPhoto: Bool) -> [ComposerBackgroundMenuAction] {
+        served.filter { offersPhoto || $0 != .retakePhoto }
+    }
 }
 
 /// Le vocabulaire du menu, séparé de la vue pour la raison habituelle du
@@ -86,6 +101,9 @@ enum ComposerBackgroundMenuCopy {
         case .delete:
             return String(localized: "composer.scene.background.menu.delete",
                           defaultValue: "Supprimer", bundle: .main)
+        case .retakePhoto:
+            return String(localized: "composer.scene.background.menu.retakePhoto",
+                          defaultValue: "Reprendre une photo", bundle: .main)
         }
     }
 }

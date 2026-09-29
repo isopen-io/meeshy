@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { MessageCardDelivery } from '@/lib/export/deliver-message-card';
 import type { MessageCardInput } from '@/lib/export/message-card-layout';
+import type { MessageCardSubject } from '@/lib/export/message-card-subject';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { createActMounter } from '@/test-support/act-mount';
@@ -12,6 +13,7 @@ import { ALL_TEMPLATE_IDS, CARD_LINKS, CARD_PALETTE_IDS, CARD_TYPEFACE_IDS, FEAT
 import { MESSAGE_CARD_USAGE_KEY } from '@/lib/export/message-card-usage';
 import type { SafeStorage } from '@/lib/storage';
 
+import type { MotionRecorder, SourcesLoader } from './thread-export-output';
 import { MessageExportSheet } from './thread-export-sheet';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -31,17 +33,19 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-const subject = {
-  quoted: { author: 'Awa', text: 'On se retrouve où ce soir ?' },
-  reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !' },
+const subject: MessageCardSubject = {
+  quoted: { author: 'Awa', text: 'On se retrouve où ce soir ?', handle: 'awa' },
+  reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !', handle: 'jacques' },
   sentAt: new Date('2026-09-28T18:30:00.000Z'),
+  quotedAt: new Date('2026-09-28T18:29:00.000Z'),
+  media: [],
 };
 
 const exportLanguages = {
   codes: ['fr', 'en'],
-  subjectIn: (language: string) =>
+  subjectIn: (language: string): MessageCardSubject =>
     language === 'en'
-      ? { quoted: { author: 'Awa', text: 'Where do we meet tonight?' }, reply: { author: 'Jacques', text: 'At Lina’s, 8 pm!' }, sentAt: subject.sentAt }
+      ? { ...subject, quoted: { author: 'Awa', text: 'Where do we meet tonight?', handle: 'awa' }, reply: { author: 'Jacques', text: 'At Lina’s, 8 pm!', handle: 'jacques' } }
       : subject,
 };
 
@@ -77,12 +81,17 @@ const mountSheet = async (
     readonly storage?: SafeStorage;
     readonly random?: () => number;
     readonly languages?: boolean;
+    readonly subject?: MessageCardSubject;
+    readonly loadSources?: SourcesLoader;
+    readonly recordMotion?: MotionRecorder;
   } = {},
 ) => {
   const harness: Harness = { painted: [], delivered: [], intents: [], announced: [], closed: { count: 0 }, thumbnails: [] };
   const host = await mounter.mount(
     <MessageExportSheet
-      subject={subject}
+      subject={options.subject ?? subject}
+      loadSources={options.loadSources ?? (async () => ({ sources: [], dispose: () => undefined }))}
+      {...(options.recordMotion === undefined ? {} : { recordMotion: options.recordMotion })}
       handle="jacques"
       {...(options.languages === true ? { exportLanguages } : {})}
       conversationTitle={options.title === undefined ? 'Soirée de lancement' : options.title}
@@ -192,7 +201,7 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     expect(host.querySelector('[data-export-hint]')).toBeNull();
   });
 
-  test('l’en-tête n’est une zone que s’il est peint, et ouvre les détails', async () => {
+  test('l’en-tête n’est une zone que s’il est peint, et ouvre l’onglet Frame (#8693)', async () => {
     const { host } = await mountSheet();
     expect(host.querySelector('[data-export-part="header"]')).toBeNull();
     await openTab(host, 'details');
@@ -201,7 +210,7 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     await openTab(host, 'styles');
     await mounter.click(host.querySelector('[data-export-part="header"]'));
     await mounter.settle();
-    expect(host.querySelector('[data-export-tab="details"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-export-tab="frame"]')?.getAttribute('aria-selected')).toBe('true');
   });
 
   test('toucher la citation ou la réponse offre SON anonymat, et lui seul', async () => {
@@ -307,8 +316,10 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     await openTab(host, 'details');
     await mounter.click(host.querySelector('[data-export-option="showConversationTitle"]'));
     await mounter.settle();
+    await openTab(host, 'frame');
     await mounter.click(host.querySelector('[data-export-option="showDate"]'));
     await mounter.settle();
+    await openTab(host, 'details');
     await mounter.click(host.querySelector('[data-export-option="showAuthors"]'));
     await mounter.settle();
     const last = harness.painted[harness.painted.length - 1];
@@ -319,7 +330,7 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
 
   test('chaque auteur s’anonymise séparément, et le filigrane reste', async () => {
     const { host, harness } = await mountSheet();
-    await openTab(host, 'details');
+    await openTab(host, 'frame');
     await mounter.click(host.querySelector('[data-export-option="anonymizeQuoted"]'));
     await mounter.settle();
     const quotedOnly = harness.painted[harness.painted.length - 1];
@@ -335,6 +346,7 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     await openTab(host, 'details');
     await mounter.click(host.querySelector('[data-export-option="showAuthors"]'));
     await mounter.settle();
+    await openTab(host, 'frame');
     expect(host.querySelector('[data-export-option="anonymizeQuoted"]')).toBeNull();
     expect(host.querySelector('[data-export-option="anonymizeReply"]')).toBeNull();
     await mounter.click(host.querySelector('[data-export-part="reply"]'));
@@ -346,7 +358,7 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     const { host } = await mountSheet({ title: null });
     await openTab(host, 'details');
     expect(host.querySelector('[data-export-option="showConversationTitle"]') === null).toBe(true);
-    expect(host.querySelectorAll('[data-export-option]').length).toBe(4);
+    expect(host.querySelectorAll('[data-export-option]').length).toBe(1);
   });
 
   test('« Utiliser comme format par défaut » l’enregistre sur l’appareil et le dit', async () => {
@@ -409,5 +421,189 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
   test('un message dans une seule langue n’offre pas de choix de langue', async () => {
     const { host } = await mountSheet();
     expect(host.querySelector('[data-export-tab="language"]')).toBeNull();
+  });
+});
+
+describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
+  const withVideo: MessageCardSubject = {
+    ...subject,
+    media: [
+      { id: 'v', card: { kind: 'video', width: 1920, height: 1080 }, url: '/v.mp4', mimeType: 'video/mp4', posterUrl: '/v.jpg' },
+      { id: 'i', card: { kind: 'image', width: 800, height: 600 }, url: '/i.jpg', mimeType: 'image/jpeg', posterUrl: null },
+    ],
+  };
+  const withVoice: MessageCardSubject = {
+    ...subject,
+    media: [{ id: 'a', card: { kind: 'audio', durationMs: 8000, name: 'note.m4a', peaks: [1, 2, 3] }, url: '/a.m4a', mimeType: 'audio/mp4', posterUrl: null }],
+  };
+  const outputsOf = (host: HTMLElement) => [...host.querySelectorAll('[data-export-output]')].map((el) => el.getAttribute('data-export-output'));
+
+  test('l’atelier est titré « Imagine »', async () => {
+    const { host } = await mountSheet();
+    expect(host.ownerDocument.body.textContent?.includes('Imagine')).toBe(true);
+  });
+
+  test('l’onglet Frame vient AVANT Fond ; Médias n’apparaît que si la carte en porte', async () => {
+    const { host } = await mountSheet();
+    const tabs = [...host.querySelectorAll('[data-export-tab]')].map((el) => el.getAttribute('data-export-tab'));
+    expect(tabs.indexOf('frame')).toBe(tabs.indexOf('palette') - 1);
+    expect(tabs).not.toContain('media');
+    const media = await mountSheet({ subject: withVideo });
+    expect([...media.host.querySelectorAll('[data-export-tab]')].map((el) => el.getAttribute('data-export-tab'))).toContain('media');
+  });
+
+  test('le FORMAT de l’image se choisit dans Frame et part dans la carte', async () => {
+    const { host, harness } = await mountSheet();
+    expect(harness.painted[0]?.aspect).toBe('auto');
+    await openTab(host, 'frame');
+    for (const aspect of ['story', 'portrait', 'square', 'landscape']) expect(chip(host, 'aspect', aspect)).not.toBeNull();
+    await mounter.click(chip(host, 'aspect', 'landscape'));
+    await mounter.settle();
+    expect(harness.painted[harness.painted.length - 1]?.aspect).toBe('landscape');
+    expect(chip(host, 'aspect', 'landscape')?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('Frame : noms à la fin, heures des messages, rotation, pseudo au lieu du nom affiché', async () => {
+    const { host, harness } = await mountSheet();
+    await openTab(host, 'frame');
+    await mounter.click(host.querySelector('[data-export-option="showTimes"]'));
+    await mounter.settle();
+    await mounter.click(chip(host, 'authors-at', 'end'));
+    await mounter.settle();
+    await mounter.click(chip(host, 'tilt', 'left'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-option="usePseudonyms"]'));
+    await mounter.settle();
+    const last = harness.painted[harness.painted.length - 1];
+    expect(last?.frame).toEqual({ header: 'horizontal', authors: 'end', tilt: 'left' });
+    expect(last?.reply.author).toBe('@jacques');
+    expect(last?.quoted?.author).toBe('@awa');
+    expect(typeof last?.reply.time).toBe('string');
+    expect(last?.reply.time).not.toBe('');
+  });
+
+  test('l’en-tête ne se couche que s’il est peint', async () => {
+    const { host, harness } = await mountSheet();
+    await openTab(host, 'frame');
+    expect(host.querySelector('[data-export-group="header"]')).toBeNull();
+    await mounter.click(host.querySelector('[data-export-option="showDate"]'));
+    await mounter.settle();
+    await mounter.click(chip(host, 'header', 'letters'));
+    await mounter.settle();
+    expect(harness.painted[harness.painted.length - 1]?.frame?.header).toBe('letters');
+  });
+
+  test('les médias partent dans la carte ; leurs pixels arrivent ensuite et la carte se repeint', async () => {
+    const loaded: string[][] = [];
+    const bitmap = { width: 10, height: 10 } as unknown as CanvasImageSource;
+    const { harness } = await mountSheet({
+      subject: withVideo,
+      loadSources: async (items) => {
+        loaded.push(items.map((item) => item.id));
+        return { sources: [bitmap, null], dispose: () => undefined };
+      },
+    });
+    await mounter.settle();
+    expect(loaded).toEqual([['v', 'i']]);
+    expect(harness.painted[0]?.media?.map((item) => item.kind)).toEqual(['video', 'image']);
+    expect(harness.painted.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('« Imager rapide » attend les pixels des médias : jamais une carte aux cadres vides', async () => {
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { harness } = await mountSheet({
+      subject: withVideo,
+      quick: true,
+      loadSources: async () => {
+        await gate;
+        return { sources: [null, null], dispose: () => undefined };
+      },
+    });
+    await mounter.settle();
+    expect(harness.delivered).toEqual([]);
+    (release as (() => void) | null)?.();
+    await mounter.settle();
+    await mounter.settle();
+    expect(harness.delivered).toHaveLength(1);
+  });
+
+  test('Médias : disposition des images et représentation de l’audio', async () => {
+    const video = await mountSheet({ subject: withVideo });
+    await openTab(video.host, 'media');
+    expect(chip(video.host, 'media-style', 'bande')).not.toBeNull();
+    expect(video.host.querySelector('[data-export-audio-style]')).toBeNull();
+    await mounter.click(chip(video.host, 'media-style', 'bande'));
+    await mounter.settle();
+    expect(video.harness.painted[video.harness.painted.length - 1]?.mediaStyle).toBe('bande');
+
+    const voice = await mountSheet({ subject: withVoice });
+    await openTab(voice.host, 'media');
+    for (const style of ['onde', 'spectre', 'pastille', 'etiquette']) expect(chip(voice.host, 'audio-style', style)).not.toBeNull();
+    await mounter.click(chip(voice.host, 'audio-style', 'pastille'));
+    await mounter.settle();
+    expect(voice.harness.painted[voice.harness.painted.length - 1]?.audioStyle).toBe('pastille');
+  });
+
+  test('avant d’enregistrer : Image · GIF · Vidéo pour une vidéo, Image · Vidéo pour un audio, rien pour un texte', async () => {
+    expect(outputsOf((await mountSheet()).host)).toEqual([]);
+    expect(outputsOf((await mountSheet({ subject: withVideo })).host)).toEqual(['image', 'gif', 'video']);
+    expect(outputsOf((await mountSheet({ subject: withVoice })).host)).toEqual(['image', 'video']);
+  });
+
+  test('« Vidéo » fabrique la vidéo de la carte, la livre sous son extension, et ne la refilme pas au second geste', async () => {
+    const recorded: string[] = [];
+    const { host, harness } = await mountSheet({
+      subject: withVoice,
+      delivery: 'expired',
+      recordMotion: async ({ output, item }) => {
+        recorded.push(`${output}:${item.id}`);
+        return new Blob(['v'], { type: 'video/mp4' });
+      },
+    });
+    await mounter.click(host.querySelector('[data-export-output="video"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(recorded).toEqual(['video:a']);
+    expect(harness.delivered.every((name) => name.endsWith('.mp4'))).toBe(true);
+    expect(harness.delivered).toHaveLength(2);
+  });
+
+  test('un navigateur qui ne sait pas animer le dit, sans rien livrer', async () => {
+    const { host, harness } = await mountSheet({ subject: withVideo, recordMotion: async () => null });
+    await mounter.click(host.querySelector('[data-export-output="gif"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(harness.delivered).toEqual([]);
+    expect(harness.announced).toContain('Ce navigateur ne sait pas créer cette animation');
+  });
+
+  test('la miniature montre la carte ENTIÈRE — rien de rogné, le séparateur compris', async () => {
+    const original = globalThis.IntersectionObserver;
+    /* Un observateur qui voit tout : chaque vignette entre à l'écran aussitôt observée. */
+    class SeeingObserver {
+      constructor(private readonly callback: (entries: { readonly isIntersecting: boolean }[]) => void) {}
+      observe() {
+        this.callback([{ isIntersecting: true }]);
+      }
+      disconnect() {}
+    }
+    globalThis.IntersectionObserver = SeeingObserver as unknown as typeof IntersectionObserver;
+    try {
+      const { host } = await mountSheet();
+      await mounter.settle();
+      await mounter.settle();
+      const thumb = host.querySelector('[data-export-template] img');
+      expect(thumb?.className.includes('object-contain')).toBe(true);
+      expect(thumb?.className.includes('object-cover')).toBe(false);
+    } finally {
+      globalThis.IntersectionObserver = original;
+    }
   });
 });

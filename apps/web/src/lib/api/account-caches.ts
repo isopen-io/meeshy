@@ -1,3 +1,4 @@
+import { forgetCallJournal } from '../calls/call-network-journal-keys';
 import { SW_RUNTIME_CACHE_NAMES } from '../sw-caches';
 import { safeLocalStorage, type SafeStorage } from '../storage';
 
@@ -150,7 +151,8 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
 
 /**
  * LA FIN D'UN COMPTE SUR L'APPAREIL (#8674) — déconnexion, session révoquée ou
- * expirée : son cache rangé part, et les seaux du service worker avec lui.
+ * expirée : son cache rangé part, son journal réseau d'appels (#8698) aussi,
+ * et les seaux du service worker avec eux.
  * Changer de compte n'appelle jamais ceci.
  */
 export function forgetAccountCaches({
@@ -162,7 +164,9 @@ export function forgetAccountCaches({
   readonly storage?: SafeStorage;
   readonly cacheStorage?: CacheStorageLike;
 }): void {
-  createAccountCacheShelf(storage ?? safeLocalStorage()).forget(userId);
+  const local = storage ?? safeLocalStorage();
+  createAccountCacheShelf(local).forget(userId);
+  forgetCallJournal(local, userId);
   purgeReaderCaches(cacheStorage);
 }
 

@@ -290,6 +290,18 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  test('ma vignette porte le cran du zoom de ma caméra, à côté de ses commandes (#8441)', async () => {
+    const camera = { kind: 'video', readyState: 'live', getCapabilities: () => ({ zoom: { min: 1, max: 10, step: 0.1 } }), getSettings: () => ({ zoom: 1 }), applyConstraints: async () => undefined };
+    const stream = Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getVideoTracks: () => [camera], getAudioTracks: () => [], getTracks: () => [camera] });
+    const view = mount({ cameraOn: true, localStream: stream, members: { 'u-peer': member() } });
+    await act(async () => {
+      await import('./call-self-camera');
+    });
+    await act(async () => {});
+    expect(view.find('[data-call-corner-frame] [data-call-self-controls="tile"] [data-call-self-control="zoom"]')?.textContent).toBe('1×');
+    view.done();
+  });
+
   test('caméra coupée, les commandes de ma caméra restent dans le (…) pour la rallumer (#8626)', () => {
     const view = mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) } });
     expect(view.find('[data-call-self-controls]')).toBeNull();

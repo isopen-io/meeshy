@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import QuartzCore
 
@@ -148,7 +149,11 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     public private(set) var isActive: Bool = false
     public private(set) var isPaused: Bool = false
     public private(set) var isPlaybackStalled: Bool = false
+    /// L'hôte a réclamé l'audio (`PlaybackInterruption`) : la slide attend,
+    /// elle n'avance pas sous la vue qui la recouvre.
+    public private(set) var isInterrupted: Bool = false
 
+    private var interruptionSubscription: AnyCancellable?
     private var duration: TimeInterval = 0
     private var elapsed: TimeInterval = 0
     private var completionFired: Bool = false
@@ -177,9 +182,18 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// - Parameter useDisplayLink : Set to `false` in unit tests to
     ///   skip the `CADisplayLink` sub-system entirely and drive the
     ///   timer through `_advanceClockForTesting(by:)` instead.
-    public init(useDisplayLink: Bool = true) {
+    public init(useDisplayLink: Bool = true, interruption: PlaybackInterruption? = nil) {
         self.useDisplayLink = useDisplayLink
         super.init()
+        interruptionSubscription = (interruption ?? .shared).$isActive
+            .removeDuplicates()
+            .sink { [weak self] active in self?.setInterrupted(active) }
+    }
+
+    private func setInterrupted(_ interrupted: Bool) {
+        guard interrupted != isInterrupted else { return }
+        isInterrupted = interrupted
+        if !interrupted { lastTick = nil }
     }
 
     // `nonisolated` (l'intention documentée ci-dessus l.118) : sans ce mot-clé,
@@ -327,14 +341,14 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
             // Pending : arm the anti-freeze failsafe. Paused / backgrounded time
             // is not counted (guard on `isPaused`); a disabled failsafe (0) never
             // force-activates, preserving pure gating semantics for tests.
-            guard !isPaused, contentReadyFailsafe > 0 else { return }
+            guard !isPaused, !isInterrupted, contentReadyFailsafe > 0 else { return }
             pendingElapsed += d
             if pendingElapsed >= contentReadyFailsafe, let id = currentSlideId {
                 markContentReady(slideId: id)
             }
             return
         }
-        guard !isPaused, !isPlaybackStalled, duration > 0 else { return }
+        guard !isPaused, !isPlaybackStalled, !isInterrupted, duration > 0 else { return }
         elapsed = min(duration, elapsed + d)
         progress = elapsed / duration
         onProgressChange?(progress)

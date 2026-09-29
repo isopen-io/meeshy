@@ -3,18 +3,25 @@ import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { safeLocalStorage } from '@/lib/storage';
 
 import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { createCameraEffects } from './camera-effects';
+import { browserConnection, dataProfileOf, opusShapeFor, type DataProfile } from './call-data-profile';
 import { preferredInputs } from './call-devices';
 import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
+import { createJournalRecorder, type JournalRecorder } from './call-network-journal-recorder';
+import { createCallJournalStore } from './call-network-journal-store';
+import { shapeOpusSdp } from './call-opus-sdp';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
+import { callStore } from './call-store';
 import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
 import { createPeerLink } from './peer-link';
+import { acquireRearCamera } from './rear-camera';
 import { browserColorSupport, videoEffectsStore } from './video-effects';
 
 /**
@@ -41,14 +48,34 @@ function watchBrowserNetwork(onChange: () => void): () => void {
   };
 }
 
+/** Le profil de données du moment (#8697) : relu à chaque négociation, capture et relevé. */
+const currentProfile = (): DataProfile => dataProfileOf(browserConnection());
+
+const viewerId = (): string => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
+
+/**
+ * Le journal réseau de chaque appel (#8698), écrit dans l'espace du compte
+ * (`call-network-journal-store.ts`) : un seul enregistreur par onglet, posé au
+ * premier chargement du moteur.
+ */
+let recorder: JournalRecorder | null = null;
+const journalRecorder = (): JournalRecorder =>
+  (recorder ??= createJournalRecorder({ store: callStore, journal: createCallJournalStore({ storage: safeLocalStorage(), now: Date.now }), viewerId, now: Date.now }));
+
 /**
  * La boucle de qualité est un chunk à part (`budgets.json` › `call_quality`),
  * chargé au premier relevé : `getStats`, paliers et survie ne pèsent que sur un
  * appel CONNECTÉ, jamais sur la sonnerie.
  */
 function lazyQualityLoop(deps: QualityLoopDeps): QualityLoop {
-  const loop = import('./call-quality-loop').then((module) => module.createQualityLoop(deps));
-  return { tick: () => loop.then((ready) => ready.tick()) };
+  const loop = import('./call-quality-loop').then((module) => module.createQualityLoop({ ...deps, profile: currentProfile }));
+  return {
+    tick: async () => {
+      const tick = await (await loop).tick();
+      if (tick !== null) journalRecorder().noteTick(tick);
+      return tick;
+    },
+  };
 }
 
 /**
@@ -82,14 +109,15 @@ const cameraEffects = createCameraEffects({
 });
 
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
+  journalRecorder();
   return {
     transport: currentCallTransport,
-    viewerId: () => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '',
+    viewerId,
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
-    acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs() }),
-    acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
+    acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
+    acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera({ profile: currentProfile() }) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
     acquireDisplay: () => acquireDisplay(),
-    createLink: createPeerLink,
+    createLink: (link) => createPeerLink({ ...link, shapeSdp: (sdp) => shapeOpusSdp(sdp, opusShapeFor(currentProfile())) }),
     cameraEffects,
     createStream: defaultCreateStream,
     now: Date.now,

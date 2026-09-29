@@ -183,7 +183,7 @@ struct CallView: View {
             // again. Hence: self-preview background only when NOT connected.
             if shouldShowSelfPreviewBackground {
                 // §7.7 — self-preview background mirrors only the front camera.
-                CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
+                LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
                     .ignoresSafeArea()
                 Color.black.opacity(0.25)
                     .ignoresSafeArea()

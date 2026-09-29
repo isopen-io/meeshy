@@ -23,7 +23,21 @@ public extension APINotification {
     /// l'arrivant. Sans acteur identifié, aucun geste : un bouton qui ne
     /// saurait pas vers qui aller n'existe pas.
     var quickActions: [NotificationQuickAction] {
-        guard notificationType == .contactJoined, let userId = senderId, !userId.isEmpty else { return [] }
-        return [.connect(userId: userId), .write(userId: userId)]
+        quickActions(isFriend: false)
+    }
+
+    /// #8724 — le badge « Invités venus » nomme la personne venue par votre
+    /// lien : on peut lui ÉCRIRE, et se connecter à elle si l'amitié que le
+    /// parrainage a nouée n'existe plus. Déjà amis ⇒ « Écrire » seul.
+    func quickActions(isFriend: Bool) -> [NotificationQuickAction] {
+        guard let userId = senderId, !userId.isEmpty else { return [] }
+        switch notificationType {
+        case .contactJoined:
+            return [.connect(userId: userId), .write(userId: userId)]
+        case .badgeEarned where metadata?.axisKey == EngagementAxisKey.inviteJoined.rawValue:
+            return isFriend ? [.write(userId: userId)] : [.write(userId: userId), .connect(userId: userId)]
+        default:
+            return []
+        }
     }
 }

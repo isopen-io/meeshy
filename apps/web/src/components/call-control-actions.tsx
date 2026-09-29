@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
@@ -11,6 +11,7 @@ import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
 import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
 import type { RowKeyHandler, RowWheelHandler } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import type { LocalZoom } from '@/lib/calls/self-zoom';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -273,15 +274,19 @@ export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/
 
 type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit };
 
+const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallZoomStep })));
+
 const CAMERA_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
 
 /**
  * LES COMMANDES DE MA CAMÉRA (#8576, #8626) — Retourner, Couper la caméra,
- * Effets (qui entre dans le mode), Partager l'écran, en une rangée compacte :
+ * Effets (qui entre dans le mode), Partager l'écran, et dans ma vignette le
+ * cran du zoom (#8441 : `local`, que l'écran d'appel ne remet qu'à ma
+ * vignette, `zoomControlIn`), en une rangée compacte :
  * en bas de ma vignette (`tile`), ou en haut au centre quand mon image
  * remplit l'écran (`top`). ← et → y passent d'un bouton à l'autre.
  */
-export function CallCameraControls({ call, set, language, panels, kit, place }: RowsProps & { readonly place: 'tile' | 'top' }) {
+export function CallCameraControls({ call, set, language, panels, kit, place, local }: RowsProps & { readonly place: 'tile' | 'top'; readonly local: LocalZoom | null }) {
   const context = { call, language, panels, kit };
   const label = translateCallControls(language, 'callControls.camera.options');
   return (
@@ -302,6 +307,11 @@ export function CallCameraControls({ call, set, language, panels, kit, place }: 
           />
         );
       })}
+      {local !== null ? (
+        <Suspense fallback={null}>
+          <CallZoomStep stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} Button={kit.Button} rowItem={kit.rowItem} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

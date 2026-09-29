@@ -195,7 +195,27 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(journal).toEqual([`pick:${SERVER_MESSAGE_ID}:fr`, 'detail:null']);
   });
 
-  test('« Exporter en image » monte la carte d’un message ordinaire, avec ses templates', async () => {
+  test('« Plus… » déplie Composer (une photo à composer) ET Imager, qui ouvre l’atelier (#8693)', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        setExportFor: (request) => journal.push(typeof request === 'function' || request === null ? 'export:?' : `export:${request.messageId}:${String(request.quick)}`),
+        setDetailFor: (id) => journal.push(`detail:${String(id)}`),
+      }),
+      [ownMessage()],
+    );
+    expect([...host.querySelectorAll('[data-message-create]')].map((el) => el.getAttribute('data-message-create'))).toEqual(['compose', 'image']);
+    await mounter.click(host.querySelector<HTMLElement>('[data-message-create="image"]'));
+    expect(journal).toEqual([`export:${SERVER_MESSAGE_ID}:false`, 'detail:null']);
+  });
+
+  test('« Plus… » d’un message protégé n’offre ni Composer ni Imager', async () => {
+    const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ isBlurred: true })]);
+    expect(has(host, '[data-message-create]')).toBe(false);
+  });
+
+  test('« Imager » monte la carte d’un message ordinaire, avec ses templates', async () => {
     const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ attachments: [] })]);
     await loadExportCardCatalog('fr');
     await mounter.settle();

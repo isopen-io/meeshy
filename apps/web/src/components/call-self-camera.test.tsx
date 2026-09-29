@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
+import { setLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
@@ -161,6 +162,7 @@ describe('mon image pendant un appel', () => {
     const view = mount(call(zoomCamera()));
     await view.full();
     expect(view.find('[data-test-column] [data-call-zoom]')?.getAttribute('aria-label')).toBe('Zoom de ma caméra');
+    expect(view.find('[data-call-zoom]')?.getAttribute('data-call-zoom')).toBe('device');
     expect(view.find('[data-call-zoom-value]')?.textContent).toBe('1×');
     expect((view.find('[data-call-zoom-out]') as HTMLButtonElement).disabled).toBe(true);
     expect(view.find('[data-call-self-gestures]')).not.toBeNull();
@@ -203,13 +205,28 @@ describe('mon image pendant un appel', () => {
     view.done();
   });
 
-  test('sans zoom proposé, la rangée de ma caméra vient seule, en haut', async () => {
+  test('sans zoom de la caméra, le zoom NUMÉRIQUE agrandit mon seul aperçu — rien ne part (#8441)', async () => {
     fresh();
-    const view = mount(call(zoomCamera(false)));
+    setLocalZoom('call-0', 'user', 1);
+    const camera = zoomCamera(false);
+    const view = mount(call(camera));
     await view.full();
     expect(view.find('[data-test-row]')).not.toBeNull();
-    expect(view.find('[data-call-zoom]')).toBeNull();
-    expect(view.find('[data-call-self-gestures]')).toBeNull();
+    expect(view.find('[data-call-zoom]')?.getAttribute('data-call-zoom')).toBe('local');
+    view.press('[data-call-zoom-in]');
+    await act(async () => {});
+    expect(camera.applied).toEqual([]);
+    expect(view.find('[data-call-zoom-value]')?.textContent).toBe('1,3×');
+    expect((view.find('video[data-call-mirrored]') as HTMLVideoElement).style.transform).toBe('scaleX(-1) scale(1.3)');
+    expect((view.find('video[data-call-mirrored]') as HTMLVideoElement).parentElement?.classList.contains('overflow-hidden')).toBe(true);
+    view.done();
+  });
+
+  test('ma caméra arrière zoomée localement n’est pas retournée', async () => {
+    fresh();
+    setLocalZoom('call-1', 'environment', 2);
+    const view = mount(call(zoomCamera(false), { facing: 'environment' }));
+    expect((view.find('[data-call-corner] video') as HTMLVideoElement).style.transform).toBe('scale(2)');
     view.done();
   });
 

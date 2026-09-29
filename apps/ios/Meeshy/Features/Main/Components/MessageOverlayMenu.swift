@@ -189,7 +189,7 @@ struct MessageOverlayMenu: View {
             canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
             isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
-            hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat
+            hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: message).isEmpty
         )
     }
 

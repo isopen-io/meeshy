@@ -1,18 +1,20 @@
-import { useEffect, useState, type ReactNode } from 'react';
 
 import { ForwardSheet } from '@/components/forward-sheet';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
-import { isExportCardCatalogLoaded, loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
-import type { Message } from '@/lib/api/types';
-import { messageDetailExposureOf, translationChoices } from '@/lib/view/message-actions';
+import type { Attachment, Message } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import { offerStudioSeed } from '@/lib/stories/studio-seed';
+import { messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
 
+import { ExportCatalogGate } from './export-catalog-gate';
+import { href, navigate } from './route-table';
 import { MessageExportSheet } from './thread-export-sheet';
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
@@ -132,6 +134,9 @@ export function ThreadMessageSheets({
         const servedDetail = messageMenu.servedOf(detailFor);
         /* Un message protégé (#7580, #8008) : ni langues ni pièces — rien de son contenu. */
         const exposed = messageDetailExposureOf(detailMessage, { now: Date.now() });
+        const menuContext = messageMenuContextOf(detailMessage, { now: Date.now() });
+        const imageable = !menuContext.isProtected && (menuContext.hasText || menuContext.hasImageableMedia === true);
+        const composable = menuContext.composableIndex === null || menuContext.composableIndex === undefined ? null : (detailMessage.attachments ?? [])[menuContext.composableIndex];
         return (
           <MessageDetailSheet
             choices={
@@ -147,6 +152,10 @@ export function ThreadMessageSheets({
             messageId={detailMessage.id}
             attachments={exposed ? (detailMessage.attachments ?? []) : []}
             star={messageMenu.starOf(detailFor)}
+            create={{
+              onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
+              onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
+            }}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);
@@ -164,7 +173,7 @@ export function ThreadMessageSheets({
           messageCardSubjectOf({
             message: exportMessage,
             servedText: messageMenu.servedOf(exportFor)?.text,
-            viewer: { id: viewerId, displayName: viewerName },
+            viewer: { id: viewerId, displayName: viewerName, handle: viewerHandle },
             readerLanguages,
             interfaceLanguage: currentInterfaceLanguage(),
             now: Date.now(),
@@ -190,23 +199,20 @@ export function ThreadMessageSheets({
   );
 }
 
-/** Le composer d'export ne se monte qu'une fois SON catalogue chargé : il vit
- * hors du catalogue d'interface, chargé au premier « Exporter en image ». */
-function ExportCatalogGate({ children }: { readonly children: ReactNode }) {
+/**
+ * « COMPOSER » DEPUIS « PLUS… » (#8693) — le geste de la visionneuse
+ * (`viewer-media-actions.tsx`, #6303) : la pièce en fichier, posée en graine
+ * du studio, puis le studio. Un échec se dit, jamais un bouton muet.
+ */
+async function composeWithAttachment(attachment: Attachment, announce: (message: string) => void): Promise<void> {
   const language = currentInterfaceLanguage();
-  const [ready, setReady] = useState(() => isExportCardCatalogLoaded(language));
-  useEffect(() => {
-    if (ready) return;
-    let live = true;
-    void loadExportCardCatalog(language).then(
-      () => {
-        if (live) setReady(true);
-      },
-      () => undefined,
-    );
-    return () => {
-      live = false;
-    };
-  }, [language, ready]);
-  return ready ? <>{children}</> : null;
+  const { fetchCardMediaBlob } = await import('@/lib/export/message-card-fetch');
+  const blob = await fetchCardMediaBlob(attachment.fileUrl, attachment.id).catch(() => null);
+  if (blob === null) {
+    announce(translate(language, 'media.viewer.compose_failed'));
+    return;
+  }
+  offerStudioSeed(new File([blob], attachment.originalName !== '' ? attachment.originalName : attachment.fileName, { type: attachment.mimeType }));
+  navigate(href('storyCompose'));
 }
+

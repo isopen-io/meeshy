@@ -148,7 +148,8 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         "composer.camera.lock.done",
         "composer.camera.zoom",
         "composer.camera.flashIntensity",
-        "composer.camera.gesture.tapPhoto",
+        "composer.camera.gesture.tapArm",
+        "composer.camera.gesture.tapAgainPhoto",
         "composer.camera.gesture.holdFilm",
     ]
 
@@ -175,19 +176,23 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertTrue(parle.hasPrefix(ComposerSceneCameraCopy.emptySceneTitle))
         XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.emptySceneInvite))
         XCTAssertTrue(parle.hasSuffix(ComposerSceneCameraCopy.gestureLine(.holdFilm)))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapPhoto)))
+        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapArm)))
+        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapAgainPhoto)))
     }
 
     // MARK: - Les gestes : une ligne chacun, précédée de son icône (complément porteur)
 
-    func test_gestes_photoPuisVideo_chacunSaLigne() {
-        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.photoOrVideo), [.tapPhoto, .holdFilm])
+    /// **L'indication dit les DEUX temps de la photo** (#8711) : toucher arme,
+    /// toucher encore prend — puis la vidéo au maintien.
+    func test_gestes_armerPuisPhotographierPuisFilmer_chacunSaLigne() {
+        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.photoOrVideo), [.tapArm, .tapAgainPhoto, .holdFilm])
         XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.videoOnly), [.holdFilm],
                        "un réel n'offre pas la photo : sa ligne ne s'affiche pas")
     }
 
     func test_gestes_chaqueLigneASonIcone() {
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapPhoto.symbol, "camera")
+        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapArm.symbol, "camera.viewfinder")
+        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapAgainPhoto.symbol, "camera")
         XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.holdFilm.symbol, "video")
     }
 

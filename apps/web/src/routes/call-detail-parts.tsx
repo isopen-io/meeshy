@@ -31,7 +31,13 @@ import { Link } from '@/routes/route-table';
  * lu par le Prisme du lecteur, relu depuis la passerelle — le journal vécu
  * pendant l'appel s'y retrouve une fois l'appel fini. Chunk à part, partagé
  * avec la bulle du fil (`call_transcript_panel`) ; un appel manqué n'en a pas.
+ *
+ * Entre les deux, « Qualité et réseau » (#8698) : le journal que CE téléphone
+ * a gardé de l'appel, pour le compte qui regarde — chunk à part
+ * (`call_network_journal_panel`), muet quand le journal est vide.
  */
+
+const CallNetworkJournalSection = lazy(() => import('@/components/call-network-journal-panel').then((module) => ({ default: module.CallNetworkJournalSection })));
 
 const CallTranscriptPanel = lazy(() => import('@/components/call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
 
@@ -150,11 +156,14 @@ export function CallDetailCard({
   detail,
   now,
   onCall,
+  viewerId = '',
 }: {
   readonly language: InterfaceLanguage;
   readonly detail: CallDetail;
   readonly now: Date;
   readonly onCall: (media: CallMedia) => void;
+  /** Le compte qui regarde : son journal réseau de l'appel (#8698) ; vide, rien à relire. */
+  readonly viewerId?: string;
 }) {
   const missed = detail.direction === 'missed';
   const status = [translate(language, DIRECTION_LABEL[detail.direction]), detail.startedAt === null ? '' : shortRelativeTime(new Date(detail.startedAt), now, language)]
@@ -192,6 +201,13 @@ export function CallDetailCard({
         {data === null ? null : <DetailRow field="data" glyph={glyphOf('arrowsDownUp')} label={translate(language, 'callJoin.detail.data')} value={data} />}
         {detail.reactions.length === 0 ? null : <ReactionsRow label={translate(language, 'callJoin.detail.reactions')} reactions={detail.reactions} />}
       </dl>
+      {viewerId === '' ? null : (
+        <div className="contents" data-call-detail-network={detail.callId}>
+          <Suspense fallback={null}>
+            <CallNetworkJournalSection callId={detail.callId} viewerId={viewerId} language={language} />
+          </Suspense>
+        </div>
+      )}
       {missed ? null : (
         <section aria-labelledby={`transcript-${detail.callId}`} className="grid gap-2" data-call-detail-transcript={detail.callId}>
           <h3 id={`transcript-${detail.callId}`} className="px-1 text-caption font-semibold" style={{ color: INK_2 }}>

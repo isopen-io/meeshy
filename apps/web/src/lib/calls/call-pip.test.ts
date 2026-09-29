@@ -17,7 +17,9 @@ const videoStream = (live = true) => ({ getVideoTracks: () => (live ? [{ readySt
 
 const member = (userId: string, cameraOn: boolean): CallMember => ({ userId, name: userId, avatar: null, micMuted: false, cameraOn, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected' });
 
-const call = (patch: Partial<ActiveCall> = {}): Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'> => ({
+const call = (patch: Partial<ActiveCall> = {}): Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase' | 'facing' | 'screenSharing'> => ({
+  facing: 'user',
+  screenSharing: false,
   members: { peer: member('peer', true) },
   remoteStreams: { peer: videoStream() },
   localStream: videoStream(),
@@ -42,6 +44,11 @@ describe('pipSource', () => {
     const mine = call({ members: { peer: member('peer', false) } });
     expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: true });
     expect(pipSource(call({ members: { peer: member('peer', false) }, cameraOn: false }))).toBeNull();
+  });
+
+  test('ma caméra arrière flotte sans miroir (#8696)', () => {
+    const rear = call({ members: { peer: member('peer', false) }, facing: 'environment' });
+    expect(pipSource(rear)).toEqual({ stream: rear.localStream, mirrored: false });
   });
 });
 

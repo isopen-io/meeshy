@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 
-import { applyZoom, clampZoom, currentZoom, zoomAfterPinch, zoomAfterWheel, zoomLabel, zoomNudge, zoomRangeOf, type ZoomRange } from '@/lib/calls/camera-zoom';
-import { cameraSourceOf } from '@/lib/calls/video-effects';
+import type { CallButton } from '@/components/call-glass-button';
+import { nextZoomStop, zoomAfterPinch, zoomAfterWheel, zoomLabel, zoomNudge } from '@/lib/calls/camera-zoom';
+import type { LocalZoom } from '@/lib/calls/self-zoom';
+import { useCameraZoom, type CameraZoom } from '@/lib/calls/use-camera-zoom';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -9,39 +11,19 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * **MA CAMÉRA EN PLEIN ÉCRAN** (#8441, #8576) — quand MON image remplit
  * l'écran (un toucher sur ma vignette l'y met), et là seulement :
  *
- * - pincer mon image, ou la molette dessus, zoome la caméra, là où elle le
- *   propose (Chrome sur Android, la coque) ;
+ * - pincer mon image, ou la molette dessus, zoome la caméra là où elle le
+ *   propose (Chrome sur Android, la coque), sinon mon seul aperçu
+ *   (`use-camera-zoom.ts`) ;
  * - la capsule `+  1×  −` du zoom se pose sur le bord : elle le fait au
  *   clavier et au lecteur d'écran, et dit le facteur. Les commandes de ma
  *   caméra, elles, montent en haut au centre (#8626, `call-stage.tsx`).
  *
+ * Le même chunk porte le CRAN du zoom de ma vignette (`CallZoomStep`).
+ *
  * Chunk à part (`budgets.json` › `call_self_camera`), chargé quand mon image
- * passe en plein écran : il n'importe rien de l'écran d'appel (`call_overlay`),
+ * passe en plein écran ou que ma vignette montre son cran : il n'importe rien de l'écran d'appel (`call_overlay`),
  * qui lui remet ses glyphes et la colonne de la capsule (`column`).
  */
-
-export type CameraZoom = { readonly range: ZoomRange; readonly value: number; readonly set: (value: number) => void };
-
-/** Le zoom de la caméra DERRIÈRE ma piste envoyée — `null` quand elle n'en propose pas. */
-export function useCameraZoom(stream: MediaStream | null): CameraZoom | null {
-  const sent = stream?.getVideoTracks()[0] ?? null;
-  const camera = sent === null ? null : cameraSourceOf(sent);
-  const range = useMemo(() => zoomRangeOf(camera), [camera]);
-  const [value, setValue] = useState(() => (camera !== null && range !== null ? currentZoom(camera, range) : 1));
-  useEffect(() => {
-    if (camera !== null && range !== null) setValue(currentZoom(camera, range));
-  }, [camera, range]);
-  if (camera === null || range === null) return null;
-  return {
-    range,
-    value,
-    set: (next) => {
-      const zoom = clampZoom(range, next);
-      setValue(zoom);
-      void applyZoom(camera, zoom).catch(() => undefined);
-    },
-  };
-}
 
 type Point = { readonly x: number; readonly y: number };
 
@@ -105,7 +87,7 @@ const STEP = 'grid size-11 place-items-center rounded-full transition-transform 
 function ZoomCapsule({ zoom, language, glyphs }: { readonly zoom: CameraZoom; readonly language: InterfaceLanguage; readonly glyphs: Glyphs }) {
   const step = (direction: 1 | -1) => () => zoom.set(zoomNudge(zoom.range, zoom.value, direction));
   return (
-    <div role="group" aria-label={translate(language, 'call.zoom')} className="glass-call flex flex-col items-center rounded-full p-0.5 text-white" data-call-zoom="">
+    <div role="group" aria-label={translate(language, 'call.zoom')} className="glass-call flex flex-col items-center rounded-full p-0.5 text-white" data-call-zoom={zoom.mode}>
       <button type="button" aria-label={translate(language, 'call.zoom.in')} title={translate(language, 'call.zoom.in')} onClick={step(1)} disabled={zoom.value >= zoom.range.max} className={STEP} data-call-zoom-in="">
         {glyphs.plus}
       </button>
@@ -121,19 +103,39 @@ function ZoomCapsule({ zoom, language, glyphs }: { readonly zoom: CameraZoom; re
 
 type SelfCameraProps = {
   readonly stream: MediaStream | null;
+  readonly local: LocalZoom;
   readonly language: InterfaceLanguage;
   readonly glyphs: Glyphs;
   /** La colonne qui accueille la capsule — `null` quand les commandes de ma caméra sont retirées (un mode). */
   readonly column: ((capsule: ReactNode) => ReactNode) | null;
 };
 
-export function CallSelfCamera({ stream, language, glyphs, column }: SelfCameraProps) {
-  const zoom = useCameraZoom(stream);
+export function CallSelfCamera({ stream, local, language, glyphs, column }: SelfCameraProps) {
+  const zoom = useCameraZoom({ stream, local });
   const gestures = useZoomGestures(zoom);
   return (
     <>
       {zoom === null ? null : <div aria-hidden className="absolute inset-0" {...gestures} data-call-self-gestures="" />}
       {column === null ? null : column(zoom === null ? null : <ZoomCapsule zoom={zoom} language={language} glyphs={glyphs} />)}
     </>
+  );
+}
+
+type ZoomStepProps = { readonly stream: MediaStream | null; readonly local: LocalZoom; readonly language: InterfaceLanguage; readonly Button: typeof CallButton; readonly rowItem: string };
+
+/** Le cran du zoom dans ma vignette (#8441) : « 1× », puis 2×, 5×, et retour — la caméra, sinon mon seul aperçu. */
+export function CallZoomStep({ stream, local, language, Button, rowItem }: ZoomStepProps) {
+  const zoom = useCameraZoom({ stream, local });
+  if (zoom === null) return null;
+  const said = zoomLabel(zoom.value, language);
+  return (
+    <Button
+      label={`${translate(language, 'call.zoom')}, ${said}`}
+      glyph={<span className="text-mini font-semibold tabular-nums">{said}</span>}
+      onPress={() => zoom.set(nextZoomStop(zoom.range, zoom.value))}
+      tone="bare"
+      size={44}
+      data={{ 'data-call-self-control': 'zoom', 'data-call-zoom-mode': zoom.mode, [rowItem]: '' }}
+    />
   );
 }

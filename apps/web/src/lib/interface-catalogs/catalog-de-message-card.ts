@@ -1,9 +1,11 @@
 import type { MessageCardCatalogSlice } from './catalog-fr-message-card';
 
-/** Message export as image — see `catalog-fr-message-card.ts`. */
+/** „Imager“ – eine Nachricht oder einen Kommentar als Bild – siehe `catalog-fr-message-card.ts`. */
 const deMessageCard = {
-  'message.menu.export': 'Als Bild exportieren',
-  'message.menu.exportQuick': 'Schnellexport',
+  'message.menu.export': 'Als Bild gestalten',
+  'message.menu.exportQuick': 'Schnellbild',
+  'message.menu.compose': 'Gestalten',
+  'comments.action.image': 'Als Bild gestalten',
 } satisfies MessageCardCatalogSlice;
 
 export default deMessageCard;

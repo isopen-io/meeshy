@@ -440,6 +440,7 @@ export class CommentReactionHandler {
         where: { id: postId },
         select: {
           type: true,
+          content: true,
           author: { select: { displayName: true, username: true } },
         },
       }),
@@ -463,6 +464,7 @@ export class CommentReactionHandler {
         // Forward the real post type (mirror PostReactionHandler) so a reaction on a
         // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.
         postType: post?.type,
+        postPreview: post?.content?.slice(0, 80) ?? undefined,
       })
       .catch((error) => {
         this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });

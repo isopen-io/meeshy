@@ -8,6 +8,8 @@ struct CallDetailSheet: View {
     let record: APICallRecord
 
     @Environment(\.dismiss) private var dismiss
+    @State private var networkJournal: CallNetworkJournalPresentation?
+    @State private var transcript: CallTranscript?
     private var theme: ThemeManager { ThemeManager.shared }
     private var unknownCallerFallback: String {
         String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)
@@ -32,6 +34,14 @@ struct CallDetailSheet: View {
                 if !record.participants.isEmpty {
                     participantsSection
                 }
+                if let networkJournal {
+                    CallNetworkJournalSection(presentation: networkJournal, accentColor: accentColor)
+                }
+                if let transcript {
+                    CallTranscriptSection(transcript: transcript, accentHex: accentHex, tint: accentColor) {
+                        self.transcript = nil
+                    }
+                }
             }
             .padding(20)
             // iPad/Mac width cap — mirrors FloatingCallPillView's established
@@ -44,6 +54,12 @@ struct CallDetailSheet: View {
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task(id: record.callId) {
+            networkJournal = await CallNetworkJournalStore.shared.journal(for: record.callId)
+                .map { CallNetworkJournalPresentation(journal: $0) }
+                .flatMap { $0.isEmpty ? nil : $0 }
+            transcript = await CallTranscriptLoader.load(callId: record.callId)
+        }
     }
 
     // MARK: - Header

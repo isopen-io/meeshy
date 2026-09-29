@@ -106,14 +106,18 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Revenir à la scène", bundle: .main)
     }
 
-    /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671) : la
-    /// photo au toucher, la vidéo au maintien — le format décide lesquels
-    /// paraissent (`ComposerSceneQuickCapture.gestureLines`).
+    /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671,
+    /// #8711) : le viseur au premier toucher, la photo au second, la vidéo au
+    /// maintien — le format décide lesquels paraissent
+    /// (`ComposerSceneQuickCapture.gestureLines`).
     static func gestureLine(_ line: ComposerSceneQuickCapture.GestureLine) -> String {
         switch line {
-        case .tapPhoto:
-            return String(localized: "composer.camera.gesture.tapPhoto",
-                          defaultValue: "Toucher : photo", bundle: .main)
+        case .tapArm:
+            return String(localized: "composer.camera.gesture.tapArm",
+                          defaultValue: "Toucher : ouvrir le viseur", bundle: .main)
+        case .tapAgainPhoto:
+            return String(localized: "composer.camera.gesture.tapAgainPhoto",
+                          defaultValue: "Toucher encore : photo", bundle: .main)
         case .holdFilm:
             return String(localized: "composer.camera.gesture.holdFilm",
                           defaultValue: "Maintenir : filmer", bundle: .main)
