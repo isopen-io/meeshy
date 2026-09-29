@@ -394,6 +394,14 @@ extension MeeshyComposerHost {
     /// mettre. L'étape d'arrivée vient de la loi
     /// (`ComposerSceneCamera.stageAfterCapture`), jamais d'un `.off` écrit ici.
     func poseSceneCapture(_ result: CameraResult) {
+        // **« Reprendre une photo » : l'ancien fond part À LA POSE** (#8716),
+        // avant l'ingestion — sur une scène sans fond, la prise DEVIENT le fond
+        // (`ComposerMediaPlacement.role`). Retirée ici et non à l'armement, elle
+        // ne se perd pas si l'auteur referme le viseur ; l'annulation la rend.
+        if let ancien = sceneCaptureReplacesBackgroundId {
+            sceneCaptureReplacesBackgroundId = nil
+            retractMedia(objectIds: [ancien])
+        }
         sceneCameraStage = ComposerSceneCamera.stageAfterCapture
         sceneCameraMode = nil
         extinguishSceneFlash()
@@ -406,6 +414,7 @@ extension MeeshyComposerHost {
     /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
     /// allumé que rien à l'écran n'explique.
     func disarmSceneCamera() {
+        sceneCaptureReplacesBackgroundId = nil
         sceneCameraStage = .off
         sceneCameraSize = .card
         sceneCameraMode = nil

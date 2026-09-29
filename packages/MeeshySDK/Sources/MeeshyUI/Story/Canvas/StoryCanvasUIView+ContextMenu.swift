@@ -42,6 +42,13 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
     /// `plane`. Les confondre ferait passer un objet devant un fond au lieu de
     /// le sortir.
     case leaveScene
+    /// **Un média de PREMIER PLAN devient le fond** (#8716, directive porteur
+    /// 2026-09-29 : « lorsqu'on longpress sur une image/vidéo sur la scène en
+    /// front, on doit proposer de mettre en fond ou de remplacer le fond »).
+    /// Deux cas, un geste : le MOT dit s'il y a un fond à remplacer — l'auteur
+    /// sait avant de toucher que l'ancien va partir.
+    case setAsBackground
+    case replaceBackground
     case delete
 
     /// **Ce qu'un objet offre VRAIMENT (#4046) — loi 4, sans exception : une
@@ -76,7 +83,9 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         sharesPlaneWithAnother: Bool,
         hasEditor: Bool,
         canLeaveScene: Bool = false,
-        hasTrimmableSource: Bool = false
+        hasTrimmableSource: Bool = false,
+        canBecomeBackground: Bool = false,
+        sceneHasBackground: Bool = false
     ) -> [StoryCanvasContextAction] {
         let empile = !isBackground && sharesPlaneWithAnother
         var servies: [StoryCanvasContextAction] = []
@@ -92,6 +101,12 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         // lui, la refuse : sortir le badge d'attribution d'une republication
         // retirerait l'attribution, ce que le verrou existe pour empêcher.
         if !isLocked, canLeaveScene { servies.append(.leaveScene) }
+        // **Devenir le fond** (#8716) : un média de PREMIER PLAN seulement — un
+        // fond l'est déjà — et l'hôte doit savoir le faire. Le défaut FERME,
+        // comme la sortie : le SDK demande l'EFFET, jamais le profil.
+        if !isLocked, !isBackground, canBecomeBackground {
+            servies.append(sceneHasBackground ? .replaceBackground : .setAsBackground)
+        }
         if !isLocked { servies.append(.delete) }
         return servies
     }
@@ -143,6 +158,12 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         case .leaveScene:
             return String(localized: "story.canvas.action.leaveScene",
                           defaultValue: "Sortir de la scène", bundle: .module)
+        case .setAsBackground:
+            return String(localized: "story.canvas.action.setAsBackground",
+                          defaultValue: "Mettre en fond", bundle: .module)
+        case .replaceBackground:
+            return String(localized: "story.canvas.action.replaceBackground",
+                          defaultValue: "Remplacer le fond", bundle: .module)
         case .delete:
             return String(localized: "story.canvas.action.delete",
                           defaultValue: "Supprimer", bundle: .module)
@@ -157,6 +178,8 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         case .bringForward: return "square.3.stack.3d.top.filled"
         case .sendBackward: return "square.2.stack.3d.bottom.filled"
         case .leaveScene:   return "rectangle.portrait.and.arrow.right"
+        case .setAsBackground:   return "photo.on.rectangle"
+        case .replaceBackground: return "photo.on.rectangle.angled"
         case .delete:       return "trash"
         }
     }
@@ -216,7 +239,9 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 hasEditor: hasEditor(for: kind),
                 canLeaveScene: canLeaveScene,
                 hasTrimmableSource: onItemTrimRequested != nil
-                    && StorySceneObjectPredicates.hasTrimmableSource(slide: slide, id: id)
+                    && StorySceneObjectPredicates.hasTrimmableSource(slide: slide, id: id),
+                canBecomeBackground: onItemMadeBackground != nil && kind == .media,
+                sceneHasBackground: slide.effects.hasVisualBackgroundMedia
             )
             .map { action in
                 UIAction(title: action.title,
@@ -277,6 +302,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // bornes de la source. Offerte seulement quand l'hôte l'a câblée ET
         // que l'objet a une source à rogner (loi 4).
         case .trim:         onItemTrimRequested?(id, kind)
+        // DÉLÉGUÉE : ce que devient l'ancien fond est une décision de l'hôte.
+        case .setAsBackground, .replaceBackground: onItemMadeBackground?(id, kind)
         }
     }
 

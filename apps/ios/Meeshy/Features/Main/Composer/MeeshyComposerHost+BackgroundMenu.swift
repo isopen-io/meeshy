@@ -67,6 +67,12 @@ extension MeeshyComposerHost {
             // arrivée après l'inventaire des deux autres : elle a hérité du
             // défaut sans figurer nulle part.
             retractMedia(objectIds: [id])
+        case .retakePhoto:
+            // **Le viseur s'ouvre ARMÉ, et la prise REMPLACE ce fond** (#8716).
+            // L'ancien ne part qu'à la pose (`poseSceneCapture`) : refermer le
+            // viseur le laisse intact.
+            sceneCaptureReplacesBackgroundId = id
+            armSceneCamera()
         }
         HapticFeedback.medium()
     }

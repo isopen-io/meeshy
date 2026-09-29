@@ -485,7 +485,11 @@ nonisolated enum ComposerTrailingRailPolicy {
             // interroge le MODELE, comme ses trois voisins ci-dessus. Ce que
             // l'HOTE sait faire reste dans `served`, une ligne plus bas.
             hasTrimmableSource: StorySceneObjectPredicates.hasTrimmableSource(
-                slide: slide, id: selectedId)
+                slide: slide, id: selectedId),
+            // **Devenir le fond** (#8716) : une image ou une vidéo POSÉE — le
+            // modèle le dit, le SDK en décide le mot (mettre / remplacer).
+            canBecomeBackground: slide.sceneObject(id: selectedId)?.kind == .media,
+            sceneHasBackground: slide.effects.hasVisualBackgroundMedia
         )
         .filter(served.contains)
     }

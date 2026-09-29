@@ -33,4 +33,49 @@ final class StoryCanvasHostMenuTests: XCTestCase {
         XCTAssertNil(vue.onItemMenuRequested, "par défaut, aucun hôte ne peint le menu")
         XCTAssertFalse(vue.contextMenu(for: "m", kind: .media).children.isEmpty)
     }
+
+    // MARK: - Devenir le fond (#8716)
+
+    func test_offered_premierPlanSansFond_proposeMettreEnFond() {
+        let offertes = StoryCanvasContextAction.offered(isLocked: false, isBackground: false,
+                                                        sharesPlaneWithAnother: false, hasEditor: true,
+                                                        canBecomeBackground: true, sceneHasBackground: false)
+        XCTAssertTrue(offertes.contains(.setAsBackground))
+        XCTAssertFalse(offertes.contains(.replaceBackground))
+        XCTAssertEqual(offertes.last, .delete, "la destruction reste la dernière")
+    }
+
+    func test_offered_premierPlanAvecFond_proposeRemplacerLeFond() {
+        let offertes = StoryCanvasContextAction.offered(isLocked: false, isBackground: false,
+                                                        sharesPlaneWithAnother: false, hasEditor: true,
+                                                        canBecomeBackground: true, sceneHasBackground: true)
+        XCTAssertTrue(offertes.contains(.replaceBackground))
+        XCTAssertFalse(offertes.contains(.setAsBackground))
+    }
+
+    func test_offered_parDefaut_ferme() {
+        let offertes = StoryCanvasContextAction.offered(isLocked: false, isBackground: false,
+                                                        sharesPlaneWithAnother: false, hasEditor: true)
+        XCTAssertFalse(offertes.contains(.setAsBackground))
+        XCTAssertFalse(offertes.contains(.replaceBackground))
+    }
+
+    func test_offered_fondOuVerrou_nePeuventPasDevenirLeFond() {
+        for (verrou, fond) in [(true, false), (false, true)] {
+            let offertes = StoryCanvasContextAction.offered(isLocked: verrou, isBackground: fond,
+                                                            sharesPlaneWithAnother: false, hasEditor: true,
+                                                            canBecomeBackground: true, sceneHasBackground: true)
+            XCTAssertFalse(offertes.contains(.replaceBackground))
+        }
+    }
+
+    func test_devenirLeFond_estRemisALHote() {
+        let media = StoryMediaObject(id: "m", kind: .image, aspectRatio: 1)
+        let slide = StorySlide(id: "s", effects: StoryEffects(mediaObjects: [media]), duration: 6, order: 0)
+        let vue = StoryCanvasUIView(slide: slide, mode: .edit)
+        var recu: String?
+        vue.onItemMadeBackground = { id, _ in recu = id }
+        vue.performContextAction(.replaceBackground, on: "m", kind: .media)
+        XCTAssertEqual(recu, "m")
+    }
 }

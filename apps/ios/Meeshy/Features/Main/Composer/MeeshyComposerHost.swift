@@ -630,6 +630,9 @@ struct MeeshyComposerHost: View {
     /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
     @State var sceneObjectMenu: ComposerSceneMenuRequest?
     @State var sceneMenuSize: CGSize = .zero
+    /// Le fond que la prochaine prise du viseur REMPLACE (#8716) — posé par
+    /// « Reprendre une photo », consommé à la pose, oublié au désarmement.
+    @State var sceneCaptureReplacesBackgroundId: String?
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène (#4064).**
     ///

@@ -15,12 +15,30 @@ final class ComposerBackgroundMenuTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    /// **Les trois entrées de la directive, et elles seules.** Une quatrième
-    /// n'est pas interdite — elle doit être DÉCIDÉE, et ce témoin est l'endroit
-    /// où la décision se prend.
-    func test_leMenu_sertLesTroisActionsDeLaDirective() {
+    /// **Les entrées des directives, et elles seules.** La quatrième —
+    /// « Reprendre une photo » — a été DÉCIDÉE le 2026-09-29 (#8716), ici.
+    func test_leMenu_sertLesActionsDesDirectives() {
         XCTAssertEqual(ComposerBackgroundMenuAction.served,
+                       [.edit, .retakePhoto, .bringForward, .delete])
+    }
+
+    /// Un format sans photo au viseur (un réel) ne l'offre pas.
+    func test_served_formatSansPhoto_neProposePasDeReprendreUnePhoto() {
+        XCTAssertEqual(ComposerBackgroundMenuAction.served(offersPhoto: false),
                        [.edit, .bringForward, .delete])
+        XCTAssertEqual(ComposerBackgroundMenuAction.served(offersPhoto: true),
+                       ComposerBackgroundMenuAction.served)
+    }
+
+    /// **L'ancien fond ne part qu'à la POSE** — refermer le viseur le laisse.
+    func test_reprendreUnePhoto_armeLeViseur_etRemplaceALaPose() throws {
+        let menu = try source("MeeshyComposerHost+BackgroundMenu.swift")
+        XCTAssertTrue(menu.contains("case.retakePhoto:sceneCaptureReplacesBackgroundId=idarmSceneCamera()"))
+        let viseur = try source("MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(viseur.contains("ifletancien=sceneCaptureReplacesBackgroundId{sceneCaptureReplacesBackgroundId=nilretractMedia(objectIds:[ancien])}"),
+                      "la prise remplace le fond à la pose")
+        XCTAssertTrue(viseur.contains("funcdisarmSceneCamera(){sceneCaptureReplacesBackgroundId=nil"),
+                      "refermer le viseur oublie le remplacement")
     }
 
     /// **`served` n'est pas `allCases`, et ce n'est pas un oubli** : un cas

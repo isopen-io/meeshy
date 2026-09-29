@@ -92,4 +92,60 @@ final class ComposerSceneMenuTests: XCTestCase {
         XCTAssertTrue(surface.contains("onItemMenu?(son.id, .audio"),
                       "une puce sonore ouvre le même menu")
     }
+
+    // MARK: - Un média devient le fond (#8716)
+
+    private func slide(fond: Bool) -> StorySlide {
+        var effets = StoryEffects()
+        var medias = [StoryMediaObject(id: "m", kind: .image, aspectRatio: 1)]
+        medias[0].isBackground = false
+        if fond {
+            var bg = StoryMediaObject(id: "bg", kind: .image, aspectRatio: 1)
+            bg.isBackground = true
+            medias.append(bg)
+        }
+        effets.mediaObjects = medias
+        effets.textObjects = [StoryTextObject(id: "t", text: "salut")]
+        return StorySlide(id: "s", effects: effets)
+    }
+
+    private func actions(_ slide: StorySlide, _ id: String) -> [StoryCanvasContextAction] {
+        ComposerTrailingRailPolicy.actions(slide: slide, selectedId: id,
+                                           served: ComposerTrailingColumn.servedActions,
+                                           hasEditor: true, canLeaveScene: false)
+    }
+
+    func test_mediaDePremierPlan_sceneAvecFond_proposeDeRemplacerLeFond() {
+        let offertes = actions(slide(fond: true), "m")
+        XCTAssertTrue(offertes.contains(.replaceBackground))
+        XCTAssertFalse(offertes.contains(.setAsBackground))
+    }
+
+    func test_mediaDePremierPlan_sceneSansFond_proposeDeLeMettreEnFond() {
+        let offertes = actions(slide(fond: false), "m")
+        XCTAssertTrue(offertes.contains(.setAsBackground))
+        XCTAssertFalse(offertes.contains(.replaceBackground))
+    }
+
+    func test_texteOuFond_nePeuventPasDevenirLeFond() {
+        let avecFond = slide(fond: true)
+        XCTAssertFalse(actions(avecFond, "t").contains(.replaceBackground), "un texte n'est pas un fond")
+        XCTAssertFalse(actions(avecFond, "bg").contains(.replaceBackground), "le fond l'est déjà")
+    }
+
+    func test_devenirLeFond_retireLAncienApresLaBascule() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneColumns.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let debut = code.range(of: "funcmakeSceneBackground(_id:String){") else {
+            return XCTFail("`makeSceneBackground` introuvable")
+        }
+        let corps = code[debut.upperBound...]
+        guard let bascule = corps.range(of: "viewModel.toggleBackground(id:id)"),
+              let retrait = corps.range(of: "retractMedia(objectIds:[ancien])") else {
+            return XCTFail("la bascule ou le retrait manque")
+        }
+        XCTAssertLessThan(bascule.lowerBound, retrait.lowerBound,
+                          "retiré d'abord, l'ancien fond laisserait le nouveau devenir le fond implicite")
+    }
 }

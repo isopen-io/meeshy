@@ -569,7 +569,8 @@ nonisolated enum ComposerSceneCapabilities {
     /// qu'un OBJET admet reste à la règle du SDK, qui n'offre le rognage qu'à
     /// une vidéo ou un son (`hasTrimmableSource`).
     static let controllers: Set<StoryCanvasContextAction> = [
-        .duplicate, .delete, .bringForward, .sendBackward, .trim
+        .duplicate, .delete, .bringForward, .sendBackward, .trim,
+        .setAsBackground, .replaceBackground
     ]
 
     /// Les bandes contextuelles du bas de scène. Passées à

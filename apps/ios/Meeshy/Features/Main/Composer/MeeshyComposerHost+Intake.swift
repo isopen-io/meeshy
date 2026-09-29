@@ -468,6 +468,7 @@ extension MeeshyComposerHost {
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
         case .bringForward: viewModel.bringForward(id: id)
+        case .setAsBackground, .replaceBackground: makeSceneBackground(id)
         case .sendBackward: viewModel.sendBackward(id: id)
         case .trim:
             // **« Rogner » ouvre l'ÉDITEUR sur ses bornes** (2026-09-05). Il

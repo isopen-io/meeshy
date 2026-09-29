@@ -313,6 +313,9 @@ public final class StoryCanvasUIView: UIView {
     /// l'écran — et le menu système n'est pas présenté. Non câblée, le canvas
     /// garde son `UIMenu` : les autres hôtes ne changent pas.
     public var onItemMenuRequested: ((String, CanvasItemKind, CGPoint) -> Void)?
+    /// **Un média de premier plan devient le fond** (#8716) — l'hôte décide ce
+    /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
+    public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state

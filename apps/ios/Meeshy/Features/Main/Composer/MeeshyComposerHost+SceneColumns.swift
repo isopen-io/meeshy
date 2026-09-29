@@ -198,4 +198,23 @@ extension MeeshyComposerHost {
             HapticFeedback.medium()
         }
     }
+
+    // MARK: - Un média de premier plan devient le fond (#8716)
+
+    /// **Le média devient le fond ; l'ancien fond est RETIRÉ, pas perdu.**
+    ///
+    /// L'ordre compte : `toggleBackground` d'abord — il marque le nouveau et
+    /// démarque l'ancien —, le retrait ensuite. Retiré en premier, l'ancien
+    /// laisserait le nouveau devenir le fond IMPLICITE de la slide, et la
+    /// bascule le rendrait alors au premier plan. Le retrait passe par le
+    /// meuble (#6577), et l'historique rend les deux d'un seul « annuler ».
+    func makeSceneBackground(_ id: String) {
+        let ancien = viewModel.currentSlide.effects.mediaObjects?
+            .first { $0.isBackground && $0.id != id }?.id
+        viewModel.toggleBackground(id: id)
+        if let ancien { retractMedia(objectIds: [ancien]) }
+        selectedSceneItemId = nil
+        selectedSceneItemKind = nil
+        HapticFeedback.medium()
+    }
 }

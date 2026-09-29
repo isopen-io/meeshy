@@ -37,7 +37,8 @@ extension MeeshyComposerHost {
                 hasEditor: ComposerSceneSurface.defaultEditableSceneKinds.contains(kind),
                 canLeaveScene: false))
         case .background:
-            return ComposerSceneMenu.entries(backgroundActions: ComposerBackgroundMenuAction.served)
+            return ComposerSceneMenu.entries(backgroundActions: ComposerBackgroundMenuAction.served(
+                offersPhoto: ComposerSceneCamera.modes(for: selectedFormat).contains(.photo)))
         }
     }
 
