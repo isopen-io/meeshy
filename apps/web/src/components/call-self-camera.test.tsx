@@ -99,7 +99,7 @@ const pinchOn = (element: HTMLElement, from: number, to: number) => {
 
 function Harness({ active, layout, controls }: { readonly active: ActiveCall; readonly layout: 'video-duo' | 'grid'; readonly controls: boolean }) {
   const [full, setFull] = useState(false);
-  const self = { full, onToggle: () => setFull((value) => !value), controls, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div> };
+  const self = { full, onToggle: () => setFull((value) => !value), controls, row: () => <div data-test-row="" />, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div> };
   return <CallStage call={active} layout={layout} language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
 }
 
@@ -125,11 +125,34 @@ describe('mon image pendant un appel', () => {
     return { find, press, full, done };
   };
 
-  test('en coin, aucun zoom : ni capsule, ni rail', () => {
+  test('en coin, aucun zoom : ni capsule, ni colonne — la rangée de ma caméra est DANS ma vignette (#8626)', () => {
     fresh();
     const view = mount(call(zoomCamera()));
     expect(view.find('[data-call-zoom]')).toBeNull();
     expect(view.find('[data-test-column]')).toBeNull();
+    expect(view.find('[data-call-corner-frame] [data-test-row]')).not.toBeNull();
+    expect(view.find('[data-call-corner] [data-test-row]')).toBeNull();
+    view.done();
+  });
+
+  test('en plein écran, la rangée quitte la vignette pour le haut ; la vignette du pair descend d’un cran (#8626)', async () => {
+    fresh();
+    const view = mount(call(zoomCamera()));
+    const top = () => (view.find('[data-call-corner-frame]') as HTMLElement).style.top;
+    const before = top();
+    await view.full();
+    expect(view.find('[data-test-row]')).not.toBeNull();
+    expect(view.find('[data-call-corner-frame] [data-test-row]')).toBeNull();
+    expect(top()).not.toBe(before);
+    view.done();
+  });
+
+  test('dans un mode, la rangée de ma caméra se retire, en coin comme en plein écran (#8626)', async () => {
+    fresh();
+    const view = mount(call(zoomCamera()), { controls: false });
+    expect(view.find('[data-test-row]')).toBeNull();
+    await view.full();
+    expect(view.find('[data-test-row]')).toBeNull();
     view.done();
   });
 
@@ -180,11 +203,11 @@ describe('mon image pendant un appel', () => {
     view.done();
   });
 
-  test('sans zoom proposé, le rail vient seul', async () => {
+  test('sans zoom proposé, la rangée de ma caméra vient seule, en haut', async () => {
     fresh();
     const view = mount(call(zoomCamera(false)));
     await view.full();
-    expect(view.find('[data-test-column]')).not.toBeNull();
+    expect(view.find('[data-test-row]')).not.toBeNull();
     expect(view.find('[data-call-zoom]')).toBeNull();
     expect(view.find('[data-call-self-gestures]')).toBeNull();
     view.done();
@@ -214,21 +237,22 @@ describe('ma vignette en coin se pince (#8577)', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
     const toggled: string[] = [];
-    const self = { full: false, onToggle: () => void toggled.push('toggle'), controls: true, column: () => null };
+    const self = { full: false, onToggle: () => void toggled.push('toggle'), controls: true, row: () => null, column: () => null };
     act(() => root.render(<CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />));
     const corner = () => host.querySelector('[data-call-corner]') as HTMLElement;
+    const frame = () => host.querySelector('[data-call-corner-frame]') as HTMLElement;
     const done = () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { host, corner, toggled, done };
+    return { host, corner, frame, toggled, done };
   };
 
   test('par défaut, x2 : la taille d’avant', () => {
     fresh();
     const view = mount(call(zoomCamera()));
     expect(view.corner().getAttribute('data-call-self-tile')).toBe('2');
-    expect([view.corner().style.width, view.corner().style.height]).toEqual(['112px', '160px']);
+    expect([view.frame().style.width, view.frame().style.height]).toEqual(['112px', '160px']);
     view.done();
   });
 
@@ -237,7 +261,7 @@ describe('ma vignette en coin se pince (#8577)', () => {
     const view = mount(call(zoomCamera()));
     pinchOn(view.corner(), 100, 150);
     expect(view.corner().getAttribute('data-call-self-tile')).toBe('3');
-    expect([view.corner().style.width, view.corner().style.height]).toEqual(['168px', '240px']);
+    expect([view.frame().style.width, view.frame().style.height]).toEqual(['168px', '240px']);
     expect(view.host.querySelector('[data-call-self-tile-status]')?.textContent).toBe('Ma vignette : grande');
     expect(view.toggled).toEqual([]);
     view.done();

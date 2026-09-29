@@ -37,7 +37,7 @@ import {
 } from './call-store';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { PASSTHROUGH_EFFECTS, type CameraEffectsPort } from './camera-effects';
-import { feedbackPayload, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
+import { feedbackActions, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
 import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
@@ -144,6 +144,8 @@ export type CallEngine = {
   /** La note d'après-appel (#8072) : part par `call:quality-feedback` et ferme la demande. */
   readonly rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]) => void;
   readonly skipRating: () => void;
+  /** L'appelé active le son de l'aperçu (#8627) : la sonnerie se tait. */
+  readonly hearPreview: () => void;
   /** Faire sonner un ami dans l'appel en cours (#8433). */
   readonly invite: (person: DecodedPerson) => Promise<void>;
   /** Couper le micro d'un participant, quand on modère l'appel (#8438). */
@@ -367,7 +369,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     return link;
   };
 
-  const preview = createEnginePreview({ read, update, emit, viewerId: deps.viewerId, createLink: deps.createLink, createStream: deps.createStream, localStream: () => localStream, iceServers: () => session.iceServers });
+  const preview = createEnginePreview({ read, update, emit, viewerId: deps.viewerId, createLink: deps.createLink, createStream: deps.createStream, localStream: () => localStream, iceServers: () => session.iceServers, silenceRing: deps.tones.stop });
 
   const leaveServer = (reason?: string): void => {
     const callId = read()?.callId ?? null;
@@ -993,13 +995,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       resetToIdle();
       await start(retry);
     },
-    rate: (rating, issues) => {
-      const prompt = store.getState().feedback;
-      if (prompt === null) return;
-      emit(CLIENT_EVENTS.CALL_QUALITY_FEEDBACK, feedbackPayload({ callId: prompt.callId, rating, issues }));
-      store.setState({ feedback: null });
-    },
-    skipRating: () => store.setState({ feedback: null }),
+    ...feedbackActions({ store, emit }),
+    hearPreview: preview.hear,
     invite: controls.invite,
     muteParticipant: controls.muteParticipant,
     react: controls.react,

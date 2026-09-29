@@ -1,3 +1,4 @@
+import { captureStamp } from './call-capture-save';
 import { GLAMOUR_LAYOUTS } from './call-montage-glamour';
 import { gridRects, inset, plain, whole, type LayoutInput as ShapeInput, type MontageLayout, type Ornament, type Rect, type Size } from './call-montage-shapes';
 
@@ -169,9 +170,6 @@ export function containRect(source: Size, target: Rect): Rect {
 
 /** Le nom du fichier : `meeshy-appel-<style>-AAAAMMJJ-HHMMSS.png`, ou `…-visage-<n>` pour un portrait. */
 export function captureFileName(options: { readonly at: Date; readonly style: MontageStyle | 'visage'; readonly index?: number }): string {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-  const at = options.at;
-  const stamp = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
   const suffix = options.index === undefined ? '' : `-${options.index + 1}`;
-  return `meeshy-appel-${options.style}-${stamp}${suffix}.png`;
+  return `meeshy-appel-${options.style}-${captureStamp(options.at)}${suffix}.png`;
 }

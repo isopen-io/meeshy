@@ -81,6 +81,26 @@ describe('côté appelé : voir qui appelle avant de décrocher', () => {
     expect(h.links).toEqual([]);
   });
 
+  test('activer le son de l’aperçu coupe la sonnerie : on entend l’appelant, pas la sonnerie (#8627)', () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, INITIATED('video'));
+    expect(h.tones.at(-1)).toBe('start:ring');
+    h.engine.hearPreview();
+    expect(h.tones.at(-1)).toBe('stop');
+    expect(h.call()?.phase.kind).toBe('incoming');
+  });
+
+  test('hors sonnerie, activer le son de l’aperçu ne touche à aucun son (#8627)', async () => {
+    const h = harness();
+    h.engine.hearPreview();
+    expect(h.tones).toEqual([]);
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, INITIATED('video'));
+    await h.engine.accept();
+    const before = h.tones.length;
+    h.engine.hearPreview();
+    expect(h.tones).toHaveLength(before);
+  });
+
   test('refuser ferme l’aperçu', async () => {
     const h = harness();
     h.engine.handle(SERVER_EVENTS.CALL_INITIATED, INITIATED('video'));

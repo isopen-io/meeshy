@@ -31,6 +31,8 @@ export const callActions = {
   join: (request: JoinCallRequest): void => run((engine) => engine.join(request)),
   accept: (options?: { readonly audioOnly?: boolean }): void => run((engine) => engine.accept(options)),
   decline: (): void => run((engine) => engine.decline()),
+  /** Entendre l'appelant avant de décrocher fait taire la sonnerie (#8627). */
+  hearPreview: (): void => run((engine) => engine.hearPreview()),
   hangup: (): void => run((engine) => engine.hangup()),
   toggleMic: (): void => run((engine) => engine.toggleMic()),
   toggleCamera: (): void => run((engine) => engine.toggleCamera()),
