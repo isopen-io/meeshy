@@ -56,6 +56,8 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   captions: [caption()],
   captionsMode: 'translated',
   captionPeers: [],
+  preview: null,
+  previewed: false,
   transcription: 'idle',
   initiatorId: null,
   invitedBy: null,
@@ -143,14 +145,10 @@ describe('les gestes', () => {
     view.done();
   });
 
-  test('le Journal garde Traduit / Original', () => {
+  test('le bandeau ne montre que le direct : le Journal vit dans son panneau (#8579)', () => {
     const view = mount();
-    view.press('[data-call-captions-journal-toggle]');
-    const entry = () => view.host.querySelector('[data-call-journal-entry] [dir="auto"]')?.textContent;
-    expect(entry()).toBe('Bonjour à tous');
-    view.press('[data-call-captions-journal-original]');
-    expect(entry()).toBe('Hello everyone');
-    expect(view.host.querySelector('[data-call-captions-journal-original]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(view.host.querySelector('[data-call-captions-journal-toggle]')).toBeNull();
+    expect(view.host.querySelector('[data-call-journal-entry]')).toBeNull();
     view.done();
   });
 });

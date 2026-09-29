@@ -65,6 +65,10 @@ nonisolated struct GallerySceneItem: Equatable {
     let moves: Bool
     let thumbHash: String?
     let thumbnailURL: String?
+    /// **La durée de la timeline, ou `nil` si la scène ne bouge pas** (#8598).
+    /// C'est elle qui fait naître le curseur au couloir de transport
+    /// (`GallerySceneTimeline`).
+    var timeline: TimeInterval? = nil
 
     /// La scène elle-même, et non le document entier : deux pages d'un même
     /// document ne diffèrent que par elle, et comparer le document ferait payer
@@ -162,6 +166,7 @@ nonisolated struct GallerySceneItem: Equatable {
             && gauche.moves == droite.moves
             && gauche.thumbHash == droite.thumbHash
             && gauche.thumbnailURL == droite.thumbnailURL
+            && gauche.timeline == droite.timeline
             && gauche.scene == droite.scene
     }
 }
@@ -378,7 +383,7 @@ nonisolated struct PostGalleryLot {
         let scene = document.scenes[index]
         let mediaId = SceneCaption.mediaIdentity(sceneIndex: index, in: document, post: post)
         let media = mediaId.flatMap { id in post.media.first { $0.id == id } }
-        let item = GallerySceneItem(
+        var item = GallerySceneItem(
             id: sceneItemId(postId: post.id, sceneIndex: index),
             postId: post.id,
             document: document,
@@ -395,11 +400,15 @@ nonisolated struct PostGalleryLot {
             thumbHash: scene.thumbHash ?? media?.thumbHash,
             thumbnailURL: media.flatMap(thumbnailURL(of:))
         )
+        item.timeline = GallerySceneTimeline.duration(moves: item.moves) { [item] in
+            item.renderableSlide(preferredLanguages: []).computedTotalDuration()
+        }
         let attachment = MessageAttachment(
             id: item.id,
             mimeType: GallerySceneItem.mimeType,
             thumbnailUrl: item.thumbnailURL,
             thumbHash: item.thumbHash,
+            duration: GallerySceneTimeline.attachmentDurationMs(item.timeline),
             uploadedBy: post.authorId,
             createdAt: post.timestamp,
             thumbnailColor: media?.thumbnailColor ?? "000000"

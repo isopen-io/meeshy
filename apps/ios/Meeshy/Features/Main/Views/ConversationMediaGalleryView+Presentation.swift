@@ -147,9 +147,11 @@ extension ConversationMediaGalleryView {
     /// galerie pour une scène (#6709), le player partagé pour une vidéo.
     @ViewBuilder
     var pausedBadgeLayer: some View {
-        if MediaStagePause.showsBadge(presentation: stagePresentation,
-                                      isPlayable: currentMediaIsPlayable,
-                                      isPlaying: currentScene != nil ? scenePlaying : videoManagerIsPlaying) {
+        if MediaStageVeil.showsPausedBadge(
+            MediaStagePause.showsBadge(presentation: stagePresentation,
+                                       isPlayable: currentMediaIsPlayable,
+                                       isPlaying: currentScene != nil ? scenePlaying : videoManagerIsPlaying),
+            overlays: stageOverlays) {
             MediaStagePausedBadge()
                 .allowsHitTesting(false)
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))

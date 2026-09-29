@@ -418,9 +418,18 @@ public extension CanvasV3 {
                                     payload: Self.audioPayload(audio)))
         }
 
+        // **Le filtre de SLIDE est celui du FOND** (#8502). La clé
+        // `payload.filter` est partagée avec le filtre PROPRE d'un média posé
+        // (`StoryMediaObject.filter`) : l'élire sur « le premier média content »
+        // écrasait le réglage d'un objet placé devant le fond. Il va donc au
+        // fond, et ne se replie que sur un média qui n'a pas le sien. Même
+        // règle que le convertisseur gateway (`storyEffectsV3.ts`).
         if let filter = nonEmpty(effects.filter) {
-            let targetIndex = objects.firstIndex { $0.kind == .media && $0.plane == .content }
+            let targetIndex = objects.firstIndex { $0.kind == .media && $0.payload.bool("isBackground") == true }
                 ?? objects.firstIndex { $0.kind == .media && $0.plane == .bg }
+                ?? objects.firstIndex {
+                    $0.kind == .media && $0.plane == .content && $0.payload.string("filter") == nil
+                }
             if let targetIndex {
                 var payload = objects[targetIndex].payload
                 payload["filter"] = .string(filter)
@@ -606,6 +615,9 @@ public extension CanvasV3 {
         }
         if media.loop { payload["loop"] = .bool(true) }
         if media.isBackground { payload["isBackground"] = .bool(true) }
+        // Le filtre PROPRE d'un média posé (#8502). Celui du fond est le filtre
+        // de slide, posé plus loin sur le même objet.
+        if !media.isBackground, let filter = nonEmpty(media.filter) { payload["filter"] = .string(filter) }
         if let duration = media.duration { payload["duration"] = .number(duration) }
         // **La clé sort quand la MESURE existe, pas quand la valeur diffère de 1**
         // (#5182, suivi de #5100). Le test `!= 1` interrogeait la PROJECTION
@@ -844,6 +856,7 @@ public extension StoryEffects {
                 if object.mediaReference != nil {
                     var fond = Self.mediaObject(object, at: position)
                     fond.isBackground = true
+                    fond.filter = nil
                     medias.append(fond)
                     // **Le collision guard (revue 2026-09-17)** : ce MÊME
                     // objet porte à la fois la référence et le cadrage — le
@@ -921,8 +934,10 @@ public extension StoryEffects {
         wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
         wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints
 
+        // Le filtre de slide se relit sur le FOND seul (#8502) ; le filtre d'un
+        // média posé est rendu à cet objet par `mediaObject(_:at:)`.
         let filterCarrier = scene.objects.first {
-            $0.kind == .media && $0.plane == .content && $0.payload.string("filter") != nil
+            $0.kind == .media && $0.payload.bool("isBackground") == true && $0.payload.string("filter") != nil
         } ?? scene.objects.first {
             $0.kind == .media && $0.plane == .bg && $0.payload.string("filter") != nil
         }
@@ -1056,6 +1071,7 @@ public extension StoryEffects {
             name: object.payload.string("name"),
             isDuckingDisabled: object.payload.bool("isDuckingDisabled"))
         media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
+        if !media.isBackground { media.filter = object.payload.string("filter") }
         media.sourceStart = object.payload.double("sourceStart")
         media.sourceEnd = object.payload.double("sourceEnd")
         media.crop = crop

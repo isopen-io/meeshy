@@ -147,40 +147,63 @@ nonisolated extension CanvasMediaAdoption {
         urlsBySourceIndex: [Int: String]
     ) -> StoryEffects? {
         let journal = os.Logger(subsystem: "me.meeshy.app", category: "media")
-        guard var effets = effects,
-              let objectIds = objectIdsBySourceIndex,
-              var objets = effets.mediaObjects,
-              !objets.isEmpty
-        else {
+        guard var effets = effects, let objectIds = objectIdsBySourceIndex else {
             journal.info(
-                "adoption IMPOSSIBLE: effets=\(effects != nil, privacy: .public) objectIds=\(objectIdsBySourceIndex?.count ?? -1, privacy: .public) mediaObjects=\(effects?.mediaObjects?.count ?? -1, privacy: .public)"
+                "adoption IMPOSSIBLE: effets=\(effects != nil, privacy: .public) objectIds=\(objectIdsBySourceIndex?.count ?? -1, privacy: .public)"
             )
             return effects
         }
-        var adoptes = 0
-        defer {
-            journal.info(
-                "adoption: \(adoptes, privacy: .public)/\(objets.count, privacy: .public) objet(s) — ponts=\(objectIds.compactMap { $0 }.count, privacy: .public) ids=\(idsBySourceIndex.count, privacy: .public)"
-            )
-        }
+        let servis = servedByObject(objectIdsBySourceIndex: objectIds,
+                                    idsBySourceIndex: idsBySourceIndex,
+                                    urlsBySourceIndex: urlsBySourceIndex)
+        journal.info(
+            "adoption: \(servis.count, privacy: .public) objet(s) servis — ponts=\(objectIds.compactMap { $0 }.count, privacy: .public) ids=\(idsBySourceIndex.count, privacy: .public)"
+        )
 
-        for (index, objectId) in objectIds.enumerated() {
-            guard let objectId, !objectId.isEmpty,
-                  let servedId = idsBySourceIndex[index],
-                  let position = objets.firstIndex(where: { $0.id == objectId })
-            else { continue }
-            objets[position].postMediaId = servedId
-            adoptes += 1
-            if let servedUrl = urlsBySourceIndex[index] {
-                objets[position].mediaURL = servedUrl
-            }
+        effets.mediaObjects = effets.mediaObjects?.map { objet in
+            guard let servi = servis[objet.id] else { return objet }
+            var adopte = objet
+            adopte.postMediaId = servi.id
+            if let url = servi.url { adopte.mediaURL = url }
+            return adopte
         }
-        effets.mediaObjects = objets
-        effets.canvasV3 = adopting(effets.canvasV3,
-                                   objectIdsBySourceIndex: objectIds,
-                                   idsBySourceIndex: idsBySourceIndex,
-                                   urlsBySourceIndex: urlsBySourceIndex)
+        // **Le SON et le STICKER s'adoptent comme le média visuel** (#8521).
+        // Le brouillon durable les emporte désormais dans `localMedia`
+        // (`ComposerSceneAssetCarriage`) : sans cette adoption, leur fichier
+        // monterait et le canvas garderait son `file://`, que le sanitizer
+        // annule — un son sans rien à jouer, un sticker rendu par son emoji.
+        effets.audioPlayerObjects = effets.audioPlayerObjects?.map { son in
+            guard let servi = servis[son.id] else { return son }
+            var adopte = son
+            adopte.postMediaId = servi.id
+            if let url = servi.url { adopte.mediaURL = url }
+            return adopte
+        }
+        effets.stickerObjects = effets.stickerObjects?.map { sticker in
+            guard let servi = servis[sticker.id] else { return sticker }
+            var adopte = sticker
+            adopte.postMediaId = servi.id
+            return adopte
+        }
+        effets.canvasV3 = adopting(effets.canvasV3, servedByObject: servis)
         return effets
+    }
+
+    /// Les familles du canvas dont un objet désigne un fichier par `postMediaId`.
+    private static let adoptableKinds: [ObjectKind] = [.media, .audio, .sticker]
+
+    private static func servedByObject(
+        objectIdsBySourceIndex: [String?],
+        idsBySourceIndex: [Int: String],
+        urlsBySourceIndex: [Int: String]
+    ) -> [String: (id: String, url: String?)] {
+        var servis: [String: (id: String, url: String?)] = [:]
+        for (index, objectId) in objectIdsBySourceIndex.enumerated() {
+            guard let objectId, !objectId.isEmpty,
+                  let servedId = idsBySourceIndex[index] else { continue }
+            servis[objectId] = (servedId, urlsBySourceIndex[index])
+        }
+        return servis
     }
 
     /// **Les scènes que le CANVAS transporte s'adoptent comme le runtime.**
@@ -207,18 +230,9 @@ nonisolated extension CanvasMediaAdoption {
     /// Un second critère (la position, l'ordre) aurait divergé du premier.
     private static func adopting(
         _ document: CanvasV3?,
-        objectIdsBySourceIndex: [String?],
-        idsBySourceIndex: [Int: String],
-        urlsBySourceIndex: [Int: String]
+        servedByObject servisParObjet: [String: (id: String, url: String?)]
     ) -> CanvasV3? {
-        guard let document, !document.scenes.isEmpty else { return document }
-        var servisParObjet: [String: (id: String, url: String?)] = [:]
-        for (index, objectId) in objectIdsBySourceIndex.enumerated() {
-            guard let objectId, !objectId.isEmpty,
-                  let servedId = idsBySourceIndex[index] else { continue }
-            servisParObjet[objectId] = (servedId, urlsBySourceIndex[index])
-        }
-        guard !servisParObjet.isEmpty else { return document }
+        guard let document, !document.scenes.isEmpty, !servisParObjet.isEmpty else { return document }
 
         // **Reconstruit, jamais muté** : `SceneV3` et `ObjectV3` sont
         // immuables. Et reconstruire oblige à ÉNUMÉRER ce qui voyage avec ce
@@ -230,7 +244,7 @@ nonisolated extension CanvasMediaAdoption {
             SceneV3(
                 id: scene.id,
                 objects: scene.objects.map { objet -> ObjectV3 in
-                    guard objet.kind == .media,
+                    guard adoptableKinds.contains(objet.kind),
                           let servi = servisParObjet[objet.id] else { return objet }
                     var charge = objet.payload
                     charge["postMediaId"] = .string(servi.id)

@@ -18,6 +18,7 @@ import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
+import { chromeYields, yieldingChrome } from '@/lib/view/chrome-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
@@ -97,15 +98,27 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-export function ReelsBackButton({ language, onBack }: { readonly language: InterfaceLanguage; readonly onBack: () => void }) {
+export function ReelsBackButton({
+  language,
+  onBack,
+  hidden = false,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly onBack: () => void;
+  /** La feuille de commentaires est ouverte (`chromeYields`, #8601). */
+  readonly hidden?: boolean;
+}) {
+  const chrome = yieldingChrome({ hidden, reducedMotion: prefersReducedMotion() });
   return (
     <button
       type="button"
       data-reels-back
+      data-chrome-yields={chrome['data-chrome-yields']}
+      inert={chrome.inert}
       aria-label={translate(language, 'reels.back')}
       onClick={onBack}
       className="absolute start-3 z-10 grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', backgroundColor: 'rgba(0,0,0,0.42)', outlineColor: 'white' }}
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', backgroundColor: 'rgba(0,0,0,0.42)', outlineColor: 'white', ...chrome.style }}
     >
       <Glyph name="caretLeft" size={20} />
     </button>
@@ -234,6 +247,9 @@ export default function ReelsScreen() {
      `use-comments-sheet-host.ts`, extraite de `routes/story.tsx`. */
   const comments = useCommentsSheetHost(activeId);
   const sheetOpen = comments.postId !== null;
+  /* Commenter fait céder le chrome — retour, identité, légende, rail —
+     par la loi unique du lecteur (#8601, `lib/view/chrome-yields.ts`). */
+  const chromeYielded = chromeYields({ sheetOpen });
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -343,6 +359,7 @@ export default function ReelsScreen() {
             onGesture={onGesture}
             onShare={onShare}
             onSoundBlocked={() => setSoundOn(false)}
+            chromeHidden={chromeYielded}
             {...(canWrite ? { onComment: comments.open, onRepost } : {})}
           />
         ))}
@@ -352,7 +369,7 @@ export default function ReelsScreen() {
   );
 
   return (
-    <ReelsFrame language={language} onBack={close} announcement={announcement}>
+    <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded}>
       {body}
       {repostConfirm}
     </ReelsFrame>
@@ -364,11 +381,13 @@ export function ReelsFrame({
   onBack,
   announcement,
   children,
+  chromeHidden = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly onBack: () => void;
   readonly announcement: string;
   readonly children: React.ReactNode;
+  readonly chromeHidden?: boolean;
 }) {
   return (
     <div data-reels className="h-dvh overflow-hidden bg-black text-white">
@@ -386,7 +405,7 @@ export function ReelsFrame({
         {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
             absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
             document — après le fil, il fallait traverser chaque réel monté. */}
-        <ReelsBackButton language={language} onBack={onBack} />
+        <ReelsBackButton language={language} onBack={onBack} hidden={chromeHidden} />
         {children}
       </div>
       <p role="status" aria-live="polite" className="sr-only">

@@ -192,7 +192,7 @@ extension VideoFrameConverter {
         return makeSampleBuffer(pixelBuffer: pixelBuffer, timeStampNs: frame.timeStampNs)
     }
 
-    private nonisolated func pixelBuffer(from buffer: RTCVideoFrameBuffer) -> CVPixelBuffer? {
+    nonisolated func pixelBuffer(from buffer: RTCVideoFrameBuffer) -> CVPixelBuffer? {
         if let cv = buffer as? RTCCVPixelBuffer {
             return cv.pixelBuffer
         }

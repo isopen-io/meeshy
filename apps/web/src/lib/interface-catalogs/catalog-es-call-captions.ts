@@ -15,8 +15,6 @@ const esCallCaptions = {
   'callCaptions.listening': 'Tu voz se está transcribiendo',
   'callCaptions.unsupported': 'Este navegador no transcribe tu voz: lees a los demás',
   'callCaptions.denied': 'Reconocimiento de voz denegado: lees a los demás',
-  'callCaptions.journal.show': 'Registro',
-  'callCaptions.journal.hide': 'Ocultar el registro',
   'callCaptions.journal.title': 'Registro de la llamada',
   'callCaptions.participant': 'Participante',
   'callTranscript.show': 'Transcripción',

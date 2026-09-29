@@ -26,13 +26,18 @@
  *     sous la forme exacte du schéma de la passerelle (texte, locuteur, langue
  *     du Prisme, bornes, confiance ∈ [0, 1]) ; brouillon et final partent sur
  *     le canal de données `transcription` (`transcript-entry`) ;
- *  4. le journal se déplie (44 × 44), porte les deux voix dans l'ordre ;
+ *  4. « Journal » (#8579), dans la rangée « L'appel » (44 × 44), ouvre À LA
+ *     PLACE des rangées tout ce qui a été dit, dans l'ordre : la phrase
+ *     servie et son original dessous ; le bandeau se retire le temps de le
+ *     lire. Le journal SURVIT aux sous-titres coupés et à l'appel réduit ;
  *  5. au raccroché, `bye` part sur le canal et `call:analytics` dit
  *     `transcriptionUsed: true` ;
  *  6. dans le fil, la bulle de l'appel terminé déplie sa transcription gravée
  *     (`GET /calls/:callId/transcript`) : la ligne du pair traduite par le
  *     Prisme du lecteur, la sienne telle quelle, l'original quand aucune
  *     traduction ne sert — puis « Voir l'original » ;
+ *     La fiche d'un appel fini (`/call/:callId`) la relit aussi ; celle d'un
+ *     appel manqué n'en a pas (#8579) ;
  *  7. SANS reconnaissance vocale (Firefox, la coque Android) : l'écran le dit,
  *     les sous-titres du pair arrivent quand même, rien ne part ;
  *  8. aucune erreur de page.
@@ -151,6 +156,7 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  await appears(page, '[data-call-actions]');
 };
 
 const startConnectedCall = async (page) => {
@@ -256,15 +262,55 @@ try {
         check((await peerTranscripts(page, 'call:transcription-segment')).length === 0, `${label} : sans reconnaissance vocale, rien ne part`);
       }
 
-      // ------------------------------------------------ 4. le journal
-      const toggle = page.locator('[data-call-captions-journal-toggle]');
-      const toggleSize = await tapSize(toggle);
-      check(toggleSize.ok, `${label} : « Journal » fait au moins ${TAP_FLOOR} (${JSON.stringify(toggleSize.size)})`);
-      await toggle.click();
-      check(await appears(page, '[data-call-captions-journal]'), `${label} : le journal se déplie`);
-      const journal = await page.$$eval('[data-call-journal-entry]', (items) => items.map((item) => item.getAttribute('data-call-journal-entry')));
-      check(JSON.stringify(journal) === JSON.stringify(withSpeech ? ['peer', 'mine'] : ['peer']), `${label} : le journal porte les voix dans l'ordre (${JSON.stringify(journal)})`);
+      // ------------------------------------------------ 4. le journal (#8579)
+      const expected = withSpeech ? ['peer', 'mine'] : ['peer'];
+      const journalEntries = () => page.$$eval('[data-call-journal-entry]', (items) => items.map((item) => item.getAttribute('data-call-journal-entry')));
+      const openJournal = async () => {
+        await openActions(page);
+        await page.click('[data-call-control="journal"]');
+        return appears(page, '[data-call-journal-panel]');
+      };
+      await openActions(page);
+      const journalButton = page.locator('[data-call-row="call"] [data-call-control="journal"]');
+      const journalSize = await tapSize(journalButton);
+      check(journalSize.ok, `${label} : « Journal » est dans la rangée « L'appel » et fait au moins ${TAP_FLOOR} (${JSON.stringify(journalSize.size)})`);
+      const callRow = await page.$$eval('[data-call-row="call"] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-captions') ? 'captions' : '')));
+      check(callRow.indexOf('journal') === callRow.indexOf('captions') + 1 && callRow.includes('captions'), `${label} : « Journal » suit les sous-titres (${callRow.join(' · ')})`);
+      await journalButton.click();
+      check(await appears(page, '[data-call-journal-panel]'), `${label} : « Journal » ouvre le journal`);
+      check((await page.$('[data-call-row]')) === null, `${label} : le journal REMPLACE les rangées`);
+      check((await page.$('[data-call-captions-panel]')) === null, `${label} : le bandeau des sous-titres se retire le temps de lire le journal`);
+      check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : le journal porte les voix dans l'ordre (${JSON.stringify(await journalEntries())})`);
+      const peerLine = await page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
+        text: entry.querySelector('[data-call-journal-text]')?.textContent ?? '',
+        original: entry.querySelector('[data-call-journal-original]')?.textContent ?? '',
+      }));
+      check(peerLine.text === PEER_TRANSLATED && peerLine.original === `Original · ${PEER_SAID}`, `${label} : la phrase servie, et son original dessous (${JSON.stringify(peerLine)})`);
+      check((await page.$eval('[data-call-journal]', (list) => getComputedStyle(list).overflowY)) === 'auto', `${label} : le journal défile librement`);
       await capture(page, `journal-${width}x${height}`);
+      await page.click('[data-panel-back]');
+      check(await appears(page, '[data-call-row="call"]'), `${label} : ‹ revient aux rangées`);
+      check(await page.evaluate(() => document.activeElement?.getAttribute('data-call-control') === 'journal'), `${label} : le focus revient à « Journal »`);
+
+      await openActions(page);
+      await cc.click();
+      await openActions(page);
+      await cc.click();
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : les sous-titres coupés`);
+      check(await openJournal(), `${label} : le journal s'ouvre, sous-titres coupés`);
+      check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, sous-titres coupés (${JSON.stringify(await journalEntries())})`);
+      await page.keyboard.press('Escape');
+      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : Échap ferme le journal`);
+      check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : sans réduire l'appel`);
+
+      await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+      check(await appears(page, '[data-call-pill-bar]'), `${label} : l'appel se réduit`);
+      await page.click('[data-call-pill-bar] button >> nth=0');
+      check(await appears(page, '[data-call-screen="connected"]'), `${label} : l'appel revient`);
+      check(await openJournal(), `${label} : le journal s'ouvre, l'appel revenu`);
+      check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, réduit puis rouvert (${JSON.stringify(await journalEntries())})`);
+      await page.click('[data-panel-close]');
+      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : ✕ ferme le journal`);
 
       if (withSpeech) {
         // ------------------------------------------------ 5. le raccroché
@@ -316,6 +362,14 @@ try {
       await page.click('[data-call-transcript-original]');
       const originals = await page.$$eval('[data-call-transcript-line] [dir="auto"]', (lines) => lines.map((line) => line.textContent ?? ''));
       check(originals[0] === 'Hi, can you hear me?', `${label} : « Voir l'original » rend ce qui a été dit (${JSON.stringify(originals[0])})`);
+
+      // ------------------------------------------------ 6 bis. la transcription dans la fiche d'un appel fini (#8579)
+      await page.goto(`${BASE}/call/call-kwame-video`, { waitUntil: 'load' });
+      check(await appears(page, '[data-call-detail-transcript="call-kwame-video"] [data-call-transcript]'), `${label} : la fiche d'un appel fini relit sa transcription`);
+      check((await page.textContent('[data-call-detail-transcript] h3')) === 'Transcription de l’appel', `${label} : sous son titre`);
+      await page.goto(`${BASE}/call/call-amina-manque`, { waitUntil: 'load' });
+      check(await appears(page, '[data-call-detail-status="missed"]'), `${label} : la fiche d'un appel manqué se lit`);
+      check((await page.$('[data-call-detail-transcript]')) === null, `${label} : un appel manqué n'a pas de transcription`);
     } catch (error) {
       failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);
     }

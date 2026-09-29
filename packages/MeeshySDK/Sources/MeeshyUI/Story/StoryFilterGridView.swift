@@ -12,10 +12,26 @@ import MeeshySDK
 public struct StoryFilterGridView: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
+    /// **L'objet dont la grille règle le filtre** (retour porteur 2026-09-28 :
+    /// les réglages d'un objet ne touchent que lui). `nil` ⇒ le filtre de la
+    /// SLIDE, porté par le fond ; un id ⇒ `StoryMediaObject.filter` de cet
+    /// objet, sans curseur d'intensité (le filtre d'un objet est plein).
+    var objectId: String?
 
-    public init(viewModel: StoryComposerViewModel, previewImage: UIImage? = nil) {
+    public init(viewModel: StoryComposerViewModel, previewImage: UIImage? = nil, objectId: String? = nil) {
         self.viewModel = viewModel
         self.previewImage = previewImage
+        self.objectId = objectId
+    }
+
+    private var selectedRaw: String? {
+        guard let objectId else { return viewModel.selectedFilter }
+        return viewModel.mediaObjectFilter(id: objectId)
+    }
+
+    private func choose(_ raw: String?) {
+        guard let objectId else { viewModel.applyFilter(raw); return }
+        viewModel.applyMediaObjectFilter(id: objectId, raw)
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -39,7 +55,7 @@ public struct StoryFilterGridView: View {
                 .padding(.horizontal, 12)
             }
 
-            if viewModel.selectedFilter != nil {
+            if objectId == nil, viewModel.selectedFilter != nil {
                 intensitySlider
             }
         }
@@ -50,10 +66,10 @@ public struct StoryFilterGridView: View {
 
     @ViewBuilder
     private func filterThumbnail(filter: StoryFilter?, label: String) -> some View {
-        let isSelected = viewModel.selectedFilter == filter?.rawValue
+        let isSelected = selectedRaw == filter?.rawValue
 
         Button {
-            viewModel.applyFilter(filter?.rawValue)
+            choose(filter?.rawValue)
             HapticFeedback.light()
         } label: {
             VStack(spacing: 4) {
@@ -63,7 +79,7 @@ public struct StoryFilterGridView: View {
                         // Instagram) — cached by slide id + filter so this is computed
                         // once per slide. The intensity slider only drives the canvas.
                         Image(uiImage: StoryFilterProcessor.apply(filter, to: base,
-                                                                  imageId: viewModel.currentSlide.id))
+                                                                  imageId: objectId ?? viewModel.currentSlide.id))
                             .resizable()
                             .scaledToFill()
                     } else {
@@ -127,7 +143,7 @@ public struct StoryFilterGridView: View {
     }
 
     private var thumbnailTaskKey: String {
-        "\(viewModel.currentSlide.id)_\(previewImage != nil)"
+        "\(viewModel.currentSlide.id)_\(objectId ?? "")_\(previewImage != nil)"
     }
 
     /// Downsamples `previewImage` to a tile-sized square once per slide so each

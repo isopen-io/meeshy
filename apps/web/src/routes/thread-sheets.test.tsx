@@ -87,6 +87,8 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   setReactionSheetFor: () => {},
   detailFor: null,
   setDetailFor: () => {},
+  exportFor: null,
+  setExportFor: () => {},
   servedOf: () => undefined,
   starOf: () => null,
   ...overrides,
@@ -102,6 +104,10 @@ const mountSheets = async (menu: ThreadSheetsMenu, messages: readonly Message[])
         readerLocale="fr-FR"
         conversationId="c-deploiement"
         viewerId={VIEWER_ID}
+        viewerName="Jacques"
+        viewerHandle="jacques"
+        conversationTitle="Déploiement"
+        announce={() => {}}
       />
     </QueryClientProvider>,
   );
@@ -128,6 +134,10 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
+        viewerName="Jacques"
+        viewerHandle="jacques"
+        conversationTitle="Déploiement"
+        announce={() => {}}
       />,
     );
     expect(html).toBe('');
@@ -142,6 +152,10 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
+        viewerName="Jacques"
+        viewerHandle="jacques"
+        conversationTitle="Déploiement"
+        announce={() => {}}
       />,
     );
     expect(html).toBe('');
@@ -178,6 +192,16 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     );
     await mounter.click(languageButton(host, 'Français (original)'));
     expect(journal).toEqual([`pick:${SERVER_MESSAGE_ID}:fr`, 'detail:null']);
+  });
+
+  test('« Exporter en image » monte la carte d’un message ordinaire, avec ses templates', async () => {
+    const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ attachments: [] })]);
+    expect(host.querySelectorAll('[data-export-link]').length > 1).toBe(true);
+  });
+
+  test('un message protégé ne monte aucune carte, même ciblé', async () => {
+    const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ isBlurred: true })]);
+    expect(has(host, '[data-export-link]')).toBe(false);
   });
 
   test('réagir depuis la feuille de réactions pose la réaction PUIS referme la feuille', async () => {

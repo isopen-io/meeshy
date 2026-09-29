@@ -2,15 +2,17 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
 import { CommentList } from '@/components/comment-list';
+import { CommentReplies } from '@/components/comment-replies';
 import type { CommentGestureHandlers } from '@/components/comment-row';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
 import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
-import { flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
+import { flattenCommentPages, type CommentInfiniteData, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -68,11 +70,28 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
      horloge par minute, jamais un `new Date()` par rangée à chaque rendu. */
   const now = useMemo(() => new Date(), [minute]);
 
+  /**
+   * **À QUI L'ON RÉPOND** (#8583) — posé par le glissé d'une rangée ou son
+   * bouton « Répondre », lu par le composeur (bandeau, focus, @mention) et
+   * envoyé avec le texte. Il vit ICI parce que la liste et le composeur sont
+   * frères : c'est leur hôte commun qui les relie.
+   */
+  const [replyTarget, setReplyTarget] = useState<CommentReplyTarget | null>(null);
+  /** LES RACINES DÉPLIÉES — une réponse qu'on vient de poser déplie la sienne, pour qu'elle se VOIE. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleReplies = useCallback((rootId: string) => {
+    setExpanded((current) =>
+      current.has(rootId) ? new Set([...current].filter((id) => id !== rootId)) : new Set([...current, rootId]),
+    );
+  }, []);
+
   const onSend = useCallback(
     async (content: string): Promise<CommentComposerResult> => {
-      const result = await commentAction({
+      const target = replyTarget;
+      const sending = commentAction({
         postId,
         content,
+        ...(target === null ? {} : { parentId: target.rootId }),
         author: {
           id: viewer.id ?? '',
           displayName: viewer.displayName,
@@ -86,11 +105,16 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
            une détection sur un texte court, où elle se trompe le plus. */
         originalLanguage: language,
       });
+      /* DÉPLIÉE APRÈS la pose optimiste (synchrone, avant le premier appel
+         réseau) : la racine s'ouvre sur une caisse qui porte déjà la réponse. */
+      if (target !== null) setExpanded((current) => (current.has(target.rootId) ? current : new Set([...current, target.rootId])));
+      const result = await sending;
+      if (result.ok && target !== null) setReplyTarget((current) => (current === target ? null : current));
       return result.ok
         ? { ok: true, ...(result.notice === undefined ? {} : { message: result.notice }) }
         : { ok: false, message: result.message };
     },
-    [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language],
+    [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language, replyTarget],
   );
 
   /**
@@ -154,10 +178,20 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
       canWrite
         ? {
             viewerId,
-            onLike: (commentId, on) => void runGesture({ kind: 'like', postId, commentId, on }),
-            onDelete: (commentId) => void runGesture({ kind: 'delete', postId, commentId }),
-            onEdit: (commentId, content) =>
-              void runGesture({ kind: 'edit', postId, commentId, content, originalLanguage: language }),
+            onLike: (commentId, on, parentId) =>
+              void runGesture({ kind: 'like', postId, commentId, on, ...(parentId === undefined ? {} : { parentId }) }),
+            onDelete: (commentId, parentId) =>
+              void runGesture({ kind: 'delete', postId, commentId, ...(parentId === undefined ? {} : { parentId }) }),
+            onEdit: (commentId, content, parentId) =>
+              void runGesture({
+                kind: 'edit',
+                postId,
+                commentId,
+                content,
+                originalLanguage: language,
+                ...(parentId === undefined ? {} : { parentId }),
+              }),
+            onReply: setReplyTarget,
             failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
@@ -168,6 +202,23 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
           }
         : undefined,
     [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource],
+  );
+
+  const renderReplies = useCallback(
+    (comment: PostComment) => (
+      <CommentReplies
+        postId={postId}
+        parent={comment}
+        expanded={expanded.has(comment.id)}
+        onToggle={() => toggleReplies(comment.id)}
+        language={language}
+        preferredLanguages={reader.languages}
+        locale={reader.locale}
+        now={now}
+        {...(gestures === undefined ? {} : { gestures })}
+      />
+    ),
+    [postId, expanded, toggleReplies, language, reader.languages, reader.locale, now, gestures],
   );
 
   return (
@@ -200,12 +251,20 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
           onRetry={() => void query.refetch()}
           onMore={() => void query.fetchNextPage()}
           {...(gestures === undefined ? {} : { gestures })}
+          renderReplies={renderReplies}
         />
       </div>
       {/* UN VISITEUR ANONYME NE COMMENTE PAS — la passerelle exige un
           `registeredUser` (`comments.ts:184-186`). Offrir le champ puis
           refuser en 401 serait un contrôle qui ment (loi 4). */}
-      <CommentComposer language={language} onSend={onSend} canWrite={canWrite} mentionSource={mentionSource} />
+      <CommentComposer
+        language={language}
+        onSend={onSend}
+        canWrite={canWrite}
+        mentionSource={mentionSource}
+        replyTo={replyTarget}
+        onCancelReply={() => setReplyTarget(null)}
+      />
     </section>
   );
 }

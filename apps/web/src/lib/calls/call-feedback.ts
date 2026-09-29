@@ -1,6 +1,7 @@
 import type { CallQualityFeedbackEvent } from '@meeshy/shared/types/video-call';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import type { ActiveCall, CallEndReason, CallMedia } from './call-store';
+import type { ActiveCall, CallEndReason, CallMedia, CallStoreApi } from './call-store';
 
 /**
  * **LA NOTE D'APRÈS-APPEL** (#8072, parité F6) — la règle, pure : QUAND on
@@ -56,4 +57,17 @@ export function feedbackPayload(params: {
 }): CallQualityFeedbackEvent {
   const issues = params.rating >= FEEDBACK_GOOD_RATING ? [] : [...new Set(params.issues)];
   return { callId: params.callId, rating: params.rating, ...(issues.length > 0 ? { issues } : {}) };
+}
+
+/** Noter, ou passer : la note part par `call:quality-feedback`, et la demande se ferme dans les deux cas. */
+export function feedbackActions({ store, emit }: { readonly store: CallStoreApi; readonly emit: (event: string, payload: unknown) => void }) {
+  return {
+    rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]): void => {
+      const prompt = store.getState().feedback;
+      if (prompt === null) return;
+      emit(CLIENT_EVENTS.CALL_QUALITY_FEEDBACK, feedbackPayload({ callId: prompt.callId, rating, issues }));
+      store.setState({ feedback: null });
+    },
+    skipRating: (): void => store.setState({ feedback: null }),
+  };
 }

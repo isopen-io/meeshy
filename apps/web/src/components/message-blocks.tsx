@@ -205,8 +205,9 @@ export function ReactionChip({
   glyph: string;
   count: number;
   mine?: boolean;
-  /** Retire la réaction en tapant la capsule — fourni par l'hôte SEULEMENT
-   * quand `mine` est vrai (#5865). */
+  /** Bascule la réaction en tapant la capsule — la ligne basse ne le fournit
+   * que sur la MIENNE (#5865, retirer) ; la bande de l'élu Focal le fournit
+   * sur toutes (#8536 : retirer la mienne, poser la mienne sur celle d'autrui). */
   onToggle?: () => void;
 }) {
   const style = {
@@ -228,7 +229,7 @@ export function ReactionChip({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={`Retirer votre réaction ${glyph}`}
+        aria-label={mine ? `Retirer votre réaction ${glyph}` : `Réagir avec ${glyph}`}
         /* `tap-target-chip` (`app.css`) étend la zone TACTILE à 44 px sans
            grandir le DESSIN de la capsule (même dispositif que
            `tap-target-22`/`tap-target-34` plus haut dans ce fichier). */

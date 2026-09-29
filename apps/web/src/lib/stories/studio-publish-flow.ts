@@ -67,9 +67,18 @@ export async function runStudioPublish(params: {
  * un POST : une story et un réel n'ont pas de corps, tout leur texte vit dans
  * la scène (`storyEffects`, défaut 4 de #6900). Rogné, et absent s'il est
  * vide : la passerelle ne reçoit jamais un `content` blanc.
+ *
+ * **Le post PROMU en réel garde son texte** (#8603) : « C'est un Réel »
+ * publie le MÊME contenu que le post qu'il remplace — vidéo, texte
+ * d'accompagnement, audience. Un réel composé comme tel reste sans corps.
  */
-export function studioPublicationContent(params: { readonly kind: PublicationKind; readonly postText: string }): string | undefined {
-  if (params.kind !== 'POST') return undefined;
+export function studioPublicationContent(params: {
+  readonly kind: PublicationKind;
+  readonly postText: string;
+  readonly promotedFromPost?: boolean;
+}): string | undefined {
+  const bodyTravels = params.kind === 'POST' || (params.kind === 'REEL' && params.promotedFromPost === true);
+  if (!bodyTravels) return undefined;
   const content = params.postText.trim();
   return content === '' ? undefined : content;
 }
@@ -92,10 +101,16 @@ export function publishStudioPlan(params: {
   /** Le texte du post du brouillon (#8413) — `studioPublicationContent`
    * décide s'il part. */
   readonly postText?: string;
+  /** Le réel vient de « C'est un Réel » (#8603) : le texte du post le suit. */
+  readonly promotedFromPost?: boolean;
   readonly onPublished?: (event: StudioPublishedEvent) => void;
   readonly signal?: AbortSignal;
 }): Promise<StudioPublishOutcome> {
-  const content = studioPublicationContent({ kind: params.kind, postText: params.postText ?? '' });
+  const content = studioPublicationContent({
+    kind: params.kind,
+    postText: params.postText ?? '',
+    ...(params.promotedFromPost !== undefined ? { promotedFromPost: params.promotedFromPost } : {}),
+  });
   return runStudioPublish({
     plan: params.plan,
     ...(params.onPublished !== undefined ? { onPublished: params.onPublished } : {}),
@@ -113,6 +128,7 @@ export function publishStudioPlan(params: {
         ...(publication.hasText || content !== undefined ? { originalLanguage: params.language } : {}),
         ...(content !== undefined ? { content } : {}),
         ...(publication.mediaCaption !== undefined ? { mediaCaption: publication.mediaCaption } : {}),
+        ...(publication.mediaAlt !== undefined ? { mediaAlt: publication.mediaAlt } : {}),
         storyEffects: publication.storyEffects,
         mediaIds: publication.mediaIds,
       }),
