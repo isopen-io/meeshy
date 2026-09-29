@@ -186,6 +186,7 @@ final class WebRTCService {
         _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
+            applyEncoderCeilings()
             Logger.webrtc.info("Created SDP offer")
             return offer
         } catch {
@@ -199,6 +200,7 @@ final class WebRTCService {
             let answer = try await client.createAnswer(for: offer)
             hasRemoteDescription = true
             flushBufferedCandidates()
+            applyEncoderCeilings()
             Logger.webrtc.info("Created SDP answer")
             return answer
         } catch {
@@ -276,8 +278,7 @@ final class WebRTCService {
             mediaFaults.report(stage: isVideo ? "local-media.video" : "local-media.audio", error: error)
             throw error
         }
-        currentBitrate = dataProfile.budget.audio.capping(ladderAudioBitrate)
-        client.applyAudioEncoding(maxBitrateBps: currentBitrate)
+        applyEncoderCeilings()
         Logger.webrtc.info("Local media started - video: \(isVideo)")
     }
 
@@ -689,6 +690,15 @@ final class WebRTCService {
         pathMonitor.start { [weak self] path in
             self?.updateNetworkPath(path)
         }
+    }
+
+    /// libwebrtc builds (offerer) or attaches (answerer) the senders while the
+    /// SDP is made, at the client's defaults (2.5 Mbps video): the ceilings
+    /// must reach them then, not at the next tier or path change.
+    private func applyEncoderCeilings() {
+        currentBitrate = dataProfile.budget.audio.capping(ladderAudioBitrate)
+        client.applyAudioEncoding(maxBitrateBps: currentBitrate)
+        applyVideoQuality(currentQualityLevel)
     }
 
     private func refreshDataProfile() {

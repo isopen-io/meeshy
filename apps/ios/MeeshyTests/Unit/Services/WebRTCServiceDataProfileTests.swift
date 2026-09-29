@@ -92,6 +92,34 @@ final class WebRTCServiceDataProfileTests: XCTestCase {
         XCTAssertEqual(client.audioEncodings.last, CallDataProfile.wifi.budget.audio.maxAverageBitrateBps)
     }
 
+    func test_createOffer_onCellular_capsTheSendersTheOfferJustCreated() async {
+        let (sut, client, monitor) = makeSUT()
+        _ = sut.configure(isVideo: true)
+        monitor.emit(cellular)
+        let videoBefore = client.videoEncodings.count
+
+        _ = await sut.createOffer()
+
+        let budget = CallDataProfile.cellular.budget
+        XCTAssertGreaterThan(client.videoEncodings.count, videoBefore, "the offerer's transceivers only exist once the offer is built")
+        XCTAssertLessThanOrEqual(client.videoEncodings.last?.maxBitrateBps ?? .max, budget.video.maxBitrateBps)
+        XCTAssertEqual(client.audioEncodings.last, budget.audio.maxAverageBitrateBps)
+    }
+
+    func test_createAnswer_onDataSaver_capsTheSendersTheAnswerJustAttached() async {
+        let (sut, client, monitor) = makeSUT()
+        _ = sut.configure(isVideo: true)
+        monitor.emit(lowDataMode)
+        let videoBefore = client.videoEncodings.count
+
+        _ = await sut.createAnswer(from: SessionDescription(type: .offer, sdp: "offer"))
+
+        let budget = CallDataProfile.dataSaver.budget
+        XCTAssertGreaterThan(client.videoEncodings.count, videoBefore, "the answerer attaches its tracks while building the answer")
+        XCTAssertLessThanOrEqual(client.videoEncodings.last?.maxBitrateBps ?? .max, budget.video.maxBitrateBps)
+        XCTAssertEqual(client.audioEncodings.last, budget.audio.maxAverageBitrateBps)
+    }
+
     func test_close_stopsWatchingAndResetsToWifi() {
         let (sut, client, monitor) = makeSUT()
         _ = sut.configure(isVideo: true)
