@@ -55,6 +55,9 @@ const en = {
   'callStudio.record.failed': 'The video could not be saved',
   'callStudio.record.unsupported': 'This browser cannot record the call',
   'callStudio.record.clock': 'Recording, {time}',
+  'callStudio.companions.label': 'Call participants',
+  'callStudio.companions.more': '{count} more participants',
+  'callStudio.companions.move': 'Move to the other side',
 } satisfies CallStudioCatalog;
 
 export default en;

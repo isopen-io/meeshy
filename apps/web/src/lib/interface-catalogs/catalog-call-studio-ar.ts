@@ -55,6 +55,9 @@ const ar = {
   'callStudio.record.failed': 'تعذّر حفظ الفيديو',
   'callStudio.record.unsupported': 'هذا المتصفح لا يستطيع تسجيل المكالمة',
   'callStudio.record.clock': 'جارٍ التسجيل، {time}',
+  'callStudio.companions.label': 'المشاركون في المكالمة',
+  'callStudio.companions.more': '{count} مشاركين آخرين',
+  'callStudio.companions.move': 'النقل إلى الجهة الأخرى',
 } satisfies CallStudioCatalog;
 
 export default ar;

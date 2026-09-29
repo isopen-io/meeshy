@@ -20,8 +20,8 @@ import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } fro
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
-import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
+import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
@@ -29,6 +29,8 @@ import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from '@/lib/calls/video-effects';
+
+import type { EffectsCompanion } from './call-effects-companions';
 
 /**
  * **L'ÉCRAN D'APPEL** (#6382, #8045, #8391) — miroir de `CallView.swift` et
@@ -319,6 +321,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const root = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
   const phase = call.phase.kind;
   const joined = phase === 'connected' || phase === 'reconnecting';
@@ -536,6 +539,18 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     }
   };
   const exitMode = () => send({ type: 'exit-mode' });
+  /* Les autres, qui accompagnent mon image en mode Effets (#8737), dans leur ordre d'arrivée. */
+  const companionOf = (member: CallMember): EffectsCompanion => {
+    const stream = call.remoteStreams[member.userId] ?? null;
+    const shows = (member.cameraOn || member.screenSharing) && hasVideo(stream);
+    return {
+      id: member.userId,
+      name: member.name,
+      color: speakerColor(member.userId),
+      render: (width) =>
+        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} />,
+    };
+  };
   const callAudio = (): readonly MediaStream[] => [call.localStream, ...Object.values(call.remoteStreams)].filter((stream): stream is MediaStream => stream !== null);
   const mode =
     chrome.mode === 'effects' ? (
@@ -543,7 +558,10 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         language={language}
         colorAvailable={support.color}
         blurAvailable={support.blur}
-        preview={<StreamVideo stream={call.localStream} mirrored={selfPreviewMirrored(call)} className="size-full" />}
+        preview={<StreamVideo stream={call.localStream} mirrored={selfPreviewMirrored(call)} className="size-full" videoRef={myPreview} />}
+        selfVideo={() => myPreview.current}
+        companions={Object.values(call.members).map(companionOf)}
+        captions={call.captions}
         quitGlyph={closeGlyph}
         onExit={exitMode}
         onWheel={onRowWheel}

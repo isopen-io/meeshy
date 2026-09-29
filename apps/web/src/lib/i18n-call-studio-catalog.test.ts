@@ -42,7 +42,7 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
     const french = await loadCallStudioCatalog('fr');
     for (const [language, catalog] of await loadAll()) {
       if (language === 'fr') continue;
-      for (const key of ['callStudio.face.smoothing', 'callStudio.face.toad', 'callStudio.montage.strip', 'callStudio.capture.saved', 'callStudio.capture.facesSaved'] as const) {
+      for (const key of ['callStudio.face.smoothing', 'callStudio.face.toad', 'callStudio.montage.strip', 'callStudio.capture.saved', 'callStudio.capture.facesSaved', 'callStudio.companions.label', 'callStudio.companions.more', 'callStudio.companions.move'] as const) {
         expect({ language, key, copied: catalog[key] === french[key] }).toEqual({ language, key, copied: false });
       }
     }

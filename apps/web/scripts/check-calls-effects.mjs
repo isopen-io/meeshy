@@ -24,7 +24,9 @@
  *     envoyée par la piste traitée, et le pair continue de DÉCODER des images
  *     (aucune image perdue) ; plus de déclencheur : l'indice « Deux tapes :
  *     photo · Appui long : vidéo » se montre, et deux tapes sur « Chaud »
- *     téléchargent MON image (#8625) ;
+ *     téléchargent MON image (#8625) ; l'autre reste à l'écran, dans un
+ *     bloc en haut, hors de l'aperçu capturé, qui ne couvre pas le carrousel
+ *     et se glisse d'un coin du haut à l'autre (#8737) ;
  *  4 bis. l'effet de visage « Éruption » teint l'image ENVOYÉE : le rouge y
  *     domine le bleu nettement plus qu'avant (lave, braises, étalonnage
  *     orangé), et le pair décode toujours (#8551) ;
@@ -275,6 +277,24 @@ try {
       check((await page.$('[data-call-capture-shoot], [data-call-mode-bar] .size-\\[72px\\]')) === null, `${label} : plus de déclencheur dans la barre`);
       check(await appears(page, '[data-call-capture-hint]', 2000) && (await page.textContent('[data-call-capture-hint]')) === 'Deux tapes : photo · Appui long : vidéo', `${label} : l'indice du geste se montre`);
       await capture(page, `effets-indice-${slug}`);
+      check(await appears(page, '[data-call-effects-companions] [data-call-effects-companion]'), `${label} : l'autre reste à l'écran, dans le bloc du haut (#8737)`);
+      const companions = await page.$eval('[data-call-effects-companions]', (block) => {
+        const box = block.getBoundingClientRect();
+        const bar = document.querySelector('[data-call-mode-bar]')?.getBoundingClientRect();
+        const carousel = document.querySelector('[data-call-mode-carousel]')?.getBoundingClientRect();
+        const clear = (other) => other === undefined || box.bottom <= other.top;
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { top: Math.round(box.top), left: Math.round(box.left), right: Math.round(box.right), bottom: Math.round(box.bottom), clear: clear(bar) && clear(carousel), inPreview: block.closest('[data-call-mode-preview]') !== null, reached: hit !== null && block.contains(hit) };
+      });
+      check(companions.top >= 0 && companions.bottom < height / 2 && companions.left >= 0 && companions.right <= width, `${label} : le bloc des autres tient en haut de l'écran (${JSON.stringify(companions)})`);
+      check(companions.clear && !companions.inPreview, `${label} : il ne couvre ni le carrousel ni la barre, et vit hors de l'aperçu capturé`);
+      check(companions.reached, `${label} : il reçoit le doigt`);
+      const startCorner = await page.getAttribute('[data-call-effects-companions]', 'data-call-effects-companions-corner');
+      await page.mouse.move((companions.left + companions.right) / 2, (companions.top + companions.bottom) / 2);
+      await page.mouse.down();
+      await page.mouse.move(width - (companions.left + companions.right) / 2, (companions.top + companions.bottom) / 2, { steps: 8 });
+      await page.mouse.up();
+      check(await until(page, (from) => document.querySelector('[data-call-effects-companions]')?.getAttribute('data-call-effects-companions-corner') !== from, startCorner), `${label} : glissé de l'autre côté, il y reste (${startCorner} → l'autre coin)`);
       const categories = await page.$$eval('[data-call-effects-category]', (tabs) => tabs.map((tab) => [tab.getAttribute('data-call-effects-category'), tab.getAttribute('aria-pressed'), tab.textContent]));
       check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur']]), `${label} : « Visage · Couleur », Visage d'abord (${JSON.stringify(categories)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {

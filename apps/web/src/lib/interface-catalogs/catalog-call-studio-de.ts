@@ -55,6 +55,9 @@ const de = {
   'callStudio.record.failed': 'Das Video konnte nicht gespeichert werden',
   'callStudio.record.unsupported': 'Dieser Browser kann den Anruf nicht aufnehmen',
   'callStudio.record.clock': 'Aufnahme läuft, {time}',
+  'callStudio.companions.label': 'Teilnehmende am Anruf',
+  'callStudio.companions.more': '{count} weitere Teilnehmende',
+  'callStudio.companions.move': 'Auf die andere Seite verschieben',
 } satisfies CallStudioCatalog;
 
 export default de;

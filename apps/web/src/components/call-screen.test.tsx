@@ -381,6 +381,42 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  const videoStream = (id: string): MediaStream => {
+    const track = { id, kind: 'video', readyState: 'live' };
+    return Object.assign(Object.create(MediaStream.prototype) as MediaStream, { id, getVideoTracks: () => [track], getAudioTracks: () => [], getTracks: () => [track] });
+  };
+
+  test('en mode Effets, l’autre reste à l’écran : sa vidéo en vignette, lisible, hors de l’aperçu que la capture lit — qui reste MA vidéo (#8737)', async () => {
+    const mine = videoStream('mine');
+    const theirs = videoStream('theirs');
+    const view = mount({ media: 'video', cameraOn: true, localStream: mine, members: { 'u-peer': member({ cameraOn: true }) }, remoteStreams: { 'u-peer': theirs } }, { color: true, blur: false });
+    view.press('[data-call-self-controls] [data-call-control="effects"]');
+    await settle(() => import('./call-effects-mode'));
+    const block = view.find('[data-call-effects-companions]');
+    expect(block?.getAttribute('aria-label')).toBe('Participants à l’appel');
+    const peerVideo = view.find('[data-call-effects-companion="u-peer"] video') as HTMLVideoElement | null;
+    expect(peerVideo?.srcObject).toBe(theirs);
+    expect(peerVideo?.getAttribute('aria-label')).toBe('Amina Diallo');
+    expect(peerVideo?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(peerVideo?.closest('[data-call-mode-preview]')).toBeNull();
+    const previewVideos = [...view.host.querySelectorAll('[data-call-mode-preview="effects"] video')] as HTMLVideoElement[];
+    expect(previewVideos.map((video) => video.srcObject)).toEqual([mine]);
+    view.done();
+  });
+
+  test('en groupe, les autres dans l’ordre d’arrivée ; caméra coupée, son portrait (#8737)', async () => {
+    const members = { 'u-z': member({ userId: 'u-z', name: 'Zoé', cameraOn: true }), 'u-a': member({ userId: 'u-a', name: 'Aya' }) };
+    const view = mount({ media: 'video', isGroup: true, cameraOn: true, localStream: videoStream('mine'), members, remoteStreams: { 'u-z': videoStream('z'), 'u-a': videoStream('a') } }, { color: true, blur: false });
+    view.press('[data-call-more]');
+    view.press('[data-call-control="effects"]');
+    await settle(() => import('./call-effects-mode'));
+    expect([...view.host.querySelectorAll('[data-call-effects-companion]')].map((tile) => tile.getAttribute('data-call-effects-companion'))).toEqual(['u-z', 'u-a']);
+    expect(view.find('[data-call-effects-companion="u-z"] video')).not.toBeNull();
+    expect(view.find('[data-call-effects-companion="u-a"] video')).toBeNull();
+    expect(view.find('[data-call-effects-companion="u-a"]')?.textContent).toContain('Aya');
+    view.done();
+  });
+
   test('« Capturer » entre en MODE montage : l’aperçu plein écran, les treize styles au carrousel, plus de déclencheur (#8552, #8578, #8625)', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
     view.press('[data-call-more]');

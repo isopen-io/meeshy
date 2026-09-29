@@ -55,6 +55,9 @@ const it = {
   'callStudio.record.failed': 'Impossibile salvare il video',
   'callStudio.record.unsupported': 'Questo browser non può registrare la chiamata',
   'callStudio.record.clock': 'Registrazione in corso, {time}',
+  'callStudio.companions.label': 'Partecipanti alla chiamata',
+  'callStudio.companions.more': 'Altri {count} partecipanti',
+  'callStudio.companions.move': 'Sposta sull’altro lato',
 } satisfies CallStudioCatalog;
 
 export default it;

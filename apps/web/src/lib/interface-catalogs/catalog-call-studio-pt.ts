@@ -55,6 +55,9 @@ const pt = {
   'callStudio.record.failed': 'Não foi possível guardar o vídeo',
   'callStudio.record.unsupported': 'Este navegador não consegue gravar a chamada',
   'callStudio.record.clock': 'A gravar, {time}',
+  'callStudio.companions.label': 'Participantes da chamada',
+  'callStudio.companions.more': 'Mais {count} participantes',
+  'callStudio.companions.move': 'Mudar de lado',
 } satisfies CallStudioCatalog;
 
 export default pt;

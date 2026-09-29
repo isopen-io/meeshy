@@ -58,6 +58,9 @@ const fr = {
   'callStudio.record.failed': 'La vidéo n’a pas pu être enregistrée',
   'callStudio.record.unsupported': 'Ce navigateur ne sait pas filmer l’appel',
   'callStudio.record.clock': 'Vidéo en cours, {time}',
+  'callStudio.companions.label': 'Participants à l’appel',
+  'callStudio.companions.more': '{count} autres participants',
+  'callStudio.companions.move': 'Changer de côté',
 } as const;
 
 export default fr;
