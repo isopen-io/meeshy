@@ -48,6 +48,7 @@ async function mountSheet(
     readonly onClose?: () => void;
     choices?: readonly { code: string; isOriginal: boolean; isServed: boolean }[];
     reactions?: readonly (readonly [string, number])[];
+    readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
   } = {},
 ) {
   return mounter.mount(
@@ -62,6 +63,7 @@ async function mountSheet(
         messageId={messageId}
         attachments={[]}
         star={extra.star ?? null}
+        {...(extra.create === undefined ? {} : { create: extra.create })}
         onPickLanguage={() => undefined}
         onClose={extra.onClose ?? (() => undefined)}
       />
@@ -174,5 +176,27 @@ describe('MessageDetailSheet — les libellés viennent du catalogue (#7555)', (
     const text = host.textContent ?? '';
     expect(text).toContain(translate('ar', 'message.detail.language.original', { language: 'Français' }));
     expect(text).not.toContain('(original)');
+  });
+});
+
+describe('« Plus… » déplie Composer ET Imager (#8693)', () => {
+  test('les deux entrées, dans cet ordre, agissent puis referment la feuille', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet(null, SERVER_MESSAGE_ID, {
+      create: { onCompose: () => journal.push('compose'), onImage: () => journal.push('image') },
+      onClose: () => journal.push('close'),
+    });
+    const entries = [...host.querySelectorAll<HTMLElement>('[data-message-create]')];
+    expect(entries.map((el) => el.getAttribute('data-message-create'))).toEqual(['compose', 'image']);
+    expect(entries.map((el) => el.textContent)).toEqual(['Composer', 'Imager']);
+    await mounter.click(entries[1] ?? null);
+    expect(journal).toEqual(['image', 'close']);
+  });
+
+  test('un message sans média à composer n’offre que « Imager » ; un message protégé, rien', async () => {
+    const imageOnly = await mountSheet(null, SERVER_MESSAGE_ID, { create: { onCompose: null, onImage: () => undefined } });
+    expect([...imageOnly.querySelectorAll('[data-message-create]')].map((el) => el.getAttribute('data-message-create'))).toEqual(['image']);
+    const none = await mountSheet(null, SERVER_MESSAGE_ID, { create: { onCompose: null, onImage: null } });
+    expect(none.querySelector('[data-message-create]')).toBeNull();
   });
 });

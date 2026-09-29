@@ -21,23 +21,27 @@ import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-expor
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { spokenLanguageName } from '@/lib/view/language-name';
 
+import { PRESSED, Pill, REST } from './thread-export-controls';
+import { AUDIO_STYLE_LABEL, FramePanel, MEDIA_STYLE_LABEL, MediaPanel, type FrameChoice } from './thread-export-frame';
 import { CardThumb, LinkGlyph, cssFontOf, paletteGradient, type ThumbSource } from './thread-export-thumb';
 
 /**
- * **LE PLATEAU DU COMPOSER D'EXPORT** — un seul verre, un seul réglage à la
- * fois. Les onglets nomment les parties de la carte ; toucher une partie sur
- * l'aperçu ouvre son onglet (`TAB_OF_PART`). La langue n'apparaît que si le
- * message existe dans plusieurs, et vient après les réglages de format.
+ * **LE PLATEAU D'« IMAGINE »** — un seul verre, un seul réglage à la fois. Les
+ * onglets nomment les parties de la carte ; toucher une partie sur l'aperçu
+ * ouvre son onglet (`TAB_OF_PART`). « Frame » vient AVANT « Fond » (#8693) ;
+ * « Médias » n'apparaît que si la carte en porte, la langue que si le message
+ * existe dans plusieurs, et tous deux viennent après les réglages de format.
  */
 
-export type ExportTab = 'styles' | 'palette' | 'typeface' | 'link' | 'details' | 'language';
+export type ExportTab = 'styles' | 'frame' | 'palette' | 'typeface' | 'link' | 'details' | 'media' | 'language';
 
 export const TAB_OF_PART: Readonly<Record<CardPart, ExportTab>> = {
   background: 'palette',
-  header: 'details',
+  header: 'frame',
   quote: 'typeface',
   reply: 'typeface',
   link: 'link',
+  media: 'media',
 };
 
 export const TYPEFACE_LABEL = {
@@ -65,35 +69,37 @@ const OPTION_LABEL = {
   showConversationTitle: 'export.card.option.title',
   showAuthors: 'export.card.option.authors',
   showDate: 'export.card.option.date',
+  showTimes: 'export.card.option.times',
   anonymizeQuoted: 'export.card.option.anonymizeQuoted',
   anonymizeReply: 'export.card.option.anonymizeReply',
+  usePseudonyms: 'export.card.option.pseudonyms',
 } as const satisfies Readonly<Record<MessageCardToggle, ExportCardCatalogKey>>;
 
 const TAB_LABEL = {
   styles: 'export.card.tab.styles',
+  frame: 'export.card.tab.frame',
   palette: 'export.card.tab.palette',
   typeface: 'export.card.tab.typeface',
   link: 'export.card.tab.link',
   details: 'export.card.tab.details',
+  media: 'export.card.tab.media',
   language: 'export.card.tab.language',
 } as const satisfies Readonly<Record<ExportTab, ExportCardCatalogKey>>;
 
 const TAB_GLYPH = {
   styles: EXPORT_CARD_GLYPHS.squaresFour,
+  frame: EXPORT_CARD_GLYPHS.frameCorners,
   palette: EXPORT_CARD_GLYPHS.palette,
   typeface: EXPORT_CARD_GLYPHS.textAa,
   link: EXPORT_CARD_GLYPHS.arrowElbowDownRight,
   details: EXPORT_CARD_GLYPHS.slidersHorizontal,
+  media: EXPORT_CARD_GLYPHS.images,
 } as const;
 
 export const templateLabel = (language: InterfaceLanguage, id: MessageCardTemplateId): string => {
   const template = templateOf(id);
   return `${template.palette.name} · ${translateExportCard(language, TYPEFACE_LABEL[template.typefaceId])} · ${translateExportCard(language, LINK_LABEL[template.link])}`;
 };
-
-/* Verre sur verre, jamais : les tuiles DANS le plateau sont une teinte d'encre, le verre est celui du plateau. */
-const REST = { backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 7%, transparent)', color: 'var(--color-ios-ink)' } as const;
-const PRESSED = { backgroundColor: 'var(--color-ios-ink)', color: 'var(--color-ios-surface)' } as const;
 
 function Tile({
   pressed,
@@ -125,32 +131,6 @@ function Tile({
   );
 }
 
-function Pill({
-  pressed,
-  onClick,
-  data,
-  children,
-}: {
-  readonly pressed: boolean;
-  readonly onClick: () => void;
-  readonly data: Readonly<Record<`data-${string}`, string>>;
-  readonly children: string;
-}) {
-  return (
-    <button
-      {...data}
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ minHeight: 44, ...(pressed ? PRESSED : REST) }}
-    >
-      {pressed ? <Glyph name="check" size={14} /> : null}
-      {children}
-    </button>
-  );
-}
-
 export type ExportTrayProps = {
   readonly language: InterfaceLanguage;
   readonly tab: ExportTab;
@@ -160,32 +140,56 @@ export type ExportTrayProps = {
   readonly format: MessageCardFormat;
   readonly options: readonly MessageCardToggle[];
   readonly hasQuote: boolean;
+  /** Un titre ou une date est peint : l'onglet Frame peut coucher l'en-tête. */
+  readonly hasHeader: boolean;
+  readonly hasVisual: boolean;
+  readonly hasAudio: boolean;
   readonly popular: readonly MessageCardTemplateId[];
   readonly thumbs: ThumbSource;
   readonly onTemplate: (id: MessageCardTemplateId) => void;
   readonly onPart: (part: { readonly palette?: CardPaletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) => void;
   readonly onToggle: (toggle: MessageCardToggle) => void;
+  readonly onChoice: (choice: FrameChoice) => void;
   readonly onGallery: () => void;
   readonly languages: readonly string[];
   readonly exportLanguage: string | null;
   readonly onLanguage: (code: string | null) => void;
 };
 
+const STACKED: readonly ExportTab[] = ['frame', 'media'];
+const WRAPPED: readonly ExportTab[] = ['details', 'language'];
+
 export function ExportTray(props: ExportTrayProps) {
   const { language, tab, format } = props;
   const current = templateOf(format.template);
-  const tabs: readonly ExportTab[] = ['styles', 'palette', 'typeface', 'link', 'details', ...(props.languages.length > 1 ? (['language'] as const) : [])];
+  const hasMedia = props.hasVisual || props.hasAudio;
+  const tabs: readonly ExportTab[] = [
+    'styles',
+    'frame',
+    'palette',
+    'typeface',
+    'link',
+    'details',
+    ...(hasMedia ? (['media'] as const) : []),
+    ...(props.languages.length > 1 ? (['language'] as const) : []),
+  ];
 
+  const mediaSubtitle = [props.hasVisual ? translateExportCard(language, MEDIA_STYLE_LABEL[format.mediaStyle]) : null, props.hasAudio ? translateExportCard(language, AUDIO_STYLE_LABEL[format.audioStyle]) : null]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
   const subtitle: Readonly<Record<ExportTab, string>> = {
     styles: templateLabel(language, format.template),
+    frame: '',
     palette: current.palette.name,
     typeface: translateExportCard(language, TYPEFACE_LABEL[current.typefaceId]),
     link: translateExportCard(language, LINK_LABEL[current.link]),
     details: '',
+    media: mediaSubtitle,
     language: props.exportLanguage === null ? translateExportCard(language, 'export.card.language.asRead') : spokenLanguageName(props.exportLanguage),
   };
 
   const anonymizing = props.focus === 'quote' ? (props.hasQuote ? 'anonymizeQuoted' : null) : props.focus === 'reply' ? 'anonymizeReply' : null;
+  const panelLayout = STACKED.includes(tab) ? 'max-h-[38dvh] flex-col items-stretch overflow-y-auto' : WRAPPED.includes(tab) ? 'flex-wrap' : 'overflow-x-auto';
 
   return (
     <div className="glass mx-3 rounded-[28px] pt-3" style={{ boxShadow: '0 10px 30px color-mix(in srgb, black 18%, transparent)' }}>
@@ -204,7 +208,7 @@ export function ExportTray(props: ExportTrayProps) {
         )}
       </div>
 
-      <div role="tabpanel" aria-label={translateExportCard(language, TAB_LABEL[tab])} className={`flex min-h-[92px] items-center gap-2 px-4 pb-3 ${tab === 'details' || tab === 'language' ? 'flex-wrap' : 'overflow-x-auto'}`}>
+      <div role="tabpanel" aria-label={translateExportCard(language, TAB_LABEL[tab])} className={`flex min-h-[92px] items-center gap-2 px-4 pb-3 ${panelLayout}`}>
         {tab === 'styles' ? (
           <>
             {props.popular.map((id) => (
@@ -222,6 +226,10 @@ export function ExportTray(props: ExportTrayProps) {
             </button>
           </>
         ) : null}
+
+        {tab === 'frame' ? <FramePanel language={language} format={format} hasHeader={props.hasHeader} hasQuote={props.hasQuote} onChoice={props.onChoice} onToggle={props.onToggle} /> : null}
+
+        {tab === 'media' ? <MediaPanel language={language} format={format} hasVisual={props.hasVisual} hasAudio={props.hasAudio} onChoice={props.onChoice} /> : null}
 
         {tab === 'palette'
           ? CARD_PALETTE_IDS.map((palette) => (
@@ -285,7 +293,7 @@ export function ExportTray(props: ExportTrayProps) {
         ) : null}
       </div>
 
-      <div role="tablist" aria-label={translateExportCard(language, 'export.card.options')} className="flex gap-1 px-2 pb-2 pt-1" style={{ borderTop: '1px solid color-mix(in srgb, var(--color-ios-ink) 10%, transparent)' }}>
+      <div role="tablist" aria-label={translateExportCard(language, 'export.card.options')} className="flex gap-1 overflow-x-auto px-2 pb-2 pt-1" style={{ borderTop: '1px solid color-mix(in srgb, var(--color-ios-ink) 10%, transparent)' }}>
         {tabs.map((id) => (
           <button
             key={id}
@@ -294,7 +302,7 @@ export function ExportTray(props: ExportTrayProps) {
             data-export-tab={id}
             aria-selected={id === tab}
             onClick={() => props.onTab(id)}
-            className="grid min-w-0 flex-1 justify-items-center gap-0.5 rounded-[14px] py-1.5 text-[11px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="grid min-w-[44px] flex-1 justify-items-center gap-0.5 rounded-[14px] py-1.5 text-[11px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 44,
               color: 'var(--color-ios-ink)',
