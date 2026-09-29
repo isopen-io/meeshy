@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 
-import { ReelOfferDialog } from '@/components/reel-offer-dialog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublishChoice } from '@/lib/stories/publication-layout';
 import { studioOffersReel } from '@/lib/stories/reel-offer';
 import type { StudioDraft } from '@/lib/stories/studio';
 
 const REEL: PublishChoice = { kind: 'REEL', layout: null };
+
+const ReelOfferDialog = lazy(() => import('@/components/reel-offer-dialog').then((m) => ({ default: m.ReelOfferDialog })));
 
 /**
  * **LE STUDIO DEMANDE « PUBLIER EN RÉEL ? »** (#8603) — tient les trois faits
@@ -58,12 +59,14 @@ export function useStudioReelOffer(params: {
   };
 
   const dialog = open ? (
-    <ReelOfferDialog
-      lang={params.lang}
-      onReel={() => answer(REEL, true)}
-      onPost={() => answer(params.choice, false)}
-      onCancel={() => setOpen(false)}
-    />
+    <Suspense fallback={null}>
+      <ReelOfferDialog
+        lang={params.lang}
+        onReel={() => answer(REEL, true)}
+        onPost={() => answer(params.choice, false)}
+        onCancel={() => setOpen(false)}
+      />
+    </Suspense>
   ) : null;
 
   return { promoted, requestPublish, choose, dialog };
