@@ -82,6 +82,7 @@ struct ComposerSceneCameraBar: View {
     /// Un pas de zoom VoiceOver : `true` rapproche.
     var onZoomStep: (Bool) -> Void = { _ in }
     var onFlashIntensity: (Double) -> Void = { _ in }
+    var onShutterTouched: () -> Void = {}
 
     /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
     /// différence entre une photo et une prise, et il ne peut pas vivre
@@ -373,6 +374,9 @@ struct ComposerSceneCameraBar: View {
                 if pressedAt == nil {
                     pressedAt = Date()
                     locked = false
+                    // Un doigt sur le déclencheur n'est plus sur la scène :
+                    // un appui long dont la levée s'est perdue se clôt ici.
+                    onShutterTouched()
                     armHold()
                 }
                 guard stage == .recording else { return }
@@ -434,7 +438,9 @@ struct ComposerSceneCameraBar: View {
     // MARK: - La phrase
 
     private var hint: some View {
-        Text(ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
+        // Pendant que le doigt tient, la phrase dit le cadenas (#8671).
+        Text(showsLock ? ComposerSceneCameraCopy.lockHint
+                       : ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
             .font(MeeshyFont.relative(11, design: .monospaced))
             .foregroundStyle(.white.opacity(0.85))
             .shadow(color: .black.opacity(0.6), radius: 3, y: 1)

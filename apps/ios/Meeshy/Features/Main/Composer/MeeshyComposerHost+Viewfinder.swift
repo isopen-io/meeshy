@@ -153,6 +153,16 @@ extension MeeshyComposerHost {
         }
     }
 
+    /// **Une levée perdue ne laisse pas le cadenas affiché.** Si le doigt se
+    /// pose sur le déclencheur alors que l'appui long de la scène se croit
+    /// encore tenu (levée avalée pendant l'ouverture de la session), la tenue
+    /// se clôt comme une levée : une prise verrouillée continue, le reste
+    /// s'annule.
+    func releaseStaleSceneHold() {
+        guard sceneHoldStartedAt != nil else { return }
+        handleSceneCaptureLongPressEnded()
+    }
+
     // MARK: - Le zoom au glisser (#8671)
 
     /// Le premier glissé d'une prise s'ANCRE sur le facteur courant et la
@@ -576,7 +586,8 @@ extension MeeshyComposerHost {
                 onZoomDrag: { dragSceneZoom(translationY: $0) },
                 onZoomDragEnded: { endSceneZoomDrag() },
                 onZoomStep: { stepSceneZoom(up: $0) },
-                onFlashIntensity: { setSceneFlashIntensity($0) })
+                onFlashIntensity: { setSceneFlashIntensity($0) },
+                onShutterTouched: { releaseStaleSceneHold() })
         }
         .frame(width: rect.width, height: rect.height)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: sceneCameraDismissDrag))

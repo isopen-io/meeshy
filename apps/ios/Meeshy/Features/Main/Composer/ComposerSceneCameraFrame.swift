@@ -124,6 +124,8 @@ struct ComposerSceneCameraFrameKey: PreferenceKey {
 struct ComposerSceneQuickCaptureHint: View {
     let hint: ComposerSceneQuickCapture.Hint
 
+    static let railClearance: CGFloat = 64
+
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: hint == .videoOnly ? "video" : "camera")
@@ -141,7 +143,10 @@ struct ComposerSceneQuickCaptureHint: View {
         .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(Color.gray)
         .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-        .padding(28)
+        // Le rail des outils longe le bord gauche de la scène : la marge
+        // latérale le laisse libre, et le bloc reste centré.
+        .padding(.horizontal, Self.railClearance)
+        .padding(.vertical, 28)
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(ComposerSceneCameraCopy.emptySceneSpoken(hint)))

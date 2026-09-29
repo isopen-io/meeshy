@@ -188,6 +188,11 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertTrue(barre.contains("ComposerCaptureHold.showsLock"))
         XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider"))
         XCTAssertTrue(barre.contains("accessibilityAdjustableAction"), "le curseur est ajustable à la voix")
+        XCTAssertTrue(barre.contains("ComposerSceneCameraCopy.lockHint"), "la phrase du bas dit le cadenas")
+        XCTAssertTrue(barre.contains("onShutterTouched()"),
+                      "toucher le déclencheur clôt un appui long dont la levée s'est perdue")
+        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(hote.contains("onShutterTouched: { releaseStaleSceneHold() }"))
     }
 
     func test_lHoteZoomeLaCameraEtRegleLaTorche() throws {
