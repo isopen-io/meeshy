@@ -73,6 +73,22 @@ const enStudioChrome = {
   'composer.reelOffer.body': 'Your post has a single video: as a reel, it plays full screen in Reels.',
   'composer.reelOffer.reel': 'It’s a Reel',
   'composer.reelOffer.post': 'It’s a Post',
+  'story.studio.tool.close': 'Close tool',
+  'story.studio.camera.quick.photoOrVideo': 'Tap: photo · Hold: video',
+  'story.studio.camera.quick.videoOnly': 'Hold to film',
+  'story.studio.camera.quick.photo': 'Take a photo',
+  'story.studio.camera.quick.video': 'Film',
+  'story.studio.camera.title': 'Camera',
+  'story.studio.camera.close': 'Back to the scene',
+  'story.studio.camera.flip': 'Switch camera',
+  'story.studio.camera.flash': 'Flash',
+  'story.studio.camera.shutter.photo': 'Take a photo',
+  'story.studio.camera.shutter.start': 'Start recording',
+  'story.studio.camera.shutter.stop': 'Stop recording',
+  'story.studio.camera.hint.photo': 'Tap: photo · hold: video',
+  'story.studio.camera.hint.video': 'Tap to film · tap again to place',
+  'story.studio.camera.unavailable': 'The camera isn’t available. Allow it in your browser settings.',
+  'story.studio.camera.recording': 'Recording',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

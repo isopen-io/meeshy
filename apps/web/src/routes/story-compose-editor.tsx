@@ -9,7 +9,7 @@ import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import type { StudioPose } from '@/lib/stories/studio-pose';
 import { STUDIO_TEXT_LANGUAGES, type StudioTextLayer } from '@/lib/stories/studio-text';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
-import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
+import { STUDIO_PLATE, StudioToolClose } from '@/routes/story-compose-chrome';
 
 import { StudioAltField, StudioFilterSection, StudioSection as Section } from './story-compose-media-fields';
 import { StudioChip } from './story-compose-parts';
@@ -360,15 +360,7 @@ export function StudioEditPlaque({
         <h2 className="flex-1 truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {title}
         </h2>
-        <button
-          type="button"
-          data-story-edit-done
-          onClick={onDone}
-          className="h-11 rounded-xl px-4 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ backgroundColor: '#fff', color: '#111', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          {translate(lang, 'story.studio.edit.done')}
-        </button>
+        <StudioToolClose lang={lang} probe="edit" onClose={onDone} />
       </div>
       <div className="max-h-52 overflow-y-auto">{children}</div>
     </section>

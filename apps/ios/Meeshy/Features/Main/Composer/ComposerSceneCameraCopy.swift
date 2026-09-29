@@ -106,6 +106,19 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Revenir à la scène", bundle: .main)
     }
 
+    /// **L'indication grise d'une scène vide** (#8653) : elle nomme les deux
+    /// gestes, ou le seul que le format sert.
+    static func quickCaptureHint(_ hint: ComposerSceneQuickCapture.Hint) -> String {
+        switch hint {
+        case .photoOrVideo:
+            return String(localized: "composer.camera.quickHint.photoOrVideo",
+                          defaultValue: "Toucher : photo · Maintenir : vidéo", bundle: .main)
+        case .videoOnly:
+            return String(localized: "composer.camera.quickHint.videoOnly",
+                          defaultValue: "Maintenir pour filmer", bundle: .main)
+        }
+    }
+
     /// **Le libellé parlé dit l'ACTION, jamais la forme.** « Bouton rond
     /// corail » n'apprend rien ; « Prendre une photo » et « Arrêter
     /// l'enregistrement » disent ce qu'un appui fera — et ils diffèrent selon

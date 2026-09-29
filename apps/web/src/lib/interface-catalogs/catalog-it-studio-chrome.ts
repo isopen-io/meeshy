@@ -73,6 +73,22 @@ const itStudioChrome = {
   'composer.reelOffer.body': 'Il tuo post contiene un solo video: come reel, si apre a schermo intero nei Reel.',
   'composer.reelOffer.reel': 'È un reel',
   'composer.reelOffer.post': 'È un post',
+  'story.studio.tool.close': 'Chiudi lo strumento',
+  'story.studio.camera.quick.photoOrVideo': 'Tocca: foto · Tieni premuto: video',
+  'story.studio.camera.quick.videoOnly': 'Tieni premuto per filmare',
+  'story.studio.camera.quick.photo': 'Scatta una foto',
+  'story.studio.camera.quick.video': 'Filma',
+  'story.studio.camera.title': 'Fotocamera',
+  'story.studio.camera.close': 'Torna alla scena',
+  'story.studio.camera.flip': 'Cambia fotocamera',
+  'story.studio.camera.flash': 'Flash',
+  'story.studio.camera.shutter.photo': 'Scatta una foto',
+  'story.studio.camera.shutter.start': 'Avvia la registrazione',
+  'story.studio.camera.shutter.stop': 'Interrompi la registrazione',
+  'story.studio.camera.hint.photo': 'Tocca: foto · tieni premuto: video',
+  'story.studio.camera.hint.video': 'Tocca per filmare · tocca di nuovo per posare',
+  'story.studio.camera.unavailable': 'La fotocamera non è disponibile. Consentila nelle impostazioni del browser.',
+  'story.studio.camera.recording': 'Registrazione in corso',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

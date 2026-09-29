@@ -6,6 +6,7 @@ import {
   pageWithVisual,
   pageWithVisualAspectRatio,
   type StudioDoor,
+  type StudioPage,
   type StudioUploadState,
 } from '@/lib/stories/studio-page';
 import { studioPlaceRefusal, withPage, withPlacedWhileAnimated, type StudioDraft } from '@/lib/stories/studio';
@@ -14,6 +15,19 @@ import type { StudioPlaceRefusalNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 
 const UPLOADING: StudioUploadState = { phase: 'uploading', progress: 0 };
+
+function revokeIfLocal(url: string | undefined): void {
+  if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
+}
+
+/** Les TROIS aperçus locaux d'UNE page — fond, calque, son — révoqués
+ * ensemble : une page qui quitte le brouillon (retrait, publication) ne
+ * laisse aucun `blob:` derrière elle. */
+export function revokePageMedia(page: StudioPage): void {
+  revokeIfLocal(page.background?.previewUrl);
+  revokeIfLocal(page.overlay?.previewUrl);
+  revokeIfLocal(page.sound?.previewUrl);
+}
 
 /**
  * **POSER UN MÉDIA, OU EN IMPORTER PLUSIEURS** — sorti de `story-compose.tsx`
