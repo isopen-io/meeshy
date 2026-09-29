@@ -456,6 +456,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     }
   };
   const exitMode = () => send({ type: 'exit-mode' });
+  const callAudio = (): readonly MediaStream[] => [call.localStream, ...Object.values(call.remoteStreams)].filter((stream): stream is MediaStream => stream !== null);
   const mode =
     chrome.mode === 'effects' ? (
       <CallEffectsMode
@@ -466,9 +467,10 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         quitGlyph={closeGlyph}
         onExit={exitMode}
         onWheel={onRowWheel}
+        audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} />
     ) : null;
   const fade = `transition-opacity duration-300 motion-reduce:transition-none ${hidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`;
 

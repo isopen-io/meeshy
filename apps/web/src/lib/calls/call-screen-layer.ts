@@ -10,8 +10,8 @@
  *   REMPLACE les rangées — ‹ revient au menu, ✕ ferme tout ;
  * - `mode` : Effets ou Montage — tout le chrome d'appel s'efface (en-tête,
  *   pilule, rangées, commandes de ma caméra) et seul reste le mode : son
- *   carrousel centré, son déclencheur, ✕ pour en sortir. Les sous-titres
- *   restent.
+ *   carrousel centré (deux tapes : photo, appui long : vidéo — #8625), ✕
+ *   pour en sortir. Les sous-titres restent.
  *
  * L'auto-masquage (4 s sans geste) ne vaut qu'au repos et dans le menu : on
  * ne retire pas un panneau qu'on lit, ni un mode où l'on choisit.

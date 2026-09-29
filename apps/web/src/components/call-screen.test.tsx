@@ -360,7 +360,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('« Capturer » entre en MODE montage : l’aperçu plein écran, les treize styles au carrousel, le déclencheur (#8552, #8578)', async () => {
+  test('« Capturer » entre en MODE montage : l’aperçu plein écran, les treize styles au carrousel, plus de déclencheur (#8552, #8578, #8625)', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
     view.press('[data-call-more]');
     view.press('[data-call-control="capture"]');
@@ -368,7 +368,8 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     expect(view.find('[data-call-mode-preview="montage"] [data-call-capture-preview]')?.tagName).toBe('CANVAS');
     expect(view.host.querySelectorAll('[data-call-capture-thumb]')).toHaveLength(13);
-    expect(view.find('[data-call-capture-shoot]')).not.toBeNull();
+    expect(view.find('[data-call-capture-shoot]')).toBeNull();
+    expect(view.find('[data-carousel-item="grid"]')?.getAttribute('aria-describedby')).not.toBeNull();
     expect(view.find('[data-call-control-pill]')).toBeNull();
     act(() => view.find('[data-call-mode="montage"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(view.find('[data-call-mode="montage"]')).toBeNull();

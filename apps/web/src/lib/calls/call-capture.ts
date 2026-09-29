@@ -1,8 +1,4 @@
-import { currentGallerySaver, type GallerySaver } from '@/lib/gallery/gallery-saver';
-import { saveToGallery } from '@/lib/gallery/save-to-gallery';
-import type { FileDeliveryPortal } from '@/lib/media/deliver-file';
-import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
-
+import type { CaptureFile } from './call-capture-save';
 import { visibleTiles, type CaptureTile } from './call-capture-tiles';
 import { captureFileName, captureSize, FACE_CROP_SIZE, faceCropRect, montageLayout, type MontageStyle, type Size } from './call-montage';
 import { drawMontage, paintInto, type MontageText } from './call-montage-render';
@@ -16,15 +12,11 @@ import { detectFace, type FaceDetectorPort } from './face-tracker';
  * - **Chaque visage** : un portrait carré (1080) par tuile affichée, cadré sur
  *   le visage (le détecteur du navigateur, sinon la boîte supposée).
  *
- * Les fichiers partent dans la PHOTOTHÈQUE là où l'hôte en a une (la coque
- * Android, album « Meeshy ») ; ailleurs par la porte de fichiers (le
- * téléchargement d'un navigateur, la feuille de partage de la coque iOS).
- * Rien ne quitte l'appareil : aucune image ne passe par le réseau.
+ * Les fichiers partent par `call-capture-save.ts` (photothèque, sinon porte
+ * de fichiers). Rien ne quitte l'appareil.
  */
 
-export type CaptureFile = { readonly blob: Blob; readonly fileName: string };
-
-export type SaveOutcome = { readonly saved: number; readonly failed: number; readonly cancelled: number };
+export { saveCaptures, type CaptureFile, type SaveOutcome } from './call-capture-save';
 
 type Canvas2D = { readonly context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D; readonly toBlob: () => Promise<Blob | null> };
 
@@ -78,33 +70,4 @@ export async function captureFaces({ stage, env }: { readonly stage: Element; re
   const at = env.now();
   const files = await Promise.all(visibleTiles(stage).map((tile, index) => portrait(tile, index, at, env)));
   return files.filter((file): file is CaptureFile => file !== null);
-}
-
-/** `portal` se charge à la demande (`budgets.json` › `story_export`, `dynamic_only`) : la photothèque de la coque n'en a pas besoin. */
-type SaveEnv = { readonly saver: GallerySaver | null; readonly portal: () => Promise<FileDeliveryPortal | null> };
-
-export const browserSaveEnv = (): SaveEnv => ({
-  saver: currentGallerySaver(),
-  portal: () => import('@/lib/media/deliver-file').then((module) => module.fileDeliveryPortal(browserFileDeliveryHost())),
-});
-
-const MIME = 'image/png';
-
-async function saveOne(file: CaptureFile, env: SaveEnv): Promise<'saved' | 'failed' | 'cancelled'> {
-  const notice = await saveToGallery({ blob: file.blob, fileName: file.fileName, mimeType: MIME, saver: env.saver });
-  if (notice !== null) return notice === 'media.viewer.saved' ? 'saved' : 'failed';
-  const portal = await env.portal().catch(() => null);
-  if (portal === null) return 'failed';
-  const outcome = await portal.deliver(file.blob, file.fileName, MIME);
-  if (outcome === 'delivered') return 'saved';
-  return outcome === 'cancelled' ? 'cancelled' : 'failed';
-}
-
-/** Un fichier après l'autre : une feuille de partage n'en montre qu'une à la fois. */
-export async function saveCaptures(files: readonly CaptureFile[], env: SaveEnv = browserSaveEnv()): Promise<SaveOutcome> {
-  return files.reduce<Promise<SaveOutcome>>(async (previous, file) => {
-    const tally = await previous;
-    const outcome = await saveOne(file, env);
-    return { ...tally, [outcome]: tally[outcome] + 1 };
-  }, Promise.resolve({ saved: 0, failed: 0, cancelled: 0 }));
 }

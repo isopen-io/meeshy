@@ -2,7 +2,7 @@
 /**
  * EFFETS, ZOOM, CONVERSATION, MICRO, MONTAGE — LA VUE D'APPEL DANS UN
  * NAVIGATEUR RÉEL (#8442, #8441, #8436, #8434, #8432, #8550, #8551, #8552,
- * #8576, #8578, #8580).
+ * #8576, #8578, #8580, #8625).
  *
  * Les témoins `bun test` prouvent les règles avec des doublures de WebRTC et
  * de caméra. Aucun ne prouve qu'un effet posé dans Chromium arrive au PAIR
@@ -22,7 +22,9 @@
  *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
  *     au-dessus d'UN carrousel centré en bas ; « Chaud » remplace la piste
  *     envoyée par la piste traitée, et le pair continue de DÉCODER des images
- *     (aucune image perdue) ;
+ *     (aucune image perdue) ; plus de déclencheur : l'indice « Deux tapes :
+ *     photo · Appui long : vidéo » se montre, et deux tapes sur « Chaud »
+ *     téléchargent MON image (#8625) ;
  *  4 bis. l'effet de visage « Éruption » teint l'image ENVOYÉE : le rouge y
  *     domine le bleu nettement plus qu'avant (lave, braises, étalonnage
  *     orangé), et le pair décode toujours (#8551) ;
@@ -37,13 +39,15 @@
  *     écran et les TREIZE montages du carrousel, dans l'ordre (Écran,
  *     Couverture, Doré, Tapis rouge, Grille, Bande, Polaroid, Magazine,
  *     Pellicule, Néon, Noir et blanc, BD, Cœur), se PEIGNENT en direct ;
- *     « Couverture » passe l'aperçu, et le déclencheur télécharge un PNG de
- *     1080 × 1920 ; « Chaque visage » en télécharge un par tuile affichée ;
+ *     « Couverture » passe l'aperçu, et DEUX TAPES dessus téléchargent un PNG
+ *     de 1080 × 1920 ; un APPUI LONG la filme : le stop rond, au centre du
+ *     gabarit, sous un chrono, télécharge une vidéo WebM/MP4 non vide
+ *     (#8625) ; « Chaque visage » en télécharge un par tuile affichée ;
  *  9. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
@@ -70,6 +74,20 @@ const capture = async (page, name) => {
 
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
+/** Un toucher CENTRE son élément en défilant : le geste suivant vise l'élément arrêté, comme un doigt. */
+const centered = (page, id) =>
+  until(
+    page,
+    (target) => {
+      const item = document.querySelector(`[data-carousel-item="${target}"]`);
+      const row = item?.closest('[data-call-row-scroll]');
+      if (item == null || row == null) return false;
+      const a = item.getBoundingClientRect();
+      const b = row.getBoundingClientRect();
+      return Math.abs(a.left + a.width / 2 - (b.left + b.width / 2)) <= 2;
+    },
+    id,
+  );
 const vanishes = (page, selector, timeout = 4000) => page.waitForSelector(selector, { state: 'detached', timeout }).then(() => true, () => false);
 
 const ARM_PEER = () => localStorage.setItem('meeshy.fixtures.callPeer', '1');
@@ -245,6 +263,9 @@ try {
       const left = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-row]'].filter((selector) => document.querySelector(selector) !== null));
       check(left.length === 0, `${label} : l'en-tête, la pilule et les rangées partent (${JSON.stringify(left)})`);
       check(await appears(page, '[data-call-mode-preview="effects"] video'), `${label} : ma vidéo prend tout l'écran`);
+      check((await page.$('[data-call-capture-shoot], [data-call-mode-bar] .size-\\[72px\\]')) === null, `${label} : plus de déclencheur dans la barre`);
+      check(await appears(page, '[data-call-capture-hint]', 2000) && (await page.textContent('[data-call-capture-hint]')) === 'Deux tapes : photo · Appui long : vidéo', `${label} : l'indice du geste se montre`);
+      await capture(page, `effets-indice-${slug}`);
       const categories = await page.$$eval('[data-call-effects-category]', (tabs) => tabs.map((tab) => [tab.getAttribute('data-call-effects-category'), tab.getAttribute('aria-pressed'), tab.textContent]));
       check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur']]), `${label} : « Visage · Couleur », Visage d'abord (${JSON.stringify(categories)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
@@ -260,6 +281,11 @@ try {
       check(JSON.stringify(presets) === JSON.stringify(['natural', 'warm', 'cool', 'vivid', 'muted']), `${label} : « Couleur » : cinq préréglages (${presets.join(' · ')})`);
       await page.click('[data-carousel-item="warm"]');
       check((await page.getAttribute('[data-carousel-item="warm"]', 'aria-checked')) === 'true', `${label} : « Chaud » est coché`);
+      await centered(page, 'warm');
+      const selfShot = page.waitForEvent('download', { timeout: 8000 });
+      await page.dblclick('[data-carousel-item="warm"]');
+      const selfDownload = await selfShot.catch(() => null);
+      check(selfDownload !== null && /^meeshy-appel-warm-\d{8}-\d{6}\.png$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Chaud » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
       check(await until(page, (id) => {
         const video = document.querySelector('[data-call-corner] video, [data-call-tile-self] video, [data-call-mode-preview] video');
         const track = video?.srcObject?.getVideoTracks?.()[0];
@@ -322,7 +348,8 @@ try {
       await page.click('[data-call-control="effects"]');
       await appears(page, '[data-call-mode="effects"]');
       await page.click('[data-call-effects-category="color"]');
-      check((await page.getAttribute('[data-carousel-item="warm"]', 'aria-checked')) === 'true', `${label} : quitter rend les effets d'avant (« Chaud », pas « Froid »)`);
+      const restored = await page.getAttribute('[data-call-mode="effects"] [data-carousel-item][aria-checked="true"]', 'data-carousel-item');
+      check(restored === 'warm', `${label} : quitter rend les effets d'avant (« Chaud », pas « Froid » : ${restored})`);
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 
@@ -361,10 +388,11 @@ try {
       check((await page.getAttribute('[data-call-capture-preview]', 'data-call-capture-preview')) === 'cover', `${label} : l'aperçu passe en Couverture`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : la couverture se peint`);
       await capture(page, `montage-couverture-${slug}`);
+      await centered(page, 'cover');
       const shot = page.waitForEvent('download', { timeout: 8000 });
-      await page.click('[data-call-capture-shoot]');
+      await page.dblclick('[data-carousel-item="cover"]');
       const download = await shot.catch(() => null);
-      check(download !== null && /^meeshy-appel-cover-\d{8}-\d{6}\.png$/.test(download.suggestedFilename()), `${label} : le déclencheur télécharge le montage (${download?.suggestedFilename() ?? 'rien'})`);
+      check(download !== null && /^meeshy-appel-cover-\d{8}-\d{6}\.png$/.test(download.suggestedFilename()), `${label} : deux tapes sur « Couverture » téléchargent le montage (${download?.suggestedFilename() ?? 'rien'})`);
       if (download !== null) {
         const path = join(CAPTURE_DIR ?? '/tmp', `capture-montage-${slug}.png`);
         await download.saveAs(path);
@@ -372,6 +400,25 @@ try {
         check(size.png && size.width === 1080 && size.height === 1920, `${label} : un PNG de 1080 × 1920 (${size.width} × ${size.height})`);
       }
       check(await until(page, () => document.querySelector('[data-call-capture-status]')?.textContent === 'Capture enregistrée'), `${label} : « Capture enregistrée »`);
+      check(await centered(page, 'cover'), `${label} : « Couverture » reste choisie, au centre`);
+      const cover = await page.locator('[data-carousel-item="cover"]').boundingBox();
+      await page.mouse.move(cover.x + cover.width / 2, cover.y + cover.height / 2);
+      await page.mouse.down();
+      await page.waitForTimeout(700);
+      await page.mouse.up();
+      check(await appears(page, '[data-call-recording] [data-call-record-stop]'), `${label} : un appui long sur « Couverture » lance la vidéo`);
+      const stop = await page.locator('[data-call-record-stop]').boundingBox();
+      check(stop !== null && Math.abs(stop.x + stop.width / 2 - width / 2) <= 2 && Math.abs(stop.y + stop.height / 2 - height / 2) <= height * 0.1 && stop.width >= TAP_FLOOR, `${label} : le stop rond est au centre du gabarit (${JSON.stringify(stop)})`);
+      check(/^0:0\d$/.test((await page.textContent('[data-call-record-clock]')) ?? ''), `${label} : un chrono discret (${await page.textContent('[data-call-record-clock]')})`);
+      await page.waitForTimeout(1500);
+      await capture(page, `montage-video-${slug}`);
+      const clip = page.waitForEvent('download', { timeout: 8000 });
+      await page.click('[data-call-record-stop]');
+      const clipDownload = await clip.catch(() => null);
+      const clipName = clipDownload?.suggestedFilename() ?? 'rien';
+      const clipBytes = clipDownload === null ? 0 : (await stat(await clipDownload.path())).size;
+      check(/^meeshy-appel-cover-\d{8}-\d{6}\.(webm|mp4)$/.test(clipName) && clipBytes > 1000, `${label} : stop télécharge la vidéo (${clipName}, ${clipBytes} octets)`);
+      check(await until(page, () => document.querySelector('[data-call-capture-status]')?.textContent === 'Vidéo enregistrée') && (await page.$('[data-call-recording]')) === null, `${label} : « Vidéo enregistrée », le stop part`);
       const tiles = await page.$$eval('video[data-call-stream]', (videos) => videos.filter((video) => video.videoWidth > 0).length);
       const downloads = [];
       page.on('download', (item) => downloads.push(item.suggestedFilename()));
@@ -430,4 +477,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log('\n  Les effets de couleur et de visage partent chez le pair sans perdre une image, dans un mode qui libère l’écran ; le micro coupé le reste ; les treize montages se peignent en direct et s’enregistrent ; le zoom n’apparaît que sur mon image en plein écran.\n');
+console.log('\n  Les effets de couleur et de visage partent chez le pair sans perdre une image, dans un mode qui libère l’écran ; le micro coupé le reste ; les treize montages se peignent en direct, se photographient en deux tapes et se filment en appui long ; le zoom n’apparaît que sur mon image en plein écran.\n');
