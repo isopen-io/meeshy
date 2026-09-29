@@ -29,6 +29,14 @@ enum CallCameraFoldedTap: Equatable, Sendable {
     case elsewhere
 }
 
+/// #8441 — le zoom dans les commandes de MA caméra : les pastilles des
+/// facteurs quand mon image est en plein écran, un seul bouton de 44 pt qui
+/// passe au facteur suivant dans ma vignette.
+enum CallZoomControl: Equatable, Sendable {
+    case lensChips([CGFloat])
+    case cycleButton
+}
+
 enum CallCameraRail {
     static let order: [CallAction] = [.flipCamera, .cameraPicker, .camera, .effects, .screenShare]
     static let targetSide: CGFloat = 44
@@ -78,6 +86,21 @@ enum CallCameraRail {
 
     static func isShown(_ placement: CallCameraControlsPlacement, at site: CallCameraControlsPlacement, chrome: CallChromeVisibility) -> Bool {
         placement == site && chrome.isVisible(.controls)
+    }
+
+    static func zoomControl(profile: CameraZoomProfile?, placement: CallCameraControlsPlacement, tileSize: CGSize?) -> CallZoomControl? {
+        guard let profile, profile.quickStops.count > 1 else { return nil }
+        switch placement {
+        case .topCenter:
+            return .lensChips(profile.quickStops)
+        case .selfTile:
+            guard let tileSize,
+                  tileSize.width >= targetSide + 2 * tileInset,
+                  tileSize.height >= 2 * targetSide + 2 * tileInset else { return nil }
+            return .cycleButton
+        case .menu:
+            return nil
+        }
     }
 
     static func menuRows(_ set: CallActionSet, placement: CallCameraControlsPlacement) -> [CallActionFamilyRow] {
