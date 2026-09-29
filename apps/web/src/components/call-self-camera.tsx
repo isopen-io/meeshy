@@ -1,7 +1,8 @@
 import { useRef, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 
-import type { Facing } from '@/lib/calls/call-media';
-import { zoomAfterPinch, zoomAfterWheel, zoomLabel, zoomNudge } from '@/lib/calls/camera-zoom';
+import type { CallButton } from '@/components/call-glass-button';
+import { nextZoomStop, zoomAfterPinch, zoomAfterWheel, zoomLabel, zoomNudge } from '@/lib/calls/camera-zoom';
+import type { LocalZoom } from '@/lib/calls/self-zoom';
 import { useCameraZoom, type CameraZoom } from '@/lib/calls/use-camera-zoom';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -17,8 +18,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *   clavier et au lecteur d'écran, et dit le facteur. Les commandes de ma
  *   caméra, elles, montent en haut au centre (#8626, `call-stage.tsx`).
  *
+ * Le même chunk porte le CRAN du zoom de ma vignette (`CallZoomStep`).
+ *
  * Chunk à part (`budgets.json` › `call_self_camera`), chargé quand mon image
- * passe en plein écran : il n'importe rien de l'écran d'appel (`call_overlay`),
+ * passe en plein écran ou que ma vignette montre son cran : il n'importe rien de l'écran d'appel (`call_overlay`),
  * qui lui remet ses glyphes et la colonne de la capsule (`column`).
  */
 
@@ -100,21 +103,39 @@ function ZoomCapsule({ zoom, language, glyphs }: { readonly zoom: CameraZoom; re
 
 type SelfCameraProps = {
   readonly stream: MediaStream | null;
-  readonly callId: string | null;
-  readonly facing: Facing;
+  readonly local: LocalZoom;
   readonly language: InterfaceLanguage;
   readonly glyphs: Glyphs;
   /** La colonne qui accueille la capsule — `null` quand les commandes de ma caméra sont retirées (un mode). */
   readonly column: ((capsule: ReactNode) => ReactNode) | null;
 };
 
-export function CallSelfCamera({ stream, callId, facing, language, glyphs, column }: SelfCameraProps) {
-  const zoom = useCameraZoom({ stream, callId, facing });
+export function CallSelfCamera({ stream, local, language, glyphs, column }: SelfCameraProps) {
+  const zoom = useCameraZoom({ stream, local });
   const gestures = useZoomGestures(zoom);
   return (
     <>
       {zoom === null ? null : <div aria-hidden className="absolute inset-0" {...gestures} data-call-self-gestures="" />}
       {column === null ? null : column(zoom === null ? null : <ZoomCapsule zoom={zoom} language={language} glyphs={glyphs} />)}
     </>
+  );
+}
+
+type ZoomStepProps = { readonly stream: MediaStream | null; readonly local: LocalZoom; readonly language: InterfaceLanguage; readonly Button: typeof CallButton; readonly rowItem: string };
+
+/** Le cran du zoom dans ma vignette (#8441) : « 1× », puis 2×, 5×, et retour — la caméra, sinon mon seul aperçu. */
+export function CallZoomStep({ stream, local, language, Button, rowItem }: ZoomStepProps) {
+  const zoom = useCameraZoom({ stream, local });
+  if (zoom === null) return null;
+  const said = zoomLabel(zoom.value, language);
+  return (
+    <Button
+      label={`${translate(language, 'call.zoom')}, ${said}`}
+      glyph={<span className="text-mini font-semibold tabular-nums">{said}</span>}
+      onPress={() => zoom.set(nextZoomStop(zoom.range, zoom.value))}
+      tone="bare"
+      size={44}
+      data={{ 'data-call-self-control': 'zoom', 'data-call-zoom-mode': zoom.mode, [rowItem]: '' }}
+    />
   );
 }

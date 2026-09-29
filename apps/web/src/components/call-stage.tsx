@@ -10,7 +10,7 @@ import { useTilePinch } from '@/components/use-tile-pinch';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import { selfTileScaleFor, selfTileSize, selfTileStore, setSelfTileScale, type SelfTileScale } from '@/lib/calls/call-self-tile';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
-import { localZoomFor, selfZoomStore } from '@/lib/calls/self-zoom';
+import { useLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -118,7 +118,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
   const selfMirrored = selfPreviewMirrored(call);
-  const selfZoom = useStore(selfZoomStore, (state) => localZoomFor(state, call.callId ?? '', call.facing));
+  const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
   const main = swapped ? call.localStream : remoteStream;
   const corner = swapped ? remoteStream : call.localStream;
@@ -131,7 +131,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
     <div className="absolute inset-0">
       {mainOn ? (
         <div className="absolute inset-0">
-          <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? selfZoom : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
+          <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? local.value : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} />
         </div>
       ) : (
         <div className="absolute inset-0 grid place-items-center">
@@ -145,7 +145,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
       )}
       {swapped ? (
         <Suspense fallback={self.controls ? self.column(null) : null}>
-          <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} callId={call.callId} facing={call.facing} language={language} glyphs={glyphs} column={self.controls ? self.column : null} />
+          <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} glyphs={glyphs} column={self.controls ? self.column : null} />
         </Suspense>
       ) : null}
       {swapped && self.controls ? (
@@ -165,7 +165,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
-            {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : selfZoom} className="size-full" /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+            {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : local.value} className="size-full" /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
           </button>
           {swapped || !self.controls ? null : <div className="absolute bottom-1.5 right-1.5 z-20">{self.row()}</div>}
         </div>

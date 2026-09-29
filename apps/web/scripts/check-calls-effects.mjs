@@ -7,7 +7,7 @@
  * Les témoins `bun test` prouvent les règles avec des doublures de WebRTC et
  * de caméra. Aucun ne prouve qu'un effet posé dans Chromium arrive au PAIR
  * sans couper son image, que le micro coupé le reste quand la piste vidéo
- * change sous lui, ni qu'une caméra SANS zoom n'affiche rien. Ce gate le
+ * change sous lui, ni qu'une caméra SANS zoom ne zoome que mon aperçu. Ce gate le
  * mesure sur le `dist` construit (source fixtures), avec le pair qui décroche
  * (`fixtures-call-peer.ts`) et la caméra simulée de Chromium, en clair et en
  * sombre et aux deux gabarits (390 × 844, 320 × 568) :
@@ -32,15 +32,16 @@
  *     coupée et le pair l'a appris (#8434) ; « Réglages » ouvre la luminosité ;
  *  6. Valider garde les effets et rend l'écran d'appel ; Échap (✕) quitte le
  *     mode en rendant les effets d'avant, sans réduire l'appel ;
- *  7. la caméra simulée n'offre pas de zoom : rien n'est affiché (#8441) ;
+ *  7. la caméra simulée n'offre pas de zoom : pas de capsule, mais le cran
+ *     de ma vignette agrandit mon seul aperçu, puis revient à 1× (#8441) ;
  *     une caméra qui l'offre (capacité injectée) ne montre la capsule « 1× »
  *     que quand MON image est en plein écran (#8576), et « Zoomer » la règle ;
  *  8. « Capturer » entre dans le MODE Montage (#8578, #8580) : l'aperçu plein
  *     écran et les TREIZE montages du carrousel, dans l'ordre (Écran,
  *     Couverture, Doré, Tapis rouge, Grille, Bande, Polaroid, Magazine,
  *     Pellicule, Néon, Noir et blanc, BD, Cœur), se PEIGNENT en direct ;
- *     « Couverture » passe l'aperçu, et DEUX TAPES dessus téléchargent un PNG
- *     de 1080 × 1920 ; un APPUI LONG la filme : le stop rond, au centre du
+ *     « Couverture » passe l'aperçu, et DEUX TAPES dessus téléchargent un
+ *     JPEG développé de 1080 × 1920 (#8695) ; un APPUI LONG la filme : le stop rond, au centre du
  *     gabarit, sous un chrono, télécharge une vidéo WebM/MP4 non vide
  *     (#8625) ; « Chaque visage » en télécharge un par tuile affichée ;
  *  9. aucune erreur de page.
@@ -204,10 +205,18 @@ const painted = (page, selector) =>
     }),
   );
 
-const pngSize = async (path) => {
+/** La taille d'un JPEG, lue dans son en-tête de trame (SOF0 à SOF2). */
+const jpegSize = async (path) => {
   const { readFile } = await import('node:fs/promises');
   const bytes = await readFile(path);
-  return { png: bytes.subarray(1, 4).toString('latin1') === 'PNG', width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  const frame = (offset) => {
+    if (offset + 9 > bytes.length || bytes[offset] !== 0xff) return null;
+    const marker = bytes[offset + 1];
+    if (marker >= 0xc0 && marker <= 0xc2) return { height: bytes.readUInt16BE(offset + 5), width: bytes.readUInt16BE(offset + 7) };
+    return frame(offset + 2 + bytes.readUInt16BE(offset + 2));
+  };
+  const size = bytes[0] === 0xff && bytes[1] === 0xd8 ? frame(2) : null;
+  return { jpeg: size !== null, width: size?.width ?? 0, height: size?.height ?? 0 };
 };
 
 const nestedGlass = (page) =>
@@ -247,7 +256,7 @@ try {
       check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
       const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
-      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran']), `${label} : mon image — ${mine.map((b) => b.label).join(' · ')}`);
+      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
       check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
@@ -285,7 +294,7 @@ try {
       const selfShot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="warm"]');
       const selfDownload = await selfShot.catch(() => null);
-      check(selfDownload !== null && /^meeshy-appel-warm-\d{8}-\d{6}\.png$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Chaud » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
+      check(selfDownload !== null && /^meeshy-appel-warm-\d{8}-\d{6}\.jpg$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Chaud » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
       check(await until(page, (id) => {
         const video = document.querySelector('[data-call-corner] video, [data-call-tile-self] video, [data-call-mode-preview] video');
         const track = video?.srcObject?.getVideoTracks?.()[0];
@@ -353,8 +362,15 @@ try {
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 
-      // ------------------------------------------------ 7. pas de zoom proposé : rien
-      check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche aucune commande de zoom`);
+      // ------------------------------------------------ 7. pas de zoom proposé : le zoom numérique de mon seul aperçu
+      check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche pas de capsule sur ma vignette`);
+      const step = '[data-call-corner-frame] [data-call-self-control="zoom"]';
+      check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette zoome mon seul aperçu (#8441)`);
+      await page.$eval(step, (button) => button.click());
+      check(await until(page, () => (document.querySelector('[data-call-corner] video')?.style.transform ?? '').includes('scale(2)')), `${label} : un cran agrandit mon image à 2×, à l'écran seulement`);
+      await page.$eval(step, (button) => button.click());
+      await page.$eval(step, (button) => button.click());
+      check(await until(page, () => !(document.querySelector('[data-call-corner] video')?.style.transform ?? '').includes('scale(')), `${label} : après le dernier cran, mon image revient à 1×`);
 
       // ------------------------------------------------ 8. le mode Montage
       await openActions(page);
@@ -392,12 +408,12 @@ try {
       const shot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="cover"]');
       const download = await shot.catch(() => null);
-      check(download !== null && /^meeshy-appel-cover-\d{8}-\d{6}\.png$/.test(download.suggestedFilename()), `${label} : deux tapes sur « Couverture » téléchargent le montage (${download?.suggestedFilename() ?? 'rien'})`);
+      check(download !== null && /^meeshy-appel-cover-\d{8}-\d{6}\.jpg$/.test(download.suggestedFilename()), `${label} : deux tapes sur « Couverture » téléchargent le montage (${download?.suggestedFilename() ?? 'rien'})`);
       if (download !== null) {
-        const path = join(CAPTURE_DIR ?? '/tmp', `capture-montage-${slug}.png`);
+        const path = join(CAPTURE_DIR ?? '/tmp', `capture-montage-${slug}.jpg`);
         await download.saveAs(path);
-        const size = await pngSize(path);
-        check(size.png && size.width === 1080 && size.height === 1920, `${label} : un PNG de 1080 × 1920 (${size.width} × ${size.height})`);
+        const size = await jpegSize(path);
+        check(size.jpeg && size.width === 1080 && size.height === 1920, `${label} : un JPEG développé de 1080 × 1920, #8695 (${size.width} × ${size.height})`);
       }
       check(await until(page, () => document.querySelector('[data-call-capture-status]')?.textContent === 'Capture enregistrée'), `${label} : « Capture enregistrée »`);
       check(await centered(page, 'cover'), `${label} : « Couverture » reste choisie, au centre`);
@@ -477,4 +493,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log('\n  Les effets de couleur et de visage partent chez le pair sans perdre une image, dans un mode qui libère l’écran ; le micro coupé le reste ; les treize montages se peignent en direct, se photographient en deux tapes et se filment en appui long ; le zoom n’apparaît que sur mon image en plein écran.\n');
+console.log('\n  Les effets de couleur et de visage partent chez le pair sans perdre une image, dans un mode qui libère l’écran ; le micro coupé le reste ; les treize montages se peignent en direct, se photographient en deux tapes et se filment en appui long ; la capsule du zoom n’apparaît que sur mon image en plein écran, un cran « 1× » sur ma vignette.\n');

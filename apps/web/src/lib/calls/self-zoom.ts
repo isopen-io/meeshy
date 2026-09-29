@@ -1,3 +1,4 @@
+import { useStore } from 'zustand/react';
 import { createStore } from 'zustand/vanilla';
 
 import type { Facing } from './call-media';
@@ -17,3 +18,11 @@ export const selfZoomStore = createStore<SelfZoomState>(() => ({ callId: null, f
 export const localZoomFor = (state: SelfZoomState, callId: string, facing: Facing): number => (state.callId === callId && state.facing === facing ? state.value : 1);
 
 export const setLocalZoom = (callId: string, facing: Facing, value: number): void => selfZoomStore.setState({ callId, facing, value });
+
+/** Le zoom d'aperçu remis aux chunks du zoom, qui n'importent rien de l'écran d'appel. */
+export type LocalZoom = { readonly value: number; readonly set: (value: number) => void };
+
+export function useLocalZoom(callId: string | null, facing: Facing): LocalZoom {
+  const value = useStore(selfZoomStore, (state) => localZoomFor(state, callId ?? '', facing));
+  return { value, set: (next) => setLocalZoom(callId ?? '', facing, next) };
+}
