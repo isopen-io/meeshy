@@ -288,6 +288,7 @@ export function withSealedQuote<T extends object>(payload: T, sealedAt: Date): T
   return {
     ...payload,
     content: '',
+    originalContent: undefined,
     translations: [],
     attachments: [],
     metadata: undefined,

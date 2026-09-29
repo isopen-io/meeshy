@@ -42,6 +42,7 @@ describe('message:new — la citation d’un éphémère échu POUR UN LECTEUR l
   let prisma: any;
   let ioState: ReturnType<typeof getIoState>;
   let emissions: Emission[];
+  let quotedFlags = flamme.effectFlags;
 
   const reply = () =>
     makeContractMessage({
@@ -80,6 +81,18 @@ describe('message:new — la citation d’un éphémère échu POUR UN LECTEUR l
       return chain;
     });
     prisma = makePrisma();
+    quotedFlags = flamme.effectFlags;
+    // #8630 — l'audience remonte la chaîne citée EN BASE : la ligne qui fait foi
+    // est celle que la base rend, jamais la copie embarquée dans la charge.
+    const pageFindMany = prisma.message?.findMany;
+    prisma.message = {
+      ...(prisma.message ?? {}),
+      findMany: jest.fn(async (args: any) =>
+        args?.where?.id?.in?.includes(flamme.id)
+          ? [{ id: flamme.id, replyToId: null, senderId: flamme.senderId, ephemeralDuration: null, effectFlags: quotedFlags, expiresAt: RAW_DESTRUCTION }]
+          : pageFindMany ? pageFindMany(args) : [],
+      ),
+    };
     prisma.messageStatusEntry = {
       findMany: (jest.fn() as any).mockResolvedValue([
         { participantId: READER_B.participantId, ephemeralExpiresAt: CONSUMED, participant: { userId: READER_B.userId } },
@@ -106,7 +119,10 @@ describe('message:new — la citation d’un éphémère échu POUR UN LECTEUR l
     expect(toB[0].payload.replyTo.deletedAt).toEqual(CONSUMED);
     expect(toB[0].payload.replyTo.attachments).toEqual([]);
     expect(JSON.stringify(toB[0].payload)).not.toContain('4271');
-    expect(toB[0].payload.content).toBe('je réponds');
+    // #8630 — la réponse meurt avec ce qu'elle cite, pour B : vidée, datée.
+    expect(toB[0].payload.content).toBe('');
+    expect(toB[0].payload.expiresAt).toEqual(CONSUMED);
+    expect(JSON.stringify(toB[0].payload)).not.toContain('je réponds');
   };
 
   it('transport REST/ZMQ', async () => {
@@ -120,6 +136,7 @@ describe('message:new — la citation d’un éphémère échu POUR UN LECTEUR l
   });
 
   it('une citation ordinaire ne coûte aucune lecture d’échéance', async () => {
+    quotedFlags = 0;
     await manager.broadcastMessage({ ...reply(), replyTo: { ...flamme, effectFlags: 0 } }, CONVERSATION_ID);
     expect(prisma.messageStatusEntry.findMany).not.toHaveBeenCalled();
     expect(messageNew().filter((e) => e.room === ROOMS.user(READER_B.userId))).toHaveLength(0);
