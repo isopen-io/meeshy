@@ -56,7 +56,13 @@ describe('la scène vide dit ses gestes', () => {
   test('une indication grise nomme la photo et la vidéo ; le clavier a ses deux boutons', async () => {
     const el = mount({ ...harness({}).deps, camera: camera().engine });
     await flush(() => hint(el) !== null);
-    expect(hint(el)?.textContent).toBe('Toucher : photo · Maintenir : vidéo');
+    const lines = [...el.querySelectorAll('[data-story-quick-capture-line]')];
+    expect(lines.map((line) => [line.getAttribute('data-story-quick-capture-line'), line.textContent])).toEqual([
+      ['camera', 'Toucher : photo'],
+      ['video', 'Maintenir : filmer'],
+    ]);
+    // Aucun pictogramme au-dessus du titre : le bloc s'ouvre sur lui.
+    expect(emptyScene(el)?.firstElementChild?.hasAttribute('data-story-empty-scene-title')).toBe(true);
     expect(el.querySelector('[data-story-quick-capture="photo"]')?.textContent).toBe('Prendre une photo');
     expect(el.querySelector('[data-story-quick-capture="video"]')?.textContent).toBe('Filmer');
   });
@@ -72,7 +78,7 @@ describe('la scène vide dit ses gestes', () => {
   test('un réel ne propose que de filmer', async () => {
     const el = mount({ ...harness({}).deps, camera: camera().engine }, 'REEL');
     await flush(() => hint(el) !== null);
-    expect(hint(el)?.textContent).toBe('Maintenir pour filmer');
+    expect([...el.querySelectorAll('[data-story-quick-capture-line]')].map((line) => [line.getAttribute('data-story-quick-capture-line'), line.textContent])).toEqual([['video', 'Maintenir pour filmer']]);
     expect(el.querySelector('[data-story-quick-capture="photo"]')).toBeNull();
   });
 

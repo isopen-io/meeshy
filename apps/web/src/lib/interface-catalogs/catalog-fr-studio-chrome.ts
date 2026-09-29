@@ -78,7 +78,8 @@ const frStudioChrome = {
   'composer.reelOffer.post': 'C’est un Post',
   // L'outil ouvert et la capture rapide (#8654).
   'story.studio.tool.close': 'Fermer l’outil',
-  'story.studio.camera.quick.photoOrVideo': 'Toucher : photo · Maintenir : vidéo',
+  'story.studio.camera.quick.tapPhoto': 'Toucher : photo',
+  'story.studio.camera.quick.holdFilm': 'Maintenir : filmer',
   'story.studio.camera.quick.videoOnly': 'Maintenir pour filmer',
   'story.studio.camera.quick.photo': 'Prendre une photo',
   'story.studio.camera.quick.video': 'Filmer',

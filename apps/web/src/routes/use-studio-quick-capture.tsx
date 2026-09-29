@@ -4,7 +4,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import { readFlashIntensity, writeFlashIntensity } from '@/lib/stories/studio-capture-gestures';
-import { quickCaptureHintKey, quickCaptureOffered, quickCaptureTap } from '@/lib/stories/studio-quick-capture';
+import { quickCaptureHintLines, quickCaptureOffered, quickCaptureTap } from '@/lib/stories/studio-quick-capture';
 import type { StudioCameraIntent, StudioHoldDrag } from '@/routes/story-compose-camera';
 import type { StudioSceneCapture } from '@/routes/story-compose-scene';
 
@@ -62,7 +62,7 @@ export function useStudioQuickCapture({
   const capture: StudioSceneCapture | null =
     quickCaptureOffered({ ...scene, cameraOpen: intent !== null })
       ? {
-          hintKey: quickCaptureHintKey(kind),
+          hintLines: quickCaptureHintLines(kind),
           onTap: () => setIntent(photo ? 'photo' : 'arm'),
           onHoldStart: () => {
             setHolding(true);

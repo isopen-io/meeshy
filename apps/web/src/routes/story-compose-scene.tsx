@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type ComponentProps, type RefObject } from 'react';
+import { lazy, Suspense, type ComponentProps, type RefObject } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
 import { COMPOSER_GLYPHS } from '@/components/glyphs-composer';
@@ -11,14 +11,14 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { keyboardPose } from '@/lib/stories/studio-grip';
 import { STORY_PLAIN_BACKGROUND } from '@/lib/stories/story-document';
-import type { QuickCaptureHintKey } from '@/lib/stories/studio-quick-capture';
+import type { QuickCaptureHintLine } from '@/lib/stories/studio-quick-capture';
 import { StudioStageGestures, type StudioStageCapture, type StudioStageObject } from '@/routes/story-compose-stage';
 import { StudioTextInput } from '@/routes/story-compose-text-input';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
 
 export type StudioSceneCapture = StudioStageCapture & {
-  readonly hintKey: QuickCaptureHintKey;
+  readonly hintLines: readonly QuickCaptureHintLine[];
   /** La voie du CLAVIER et du lecteur d'écran — un lecteur d'écran ne tient
    * pas un doigt : sans elle, la vidéo serait offerte à la main seule. */
   readonly onPhoto: (() => void) | null;
@@ -28,8 +28,11 @@ export type StudioSceneCapture = StudioStageCapture & {
 /**
  * **UNE SCÈNE VIDE QUI DONNE ENVIE** (#8654 puis #8672, jumelle de #8671) —
  * un titre (« Ceci est votre scène »), une invitation à y poser texte,
- * dessin, image ou vidéo, puis les gestes (toucher : photo · maintenir :
- * vidéo, ou le seul qu'un réel sert) en PLUS GRAND qu'une légende. Le bloc ne
+ * dessin, image ou vidéo, puis les gestes en PLUS GRAND qu'une légende, UN
+ * PAR LIGNE, chacun précédé de son icône : l'appareil photo devant
+ * « Toucher : photo », la caméra vidéo devant « Maintenir : filmer » (un
+ * réel n'a que la seconde). Aucun pictogramme au-dessus du titre (retour
+ * porteur 2026-09-29 : « soit rien, soit une scène »). Le bloc ne
  * se touche pas : c'est la scène entière qui répond (`StudioStageGestures`).
  * Titre et invitation se lisent au lecteur d'écran ; les gestes, qu'un doigt
  * seul accomplit, y sont portés par les deux boutons invisibles.
@@ -54,25 +57,19 @@ function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLan
         <p data-story-empty-scene-invite className="text-balance" style={{ fontSize: 'clamp(12px, 4cqw, 15px)' }}>
           {translate(lang, 'story.studio.scene.empty.invite')}
         </p>
-        <p
+        <div
           aria-hidden="true"
           data-story-quick-capture-hint
-          className="mt-2 text-balance font-semibold"
+          className="mt-2 flex flex-col items-center gap-1 font-semibold"
           style={{ color: 'rgba(209,213,219,0.95)', fontSize: 'clamp(14px, 4.6cqw, 17px)' }}
         >
-          <span className="me-1.5 inline-block" style={{ verticalAlign: '-0.2em' }}>
-            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={20} />
-          </span>
-          {/* Chaque geste reste d'un tenant : la ligne se brise au point. */}
-          {translate(lang, capture.hintKey)
-            .split(' · ')
-            .map((gesture, index, all) => (
-              <Fragment key={gesture}>
-                {index > 0 ? ' ' : null}
-                <span className="whitespace-nowrap">{index < all.length - 1 ? `${gesture} ·` : gesture}</span>
-              </Fragment>
-            ))}
-        </p>
+          {capture.hintLines.map((line) => (
+            <p key={line.key} data-story-quick-capture-line={line.glyph} className="flex items-center gap-2">
+              <GlyphSvg glyph={line.glyph === 'camera' ? COMPOSER_GLYPHS.camera : COMPOSER_GLYPHS.videoCamera} size={20} />
+              {translate(lang, line.key)}
+            </p>
+          ))}
+        </div>
       </div>
       {capture.onPhoto !== null ? (
         <button type="button" className="sr-only" data-story-quick-capture="photo" onClick={capture.onPhoto}>
