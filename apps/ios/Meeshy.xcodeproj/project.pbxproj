@@ -3170,7 +3170,7 @@
 		3DE436BFF2450806F2C12452 /* StoryGroupIntroPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryGroupIntroPolicyTests.swift; sourceTree = "<group>"; };
 		3DE5C645776525B2944211C6 /* CallPiPPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPiPPolicy.swift; sourceTree = "<group>"; };
 		3DE7B0DAA08111DF6F09B334 /* CallStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStats.swift; sourceTree = "<group>"; };
-		DE15010FA7568D0AC65900C9 /* P2PWebRTCClient+DataProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClient+DataProfile.swift; sourceTree = "<group>"; };
+		DE15010FA7568D0AC65900C9 /* P2PWebRTCClient+DataProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "P2PWebRTCClient+DataProfile.swift"; sourceTree = "<group>"; };
 		C6118D0E61EC4106306E652D /* CallNetworkPathMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallNetworkPathMonitor.swift; sourceTree = "<group>"; };
 		94F15FE6978D97E882DFBDC7 /* CallDataProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDataProfile.swift; sourceTree = "<group>"; };
 		3E08FFF5F280686C26514B19 /* ConversationViewModelCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelCacheTests.swift; sourceTree = "<group>"; };
