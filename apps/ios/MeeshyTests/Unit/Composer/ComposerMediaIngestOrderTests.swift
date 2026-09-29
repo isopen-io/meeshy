@@ -235,9 +235,18 @@ final class ComposerMediaIngestOrderTests: XCTestCase {
     func test_lesQuatrePortes_passentParLeSiteUnique() throws {
         let code = try intakeSource()
         let appels = code.components(separatedBy: "ingestIntoDocument(").count - 1
-        XCTAssertGreaterThanOrEqual(appels, 5,
-                                    "Quatre appels (photothèque, photo caméra, vidéo caméra, "
-                                    + "fichiers) plus la déclaration — une porte qui écrirait "
-                                    + "en direct rouvrirait #4879.")
+        // La photothèque passe par `routePickedMedia` depuis #8540 (une série
+        // fonde ses scènes) : trois appels ici (photo caméra, vidéo caméra,
+        // fichiers) plus la déclaration…
+        XCTAssertGreaterThanOrEqual(appels, 4,
+                                    "Les portes doivent écrire par le site unique — une porte qui "
+                                    + "écrirait en direct rouvrirait #4879.")
+        XCTAssertTrue(code.contains("routePickedMedia(medias)"), "La photothèque doit passer par le routage.")
+        // …et le routage n'écrit, lui aussi, QUE par le site unique.
+        let routage = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost+ScenePicking.swift")
+        XCTAssertTrue(routage.contains("ingestIntoDocument(medias)"))
+        XCTAssertTrue(routage.contains("ecrireDansLaListeDuDocument(medias, rail: .abandonne)"))
+        XCTAssertFalse(routage.contains("documentLocalMedia.append"),
+                       "Le routage ne doit jamais écrire la liste en direct.")
     }
 }

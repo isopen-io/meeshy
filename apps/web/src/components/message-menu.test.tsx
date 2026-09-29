@@ -176,14 +176,14 @@ describe('MessageMenu — ouvrir (T8)', () => {
     expect(document.querySelector('[aria-label="Ajouter une réaction"]')).not.toBeNull();
   });
 
-  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Plus…', () => {
+  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Exporter en image · Plus…', () => {
     const el = mount();
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const list = document.querySelector('.message-menu-list')!;
     const labels = Array.from(list.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Plus…']);
+    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Exporter en image', 'Plus…']);
   });
 
   test('l’aperçu contient le texte de la rangée et AUCUN data-message/data-row dupliqué', () => {
@@ -371,7 +371,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'More…']);
+    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'Export as image', 'More…']);
   });
 
   test('interface AR ⇒ le menu rendu est arabe, et son rail s’annonce en arabe', () => {
@@ -380,7 +380,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'المزيد…']);
+    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'تصدير كصورة', 'المزيد…']);
     expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
       translate('ar', 'message.menu.react'),
     );

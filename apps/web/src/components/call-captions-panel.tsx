@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { captionLanguageLabel, captionText, overlayCaptions, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -17,8 +17,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * Le nom de chaque personne porte SA couleur (`call-speaker-color.ts`), la
  * même que le liseré de sa vignette dans la grille. Une ligne traduite porte
  * une petite étiquette « EN → FR » — le Prisme dit discrètement qu'il a agi —
- * et un toucher sur la phrase déplie son original sous elle. « Journal » ouvre
- * tout l'appel, avec Traduit / Original.
+ * et un toucher sur la phrase déplie son original sous elle. Tout l'appel se
+ * relit dans le Journal (#8579, `call-journal-panel.tsx`), ouvert depuis la
+ * rangée « L'appel » : le bandeau ne montre que le direct.
  *
  * Accessibilité : la région est `aria-live` POLIE, mais une ligne encore en
  * révision y est `aria-hidden` — un lecteur d'écran annonce la phrase dite, pas
@@ -89,23 +90,12 @@ function CaptionLine({
 }
 
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }: { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly colorOf: SpeakerColorOf; readonly surface?: CaptionsSurface }) {
-  const [journalOpen, setJournalOpen] = useState(false);
-  const [journalOriginal, setJournalOriginal] = useState(false);
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
-  const journal = useRef<HTMLOListElement>(null);
   const mode = call.captionsMode;
   const lines = overlayCaptions(call.captions);
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const clock = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const journalMode: CaptionsMode = journalOriginal ? 'original' : mode;
-  const journalTranslates = mode === 'translated' && call.captions.some((caption) => captionText(caption, 'translated') !== caption.original);
   const toggle = (id: string) => () => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id])));
-
-  useEffect(() => {
-    const list = journal.current;
-    if (list !== null) list.scrollTop = list.scrollHeight;
-  }, [journalOpen, call.captions.length]);
 
   return (
     <section
@@ -124,44 +114,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }
       <div className="flex flex-wrap items-center justify-between gap-x-3 text-mini" style={{ color: INK_2 }}>
         <span data-call-captions-mode={mode}>{translate(language, mode === 'original' ? 'callCaptions.mode.original' : 'callCaptions.mode.translated')}</span>
         {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}
-        <button
-          type="button"
-          aria-expanded={journalOpen}
-          aria-controls="call-captions-journal"
-          onClick={() => setJournalOpen((open) => !open)}
-          className="min-h-11 min-w-11 rounded-full px-3 font-semibold text-white"
-          data-call-captions-journal-toggle=""
-        >
-          {translate(language, journalOpen ? 'callCaptions.journal.hide' : 'callCaptions.journal.show')}
-        </button>
       </div>
-      {journalOpen ? (
-        <div className="flex flex-col gap-1">
-          {journalTranslates ? (
-            <button
-              type="button"
-              aria-pressed={journalOriginal}
-              onClick={() => setJournalOriginal((value) => !value)}
-              className="min-h-11 self-start rounded-full px-3 text-mini font-semibold text-white"
-              data-call-captions-journal-original=""
-            >
-              {translate(language, journalOriginal ? 'callTranscript.showTranslated' : 'callTranscript.showOriginal')}
-            </button>
-          ) : null}
-          <ol ref={journal} id="call-captions-journal" aria-label={translate(language, 'callCaptions.journal.title')} className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto text-mini" data-call-captions-journal="">
-            {call.captions.map((caption) => (
-              <li key={caption.id} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
-                <span className="block" style={{ color: INK_2 }}>
-                  <span style={{ color: colorOf(caption) }}>{speaker(caption)}</span> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
-                </span>
-                <span className="block text-body" dir="auto">
-                  {captionText(caption, journalMode)}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
     </section>
   );
 }

@@ -424,7 +424,7 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
         gallery.observe(video)
 
-        bubble.start(attachment: video, onShare: nil)
+        bubble.start(attachment: video, origin: .manual, onShare: nil)
         XCTAssertTrue(gallery.isDownloading, "le téléchargement lancé par la bulle s'affiche dans la galerie")
 
         gallery.cancel()
@@ -441,7 +441,7 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         let cached = expectation(description: "servi par le cache local, sans réseau")
         let subscription = bubble.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
 
-        bubble.start(attachment: video, onShare: nil)
+        bubble.start(attachment: video, origin: .manual, onShare: nil)
 
         await fulfillment(of: [cached], timeout: 5)
         subscription.cancel()
@@ -493,9 +493,83 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
         let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
 
-        center.start(urlString: key, expectedSize: 100, cacheStore: .video)
+        center.start(urlString: key, expectedSize: 100, cacheStore: .video, origin: .manual)
 
         XCTAssertEqual(haptics, [.light])
         center.cancel(key: AttachmentDownloadCenter.key(for: key))
+    }
+
+    // MARK: - #8573 — seul un téléchargement MANUEL vibre
+
+    /// Un téléchargement AUTOMATIQUE (politique réseau, feed, galerie) ne
+    /// vibre pas au départ : l'utilisateur n'a rien touché.
+    func test_start_automaticOrigin_neverVibratesOnStart() {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+
+        center.start(urlString: key, expectedSize: 100, cacheStore: .video, origin: .automatic)
+
+        XCTAssertEqual(haptics, [])
+        center.cancel(key: AttachmentDownloadCenter.key(for: key))
+    }
+
+    /// Ni à la fin : un auto-téléchargement servi par le cache termine en silence.
+    func test_start_automaticOriginFinishedFromTheCache_neverVibrates() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        let cached = expectation(description: "auto-téléchargement terminé depuis le cache")
+        let subscription = surface.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        surface.start(attachment: video, origin: .automatic, onShare: nil)
+
+        await fulfillment(of: [cached], timeout: 5)
+        XCTAssertEqual(haptics, [], "un téléchargement automatique ne vibre jamais")
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    /// Le témoin du canal : le MÊME parcours, demandé par un tap, vibre au
+    /// départ puis à la fin — sans quoi le test précédent serait vert par un
+    /// canal débranché.
+    func test_start_manualOriginFinishedFromTheCache_vibratesOnStartAndSuccess() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        let cached = expectation(description: "téléchargement manuel terminé depuis le cache")
+        let subscription = surface.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        surface.start(attachment: video, origin: .manual, onShare: nil)
+
+        await fulfillment(of: [cached], timeout: 5)
+        XCTAssertEqual(haptics, [.light, .success])
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    /// Un auto-téléchargement de piste traduite qui échoue ne vibre pas non plus.
+    func test_startTranslatedAudio_automaticOriginFailing_neverVibrates() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let url = "https://cdn.example.invalid/a-\(UUID().uuidString).m4a"
+        let failed = expectation(description: "le téléchargement échoue")
+        let subscription = center.events(for: AttachmentDownloadCenter.key(for: url))
+            .filter { $0 == .failed }
+            .first()
+            .sink { _ in failed.fulfill() }
+
+        surface.startTranslatedAudio(url: url, fileSize: 0, origin: .automatic)
+
+        await fulfillment(of: [failed], timeout: 15)
+        XCTAssertEqual(haptics, [], "un échec d'auto-téléchargement ne vibre pas")
+        subscription.cancel()
     }
 }

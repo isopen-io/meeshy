@@ -55,22 +55,29 @@ export function resolveStoryMediaCaption(params: {
 }
 
 /**
- * LA CARTE `{ postMediaId → texte }` que `POST posts.root` attend
- * (`mediaCaption`, `routes/posts/types.ts:282`) — `undefined` quand aucune
- * légende n'est écrite, **jamais une carte vide posée quand même** : la
- * passerelle ignore toute clé absente de `mediaIds`, et une entrée vide
- * écraserait une légende par du vide.
+ * LA CARTE `{ postMediaId → texte }` que `POST posts.root` attend — la
+ * légende (`mediaCaption`, `routes/posts/types.ts:282`) comme le texte
+ * alternatif (`mediaAlt`, `:273`, #8518) : même contrat, même borne. Elle
+ * rend `undefined` quand aucun texte n'est écrit, **jamais une carte vide
+ * posée quand même** : la passerelle ignore toute clé absente de `mediaIds`,
+ * et une entrée vide écraserait un texte par du vide.
  *
  * Un média sans identité SERVEUR ne peut rien porter : la passerelle
  * l'ignorerait en silence.
  */
-export function storyMediaCaptionPayload(
-  entries: readonly { readonly postMediaId?: string | undefined; readonly caption?: string | undefined }[],
+export function storyMediaTextPayload(
+  entries: readonly { readonly postMediaId?: string | undefined; readonly text?: string | undefined }[],
 ): Record<string, string> | undefined {
-  const pairs = entries.flatMap(({ postMediaId, caption }) => {
-    if (postMediaId === undefined || postMediaId === '' || caption === undefined) return [];
-    const trimmed = caption.trim().slice(0, MEDIA_CAPTION_MAX);
+  const pairs = entries.flatMap(({ postMediaId, text }) => {
+    if (postMediaId === undefined || postMediaId === '' || text === undefined) return [];
+    const trimmed = text.trim().slice(0, MEDIA_CAPTION_MAX);
     return trimmed === '' ? [] : [[postMediaId, trimmed] as const];
   });
   return pairs.length === 0 ? undefined : Object.fromEntries(pairs);
 }
+
+/** La carte des LÉGENDES — la projection nommée de {@link storyMediaTextPayload}. */
+export const storyMediaCaptionPayload = (
+  entries: readonly { readonly postMediaId?: string | undefined; readonly caption?: string | undefined }[],
+): Record<string, string> | undefined => storyMediaTextPayload(entries.map(({ postMediaId, caption }) => ({ postMediaId, text: caption })));
+

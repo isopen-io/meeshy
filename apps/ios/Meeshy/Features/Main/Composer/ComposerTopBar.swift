@@ -48,12 +48,18 @@ struct ComposerTopBar: View {
     /// Une pastille posée avant le `⋯` — la bascule « Animé » de la scène
     /// (#8415). `nil` ⇒ rien.
     var trailingAccessory: AnyView? = nil
+    /// La marge de bord : 16 pt sur téléphone, celle de la maquette iPad/Mac
+    /// (`ComposerRailGeometry.roomyMargin`) sur grand écran.
+    var edgeMargin: CGFloat = 16
 
     static let topPadding: CGFloat = 12
 
     /// Le haut de la rangée de la Dynamic Island : la barre de la scène plein
     /// écran monte jusque-là (`ComposerSceneSurface.chromeLift`).
     static let islandRowTop: CGFloat = 4
+    /// La part de la zone sûre que la barre remonte : la moitié la pose juste
+    /// sous la Dynamic Island (retour porteur 2026-09-28, « redescendre »).
+    static let liftShare: CGFloat = 0.5
 
     /// **Ce que la barre occupe sous la zone sûre** — lu par la scène plein
     /// écran (#8370) pour se poser JUSTE SOUS la croix, jamais dessous.
@@ -87,7 +93,7 @@ struct ComposerTopBar: View {
             if let trailingAccessory { trailingAccessory.fixedSize() }
             if let overflowMenu { overflowMenu.fixedSize() }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, edgeMargin)
         .padding(.top, Self.topPadding)
     }
 

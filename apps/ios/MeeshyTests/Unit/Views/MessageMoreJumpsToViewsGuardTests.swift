@@ -67,7 +67,7 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
     // MARK: - Site 2 : menu contextuel natif iOS 26 (`case .more:` → Button)
 
     func test_nativeMoreButton_opensFullGrid() throws {
-        let view = try source("Features/Main/Views/ConversationView.swift")
+        let view = try source("Features/Main/Views/ConversationView+NativeMessageMenu.swift")
         guard let caseRange = view.range(of: "case .more:") else {
             XCTFail("ConversationView's native menu builder must define a `case .more:` branch")
             return

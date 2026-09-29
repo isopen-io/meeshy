@@ -51,6 +51,7 @@ extension MeeshyComposerHost {
                 audioUrl: moodSeed?.audioUrl
             )
         case .scene, .document:
+            let emportes = carriedSceneAssets
             // L'audience est celle du SOCLE, jamais la graine de la porte.
             // `initialVisibility` la fournissait tant qu'`audienceChip` était un
             // témoin ; le lire encore ferait publier sous un réglage que
@@ -108,7 +109,7 @@ extension MeeshyComposerHost {
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
                 repostOfId: intent.origin.repostedPostId,
-                localMedia: documentLocalMedia,
+                localMedia: documentLocalMedia + emportes.media,
                 location: documentLocation,
                 discoverabilityPrecision: documentOffersNearbyDiscoverability
                     ? documentDiscoverability.precisionToSend
@@ -164,7 +165,8 @@ extension MeeshyComposerHost {
                 // Le pont que `applyContentMedia` a rendu, remis TEL QUEL : la
                 // traduction en positions se fait un étage plus bas, là où
                 // l'ORDRE des fichiers existe.
-                mediaObjectIds: documentMediaObjectIdBySource,
+                mediaObjectIds: documentMediaObjectIdBySource
+                    .merging(emportes.objectIdBySource) { courant, _ in courant },
                 // **`nil`, honnêtement** (#3996). La surface `.document` (sans
                 // scène) ne monte aucun `SoundExtractionToggle` — il ne vit
                 // que dans l'atelier (`ComposerToolPanelHost` →
@@ -177,5 +179,31 @@ extension MeeshyComposerHost {
                 allowSoundExtraction: nil
             )
         }
+    }
+
+    /// **Le son et le sticker de la scène VOYAGENT avec le brouillon** (#8521).
+    ///
+    /// Le canal document ne téléverse que `localMedia` : un son posé sur la
+    /// scène, un sticker importé, ne partaient que si leur pré-montée avait
+    /// abouti. Les emporter ici les fait monter par la file durable — hors
+    /// ligne compris — et `CanvasMediaAdoption` rend au canvas leur identité
+    /// serveur. Sans scène publiée, rien ne part : aucun canvas ne les
+    /// désignerait.
+    ///
+    /// La pré-montée s'arrête au même instant : ce qui est prêt a déjà son
+    /// `postMediaId` (et n'est pas emporté), ce qui est en vol partira par la
+    /// file au lieu de monter deux fois.
+    var carriedSceneAssets: ComposerCarriedSceneAssets {
+        guard sceneIsPresent else { return .empty }
+        stopPreUploadsForPublication()
+        let deja = Set(documentLocalMedia.map(\.url))
+        let emportes = ComposerCarriedSceneAssets.materialize(
+            ComposerSceneAssetCarriage.pending(slides: viewModel.slides,
+                                               stickerBitmapIds: Set(viewModel.loadedImages.keys)),
+            loadedImages: viewModel.loadedImages,
+            stickerAnimations: viewModel.loadedStickerAnimations)
+        return ComposerCarriedSceneAssets(
+            media: emportes.media.filter { !deja.contains($0.url) },
+            objectIdBySource: emportes.objectIdBySource.filter { !deja.contains($0.key) })
     }
 }

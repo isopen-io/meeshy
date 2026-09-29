@@ -58,6 +58,29 @@ export function gripPose(pose: StudioPose, origin: GripOrigin, clientX: number, 
   return rotatedBy({ ...scaled, rotation: origin.rotation }, delta);
 }
 
+type Point = { readonly x: number; readonly y: number };
+
+/** iOS divise par deux la rotation des doigts (`handleRotation`, retour
+ * 2026-05-27 : « la rotation 1:1 était trop sensible »). */
+const PINCH_ROTATION_SENSITIVITY = 0.5;
+
+/**
+ * **PINCER ET TOURNER À DEUX DOIGTS** (#8515, miroir `handlePinch` /
+ * `handleRotation` de `StoryCanvasUIView+Gestures.swift`) — le rapport des
+ * écarts donne l'échelle, l'angle entre les deux droites la rotation (à demi
+ * sensibilité, comme iOS). Composé contre la pose de DÉPART, jamais contre
+ * l'image précédente ; l'ancre ne bouge pas.
+ */
+export function pinchPose(origin: StudioPose, from: readonly [Point, Point], to: readonly [Point, Point]): StudioPose {
+  const [a0, b0] = from;
+  const [a1, b1] = to;
+  const start = Math.hypot(b0.x - a0.x, b0.y - a0.y);
+  if (start < 1) return clampPose(origin);
+  const scaled = scaledBy(origin, Math.hypot(b1.x - a1.x, b1.y - a1.y) / start);
+  const turn = (Math.atan2(b1.y - a1.y, b1.x - a1.x) - Math.atan2(b0.y - a0.y, b0.x - a0.x)) * DEGREES;
+  return rotatedBy(scaled, turn * PINCH_ROTATION_SENSITIVITY);
+}
+
 /** Un pas de déplacement au clavier — 1 % de la scène, dix fois plus avec Maj.
  * Assez fin pour placer, assez grand pour traverser. */
 export const KEYBOARD_NUDGE = 0.01;

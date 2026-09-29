@@ -268,6 +268,10 @@ struct UniversalComposerBar: View {
     /// édition, offertes partout ailleurs.
     var hideViewOnce: Bool = false
 
+    /// Ce que le message CITÉ impose à la réponse (#8557) : ces protections
+    /// s'affichent armées et VERROUILLÉES — la réponse peut ajouter le reste.
+    var imposedProtection: ReplyProtectionContagion.Imposed = .none
+
     // MARK: - Effects picker
 
     /// Binding to pending effects. Parent owns the state.

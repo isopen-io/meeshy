@@ -63,6 +63,10 @@ const deCall = {
   'call.spotlight.back': 'Zurück zum Raster',
   'call.remove.named': '{name} aus dem Anruf entfernen',
   'call.remove.failed': 'Teilnehmer konnte nicht entfernt werden',
+  'call.preview.soundOn': 'Ton einschalten',
+  'call.preview.soundOff': 'Ton ausschalten',
+  'call.preview.seenBy': '{name} sieht Sie vor dem Annehmen',
+  'call.preview.heardBy': '{name} kann Sie vor dem Annehmen hören',
 } as const;
 
 export default deCall;

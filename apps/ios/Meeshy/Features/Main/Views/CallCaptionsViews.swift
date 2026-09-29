@@ -42,6 +42,18 @@ enum CallCaptionsCopy {
     static var title: String {
         String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main)
     }
+
+    static var backToLive: String {
+        String(localized: "call.captions.journal.live", defaultValue: "Revenir au direct", bundle: .main)
+    }
+
+    static var backToLiveHint: String {
+        String(localized: "call.captions.journal.live.hint", defaultValue: "Fait défiler le journal jusqu'à la dernière phrase", bundle: .main)
+    }
+
+    static var newLines: String {
+        String(localized: "call.captions.journal.newLines", defaultValue: "Nouvelles phrases", bundle: .main)
+    }
 }
 
 /// Une phrase : le nom du locuteur dans SA couleur (la même que le liseré de
@@ -108,7 +120,7 @@ struct CallCaptionsBand: View {
     let lines: [CallCaptionLine]
     let hasOwnGlass: Bool
     let onToggleOriginal: (UUID) -> Void
-    let onOpenJournal: () -> Void
+    let onOpenJournal: (() -> Void)?
 
     var body: some View {
         if hasOwnGlass {
@@ -137,26 +149,176 @@ struct CallCaptionsBand: View {
                 }
             }
             .padding(.vertical, 6)
-            Button(action: onOpenJournal) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(MeeshyFont.relative(17, weight: .semibold))
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+            if let onOpenJournal {
+                Button(action: onOpenJournal) {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(MeeshyFont.relative(17, weight: .semibold))
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(CallCaptionsCopy.journal)
+                .accessibilityHint(CallCaptionsCopy.journalHint)
             }
-            .accessibilityLabel(CallCaptionsCopy.journal)
-            .accessibilityHint(CallCaptionsCopy.journalHint)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallCaptionsCopy.title)
     }
 }
 
+struct CallJournalList: View {
+    let segments: [TranscriptionSegment]
+    let line: (TranscriptionSegment) -> CallCaptionLine
+    let onToggleOriginal: (UUID) -> Void
+    var contentPadding: CGFloat = 16
+
+    @State private var follow = CallJournalFollow.live
+    @State private var tracker = CallJournalScrollTracker()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let space = "call-journal"
+    private static let liveEdge = "call-journal-live-edge"
+
+    var body: some View {
+        GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        if segments.isEmpty {
+                            Text(CallCaptionsCopy.waiting)
+                                .font(.callout)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        ForEach(segments) { segment in
+                            CallCaptionRow(line: line(segment), showsTime: true) { onToggleOriginal(segment.id) }
+                        }
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.liveEdge)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(contentPadding)
+                    .background(
+                        GeometryReader { content in
+                            Color.clear.preference(
+                                key: CallJournalScrollKey.self,
+                                value: CallJournalScrollMetrics(
+                                    offset: -content.frame(in: .named(Self.space)).minY,
+                                    contentHeight: content.size.height,
+                                    viewportHeight: viewport.size.height
+                                )
+                            )
+                        }
+                    )
+                }
+                .coordinateSpace(name: Self.space)
+                .onPreferenceChange(CallJournalScrollKey.self) { track($0) }
+                .callJournalScrollGeometry { track($0) }
+                .onAppear { proxy.scrollTo(Self.liveEdge, anchor: .bottom) }
+                .adaptiveOnChange(of: tailSignature) { _, _ in
+                    guard follow.isFollowing else {
+                        follow = follow.lineArrived()
+                        return
+                    }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                        proxy.scrollTo(Self.liveEdge, anchor: .bottom)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if follow.showsReturnToLive {
+                        returnToLive {
+                            follow = .live
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                                proxy.scrollTo(Self.liveEdge, anchor: .bottom)
+                            }
+                        }
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
+                    }
+                }
+            }
+        }
+    }
+
+    private func track(_ metrics: CallJournalScrollMetrics) {
+        let next = follow.scrolled(from: tracker.last, to: metrics)
+        tracker.last = metrics
+        guard next != follow else { return }
+        follow = next
+    }
+
+    private var tailSignature: String {
+        guard let last = segments.last else { return "" }
+        return "\(segments.count)|\(last.id.uuidString)|\(last.text.count)|\(last.translatedText?.count ?? 0)"
+    }
+
+    private func returnToLive(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down")
+                    .font(.footnote.weight(.bold))
+                    .accessibilityHidden(true)
+                Text(CallCaptionsCopy.backToLive)
+                    .font(.footnote.weight(.semibold))
+                if follow.hasUnseen {
+                    Circle()
+                        .fill(MeeshyColors.indigo400)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                }
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(CallPressButtonStyle())
+        .accessibilityHint(CallCaptionsCopy.backToLiveHint)
+        .accessibilityValue(follow.hasUnseen ? CallCaptionsCopy.newLines : "")
+    }
+}
+
+final class CallJournalScrollTracker {
+    var last: CallJournalScrollMetrics?
+
+    nonisolated deinit {}
+}
+
+private extension View {
+    @ViewBuilder
+    func callJournalScrollGeometry(_ onChange: @escaping (CallJournalScrollMetrics) -> Void) -> some View {
+        if #available(iOS 18.0, *) {
+            onScrollGeometryChange(for: CallJournalScrollMetrics.self) { geometry in
+                CallJournalScrollMetrics(
+                    offset: geometry.visibleRect.minY,
+                    contentHeight: geometry.contentSize.height,
+                    viewportHeight: geometry.visibleRect.height
+                )
+            } action: { _, metrics in
+                onChange(metrics)
+            }
+        } else {
+            self
+        }
+    }
+}
+
+private nonisolated struct CallJournalScrollKey: PreferenceKey {
+    static let defaultValue = CallJournalScrollMetrics(offset: 0, contentHeight: 0, viewportHeight: 0)
+
+    static func reduce(value: inout CallJournalScrollMetrics, nextValue: () -> CallJournalScrollMetrics) {
+        value = nextValue()
+    }
+}
+
 /// Tout l'appel, Traduit ou Original — le réglage est celui du bouton
 /// Sous-titres (`showOriginalText`), un toucher par phrase l'inverse.
 struct CallCaptionsJournalSheet: View {
-    let lines: [CallCaptionLine]
+    let segments: [TranscriptionSegment]
+    let line: (TranscriptionSegment) -> CallCaptionLine
     @Binding var showsOriginal: Bool
     let onToggleOriginal: (UUID) -> Void
 
@@ -164,34 +326,22 @@ struct CallCaptionsJournalSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    if lines.isEmpty {
-                        Text(CallCaptionsCopy.waiting)
-                            .font(.callout)
-                            .foregroundColor(.white.opacity(0.7))
+            CallJournalList(segments: segments, line: line, onToggleOriginal: onToggleOriginal)
+                .navigationTitle(CallCaptionsCopy.journalTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
+                            Text(CallCaptionsCopy.translated).tag(false)
+                            Text(CallCaptionsCopy.original).tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 240)
                     }
-                    ForEach(lines) { line in
-                        CallCaptionRow(line: line, showsTime: true) { onToggleOriginal(line.id) }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
                     }
                 }
-                .padding(16)
-            }
-            .navigationTitle(CallCaptionsCopy.journalTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
-                        Text(CallCaptionsCopy.translated).tag(false)
-                        Text(CallCaptionsCopy.original).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 240)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
-                }
-            }
         }
         .presentationDetents([.medium, .large])
         .adaptiveSheetGlassBackground()

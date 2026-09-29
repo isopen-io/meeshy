@@ -32,12 +32,18 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// remplissage (cf. le témoin iPad plus bas).
     /// PLEIN ÉCRAN (maquette 2026-09-27, #8370) : les rails FLOTTENT sur la
     /// scène — elle ne cède plus aucune largeur aux couloirs.
-    func test_pleinEcran_laSceneOccupeToute_laLargeurUtile() {
+    ///
+    /// Elle garde pourtant une RESPIRATION au bord (retour porteur
+    /// 2026-09-28) : la marge des rails, jamais un couloir.
+    func test_pleinEcran_laSceneOccupeLaLargeurUtile_moinsSaRespiration() {
         for utile in [320.0, 375.0, 402.0, 430.0, 744.0, 1024.0] as [CGFloat] {
-            XCTAssertEqual(ComposerRailGeometry.sceneWidth(usableWidth: utile, railsShown: true), utile,
+            XCTAssertEqual(ComposerRailGeometry.sceneWidth(usableWidth: utile, railsShown: true),
+                           utile - 2 * ComposerRailGeometry.outerMargin,
                            accuracy: 0.01, "largeur utile \(utile) : un couloir retire encore de la place à la scène")
         }
-        XCTAssertEqual(ComposerRailGeometry.floatingInset, 0)
+        XCTAssertEqual(ComposerRailGeometry.floatingInset, ComposerRailGeometry.outerMargin)
+        XCTAssertLessThan(ComposerRailGeometry.floatingInset, ComposerRailGeometry.lane,
+                          "La respiration n'est pas un couloir.")
     }
 
     /// La cible tactile est un PLANCHER d'accessibilité, pas un réglage : ce
@@ -73,15 +79,16 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// 494 à l'époque des couloirs). **Un chiffre publié est une affirmation** :
     /// celui-ci se mesure ici, il ne se recopie pas.
     func test_surIPhone16Pro_laSceneGagneLaLargeurDesCouloirs() {
+        // Aucun couloir, la seule RESPIRATION de bord (2026-09-28) : 402 − 2 × 10.
         let scene = ComposerRailGeometry.sceneWidth(usableWidth: 402, railsShown: true)
-        XCTAssertEqual(scene, 402, accuracy: 0.01)
+        XCTAssertEqual(scene, 382, accuracy: 0.01)
 
         let taille = CanvasGeometry.aspectFitSize(
             in: CGSize(width: scene, height: 10_000),
             ratio: CanvasGeometry.portraitRatio)
-        XCTAssertEqual(taille.width, 402, accuracy: 0.01)
-        XCTAssertEqual(taille.height, 715, accuracy: 1,
-                       "9:16 sur 402 pt de large ⇒ ≈ 715 pt de haut.")
+        XCTAssertEqual(taille.width, 382, accuracy: 0.01)
+        XCTAssertEqual(taille.height, 679, accuracy: 1,
+                       "9:16 sur 382 pt de large ⇒ ≈ 679 pt de haut.")
     }
 
     /// **Le 9:16 ne bouge pas** (loi 3) : l'encastrement rétrécit, il ne
@@ -106,7 +113,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// ici, et le rester est SAIN.
     func test_surIPad_laHauteurContraint_etLaSceneSEloigneDesRails() {
         let aire = ComposerRailGeometry.sceneWidth(usableWidth: 744, railsShown: true)
-        XCTAssertEqual(aire, 744, accuracy: 0.01)
+        XCTAssertEqual(aire, 724, accuracy: 0.01)
 
         // Une hauteur d'iPad réaliste une fois barre haute et socle retirées.
         let rendue = CanvasGeometry.aspectFitSize(
@@ -208,8 +215,14 @@ final class ComposerRailGeometryTests: XCTestCase {
         // largeur (directive porteur 2026-09-27) : la tuile libellée de droite
         // et son couloir `tileLane` sont partis, le volet se retire de `lane`
         // des deux côtés.
-        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.lane)"),
-                      "Le volet de la scène doit se retirer de la largeur d'un rail de chaque côté.")
+        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.descriptionInset(roomy:isRoomy,cardLeading:sceneCardLeading))"),
+                      "Le volet de la scène lit sa marge de la règle : un rail sur téléphone, la carte sur grand écran.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: false, cardLeading: 300),
+                       ComposerRailGeometry.lane, "Sur téléphone, la marge reste celle d'un rail.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: true, cardLeading: 300), 300,
+                       "Sur grand écran, le volet ne dépasse pas la carte.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: true, cardLeading: 10),
+                       ComposerRailGeometry.lane, "…et ne recouvre jamais un rail.")
         XCTAssertFalse(surface.contains("sceneInset(railsShown:true)+10"),
                        "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
     }

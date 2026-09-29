@@ -87,11 +87,11 @@ protocol StoryVideoExportServiceProviding {
     ///     Meeshy, puis la story. `nil` exporte la story sans interlude — mais
     ///     la CARTE DE FIN de marque, elle, est ajoutée dans tous les cas :
     ///     elle ne dépend d'aucune identité résolue.
-    ///   - stickerImageSources: images des stickers de la slide, `postMediaId →
-    ///     adresse` (#4852). Un `StorySticker` ne porte pas d'URL et la slide n'a
-    ///     pas la liste des médias : seul le propriétaire de la `StoryItem` peut
-    ///     les apparier (`StoryExporter.stickerImageSources(for:media:)`), et le
-    ///     bake les rapatrie comme les médias de premier plan. Vide = 🖼️.
+    ///   - inputs: ce que la slide ne porte pas (#8599, `StoryExportInputs`) —
+    ///     les images des stickers appariées depuis les médias d'une story
+    ///     publiée (#4852, `StoryExporter.stickerImageSources(for:media:)`), ou,
+    ///     au composer, les bitmaps en mémoire et les sons de session
+    ///     (`StoryComposerViewModel.exportInputs(for:)`). `.none` = 🖼️.
     /// - Parameter appendsBrandOutro: la carte de fin est-elle due ? `true`
     ///   partout sauf pour l'export d'une SCÈNE DE POST (#7052), que le
     ///   porteur a voulue SANS habillage — ni interlude, ni carte, ni jingle.
@@ -105,7 +105,7 @@ protocol StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
@@ -119,11 +119,12 @@ protocol StoryVideoExportServiceProviding {
 }
 
 extension StoryVideoExportServiceProviding {
-    /// Forme SANS images de stickers : les deux chemins de production
-    /// (« Partager », `StoryExportShareViewModel` ; « Enregistrer dans Photos »,
-    /// `StoryPhotoSaveService`) passent par la forme complète — ce relais ne
-    /// sert qu'à un appelant sans liste de médias (tests, slide de composer),
-    /// dont les stickers image sortent sous leur repli 🖼️. Un relais, pas une
+    /// Forme SANS entrées : les trois chemins de production (« Partager »,
+    /// `StoryExportShareViewModel` ; « Enregistrer dans Photos »,
+    /// `StoryPhotoSaveService` ; le `⋯` du composer,
+    /// `ComposerSceneExportController`) passent par la forme complète — ce
+    /// relais ne sert qu'aux tests, dont les stickers image sortent sous leur
+    /// repli 🖼️. Un relais, pas une
     /// seconde exigence de protocole — pour qu'aucun double de test ne puisse
     /// laisser tomber l'index en silence.
     func prepareExport(
@@ -135,7 +136,7 @@ extension StoryVideoExportServiceProviding {
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         await prepareExport(slide: slide, languages: languages, watermark: watermark,
-                            intro: intro, stickerImageSources: [:], appendsBrandOutro: true,
+                            intro: intro, inputs: .none, appendsBrandOutro: true,
                             onProgress: onProgress, onPhaseChange: onPhaseChange)
     }
 }
@@ -180,7 +181,7 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         languages: [String] = [],
         watermark: StoryExportWatermark? = nil,
         intro: StoryExportIntroContent? = nil,
-        stickerImageSources: [String: String] = [:],
+        inputs: StoryExportInputs = .none,
         appendsBrandOutro: Bool = true,
         onProgress: ((Double) -> Void)? = nil,
         onPhaseChange: ((StoryExportPhase) -> Void)? = nil
@@ -258,7 +259,7 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                 languages: languages,
                 watermark: watermark,
                 branding: nil,
-                stickerImageSources: stickerImageSources,
+                inputs: inputs,
                 progress: progressTrampoline
             )
             let bake = Date().timeIntervalSince(startedAt)
@@ -352,7 +353,7 @@ protocol StoryExporting: Sendable {
         languages: [String],
         watermark: StoryExportWatermark?,
         branding: StoryExportBranding.Plan?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         progress: (@Sendable (Double) -> Void)?
     ) async throws
 }
@@ -368,12 +369,12 @@ struct SystemStoryExporter: StoryExporting {
         languages: [String],
         watermark: StoryExportWatermark?,
         branding: StoryExportBranding.Plan?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         try await StoryExporter.export(slide, to: outputURL, languages: languages,
                                        watermark: watermark, branding: branding,
-                                       stickerImageSources: stickerImageSources,
+                                       inputs: inputs,
                                        progress: progress)
     }
 }

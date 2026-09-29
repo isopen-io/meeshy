@@ -162,8 +162,13 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
         XCTAssertTrue(fleche.contains("onChoose:{armedPublishChoice=$0}"),
                       "Le chevron RETIENT le choix ; il ne publie pas.")
         XCTAssertFalse(fleche.contains("onPublish:"), "Le chevron ne publie plus.")
-        XCTAssertTrue(fleche.contains("performSoclePublish(armedChoice)"),
+        XCTAssertTrue(fleche.contains("requestSoclePublish(armedChoice)"),
                       "Seule la partie principale publie, et elle publie ce qui est armé.")
+        // #8603 : la partie principale passe par la question « Publier en
+        // réel ? », qui retombe sur l'aiguillage hors de son seul cas.
+        let demande = compact(try XCTUnwrap(bloc("func requestSoclePublish(", dans: try hostCode())))
+        XCTAssertTrue(demande.contains("performSoclePublish(choice)"),
+                      "Hors du post à une seule vidéo, la capsule publie comme avant.")
     }
 
     // MARK: - OÙ part la publication choisie

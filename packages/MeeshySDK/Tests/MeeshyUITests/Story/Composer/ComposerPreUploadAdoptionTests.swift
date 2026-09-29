@@ -88,4 +88,57 @@ final class ComposerPreUploadAdoptionTests: XCTestCase {
         XCTAssertTrue(media(vm, b)?.postMediaId.isEmpty ?? false,
                       "le voisin doit rester local, donc monté par la publication")
     }
+
+    // MARK: - Une adoption IMPERCEPTIBLE (retour porteur 2026-09-28)
+
+    /// **L'image ne se recharge pas quand l'objet change d'adresse.** Adopté,
+    /// l'objet est désormais cherché sous son `postMediaId` : sans ce relais,
+    /// le canvas ne trouvait plus son bitmap et le rechargeait par le réseau —
+    /// la carte disparaissait 0,6 s, mesuré à l'enregistrement d'écran.
+    func test_lAdoption_rangeLeBitmapSousLIdentifiantServeur() {
+        let vm = sut()
+        guard let id = poserImage(vm, local: "file:///tmp/b.jpg") else { return XCTFail("la pose a échoué") }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }
+        vm.registerLoadedImage(image, for: id)
+        let avant = vm.loadedImagesVersion
+
+        XCTAssertTrue(vm.adoptPreUploadedMedia(
+            localURL: "file:///tmp/b.jpg", postMediaId: "pm-b", remoteURL: "https://cdn/b.jpg"))
+
+        XCTAssertTrue(vm.loadedImages["pm-b"] === image, "le canvas retrouve le MÊME bitmap sous l'id serveur")
+        XCTAssertTrue(vm.loadedImages["https://cdn/b.jpg"] === image,
+                      "…et sous l'ADRESSE, la clé de routage d'un fond")
+        XCTAssertTrue(vm.loadedImages[id] === image, "…sans perdre la clé locale")
+        XCTAssertNotEqual(vm.loadedImagesVersion, avant, "le lecteur d'images doit se reconstruire")
+    }
+
+    /// Le fichier temporaire nommé d'après l'objet (`{id}.jpg`) est l'autre clé
+    /// sous laquelle le FOND cherche son bitmap.
+    func test_lAdoption_relaieAussiLaCleDuFichier() {
+        let vm = sut()
+        guard poserImage(vm, local: "file:///tmp/fichier-c.jpg") != nil else { return XCTFail("la pose a échoué") }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }
+        vm.registerLoadedImage(image, for: "fichier-c")
+
+        XCTAssertTrue(vm.adoptPreUploadedMedia(
+            localURL: "file:///tmp/fichier-c.jpg", postMediaId: "pm-c", remoteURL: "https://cdn/c.jpg"))
+
+        XCTAssertTrue(vm.loadedImages["pm-c"] === image)
+    }
+
+    /// Un FOND n'a parfois que son fichier local : le relais le lit, pour que
+    /// le canvas n'attende pas le réseau.
+    func test_sansBitmapEnMemoire_leRelaisLitLeFichierLocal() throws {
+        let vm = sut()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("adopt-\(UUID().uuidString).png")
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }
+        try XCTUnwrap(image.pngData()).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard poserImage(vm, local: url.absoluteString) != nil else { return XCTFail("la pose a échoué") }
+
+        XCTAssertTrue(vm.adoptPreUploadedMedia(
+            localURL: url.absoluteString, postMediaId: "pm-d", remoteURL: "https://cdn/d.png"))
+
+        XCTAssertNotNil(vm.loadedImages["pm-d"])
+    }
 }

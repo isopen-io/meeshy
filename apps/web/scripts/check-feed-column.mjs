@@ -44,6 +44,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { writeOnStage } from './lib/stage-typing.mjs';
 
 /** Les deux cotes de `src/lib/view/reading-column.ts`, relues ici comme
  * `check-curve.mjs` relit la sienne : par EXTRACTION, pour qu'un changement de
@@ -236,7 +237,9 @@ for (const scheme of ['light', 'dark']) {
     );
 
     // ------------------- 7. un réel de texte seul est refusé, en le DISANT
-    await page.fill('#story-studio-text', 'un réel de texte seul');
+    // Au clic et au clavier, comme l'auteur (#8515) — jamais `page.fill`.
+    const ecrit = await writeOnStage(page, 'un réel de texte seul');
+    check(ecrit === null, `${label} : ${ecrit}`);
     await page.waitForSelector('[data-publish-split]');
     const format = () => page.evaluate(() => document.querySelector('[data-story-publish]')?.getAttribute('data-publish-kind') ?? null);
     check((await format()) === 'REEL', `${label} : la ligne « Réel » n'ouvre pas le composeur au format RÉEL (${await format()})`);

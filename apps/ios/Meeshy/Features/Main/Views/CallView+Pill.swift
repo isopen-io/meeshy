@@ -4,17 +4,15 @@ import MeeshySDK
 import MeeshyUI
 
 // #8394 — la pilule du bas, identique en audio, en vidéo et en groupe :
-// (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel
-// (`glassEffect` sous iOS 26, matériau avant), et le (…) déploie ses actions
-// DANS ce bloc, au-dessus de la rangée de base : en duo, une rangée (deux si
-// elle ne tient pas) ; en groupe, deux rangées légendées de quatre colonnes.
-// Le bloc grandit d'un ressort, en fondu avec Réduire les animations. La
-// conversation n'est pas une action : sa seule porte est l'en-tête (#8436).
+// (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel.
+// #8550 — le (…) empile au-dessus de la rangée de base une rangée par
+// famille (« Mon image », « L'appel »). #8578 — un panneau REMPLACE les
+// rangées, jamais empilé. La conversation n'est pas une action : sa seule
+// porte est l'en-tête (#8436).
 
-/// Ré-arme l'auto-masquage (§7.3) à chaque révélation ET à chaque usage du (…).
 struct AutoHideKey: Equatable {
     let isVisible: Bool
-    let isExpanded: Bool
+    let layer: CallScreenLayer
 }
 
 enum CallControlsCopy {
@@ -55,11 +53,43 @@ enum CallControlsCopy {
     static var effectsCaption: String {
         String(localized: "call.control.effects.caption", defaultValue: "Effets", bundle: .main)
     }
+
+    static var closePanel: String {
+        String(localized: "call.panel.close", defaultValue: "Fermer", bundle: .main)
+    }
+
+    static var backToMenu: String {
+        String(localized: "call.panel.back", defaultValue: "Retour aux actions", bundle: .main)
+    }
+
+    static var effects: String {
+        String(localized: "call.control.effects", defaultValue: "Effets de ma caméra", bundle: .main)
+    }
+
+    static var effectsHint: String {
+        String(localized: "call.control.effects.hint", defaultValue: "Libère l'écran pour choisir un effet, un à la fois", bundle: .main)
+    }
+
+    static var cameraRail: String {
+        String(localized: "call.control.cameraRail", defaultValue: "Options de ma caméra", bundle: .main)
+    }
+
+    static var cameraRailUnfoldHint: String {
+        String(localized: "call.control.cameraRail.unfold.hint", defaultValue: "Affiche les commandes de ma caméra par-dessus la vignette", bundle: .main)
+    }
+
+    static func familyTitle(_ family: CallActionFamily) -> String {
+        switch family {
+        case .myImage: return myImage
+        case .theCall: return theCall
+        }
+    }
 }
 
 extension CallView {
     private static let pillGlyphDiameter: CGFloat = 48
     private static let rowGlyphDiameter: CGFloat = 44
+    private static let rowCellWidth: CGFloat = 68
 
     private var actionContext: CallActionContext {
         let isConnected: Bool = {
@@ -73,17 +103,18 @@ extension CallView {
                 && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })),
             isConnected: isConnected,
             mayRecord: callManager.mayRequestRecording || callManager.recording.phase.isActive,
-            canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive
+            canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive,
+            showsVideo: callManager.isVideoUIActive
         )
     }
 
-    var actionsPresentation: CallActionsPresentation {
-        controlsDisclosure.presentation(isGroup: isGroupStage)
+    var currentActionSet: CallActionSet {
+        CallActionSet.resolve(actionContext)
     }
 
     /// Le déploiement du (…) : un ressort, ou un simple fondu avec Réduire
     /// les animations — jamais une bascule sèche.
-    private var disclosureAnimation: Animation {
+    var disclosureAnimation: Animation {
         reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.85)
     }
 
@@ -91,7 +122,7 @@ extension CallView {
 
     private static let pillShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
 
-    /// Les actions naissent du bas du bloc, là où est le (…) ; avec Réduire
+    /// Les rangées naissent du bas du bloc, là où est le (…) ; avec Réduire
     /// les animations elles apparaissent en fondu, sans rien déplacer.
     private var unfoldTransition: AnyTransition {
         reduceMotion
@@ -99,24 +130,21 @@ extension CallView {
             : .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))
     }
 
-    /// UN bloc de verre : les actions déployées, PUIS (en groupe) les
-    /// sous-titres, PUIS la rangée de base. Le verre enveloppe le tout et
-    /// grandit avec lui (#8459).
+    /// UN bloc de verre : le panneau ouvert OU les familles, PUIS (en groupe)
+    /// les sous-titres, PUIS la rangée de base. Le verre enveloppe le tout et
+    /// grandit avec lui (#8459, #8550, #8578).
     var callControlsPill: some View {
-        let actions = CallActionSet.resolve(actionContext)
+        let actions = currentActionSet
         return VStack(spacing: 0) {
-            switch actionsPresentation {
-            case .hidden:
-                EmptyView()
-            case .row:
+            if layer.isExpanded {
                 VStack(spacing: 0) {
-                    duoActionRows(actions)
-                    pillHairline
-                }
-                .transition(unfoldTransition)
-            case .rows:
-                VStack(spacing: 0) {
-                    groupActionRows(actions)
+                    unfoldedRows {
+                        if let panel = layer.pillPanel {
+                            panelRows(panel)
+                        } else {
+                            familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))
+                        }
+                    }
                     pillHairline
                 }
                 .transition(unfoldTransition)
@@ -133,10 +161,10 @@ extension CallView {
         .clipShape(Self.pillShape)
         .callControlsGlass(in: Self.pillShape)
         .frame(maxWidth: 440)
-        .animation(disclosureAnimation, value: controlsDisclosure)
+        .animation(disclosureAnimation, value: layer)
     }
 
-    private var pillHairline: some View {
+    var pillHairline: some View {
         Rectangle()
             .fill(Color.white.opacity(0.14))
             .frame(height: 0.5)
@@ -144,11 +172,18 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// Les mêmes quatre boutons partout. Quand la pilule d'un groupe a
-    /// grandi en rangées légendées, la rangée de base se légende aussi : une
-    /// grille de quatre colonnes ne mélange pas colonnes muettes et légendées.
+    private func unfoldedRows<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        let rows = VStack(spacing: 0) { content() }
+        return ViewThatFits(in: .vertical) {
+            rows
+            ScrollView(.vertical, showsIndicators: false) { rows }
+        }
+    }
+
+    /// Les mêmes quatre boutons partout, légendés dès que les rangées
+    /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
-        let captioned = actionsPresentation == .rows
+        let captioned = layer.isExpanded
         return HStack(alignment: .top, spacing: 0) {
             moreButton(captioned: captioned)
                 .frame(maxWidth: .infinity)
@@ -182,10 +217,10 @@ extension CallView {
     }
 
     private func moreButton(captioned: Bool) -> some View {
-        let isExpanded = controlsDisclosure.isExpanded
+        let isExpanded = layer.isExpanded
         return Button {
             withAnimation(disclosureAnimation) {
-                controlsDisclosure = controlsDisclosure.toggled()
+                layer = layer.togglingMenu()
             }
             HapticFeedback.light()
         } label: {
@@ -196,8 +231,7 @@ extension CallView {
                 diameter: Self.pillGlyphDiameter
             )
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(CallControlsCopy.more)
         .accessibilityHint(CallControlsCopy.moreHint)
         .accessibilityValue(CallControlsCopy.moreValue(isExpanded: isExpanded))
@@ -219,87 +253,36 @@ extension CallView {
         }
     }
 
-    // MARK: - Group rows
+    // MARK: - Family rows
 
-    /// Groupe : « mon image » puis « l'appel », deux rangées légendées dans
-    /// le bloc, au-dessus de la rangée de base.
-    private func groupActionRows(_ actions: CallActionSet) -> some View {
+    private func familyRows(_ rows: [CallActionFamilyRow]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(actions.groupSections.enumerated()), id: \.offset) { index, section in
-                if index > 0 { pillHairline }
-                ForEach(Array(section.rows.enumerated()), id: \.offset) { rowIndex, row in
-                    actionRow(
-                        title: rowIndex == 0 ? (section.group == .myImage ? CallControlsCopy.myImage : CallControlsCopy.theCall) : nil,
-                        actions: row
-                    )
-                }
-            }
-        }
-    }
-
-    /// Une rangée légendée de quatre colonnes : les places vides gardent la
-    /// grille, pour que « Micro » ne change pas de colonne d'un appel à l'autre.
-    func actionRow(title: String?, actions: [CallAction]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let title {
-                Text(title)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                    .textCase(.uppercase)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            HStack(spacing: 0) {
-                ForEach(actions, id: \.self) { action in
-                    actionButton(action, captioned: true)
-                        .frame(maxWidth: .infinity)
-                }
-                ForEach(0..<max(0, CallActionSet.maxPerRow - actions.count), id: \.self) { _ in
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: 1)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .contain)
-    }
-
-    // MARK: - Duo row
-
-    /// Duo : une rangée de boutons sans légende dans le bloc, au-dessus de la
-    /// rangée de base, ou deux quand elle ne tiendrait pas (`CallActionSet.duoRows`).
-    /// Chaque action prend une part égale de la largeur, avec la marge de la
-    /// rangée de base : à quatre, elles tombent dans les colonnes de
-    /// Plus · Micro · Sortie · Fin.
-    /// Le nom de chaque bouton est porté par l'accessibilité.
-    private func duoActionRows(_ actions: CallActionSet) -> some View {
-        VStack(spacing: 8) {
-            ForEach(Array(actions.duoRows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 0) {
-                    ForEach(row, id: \.self) { action in
-                        actionButton(action, captioned: false)
-                            .frame(maxWidth: .infinity)
+            ForEach(rows) { row in
+                CallPillRow(title: CallControlsCopy.familyTitle(row.family)) {
+                    ForEach(row.actions, id: \.self) { action in
+                        actionButton(action)
+                            .frame(width: Self.rowCellWidth)
                     }
                 }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallControlsCopy.actions)
     }
 
     // MARK: - Actions
 
-    func actionButton(_ action: CallAction, captioned: Bool) -> some View {
-        actionButtonBody(action, captioned: captioned)
+    func actionButton(_ action: CallAction) -> some View {
+        actionButtonBody(action, captioned: true)
+    }
+
+    func railActionButton(_ action: CallAction) -> some View {
+        actionButtonBody(action, captioned: false)
     }
 
     @ViewBuilder
     private func actionButtonBody(_ action: CallAction, captioned: Bool) -> some View {
-        let diameter = captioned ? Self.pillGlyphDiameter : Self.rowGlyphDiameter
+        let diameter = Self.rowGlyphDiameter
         switch action {
         case .camera:
             cameraActionButton(captioned: captioned, diameter: diameter)
@@ -319,17 +302,14 @@ extension CallView {
             cameraPickerActionButton(captioned: captioned, diameter: diameter)
         case .effects:
             CallPillButton(
-                symbol: showEffectsToolbar ? "xmark" : "camera.filters",
-                kind: showEffectsToolbar || hasActiveEffects ? .active : .normal,
-                label: String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main),
+                symbol: "camera.filters",
+                kind: hasActiveEffects ? .active : .normal,
+                label: CallControlsCopy.effects,
                 caption: captioned ? CallControlsCopy.effectsCaption : nil,
-                hint: String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main),
-                toggleState: showEffectsToolbar,
+                hint: CallControlsCopy.effectsHint,
                 diameter: diameter
             ) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showEffectsToolbar.toggle()
-                }
+                enterMode(.effects)
             }
         case .screenShare:
             CallPillButton(
@@ -353,6 +333,10 @@ extension CallView {
             addPeopleActionButton(captioned: captioned, diameter: diameter)
         case .react:
             reactActionButton(captioned: captioned, diameter: diameter)
+        case .capture:
+            captureActionButton(captioned: captioned, diameter: diameter)
+        case .journal:
+            journalActionButton(captioned: captioned, diameter: diameter)
         }
     }
 

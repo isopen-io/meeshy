@@ -1,5 +1,5 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
@@ -26,7 +26,14 @@ import { Link } from '@/routes/route-table';
  * feuille n'a pas d'adresse à partager. Même contenu, même ordre, même geste
  * principal (le rappel) ; « Ouvrir la conversation » remplace le tap de la
  * ligne, qui ouvrait le fil avant cette fiche.
+ *
+ * Sous les détails, la TRANSCRIPTION de l'appel (#8579) : ce qui a été dit,
+ * lu par le Prisme du lecteur, relu depuis la passerelle — le journal vécu
+ * pendant l'appel s'y retrouve une fois l'appel fini. Chunk à part, partagé
+ * avec la bulle du fil (`call_transcript_panel`) ; un appel manqué n'en a pas.
  */
+
+const CallTranscriptPanel = lazy(() => import('@/components/call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
 
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
@@ -185,6 +192,16 @@ export function CallDetailCard({
         {data === null ? null : <DetailRow field="data" glyph={glyphOf('arrowsDownUp')} label={translate(language, 'callJoin.detail.data')} value={data} />}
         {detail.reactions.length === 0 ? null : <ReactionsRow label={translate(language, 'callJoin.detail.reactions')} reactions={detail.reactions} />}
       </dl>
+      {missed ? null : (
+        <section aria-labelledby={`transcript-${detail.callId}`} className="grid gap-2" data-call-detail-transcript={detail.callId}>
+          <h3 id={`transcript-${detail.callId}`} className="px-1 text-caption font-semibold" style={{ color: INK_2 }}>
+            {translate(language, 'callTranscript.title')}
+          </h3>
+          <Suspense fallback={null}>
+            <CallTranscriptPanel callId={detail.callId} language={language} />
+          </Suspense>
+        </section>
+      )}
       <Link
         to="thread"
         params={{ conversation: detail.conversationId }}

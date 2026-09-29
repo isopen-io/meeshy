@@ -103,7 +103,7 @@ struct ComposerTrailingRail: View {
     }
 
     private var tiles: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
             if let onUndo {
                 tile(symbol: "arrow.uturn.backward", label: ComposerHistoryCopy.undo,
                      key: "undo", isOn: false, action: onUndo)
@@ -150,10 +150,10 @@ struct ComposerTrailingRail: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .composerToolBounce(active: lastTapped == key)
+                .modifier(ComposerRailButtonGlass(active: true, plateauTint: plateauTint,
+                                                  tint: isOn ? MeeshyColors.brandPrimary : nil))
                 .frame(width: ComposerRailGeometry.railWidth, height: ComposerRailGeometry.railWidth)
-                .contentShape(Circle())
-                .adaptiveGlass(in: Circle(),
-                               tint: isOn ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))

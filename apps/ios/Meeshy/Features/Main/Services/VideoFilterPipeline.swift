@@ -31,8 +31,10 @@ nonisolated struct VideoFilterConfig: Equatable, Sendable {
     var skinSmoothingEnabled: Bool = false
     var skinSmoothingIntensity: Float = 0.4
 
+    var faceEffect: CallFaceEffect = .none
+
     var hasAdvancedFilters: Bool {
-        backgroundBlurEnabled || skinSmoothingEnabled
+        backgroundBlurEnabled || skinSmoothingEnabled || faceEffect.isStylized
     }
 
     static let `default` = VideoFilterConfig()
@@ -40,7 +42,7 @@ nonisolated struct VideoFilterConfig: Equatable, Sendable {
 
 // MARK: - Filter Presets
 
-enum VideoFilterPreset: String, CaseIterable, Sendable {
+nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     case natural, warm, cool, vivid, muted
 
     var config: VideoFilterConfig {
@@ -110,6 +112,7 @@ protocol VideoFilterPipelineProviding {
     nonisolated var isAutoDegraded: Bool { get }
     nonisolated func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer
     nonisolated func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?) -> CVPixelBuffer
+    nonisolated func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?, rotation: Int) -> CVPixelBuffer
     nonisolated func reset()
 }
 
@@ -157,15 +160,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     private let overBudgetThreshold = 10
     private let underBudgetThreshold = 30
 
-    // PERF-013: VNSequenceRequestHandler is the right tool for streamed video
-    // — it lets Vision reuse model state and avoids the per-frame ~0.6MB
-    // allocation that VNImageRequestHandler(cvPixelBuffer:) imposes.
-    // We also cache the last face observation and only re-detect every Nth
-    // frame so face detection drops from ~30Hz to ~6Hz.
-    private let faceDetector = VNSequenceRequestHandler()
-    private var lastFaceObservation: VNFaceObservation?
-    private var skinSmoothingFrameCounter = 0
-    private static let faceDetectionStride = 5
+    private let faceEffects: any CallFaceEffectsRendererProviding
 
     // PERF-014: dedicated CVPixelBufferPool for filter output. Rendering back
     // into the input buffer (capturer-owned pool) starves the camera capturer
@@ -188,7 +183,8 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         return request
     }()
 
-    init() {
+    init(faceEffects: any CallFaceEffectsRendererProviding = CallFaceEffectsRenderer()) {
+        self.faceEffects = faceEffects
         // PERF-015: explicit Metal device + disabled colorspace work. Pinning
         // CIContext to MTLCreateSystemDefaultDevice() forces GPU-backed
         // rendering and skips the implicit sRGB→working-space conversion that
@@ -214,6 +210,10 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     }
 
     func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?) -> CVPixelBuffer {
+        process(pixelBuffer, averageBrightness: averageBrightness, rotation: 90)
+    }
+
+    func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?, rotation: Int) -> CVPixelBuffer {
         // Single atomic snapshot: every filter stage below reads this same
         // struct copy, so a slider drag landing mid-frame can only ever apply
         // fully-before or fully-after this frame — never a torn mix of fields.
@@ -240,9 +240,17 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         if cfg.backgroundBlurEnabled && !isAutoDegraded {
             image = applyBackgroundBlur(to: image, pixelBuffer: pixelBuffer, config: cfg)
         }
-        // 4. Skin smoothing (if enabled and not auto-degraded for smoothing)
-        if cfg.skinSmoothingEnabled && !isSmoothingDegraded {
-            image = applySkinSmoothing(to: image, pixelBuffer: pixelBuffer, config: cfg)
+        // 4. Face effect: skin smoothing (skipped when degraded) or a stylized preset
+        let faceEffect = cfg.activeFaceEffect
+        if faceEffect.isStylized || (faceEffect == .smoothing && !isSmoothingDegraded) {
+            image = faceEffects.render(
+                faceEffect,
+                on: image,
+                pixelBuffer: pixelBuffer,
+                rotation: rotation,
+                intensity: cfg.skinSmoothingIntensity,
+                isDegraded: isAutoDegraded || isSmoothingDegraded
+            )
         }
 
         // PERF-014: render into a pool-allocated output buffer instead of
@@ -308,8 +316,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         consecutiveOverBudgetFrames = 0
         consecutiveUnderBudgetFrames = 0
         lastFrameProcessingTime = nil
-        lastFaceObservation = nil
-        skinSmoothingFrameCounter = 0
+        faceEffects.reset()
     }
 
     // MARK: - Auto-Degradation
@@ -426,38 +433,6 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
             "inputMaskImage": maskImage
         ])
     }
-
-    // MARK: - Skin Smoothing (§14.2.3)
-
-    private func applySkinSmoothing(to image: CIImage, pixelBuffer: CVPixelBuffer, config: VideoFilterConfig) -> CIImage {
-        // PERF-013: face detection is not free (~3-4ms per frame on 720p).
-        // Faces don't move enough between consecutive frames to justify
-        // re-detecting at 30Hz. We re-detect every Nth frame and reuse the
-        // cached observation in between. Using VNSequenceRequestHandler also
-        // keeps Vision's internal state warm across frames so each detect
-        // call is cheaper than VNImageRequestHandler's one-shot path.
-        skinSmoothingFrameCounter &+= 1
-        if skinSmoothingFrameCounter % Self.faceDetectionStride == 0 || lastFaceObservation == nil {
-            let faceRequest = VNDetectFaceRectanglesRequest()
-            do {
-                try faceDetector.perform([faceRequest], on: pixelBuffer, orientation: .right)
-                lastFaceObservation = faceRequest.results?.first
-            } catch {
-                return image
-            }
-        }
-
-        guard lastFaceObservation != nil else {
-            return image
-        }
-
-        let blurRadius = Double(config.skinSmoothingIntensity) * 3.0
-        guard blurRadius > 0 else { return image }
-
-        return image.applyingFilter("CIGaussianBlur", parameters: [
-            "inputRadius": blurRadius
-        ]).cropped(to: image.extent).composited(over: image)
-    }
 }
 
 // MARK: - Logger Extension
@@ -522,7 +497,11 @@ nonisolated final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerD
         // back to in-place rendering, or the pipeline early-returned the
         // input unchanged, the returned buffer === input and the original
         // frame already reflects the (non-)filter result.
-        let processed = pipeline.process(pixelBuffer, averageBrightness: darkFrameDetector.lastAverageBrightness)
+        let processed = pipeline.process(
+            pixelBuffer,
+            averageBrightness: darkFrameDetector.lastAverageBrightness,
+            rotation: Int(frame.rotation.rawValue)
+        )
         if processed !== pixelBuffer {
             let wrapped = RTCCVPixelBuffer(pixelBuffer: processed)
             let filteredFrame = RTCVideoFrame(

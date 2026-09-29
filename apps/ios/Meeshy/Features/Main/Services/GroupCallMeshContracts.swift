@@ -95,6 +95,8 @@ struct GroupPeerLinkConfiguration: Sendable {
     let isPolite: Bool
     let sendsAudio: Bool
     let sendsVideo: Bool
+    /// L'aperçu avant décroché de l'appelé (#8480) : il reçoit, n'envoie rien.
+    var receiveOnly = false
 }
 
 extension IceServer {

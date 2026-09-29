@@ -5,6 +5,7 @@ import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { CallMember } from '@/lib/calls/call-store';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
  * **LE MENU DE MODÉRATION D'UN PARTICIPANT** (#8438) — posé sur sa tuile (vue
@@ -22,7 +23,16 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * Le menu et l'alerte se posent à la racine de l'écran d'appel (portail) : un verre
  * (`backdrop-filter`) ou une liste qui défile les couperaient sinon.
+ *
+ * Le retour matériel de la coque Android les referme aussi (#8504) : chacun est
+ * une couche modale, déclarée par `BackLayer`. Passer du menu à l'alerte se
+ * fait dans un seul commit, et l'alerte reprend l'entrée d'historique du menu.
  */
+
+function BackLayer({ onClose }: { readonly onClose: () => void }): null {
+  useBackDismiss(onClose);
+  return null;
+}
 
 const MENU_HEIGHT = 112;
 const MENU_WIDTH = 224;
@@ -170,6 +180,8 @@ export function CallModerationMenu({
         </div>,
         layer(),
       ) : null}
+      {open ? <BackLayer key="menu" onClose={close} /> : null}
+      {confirming ? <BackLayer key="confirm" onClose={close} /> : null}
       {confirming && typeof document !== 'undefined' ? createPortal(
         <div className="fixed inset-0 z-[230] grid place-items-center p-4" data-call-remove-confirm={member.userId}>
           <button type="button" aria-label={t(language, 'callControls.cancel')} tabIndex={-1} onClick={close} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />

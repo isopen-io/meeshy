@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { backgroundCss, type BackgroundFraming } from '@/lib/canvas/background';
+import { mediaFilterCss } from '@/lib/canvas/media-filter';
 import { backgroundMediaTimeline } from '@/lib/canvas/media-seek';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
@@ -67,6 +68,10 @@ export function BackgroundLayer({
   const src = objectMediaSrc(object, carrier);
   const poster = posterSrcOf(object, carrier);
   const background = typeof payload.background === 'string' ? payload.background : undefined;
+  // LE FILTRE DE SLIDE (lot 7) — porté par le média de fond, il ne peint que
+  // lui : ni la bande d'autour, ni les objets posés.
+  const filter = mediaFilterCss(payload);
+  const mediaStyle = filter !== undefined ? { filter } : undefined;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const isVideo = src !== undefined && mediaType?.startsWith('video') === true;
@@ -173,6 +178,7 @@ export function BackgroundLayer({
           onLoadedData={ready}
           onError={ready}
           className={`absolute inset-0 size-full ${fit}`}
+          style={mediaStyle}
         />
       </>
     );
@@ -191,6 +197,7 @@ export function BackgroundLayer({
           onLoad={ready}
           onError={ready}
           className={`absolute inset-0 size-full ${fit}`}
+          style={mediaStyle}
         />
       </>
     );

@@ -76,6 +76,13 @@ import { openModalLayer } from './modal-layers';
  * s'empilent donc dans l'ordre où elles posent leur entrée ; une couche qui
  * rend la sienne reste sur la pile jusqu'au `popstate` de ce retour, pour que
  * celle du dessous ne le prenne pas pour elle.
+ *
+ * **ÉCHAP SUIT LA MÊME PILE** (#8517). Les couches du studio (Cadre, menu d'un
+ * objet, retouche) écoutaient chacune Échap sur `window` : une seule frappe
+ * refermait le Cadre ET la retouche qui le portait. Une couche qui le demande
+ * (`{ escape: true }`) ne répond à Échap que si elle est au SOMMET de la pile —
+ * la même loi que le retour, écrite une fois. Les `<dialog>` (`Sheet`) n'en ont
+ * pas besoin : le navigateur leur donne déjà `cancel`.
  */
 let nextMarker = 0;
 
@@ -89,6 +96,17 @@ function isTopLayer(layer: symbol): boolean {
 
 function dropLayer(layer: symbol): void {
   layerStack = layerStack.filter((open) => open !== layer);
+  closedLayers = closedLayers.filter((closed) => closed !== layer);
+}
+
+/** Les couches DÉMONTÉES qui restent sur la pile le temps que leur retour
+ * soit rendu (#8078) : elles gardent le `popstate` à venir, jamais Échap. */
+let closedLayers: readonly symbol[] = [];
+
+/** La couche MONTÉE la plus haute est celle qu'Échap ferme (#8517). */
+function isTopOpenLayer(layer: symbol): boolean {
+  const open = layerStack.filter((candidate) => !closedLayers.includes(candidate));
+  return open[open.length - 1] === layer;
 }
 
 /** L'entrée qu'une couche démontée a laissée, tant qu'aucune autre ne l'a
@@ -126,7 +144,13 @@ function adoptLeftEntry(): string | null {
   return adopted;
 }
 
-export function useBackDismiss(onClose: () => void): void {
+export type BackDismissOptions = {
+  /** Échap ferme aussi la couche — seulement quand elle est au sommet. */
+  readonly escape?: boolean;
+};
+
+export function useBackDismiss(onClose: () => void, options: BackDismissOptions = {}): void {
+  const escape = options.escape === true;
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -151,11 +175,19 @@ export function useBackDismiss(onClose: () => void): void {
       onCloseRef.current();
     };
     window.addEventListener('popstate', onPopState);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !isTopOpenLayer(layer)) return;
+      event.preventDefault();
+      onCloseRef.current();
+    };
+    if (escape) window.addEventListener('keydown', onKeyDown);
 
     return () => {
       releaseModalLayer();
       window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('keydown', onKeyDown);
       if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) {
+        closedLayers = [...closedLayers, layer];
         leaveEntry(ownMarker, layer);
         return;
       }
