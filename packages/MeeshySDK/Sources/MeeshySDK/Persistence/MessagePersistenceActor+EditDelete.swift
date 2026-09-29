@@ -69,7 +69,11 @@ extension MessagePersistenceActor {
     ///
     /// Les citations du message supprimé sont SCELLÉES (#7927) : plus rien de
     /// lui ne se lit dans les réponses qui le citaient.
-    public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false) throws {
+    ///
+    /// - Parameter expired: `true` quand la mort est une EXPIRATION
+    ///   (`message:expired`) : les citations se scellent alors « expirées »
+    ///   et se lisent « Message éphémère expiré », pas « supprimé » (#8631).
+    public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false) throws {
         let affectedConversationId: String? = try dbWriter.write { db -> String? in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
@@ -90,7 +94,7 @@ extension MessagePersistenceActor {
                 arguments: [deletedAt, Date(), localId, localId]
             )
             try Self.followQuotes(of: record, in: db) { quote in
-                quote.isQuotedMessageDeleted || quote.isStoryReply ? nil : quote.tombstoned(at: deletedAt)
+                quote.isQuotedMessageDeleted || quote.isStoryReply ? nil : quote.tombstoned(at: deletedAt, expired: expired)
             }
             return record.conversationId
         }
