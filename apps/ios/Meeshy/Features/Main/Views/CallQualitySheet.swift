@@ -27,12 +27,15 @@ struct CallQualitySheet: View {
                             Divider()
                         }
                     }
+                    if let network = model.network {
+                        CallQualityNetworkRowsView(context: network)
+                    }
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(20)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
@@ -87,6 +90,41 @@ struct CallQualityRowView: View {
         .accessibilityLabel(row.metric.title)
         .accessibilityValue(row.accessibilityValue)
         .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
+struct CallQualityNetworkRowsView: View {
+    let context: CallQualityNetworkContext
+
+    var body: some View {
+        if let profile = context.profile {
+            Divider()
+            CallQualityLabelRow(title: CallQualityNetworkContext.profileTitle, value: profile.label)
+        }
+        if let route = context.routeLabel {
+            Divider()
+            CallQualityLabelRow(title: CallQualityNetworkContext.routeTitle, value: route)
+        }
+    }
+}
+
+struct CallQualityLabelRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+        }
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

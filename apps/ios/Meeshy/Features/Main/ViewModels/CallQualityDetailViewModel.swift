@@ -3,6 +3,7 @@ import Combine
 
 final class CallQualityDetailViewModel: ObservableObject {
     @Published private(set) var rows: [CallQualityRow] = []
+    @Published private(set) var network: CallQualityNetworkContext?
 
     private let feed: CallQualityStatsProviding
     private let locale: Locale
@@ -35,6 +36,8 @@ final class CallQualityDetailViewModel: ObservableObject {
     }
 
     private func apply(_ reading: CallQualityReading?) {
+        let nextNetwork = CallQualityNetworkContext.from(reading)
+        if nextNetwork != network { network = nextNetwork }
         let next = CallQualityRows.rows(for: reading, locale: locale)
         guard next != rows else { return }
         rows = next

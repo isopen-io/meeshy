@@ -1058,27 +1058,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // `CallStats.reduce` (§5.7) — here we only adapt NSObject → Double.
         let entries: [CallStats.RawEntry] = await withCheckedContinuation { continuation in
             pc.statistics { report in
-                let numericKeys = [
-                    "currentRoundTripTime", "availableOutgoingBitrate",
-                    "packetsLost", "packetsReceived",
-                    "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel"
-                ]
-                var parsed: [CallStats.RawEntry] = []
-                parsed.reserveCapacity(report.statistics.count)
-                for (id, stats) in report.statistics {
-                    let values = stats.values
-                    var nums: [String: Double] = [:]
-                    for key in numericKeys {
-                        if let number = values[key] as? NSNumber { nums[key] = number.doubleValue }
-                    }
-                    parsed.append(CallStats.RawEntry(
-                        id: id,
-                        type: stats.type,
-                        kind: (values["kind"] as? String) ?? (values["mediaType"] as? String),
-                        codecId: values["codecId"] as? String,
-                        mimeType: values["mimeType"] as? String,
-                        values: nums
-                    ))
+                let parsed = report.statistics.map { id, stats in
+                    CallStats.RawEntry(id: id, type: stats.type, raw: stats.values)
                 }
                 continuation.resume(returning: parsed)
             }
