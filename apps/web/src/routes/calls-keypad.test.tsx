@@ -148,6 +148,14 @@ describe('la fiche d’un appel', () => {
     expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail({ direction: 'missed' })} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-transcript');
   });
 
+  test('« Qualité et réseau » a sa place entre les détails et la transcription, relue pour le compte qui regarde (#8698)', () => {
+    const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} viewerId="u-me" />);
+    expect(html).toContain('data-call-detail-network="call-amina"');
+    expect(html.indexOf('data-call-detail-network')).toBeGreaterThan(html.indexOf('data-call-detail-row="type"'));
+    expect(html.indexOf('data-call-detail-network')).toBeLessThan(html.indexOf('data-call-detail-transcript'));
+    expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-network');
+  });
+
   test('un appel manqué se lit sans la couleur', () => {
     const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail({ direction: 'missed' })} now={NOW} onCall={noop} />);
     expect(html).toContain('data-call-detail-status="missed"');

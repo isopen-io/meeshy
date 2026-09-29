@@ -271,6 +271,15 @@
         "source": "Mesure du 2026-09-28 (`bun run build` puis gzip -9) : 1,32 Ko -- le JOURNAL de l appel (`components/call-journal-panel.tsx`, #8579) : tout ce qui a ete dit depuis le debut de l appel, sans rien tronquer -- qui, quand, la phrase servie et son original --, le defilement libre et « Revenir au direct ». Ouvert par « Journal » dans la rangee « L appel », a la place des rangees. Charge A LA DEMANDE par `call-screen.tsx` a la premiere ouverture ; il n importe rien de `call_overlay`, qui lui remet la couleur de chaque personne et le glyphe de Fermer. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
+    "call_network_journal_panel": {
+      "pattern": "^assets/call-network-journal-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8698, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-29 (`bun run build` puis gzip -9) : 1,63 Ko -- « Qualite et reseau » dans la fiche d un appel (`components/call-network-journal-panel.tsx`, #8698) : le resume (qualite la plus basse, pires perte et latence, reconnexions, relais, reseau, fin) et la chronologie du journal reseau que CE telephone a garde de l appel, relu dans l espace du compte (`lib/calls/call-network-journal-store.ts`). Charge A LA DEMANDE par `routes/call-detail-parts.tsx` ; muet quand le journal est vide. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
     "call_overlay": {
       "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
