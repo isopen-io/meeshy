@@ -1,4 +1,533 @@
 {
   "mood": "deconnecte",
-  "motifs": []
+  "motifs": [
+    {
+      "id": "deconnecte.carte-postale",
+      "mood": "deconnecte",
+      "name": "Carte postale",
+      "base": {
+        "layout": {
+          "arrangement": "scatter",
+          "margin": 0.08,
+          "gap": 0.03,
+          "top": 0.15,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "stamp",
+          "card": {
+            "color": "#FFFDF7",
+            "pad": 0.06,
+            "foot": 0
+          },
+          "shadow": true,
+          "tilt": "gentle",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#F3E9D8"
+        },
+        "pattern": {
+          "kind": "grain",
+          "color": "#3B2F2A",
+          "opacity": 0.08
+        },
+        "border": {
+          "kind": "perforated",
+          "color": "#C8553D",
+          "width": 0.018,
+          "inset": 0.022
+        },
+        "ornaments": [
+          {
+            "kind": "grain",
+            "color": "#D9C3A0",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "tape",
+            "color": "#E9D8A6CC",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom-right",
+          "color": "#3B2F2A",
+          "size": "s"
+        },
+        "names": {
+          "show": "name",
+          "style": "tag",
+          "font": "handwriting",
+          "color": "#3B2F2A"
+        },
+        "title": {
+          "source": "group",
+          "font": "handwriting",
+          "color": "#2B4C7E",
+          "place": "top",
+          "size": "l"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "typewriter",
+          "color": "#C8553D",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.08,
+            "gap": 0.03,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "date",
+            "font": "typewriter",
+            "color": "#C8553D",
+            "place": "top",
+            "size": "m",
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "names",
+            "font": "handwriting",
+            "color": "#2B4C7E",
+            "place": "top",
+            "size": "m"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.09,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "stamp",
+            "card": {
+              "color": "#FFFDF7",
+              "pad": 0.05,
+              "foot": 0
+            },
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "name",
+            "style": "list",
+            "font": "handwriting",
+            "color": "#3B2F2A"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.08,
+            "gap": 0.02,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "stamp",
+            "card": {
+              "color": "#FFFDF7",
+              "pad": 0.04,
+              "foot": 0
+            },
+            "tilt": "none",
+            "tone": "faded"
+          },
+          "names": {
+            "show": "none",
+            "style": "tag",
+            "font": "handwriting",
+            "color": "#3B2F2A"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "typewriter",
+            "color": "#C8553D",
+            "place": "bottom",
+            "size": "s",
+            "case": "upper"
+          }
+        }
+      }
+    },
+    {
+      "id": "deconnecte.road-trip",
+      "mood": "deconnecte",
+      "name": "Road trip",
+      "base": {
+        "layout": {
+          "arrangement": "row",
+          "margin": 0.12,
+          "gap": 0.025,
+          "top": 0.12,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#1E1A17"
+        },
+        "border": {
+          "kind": "filmstrip",
+          "color": "#F3E9D8",
+          "width": 0.07,
+          "inset": 0
+        },
+        "ornaments": [
+          {
+            "kind": "lightleak",
+            "color": "#E07A5F",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "grain",
+            "color": "#F2CC8F",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom-left",
+          "color": "#F3E9D8",
+          "size": "s",
+          "font": "retro"
+        },
+        "names": {
+          "show": "handle",
+          "style": "caption",
+          "font": "retro",
+          "color": "#F2CC8F"
+        },
+        "title": {
+          "source": "group",
+          "font": "retro",
+          "color": "#F2CC8F",
+          "place": "top",
+          "size": "m",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.12,
+            "gap": 0.03,
+            "top": 0.12,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "handle",
+            "style": "plate",
+            "font": "retro",
+            "color": "#F2CC8F",
+            "fill": "#1E1A17CC"
+          },
+          "title": {
+            "source": "names",
+            "font": "retro",
+            "color": "#F2CC8F",
+            "place": "top",
+            "size": "m",
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "typewriter",
+            "color": "#E07A5F",
+            "place": "top",
+            "size": "s"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.12,
+            "gap": 0.02,
+            "top": 0.1,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "rect",
+            "tilt": "none",
+            "tone": "faded"
+          },
+          "names": {
+            "show": "handle",
+            "style": "plate",
+            "font": "typewriter",
+            "color": "#F2CC8F",
+            "fill": "#1E1A17CC"
+          },
+          "title": {
+            "source": "group",
+            "font": "retro",
+            "color": "#F2CC8F",
+            "place": "top",
+            "size": "s",
+            "case": "upper"
+          }
+        }
+      }
+    },
+    {
+      "id": "deconnecte.cahier-de-vacances",
+      "mood": "deconnecte",
+      "name": "Cahier de vacances",
+      "base": {
+        "layout": {
+          "arrangement": "scatter",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.15,
+          "bottom": 0.08
+        },
+        "slot": {
+          "shape": "rect",
+          "card": {
+            "color": "#FFFFFF",
+            "pad": 0.05,
+            "foot": 0.18
+          },
+          "shadow": true,
+          "tilt": "wild",
+          "tone": "faded"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#FBF7EE"
+        },
+        "pattern": {
+          "kind": "grid",
+          "color": "#6C9BD2",
+          "opacity": 0.22
+        },
+        "ornaments": [
+          {
+            "kind": "leaves",
+            "color": "#81B29A",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "tape",
+            "color": "#F2CC8FCC",
+            "density": "mid",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-right",
+          "color": "#2B4C7E",
+          "size": "m"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "handwriting",
+          "color": "#2B4C7E"
+        },
+        "title": {
+          "source": "group",
+          "font": "note",
+          "color": "#C8553D",
+          "place": "top",
+          "size": "l"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "cascade",
+            "margin": 0.08,
+            "gap": 0.03,
+            "top": 0.15,
+            "bottom": 0.08
+          },
+          "title": {
+            "source": "names",
+            "font": "note",
+            "color": "#C8553D",
+            "place": "top",
+            "size": "l"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "handwriting",
+            "color": "#2B4C7E",
+            "place": "top",
+            "size": "s"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "rect",
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.04,
+              "foot": 0.16
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "faded"
+          },
+          "names": {
+            "show": "name",
+            "style": "caption",
+            "font": "note",
+            "color": "#2B4C7E"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "rect",
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.04,
+              "foot": 0.12
+            },
+            "tilt": "gentle",
+            "tone": "faded"
+          },
+          "ornaments": [
+            {
+              "kind": "tape",
+              "color": "#F2CC8FCC",
+              "density": "low",
+              "layer": "front"
+            }
+          ],
+          "names": {
+            "show": "none",
+            "style": "caption",
+            "font": "note",
+            "color": "#2B4C7E"
+          },
+          "title": {
+            "source": "group",
+            "font": "note",
+            "color": "#C8553D",
+            "place": "top",
+            "size": "m"
+          }
+        }
+      }
+    },
+    {
+      "id": "deconnecte.coucher-de-soleil",
+      "mood": "deconnecte",
+      "name": "Coucher de soleil",
+      "base": {
+        "layout": {
+          "arrangement": "column",
+          "margin": 0.07,
+          "gap": 0.05,
+          "top": 0.18,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "arch",
+          "stroke": {
+            "color": "#FFF8EE",
+            "width": 0.02
+          },
+          "tilt": "none",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#F2CC8F",
+            "#E07A5F",
+            "#6D597A"
+          ],
+          "angle": 0
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#FFF1D0",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "lightleak",
+            "color": "#FFB38A",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "watermark",
+          "color": "#FFFFFF1F",
+          "size": "s"
+        },
+        "names": {
+          "show": "both",
+          "style": "caption",
+          "font": "handwriting",
+          "color": "#FFF8EE"
+        },
+        "title": {
+          "source": "names",
+          "font": "handwriting",
+          "color": "#3B2F2A",
+          "place": "top",
+          "size": "l"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "typewriter",
+          "color": "#3B2F2A",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
 }

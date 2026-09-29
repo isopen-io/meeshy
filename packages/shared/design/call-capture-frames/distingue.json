@@ -1,4 +1,457 @@
 {
   "mood": "distingue",
-  "motifs": []
+  "motifs": [
+    {
+      "id": "distingue.monogramme",
+      "mood": "distingue",
+      "name": "Monogramme",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.08,
+          "gap": 0.03,
+          "top": 0.2,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "oval",
+          "stroke": {
+            "color": "#1B2A41",
+            "width": 0.004
+          },
+          "double": true,
+          "tilt": "none",
+          "tone": "sepia"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#F5F0E6"
+        },
+        "pattern": {
+          "kind": "damask",
+          "color": "#1B2A41",
+          "opacity": 0.05
+        },
+        "border": {
+          "kind": "double",
+          "color": "#1B2A41",
+          "width": 0.005,
+          "inset": 0.03
+        },
+        "ornaments": [],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#1B2A41",
+          "size": "s",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "italic",
+          "color": "#1B2A41"
+        },
+        "title": {
+          "source": "group",
+          "font": "elegant",
+          "color": "#1B2A41",
+          "place": "top",
+          "size": "l",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "italic",
+          "color": "#7A6A4F",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.1,
+            "gap": 0.04,
+            "top": 0.22,
+            "bottom": 0.16
+          },
+          "title": {
+            "source": "names",
+            "font": "elegant",
+            "color": "#1B2A41",
+            "place": "top",
+            "size": "l",
+            "case": "upper"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.08,
+            "gap": 0.03,
+            "top": 0.2,
+            "bottom": 0.14
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.07,
+            "gap": 0.02,
+            "top": 0.18,
+            "bottom": 0.16
+          },
+          "slot": {
+            "shape": "oval",
+            "stroke": {
+              "color": "#1B2A41",
+              "width": 0.003
+            },
+            "tilt": "none",
+            "tone": "sepia"
+          },
+          "names": {
+            "show": "name",
+            "style": "list",
+            "font": "italic",
+            "color": "#1B2A41"
+          }
+        }
+      }
+    },
+    {
+      "id": "distingue.bibliotheque",
+      "mood": "distingue",
+      "name": "Bibliothèque",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.035,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "card": {
+            "color": "#F5F0E6",
+            "pad": 0.04,
+            "foot": 0.04
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "sepia"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#1F3B2D",
+            "#14271E"
+          ],
+          "angle": 0
+        },
+        "border": {
+          "kind": "hairline",
+          "color": "#E8DFC8",
+          "width": 0.003,
+          "inset": 0.035
+        },
+        "ornaments": [
+          {
+            "kind": "grain",
+            "color": "#00000033",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "vignette",
+            "color": "#000000",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "bottom-right",
+          "color": "#E8DFC8",
+          "size": "m"
+        },
+        "names": {
+          "show": "handle",
+          "style": "plate",
+          "font": "classic",
+          "color": "#F5F0E6",
+          "fill": "#1F3B2DE6"
+        },
+        "title": {
+          "source": "group",
+          "font": "classic",
+          "color": "#F5F0E6",
+          "place": "top",
+          "size": "m",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "brand",
+          "font": "italic",
+          "color": "#C9BFA5",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "classic",
+            "color": "#F5F0E6",
+            "place": "top",
+            "size": "l"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.07,
+            "gap": 0.035,
+            "top": 0.16,
+            "bottom": 0.1
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "classic",
+            "color": "#F5F0E6",
+            "fill": "#1F3B2DE6"
+          }
+        }
+      }
+    },
+    {
+      "id": "distingue.cercle",
+      "mood": "distingue",
+      "name": "Cercle",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.06,
+          "gap": 0.03,
+          "top": 0.14,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "oval",
+          "stroke": {
+            "color": "#B08D57",
+            "width": 0.006
+          },
+          "double": true,
+          "shadow": true,
+          "tilt": "none",
+          "tone": "mono"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#5A2227",
+            "#4A1C1F",
+            "#2A0F12"
+          ]
+        },
+        "border": {
+          "kind": "hairline",
+          "color": "#B08D57",
+          "width": 0.003,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "vignette",
+            "color": "#0A0405",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "top-left",
+          "color": "#F5F0E6",
+          "size": "s",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "both",
+          "style": "plate",
+          "font": "classic",
+          "color": "#1B1210",
+          "fill": "#C9B48AEE"
+        },
+        "title": {
+          "source": "group",
+          "font": "elegant",
+          "color": "#F5F0E6",
+          "place": "top",
+          "size": "m",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "elegant",
+            "color": "#F5F0E6",
+            "place": "top",
+            "size": "m",
+            "case": "upper"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "italic",
+            "color": "#C9B48A",
+            "place": "top",
+            "size": "s"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "orbit",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.14,
+            "bottom": 0.1
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "oval",
+            "stroke": {
+              "color": "#B08D57",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "mono"
+          },
+          "names": {
+            "show": "name",
+            "style": "plate",
+            "font": "classic",
+            "color": "#1B1210",
+            "fill": "#C9B48AEE"
+          }
+        }
+      }
+    },
+    {
+      "id": "distingue.correspondance",
+      "mood": "distingue",
+      "name": "Correspondance",
+      "base": {
+        "layout": {
+          "arrangement": "cascade",
+          "margin": 0.08,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "stamp",
+          "card": {
+            "color": "#F5F0E6",
+            "pad": 0.05,
+            "foot": 0.05
+          },
+          "shadow": true,
+          "tilt": "gentle",
+          "tone": "sepia"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#1B2A41",
+            "#111C2C"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "grain",
+          "color": "#F5F0E6",
+          "opacity": 0.06
+        },
+        "ornaments": [],
+        "brand": {
+          "mark": "wordmark",
+          "place": "watermark",
+          "color": "#F5F0E624",
+          "size": "m",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "handle",
+          "style": "caption",
+          "font": "italic",
+          "color": "#F5F0E6"
+        },
+        "title": {
+          "source": "date",
+          "font": "italic",
+          "color": "#F5F0E6",
+          "place": "top",
+          "size": "m"
+        },
+        "subtitle": {
+          "source": "names",
+          "font": "classic",
+          "color": "#C9BFA5",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
 }

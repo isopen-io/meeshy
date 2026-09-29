@@ -1,4 +1,451 @@
 {
   "mood": "corporate",
-  "motifs": []
+  "motifs": [
+    {
+      "id": "corporate.conseil",
+      "mood": "corporate",
+      "name": "Conseil",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.06,
+          "gap": 0.015,
+          "top": 0.14,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#334155",
+            "width": 0.006
+          },
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#0F1C2E"
+        },
+        "pattern": {
+          "kind": "grid",
+          "color": "#334155",
+          "opacity": 0.18
+        },
+        "border": {
+          "kind": "hairline",
+          "color": "#14B8A6",
+          "width": 0.004,
+          "inset": 0.03
+        },
+        "ornaments": [],
+        "brand": {
+          "mark": "both",
+          "place": "bottom-right",
+          "color": "#FFFFFF",
+          "size": "s"
+        },
+        "names": {
+          "show": "both",
+          "style": "plate",
+          "font": "bold",
+          "color": "#FFFFFF",
+          "fill": "#0F1C2ED9"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "m",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#94A3B8",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "row",
+            "margin": 0.08,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "poster",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "m",
+            "case": "upper"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.12,
+            "bottom": 0.16
+          },
+          "names": {
+            "show": "both",
+            "style": "list",
+            "font": "classic",
+            "color": "#E2E8F0"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.01,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "names": {
+            "show": "handle",
+            "style": "plate",
+            "font": "bold",
+            "color": "#FFFFFF",
+            "fill": "#0F1C2ED9"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "classic",
+            "color": "#94A3B8",
+            "place": "bottom",
+            "size": "s"
+          }
+        }
+      }
+    },
+    {
+      "id": "corporate.keynote",
+      "mood": "corporate",
+      "name": "Keynote",
+      "base": {
+        "layout": {
+          "arrangement": "arch",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.18,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.05,
+          "glow": "#6366F166",
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#243248",
+            "#0F1C2E",
+            "#0A1320"
+          ]
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#6366F1",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "vignette",
+            "color": "#000000",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "top-left",
+          "color": "#FFFFFF",
+          "size": "s",
+          "font": "poster"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "classic",
+          "color": "#E2E8F0"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "l",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#A5B4FC",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "name",
+            "style": "plate",
+            "font": "bold",
+            "color": "#FFFFFF",
+            "fill": "#0F1C2ED9"
+          },
+          "title": {
+            "source": "names",
+            "font": "poster",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "l",
+            "case": "upper"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.04,
+            "tilt": "none",
+            "tone": "color"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.04,
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "none",
+            "style": "caption",
+            "font": "classic",
+            "color": "#E2E8F0"
+          },
+          "title": {
+            "source": "group",
+            "font": "poster",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "m",
+            "case": "upper"
+          }
+        }
+      }
+    },
+    {
+      "id": "corporate.badge",
+      "mood": "corporate",
+      "name": "Badge",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.08,
+          "gap": 0.035,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.06,
+          "card": {
+            "color": "#FFFFFF",
+            "pad": 0.06,
+            "foot": 0.24
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#F1F5F9"
+        },
+        "pattern": {
+          "kind": "dots",
+          "color": "#CBD5E1",
+          "opacity": 0.5
+        },
+        "ornaments": [],
+        "brand": {
+          "mark": "logo",
+          "place": "top-right",
+          "color": "#14B8A6",
+          "size": "m"
+        },
+        "names": {
+          "show": "both",
+          "style": "caption",
+          "font": "bold",
+          "color": "#0F1C2E"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#0F1C2E",
+          "place": "top",
+          "size": "m",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#334155",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.08,
+            "gap": 0.05,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "poster",
+            "color": "#0F1C2E",
+            "place": "top",
+            "size": "m",
+            "case": "upper"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.06,
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.05,
+              "foot": 0.2
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "handle",
+            "style": "caption",
+            "font": "bold",
+            "color": "#0F1C2E"
+          }
+        }
+      }
+    },
+    {
+      "id": "corporate.poignee-de-main",
+      "mood": "corporate",
+      "name": "Poignée de main",
+      "base": {
+        "layout": {
+          "arrangement": "split",
+          "margin": 0.07,
+          "gap": 0.012,
+          "top": 0.15,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#14B8A6",
+            "width": 0.004
+          },
+          "tilt": "none",
+          "tone": "cool"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#0F1C2E",
+            "#16263D"
+          ],
+          "angle": 0
+        },
+        "border": {
+          "kind": "brackets",
+          "color": "#14B8A6",
+          "width": 0.006,
+          "inset": 0.035
+        },
+        "ornaments": [],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#FFFFFF",
+          "size": "s"
+        },
+        "names": {
+          "show": "both",
+          "style": "plate",
+          "font": "classic",
+          "color": "#FFFFFF",
+          "fill": "#0F1C2ED9"
+        },
+        "title": {
+          "source": "names",
+          "font": "poster",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "m",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#14B8A6",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
 }

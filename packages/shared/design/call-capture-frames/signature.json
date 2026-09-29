@@ -1,4 +1,534 @@
 {
   "mood": "signature",
-  "motifs": []
+  "motifs": [
+    {
+      "id": "signature.aurore",
+      "mood": "signature",
+      "name": "Aurore",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.06,
+          "gap": 0.03,
+          "top": 0.14,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.12,
+          "stroke": {
+            "color": "#FFFFFF66",
+            "width": 0.006
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "accent"
+        },
+        "ornaments": [
+          {
+            "kind": "lightleak",
+            "color": "#E0E7FF40",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "bokeh",
+            "color": "#FFFFFF2E",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#FFFFFF",
+          "size": "l",
+          "font": "bubble"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "bubble",
+          "color": "#FFFFFF"
+        },
+        "title": {
+          "source": "group",
+          "font": "bubble",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "m",
+          "effect": "shadow"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.12,
+            "bottom": 0.12
+          },
+          "title": {
+            "source": "names",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "l",
+            "effect": "shadow"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "circle",
+            "stroke": {
+              "color": "#FFFFFFB3",
+              "width": 0.008
+            },
+            "glow": "#C7D2FEAA",
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "fill": "#1E1B4BCC"
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#FFFFFF80",
+              "width": 0.005
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "fill": "#1E1B4BCC"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.04,
+            "gap": 0.015,
+            "top": 0.12,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#FFFFFF80",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "color"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "bubble",
+            "color": "#FFFFFF"
+          }
+        }
+      }
+    },
+    {
+      "id": "signature.prisme",
+      "mood": "signature",
+      "name": "Prisme",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.06,
+          "gap": 0.02,
+          "top": 0.12,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#FFFFFFCC",
+            "width": 0.004
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#312E81",
+            "#4338CA",
+            "#6366F1",
+            "#22D3EE"
+          ],
+          "angle": 135
+        },
+        "pattern": {
+          "kind": "stripes",
+          "color": "#FFFFFF",
+          "opacity": 0.07
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#FFFFFF1F",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#E0E7FF",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-right",
+          "color": "#FFFFFF",
+          "size": "l"
+        },
+        "names": {
+          "show": "handle",
+          "style": "plate",
+          "font": "bold",
+          "color": "#FFFFFF",
+          "fill": "#1E1B4BB3"
+        },
+        "title": {
+          "source": "group",
+          "font": "bold",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "m",
+          "effect": "glow",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "bold",
+          "color": "#E0E7FFCC",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.006
+            },
+            "glow": "#22D3EE88",
+            "shadow": true,
+            "tilt": "none",
+            "tone": "color"
+          },
+          "title": {
+            "source": "names",
+            "font": "bold",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.1
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.12,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "bold",
+            "color": "#FFFFFF",
+            "fill": "#312E81CC"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.04,
+            "gap": 0.012,
+            "top": 0.1,
+            "bottom": 0.08
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "bold",
+            "color": "#FFFFFF",
+            "fill": "#312E81CC"
+          },
+          "subtitle": {
+            "source": "none",
+            "font": "bold",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "s"
+          }
+        }
+      }
+    },
+    {
+      "id": "signature.bulle",
+      "mood": "signature",
+      "name": "Bulle",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.05,
+          "gap": 0.025,
+          "top": 0.12,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.22,
+          "card": {
+            "color": "#FFFFFF",
+            "pad": 0.03,
+            "foot": 0.03
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#1E1B4B"
+        },
+        "pattern": {
+          "kind": "dots",
+          "color": "#6366F1",
+          "opacity": 0.22
+        },
+        "ornaments": [
+          {
+            "kind": "bubbles",
+            "color": "#818CF8",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "top-left",
+          "color": "#FFFFFF",
+          "size": "m",
+          "font": "bubble"
+        },
+        "names": {
+          "show": "handle",
+          "style": "badge",
+          "font": "bubble",
+          "color": "#FFFFFF",
+          "fill": "#6366F1"
+        },
+        "title": {
+          "source": "group",
+          "font": "bubble",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "m"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "cascade",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "both",
+            "style": "bubble",
+            "font": "bubble",
+            "color": "#1E1B4B",
+            "fill": "#FFFFFF"
+          },
+          "title": {
+            "source": "names",
+            "font": "bubble",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "l"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "scatter",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.14,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.22,
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.03,
+              "foot": 0.03
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "color"
+          },
+          "names": {
+            "show": "handle",
+            "style": "bubble",
+            "font": "bubble",
+            "color": "#1E1B4B",
+            "fill": "#FFFFFF"
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.12,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.2,
+            "stroke": {
+              "color": "#818CF8",
+              "width": 0.006
+            },
+            "tilt": "none",
+            "tone": "color"
+          }
+        }
+      }
+    },
+    {
+      "id": "signature.echo",
+      "mood": "signature",
+      "name": "Écho",
+      "base": {
+        "layout": {
+          "arrangement": "column",
+          "margin": 0.08,
+          "gap": 0.05,
+          "top": 0.2,
+          "bottom": 0.16
+        },
+        "slot": {
+          "shape": "circle",
+          "stroke": {
+            "color": "#C7D2FE",
+            "width": 0.006
+          },
+          "glow": "#818CF8CC",
+          "tilt": "none",
+          "tone": "color"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#4338CA",
+            "#1E1B4B",
+            "#0F0D2E"
+          ]
+        },
+        "pattern": {
+          "kind": "waves",
+          "color": "#818CF8",
+          "opacity": 0.14
+        },
+        "ornaments": [
+          {
+            "kind": "orbits",
+            "color": "#A5B4FC55",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "watermark",
+          "color": "#FFFFFF1F",
+          "size": "m"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "bold",
+          "color": "#E0E7FF"
+        },
+        "title": {
+          "source": "names",
+          "font": "bubble",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "bubble",
+          "color": "#C7D2FECC",
+          "place": "top",
+          "size": "s"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
 }
