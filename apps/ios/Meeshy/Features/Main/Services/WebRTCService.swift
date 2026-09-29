@@ -88,6 +88,7 @@ final class WebRTCService {
     private var ladderAudioBitrate: Int = QualityThresholds.defaultBitrate
     private var lastHeuristicLevel: VideoQualityLevel = .excellent
     private let pathMonitor: any CallNetworkPathProviding
+    private let mediaFaults: any CallMediaFaultReporting
     // Audit P1-4 — replace Timer.scheduledTimer with cancellable Task to
     // align with PERF-011 (heartbeat / duration migrated; this monitor was
     // missed). Timers run on RunLoop.main, are App-Nap-unfriendly, and have
@@ -111,9 +112,14 @@ final class WebRTCService {
     // (`.failed`/`.closed`, which fire `webRTCServiceDidDisconnect` at once).
     private var disconnectDebounceTask: Task<Void, Never>?
 
-    init(client: (any WebRTCClientProviding)? = nil, pathMonitor: (any CallNetworkPathProviding)? = nil) {
+    init(
+        client: (any WebRTCClientProviding)? = nil,
+        pathMonitor: (any CallNetworkPathProviding)? = nil,
+        mediaFaults: (any CallMediaFaultReporting)? = nil
+    ) {
         self.client = client ?? P2PWebRTCClient()
         self.pathMonitor = pathMonitor ?? CallNetworkPathMonitor()
+        self.mediaFaults = mediaFaults ?? CallMediaFaultFeed.shared
         self.client.delegate = self
         Logger.webrtc.info("WebRTCService initialized")
     }
@@ -264,7 +270,12 @@ final class WebRTCService {
     }
 
     func startLocalMedia(isVideo: Bool) async throws {
-        try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
+        do {
+            try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
+        } catch {
+            mediaFaults.report(stage: isVideo ? "local-media.video" : "local-media.audio", error: error)
+            throw error
+        }
         currentBitrate = dataProfile.budget.audio.capping(ladderAudioBitrate)
         client.applyAudioEncoding(maxBitrateBps: currentBitrate)
         Logger.webrtc.info("Local media started - video: \(isVideo)")
@@ -286,7 +297,13 @@ final class WebRTCService {
     /// track, attaches it to the reserved video transceiver and flips to
     /// sendRecv. Returns true when a renegotiation (createOffer) is required.
     func upgradeToVideo() async throws -> Bool {
-        let needsRenegotiation = try await client.enableLocalVideo()
+        let needsRenegotiation: Bool
+        do {
+            needsRenegotiation = try await client.enableLocalVideo()
+        } catch {
+            mediaFaults.report(stage: "camera", error: error)
+            throw error
+        }
         // `enableLocalVideo` repose l'encodage PAR DÉFAUT (2,5 Mbps / 30 fps) :
         // il n'a aucune connaissance du gel de survie. Repasser par le SITE qui
         // consulte `survivalFloorActive`, sinon une ré-acquisition (unhold,
