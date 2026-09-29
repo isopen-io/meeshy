@@ -1196,9 +1196,10 @@ struct StoryCardView: View {
     /// (truth-table SDK pure, testée). Le long-press qui cache les contrôleurs
     /// agrandit ainsi le canvas pour épouser le viewport (user 2026-06-03).
     private var canvasPresentation: StoryCanvasFraming.Presentation {
-        StoryCanvasFraming.readerPresentation(
-            isFullscreenSession: isFullscreenStorySession,
-            chromeVisible: chromeVisible)
+        StorySceneFocus.presentation(
+            resting: StoryCanvasFraming.readerPresentation(isFullscreenSession: isFullscreenStorySession,
+                                                           chromeVisible: chromeVisible),
+            isComposing: isComposerEngaged)
     }
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
@@ -1210,7 +1211,7 @@ struct StoryCardView: View {
     var canvasIsExpanded: Bool { canvasPresentation != .carded } // internal : idem
 
     var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
-        StoryCanvasFraming.resolve(.init(
+        StoryCanvasFraming.resolve(StorySceneFocus.framingInput(resting: .init(
             viewport: geometry.size,
             headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
@@ -1229,7 +1230,8 @@ struct StoryCardView: View {
             // vivent chez `StageChromeAlignment.verticalAlignment` — pas ici,
             // pour qu'une seule surface ne puisse pas les faire diverger.
             verticalAlignment: StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio),
-            canvasRatio: readerCanvasRatio))
+            canvasRatio: readerCanvasRatio),
+            topInset: topInset, composerReserve: composingSceneReserve))
     }
 
     var body: some View {
@@ -1298,6 +1300,7 @@ struct StoryCardView: View {
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: outgoing))
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1407,6 +1410,7 @@ struct StoryCardView: View {
                     // Le flou est posé APRÈS l'ombre et le cadrage : il porte
                     // sur la carte telle qu'elle est rendue, coins compris, et
                     // ne déborde donc pas de son clip.
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
@@ -1450,6 +1454,7 @@ struct StoryCardView: View {
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: story))
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)

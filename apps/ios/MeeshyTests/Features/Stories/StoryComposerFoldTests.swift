@@ -114,8 +114,9 @@ final class StoryComposerFoldTests: XCTestCase {
             contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerLayer.swift"), encoding: .utf8))
         XCTAssertFalse(layer.contains("composerFoldButton"),
                        "plus aucun ⌄ ne flotte au-dessus de la plaque")
-        XCTAssertTrue(layer.contains("foldControl: StoryComposerFold.offersFoldButton("),
-                      "le lecteur remet le repli à la barre, sous la même loi")
+        XCTAssertTrue(layer.contains("foldControl: composerFoldControl"),
+                      "le lecteur remet le repli à la barre")
+        XCTAssertTrue(layer.contains("StoryComposerFold.offersFoldButton("), "sous la même loi")
 
         let bar = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerBar.swift"), encoding: .utf8)
         XCTAssertTrue(bar.contains("foldControl: foldControl"))
@@ -126,7 +127,7 @@ final class StoryComposerFoldTests: XCTestCase {
         let bande = toolbar[trailing.upperBound...].prefix(900)
         XCTAssertTrue(bande.contains("foldControl"),
                       "le ⌄ est au bout de la rangée d'outils, dans le verre")
-        XCTAssertTrue(bande.contains("fold.symbol"), "le glyphe est celui que l'hôte déclare")
+        XCTAssertTrue(toolbar.contains("Image(systemName: fold.symbol)"), "le glyphe est celui que l'hôte déclare")
         XCTAssertTrue(layer.contains("symbol: StoryComposerFold.foldSymbol"))
     }
 

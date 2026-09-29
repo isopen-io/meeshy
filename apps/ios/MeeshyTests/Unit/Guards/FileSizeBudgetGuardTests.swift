@@ -551,7 +551,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `legacyOverBudget` ENTIER (−1 361). La feuille reçoit ensuite la cible de
     // réponse amorcée depuis l'aperçu (+11) : le plafond baisse du NET du lot,
     // pas de sa seule relocalisation — le mou antérieur reste à ses lots.
-    private static let legacyLineCeiling = 43_431
+    //
+    // #8642/#8644 — 43 431 → 43 322 (−109, NET du lot). La scène d'une story
+    // qui se floute et se réduit devait toucher `StoryViewerView+Canvas.swift` ;
+    // `StoryViewerContentView` en sort d'abord (−121), la loi rentre par ses
+    // appels (+10). La feuille de commentaires et le détail d'un post reçoivent
+    // une ligne chacun (+2) : la règle vit dans `CommentReplyFocus.swift`.
+    private static let legacyLineCeiling = 43_322
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

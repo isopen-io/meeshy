@@ -1,4 +1,6 @@
 import SwiftUI
+import MeeshySDK
+import MeeshyUI
 
 // MARK: - Écrire un commentaire fait le SILENCE autour (#8601)
 //
@@ -72,8 +74,111 @@ extension StoryCardView {
         StoryComposingFocus.showsChrome(chromeVisible: chromeVisible, isComposing: isComposerEngaged)
     }
 
-    /// Les décorations du contenu — tues pendant la saisie seulement (#8601).
+    /// Les décorations du contenu — tues pendant la saisie (#8601) et pendant
+    /// la lecture des commentaires (#8642).
     var readerDecorationsShown: Bool {
-        StoryComposingFocus.showsContentDecorations(isComposing: isComposerEngaged)
+        StorySceneFocus.showsContentDecorations(isComposing: isComposerEngaged, commentsOpen: showCommentsOverlay)
+    }
+
+    /// Ce que le composeur occupe depuis le bas de l'écran — clavier ou zone
+    /// sûre, plus la plaque mesurée. `nil` hors saisie : la scène garde alors
+    /// son cadrage de lecture (#8642).
+    var composingSceneReserve: CGFloat? {
+        guard isComposerEngaged, let block = composerBlockHeight else { return nil }
+        return composerBottomPadding(geometry) + block
+    }
+}
+
+// MARK: - Lire les commentaires FLOUTE la scène ; écrire la RÉDUIT (#8642)
+//
+// Demande porteur du 2026-09-29 : « Lorsqu'on affiche les commentaires d'une
+// story, floute un peu toute la scène histoire de permettre [la lecture].
+// Lorsqu'on ouvre pour créer un commentaire il faut réduire la scène pour que ce
+// soit visible entièrement au-dessus du Universal Composer bar ! »
+//
+// Les deux gestes répondent à la même question — que garder en vue pendant
+// l'opération ? — par deux réponses opposées, parce que les deux opérations ne
+// regardent pas la même chose :
+//
+// - LIRE des commentaires regarde la liste : la scène recule (un flou léger) et
+//   ses décorations se taisent, elles se posaient au même bas d'écran ;
+// - ÉCRIRE un commentaire regarde la scène qu'on commente : elle ne doit plus
+//   disparaître sous le clavier et la plaque, elle se RÉDUIT pour tenir entière
+//   au-dessus d'eux, ancrée en haut, avec les coins de la carte.
+
+/// **La scène d'une story pendant qu'on lit ou qu'on écrit ses commentaires —
+/// la règle, sans vue.** Le cadrage réduit n'est pas un second solveur : il
+/// remet à `StoryCanvasFraming.resolve` une région plus courte, et c'est la loi
+/// de la carte qui rend l'échelle.
+nonisolated enum StorySceneFocus {
+
+    /// « Un peu » : la scène se devine encore sous la liste.
+    static let commentsBlurRadius: CGFloat = 6
+
+    /// L'air laissé entre la carte réduite et ses bornes — zone sûre en haut,
+    /// plaque de verre en bas.
+    static let composingGap: CGFloat = 8
+
+    static func blurRadius(commentsOpen: Bool) -> CGFloat {
+        commentsOpen ? commentsBlurRadius : 0
+    }
+
+    static func showsContentDecorations(isComposing: Bool, commentsOpen: Bool) -> Bool {
+        StoryComposingFocus.showsContentDecorations(isComposing: isComposing) && !commentsOpen
+    }
+
+    /// En saisie, la scène est une CARTE, même en session plein écran : une
+    /// scène qui couvre le viewport ne peut pas tenir au-dessus du clavier.
+    static func presentation(resting: StoryCanvasFraming.Presentation,
+                             isComposing: Bool) -> StoryCanvasFraming.Presentation {
+        isComposing ? .carded : resting
+    }
+
+    /// **La région de la carte pendant la saisie** : de la zone sûre au haut de
+    /// la plaque, ancrée en haut. Sans réserve mesurée, le cadrage de lecture
+    /// reste intact.
+    static func framingInput(resting: StoryCanvasFraming.Input,
+                             topInset: CGFloat,
+                             composerReserve: CGFloat?) -> StoryCanvasFraming.Input {
+        guard let reserve = composerReserve, reserve > 0 else { return resting }
+        return StoryCanvasFraming.Input(
+            viewport: resting.viewport,
+            headerInset: topInset + composingGap,
+            bottomInset: reserve + composingGap,
+            sideInset: resting.sideInset,
+            state: .carded,
+            cardedCornerRadius: resting.cardedCornerRadius,
+            verticalAlignment: .top,
+            canvasRatio: resting.canvasRatio)
+    }
+
+    /// Le ressort de la carte ; sous Reduce Motion, la scène se pose sans
+    /// mouvement.
+    static func reframeAnimation(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)
+    }
+
+    static func blurAnimation(reduceMotion: Bool) -> Animation {
+        .easeInOut(duration: reduceMotion ? 0.12 : 0.25)
+    }
+}
+
+private struct StoryCommentsReadingBlur: ViewModifier {
+    let commentsOpen: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: StorySceneFocus.blurRadius(commentsOpen: commentsOpen))
+            .animation(StorySceneFocus.blurAnimation(reduceMotion: reduceMotion), value: commentsOpen)
+    }
+}
+
+extension View {
+
+    /// Le flou de lecture des commentaires (#8642) — posé sur la carte telle
+    /// qu'elle est rendue, coins compris.
+    func storyCommentsReadingBlur(_ commentsOpen: Bool) -> some View {
+        modifier(StoryCommentsReadingBlur(commentsOpen: commentsOpen))
     }
 }
