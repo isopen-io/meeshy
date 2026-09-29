@@ -2519,20 +2519,16 @@ final class CallManager: ObservableObject {
     }
 
     func toggleSpeaker() {
-        // §7.8 — optimistic speaker toggle, corrected on failure. Same class of
-        // bug already fixed for switchCamera()/selectCamera(id:) above:
-        // `overrideOutputAudioPort` can throw (e.g. `insufficientPriority` when
-        // a higher-priority route — a connected Bluetooth headset — is active),
-        // and without a revert `isSpeaker` stays desynced from the real audio
-        // route: the button renders "on" while audio keeps playing through
-        // Bluetooth, and a second tap becomes a no-op relative to the actual
-        // route since it flips back to a state that was never truly applied.
+        // §7.8 — optimistic toggle, reverted on failure (`insufficientPriority`
+        // under Bluetooth). #8735 — the route applies OFF the main thread.
         let previousSpeaker = isSpeaker
         isSpeaker.toggle()
-        if !applySpeakerRoute() {
-            isSpeaker = previousSpeaker
-        }
         HapticFeedback.light()
+        let intended = isSpeaker
+        applySpeakerRouteOffMain { [weak self] applied in
+            guard let self, !applied, self.isSpeaker == intended else { return }
+            self.isSpeaker = previousSpeaker
+        }
     }
 
     /// §5.4 — mid-call audio↔video switch (FaceTime-style asymmetric). Acquires/
@@ -4234,6 +4230,11 @@ final class CallManager: ObservableObject {
                 applyBestEffortAudioSetting("preferredIOBufferDuration") {
                     try session.session.setPreferredIOBufferDuration(0.02)
                 }
+                // #8735 — sans ce choix, iOS tait tout retour haptique pendant
+                // que l'appel enregistre le micro : chaque bouton restait muet.
+                applyBestEffortAudioSetting("allowHapticsAndSystemSoundsDuringRecording") {
+                    try session.session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+                }
                 Logger.calls.info("RTCAudioSession pre-configured — videoUI: \(videoUIActive), activation=\(activation.map(String.init) ?? "callkit")")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé
@@ -4288,9 +4289,10 @@ final class CallManager: ObservableObject {
         }
     }
 
-    /// Returns whether the route override actually applied. `toggleSpeaker()`
-    /// uses this to revert its optimistic `isSpeaker` flip on failure — see
-    /// the doc-comment there. The early-return below (call not active yet) is
+    /// Returns whether the route override actually applied — the route-change
+    /// handlers revert `isSpeaker` on failure. `toggleSpeaker()` takes the same
+    /// route OFF the main thread (`applySpeakerRouteOffMain`, CallManager+Speaker).
+    /// The early-return below (call not active yet) is
     /// reported as success: there is nothing to revert, the route simply
     /// hasn't been applied yet (it will be, once the call becomes active and
     /// this is invoked again from the audio-session lifecycle call sites).
@@ -4298,40 +4300,10 @@ final class CallManager: ObservableObject {
     fileprivate func applySpeakerRoute() -> Bool {
         guard callState.isActive else { return true }
         let speaker = isSpeaker
-
-        // CRITIQUE simulator : `.none` (= défaut earpiece/Receiver) ne route
-        // PAS vers les haut-parleurs macOS sur iOS Simulator. L'audio est
-        // décodé par WebRTC mais joué sur un port virtuel qui n'existe pas
-        // côté Mac → silence total même si l'ADM tourne. On force `.speaker`
-        // sur simulator pour mapper vers la sortie audio macOS.
-        // Sur device réel, on garde le routing par défaut (`.none` = earpiece
-        // pour `.voiceChat` mode) — l'utilisateur tient l'iPhone à l'oreille
-        // ou tap le bouton speaker pour basculer.
-        #if targetEnvironment(simulator)
-        let port: AVAudioSession.PortOverride = .speaker
-        #else
-        // CALL-FIX 2026-06-05 (macOS) — same failure as the simulator on
-        // iOS-app-on-Mac ("Designed for iPad", NOT Catalyst): there is no
-        // earpiece, so `.none` routes to a virtual port that doesn't exist →
-        // total silence even though the ADM is decoding. Force `.speaker` on Mac
-        // so the audio maps to the Mac's output. Runtime check (`isiOSAppOnMac`)
-        // because Mac uses the iphoneos slice, not a separate compile target.
-        let forceSpeakerForMac = ProcessInfo.processInfo.isiOSAppOnMac
-        let port: AVAudioSession.PortOverride = (speaker || forceSpeakerForMac) ? .speaker : .none
-        #endif
-
+        let port = CallSpeakerRoute.port(isSpeaker: speaker)
         var succeeded = true
         audioSessionQueue.sync {
-            let session = RTCAudioSession.sharedInstance()
-            session.lockForConfiguration()
-            defer { session.unlockForConfiguration() }
-            do {
-                try session.overrideOutputAudioPort(port)
-                Logger.calls.info("Audio route override applied: \(port.rawValue) (isSpeaker=\(speaker))")
-            } catch {
-                Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
-                succeeded = false
-            }
+            if !CallSpeakerRoute.override(port, isSpeaker: speaker) { succeeded = false }
         }
         return succeeded
     }

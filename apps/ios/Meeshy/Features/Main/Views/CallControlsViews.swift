@@ -138,6 +138,9 @@ struct CallInviteStrip: View, Equatable {
                 .accessibilityElement(children: .combine)
             }
         }
+        // #8735 — une information, pas un contrôle : elle ne vole aucun
+        // toucher à ce qui est dessous.
+        .allowsHitTesting(false)
     }
 }
 

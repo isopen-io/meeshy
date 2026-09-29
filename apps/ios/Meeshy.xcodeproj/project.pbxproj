@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		886E8510D942C6D1C9FF624C /* CallScreenFirstTouchGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CEF80ABC8671060B1AB272 /* CallScreenFirstTouchGuardTests.swift */; };
+		7072BDFDD5ED4F05893AD8AE /* CallChromeInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC742CCF46F33613AC081578 /* CallChromeInteractionTests.swift */; };
+		A70A1975F203A3015DF49939 /* CallManager+Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FC23BFCE18EFAC1908710C /* CallManager+Speaker.swift */; };
+		940D6A5CCBA9C56B4DF51794 /* CallChromeInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = F509005D6A64E4B40809DC10 /* CallChromeInteraction.swift */; };
 		97565F4194E6F0685123A7EA /* CallEffectsCompanionRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60170C05EE8AD1A4CC46732F /* CallEffectsCompanionRuleTests.swift */; };
 		A52724E109FED9C2F0C30F60 /* CallEffectsCompanionStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A677B3EAB6AF8F698CDF2E7A /* CallEffectsCompanionStrip.swift */; };
 		28843831695DC1292E336857 /* CallEffectsCompanions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44AB9F1E18FEE0AB6969F96 /* CallEffectsCompanions.swift */; };
@@ -2556,6 +2560,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		14CEF80ABC8671060B1AB272 /* CallScreenFirstTouchGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallScreenFirstTouchGuardTests.swift; sourceTree = "<group>"; };
+		DC742CCF46F33613AC081578 /* CallChromeInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallChromeInteractionTests.swift; sourceTree = "<group>"; };
+		12FC23BFCE18EFAC1908710C /* CallManager+Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager+Speaker.swift; sourceTree = "<group>"; };
+		F509005D6A64E4B40809DC10 /* CallChromeInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallChromeInteraction.swift; sourceTree = "<group>"; };
 		60170C05EE8AD1A4CC46732F /* CallEffectsCompanionRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallEffectsCompanionRuleTests.swift; sourceTree = "<group>"; };
 		A677B3EAB6AF8F698CDF2E7A /* CallEffectsCompanionStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallEffectsCompanionStrip.swift; sourceTree = "<group>"; };
 		C44AB9F1E18FEE0AB6969F96 /* CallEffectsCompanions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallEffectsCompanions.swift; sourceTree = "<group>"; };
@@ -5247,6 +5255,7 @@
 		0D84F8ADB66F6FE7CE49623D /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				14CEF80ABC8671060B1AB272 /* CallScreenFirstTouchGuardTests.swift */,
 				6DD6B6A6DAB1827E29747306 /* AccessScreensFormWidthTests.swift */,
 				9C10BA6719205AC3EE0FB2A8 /* AccountSwitcherStatusTests.swift */,
 				A8BF87EFBAEDE5D927A17523 /* AchievementCopyCoverageTests.swift */,
@@ -5728,6 +5737,7 @@
 		17A5536E8F1E3FAAEDE99C40 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				DC742CCF46F33613AC081578 /* CallChromeInteractionTests.swift */,
 				60170C05EE8AD1A4CC46732F /* CallEffectsCompanionRuleTests.swift */,
 				AD12A3004402B053B1D9F56B /* AudioTrackLanguageResolverTests.swift */,
 				CC101C144ED2502DE4E2142D /* BubbleCallRecordingTests.swift */,
@@ -7602,6 +7612,7 @@
 		B0B0A3D54410DF457C02411B /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				12FC23BFCE18EFAC1908710C /* CallManager+Speaker.swift */,
 				06039AD3B5DCBBE3A7EA30F6 /* ActiveSpeakerDetector.swift */,
 				0F7CBA67AA47DF4047719DC2 /* AnalyticsManager.swift */,
 				8200753C2DB4B4168738C75B /* AnonymousSessionStore.swift */,
@@ -8257,6 +8268,7 @@
 		F2299A4649663A9E3837B193 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				F509005D6A64E4B40809DC10 /* CallChromeInteraction.swift */,
 				C44AB9F1E18FEE0AB6969F96 /* CallEffectsCompanions.swift */,
 				9BB52A80633BE2A3D8B0CDF9 /* AnonymousSessionContext.swift */,
 				EB7EF20E03E9BD245BAC704A /* AnyCodable.swift */,
@@ -8670,6 +8682,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A70A1975F203A3015DF49939 /* CallManager+Speaker.swift in Sources */,
+				940D6A5CCBA9C56B4DF51794 /* CallChromeInteraction.swift in Sources */,
 				A52724E109FED9C2F0C30F60 /* CallEffectsCompanionStrip.swift in Sources */,
 				28843831695DC1292E336857 /* CallEffectsCompanions.swift in Sources */,
 				37CB4F0784988D1007142CCA /* AVSampleBufferDisplayLayer+Meeshy.swift in Sources */,
@@ -9859,6 +9873,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				886E8510D942C6D1C9FF624C /* CallScreenFirstTouchGuardTests.swift in Sources */,
+				7072BDFDD5ED4F05893AD8AE /* CallChromeInteractionTests.swift in Sources */,
 				97565F4194E6F0685123A7EA /* CallEffectsCompanionRuleTests.swift in Sources */,
 				0BE2D0F2157FFBFE635BD16B /* A11yLabelComposerTests.swift in Sources */,
 				7E5598AA054C8B56651FD6B2 /* APIServiceTests.swift in Sources */,

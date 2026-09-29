@@ -35,6 +35,9 @@ struct CallView: View {
     @ObservedObject var transcriptionService: CallTranscriptionService
     @State var pulseScale: CGFloat = 1.0
     @State var showControls = true
+    /// #8735 — les touchers du chrome : chacun réarme le masquage automatique,
+    /// et aucun masquage ne tombe sous un doigt posé.
+    @State var chromeTouches = CallChromeTouches()
     @State var showTranscript = false
     @State var showOriginalText = false
     @State var showEffectsToolbar = false
@@ -191,49 +194,52 @@ struct CallView: View {
                 callBackground
             }
 
-            // Content based on state
-            switch callManager.callState {
-            case .ringing(let isOutgoing):
-                if isOutgoing {
-                    outgoingRingingView
-                } else {
-                    // Audit P1-16 — pass our own @ObservedObject down so
-                    // SwiftUI reuses the same subscription instead of
-                    // re-creating it on each parent body reval.
-                    IncomingCallView(callManager: callManager)
-                }
-            case .offering:
-                // `.offering` = SDP offer émis, en attente de l'answer du
-                // peer = en attente que l'appelé tape "Accepter" sur CallKit.
-                // L'utilisateur attend toujours une réponse humaine — afficher
-                // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
-                // La transition vers connectingView ne se fait qu'après que
-                // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
-                // que le peer a accepté.
-                outgoingRingingView
-            case .connecting:
-                connectingView
-                    .background { CallPreviewBackdrop(preview: .shared) }
-            case .connected:
+            // Content based on state.
+            //
+            // §4.3 — `.reconnecting` keeps the connected layout (peer's last
+            // frame / tiles) instead of blanking to the full-screen connecting
+            // view — the FaceTime/WhatsApp recovery behaviour — gated on
+            // `hasEstablishedMedia` (`showsConnectedLayout`): un ICE restart
+            // PRÉ-établissement passe aussi par `.reconnecting`, et sans média
+            // négocié le layout connecté afficherait un chrono 00:00 mensonger.
+            //
+            // #8735 — `connectedView` est monté à UN SEUL endroit, hors du
+            // `switch` : deux branches en faisaient deux vues pour SwiftUI, et
+            // un simple creux réseau (`.connected` → `.reconnecting`) détruisait
+            // tout le sous-arbre — le (…) ou le mode ouvert se refermait, la
+            // rangée défilée disparaissait sous le doigt.
+            if showsConnectedLayout {
                 connectedView
-            case .ended(let reason):
-                endedView(reason: reason)
-            case .reconnecting:
-                // §4.3 — keep the connected layout (peer's last frame / tiles)
-                // and overlay a "Reconnexion…" banner instead of blanking to
-                // the full-screen connecting view — the FaceTime/WhatsApp
-                // recovery behaviour. Gated on `hasEstablishedMedia` : un ICE
-                // restart PRÉ-établissement (watchdog `.connecting`) passe
-                // aussi par `.reconnecting` — sans média déjà négocié il n'y a
-                // pas de "dernier frame" à figer et le layout connecté
-                // afficherait un chrono 00:00 mensonger : rester "Connexion…".
-                if callManager.hasEstablishedMedia {
-                    connectedView
-                } else {
+            } else {
+                switch callManager.callState {
+                case .ringing(let isOutgoing):
+                    if isOutgoing {
+                        outgoingRingingView
+                    } else {
+                        // Audit P1-16 — pass our own @ObservedObject down so
+                        // SwiftUI reuses the same subscription instead of
+                        // re-creating it on each parent body reval.
+                        IncomingCallView(callManager: callManager)
+                    }
+                case .offering:
+                    // `.offering` = SDP offer émis, en attente de l'answer du
+                    // peer = en attente que l'appelé tape "Accepter" sur CallKit.
+                    // L'utilisateur attend toujours une réponse humaine — afficher
+                    // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
+                    // La transition vers connectingView ne se fait qu'après que
+                    // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
+                    // que le peer a accepté.
+                    outgoingRingingView
+                case .connecting:
                     connectingView
+                        .background { CallPreviewBackdrop(preview: .shared) }
+                case .connected, .reconnecting:
+                    connectingView
+                case .ended(let reason):
+                    endedView(reason: reason)
+                case .idle:
+                    EmptyView()
                 }
-            case .idle:
-                EmptyView()
             }
 
             // Bandeau top — les bannières émergent de la Dynamic Island
@@ -307,6 +313,9 @@ struct CallView: View {
         // sombre : sinon ils virent au clair en mode Light et les contrôles/
         // textes blancs deviennent illisibles (white-on-white).
         .environment(\.colorScheme, .dark)
+        // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
+        // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
+        .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
         .onAppear {
             showTranscript = transcriptionService.isShowingOverlay
             startPulseAnimation()
