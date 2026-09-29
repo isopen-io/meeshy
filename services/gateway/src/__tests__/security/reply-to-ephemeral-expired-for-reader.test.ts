@@ -163,10 +163,19 @@ describe('un message NON éphémère n’est pas touché', () => {
 });
 
 describe('withSealedQuote — la variante scellée d’une charge de diffusion', () => {
-  it('scelle la citation d’une charge sans toucher au reste', () => {
-    const payload = { id: 'r1', content: 'ma réponse', replyTo: { ...flammeOeil(), sender: { id: 'p1' } } };
+  it('scelle la citation ET tue la réponse pour ce lecteur (#8630) : elle part avec ce qu’elle cite', () => {
+    const payload = {
+      id: 'r1',
+      content: 'ma réponse',
+      translations: [{ language: 'en', translatedContent: 'my answer' }],
+      attachments: [{ id: 'a1', fileUrl: 'https://x/a1.jpg' }],
+      replyTo: { ...flammeOeil(), sender: { id: 'p1' } },
+    };
     const sealed = withSealedQuote(payload, BEFORE);
-    expect(sealed.content).toBe('ma réponse');
+    expect(sealed).toMatchObject({ id: 'r1', content: '', translations: [], attachments: [], expiresAt: BEFORE });
+    expect(JSON.stringify(sealed)).not.toContain('ma réponse');
+    expect(JSON.stringify(sealed)).not.toContain('my answer');
+    expect(JSON.stringify(sealed)).not.toContain('a1.jpg');
     expect(sealed.replyTo).toMatchObject({ id: flammeOeil().id, content: '', deletedAt: BEFORE, attachments: [] });
     expect((sealed.replyTo as Record<string, unknown>)['sender']).toEqual({ id: 'p1' });
     expect(JSON.stringify(sealed)).not.toContain('4271');

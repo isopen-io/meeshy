@@ -21,6 +21,7 @@ public struct MessageStoreAccountKey: Hashable, Sendable {
     public static let legacyDatabaseFileName = "meeshy_messages.sqlite"
     public static let activeUserIdDefaultsKey = "meeshy_active_user_id"
     static let fileNamePrefix = "meeshy_messages_acct_"
+    static let cacheArchivePrefix = "meeshy_cache_acct_"
     static let fileNameSuffix = ".sqlite"
 
     public init?(userId: String?, serverOrigin: String?) {
@@ -30,14 +31,37 @@ public struct MessageStoreAccountKey: Hashable, Sendable {
         self.environmentHost = Self.normalizedHost(of: serverOrigin ?? "")
     }
 
+    /// Le compte tel qu'il a été gravé (hôte déjà normalisé) — relu depuis
+    /// le marqueur du propriétaire du cache (#8674).
+    init(userId: String, environmentHost: String) {
+        self.userId = userId
+        self.environmentHost = environmentHost
+    }
+
     public var databaseFileName: String {
+        Self.fileNamePrefix + fingerprint + Self.fileNameSuffix
+    }
+
+    /// Le cache (`CacheCoordinator`) d'un compte QUITTÉ mais gardé sur
+    /// l'appareil, mis de côté jusqu'à son retour (#8674). Même empreinte que
+    /// sa base de messages : un compte, deux fichiers, jamais son identifiant
+    /// en clair.
+    public var cacheArchiveFileName: String {
+        Self.cacheArchivePrefix + fingerprint + Self.fileNameSuffix
+    }
+
+    /// L'empreinte du compte, qui nomme tout ce que l'appareil garde de lui.
+    public var fingerprint: String {
         let digest = SHA256.hash(data: Data("\(environmentHost)|\(userId)".utf8))
-        let hex = digest.prefix(16).map { String(format: "%02x", $0) }.joined()
-        return Self.fileNamePrefix + hex + Self.fileNameSuffix
+        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     public static func isAccountStoreFileName(_ name: String) -> Bool {
         name.hasPrefix(fileNamePrefix) && name.hasSuffix(fileNameSuffix)
+    }
+
+    public static func isCacheArchiveFileName(_ name: String) -> Bool {
+        name.hasPrefix(cacheArchivePrefix) && name.hasSuffix(fileNameSuffix)
     }
 
     /// Le compte actif tel que l'app le publie dans l'App Group — ce que lit

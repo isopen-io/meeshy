@@ -35,6 +35,8 @@ import {
   hasPerReaderEphemeralDeadline,
   isAfterReadEphemeral,
   isEphemeralServable,
+  isInheritedEphemeralServable,
+  inheritedEphemeralExpiresAt,
   normalizeEphemeralDuration,
   recipientEphemeralDeadline,
   servedEphemeralExpiresAt,
@@ -307,5 +309,37 @@ describe('flamme-œil — une échéance par lecteur sans durée (#8302)', () =>
 
   it('est un éphémère pour la protection, même si le bit EPHEMERAL manque', () => {
     expect(messageProtection({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ }).ephemeral).toBe(true);
+  });
+});
+
+/**
+ * #8630 — décision porteur 2026-09-29 : « quand elle se détruit, elle entraîne
+ * la destruction du message qui l'a cité ». La réponse meurt, POUR UN LECTEUR,
+ * à la plus proche des échéances servies de sa chaîne de citations — la sienne
+ * comprise. Le témoin est posé sur une réponse qui vivrait PLUS LONGTEMPS que
+ * ce qu'elle cite : c'est le seul cas où la règle change le verdict.
+ */
+describe('la destruction d\'un message cité entraîne ses réponses (#8630)', () => {
+  const QUOTED_DEATH = new Date('2026-09-29T10:00:00.000Z');
+  const OWN_DEATH = new Date('2026-09-29T12:00:00.000Z');
+
+  it('retient la plus proche des échéances de la chaîne, jamais la plus lointaine', () => {
+    expect(inheritedEphemeralExpiresAt([OWN_DEATH, null, QUOTED_DEATH, undefined])).toEqual(QUOTED_DEATH);
+  });
+
+  it('ne fabrique aucune échéance quand rien de la chaîne n\'a d\'échéance servie', () => {
+    expect(inheritedEphemeralExpiresAt([null, undefined])).toBeNull();
+    expect(inheritedEphemeralExpiresAt([])).toBeNull();
+  });
+
+  it('cesse de servir la réponse une heure après la mort du message cité, comme le cité lui-même', () => {
+    const justBefore = new Date(QUOTED_DEATH.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS - 1);
+    const atGraceEnd = new Date(QUOTED_DEATH.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS);
+    expect(isInheritedEphemeralServable({ inheritedExpiresAt: QUOTED_DEATH, now: justBefore })).toBe(true);
+    expect(isInheritedEphemeralServable({ inheritedExpiresAt: QUOTED_DEATH, now: atGraceEnd })).toBe(false);
+  });
+
+  it('sert toujours une réponse dont aucun ancêtre n\'est mort pour ce lecteur', () => {
+    expect(isInheritedEphemeralServable({ inheritedExpiresAt: null, now: OWN_DEATH })).toBe(true);
   });
 });
