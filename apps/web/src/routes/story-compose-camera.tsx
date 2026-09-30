@@ -10,19 +10,19 @@ import { cameraMirrored } from '@/lib/media/camera-mirror';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { captureLock, flashFloorColor, flashSliderShown, zoomAfterDrag, type CameraZoomRange, type LayoutDirection } from '@/lib/stories/studio-capture-gestures';
 import { createBrowserCameraEngine, type CameraEngine } from '@/lib/stories/studio-camera-engine';
-import { cameraFlashPlan, quickCaptureRelease, quickCaptureTap, type CameraFacing } from '@/lib/stories/studio-quick-capture';
+import { cameraFlashPlan, quickCaptureArmedTap, quickCaptureRelease, type CameraFacing } from '@/lib/stories/studio-quick-capture';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { StudioCameraFlash } from '@/routes/story-compose-camera-flash';
 import { ROUND_GLASS } from '@/routes/story-compose-chrome';
 
 /**
- * `photo` : ouverte par un toucher, elle prend la photo dès qu'elle voit.
+ * `arm` : ouverte par un toucher (#8711) — le viseur s'ouvre ARMÉ, rien n'est
+ * pris ; un second toucher n'importe où sur lui prend la photo.
  * `hold` : ouverte par un appui long, elle filme tant qu'il dure (`holding`).
- * `arm` : un toucher sur un réel — elle s'ouvre, rien n'est pris.
  * `manual` : le déclencheur seul décide. `film` : ouverte par la voie du clavier
  * pour filmer — le déclencheur démarre puis arrête (un clavier ne tient pas).
  */
-export type StudioCameraIntent = 'photo' | 'hold' | 'arm' | 'manual' | 'film';
+export type StudioCameraIntent = 'hold' | 'arm' | 'manual' | 'film';
 
 /** Au-delà, un appui sur le déclencheur FILME (miroir du geste de la scène). */
 const HOLD_MS = 350;
@@ -127,7 +127,7 @@ export function StudioCamera({
   const holdingRef = useRef(holding);
   holdingRef.current = holding;
   const [engine] = useState(() => injected ?? createBrowserCameraEngine());
-  const photoFirst = quickCaptureTap(kind) === 'photo' && intent !== 'film';
+  const photoFirst = kind !== 'REEL' && intent !== 'film';
 
   const releaseStream = () => {
     const stream = streamRef.current;
@@ -285,12 +285,12 @@ export function StudioCamera({
     finish(file);
   };
 
-  /* LA CAPTURE RAPIDE — une fois l'image vivante, le geste qui a ouvert la
-     caméra se tient : la photo part, ou le film commence si l'appui dure. */
+  /* LA CAPTURE RAPIDE — une fois l'image vivante, l'appui long qui a ouvert
+     la caméra se tient : le film commence s'il dure. Un toucher n'a fait
+     qu'ARMER (#8711) : rien ne part sans le second. */
   useEffect(() => {
     if (status !== 'live' || autoRef.current) return;
     autoRef.current = true;
-    if (intent === 'photo') void takePhoto();
     if (intent === 'hold' && holdingRef.current) void startRecording('hold');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
@@ -355,6 +355,12 @@ export function StudioCamera({
   const onViewEnd = () => {
     viewDragRef.current = null;
   };
+  /* LE SECOND TOUCHER (#8711) — n'importe où sur le viseur armé, hors de ses
+     contrôles (flash, optique, sortie, déclencheur) : la photo part. */
+  const onViewTap = (event: { readonly target: EventTarget | null }) => {
+    if (!photoFirst || (event.target instanceof Element && event.target.closest('button, input') !== null)) return;
+    if (quickCaptureArmedTap({ live: status === 'live', recording: recordingRef.current !== null, busy: busyRef.current, kind }) === 'take-photo') void takePhoto();
+  };
 
   return (
     <div
@@ -371,6 +377,7 @@ export function StudioCamera({
       onPointerMove={onViewMove}
       onPointerUp={onViewEnd}
       onPointerCancel={onViewEnd}
+      onClick={onViewTap}
     >
       {/* LE SOL BLANC s'allume d'un coup, jamais en fondu : la lumière doit
           être pleine au moment où l'image est prise. */}

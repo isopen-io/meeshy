@@ -1,6 +1,7 @@
 import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
 import { sceneBackdropOf, sceneFitModeOf } from '@/lib/canvas/backdrop';
 import { isStoryFilter, type StoryFilterId } from '@/lib/canvas/media-filter';
+import { isSceneTransition } from '@/lib/canvas/scene-transition';
 
 import type { StoryFrame, StudioPlane } from './story-document';
 import {
@@ -471,6 +472,8 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
     texts,
     selected: texts[0]?.id ?? null,
     ...(durationOf(snapshot.duration) !== undefined ? { duration: durationOf(snapshot.duration)! } : {}),
+    ...(isSceneTransition(snapshot.opening) ? { opening: snapshot.opening } : {}),
+    ...(isSceneTransition(snapshot.closing) ? { closing: snapshot.closing } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
     sound:
@@ -515,6 +518,8 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
     id: page.id,
     texts: page.texts.map((layer) => ({ ...layer })),
     ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(overlay !== undefined ? { overlay } : {}),
     ...(sound !== null && page.sound !== null

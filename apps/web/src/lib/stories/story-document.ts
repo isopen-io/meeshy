@@ -1,6 +1,7 @@
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import { sceneTransitionWire, type SceneTransition } from '@/lib/canvas/scene-transition';
 import { DEFAULT_SCENE_BACKDROP, DEFAULT_SCENE_FIT_MODE, type SceneBackdrop, type SceneFitMode } from '@/lib/canvas/backdrop';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
@@ -94,6 +95,9 @@ export type StoryComposition = {
   readonly overlay?: StoryVisual & { readonly pose: StudioPose; readonly timing?: StudioTiming };
   /** LA DURÉE d'une scène animée (#8415) — `SceneV3.timelineDuration`. */
   readonly duration?: number;
+  /** L'ENTRÉE et la SORTIE de la scène (#8792) — `SceneV3.opening` / `.closing`. */
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
   /** LE SON — `background` : la bande-son de la scène, élue par
    * `electBackgroundTrack` (`payload.isBackground === true`) ; `foreground` :
    * un son POSÉ, que cette élection ignore. Deux rôles, un seul fichier. */
@@ -121,6 +125,15 @@ const IDENTITY = { scale: 1, rotation: 0, opacity: 1 } as const;
 /** `timelineDuration` d'une scène ANIMÉE — absente d'une scène statique. */
 const durationOf = (input: { readonly duration?: number }): { readonly timelineDuration?: number } =>
   input.duration !== undefined && input.duration > 0 ? { timelineDuration: input.duration } : {};
+
+/** `opening` / `closing` d'une scène — `{ type }`, la forme d'iOS (#8792). */
+const transitionsOf = (input: {
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
+}): { readonly opening?: { readonly type: SceneTransition }; readonly closing?: { readonly type: SceneTransition } } => ({
+  ...(input.opening !== undefined ? { opening: sceneTransitionWire(input.opening) } : {}),
+  ...(input.closing !== undefined ? { closing: sceneTransitionWire(input.closing) } : {}),
+});
 
 function frameTransform(frame: StoryFrame | undefined): Record<string, string> {
   const fitMode = frame?.fitMode ?? DEFAULT_SCENE_FIT_MODE;
@@ -265,7 +278,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
  * jamais sans texte NI média, `core.ts:327-365`). */
 export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
   const objects = composeObjects(input);
-  return objects.length === 0 ? null : { v: 3, scenes: [{ id: 'scene-0', objects, ...durationOf(input) }] };
+  return objects.length === 0 ? null : { v: 3, scenes: [{ id: 'scene-0', objects, ...durationOf(input), ...transitionsOf(input) }] };
 }
 
 /**
@@ -300,6 +313,8 @@ function storyCompositionOf<A>(
     readonly overlay?: OverlaySlot<A>;
     readonly sound?: SoundSlot<A>;
     readonly duration?: number;
+    readonly opening?: SceneTransition;
+    readonly closing?: SceneTransition;
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): StoryComposition {
@@ -317,6 +332,8 @@ function storyCompositionOf<A>(
       ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose, ...(params.overlay.timing !== undefined ? { timing: params.overlay.timing } : {}) } }
       : {}),
     ...(params.duration !== undefined ? { duration: params.duration } : {}),
+    ...(params.opening !== undefined ? { opening: params.opening } : {}),
+    ...(params.closing !== undefined ? { closing: params.closing } : {}),
     ...(params.sound !== undefined ? { sound: { address: addressOf(params.sound.source), plane: params.sound.plane } } : {}),
   };
 }
@@ -328,6 +345,8 @@ function compose<A>(
     readonly overlay?: OverlaySlot<A>;
     readonly sound?: SoundSlot<A>;
     readonly duration?: number;
+    readonly opening?: SceneTransition;
+    readonly closing?: SceneTransition;
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): CanvasV3 | null {
@@ -340,6 +359,8 @@ export function buildStoryCanvasEffects(params: {
   readonly overlay?: OverlaySlot<StudioReadyAsset>;
   readonly sound?: SoundSlot<StudioReadyAsset>;
   readonly duration?: number;
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 }): CanvasV3 | null {
   return compose(params, (ready) => ({
     postMediaId: ready.postMediaId,
@@ -359,6 +380,8 @@ export function buildPreviewCanvasDocument(params: {
   readonly overlay?: OverlaySlot<string>;
   readonly sound?: SoundSlot<string>;
   readonly duration?: number;
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 }): CanvasDocument | null {
   const composed = compose(params, (previewUrl) => ({ mediaURL: previewUrl }));
   return composed === null ? null : parseCanvasDocument(composed);
@@ -423,7 +446,9 @@ export function studioMediaIds(
 export type StoryPageComposition = StoryComposition & { readonly id: string };
 
 export function composeStoryCanvasPages(pages: readonly StoryPageComposition[], layout: MosaicLayoutMode | null): CanvasV3 | null {
-  const scenes = pages.map((page) => ({ id: page.id, objects: composeObjects(page), ...durationOf(page) })).filter((scene) => scene.objects.length > 0);
+  const scenes = pages
+    .map((page) => ({ id: page.id, objects: composeObjects(page), ...durationOf(page), ...transitionsOf(page) }))
+    .filter((scene) => scene.objects.length > 0);
   if (scenes.length === 0) return null;
   return { v: 3, scenes, ...(scenes.length >= 2 && layout !== null ? { layout } : {}) };
 }
@@ -438,6 +463,8 @@ export function buildStoryCanvasEffectsPages(
     readonly overlay?: OverlaySlot<StudioReadyAsset>;
     readonly sound?: SoundSlot<StudioReadyAsset>;
     readonly duration?: number;
+    readonly opening?: SceneTransition;
+    readonly closing?: SceneTransition;
   }[],
   layout: MosaicLayoutMode | null,
 ): CanvasV3 | null {

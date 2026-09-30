@@ -132,6 +132,8 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
     id: page.id,
     texts: page.texts,
     ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
     ...(background !== undefined && page.background !== null
       ? {
           background: {

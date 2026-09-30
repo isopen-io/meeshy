@@ -23,6 +23,7 @@ const NOT_A_CAPTURE: Readonly<Record<string, string>> = {
   'lib/stories/studio-retouch.ts': 'la retouche d’une image déjà posée dans le fil',
   'lib/profile/image-recompress.ts': 'un avatar ou une bannière choisis dans la photothèque',
   'lib/export/message-card-paint.ts': 'la carte d’un message, dessinée',
+  'lib/stories/studio-filter-thumbnails.ts': 'la miniature réduite d’un fond déjà posé, pour les effets visuels (#8794)',
 };
 
 const CAPTURE_SITES: readonly string[] = [
