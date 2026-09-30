@@ -57,6 +57,28 @@ extension ConversationView {
         ))
     }
 
+    // MARK: - L'aperçu tiré de la bannière (#8822)
+
+    /// Ce que la bande d'en-tête montre : l'aperçu porte l'en-tête COMPLET dans
+    /// son bloc de verre, sans chevron retour (`ConversationHeaderLayout`).
+    var headerLayout: ConversationHeaderLayout {
+        ConversationHeaderLayout.resolve(previewMode: previewMode, showOptions: composerState.showOptions)
+    }
+
+    /// LA PORTE VERS LA CONVERSATION COMPLÈTE, dans l'aperçu. Elle remplace le
+    /// calque transparent posé sur tout le fil, qui l'ouvrait au toucher — et
+    /// volait ainsi le DÉFILEMENT à la liste.
+    var openFullConversationButton: AnyView {
+        AnyView(Button {
+            HapticFeedback.light()
+            onOpenFullConversation?()
+        } label: {
+            HeaderOpenFullGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
+        }
+        .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
+        .accessibilityIdentifier("conversation.preview.openFull"))
+    }
+
     // MARK: - Header Call Buttons (audio + video)
 
     // AnyView : dernier maillon nu de la chaîne du header (voir les
@@ -206,6 +228,22 @@ extension ConversationView {
         } catch {
             Logger.network.error("createDirectConversation failed: \(error.localizedDescription)")
         }
+    }
+}
+
+/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
+/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
+private struct HeaderOpenFullGlyph: View {
+    let accentColor: String
+    let secondaryColor: String
+
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(MeeshyFont.relative(12, weight: .semibold))
+            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 28, height: 28)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .meeshyTapTarget()
     }
 }
 
