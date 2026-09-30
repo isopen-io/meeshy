@@ -193,7 +193,7 @@ export function StudioVisualEffects({
     );
   };
   return (
-    <div role="group" aria-label={translate(lang, 'story.studio.effect.visual')} data-story-visual-effects className="flex gap-2 overflow-x-auto pb-0.5">
+    <div role="group" aria-label={translate(lang, 'story.studio.effect.visual')} data-story-visual-effects className="flex gap-2 overflow-x-auto p-1">
       {tile(null)}
       {STORY_FILTERS.map(tile)}
     </div>

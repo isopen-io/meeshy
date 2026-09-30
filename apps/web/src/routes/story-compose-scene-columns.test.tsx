@@ -184,6 +184,15 @@ describe('l’appui long sur le FOND ouvre son menu de verre (#8716, #8717)', ()
     expect(document.querySelector('[data-story-object-action="remove"]')?.getAttribute('style')).toContain('var(--color-error)');
   });
 
+  test('le clavier y arrive aussi : un bouton nommé « Fond de la scène » ouvre le même menu', async () => {
+    const el = mount(seeded({ background: 'image' }).deps, 'POST');
+    await flush(() => el.querySelector('[data-story-background-menu]') !== null);
+    expect(el.querySelector('[data-story-background-menu]')?.textContent).toBe('Fond de la scène');
+    click(el.querySelector('[data-story-background-menu]'));
+    await flush(() => document.querySelector('[data-story-object-menu]') !== null);
+    expect(entries()).toEqual(['edit', 'retake', 'forward', 'remove']);
+  });
+
   test('« Reprendre une photo » ouvre le viseur ARMÉ ; le refermer laisse le fond intact', async () => {
     const el = mount(seeded({ background: 'image' }).deps, 'POST');
     await flush(() => backgroundImage(el) !== null);

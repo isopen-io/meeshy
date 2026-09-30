@@ -217,6 +217,21 @@ export function StudioScene({
               {...(objects.onBackgroundMenu !== undefined ? { onBackgroundMenu: objects.onBackgroundMenu } : {})}
             />
             {capture !== null ? <StudioQuickCaptureHint lang={lang} capture={capture} /> : null}
+            {/* La voie du CLAVIER vers le menu du fond (#8716) — un clavier ne
+                tient pas un doigt : le menu s'ouvre au centre de la carte. */}
+            {objects.onBackgroundMenu !== undefined ? (
+              <button
+                type="button"
+                className="sr-only"
+                data-story-background-menu
+                onClick={(event) => {
+                  const box = event.currentTarget.parentElement?.getBoundingClientRect();
+                  objects.onBackgroundMenu?.({ x: box === undefined ? 0 : box.left + box.width / 2, y: box === undefined ? 0 : box.top + box.height / 2 });
+                }}
+              >
+                {translate(lang, 'story.studio.background.menu.title')}
+              </button>
+            ) : null}
             {/* La voie du CLAVIER et du lecteur d'écran : un bouton par objet. */}
             {objects.items.map((object) => (
               <button
