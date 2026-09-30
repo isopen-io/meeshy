@@ -1009,7 +1009,7 @@ struct ConversationView: View {
                     CallSummaryDetailSheet(
                         summary: summary,
                         isOutgoing: summary.initiatorId == viewModel.currentUserIdForView,
-                        accentHex: accentColor,
+                        accentColor: accentColor,
                         timestamp: msg.createdAt,
                         onCallBack: { s in viewModel.callBack(for: s) }
                     )
@@ -2346,7 +2346,7 @@ struct ConversationView: View {
     private var readingModeChipModel: ReadingModeChipModel {
         ReadingModeChipModel(
             label: ReadingModeLensCatalog.title(for: readingModeController.mode),
-            accentHex: accentColor,
+            accentColor: accentColor,
             isAuto: readingModeController.decision.reason != .sticky
                 && readingModeController.decision.reason != .flagDisabled
         )
@@ -2467,7 +2467,7 @@ struct ConversationView: View {
     }
 
     private var expandedHeaderBackground: AnyView {
-        AnyView(ConversationHeaderGlass(shape: headerLayout.glassShape, accentHex: accentColor, secondaryHex: secondaryColor))
+        AnyView(ConversationHeaderGlass(shape: headerLayout.glassShape, accentColor: accentColor, secondaryColor: secondaryColor))
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
