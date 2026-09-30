@@ -49,6 +49,7 @@ const EYE = { cx: 78.5, cy: 37 } as const;
 const INK = 'var(--ios-indigo-950)';
 const COIN = 'var(--ios-meesh-silver)';
 const GOLD = 'var(--ios-warning)';
+const ON_INK = 'var(--ios-on-brand)';
 
 const CELEBRATES: ReadonlySet<MascotMood> = new Set(['cheer', 'minting']);
 
@@ -60,7 +61,7 @@ function Coin({ filter }: { readonly filter?: string }) {
   return (
     <g data-mascot-coin data-mascot-motion="coin" {...(filter !== undefined ? { filter } : {})}>
       <circle cx="112" cy="20" r="9" fill={COIN} />
-      <circle cx="112" cy="20" r="6" fill="none" stroke="var(--ios-on-brand)" strokeWidth="1.6" opacity="0.75" />
+      <circle cx="112" cy="20" r="6" fill="none" stroke={ON_INK} strokeWidth="1.6" opacity="0.75" />
       <text x="112" y="23.5" textAnchor="middle" fontSize="9" fontWeight="800" fill={INK}>
         M
       </text>
@@ -74,7 +75,7 @@ function PaintedEyes({ mood, stroke }: { readonly mood: MascotMood; readonly str
   ) : (
     <g data-mascot-eyes="open">
       <circle cx={EYE.cx} cy={EYE.cy} r="3.8" fill={INK} />
-      <circle cx={EYE.cx + 1.2} cy={EYE.cy - 1.3} r="1.2" fill="var(--ios-on-brand)" />
+      <circle cx={EYE.cx + 1.2} cy={EYE.cy - 1.3} r="1.2" fill={ON_INK} />
     </g>
   );
 }
@@ -106,14 +107,23 @@ function Aquarelle({ mood, uid }: Parts) {
         </filter>
       </defs>
       <g filter={filter}>
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.wingBack} fill="#99f6e4" opacity="0.55" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.tail} fill="#2dd4bf" opacity="0.85" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.body} fill="#5eead4" opacity="0.9" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.back} fill="#818cf8" opacity="0.75" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.belly} fill="#f0fdfa" opacity="0.8" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <circle {...HEAD} fill="#818cf8" opacity="0.9" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.gorget} fill="#fb7185" opacity="0.9" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.beak} fill="#3f3d63" />
+        {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
         <path d={GEOMETRY.wing} fill="#a7f3d0" opacity="0.85" />
       </g>
       <PaintedEyes mood={mood} stroke={2.6} />
@@ -132,22 +142,33 @@ function Realiste({ mood, uid }: Parts) {
     <>
       <defs>
         <linearGradient id={plume} x1="0" y1="0" x2="1" y2="1">
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0" stopColor="#4f46e5" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0.45" stopColor="#0ea5a4" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="1" stopColor="#047857" />
         </linearGradient>
         <linearGradient id={crown} x1="0" y1="0" x2="1" y2="1">
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0" stopColor="#6366f1" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="1" stopColor="#0d9488" />
         </linearGradient>
         <radialGradient id={ruby} cx="0.6" cy="0.3" r="0.8">
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0" stopColor="#fb7185" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0.6" stopColor="#e11d48" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="1" stopColor="#881337" />
         </radialGradient>
         <linearGradient id={feather} x1="0" y1="1" x2="0" y2="0">
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0" stopColor="#115e59" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="0.6" stopColor="#5eead4" />
+          {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
           <stop offset="1" stopColor="#ccfbf1" />
         </linearGradient>
         <filter id={blur} x="-20%" y="-20%" width="140%" height="140%">
@@ -155,9 +176,12 @@ function Realiste({ mood, uid }: Parts) {
         </filter>
       </defs>
       <path d={GEOMETRY.wingBack} fill={`url(#${feather})`} opacity="0.45" filter={`url(#${blur})`} />
+      {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
       <path d={GEOMETRY.tail} fill="#115e59" />
       <path d={GEOMETRY.body} fill={`url(#${plume})`} />
+      {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
       <path d={GEOMETRY.belly} fill="#e0f2f1" opacity="0.75" />
+      {/* harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome */}
       <path d="M48 52 q6 -2 10 0 M44 58 q6 -2 10 0 M52 46 q5 -2 9 0" fill="none" stroke="#99f6e4" strokeWidth="0.8" opacity="0.55" />
       <circle {...HEAD} fill={`url(#${crown})`} />
       <path d={GEOMETRY.gorget} fill={`url(#${ruby})`} />
@@ -166,6 +190,7 @@ function Realiste({ mood, uid }: Parts) {
       <path
         d="M60 40 C52 28 50 16 54 6 M61 38 C57 28 57 18 58 9 M59 39 C49 30 46 20 48 11"
         fill="none"
+        // harmony-exempt: plumage peint du colibri, une teinte d'illustration et non du chrome
         stroke="#0f766e"
         strokeWidth="0.7"
         opacity="0.6"

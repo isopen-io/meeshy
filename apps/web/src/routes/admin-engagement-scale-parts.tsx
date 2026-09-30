@@ -326,7 +326,7 @@ function ScaleEditor({
           disabled={saving}
           data-scale-save
           className="rounded-chip px-5 text-body font-semibold"
-          style={{ minHeight: 44, backgroundColor: BRAND, color: 'white', opacity: saving ? 0.6 : 1 }}
+          style={{ minHeight: 44, backgroundColor: BRAND, color: 'var(--ios-on-brand)', opacity: saving ? 0.6 : 1 }}
         >
           {translateAdmin(language, saving ? 'admin.scale.saving' : 'admin.scale.save')}
         </button>
