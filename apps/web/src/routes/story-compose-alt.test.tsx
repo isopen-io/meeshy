@@ -7,9 +7,9 @@ import { VIEWER_ID, flush, harness, mount, onePageSnapshot, publishButton, regis
 /**
  * UN MÉDIA PORTE SON TEXTE ALTERNATIF, LE FOND CHOISIT SON FILTRE (#8518) —
  * miroir de `ComposerObjectEditorView+Media.swift` (« ⌾ Décrire »). L'alt se
- * saisit dans la plaque du calque et dans le Cadre du fond, et PART en
+ * saisit dans la plaque du calque et dans l’outil « Décrire » du fond, et PART en
  * `mediaAlt` (`{ postMediaId → texte }`, `CreatePostSchema.mediaAlt`) — le
- * témoin lit la REQUÊTE envoyée. Le filtre du fond se choisit dans le Cadre et
+ * témoin lit la REQUÊTE envoyée. Le filtre du fond se choisit dans son outil et
  * part sur le seul objet `background`.
  */
 registerStudioBench();
@@ -45,7 +45,7 @@ const sentObjects = (post: Record<string, unknown> | undefined): readonly SentOb
   (post?.storyEffects as { scenes: { objects: SentObject[] }[] }).scenes[0]!.objects;
 
 describe('le texte alternatif d’un média part en `mediaAlt`', () => {
-  test('l’alt du calque (sa plaque) et celui du fond (le Cadre) partent, chacun sur SON média', async () => {
+  test('l’alt du calque (sa plaque) et celui du fond (son outil « Décrire ») partent, chacun sur SON média', async () => {
     const bench = seeded();
     const el = mount(bench.deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
@@ -55,9 +55,11 @@ describe('le texte alternatif d’un média part en `mediaAlt`', () => {
     click(el.querySelector('[data-story-edit-done]'));
 
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-option="background:describe"]') !== null);
+    click(el.querySelector('[data-story-option="background:describe"]'));
     await flush(() => el.querySelector('#story-studio-alt-visual') !== null);
     write(el.querySelector<HTMLInputElement>('#story-studio-alt-visual'), 'Une plage au lever du jour');
-    click(el.querySelector('[data-story-frame-done]'));
+    click(el.querySelector('[data-story-option="background:exit"]'));
 
     click(publishButton(el));
     await flush(() => bench.posts.length === 1);
@@ -77,23 +79,27 @@ describe('le texte alternatif d’un média part en `mediaAlt`', () => {
     const el = mount(seeded().deps, 'STORY');
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-option="background:describe"]') !== null);
+    click(el.querySelector('[data-story-option="background:describe"]'));
     await flush(() => el.querySelector('#story-studio-alt-visual') !== null);
     expect(el.querySelector('#story-studio-alt-visual')?.getAttribute('aria-label')).toBe('Texte alternatif');
     expect(el.querySelector('#story-studio-alt-visual')?.getAttribute('placeholder')).toBe('Décrivez ce média pour les lecteurs d’écran');
   });
 });
 
-describe('le filtre du FOND se choisit dans le Cadre', () => {
-  test('choisi dans le Cadre, il part sur le fond seul, jamais sur le calque', async () => {
+describe('le filtre du FOND se choisit dans son outil « Filtre »', () => {
+  test('choisi dans l’outil du fond, il part sur le fond seul, jamais sur le calque', async () => {
     const bench = seeded();
     const el = mount(bench.deps, 'STORY');
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     click(el.querySelector('[data-story-option="frame"]'));
-    await flush(() => el.querySelector('[data-story-frame-panel] [data-story-option="filter:warm"]') !== null);
-    expect(el.querySelector('[data-story-frame-panel] [data-story-option="filter:none"]')?.getAttribute('aria-pressed')).toBe('true');
-    click(el.querySelector('[data-story-frame-panel] [data-story-option="filter:warm"]'));
-    expect(el.querySelector('[data-story-frame-panel] [data-story-option="filter:warm"]')?.getAttribute('aria-pressed')).toBe('true');
-    click(el.querySelector('[data-story-frame-done]'));
+    await flush(() => el.querySelector('[data-story-option="background:filter"]') !== null);
+    click(el.querySelector('[data-story-option="background:filter"]'));
+    await flush(() => el.querySelector('[data-story-background-tool="filter"] [data-story-option="filter:warm"]') !== null);
+    expect(el.querySelector('[data-story-background-tool="filter"] [data-story-option="filter:none"]')?.getAttribute('aria-pressed')).toBe('true');
+    click(el.querySelector('[data-story-background-tool="filter"] [data-story-option="filter:warm"]'));
+    expect(el.querySelector('[data-story-background-tool="filter"] [data-story-option="filter:warm"]')?.getAttribute('aria-pressed')).toBe('true');
+    click(el.querySelector('[data-story-option="background:exit"]'));
     click(publishButton(el));
     await flush(() => bench.posts.length === 1);
     const objects = sentObjects(bench.posts[0]);

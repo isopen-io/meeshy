@@ -292,19 +292,19 @@ async function runScheme(colorScheme) {
     check(solHache, `${tag} : le sol doit être peint du thumbhash du COMPOSITE de la scène ([data-story-studio-floor="hash"])`);
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */
-    /* LOT 6 : « Retirer le fond » vit dans la plaque du Cadre (le média prêt
-       n'a plus de ligne visible en bas) — on l'ouvre pour mesurer. */
+    /* « Retirer le fond » est un geste du RAIL des outils du fond (#8849,
+       l'ancien panneau Cadre retiré) — on l'ouvre pour mesurer. */
     const avantCadre = await targetSizesOf(page, ['input[data-door="visual"]', 'input[data-door="sound"]', '[data-story-publish]', '[data-story-studio-sound-toggle]']);
     await page.click('[data-story-option="frame"]');
-    await page.waitForSelector('[data-story-frame-remove]', { timeout: 8000 });
+    await page.waitForSelector('[data-story-option="object:remove"]', { timeout: 8000 });
     /* Plaque ouverte en bas, le SOCLE se retire sur mobile (lot 6). */
     const socleRetire = await page.evaluate(() => {
       const row = document.querySelector('[data-story-socle-row]');
       return row === null || getComputedStyle(row).display === 'none';
     });
-    check(socleRetire, `${tag} : plaque du Cadre ouverte, le socle doit se retirer sur mobile`);
-    const tailles = { ...avantCadre, ...(await targetSizesOf(page, ['[data-story-frame-remove]'])) };
-    await page.click('[data-story-frame-done]');
+    check(socleRetire, `${tag} : outils du fond ouverts, le socle doit se retirer sur mobile`);
+    const tailles = { ...avantCadre, ...(await targetSizesOf(page, ['[data-story-option="object:remove"]'])) };
+    await page.click('[data-story-option="background:exit"]');
     for (const [selector, size] of Object.entries(tailles)) {
       // Les `<input type=file>` sont masqués (`sr-only`) : c'est leur `<label>`
       // englobant (`StudioDoorButton`) qui porte la cible visible et cliquable.
@@ -871,7 +871,7 @@ for (const viewport of [
   await twoFrames(page);
   const framed = await geometry();
   check(framed.overflow <= 0, `${tag} : la page déborde de ${framed.overflow} px panneau Cadre ouvert`);
-  await page.click('[data-story-frame-done]');
+  await page.click('[data-story-option="background:exit"]');
   // Le calque se pose AVANT d'ouvrir Animé : la frise retire les couloirs.
   await page.setInputFiles('input[data-door="overlay"]', { name: 'calque.png', mimeType: 'image/png', buffer: icon });
   await page.waitForSelector('[data-scene-object-id="overlay"]', { timeout: 8000 });
