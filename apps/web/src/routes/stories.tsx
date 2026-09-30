@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useStore } from 'zustand';
 
 import { Avatar } from '@/components/avatar';
+import { BUTTON } from '@/components/ui-chrome';
 import { apiDeps } from '@/lib/api/deps';
 import { useStoryTray } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
@@ -62,8 +63,7 @@ export function StoriesEmpty({ language }: { readonly language: InterfaceLanguag
       </p>
       <Link
         to="storyCompose"
-        className="grid place-items-center rounded-chip px-5 py-2 text-body font-semibold text-white"
-        style={{ background: 'var(--color-ios-brand)' }}
+        className={BUTTON.primary}
       >
         {translate(language, 'stories.create')}
       </Link>
@@ -81,8 +81,8 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
     <Link
       to="story"
       params={{ post: group.entryStoryId }}
-      className="flex w-full items-center gap-3 rounded-card px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ backgroundColor: 'var(--color-ios-card)', outlineColor: 'var(--color-ios-brand)' }}
+      className="flex w-full items-center gap-3 rounded-card px-3 py-2.5"
+      style={{ backgroundColor: 'var(--color-ios-card)' }}
     >
       <span
         className="grid shrink-0 place-items-center rounded-chip"
@@ -90,7 +90,7 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
           padding: '2px',
           background: group.hasUnseen
             ? 'var(--color-ios-brand)'
-            : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
+            : 'var(--color-ios-outline)',
         }}
       >
         <Avatar
