@@ -2,11 +2,13 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
-import type { AdminPermissions } from '@/lib/admin/sections';
+import { visibleAdminSections, type AdminPermissions } from '@/lib/admin/sections';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
+import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/admin-assertions';
+import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import AdminScreen from './admin';
@@ -34,7 +36,7 @@ import AdminScreen from './admin';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadAdminInterfaceCatalog('fr');
   await loadInterfaceCatalog('fr');
@@ -106,5 +108,80 @@ describe('le hub d’administration mène à chacune de ses pièces', () => {
   test('un MODERATOR sans `canManageAgent` ne voit pas l’agent non plus', async () => {
     const host = await hub('MODERATOR', { ...MATRICE, canManageAgent: false });
     expect(tuiles(host)).not.toContain('agent');
+  });
+});
+
+/**
+ * **LE HUB EST LE REFLET EXACT DE CE QUE LE LECTEUR PEUT OUVRIR** (#8876) — ses
+ * attentes sont DÉRIVÉES de `visibleAdminSections`, jamais une liste écrite :
+ * dix lots basculent leur drapeau de disponibilité à tour de rôle, et une liste
+ * épinglée ici changerait à chaque bascule, pour des raisons qui n'ont rien à
+ * voir avec le hub.
+ */
+describe('le hub reflète `visibleAdminSections`, groupe par groupe', () => {
+  const attendues = (role: string, permissions: AdminPermissions = MATRICE) =>
+    visibleAdminSections(permissions, role)
+      .filter((section) => section.id !== 'dashboard')
+      .map((section) => section.id);
+
+  test('un BIGBOSS voit une tuile pour chaque section qu’il peut ouvrir — ni plus, ni moins', async () => {
+    const host = await hub('BIGBOSS');
+    expect([...tuiles(host)].sort()).toEqual([...attendues('BIGBOSS')].sort());
+  });
+
+  test('un MODERATOR : exactement ce que son rôle ouvre', async () => {
+    const identite = adminIdentityFixture({ role: 'MODERATOR' });
+    const host = await hub('MODERATOR', identite.permissions);
+    expect([...tuiles(host)].sort()).toEqual([...attendues('MODERATOR', identite.permissions)].sort());
+  });
+
+  test('les tuiles sont RANGÉES par groupe, chaque groupe porte son titre', async () => {
+    const host = await hub('BIGBOSS');
+    const groupes = [...host.querySelectorAll('[data-admin-group]')];
+
+    expect(groupes.length).toBeGreaterThan(0);
+    for (const groupe of groupes) {
+      expect(groupe.querySelector('h2')?.textContent ?? '').not.toBe('');
+      expect(groupe.querySelectorAll('[data-admin-section]').length).toBeGreaterThan(0);
+    }
+  });
+
+  test('aucune tuile ne mène vers une section pas prête — jamais un écran d’attente', async () => {
+    const host = await hub('BIGBOSS');
+    for (const id of tuiles(host)) {
+      expect(visibleAdminSections(MATRICE, 'BIGBOSS').map((section) => section.id)).toContain(id);
+    }
+  });
+
+  test('le sous-titre dit le rôle servi en mots — jamais « BIGBOSS »', async () => {
+    const host = await hub('BIGBOSS');
+    expect(host.querySelector('[data-admin-page-header] p')?.textContent).toBe('Connecté en tant que Créateur');
+    expectNoRawIdentifiers(host);
+  });
+
+  test('chaque tuile porte sa ligne d’aide sous son libellé', async () => {
+    const host = await hub('BIGBOSS');
+    for (const tuile of host.querySelectorAll('[data-admin-section]')) {
+      expect((tuile.querySelectorAll('span > span')[1]?.textContent ?? '').length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('le hub reste DANS l’espace où l’on est (D-76)', () => {
+  test('depuis /adm, chaque tuile mène sous /adm — jamais à /admin', async () => {
+    const host = await mountAdminAt(mounter, '/adm', adminIdentityFixture({ role: 'BIGBOSS' }), '[data-admin-directory]');
+    const liens = [...host.querySelectorAll('[data-admin-section]')].map((lien) => lien.getAttribute('href') ?? '');
+
+    expect(liens.length).toBeGreaterThan(0);
+    expect(liens.filter((href) => !href.startsWith('/adm/'))).toEqual([]);
+    resetAdminRouter();
+  });
+
+  test('depuis /admin, chaque tuile mène sous /admin', async () => {
+    const host = await mountAdminAt(mounter, '/admin', adminIdentityFixture({ role: 'BIGBOSS' }), '[data-admin-directory]');
+    const liens = [...host.querySelectorAll('[data-admin-section]')].map((lien) => lien.getAttribute('href') ?? '');
+
+    expect(liens.filter((href) => !href.startsWith('/admin/'))).toEqual([]);
+    resetAdminRouter();
   });
 });

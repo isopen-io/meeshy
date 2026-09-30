@@ -3,11 +3,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { act } from 'react';
 
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
-import type { AdminPermissions } from '@/lib/admin/sections';
+import { visibleAdminSections, type AdminPermissions } from '@/lib/admin/sections';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
+import { adminIdentityFixture } from '@/test-support/admin-assertions';
+import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminScreenFrame } from './admin-shell';
@@ -23,7 +25,7 @@ import { AdminScreenFrame } from './admin-shell';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadAdminInterfaceCatalog('fr');
   await loadInterfaceCatalog('fr');
@@ -77,7 +79,8 @@ describe('le menu latéral d’administration', () => {
     const hote = await cadre('ADMIN');
     const menu = hote.querySelector('[data-admin-sidebar]');
 
-    expect(entrees(menu ?? hote)).toEqual(['dashboard', 'users', 'anonymous', 'conversations']);
+    expect(entrees(menu ?? hote)).toEqual(visibleAdminSections(MATRICE, 'ADMIN').map((section) => section.id));
+    expect(entrees(menu ?? hote)).toContain('anonymous');
     expect(hote.querySelector('[data-contenu]')?.textContent).toBe('contenu');
   });
 
@@ -182,5 +185,79 @@ describe('l’en-tête « ‹ Comptes » et son action', () => {
     const hote = await cadre('ADMIN');
     expect(hote.querySelector('header h1')?.textContent).toBe('Comptes');
     expect(hote.querySelector('[data-admin-back-label]')).toBeNull();
+  });
+});
+
+/**
+ * **LE MENU EST GROUPÉ** (#8876) — sept groupes titrés, dans l'ordre où ils se
+ * lisent, et un groupe sans section visible n'est pas rendu. Replié en rail, le
+ * titre cède la place à un séparateur : les groupes restent lisibles sans mot.
+ */
+describe('le menu latéral groupé', () => {
+  const groupes = (racine: ParentNode): readonly string[] =>
+    [...racine.querySelectorAll('[data-admin-nav-group]')].map((n) => n.getAttribute('data-admin-nav-group') ?? '');
+
+  test('range les sections sous leur groupe, dans l’ordre des groupes', async () => {
+    const hote = await cadre('ADMIN');
+    const visibles = visibleAdminSections(MATRICE, 'ADMIN');
+    const attendus = [...new Set(visibles.map((section) => section.group))];
+
+    expect(groupes(hote)).toEqual(attendus);
+    for (const groupe of hote.querySelectorAll('[data-admin-nav-group]')) {
+      const id = groupe.getAttribute('data-admin-nav-group');
+      const dedans = [...groupe.querySelectorAll('[data-admin-nav]')].map((n) => n.getAttribute('data-admin-nav'));
+      expect(dedans).toEqual(visibles.filter((section) => section.group === id).map((section) => section.id));
+    }
+  });
+
+  test('chaque groupe affiche son titre, déplié', async () => {
+    const hote = await cadre('ADMIN');
+    const titres = [...hote.querySelectorAll('[data-admin-sidebar] [data-admin-nav-group] > p')].map((p) => p.textContent);
+
+    expect(titres.length).toBeGreaterThan(0);
+    expect(titres.every((titre) => (titre ?? '').length > 0)).toBe(true);
+  });
+
+  test('replié, les titres cèdent la place à des séparateurs — et chaque entrée garde son nom', async () => {
+    const hote = await cadre('ADMIN');
+    act(() => hote.querySelector<HTMLButtonElement>('[data-admin-sidebar-toggle]')?.click());
+
+    expect(hote.querySelectorAll('[data-admin-sidebar] [data-admin-nav-group] > p')).toHaveLength(0);
+    expect(hote.querySelectorAll('[data-admin-sidebar] [data-admin-nav-group] > hr').length).toBe(groupes(hote).length - 1);
+    expect(hote.querySelector('[data-admin-sidebar] [data-admin-nav="users"]')?.getAttribute('title')).toBe('Comptes');
+  });
+
+  test('chaque entrée porte un GLYPHE du jeu d’administration, jamais un emoji', async () => {
+    const hote = await cadre('ADMIN');
+    for (const entree of hote.querySelectorAll('[data-admin-sidebar] [data-admin-nav]')) {
+      expect(entree.querySelector('svg')).not.toBeNull();
+      expect(entree.textContent ?? '').not.toMatch(/\p{Extended_Pictographic}/u);
+    }
+  });
+
+  test('un MODERATOR ne voit que les groupes qui portent au moins une de ses sections', async () => {
+    const identite = adminIdentityFixture({ role: 'MODERATOR' });
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, identite);
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminScreenFrame language="fr" title="Comptes" back="admin">
+          <p>contenu</p>
+        </AdminScreenFrame>
+      </QueryClientProvider>,
+    );
+    const attendus = [...new Set(visibleAdminSections(identite.permissions, 'MODERATOR').map((section) => section.group))];
+
+    expect(groupes(hote)).toEqual(attendus);
+  });
+});
+
+describe('le retour et le menu restent dans l’espace courant (D-76)', () => {
+  test('depuis /adm, chaque entrée du menu mène sous /adm', async () => {
+    const hote = await mountAdminAt(mounter, '/adm/users', adminIdentityFixture({ role: 'ADMIN' }), '[data-admin-sidebar]');
+    const liens = [...hote.querySelectorAll('[data-admin-sidebar] [data-admin-nav]')].map((lien) => lien.getAttribute('href') ?? '');
+
+    expect(liens.length).toBeGreaterThan(0);
+    expect(liens.filter((href) => !(href === '/adm' || href.startsWith('/adm/')))).toEqual([]);
+    resetAdminRouter();
   });
 });

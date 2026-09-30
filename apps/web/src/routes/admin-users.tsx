@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
-import { adminIdentityQueryOptions, adminUsersQueryKey, loadAdminUsers, type AdminUserRow } from '@/lib/api/admin';
+import { adminIdentityQueryOptions } from '@/lib/api/admin';
+import { adminUsersQueryKey, loadAdminUsers, type AdminUserRow } from '@/lib/api/admin-users';
 import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { adminMoment } from '@/lib/admin/format';

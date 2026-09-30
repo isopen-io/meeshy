@@ -7,7 +7,7 @@ import { resetAbsentMedia } from './media-absent';
 import { reactionStore } from './reaction-store';
 /* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
    depuis le socle sans y tirer les décodeurs d'administration (#6862). */
-import { estClefSouveraine } from './souverain';
+import { estClefNonPersistable } from './souverain';
 import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
@@ -147,7 +147,7 @@ export function persistableQuery(query: {
   readonly state: { readonly status: string };
   readonly queryKey: readonly unknown[];
 }): boolean {
-  return query.state.status === 'success' && !estClefSouveraine(query.queryKey);
+  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey);
 }
 
 export type CreateAppQueryClientOptions = {

@@ -2,9 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
+import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { Glyph } from '@/components/glyph';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
+import type { AdminBack } from '@/lib/admin/admin-routes';
 import {
   activeAdminSectionId,
   adminSpaceOf,
@@ -13,7 +15,7 @@ import {
   writeSidebarFolded,
   type AdminSpace,
 } from '@/lib/admin/admin-space';
-import { visibleAdminSections, type ServedAdminSection } from '@/lib/admin/sections';
+import { ADMIN_GROUPS, visibleAdminSections, type ServedAdminSection } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -47,9 +49,8 @@ const BRAND = 'var(--color-ios-brand)';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 const SURFACE = 'var(--color-ios-surface)';
+const INK3 = 'var(--color-ios-ink-3)';
 const EDGE = 'var(--color-edge)';
-
-type Back = 'list' | 'admin' | 'adminUsers' | 'admUsers' | 'adminAnonymous' | 'admAnonymous';
 
 function MenuGlyph() {
   return (
@@ -59,6 +60,54 @@ function MenuGlyph() {
   );
 }
 
+function AdminNavItem({
+  language,
+  section,
+  space,
+  active,
+  folded,
+  onNavigate,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly section: ServedAdminSection;
+  readonly space: AdminSpace;
+  readonly active: string | null;
+  readonly folded: boolean;
+  readonly onNavigate?: () => void;
+}) {
+  const libelle = translateAdmin(language, section.labelKey);
+  const actif = section.id === active;
+  return (
+    <li>
+      <Link
+        to={routeInSpace(section.route, space)}
+        data-admin-nav={section.id}
+        aria-current={actif ? 'page' : undefined}
+        title={folded ? libelle : undefined}
+        {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
+        className={`flex items-center gap-3 rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
+        style={{
+          minHeight: 44,
+          outlineColor: BRAND,
+          color: actif ? BRAND : INK,
+          fontWeight: actif ? 600 : 500,
+          backgroundColor: actif ? 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' : 'transparent',
+        }}
+      >
+        <span aria-hidden="true" className="shrink-0">
+          <AdminGlyph name={section.glyph} size={18} />
+        </span>
+        <span className={folded ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{libelle}</span>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * LE MENU GROUPÉ (#8876) — sept groupes titrés, dans l'ordre où ils se lisent ;
+ * un groupe sans section visible n'est pas rendu. Replié en rail d'icônes, le
+ * titre cède la place à un séparateur : les groupes restent lisibles sans mot.
+ */
 function AdminNav({
   language,
   sections,
@@ -74,38 +123,36 @@ function AdminNav({
   readonly folded: boolean;
   readonly onNavigate?: () => void;
 }) {
+  const groupes = ADMIN_GROUPS.map((groupe) => ({ groupe, entrees: sections.filter((section) => section.group === groupe.id) })).filter(
+    ({ entrees }) => entrees.length > 0,
+  );
+
   return (
     <nav aria-label={translateAdmin(language, 'admin.shell.menu')} className="min-h-0 flex-1 overflow-y-auto px-2">
-      <ul className="grid gap-1">
-        {sections.map((section) => {
-          const libelle = translateAdmin(language, section.labelKey);
-          const actif = section.id === active;
-          return (
-            <li key={section.id}>
-              <Link
-                to={routeInSpace(section.route, space)}
-                data-admin-nav={section.id}
-                aria-current={actif ? 'page' : undefined}
-                title={folded ? libelle : undefined}
-                {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
-                className={`flex items-center gap-3 rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
-                style={{
-                  minHeight: 44,
-                  outlineColor: BRAND,
-                  color: actif ? BRAND : INK,
-                  fontWeight: actif ? 600 : 500,
-                  backgroundColor: actif ? 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' : 'transparent',
-                }}
-              >
-                <span aria-hidden="true" className="shrink-0 text-body">
-                  {section.glyph}
-                </span>
-                <span className={folded ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{libelle}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      {groupes.map(({ groupe, entrees }, index) => (
+        <div key={groupe.id} data-admin-nav-group={groupe.id} role="group" aria-label={translateAdmin(language, groupe.labelKey)}>
+          {folded ? (
+            index === 0 ? null : <hr aria-hidden="true" className="mx-3 my-2" style={{ border: 0, borderTop: `1px solid ${EDGE}` }} />
+          ) : (
+            <p aria-hidden="true" className="px-3 pb-1 pt-4 text-caption font-semibold uppercase" style={{ color: INK3 }}>
+              {translateAdmin(language, groupe.labelKey)}
+            </p>
+          )}
+          <ul className="grid gap-1">
+            {entrees.map((section) => (
+              <AdminNavItem
+                key={section.id}
+                language={language}
+                section={section}
+                space={space}
+                active={active}
+                folded={folded}
+                {...(onNavigate === undefined ? {} : { onNavigate })}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -159,7 +206,7 @@ export function AdminHeader({
    * Un écran de DÉTAIL revient à la liste d'où l'on vient, et dans l'ESPACE
    * d'où l'on vient (#6819, D-76). Le menu latéral couvre le reste.
    */
-  readonly back: Back;
+  readonly back: AdminBack;
   readonly onMenu?: () => void;
   readonly heading?: AdminHeading;
   /** Le libellé posé à droite du chevron de retour quand le titre vit dans le contenu. */
@@ -306,7 +353,7 @@ export function AdminScreenFrame({
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
-  readonly back: Back;
+  readonly back: AdminBack;
   /** Voir `AdminHeading` — `'content'` : l'écran pose son `<h1>` lui-même. */
   readonly heading?: AdminHeading;
   readonly backLabel?: string;

@@ -1043,3 +1043,98 @@ emit({
   type: 'ExportCardGlyphName',
   role: "LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) : les onglets du plateau et les gestes de l'en-tete, charge avec la feuille d'export.",
 });
+
+/**
+ * LE JEU D'ECRAN DE L'ADMINISTRATION (#8876) — le kit (`components/admin/*`)
+ * et le menu groupe. Charge avec les routes `/adm` et `/admin`, jamais dans
+ * le socle : un lecteur qui n'ouvre jamais l'administration ne paie pas un
+ * octet de ces tracés (`budgets.json`, `first_paint`).
+ *
+ * | usage | phosphor |
+ * |---|---|
+ * | sections du menu | `squares-four` (tableau de bord), `users`, `detective` (anonymes), `handshake` (demandes de contact), `chats`, `users-three` (communautés), `link-simple`, `newspaper`, `flag`, `scroll` (journal), `chart-line`, `trophy`, `target` (suivi), `megaphone`, `heartbeat`, `translate`, `robot`, `gear` |
+ * | entités liées | `user`, `detective`, `handshake`, `chats`, `users-three`, `link-simple`, `newspaper`, `flag`, `target`, `megaphone` |
+ * | états (ton) | `check-circle`, `warning`, `warning-circle`, `info`, `prohibit`, `lock`, `lock-open`, `shield-check`, `eye`, `eye-slash`, `hourglass` |
+ * | gestes | `pencil-simple`, `trash`, `paper-plane-tilt`, `plus`, `copy`, `arrow-clockwise`, `arrow-square-out`, `download-simple`, `user-minus`, `link-break` |
+ * | listes et graphiques | `magnifying-glass`, `funnel`, `x`, `check`, `caret-*`, `arrow-up`, `arrow-down`, `table`, `chart-bar`, `chart-pie-slice`, `trend-up`, `trend-down`, `minus`, `list`, `dots-three` |
+ * | métadonnées | `clock`, `calendar-blank`, `globe`, `phone-call`, `video-camera`, `image`, `file`, `microphone`, `database`, `cpu`, `lightning` |
+ */
+const ADMIN = [
+  'squares-four',
+  'users',
+  'detective',
+  'handshake',
+  'chats',
+  'users-three',
+  'link-simple',
+  'newspaper',
+  'flag',
+  'scroll',
+  'chart-line',
+  'trophy',
+  'target',
+  'megaphone',
+  'heartbeat',
+  'translate',
+  'robot',
+  'gear',
+  'magnifying-glass',
+  'funnel',
+  'x',
+  'check',
+  'check-circle',
+  'caret-right',
+  'caret-left',
+  'caret-down',
+  'caret-up',
+  'arrow-up',
+  'arrow-down',
+  'arrow-clockwise',
+  'copy',
+  'warning',
+  'warning-circle',
+  'info',
+  'prohibit',
+  'trash',
+  'lock',
+  'lock-open',
+  'shield-check',
+  'eye',
+  'eye-slash',
+  'pencil-simple',
+  'paper-plane-tilt',
+  'plus',
+  'arrow-square-out',
+  'clock',
+  'calendar-blank',
+  'globe',
+  'phone-call',
+  'video-camera',
+  'image',
+  'file',
+  'microphone',
+  'user',
+  'user-minus',
+  'database',
+  'cpu',
+  'lightning',
+  'hourglass',
+  'list',
+  'dots-three',
+  'download-simple',
+  'table',
+  'chart-bar',
+  'chart-pie-slice',
+  'trend-up',
+  'trend-down',
+  'minus',
+  'link-break',
+];
+
+emit({
+  ids: ADMIN,
+  output: join(HERE, '../src/components/glyphs-admin.ts'),
+  constant: 'ADMIN_GLYPHS',
+  type: 'AdminGlyphName',
+  role: "LE JEU D'ECRAN de l'administration (#8876) : le menu groupe et le kit, charge avec les routes /adm et /admin, jamais dans le socle.",
+});

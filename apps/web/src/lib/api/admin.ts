@@ -1,4 +1,3 @@
-import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { AdminPermissions } from '@/lib/admin/sections';
@@ -9,73 +8,32 @@ import type { ApiResult, HttpTransport } from './http';
 /**
  * **LE PORT DE L'ADMINISTRATION** (#6432) — `services/gateway/src/routes/admin/*`.
  *
- * Trois lectures, et c'est tout : la MATRICE de permissions, les COMPTEURS du
- * tableau de bord, la LISTE des comptes. Aucune écriture dans cette tranche —
- * bannir, changer un rôle ou réinitialiser un mot de passe restent au legacy
- * tant que leurs confirmations n'ont pas été portées, et une écriture
- * d'administration sans sa confirmation serait pire que son absence.
+ * Ce module ne garde plus que l'IDENTITÉ du lecteur — la matrice de
+ * permissions — et les lectures prudentes que tous les ports d'administration
+ * partagent (`asRecord`, `asCount`, `asText`, `pageServie`). Les compteurs du
+ * tableau de bord vivent dans `admin-dashboard.ts` et la liste des comptes dans
+ * `admin-users.ts` (#8876) : un port par ressource, chacun avec ses décodeurs
+ * et sa clé de requête.
  *
  * - `GET /me/permissions` — l'adresse CANONIQUE (`routes/me/permissions.ts`).
  *   Pas `/admin/me/permissions`, qui en est l'alias DÉPRÉCIÉ (#4350) : viser
  *   l'alias ferait porter à chaque ouverture de l'espace un en-tête `Deprecation`
  *   que rien ne justifie.
- * - `GET /admin/dashboard` — compteurs mis en cache 10 min côté serveur.
- * - `GET /admin/users?offset=&limit=&search=` — la liste paginée. **`offset`,
- *   jamais `page`** : c'est ce que `validatePagination` lit
- *   (`utils/pagination.ts`), et un `?page=2` serait simplement IGNORÉ — la
- *   deuxième page rendrait la première, sans erreur, indéfiniment.
  *
  * **Aucune branche `fixtures`.** Les autres ports en portent une parce que le
  * POC se capture sans passerelle ; l'administration, elle, n'a de sens que
  * SERVIE — un tableau de bord de démonstration afficherait des chiffres faux
  * dans un écran dont le métier est de dire le vrai. Sous `source: 'fixtures'`
- * les trois fonctions échouent proprement, et l'écran rend son refus.
+ * les lectures échouent proprement, et l'écran rend son refus.
  */
 
 export type AdminDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
 export const ADMIN_PERMISSIONS_QUERY_KEY = ['admin', 'permissions'] as const;
-export const ADMIN_DASHBOARD_QUERY_KEY = ['admin', 'dashboard'] as const;
-export const adminUsersQueryKey = (adresse: string) => ['admin', 'users', adresse] as const;
-
-export const ADMIN_USERS_PAGE_SIZE = 20;
 
 export type AdminIdentity = {
   readonly role: string;
   readonly permissions: AdminPermissions;
-};
-
-export type AdminDashboard = {
-  readonly totalUsers: number;
-  readonly activeUsers: number;
-  readonly totalMessages: number;
-  readonly totalCommunities: number;
-  readonly totalReports: number;
-  readonly newUsers24h: number;
-  readonly newMessages24h: number;
-};
-
-export type AdminUserRow = {
-  readonly id: string;
-  readonly username: string;
-  readonly displayName: string;
-  readonly email: string;
-  readonly role: string;
-  readonly isActive: boolean;
-  readonly isOnline: boolean;
-  readonly createdAt: string | null;
-  readonly avatar: string;
-  /** Masquée par la passerelle sous `canViewPresence` — `null` n'y veut pas dire « jamais ». */
-  readonly lastActiveAt: string | null;
-  readonly emailVerified: boolean;
-  readonly twoFactorEnabled: boolean;
-};
-
-export type AdminUsersPage = {
-  readonly users: readonly AdminUserRow[];
-  readonly total: number;
-  readonly offset: number;
-  readonly hasMore: boolean;
 };
 
 /**
@@ -208,110 +166,4 @@ export function adminIdentityQueryOptions(deps: AdminDeps) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   };
-}
-
-export function decodeAdminDashboard(raw: unknown): AdminDashboard {
-  const charge = asRecord(raw) ?? {};
-  const stats = asRecord(charge.statistics) ?? {};
-  const recent = asRecord(charge.recentActivity) ?? {};
-
-  return {
-    totalUsers: asCount(stats.totalUsers),
-    activeUsers: asCount(stats.activeUsers),
-    totalMessages: asCount(stats.totalMessages),
-    totalCommunities: asCount(stats.totalCommunities),
-    totalReports: asCount(stats.totalReports),
-    newUsers24h: asCount(recent.newUsers),
-    newMessages24h: asCount(recent.newMessages),
-  };
-}
-
-export async function loadAdminDashboard(
-  params: AdminDeps & { readonly signal?: AbortSignal },
-): Promise<ApiResult<AdminDashboard>> {
-  const result = await params.transport.request<unknown>({
-    method: 'GET',
-    path: adminEndpoints.dashboard,
-    ...(params.signal === undefined ? {} : { signal: params.signal }),
-  });
-  if (!result.ok) return result;
-
-  return { ok: true, data: decodeAdminDashboard(result.data) };
-}
-
-/**
- * La pagination est DANS `data`, pas à côté.
- *
- * `POST`/`GET /admin/users` répond par `sendSuccess(reply, { users, pagination })` —
- * l'objet `pagination` est donc une clé de la charge, là où d'autres routes du
- * dépôt le servent au niveau du `sendPaginatedSuccess`. Le lire au mauvais
- * endroit rendrait `total: 0` et `hasMore: false` : une liste qui s'arrête à
- * la première page sans que rien n'échoue.
- */
-export function decodeAdminUsers(raw: unknown, offset: number): AdminUsersPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.users) ? charge.users : Array.isArray(raw) ? raw : [];
-
-  const users = brut
-    .map((entree): AdminUserRow | null => {
-      const ligne = asRecord(entree);
-      if (ligne === null || typeof ligne.id !== 'string') return null;
-      const username = asText(ligne.username);
-      return {
-        id: ligne.id,
-        username,
-        // Le nom affiché retombe sur le pseudo — jamais une ligne sans nom
-        // dans un tableau où l'on cherche quelqu'un.
-        displayName: asText(ligne.displayName) || username,
-        email: asText(ligne.email),
-        role: asText(ligne.role) || 'USER',
-        isActive: ligne.isActive !== false,
-        isOnline: ligne.isOnline === true,
-        createdAt: typeof ligne.createdAt === 'string' ? ligne.createdAt : null,
-        avatar: asText(ligne.avatar),
-        lastActiveAt: typeof ligne.lastActiveAt === 'string' ? ligne.lastActiveAt : null,
-        emailVerified: typeof ligne.emailVerifiedAt === 'string' || ligne.emailVerified === true,
-        twoFactorEnabled: typeof ligne.twoFactorEnabledAt === 'string' || ligne.twoFactorEnabled === true,
-      };
-    })
-    .filter((ligne): ligne is AdminUserRow => ligne !== null);
-
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  // `hasMore` vient du SERVEUR quand il le dit ; sinon il se recalcule depuis
-  // l'offset et ce qui a été rendu — jamais depuis la seule longueur de page,
-  // qui vaut aussi bien « fin de liste » que « page pleine ».
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + users.length < total;
-
-  return { users, total: total || users.length, offset, hasMore };
-}
-
-export async function loadAdminUsers(
-  params: AdminDeps & {
-    readonly offset: number;
-    readonly search: string;
-    readonly limit?: number;
-    /** Le tri et les filtres d'une liste d'administration (#7873), déjà passés par la liste blanche de l'écran. */
-    readonly sortBy?: string;
-    readonly sortOrder?: 'asc' | 'desc';
-    readonly filters?: Readonly<Record<string, string>>;
-    readonly signal?: AbortSignal;
-  },
-): Promise<ApiResult<AdminUsersPage>> {
-  const query = new URLSearchParams({
-    offset: String(params.offset),
-    limit: String(params.limit ?? ADMIN_USERS_PAGE_SIZE),
-    ...(params.search.trim() === '' ? {} : { search: params.search.trim() }),
-    ...(params.sortBy === undefined ? {} : { sortBy: params.sortBy }),
-    ...(params.sortOrder === undefined ? {} : { sortOrder: params.sortOrder }),
-    ...params.filters,
-  });
-  const result = await params.transport.request<unknown>({
-    method: 'GET',
-    path: `${adminEndpoints.users}?${query.toString()}`,
-    ...(params.signal === undefined ? {} : { signal: params.signal }),
-  });
-  if (!result.ok) return result;
-
-  return { ok: true, data: decodeAdminUsers(result.data, params.offset) };
 }

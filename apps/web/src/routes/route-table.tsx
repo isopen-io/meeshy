@@ -61,6 +61,51 @@ const adminAnonymousOneScreen = () =>
   Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminAgentScreen = () =>
   Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+
+/* LES VINGT ÉCRANS D'ATTENTE DE LA VUE DE DIEU (#8876) — chaque route neuve
+   charge AUSSI le catalogue d'administration (`admin-catalog-loading.test.ts`),
+   et pointe d'abord vers un écran d'attente (`AdminStubScreen`) que le lot de
+   sa section remplace sans jamais revenir ici. */
+const adminInvitationsScreen = () =>
+  Promise.all([import('@/routes/admin-invitations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminInvitationScreen = () =>
+  Promise.all([import('@/routes/admin-invitation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminCommunitiesScreen = () =>
+  Promise.all([import('@/routes/admin-communities'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminCommunityScreen = () =>
+  Promise.all([import('@/routes/admin-community'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminShareLinksScreen = () =>
+  Promise.all([import('@/routes/admin-share-links'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminShareLinkScreen = () =>
+  Promise.all([import('@/routes/admin-share-link'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminPostsScreen = () =>
+  Promise.all([import('@/routes/admin-posts'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminPostScreen = () =>
+  Promise.all([import('@/routes/admin-post'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminReportsScreen = () =>
+  Promise.all([import('@/routes/admin-reports'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminReportScreen = () =>
+  Promise.all([import('@/routes/admin-report'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminAuditScreen = () =>
+  Promise.all([import('@/routes/admin-audit'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminAnalyticsScreen = () =>
+  Promise.all([import('@/routes/admin-analytics'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminRankingScreen = () =>
+  Promise.all([import('@/routes/admin-ranking'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminTrackingLinksScreen = () =>
+  Promise.all([import('@/routes/admin-tracking-links'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminTrackingLinkScreen = () =>
+  Promise.all([import('@/routes/admin-tracking-link'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminBroadcastsScreen = () =>
+  Promise.all([import('@/routes/admin-broadcasts'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminBroadcastScreen = () =>
+  Promise.all([import('@/routes/admin-broadcast'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminMonitoringScreen = () =>
+  Promise.all([import('@/routes/admin-monitoring'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminLanguagesScreen = () =>
+  Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminSettingsScreen = () =>
+  Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
@@ -409,6 +454,52 @@ export const ROUTES = {
   admAnonymous: { pattern: '/adm/anonymous', screen: adminAnonymousScreen },
   adminAnonymousOne: { pattern: '/admin/anonymous/$participant', screen: adminAnonymousOneScreen },
   admAnonymousOne: { pattern: '/adm/anonymous/$participant', screen: adminAnonymousOneScreen },
+  /* LA VUE DE DIEU (#8876) — treize listes et sept fiches de plus, déclarées
+     d'avance dans les deux espaces (motifs : listes à deux segments, fiches à
+     trois — aucune ambiguïté d'ordre). Déclarées AUSSI, par dérivation, dans
+     `session-guard.ts` (`ADMIN_ROUTE_KEYS`) : sans quoi elles seraient
+     PUBLIQUES. Tant qu'un lot n'a pas basculé son drapeau (`lib/admin/ready/`),
+     aucun menu ni aucune tuile n'y mène. */
+  adminInvitations: { pattern: '/admin/invitations', screen: adminInvitationsScreen },
+  admInvitations: { pattern: '/adm/invitations', screen: adminInvitationsScreen },
+  adminInvitation: { pattern: '/admin/invitations/$invitation', screen: adminInvitationScreen },
+  admInvitation: { pattern: '/adm/invitations/$invitation', screen: adminInvitationScreen },
+  adminCommunities: { pattern: '/admin/communities', screen: adminCommunitiesScreen },
+  admCommunities: { pattern: '/adm/communities', screen: adminCommunitiesScreen },
+  adminCommunity: { pattern: '/admin/communities/$community', screen: adminCommunityScreen },
+  admCommunity: { pattern: '/adm/communities/$community', screen: adminCommunityScreen },
+  adminShareLinks: { pattern: '/admin/share-links', screen: adminShareLinksScreen },
+  admShareLinks: { pattern: '/adm/share-links', screen: adminShareLinksScreen },
+  adminShareLink: { pattern: '/admin/share-links/$link', screen: adminShareLinkScreen },
+  admShareLink: { pattern: '/adm/share-links/$link', screen: adminShareLinkScreen },
+  adminPosts: { pattern: '/admin/posts', screen: adminPostsScreen },
+  admPosts: { pattern: '/adm/posts', screen: adminPostsScreen },
+  adminPost: { pattern: '/admin/posts/$post', screen: adminPostScreen },
+  admPost: { pattern: '/adm/posts/$post', screen: adminPostScreen },
+  adminReports: { pattern: '/admin/reports', screen: adminReportsScreen },
+  admReports: { pattern: '/adm/reports', screen: adminReportsScreen },
+  adminReport: { pattern: '/admin/reports/$report', screen: adminReportScreen },
+  admReport: { pattern: '/adm/reports/$report', screen: adminReportScreen },
+  adminAudit: { pattern: '/admin/audit', screen: adminAuditScreen },
+  admAudit: { pattern: '/adm/audit', screen: adminAuditScreen },
+  adminAnalytics: { pattern: '/admin/analytics', screen: adminAnalyticsScreen },
+  admAnalytics: { pattern: '/adm/analytics', screen: adminAnalyticsScreen },
+  adminRanking: { pattern: '/admin/ranking', screen: adminRankingScreen },
+  admRanking: { pattern: '/adm/ranking', screen: adminRankingScreen },
+  adminTrackingLinks: { pattern: '/admin/tracking-links', screen: adminTrackingLinksScreen },
+  admTrackingLinks: { pattern: '/adm/tracking-links', screen: adminTrackingLinksScreen },
+  adminTrackingLink: { pattern: '/admin/tracking-links/$link', screen: adminTrackingLinkScreen },
+  admTrackingLink: { pattern: '/adm/tracking-links/$link', screen: adminTrackingLinkScreen },
+  adminBroadcasts: { pattern: '/admin/broadcasts', screen: adminBroadcastsScreen },
+  admBroadcasts: { pattern: '/adm/broadcasts', screen: adminBroadcastsScreen },
+  adminBroadcast: { pattern: '/admin/broadcasts/$broadcast', screen: adminBroadcastScreen },
+  admBroadcast: { pattern: '/adm/broadcasts/$broadcast', screen: adminBroadcastScreen },
+  adminMonitoring: { pattern: '/admin/monitoring', screen: adminMonitoringScreen },
+  admMonitoring: { pattern: '/adm/monitoring', screen: adminMonitoringScreen },
+  adminLanguages: { pattern: '/admin/languages', screen: adminLanguagesScreen },
+  admLanguages: { pattern: '/adm/languages', screen: adminLanguagesScreen },
+  adminSettings: { pattern: '/admin/settings', screen: adminSettingsScreen },
+  admSettings: { pattern: '/adm/settings', screen: adminSettingsScreen },
 } as const;
 
 /**

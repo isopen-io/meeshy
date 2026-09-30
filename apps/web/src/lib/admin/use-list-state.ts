@@ -12,12 +12,12 @@ import { parseListState, serializeListState, withSearch, type ListSpec, type Lis
  * garde ce qu'on tape (espaces compris) et ne l'écrit qu'après une courte
  * pause — une frappe n'est pas une navigation.
  */
-export function useAdminListState<S extends string, F extends string>(spec: ListSpec<S, F>) {
+export function useAdminListState<S extends string, F extends string, I extends string = never>(spec: ListSpec<S, F, I>) {
   const [search, setSearch] = useSearch();
   const state = parseListState(search, spec);
   const [brouillon, setBrouillon] = useState(state.q);
 
-  const ecrire = (suivant: ListState<S, F>) => setSearch(serializeListState(suivant, spec), true);
+  const ecrire = (suivant: ListState<S, F, I>) => setSearch(serializeListState(suivant, spec), true);
 
   useEffect(() => {
     if (brouillon.trim() === state.q) return undefined;

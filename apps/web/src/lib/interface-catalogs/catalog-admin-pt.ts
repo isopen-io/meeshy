@@ -1,4 +1,15 @@
 import type { AdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import kitPt from './admin/kit-pt';
+import dashboardPt from './admin/dashboard-pt';
+import statistiquesPt from './admin/statistiques-pt';
+import moderationPt from './admin/moderation-pt';
+import contenusPt from './admin/contenus-pt';
+import liensPt from './admin/liens-pt';
+import diffusionsPt from './admin/diffusions-pt';
+import classementSupervisionPt from './admin/classement-supervision-pt';
+import auditReglagesPt from './admin/audit-reglages-pt';
+import personnesPt from './admin/personnes-pt';
+import conversationsAgentPt from './admin/conversations-agent-pt';
 
 const pt = {
   'admin.role': 'O seu papel: {role}',
@@ -15,8 +26,7 @@ const pt = {
   'admin.sections.title': 'Secções',
   'admin.nav.dashboard': 'Painel',
   'admin.nav.users': 'Contas',
-  'admin.nav.moderation': 'Moderação',
-  'admin.nav.audit': 'Registos de auditoria',
+  'admin.nav.audit': 'Registro de auditoria',
   'admin.nav.analytics': 'Estatísticas',
   'admin.nav.trackingLinks': 'Ligações de seguimento',
   'admin.nav.ranking': 'Classificação',
@@ -24,6 +34,30 @@ const pt = {
   'admin.nav.settings': 'Definições',
   'admin.nav.agent': 'Agente',
   'admin.nav.monitoring': 'Supervisão',
+  'admin.nav.invitations': 'Pedidos de contato',
+  'admin.nav.communities': 'Comunidades',
+  'admin.nav.shareLinks': 'Links de compartilhamento',
+  'admin.nav.posts': 'Publicações',
+  'admin.nav.reports': 'Denúncias',
+  'admin.nav.languages': 'Idiomas e traduções',
+  'admin.nav.dashboard.hint': 'O estado da plataforma num relance',
+  'admin.nav.users.hint': 'Todas as contas, seus direitos e sua segurança',
+  'admin.nav.anonymous.hint': 'Convidados que entraram por um link, sem conta',
+  'admin.nav.invitations.hint': 'Os pedidos de amizade enviados entre membros',
+  'admin.nav.conversations.hint': 'As conversas da plataforma e sua leitura supervisionada',
+  'admin.nav.communities.hint': 'As comunidades, suas equipes e suas conversas',
+  'admin.nav.shareLinks.hint': 'Os links que abrem uma conversa',
+  'admin.nav.posts.hint': 'Publicações, stories, reels e status',
+  'admin.nav.reports.hint': 'As denúncias a analisar e tratar',
+  'admin.nav.audit.hint': 'O rastro de cada ação de administração',
+  'admin.nav.analytics.hint': 'Atividade, mensagens e chamadas ao longo do tempo',
+  'admin.nav.ranking.hint': 'Os membros, conversas e links mais ativos',
+  'admin.nav.trackingLinks.hint': 'As campanhas e seus cliques',
+  'admin.nav.broadcasts.hint': 'Escrever a todas as contas, por e-mail ou no aplicativo',
+  'admin.nav.monitoring.hint': 'A saúde dos serviços e o uso das rotas',
+  'admin.nav.languages.hint': 'A saúde do Prisma: idiomas e pares traduzidos',
+  'admin.nav.agent.hint': 'Conduzir o agente de conversa',
+  'admin.nav.settings.hint': 'Seu acesso e as preferências do espaço',
   'admin.users.search': 'Procurar uma conta',
   'admin.users.count': '{count} conta(s)',
   'admin.users.empty': 'Nenhuma conta corresponde.',
@@ -351,6 +385,17 @@ const pt = {
   'admin.quick.activated': 'Conta ativada',
   'admin.quick.validateEmail': 'Validar o e-mail',
   'admin.quick.validatePhone': 'Validar o telefone',
+  ...kitPt,
+  ...dashboardPt,
+  ...statistiquesPt,
+  ...moderationPt,
+  ...contenusPt,
+  ...liensPt,
+  ...diffusionsPt,
+  ...classementSupervisionPt,
+  ...auditReglagesPt,
+  ...personnesPt,
+  ...conversationsAgentPt,
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

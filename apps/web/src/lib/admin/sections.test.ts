@@ -2,19 +2,34 @@ import { describe, expect, test } from 'bun:test';
 
 import { ROUTES } from '@/routes/route-table';
 
-import { ADMIN_SECTIONS, visibleAdminSections, type AdminPermissions } from './sections';
+import { ADMIN_FICHES } from './admin-routes';
+import {
+  ADMIN_GROUPS,
+  ADMIN_SECTIONS,
+  canEnterAdmin,
+  hasAdministrationRank,
+  visibleAdminSections,
+  type AdminPermissions,
+  type AdminSection,
+} from './sections';
 
 /**
- * QUI VOIT L'ADMINISTRATION, ET CE QU'IL Y VOIT (#6432).
+ * QUI VOIT L'ADMINISTRATION, ET CE QU'IL Y VOIT (#6432, #8876).
  *
- * Le témoin le plus important du fichier est le premier : `null` — pas encore
- * su, ou requête refusée — doit rendre une liste VIDE. Une garde qui s'ouvre
- * quand la réponse manque n'est pas une garde ; et c'est l'état par lequel
- * TOUT écran passe au montage, donc celui qu'on voit le plus.
+ * Deux familles de témoins, et elles ne se mélangent pas :
  *
- * Le legacy est DÉCOMMISSIONNÉ (directive porteur 2026-09-15, #6702) : une
- * section que la v2 ne sert pas n'a plus aucune adresse où mener. Elle est
- * MASQUÉE — jamais offerte vers un ailleurs qui n'existe plus (loi 4).
+ * 1. **Le REGISTRE est épinglé** (dix-huit sections, sept groupes, leurs
+ *    permissions, leurs routes, leur ordre) — c'est la décision de la
+ *    spécification, elle ne bouge que par un lot qui la révise.
+ * 2. **La VISIBILITÉ se teste sur des registres SYNTHÉTIQUES** — jamais sur
+ *    `ADMIN_SECTIONS` : dix lots basculent leur drapeau `ready` à tour de rôle,
+ *    et un témoin qui épinglerait « ce qu'un BIGBOSS voit aujourd'hui »
+ *    changerait à chaque bascule, pour des raisons qui n'ont rien à voir avec
+ *    la règle qu'il garde.
+ *
+ * Le témoin le plus important de la seconde famille reste le premier : `null` —
+ * pas encore su, ou requête refusée — doit rendre une liste VIDE. Une garde qui
+ * s'ouvre quand la réponse manque n'est pas une garde.
  */
 
 const AUCUNE: AdminPermissions = {
@@ -43,129 +58,172 @@ const TOUTES: AdminPermissions = {
   canManageAgent: true,
 };
 
-describe('visibleAdminSections — fail-closed par construction', () => {
-  test('rend une liste VIDE quand la matrice n’est pas connue', () => {
-    expect(visibleAdminSections(null)).toEqual([]);
+describe('le registre des dix-huit sections (spécification § 1.2)', () => {
+  const ligne = (section: AdminSection) => [section.id, section.group, section.permission, section.adminRankOnly === true, section.route];
+
+  test('les ids, leur groupe, leur permission, leur rang et leur route, dans l’ordre du menu', () => {
+    expect(ADMIN_SECTIONS.map(ligne)).toEqual([
+      ['dashboard', 'overview', 'canAccessAdmin', false, 'admin'],
+      ['users', 'people', 'canManageUsers', false, 'adminUsers'],
+      ['anonymous', 'people', 'canManageUsers', false, 'adminAnonymous'],
+      ['invitations', 'people', 'canManageUsers', false, 'adminInvitations'],
+      ['conversations', 'exchanges', 'canManageConversations', true, 'adminConversations'],
+      ['communities', 'exchanges', 'canManageGroups', false, 'adminCommunities'],
+      ['shareLinks', 'exchanges', 'canManageConversations', false, 'adminShareLinks'],
+      ['posts', 'content', 'canModerateContent', false, 'adminPosts'],
+      ['reports', 'moderation', 'canModerateContent', false, 'adminReports'],
+      ['audit', 'moderation', 'canViewAuditLogs', false, 'adminAudit'],
+      ['analytics', 'growth', 'canViewAnalytics', false, 'adminAnalytics'],
+      ['ranking', 'growth', 'canViewAnalytics', false, 'adminRanking'],
+      ['trackingLinks', 'growth', 'canViewAnalytics', false, 'adminTrackingLinks'],
+      ['broadcasts', 'growth', 'canManageNotifications', false, 'adminBroadcasts'],
+      ['monitoring', 'platform', 'canViewAnalytics', true, 'adminMonitoring'],
+      ['languages', 'platform', 'canViewAnalytics', false, 'adminLanguages'],
+      ['agent', 'platform', 'canManageAgent', false, 'adminAgent'],
+      ['settings', 'platform', 'canAccessAdmin', false, 'adminSettings'],
+    ]);
   });
 
-  test('rend une liste VIDE sans canAccessAdmin, même si une permission fine est vraie', () => {
-    // L'accès à l'espace précède l'accès à ses pièces : sans cette règle, un
-    // rôle intermédiaire entrerait par une section isolée.
-    const modérateurSansAccès: AdminPermissions = { ...AUCUNE, canModerateContent: true };
-
-    expect(visibleAdminSections(modérateurSansAccès)).toEqual([]);
+  test('les sept groupes, dans leur ordre, chacun avec sa clé de catalogue', () => {
+    expect(ADMIN_GROUPS).toEqual([
+      { id: 'overview', labelKey: 'admin.group.overview' },
+      { id: 'people', labelKey: 'admin.group.people' },
+      { id: 'exchanges', labelKey: 'admin.group.exchanges' },
+      { id: 'content', labelKey: 'admin.group.content' },
+      { id: 'moderation', labelKey: 'admin.group.moderation' },
+      { id: 'growth', labelKey: 'admin.group.growth' },
+      { id: 'platform', labelKey: 'admin.group.platform' },
+    ]);
   });
 
-  test('une matrice complète ne voit que les sections que la v2 SERT (#6702)', () => {
-    // SANS rôle : la section réservée au rang d'administration reste masquée —
-    // l'absence de rôle est FERMANTE (#6862).
-    expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(['dashboard', 'users', 'anonymous', 'agent']);
+  test('les sections sont RANGÉES par groupe : le menu n’a jamais à les réordonner', () => {
+    const ordre = ADMIN_GROUPS.map((groupe) => groupe.id);
+    const positions = ADMIN_SECTIONS.map((section) => ordre.indexOf(section.group));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  /**
-   * **LA TUILE DE L'AGENT SE LIT SUR `canManageAgent`, JAMAIS SUR L'ACCÈS**
-   * (#6733).
-   *
-   * Elle portait `permission: 'canAccessAdmin'` — le seuil de la PORTE, pas
-   * celui des routes qu'elle ouvre. Les 35 routes `/admin/agent/*` sont
-   * gardées par `requirePermission('canManageAgent')`
-   * (`routes/admin/agent-shared.ts`), et la matrice centrale refuse ce droit à
-   * MODERATOR comme à AUDIT, qui portent pourtant `canAccessAdmin`.
-   *
-   * **MODERATOR est le rang où les deux clés divergent** : c'est là, et nulle
-   * part ailleurs, qu'un témoin sur ce droit peut tomber. Un témoin écrit sur
-   * BIGBOSS aurait verdi sur les deux seuils sans rien prouver — c'est la
-   * leçon 261 (un témoin de RANG s'écrit sur un rang AUTRE que celui où les
-   * deux règles s'accordent).
-   */
-  test('un MODERATOR entre dans l’espace mais ne voit PAS la tuile de l’agent', () => {
-    const moderateur: AdminPermissions = {
-      ...AUCUNE,
-      canAccessAdmin: true,
-      canModerateContent: true,
-      canManageConversations: true,
-      canManageAgent: false,
-    };
-
-    expect(visibleAdminSections(moderateur, 'MODERATOR').length).toBeGreaterThan(0);
-    expect(visibleAdminSections(moderateur, 'MODERATOR').map((s) => s.id)).not.toContain('agent');
+  test('aucun identifiant en double — deux tuiles homonymes seraient indiscernables', () => {
+    expect(new Set(ADMIN_SECTIONS.map((section) => section.id)).size).toBe(ADMIN_SECTIONS.length);
   });
 
-  test('un porteur de `canManageAgent` la voit', () => {
-    const agent: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canManageAgent: true };
-
-    expect(visibleAdminSections(agent, 'ADMIN').map((s) => s.id)).toContain('agent');
+  test('chaque section porte sa clé de libellé ET sa ligne d’aide, jamais un libellé en dur', () => {
+    for (const section of ADMIN_SECTIONS) {
+      expect(section.labelKey).toBe(`admin.nav.${section.id}`);
+    }
   });
 
-  test('la tuile de l’agent ne dépend PAS du rang — elle n’est pas `adminRankOnly`', () => {
-    // Sa garde serveur est une PERMISSION, pas un rang : y ajouter un filtre
-    // de rang retirerait la tuile à un rôle futur que la matrice autoriserait.
-    const agentSansRang: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canManageAgent: true };
-
-    expect(visibleAdminSections(agentSansRang).map((s) => s.id)).toContain('agent');
-  });
-
-  /**
-   * LE RANG D'ADMINISTRATION (#6862) — directive porteur du 2026-09-16 :
-   * « permettre aussi aux ADMIN de pouvoir accéder à ces informations pour le
-   * moment ».
-   *
-   * `canManageConversations` est portée par BIGBOSS, ADMIN **et MODERATOR**
-   * (matrice centrale de la passerelle). Sans le filtre de rang, un MODERATOR
-   * verrait la tuile et n'obtiendrait que des 403 — un contrôle voué à
-   * l'échec. Ces trois témoins sont les seuls à pouvoir le voir.
-   */
-  test('la section réservée au rang reste masquée SANS rôle — l’absence est fermante', () => {
-    expect(visibleAdminSections(TOUTES).map((s) => s.id)).not.toContain('conversations');
-    expect(visibleAdminSections(TOUTES, null).map((s) => s.id)).not.toContain('conversations');
-  });
-
-  test('un MODERATOR ne la voit pas, bien qu’il PORTE la permission', () => {
-    expect(visibleAdminSections(TOUTES, 'MODERATOR').map((s) => s.id)).not.toContain('conversations');
-  });
-
-  test('un ADMIN et un BIGBOSS la voient', () => {
-    expect(visibleAdminSections(TOUTES, 'ADMIN').map((s) => s.id)).toContain('conversations');
-    expect(visibleAdminSections(TOUTES, 'BIGBOSS').map((s) => s.id)).toContain('conversations');
-  });
-
-  test('ne rend que les sections dont la permission est vraie', () => {
-    const analyste: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canViewAnalytics: true };
-
-    expect(visibleAdminSections(analyste).map((s) => s.id)).toEqual(['dashboard']);
-  });
-
-  test('conserve l’ORDRE de la table — un admin retrouve ses sections où il les cherche', () => {
-    // Le rôle est passé DÉLIBÉRÉMENT : ce témoin mesure l'ORDRE, pas la
-    // visibilité. Sans lui, une section conditionnée au rang (#6862) manque à
-    // la liste et l'écart se lit comme un désordre — deux questions
-    // différentes, dont une seule est celle de ce test. Les trois témoins de
-    // visibilité, eux, sont juste au-dessus.
-    expect(visibleAdminSections(TOUTES, 'BIGBOSS').map((s) => s.id)).toEqual(
-      ADMIN_SECTIONS.filter((s) => s.route !== null).map((s) => s.id),
-    );
-  });
-});
-
-describe('aucune section visible ne mène hors de la v2 (#6702)', () => {
-  test('chaque section visible vise une route de la table des routes, sous `/admin`', () => {
-    const sections = visibleAdminSections(TOUTES);
-
-    expect(sections.length).toBeGreaterThan(0);
-    for (const section of sections) {
+  test('chaque route de section est une clé de la table des routes, sous `/admin`', () => {
+    for (const section of ADMIN_SECTIONS) {
       expect(ROUTES[section.route].pattern.startsWith('/admin')).toBe(true);
     }
   });
-});
 
-describe('la table des sections', () => {
-  test('n’a aucun identifiant en double — deux tuiles homonymes seraient indiscernables', () => {
-    expect(new Set(ADMIN_SECTIONS.map((s) => s.id)).size).toBe(ADMIN_SECTIONS.length);
+  test('chaque genre d’entité a sa fiche, dans les deux espaces, sous la route de sa section', () => {
+    expect(ADMIN_FICHES.map((fiche) => fiche.entity)).toEqual([
+      'user',
+      'anonymous',
+      'invitation',
+      'conversation',
+      'community',
+      'shareLink',
+      'post',
+      'report',
+      'trackingLink',
+      'broadcast',
+    ]);
   });
 
-  test('porte une clé de catalogue pour chaque section — jamais un libellé en dur', () => {
-    for (const section of ADMIN_SECTIONS) {
-      expect(section.labelKey).toMatch(/^admin\.nav\./);
+  test('les cinq sections déjà servies sont prêtes ; aucune section neuve n’est offerte sans son drapeau', () => {
+    const prêtes = ADMIN_SECTIONS.filter((section) => section.ready).map((section) => section.id);
+    for (const id of ['dashboard', 'users', 'anonymous', 'conversations', 'agent']) expect(prêtes).toContain(id);
+  });
+});
+
+const section = (id: AdminSection['id'], extra: Partial<AdminSection> = {}): AdminSection => ({
+  id,
+  group: 'platform',
+  labelKey: `admin.nav.${id}`,
+  route: 'admin',
+  permission: 'canAccessAdmin',
+  ready: true,
+  glyph: 'gear',
+  ...extra,
+});
+
+describe('visibleAdminSections — fail-closed par construction (registres synthétiques)', () => {
+  const registre: readonly AdminSection[] = [
+    section('dashboard'),
+    section('users', { permission: 'canManageUsers' }),
+    section('conversations', { permission: 'canManageConversations', adminRankOnly: true }),
+    section('agent', { permission: 'canManageAgent' }),
+    section('audit', { permission: 'canViewAuditLogs', ready: false }),
+  ];
+  const ids = (permissions: AdminPermissions | null, role?: string | null) =>
+    visibleAdminSections(permissions, role, registre).map((s) => s.id);
+
+  test('rend une liste VIDE quand la matrice n’est pas connue', () => {
+    expect(ids(null)).toEqual([]);
+    expect(ids(null, 'BIGBOSS')).toEqual([]);
+  });
+
+  test('rend une liste VIDE sans canAccessAdmin, même si une permission fine est vraie', () => {
+    expect(ids({ ...AUCUNE, canManageUsers: true })).toEqual([]);
+  });
+
+  test('une section PAS PRÊTE n’est offerte à personne, même BIGBOSS avec toutes les permissions', () => {
+    expect(ids(TOUTES, 'BIGBOSS')).not.toContain('audit');
+  });
+
+  test('…et la même section, devenue prête, l’est aussitôt', () => {
+    const prête = registre.map((s) => (s.id === 'audit' ? { ...s, ready: true } : s));
+    expect(visibleAdminSections(TOUTES, 'BIGBOSS', prête).map((s) => s.id)).toContain('audit');
+  });
+
+  test('ne rend que les sections dont la permission est vraie, dans l’ordre du registre', () => {
+    expect(ids({ ...AUCUNE, canAccessAdmin: true, canManageUsers: true })).toEqual(['dashboard', 'users']);
+    expect(ids(TOUTES, 'BIGBOSS')).toEqual(['dashboard', 'users', 'conversations', 'agent']);
+  });
+
+  /**
+   * LE RANG D'ADMINISTRATION (#6862) — `canManageConversations` est portée par
+   * BIGBOSS, ADMIN **et MODERATOR**. Sans le filtre de rang, un MODERATOR verrait
+   * la tuile et n'obtiendrait que des 403. **MODERATOR est le rang où les deux
+   * lois divergent** : c'est là, et nulle part ailleurs, qu'un témoin peut tomber
+   * (leçon 261).
+   */
+  test('la section réservée au rang reste masquée SANS rôle — l’absence est fermante', () => {
+    expect(ids(TOUTES)).not.toContain('conversations');
+    expect(ids(TOUTES, null)).not.toContain('conversations');
+  });
+
+  test('un MODERATOR ne la voit pas, bien qu’il PORTE la permission', () => {
+    expect(ids(TOUTES, 'MODERATOR')).not.toContain('conversations');
+  });
+
+  test('un ADMIN et un BIGBOSS la voient', () => {
+    expect(ids(TOUTES, 'ADMIN')).toContain('conversations');
+    expect(ids(TOUTES, 'BIGBOSS')).toContain('conversations');
+  });
+
+  test('la tuile de l’agent se lit sur `canManageAgent`, jamais sur l’accès — et ne dépend pas du rang (#6733)', () => {
+    const moderateur: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canManageConversations: true, canManageAgent: false };
+    expect(ids(moderateur, 'MODERATOR')).not.toContain('agent');
+    expect(ids({ ...AUCUNE, canAccessAdmin: true, canManageAgent: true })).toContain('agent');
+  });
+});
+
+describe('canEnterAdmin et hasAdministrationRank', () => {
+  test('canEnterAdmin : faux sur null et sur toute matrice sans canAccessAdmin', () => {
+    expect(canEnterAdmin(null)).toBe(false);
+    expect(canEnterAdmin(AUCUNE)).toBe(false);
+    expect(canEnterAdmin({ ...AUCUNE, canAccessAdmin: true })).toBe(true);
+  });
+
+  test('hasAdministrationRank : BIGBOSS et ADMIN seulement', () => {
+    expect(hasAdministrationRank('BIGBOSS')).toBe(true);
+    expect(hasAdministrationRank('ADMIN')).toBe(true);
+    for (const role of ['MODERATOR', 'AUDIT', 'ANALYST', 'USER', '', null, undefined]) {
+      expect(hasAdministrationRank(role)).toBe(false);
     }
   });
 });

@@ -1,3 +1,15 @@
+import kitFr from './admin/kit-fr';
+import dashboardFr from './admin/dashboard-fr';
+import statistiquesFr from './admin/statistiques-fr';
+import moderationFr from './admin/moderation-fr';
+import contenusFr from './admin/contenus-fr';
+import liensFr from './admin/liens-fr';
+import diffusionsFr from './admin/diffusions-fr';
+import classementSupervisionFr from './admin/classement-supervision-fr';
+import auditReglagesFr from './admin/audit-reglages-fr';
+import personnesFr from './admin/personnes-fr';
+import conversationsAgentFr from './admin/conversations-agent-fr';
+
 /**
  * LE CATALOGUE D'INTERFACE D'ADMINISTRATION FRANÇAIS (#6871, #6834) — la
  * SOURCE DES CLÉS `admin.*`, sorties de `catalog-fr.ts` parce qu'un lecteur
@@ -27,8 +39,7 @@ const fr = {
   'admin.sections.title': 'Sections',
   'admin.nav.dashboard': 'Tableau de bord',
   'admin.nav.users': 'Comptes',
-  'admin.nav.moderation': 'Modération',
-  'admin.nav.audit': 'Journaux d\'audit',
+  'admin.nav.audit': 'Journal d’audit',
   'admin.nav.analytics': 'Statistiques',
   'admin.nav.trackingLinks': 'Liens de suivi',
   'admin.nav.ranking': 'Classement',
@@ -36,6 +47,30 @@ const fr = {
   'admin.nav.settings': 'Réglages',
   'admin.nav.agent': 'Agent',
   'admin.nav.monitoring': 'Supervision',
+  'admin.nav.invitations': 'Demandes de contact',
+  'admin.nav.communities': 'Communautés',
+  'admin.nav.shareLinks': 'Liens de partage',
+  'admin.nav.posts': 'Publications',
+  'admin.nav.reports': 'Signalements',
+  'admin.nav.languages': 'Langues et traductions',
+  'admin.nav.dashboard.hint': 'L’état de la plateforme en un coup d’œil',
+  'admin.nav.users.hint': 'Tous les comptes, leurs droits et leur sécurité',
+  'admin.nav.anonymous.hint': 'Les invités entrés par un lien, sans compte',
+  'admin.nav.invitations.hint': 'Les demandes d’ami envoyées entre membres',
+  'admin.nav.conversations.hint': 'Les conversations de la plateforme et leur lecture encadrée',
+  'admin.nav.communities.hint': 'Les communautés, leurs équipes et leurs conversations',
+  'admin.nav.shareLinks.hint': 'Les liens qui ouvrent une conversation',
+  'admin.nav.posts.hint': 'Publications, stories, reels et statuts',
+  'admin.nav.reports.hint': 'Les signalements à examiner et à traiter',
+  'admin.nav.audit.hint': 'La trace de chaque geste d’administration',
+  'admin.nav.analytics.hint': 'Activité, messages et appels dans le temps',
+  'admin.nav.ranking.hint': 'Les membres, conversations et liens les plus actifs',
+  'admin.nav.trackingLinks.hint': 'Les campagnes et leurs clics',
+  'admin.nav.broadcasts.hint': 'Écrire à tous les comptes, par e-mail ou dans l’application',
+  'admin.nav.monitoring.hint': 'La santé des services et l’usage des routes',
+  'admin.nav.languages.hint': 'La santé du Prisme : langues et paires traduites',
+  'admin.nav.agent.hint': 'Piloter l’agent de conversation',
+  'admin.nav.settings.hint': 'Votre accès et les préférences de l’espace',
   'admin.users.search': 'Rechercher un compte',
   'admin.users.count': '{count} compte(s)',
   'admin.users.empty': 'Aucun compte ne correspond.',
@@ -378,6 +413,17 @@ const fr = {
   'admin.quick.activated': 'Compte activé',
   'admin.quick.validateEmail': 'Valider l’e-mail',
   'admin.quick.validatePhone': 'Valider le téléphone',
+  ...kitFr,
+  ...dashboardFr,
+  ...statistiquesFr,
+  ...moderationFr,
+  ...contenusFr,
+  ...liensFr,
+  ...diffusionsFr,
+  ...classementSupervisionFr,
+  ...auditReglagesFr,
+  ...personnesFr,
+  ...conversationsAgentFr,
 } as const;
 
 export default fr;

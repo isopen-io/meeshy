@@ -1,4 +1,15 @@
 import type { AdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import kitAr from './admin/kit-ar';
+import dashboardAr from './admin/dashboard-ar';
+import statistiquesAr from './admin/statistiques-ar';
+import moderationAr from './admin/moderation-ar';
+import contenusAr from './admin/contenus-ar';
+import liensAr from './admin/liens-ar';
+import diffusionsAr from './admin/diffusions-ar';
+import classementSupervisionAr from './admin/classement-supervision-ar';
+import auditReglagesAr from './admin/audit-reglages-ar';
+import personnesAr from './admin/personnes-ar';
+import conversationsAgentAr from './admin/conversations-agent-ar';
 
 const ar = {
   'admin.role': 'دورك: {role}',
@@ -15,8 +26,7 @@ const ar = {
   'admin.sections.title': 'الأقسام',
   'admin.nav.dashboard': 'لوحة المعلومات',
   'admin.nav.users': 'الحسابات',
-  'admin.nav.moderation': 'الإشراف',
-  'admin.nav.audit': 'سجلات التدقيق',
+  'admin.nav.audit': 'سجل التدقيق',
   'admin.nav.analytics': 'الإحصاءات',
   'admin.nav.trackingLinks': 'روابط التتبع',
   'admin.nav.ranking': 'الترتيب',
@@ -24,6 +34,30 @@ const ar = {
   'admin.nav.settings': 'الإعدادات',
   'admin.nav.agent': 'الوكيل',
   'admin.nav.monitoring': 'المراقبة',
+  'admin.nav.invitations': 'طلبات التواصل',
+  'admin.nav.communities': 'المجتمعات',
+  'admin.nav.shareLinks': 'روابط المشاركة',
+  'admin.nav.posts': 'المنشورات',
+  'admin.nav.reports': 'البلاغات',
+  'admin.nav.languages': 'اللغات والترجمات',
+  'admin.nav.dashboard.hint': 'حالة المنصة في لمحة',
+  'admin.nav.users.hint': 'كل الحسابات وصلاحياتها وأمانها',
+  'admin.nav.anonymous.hint': 'الضيوف الذين دخلوا عبر رابط دون حساب',
+  'admin.nav.invitations.hint': 'طلبات الصداقة المرسلة بين الأعضاء',
+  'admin.nav.conversations.hint': 'محادثات المنصة وقراءتها الخاضعة للرقابة',
+  'admin.nav.communities.hint': 'المجتمعات وفرقها ومحادثاتها',
+  'admin.nav.shareLinks.hint': 'الروابط التي تفتح محادثة',
+  'admin.nav.posts.hint': 'المنشورات والستوري والريلز والحالات',
+  'admin.nav.reports.hint': 'البلاغات التي تنتظر الفحص والمعالجة',
+  'admin.nav.audit.hint': 'أثر كل إجراء إداري',
+  'admin.nav.analytics.hint': 'النشاط والرسائل والمكالمات عبر الزمن',
+  'admin.nav.ranking.hint': 'أنشط الأعضاء والمحادثات والروابط',
+  'admin.nav.trackingLinks.hint': 'الحملات ونقراتها',
+  'admin.nav.broadcasts.hint': 'المراسلة إلى كل الحسابات، بالبريد أو داخل التطبيق',
+  'admin.nav.monitoring.hint': 'صحة الخدمات واستخدام المسارات',
+  'admin.nav.languages.hint': 'صحة المنشور اللغوي: اللغات والأزواج المترجمة',
+  'admin.nav.agent.hint': 'قيادة وكيل المحادثة',
+  'admin.nav.settings.hint': 'وصولك وتفضيلات هذا الفضاء',
   'admin.users.search': 'ابحث عن حساب',
   'admin.users.count': '{count} حساب',
   'admin.users.empty': 'لا يوجد حساب مطابق.',
@@ -351,6 +385,17 @@ const ar = {
   'admin.quick.activated': 'تم تفعيل الحساب',
   'admin.quick.validateEmail': 'تأكيد البريد الإلكتروني',
   'admin.quick.validatePhone': 'تأكيد الهاتف',
+  ...kitAr,
+  ...dashboardAr,
+  ...statistiquesAr,
+  ...moderationAr,
+  ...contenusAr,
+  ...liensAr,
+  ...diffusionsAr,
+  ...classementSupervisionAr,
+  ...auditReglagesAr,
+  ...personnesAr,
+  ...conversationsAgentAr,
 } satisfies AdminInterfaceCatalog;
 
 export default ar;

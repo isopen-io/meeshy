@@ -118,3 +118,24 @@ export function translateAdmin(
   if (params === undefined) return text;
   return text.replace(PLACEHOLDER, (whole, name: string) => params[name] ?? whole);
 }
+
+function isCatalogKey(catalog: AdminInterfaceCatalog, key: string): key is AdminInterfaceCatalogKey {
+  return Object.prototype.hasOwnProperty.call(catalog, key);
+}
+
+/**
+ * LA LECTURE TOLÉRANTE (#8876) — `null` quand la clé n'existe pas, au lieu de
+ * ne pas compiler : la bibliothèque d'interprétation COMPOSE ses clés depuis
+ * une famille et un code que le serveur sert (`admin.enum.<famille>.<code>`),
+ * et un code que le catalogue ne connaît pas doit se dire « Non reconnu », pas
+ * planter. Le prédicat de type est l'UNIQUE endroit où une chaîne devient une
+ * clé ; `i18n-admin-catalog.test.ts` et `interpret/enums.test.ts` mesurent que
+ * chaque clé que la bibliothèque compose existe dans les sept langues.
+ */
+export function translateAdminMaybe(language: InterfaceLanguage, key: string): string | null {
+  const catalog = loaded.get(language);
+  if (catalog === undefined) {
+    throw new Error(`Catalogue d'administration « ${language} » lu avant d'être chargé (loadAdminInterfaceCatalog).`);
+  }
+  return isCatalogKey(catalog, key) ? catalog[key] : null;
+}

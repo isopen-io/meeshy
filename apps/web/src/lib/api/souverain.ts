@@ -49,3 +49,29 @@ export const ADMIN_SOUVERAIN_PREFIXE = 'admin-souverain' as const;
 export function estClefSouveraine(key: readonly unknown[]): boolean {
   return key[0] === ADMIN_SOUVERAIN_PREFIXE;
 }
+
+/**
+ * **TOUTE DONNÉE D'ADMINISTRATION RESTE EN MÉMOIRE** (#8876) — `true` pour toute
+ * clé dont le premier segment est `'admin'` ou le préfixe souverain, SAUF
+ * exactement `['admin', 'permissions']`.
+ *
+ * Une liste de comptes, un signalement, un journal d'audit sont des données
+ * d'administration : l'écriture sur le disque du navigateur les ferait survivre
+ * à la session, sur un poste que rien ne garantit. Elles restent cache-first
+ * EN MÉMOIRE (`staleTime`) — c'est ce qui rend les écrans instantanés d'un
+ * écran à l'autre — mais ne touchent plus `localStorage['meeshy.query-cache']`.
+ *
+ * L'EXCEPTION est la matrice de permissions du lecteur : elle rend le menu
+ * flottant instantané au démarrage à froid (#6458), elle ne dit rien d'un tiers
+ * — seulement ce que CE lecteur peut faire, et c'est la seule chose que le menu
+ * doit savoir avant que le réseau réponde. L'exception est EXACTE : une clé
+ * `['admin', 'permissions', autre]` ne l'hérite pas.
+ *
+ * Les données les plus sensibles (journal d'audit, révélation, sessions)
+ * gardent EN PLUS le préfixe souverain et `gcTime: 0`.
+ */
+export function estClefNonPersistable(key: readonly unknown[]): boolean {
+  if (estClefSouveraine(key)) return true;
+  if (key[0] !== 'admin') return false;
+  return !(key.length === 2 && key[1] === 'permissions');
+}

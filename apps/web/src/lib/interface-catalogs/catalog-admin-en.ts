@@ -1,4 +1,15 @@
 import type { AdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import kitEn from './admin/kit-en';
+import dashboardEn from './admin/dashboard-en';
+import statistiquesEn from './admin/statistiques-en';
+import moderationEn from './admin/moderation-en';
+import contenusEn from './admin/contenus-en';
+import liensEn from './admin/liens-en';
+import diffusionsEn from './admin/diffusions-en';
+import classementSupervisionEn from './admin/classement-supervision-en';
+import auditReglagesEn from './admin/audit-reglages-en';
+import personnesEn from './admin/personnes-en';
+import conversationsAgentEn from './admin/conversations-agent-en';
 
 const en = {
   'admin.role': 'Your role: {role}',
@@ -15,8 +26,7 @@ const en = {
   'admin.sections.title': 'Sections',
   'admin.nav.dashboard': 'Dashboard',
   'admin.nav.users': 'Accounts',
-  'admin.nav.moderation': 'Moderation',
-  'admin.nav.audit': 'Audit logs',
+  'admin.nav.audit': 'Audit log',
   'admin.nav.analytics': 'Analytics',
   'admin.nav.trackingLinks': 'Tracking links',
   'admin.nav.ranking': 'Ranking',
@@ -24,6 +34,30 @@ const en = {
   'admin.nav.settings': 'Settings',
   'admin.nav.agent': 'Agent',
   'admin.nav.monitoring': 'Monitoring',
+  'admin.nav.invitations': 'Contact requests',
+  'admin.nav.communities': 'Communities',
+  'admin.nav.shareLinks': 'Share links',
+  'admin.nav.posts': 'Posts',
+  'admin.nav.reports': 'Reports',
+  'admin.nav.languages': 'Languages and translations',
+  'admin.nav.dashboard.hint': 'The state of the platform at a glance',
+  'admin.nav.users.hint': 'Every account, its rights and its security',
+  'admin.nav.anonymous.hint': 'Guests who came in through a link, without an account',
+  'admin.nav.invitations.hint': 'Friend requests sent between members',
+  'admin.nav.conversations.hint': 'The platform’s conversations and their supervised reading',
+  'admin.nav.communities.hint': 'Communities, their teams and their conversations',
+  'admin.nav.shareLinks.hint': 'Links that open a conversation',
+  'admin.nav.posts.hint': 'Posts, stories, reels and statuses',
+  'admin.nav.reports.hint': 'Reports to review and handle',
+  'admin.nav.audit.hint': 'The trace of every administration action',
+  'admin.nav.analytics.hint': 'Activity, messages and calls over time',
+  'admin.nav.ranking.hint': 'The most active members, conversations and links',
+  'admin.nav.trackingLinks.hint': 'Campaigns and their clicks',
+  'admin.nav.broadcasts.hint': 'Write to every account, by email or in the app',
+  'admin.nav.monitoring.hint': 'Service health and route usage',
+  'admin.nav.languages.hint': 'The health of the Prism: languages and translated pairs',
+  'admin.nav.agent.hint': 'Drive the conversation agent',
+  'admin.nav.settings.hint': 'Your access and the space preferences',
   'admin.users.search': 'Search an account',
   'admin.users.count': '{count} account(s)',
   'admin.users.empty': 'No account matches.',
@@ -351,6 +385,17 @@ const en = {
   'admin.quick.activated': 'Account activated',
   'admin.quick.validateEmail': 'Validate the email',
   'admin.quick.validatePhone': 'Validate the phone',
+  ...kitEn,
+  ...dashboardEn,
+  ...statistiquesEn,
+  ...moderationEn,
+  ...contenusEn,
+  ...liensEn,
+  ...diffusionsEn,
+  ...classementSupervisionEn,
+  ...auditReglagesEn,
+  ...personnesEn,
+  ...conversationsAgentEn,
 } satisfies AdminInterfaceCatalog;
 
 export default en;
