@@ -29,14 +29,14 @@ final class ConversationEngagementStore: ObservableObject, ConversationEngagemen
     @Published private(set) var snapshots: [String: ConversationEngagementSnapshot] = [:]
 
     private let calendar: Calendar
-    private let fetch: @Sendable (String) async throws -> ConversationEngagementSnapshot
+    private let fetch: @Sendable @concurrent (String) async throws -> ConversationEngagementSnapshot
     private var cancellables = Set<AnyCancellable>()
 
     init(
         updates: AnyPublisher<ConversationEngagementSnapshot, Never> = MessageSocketManager.shared.conversationEngagementUpdated.eraseToAnyPublisher(),
         authentication: AnyPublisher<Bool, Never> = AuthManager.shared.$isAuthenticated.eraseToAnyPublisher(),
         calendar: Calendar = .current,
-        fetch: @escaping @Sendable (String) async throws -> ConversationEngagementSnapshot = {
+        fetch: @escaping @Sendable @concurrent (String) async throws -> ConversationEngagementSnapshot = {
             try await ConversationService.shared.engagement(conversationId: $0)
         }
     ) {
