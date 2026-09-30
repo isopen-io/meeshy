@@ -25,7 +25,7 @@ export function readSceneTransition(raw: Readonly<Record<string, unknown>> | und
 
 export const sceneTransitionWire = (transition: SceneTransition): { readonly type: SceneTransition } => ({ type: transition });
 
-type Frame = Readonly<Record<'opacity', number> | Record<'transform' | 'clipPath', string>>;
+type Frame = { readonly opacity: number } | { readonly transform: string } | { readonly clipPath: string };
 
 /** Le rayon qui couvre les coins : `hypot(w, h) / 2`, soit `√2 / 2` de la
  * référence d'un pourcentage de `circle()`. */

@@ -1,4 +1,5 @@
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { SceneTransition } from '@/lib/canvas/scene-transition';
 
 /**
@@ -35,6 +36,11 @@ export function studioLeadingSceneToggles({ animated, frame }: { readonly animat
  * `visual` : le LOOK du fond (`payload.filter` de son objet média).
  */
 export type StudioSceneEffect = 'opening' | 'visual';
+
+export const STUDIO_EFFECT_LABEL_KEYS = {
+  opening: 'story.studio.effect.opening',
+  visual: 'story.studio.effect.visual',
+} as const satisfies Record<StudioSceneEffect, InterfaceCatalogKey>;
 
 export type StudioBackgroundKind = 'image' | 'video' | null;
 

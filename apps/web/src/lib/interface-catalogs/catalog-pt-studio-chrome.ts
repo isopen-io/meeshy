@@ -9,7 +9,6 @@ const ptStudioChrome = {
   'story.studio.postText': 'Texto da publicação',
   'story.studio.postText.placeholder': 'Escreva o texto da publicação…',
   'story.studio.postText.done': 'Concluído',
-  'story.studio.tile.page': 'Cena',
   'story.studio.tile.text': 'Texto',
   'story.studio.tile.time': 'Tempo',
   'story.studio.rail.scene': 'Ferramentas da cena',

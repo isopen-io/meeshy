@@ -16,14 +16,13 @@ import { VIEWER_ID, flush, harness, mount, onePageSnapshot, publishButton, regis
 
 registerStudioBench();
 
-const seeded = (mediaType: StudioMediaKind = 'video') => {
+/** `overlay` : la vidéo est posée au PREMIER PLAN — la seule place où le modal
+ * reste la question : au FOND, elle bascule le post en réel d'elle-même (#8794). */
+const seeded = (mediaType: StudioMediaKind = 'video', slot: 'background' | 'overlay' = 'overlay') => {
   const drafts = createStudioDraftStore(null);
+  const media = { postMediaId: 'pm-v', fileUrl: `2026/09/u/v.${mediaType === 'video' ? 'mp4' : 'jpg'}`, mediaType, aspectRatio: 9 / 16, durationMs: 12_000 };
   drafts.set(VIEWER_ID, {
-    ...onePageSnapshot({
-      texts: [],
-      visibility: 'FRIENDS',
-      background: { postMediaId: 'pm-v', fileUrl: `2026/09/u/v.${mediaType === 'video' ? 'mp4' : 'jpg'}`, mediaType, aspectRatio: 9 / 16, durationMs: 12_000 },
-    }),
+    ...onePageSnapshot({ texts: [], visibility: 'FRIENDS', ...(slot === 'background' ? { background: media } : { overlay: media }) }),
     postText: 'Mon texte',
   });
   return harness({ drafts });
@@ -104,7 +103,7 @@ describe('studio — aucun modal hors du post à une seule vidéo', () => {
   });
 
   test('« Post » choisi au chevron : l’auteur l’a déjà dit, le post part', async () => {
-    const bench = seeded();
+    const bench = seeded('video', 'background');
     const el = mount(bench.deps, 'POST');
     await flush(() => publishButton(el) !== null);
     act(() => el.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]')!.click());
@@ -113,5 +112,28 @@ describe('studio — aucun modal hors du post à une seule vidéo', () => {
     await flush(() => bench.posts.length > 0);
     expect(offer()).toBeNull();
     expect(bench.posts[0]?.type).toBe('POST');
+  });
+});
+
+describe('studio — un POST dont le FOND est une vidéo passe en RÉEL tout seul (#8794, jumelle de #8793)', () => {
+  test('la capsule s’arme en réel, le dit, et Publier part en réel avec le texte du post — sans question', async () => {
+    const bench = seeded('video', 'background');
+    const el = mount(bench.deps, 'POST');
+    await flush(() => el.querySelector('[data-story-reel-switch="armed"]') !== null);
+    expect(el.querySelector('[data-story-reel-switch]')?.textContent).toBe('Publication passée en réel');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(offer()).toBeNull();
+    expect(bench.posts[0]?.type).toBe('REEL');
+    expect(bench.posts[0]?.content).toBe('Mon texte');
+  });
+
+  test('une story au fond vidéo reste une story : seule la création de post bascule', async () => {
+    const bench = seeded('video', 'background');
+    const el = mount(bench.deps, 'STORY');
+    await flush(() => publishButton(el) !== null);
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.type).toBe('STORY');
   });
 });

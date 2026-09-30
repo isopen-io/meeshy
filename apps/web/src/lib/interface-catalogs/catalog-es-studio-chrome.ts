@@ -9,7 +9,6 @@ const esStudioChrome = {
   'story.studio.postText': 'Texto de la publicación',
   'story.studio.postText.placeholder': 'Escribe el texto de la publicación…',
   'story.studio.postText.done': 'Listo',
-  'story.studio.tile.page': 'Escena',
   'story.studio.tile.text': 'Texto',
   'story.studio.tile.time': 'Tiempo',
   'story.studio.rail.scene': 'Herramientas de la escena',

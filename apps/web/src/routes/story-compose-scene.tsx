@@ -214,6 +214,7 @@ export function StudioScene({
               onWrite={objects.onWrite}
               editing={objects.editing ?? null}
               capture={capture}
+              {...(objects.onBackgroundMenu !== undefined ? { onBackgroundMenu: objects.onBackgroundMenu } : {})}
             />
             {capture !== null ? <StudioQuickCaptureHint lang={lang} capture={capture} /> : null}
             {/* La voie du CLAVIER et du lecteur d'écran : un bouton par objet. */}

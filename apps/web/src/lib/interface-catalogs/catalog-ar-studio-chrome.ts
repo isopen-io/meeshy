@@ -9,7 +9,6 @@ const arStudioChrome = {
   'story.studio.postText': 'نص المنشور',
   'story.studio.postText.placeholder': 'اكتب نص المنشور…',
   'story.studio.postText.done': 'تم',
-  'story.studio.tile.page': 'مشهد',
   'story.studio.tile.text': 'نص',
   'story.studio.tile.time': 'الوقت',
   'story.studio.rail.scene': 'أدوات المشهد',

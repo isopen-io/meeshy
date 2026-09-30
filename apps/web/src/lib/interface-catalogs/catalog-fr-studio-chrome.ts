@@ -12,7 +12,6 @@ const frStudioChrome = {
   'story.studio.postText': 'Texte du post',
   'story.studio.postText.placeholder': 'Écrivez le texte du post…',
   'story.studio.postText.done': 'Terminé',
-  'story.studio.tile.page': 'Scène',
   'story.studio.tile.text': 'Texte',
   'story.studio.tile.time': 'Temps',
   'story.studio.rail.scene': 'Outils de la scène',

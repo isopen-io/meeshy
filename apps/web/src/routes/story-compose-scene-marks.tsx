@@ -1,3 +1,6 @@
+import type { StudioObjectActionId, StudioSceneEffect } from '@/lib/stories/studio-scene-columns';
+import type { StudioBackgroundMenuAction } from '@/lib/stories/studio-scene-menu';
+
 /**
  * **LES GLYPHES DES RAILS DE LA SCÈNE** (#8715, #8794) — même trait que les
  * marques du chrome (`story-compose-chrome.tsx`) : 24 × 24, trait de 1,8.
@@ -53,6 +56,45 @@ export function BackgroundMark({ size = 20 }: MarkProps) {
   );
 }
 
+/** « Modifier » — le crayon. */
+export function EditMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M13.5 6.5l4 4" />
+    </svg>
+  );
+}
+
+/** « Monter » / « Descendre » — une flèche dans un plan. */
+export function LayerStepMark({ size = 20, up }: MarkProps & { readonly up: boolean }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 19h16" />
+      <path d={up ? 'M12 15V4M7.5 8.5L12 4l4.5 4.5' : 'M12 4v11M7.5 10.5L12 15l4.5-4.5'} />
+    </svg>
+  );
+}
+
+/** « Dupliquer » — deux feuilles. */
+export function DuplicateMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <rect x="8" y="8" width="12" height="12" rx="2.5" />
+      <path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" />
+    </svg>
+  );
+}
+
+/** « Retirer » — la corbeille. */
+export function TrashMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13" />
+    </svg>
+  );
+}
+
 /** « Passer au premier plan » — trois plans, le haut plein. */
 export function ForegroundMark({ size = 20 }: MarkProps) {
   return (
@@ -61,4 +103,21 @@ export function ForegroundMark({ size = 20 }: MarkProps) {
       <path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5" />
     </svg>
   );
+}
+
+/** Le glyphe d'une action d'objet ou du fond — le MÊME au menu d'appui long
+ * et à la colonne droite. */
+export function ObjectActionMark({ action, size = 20 }: { readonly action: StudioObjectActionId | StudioBackgroundMenuAction; readonly size?: number }) {
+  if (action === 'edit') return <EditMark size={size} />;
+  if (action === 'raise' || action === 'lower') return <LayerStepMark size={size} up={action === 'raise'} />;
+  if (action === 'duplicate') return <DuplicateMark size={size} />;
+  if (action === 'set-background' || action === 'replace-background') return <BackgroundMark size={size} />;
+  if (action === 'forward') return <ForegroundMark size={size} />;
+  if (action === 'retake') return <ViewfinderMark size={size} />;
+  return <TrashMark size={size} />;
+}
+
+/** La famille d'effets de la scène, par son glyphe. */
+export function EffectMark({ effect, size = 20 }: { readonly effect: StudioSceneEffect; readonly size?: number }) {
+  return effect === 'opening' ? <OpeningEffectMark size={size} /> : <VisualEffectMark size={size} />;
 }

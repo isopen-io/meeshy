@@ -9,7 +9,6 @@ const enStudioChrome = {
   'story.studio.postText': 'Post text',
   'story.studio.postText.placeholder': 'Write the post text…',
   'story.studio.postText.done': 'Done',
-  'story.studio.tile.page': 'Scene',
   'story.studio.tile.text': 'Text',
   'story.studio.tile.time': 'Time',
   'story.studio.rail.scene': 'Scene tools',

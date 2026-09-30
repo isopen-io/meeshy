@@ -9,7 +9,6 @@ const deStudioChrome = {
   'story.studio.postText': 'Beitragstext',
   'story.studio.postText.placeholder': 'Beitragstext schreiben…',
   'story.studio.postText.done': 'Fertig',
-  'story.studio.tile.page': 'Szene',
   'story.studio.tile.text': 'Text',
   'story.studio.tile.time': 'Zeit',
   'story.studio.rail.scene': 'Szenenwerkzeuge',

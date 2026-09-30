@@ -46,7 +46,14 @@ export function useStudioQuickCapture({
   readonly onTake: (file: File) => void;
   /** Injectable pour les témoins ; la production prend le moteur navigateur. */
   readonly engine?: CameraEngine;
-}): { readonly capture: StudioSceneCapture | null; readonly cameraOpen: boolean; readonly cameraLayer: ReactNode } {
+}): {
+  readonly capture: StudioSceneCapture | null;
+  readonly cameraOpen: boolean;
+  readonly cameraLayer: ReactNode;
+  /** « Reprendre une photo » (#8716) — le viseur ARMÉ sur une scène qui a
+   * déjà un fond : la prise le remplace, la sortie le laisse intact. */
+  readonly retake: () => void;
+} {
   const [intent, setIntent] = useState<StudioCameraIntent | null>(null);
   const [holding, setHolding] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -102,5 +109,5 @@ export function useStudioQuickCapture({
       </Suspense>
     );
 
-  return { capture, cameraOpen: intent !== null, cameraLayer };
+  return { capture, cameraOpen: intent !== null, cameraLayer, retake: () => setIntent('arm') };
 }

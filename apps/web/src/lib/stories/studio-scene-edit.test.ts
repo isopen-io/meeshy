@@ -105,7 +105,7 @@ describe('la publication porte les transitions de CHAQUE page (#8792)', () => {
       ],
       null,
     );
-    expect(doc?.scenes.map((scene) => [scene.opening, scene.closing])).toEqual([
+    expect((doc?.scenes ?? []).map((scene) => [scene.opening, scene.closing])).toEqual([
       [{ type: 'slide' }, undefined],
       [undefined, { type: 'reveal' }],
     ]);
