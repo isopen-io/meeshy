@@ -7,6 +7,7 @@ import {
   DEFAULT_ENGAGEMENT_SCALE,
   conversationEngagementForDay,
   elanUnderScale,
+  elanUnderScaleFromRows,
   factorCapForLevel,
   formatConversationPoints,
   isConversationEngagementSnapshot,
@@ -169,5 +170,35 @@ describe('l’état d’une conversation', () => {
 
   it('s’affiche « N (M) »', () => {
     expect(formatConversationPoints(snapshot())).toBe('120 (12)');
+  });
+});
+
+describe('elanUnderScaleFromRows', () => {
+  const now = new Date('2026-09-30T12:00:00Z');
+  const familyOf = (axisKey: string) => (axisKey.startsWith('content.') ? 'content' : axisKey.startsWith('comment.') ? 'comment' : null);
+  const counters = [
+    { axisKey: 'content.text_message', updatedAt: new Date('2026-09-29T12:00:00Z') },
+    { axisKey: 'comment.text', updatedAt: new Date('2026-09-20T12:00:00Z') },
+  ];
+
+  it('suit la fenêtre du barème, pas la constante', () => {
+    const week = elanUnderScaleFromRows({ rules: DEFAULT_ENGAGEMENT_SCALE.multiplier, counters, milestones: [], familyOf, engagementScore: 0, now });
+    const month = elanUnderScaleFromRows({ rules: withRules({ windowDays: 30 }).multiplier, counters, milestones: [], familyOf, engagementScore: 0, now });
+    expect(week).toMatchObject({ factor: 1, activeFamilyCount: 1 });
+    expect(month).toMatchObject({ factor: 2, activeFamilyCount: 2 });
+  });
+
+  it('suit le seuil de haut badge du barème et compte la famille du geste à venir', () => {
+    const milestones = Array.from({ length: 5 }, (_, i) => ({ milestoneType: 'badge', milestoneKey: `content.post:${50 + i}` }));
+    const elan = elanUnderScaleFromRows({
+      rules: withRules({ highBadgeThreshold: 50 }).multiplier,
+      counters,
+      milestones,
+      familyOf,
+      engagementScore: 0,
+      extraFamily: 'tool',
+      now,
+    });
+    expect(elan).toMatchObject({ hasStanding: true, activeFamilyCount: 2, factor: 3 });
   });
 });

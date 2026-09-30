@@ -24,6 +24,8 @@
 
 import {
   ENGAGEMENT_AXES,
+  ENGAGEMENT_AXIS_FAMILIES,
+  type EngagementAxisFamily,
   ENGAGEMENT_AXIS_WEIGHTS,
   LEVEL_THRESHOLDS,
   isEngagementAxisKey,
@@ -259,6 +261,55 @@ export function elanUnderScale(rules: EngagementMultiplierRules, input: Engageme
     Math.max(0, input.activeFamilyCount - 1) * rules.stepPerExtraFamily +
     (hasStanding ? rules.standingBonus : 0);
   return { factor: Math.min(cap, Math.max(1, raw)), hasStanding, level, cap };
+}
+
+export type EngagementScaleElanFromRows = EngagementScaleElan & {
+  readonly activeFamilies: readonly EngagementAxisFamily[];
+  readonly activeFamilyCount: number;
+};
+
+/**
+ * Le multiplicateur sous CE barème, DÉRIVÉ de lignes déjà lues — la jumelle
+ * barème-consciente d'`elanInputsFromRows` : l'écran « Progression » et les
+ * récompenses de l'onboarding AFFICHENT ce que `EngagementService` CRÉDITERA,
+ * fenêtre et seuil de haut badge compris. `extraFamily` ajoute la famille du
+ * geste à venir, comme le crédit le fait.
+ */
+export function elanUnderScaleFromRows(params: {
+  readonly rules: EngagementMultiplierRules;
+  readonly counters: readonly { readonly axisKey: string; readonly updatedAt: Date | string }[];
+  readonly milestones: readonly { readonly milestoneType: string; readonly milestoneKey: string }[];
+  readonly familyOf: (axisKey: string) => EngagementAxisFamily | null;
+  readonly engagementScore: number;
+  readonly extraFamily?: EngagementAxisFamily;
+  readonly now?: Date;
+}): EngagementScaleElanFromRows {
+  const since = (params.now ?? new Date()).getTime() - params.rules.windowDays * 86_400_000;
+  const recent = params.counters
+    .filter((counter) => {
+      const at = new Date(counter.updatedAt).getTime();
+      return Number.isFinite(at) && at >= since;
+    })
+    .map((counter) => params.familyOf(counter.axisKey))
+    .filter((family): family is EngagementAxisFamily => family !== null);
+  const families = new Set<EngagementAxisFamily>(
+    [...recent, ...(params.extraFamily ? [params.extraFamily] : [])].filter((family) =>
+      (ENGAGEMENT_AXIS_FAMILIES as readonly string[]).includes(family),
+    ),
+  );
+  const achievementCount = params.milestones.filter((m) => m.milestoneType === 'achievement').length;
+  const highBadgeCount = params.milestones.filter((m) => {
+    if (m.milestoneType !== 'badge') return false;
+    const threshold = Number.parseInt(m.milestoneKey.split(':').at(-1) ?? '', 10);
+    return Number.isFinite(threshold) && threshold >= params.rules.highBadgeThreshold;
+  }).length;
+  const elan = elanUnderScale(params.rules, {
+    activeFamilyCount: families.size,
+    achievementCount,
+    highBadgeCount,
+    engagementScore: params.engagementScore,
+  });
+  return { ...elan, activeFamilies: [...families], activeFamilyCount: families.size };
 }
 
 /** Les points qu'UNE action de cet axe crédite sous ce barème et à ce multiplicateur — entier, jamais négatif. */

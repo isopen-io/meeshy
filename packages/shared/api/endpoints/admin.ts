@@ -165,6 +165,9 @@ export const dashboard = '/api/v1/admin/dashboard';
 /** POST /api/v1/admin/dashboard/invalidate-cache */
 export const dashboardInvalidateCache = '/api/v1/admin/dashboard/invalidate-cache';
 
+/** GET · PUT /api/v1/admin/engagement-scale */
+export const engagementScale = '/api/v1/admin/engagement-scale';
+
 /** GET /api/v1/admin/invitations */
 export const invitations = '/api/v1/admin/invitations';
 

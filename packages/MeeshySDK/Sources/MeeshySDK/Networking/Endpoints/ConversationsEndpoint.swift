@@ -28,6 +28,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdAnalysis(id: String)
     case byIdCard(id: String)
     case byIdDeleteForMe(id: String)
+    case byIdEngagement(id: String)
     case byIdInvite(id: String)
     case byIdLeave(id: String)
     case byIdMarkRead(id: String)
@@ -75,6 +76,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdAnalysis(let id): return "/api/v1/conversations/\(id)/analysis"
         case .byIdCard(let id): return "/api/v1/conversations/\(id)/card"
         case .byIdDeleteForMe(let id): return "/api/v1/conversations/\(id)/delete-for-me"
+        case .byIdEngagement(let id): return "/api/v1/conversations/\(id)/engagement"
         case .byIdInvite(let id): return "/api/v1/conversations/\(id)/invite"
         case .byIdLeave(let id): return "/api/v1/conversations/\(id)/leave"
         case .byIdMarkRead(let id): return "/api/v1/conversations/\(id)/mark-read"
