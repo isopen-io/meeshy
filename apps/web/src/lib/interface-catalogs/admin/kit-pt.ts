@@ -31,7 +31,7 @@ const f = {
   'admin.kit.chart.others': 'Outros',
   'admin.kit.chart.columnLabel': 'Rótulo',
   'admin.kit.chart.columnValue': 'Valor',
-  'admin.kit.chart.columnShare': 'Parte',
+  'admin.kit.chart.columnShare': 'Proporção',
   'admin.kit.stat.up': 'em alta de {value}',
   'admin.kit.stat.down': 'em queda de {value}',
   'admin.kit.stat.flat': 'estável',
@@ -66,7 +66,7 @@ const f = {
   'admin.value.conversation.moreOne': '{names} e mais 1',
   'admin.value.conversation.moreMany': '{names} e mais {count}',
   'admin.value.shareLink.unnamed': 'Link sem nome',
-  'admin.value.trackingLink.unnamed': 'Link de acompanhamento sem nome',
+  'admin.value.trackingLink.unnamed': 'Link de rastreamento sem nome',
   'admin.value.post.by': '{type} de {author}',
   'admin.value.report.titled': 'Denúncia · {reason}',
   'admin.value.invitation.label': '{sender} → {recipient}',
@@ -93,7 +93,7 @@ const f = {
   'admin.enum.accountState.deactivated': 'Desativado',
   'admin.enum.accountState.deactivated.explain': 'Não pode mais entrar; os dados são mantidos.',
   'admin.enum.accountState.deleted': 'Excluído',
-  'admin.enum.accountState.deleted.explain': 'Exclusão suave: a conta pode ser restaurada.',
+  'admin.enum.accountState.deleted.explain': 'Exclusão lógica: a conta pode ser restaurada.',
   'admin.enum.accountState.banned': 'Banido',
   'admin.enum.accountState.banned.explain': 'Excluído da plataforma durante o banimento.',
   'admin.enum.accountState.locked': 'Bloqueado',
@@ -142,7 +142,7 @@ const f = {
   'admin.enum.reportStatus.dismissed': 'Arquivada sem ação',
   'admin.enum.reportStatus.dismissed.explain': 'Encerrada sem ação: este caso não entra no tempo médio de resolução.',
 
-  'admin.enum.reportType.spam': 'Indesejado',
+  'admin.enum.reportType.spam': 'Spam',
   'admin.enum.reportType.inappropriate': 'Conteúdo inadequado',
   'admin.enum.reportType.harassment': 'Assédio',
   'admin.enum.reportType.violence': 'Violência',
@@ -156,7 +156,7 @@ const f = {
   'admin.enum.reportedEntity.conversation': 'Conversa',
   'admin.enum.reportedEntity.community': 'Comunidade',
   'admin.enum.reportedEntity.post': 'Publicação',
-  'admin.enum.reportedEntity.story': 'História',
+  'admin.enum.reportedEntity.story': 'Story',
   'admin.enum.reportedEntity.comment': 'Comentário',
   'admin.enum.reportedEntity.sound': 'Som',
 
@@ -177,8 +177,8 @@ const f = {
   'admin.enum.broadcastStatus.FAILED': 'Falha',
 
   'admin.enum.postType.POST': 'Publicação',
-  'admin.enum.postType.REEL': 'Bobina',
-  'admin.enum.postType.STORY': 'História',
+  'admin.enum.postType.REEL': 'Reel',
+  'admin.enum.postType.STORY': 'Story',
   'admin.enum.postType.STATUS': 'Estado',
 
   'admin.enum.postVisibility.PUBLIC': 'Pública',
@@ -198,9 +198,9 @@ const f = {
   'admin.enum.postState.expired.explain': 'Uma story desaparece sozinha ao fim da sua duração.',
 
   'admin.enum.invitationStatus.pending': 'Pendente',
-  'admin.enum.invitationStatus.accepted': 'Aceita',
-  'admin.enum.invitationStatus.rejected': 'Recusada',
-  'admin.enum.invitationStatus.rejected.explain': 'Recusada pelo destinatário ou cancelada por um administrador.',
+  'admin.enum.invitationStatus.accepted': 'Aceito',
+  'admin.enum.invitationStatus.rejected': 'Recusado',
+  'admin.enum.invitationStatus.rejected.explain': 'Recusado pelo destinatário ou cancelado por um administrador.',
 
   'admin.enum.shareLinkState.active': 'Ativo',
   'admin.enum.shareLinkState.expired': 'Expirado',
@@ -215,8 +215,8 @@ const f = {
   'admin.enum.trackingLinkState.expired': 'Expirado',
 
   'admin.enum.trackingTarget.POST': 'Publicação',
-  'admin.enum.trackingTarget.REEL': 'Bobina',
-  'admin.enum.trackingTarget.STORY': 'História',
+  'admin.enum.trackingTarget.REEL': 'Reel',
+  'admin.enum.trackingTarget.STORY': 'Story',
   'admin.enum.trackingTarget.STATUS': 'Estado',
   'admin.enum.trackingTarget.CONVERSATION': 'Conversa',
   'admin.enum.trackingTarget.PROFILE': 'Perfil',
@@ -243,7 +243,7 @@ const f = {
 
   'admin.enum.circuitState.CLOSED': 'Normal',
   'admin.enum.circuitState.CLOSED.explain': 'As chamadas passam.',
-  'admin.enum.circuitState.OPEN': 'Cortado',
+  'admin.enum.circuitState.OPEN': 'Interrompido',
   'admin.enum.circuitState.OPEN.explain': 'As chamadas são recusadas enquanto o serviço se recupera.',
   'admin.enum.circuitState.HALF_OPEN': 'Em teste',
   'admin.enum.circuitState.HALF_OPEN.explain': 'Algumas chamadas passam para verificar se o serviço se recuperou.',
@@ -260,13 +260,13 @@ const f = {
 
   'admin.enum.friendStatus.pending': 'Pendente',
   'admin.enum.friendStatus.accepted': 'Amigos',
-  'admin.enum.friendStatus.rejected': 'Recusada',
+  'admin.enum.friendStatus.rejected': 'Recusado',
   'admin.enum.friendStatus.blocked': 'Bloqueado',
 
-  'admin.enum.presence.online': 'Em linha',
+  'admin.enum.presence.online': 'Online',
   'admin.enum.presence.away': 'Ausente',
   'admin.enum.presence.idle': 'Inativo',
-  'admin.enum.presence.offline': 'Offline',
+  'admin.enum.presence.offline': 'Sem conexão',
   'admin.enum.presence.unknown': 'Não informada',
   'admin.enum.presence.unknown.explain': 'A presença só é compartilhada com amigos aceitos e administradores.',
 } satisfies AdminCatalogFragment<typeof fr>;

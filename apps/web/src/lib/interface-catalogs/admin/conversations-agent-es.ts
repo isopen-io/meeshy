@@ -16,10 +16,8 @@ const f = {
   'admin.conversation.list.empty': 'Ninguna conversación',
   'admin.conversation.list.emptyHint': 'Las conversaciones creadas en la plataforma aparecen aquí.',
   'admin.conversation.list.filteredEmpty': 'Ninguna conversación con estos filtros',
-  'admin.conversation.list.onCommunity':
-    'Conversaciones de una sola comunidad: quite el filtro para volver a ver todas las conversaciones.',
-  'admin.conversation.list.onCommunityNamed':
-    'Conversaciones de la comunidad «{name}»: quite el filtro para volver a ver todas las conversaciones.',
+  'admin.conversation.list.onCommunity': 'Conversaciones de una sola comunidad: quita el filtro para volver a ver todas las conversaciones.',
+  'admin.conversation.list.onCommunityNamed': 'Conversaciones de la comunidad «{name}»: quita el filtro para volver a ver todas las conversaciones.',
   'admin.conversation.list.onCommunityReset': 'Ver todas las conversaciones',
 
   'admin.conversation.filter.type': 'Tipo',
@@ -113,8 +111,7 @@ const f = {
   'admin.conversation.reading.hint':
     'El contenido de los mensajes solo se lee con un motivo escrito, registrado con su nombre en el registro de auditoría. El hilo se muestra en sus idiomas de lectura, como en la aplicación.',
 
-  'admin.agentPanel.subtitle':
-    'Las conversaciones en las que interviene el agente: siga su actividad, vuelva a lanzarlo o detenga un escaneo en curso.',
+  'admin.agentPanel.subtitle': 'Las conversaciones en las que interviene el agente: sigue su actividad, vuelve a lanzarlo o detén un escaneo en curso.',
   'admin.agentPanel.stat.tracked': 'Conversaciones controladas',
   'admin.agentPanel.stat.trackedCaption': 'de {total} seguidas',
   'admin.agentPanel.stat.users': 'Miembros controlados',

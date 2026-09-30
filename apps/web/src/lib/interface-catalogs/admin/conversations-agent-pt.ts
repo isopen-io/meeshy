@@ -36,7 +36,7 @@ const f = {
   'admin.conversation.col.lastMessage': 'Última mensagem',
 
   'admin.conversation.fiche.loading': 'Carregando a conversa',
-  'admin.conversation.fiche.notFound': 'Esta conversa já não existe',
+  'admin.conversation.fiche.notFound': 'Esta conversa não existe mais',
   'admin.conversation.fiche.notFoundHint': 'Foi excluída, ou o endereço está incorreto.',
   'admin.conversation.fiche.back': 'Voltar às conversas',
   'admin.conversation.fiche.configure': 'Configurar',
@@ -97,8 +97,7 @@ const f = {
   'admin.conversation.members.creatorRefused': 'O criador da conversa está protegido: não pode ser rebaixado nem removido.',
   'admin.conversation.members.motive': 'Motivo (mínimo de 10 caracteres)',
   'admin.conversation.members.role.confirmTitle': 'Alterar a função',
-  'admin.conversation.members.role.confirmBody':
-    '{name} passará de «{from}» a «{to}». A alteração fica registrada no registro de auditoria com o seu motivo.',
+  'admin.conversation.members.role.confirmBody': '{name} passará de «{from}» a «{to}». A alteração fica registrada no registro de auditoria com o seu motivo.',
   'admin.conversation.members.role.confirm': 'Alterar a função',
   'admin.conversation.members.role.done': 'Função alterada',
   'admin.conversation.members.remove.confirmTitle': 'Remover da conversa',
@@ -108,11 +107,9 @@ const f = {
   'admin.conversation.members.remove.done': 'Membro removido',
 
   'admin.conversation.reading.title': 'Ler a conversa',
-  'admin.conversation.reading.hint':
-    'O conteúdo das mensagens só se lê com um motivo escrito, registrado com o seu nome no registro de auditoria. A conversa é mostrada nos seus idiomas de leitura, como no aplicativo.',
+  'admin.conversation.reading.hint': 'O conteúdo das mensagens só se lê com um motivo escrito, registrado com o seu nome no registro de auditoria. O fio é mostrado nos seus idiomas de leitura, como no aplicativo.',
 
-  'admin.agentPanel.subtitle':
-    'As conversas em que o agente intervém: acompanhe a sua atividade, volte a lançá-lo ou pare uma análise em curso.',
+  'admin.agentPanel.subtitle': 'As conversas em que o agente intervém: acompanhe a atividade dele, relance-o ou interrompa uma análise em andamento.',
   'admin.agentPanel.stat.tracked': 'Conversas controladas',
   'admin.agentPanel.stat.trackedCaption': 'de {total} acompanhadas',
   'admin.agentPanel.stat.users': 'Membros controlados',
@@ -132,7 +129,7 @@ const f = {
   'admin.agentPanel.tracked.col.control': 'Controle',
   'admin.agentPanel.state.on': 'Ativado',
   'admin.agentPanel.state.off': 'Desativado',
-  'admin.agentPanel.state.scanning': 'Análise em curso',
+  'admin.agentPanel.state.scanning': 'Análise em andamento',
   'admin.agentPanel.lastResponse.never': 'Nenhuma resposta',
 
   'admin.agentPanel.logs.caption': 'Registro das análises do agente',
@@ -173,13 +170,13 @@ const f = {
   'admin.agentPanel.detail.started': 'Início',
   'admin.agentPanel.detail.reactions': 'Reações enviadas',
   'admin.agentPanel.detail.rejected': 'Mensagens descartadas',
-  'admin.agentPanel.detail.rejectedExplain': 'Redigidas pelo agente e recusadas pelo seu controlo de qualidade.',
+  'admin.agentPanel.detail.rejectedExplain': 'Redigidas pelo agente e recusadas pelo controle de qualidade dele.',
   'admin.agentPanel.detail.users': 'Membros interpretados',
   'admin.agentPanel.detail.tokens': 'Tokens (entrada / saída)',
   'admin.agentPanel.detail.cost': 'Custo estimado',
 
   'admin.agentPanel.conversation.title': 'Agente nesta conversa',
-  'admin.agentPanel.conversation.usersNone': 'Nenhum membro controlado por agora',
+  'admin.agentPanel.conversation.usersNone': 'Nenhum membro controlado no momento',
   'admin.agentPanel.conversation.messages': 'Mensagens publicadas',
   'admin.agentPanel.conversation.lastResponse': 'Última resposta',
 } as const satisfies AdminCatalogFragment<typeof fr>;

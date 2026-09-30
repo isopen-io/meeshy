@@ -93,7 +93,7 @@ const f = {
   'admin.enum.accountState.deactivated': 'Desactivado',
   'admin.enum.accountState.deactivated.explain': 'Ya no puede iniciar sesión; sus datos se conservan.',
   'admin.enum.accountState.deleted': 'Eliminado',
-  'admin.enum.accountState.deleted.explain': 'Eliminación suave: la cuenta se puede restaurar.',
+  'admin.enum.accountState.deleted.explain': 'Eliminación lógica: la cuenta se puede restaurar.',
   'admin.enum.accountState.banned': 'Expulsado',
   'admin.enum.accountState.banned.explain': 'Excluido de la plataforma mientras dure la expulsión.',
   'admin.enum.accountState.locked': 'Bloqueado',
