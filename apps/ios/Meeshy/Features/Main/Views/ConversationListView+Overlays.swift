@@ -470,7 +470,7 @@ extension ConversationListView {
                 Rectangle()
                     .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
-                    .overlay(Color.black.opacity(0.12).ignoresSafeArea())
+                    .overlay(Color.black.opacity(MeeshyOpacity.light).ignoresSafeArea())
                     .contentShape(Rectangle())
                     .onTapGesture { dismissContextMenu() }
                     // Le blur du fond s'EFFACE pendant le morph drag : la
@@ -1015,7 +1015,7 @@ struct ConversationListHeaderOverlay: View {
                     } label: {
                         HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "square.stack.fill")
-                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                                 .accessibilityHidden(true)
                             Text(String(localized: "conversation.list.feed", defaultValue: "Flux", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -1024,7 +1024,7 @@ struct ConversationListHeaderOverlay: View {
                             LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                         )
                         .padding(.horizontal, MeeshySpacing.smPlus)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(
                             Capsule()
                                 .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
@@ -1060,7 +1060,7 @@ struct ConversationListHeaderOverlay: View {
                                 Image(systemName: "link.badge.plus")
                                     .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 40, height: 40)
+                                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                                     .adaptiveGlass(in: Circle(), interactive: true)
                             }
                             .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Créer un lien de partage", bundle: .main))
@@ -1071,7 +1071,7 @@ struct ConversationListHeaderOverlay: View {
                                 Image(systemName: "plus")
                                     .font(.system(size: MeeshyIconSize.lg, weight: .bold))
                                     .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 40, height: 40)
+                                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                                     .adaptiveGlass(in: Circle(), interactive: true)
                             }
                             .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
@@ -1103,7 +1103,7 @@ struct ConversationListHeaderOverlay: View {
                                         .lineLimit(1)
                                         // Capsule et non cercle figé : « 99+ » doit
                                         // s'afficher entier, pas être rogné.
-                                        .padding(.horizontal, 5)
+                                        .padding(.horizontal, MeeshySpacing.xs)
                                         .frame(minWidth: 16, minHeight: 16)
                                         .background(Capsule().fill(MeeshyColors.error))
                                         .offset(x: 6, y: -6)
@@ -1196,7 +1196,7 @@ struct ConversationListBottomBar: View {
                             RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
-                        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
+                        .shadow(color: Color.black.opacity(MeeshyOpacity.light), radius: 14, y: 6)
                 )
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.bottom, MeeshySpacing.sm)
@@ -1244,7 +1244,7 @@ struct ConversationListBottomBar: View {
                             .font(MeeshyFont.relative(MeeshyIconSize.lg))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.7)],
+                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(MeeshyOpacity.heavy)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )

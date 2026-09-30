@@ -19,18 +19,18 @@ struct CameraPermissionPanel: View {
                 // texte : c'est un écran qu'on lit quand quelque chose ne
                 // marche pas, donc précisément là où la grande taille sert.
                 .font(MeeshyFont.relative(38, weight: .light))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
 
             Text(String(localized: "camera.permission.denied.title",
                         defaultValue: "Accès à la caméra refusé", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
 
             Text(String(localized: "camera.permission.denied.body",
                         defaultValue: "Autorisez Meeshy à utiliser la caméra pour prendre des photos et des vidéos.",
                         bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .multilineTextAlignment(.center)
 
             Button {
@@ -41,13 +41,13 @@ struct CameraPermissionPanel: View {
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, MeeshySpacing.xl)
-                    .frame(height: 44)
+                    .frame(height: MeeshyControlSize.tapTarget)
                     .background(Capsule().fill(.white))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, MeeshySpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.55))
+        .background(MeeshyColors.mediaScrim)
     }
 }

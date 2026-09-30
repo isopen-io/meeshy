@@ -115,10 +115,10 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     private var card: some View {
-        VStack(alignment: .trailing, spacing: 3) {
-            HStack(spacing: 11) {
+        VStack(alignment: .trailing, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 leadingGlyph
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(ThemeManager.shared.textPrimary)
@@ -135,8 +135,8 @@ struct BubbleCallNoticeView: View, Equatable {
                 .foregroundColor(ThemeManager.shared.textMuted)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(minHeight: 44)
         .background(simpleContour)
         .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
@@ -153,7 +153,7 @@ struct BubbleCallNoticeView: View, Equatable {
         let duration = durationLabel
         let data = summary.dataSpentLabel
         if duration != nil || data != nil {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if let duration { metric(icon: "clock", text: duration) }
                 if duration != nil, data != nil {
                     MetaSeparator()
@@ -192,7 +192,7 @@ struct BubbleCallNoticeView: View, Equatable {
     private func metric(icon: String, text: String) -> some View {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .lineLimit(1)
@@ -210,9 +210,9 @@ struct BubbleCallNoticeView: View, Equatable {
         ZStack {
             Circle()
                 .fill(tint.opacity(isDark ? 0.14 : 0.09))
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             Image(systemName: mediaGlyph)
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(tint)
         }
         .overlay(alignment: .bottomTrailing) { directionChip }
@@ -426,10 +426,10 @@ struct CallSummaryDetailSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()
-                    .fill(tint.opacity(0.12))
+                    .fill(tint.opacity(MeeshyOpacity.light))
                     .frame(width: 64, height: 64)
                 Image(systemName: mediaGlyph)
-                    .font(MeeshyFont.relative(26, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .semibold))
                     .foregroundColor(tint)
             }
             .overlay(alignment: .bottomTrailing) {

@@ -192,7 +192,7 @@ public struct ConversationScrollControlsView: View {
                     // Offline indicator when no unread/typing
                     HStack(spacing: MeeshySpacing.sm) {
                         Image(systemName: "wifi.slash")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                         Text(String(localized: "conversation.offline", defaultValue: "Hors ligne", bundle: .module))
                             .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     }
@@ -206,9 +206,9 @@ public struct ConversationScrollControlsView: View {
                     // est plus étroit que le glyphe et déborde horizontalement.
                     // 44×44 atteint au passage la cible tactile HIG.
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                         .foregroundColor(contentColor)
-                        .frame(width: 44, height: 44)
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 }
             }
             // Liquid Glass iOS 26 (fallback material teinté < 26). Teinte accent
@@ -238,7 +238,7 @@ public struct ConversationScrollControlsView: View {
             Spacer(minLength: 0)
 
             // Animated dots to show activity
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(Color.white.opacity(searchPulse ? 1.0 : 0.4))
@@ -400,10 +400,10 @@ public struct ConversationScrollControlsView: View {
             // Right: chevron / offline glyph.
             if isOffline {
                 Image(systemName: "wifi.slash")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             } else {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
         }
         .foregroundColor(contentColor)
@@ -466,7 +466,7 @@ public struct ConversationScrollControlsView: View {
         if unreadAttachmentIsAudio {
             Image(systemName: isAudioPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(Circle().fill(Color.white.opacity(isAudioPlaying ? 0.4 : 0.25)))
                 .contentShape(Circle())
                 .highPriorityGesture(
@@ -482,7 +482,7 @@ public struct ConversationScrollControlsView: View {
             ) {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color.white.opacity(0.2))
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .overlay(
                         Image(systemName: unreadAttachmentTypeLabel == "Video" ? "video.fill" : "photo.fill")
                             .font(.system(size: MeeshyIconSize.sm))
@@ -490,15 +490,15 @@ public struct ConversationScrollControlsView: View {
                     )
             }
             .aspectRatio(contentMode: .fill)
-            .frame(width: 36, height: 36)
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
         } else if let symbol = unreadAttachmentSymbol {
             // Media without a thumbnail (file, location, thumbnail-less video):
             // render the type glyph so the preview still reads as media.
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color.white.opacity(0.2)))
         } else if let callSymbol = unreadCallSymbol {
             // Notice d'appel (en cours/manqué/rejeté/annulé/échoué) : même
@@ -507,9 +507,9 @@ public struct ConversationScrollControlsView: View {
             // `nil` (ex. appel en cours, pastille déjà teintée accent) retombe
             // sur `contentColor` pour rester lisible.
             Image(systemName: callSymbol)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(unreadCallTint.map { Color(hex: $0) } ?? contentColor)
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color.white.opacity(0.2)))
         } else {
             EmptyView()
@@ -569,7 +569,7 @@ public struct ConversationScrollControlsView: View {
     }
 
     private var typingDotsView: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .fill(contentColor)

@@ -216,7 +216,7 @@ struct MagicLinkView: View {
                     .accessibilityHint(howItWorksHint.text)
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)

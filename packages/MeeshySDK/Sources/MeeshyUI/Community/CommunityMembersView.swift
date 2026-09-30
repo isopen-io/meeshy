@@ -105,7 +105,7 @@ public struct CommunityMembersView: View {
     private func sectionHeader(role: MemberRole, count: Int) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: role.icon)
-                .font(.system(size: 11))
+                .font(.system(size: MeeshyIconSize.xxs))
             Text("\(role.displayName)s")
                 .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
@@ -153,7 +153,7 @@ struct MemberRow: View {
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: member.communityRole.icon)
-                        .font(.system(size: 9))
+                        .font(.system(size: MeeshyIconSize.xxs))
                     Text(member.communityRole.displayName)
                         .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                 }
@@ -184,7 +184,7 @@ struct MemberRow: View {
                     Image(systemName: "ellipsis")
                         .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 32, height: 32)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
                 }
             }

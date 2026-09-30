@@ -156,13 +156,13 @@ struct ComposerSceneFrise: View {
                 let debut = CGFloat(ComposerSceneFriseMetrics.fraction(fenetre.start, of: duree)) * largeur
                 let fin = CGFloat(ComposerSceneFriseMetrics.fraction(fenetre.end, of: duree)) * largeur
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                         .fill(Color.white.opacity(0.07))
                         .contentShape(Rectangle())
                         .onTapGesture(coordinateSpace: .local) { point in
                             choisir(piste, a: temps(x: point.x, largeur: largeur))
                         }
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                         .fill(choisie ? MeeshyColors.brandPrimary : Color.white.opacity(0.35))
                         .frame(width: max(4, fin - debut))
                         .padding(.vertical, MeeshySpacing.xs)

@@ -46,7 +46,7 @@ struct OnboardingPrismIllustration: View {
             orbit
             if reduce {
                 VStack(spacing: MeeshySpacing.sm) {
-                    bubble(text: originalText, language: originalLanguage, translated: false).opacity(0.55).scaleEffect(0.9)
+                    bubble(text: originalText, language: originalLanguage, translated: false).opacity(MeeshyOpacity.strong).scaleEffect(0.9)
                     Image(systemName: "arrow.down")
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                         .foregroundStyle(MeeshyColors.indigo400)
@@ -82,7 +82,7 @@ struct OnboardingPrismIllustration: View {
                     .font(MeeshyFont.relative(MeeshyFont.titleSize))
                     .padding(MeeshySpacing.xsPlus)
                     .background(Circle().fill(isDark ? MeeshyColors.indigo950 : Color.white))
-                    .shadow(color: MeeshyColors.indigo700.opacity(0.18), radius: 6, y: 2)
+                    .shadow(color: MeeshyColors.indigo700.opacity(MeeshyOpacity.light), radius: 6, y: 2)
                     .offset(item.offset)
             }
         }
@@ -105,7 +105,7 @@ struct OnboardingPrismIllustration: View {
             if translated {
                 Image(systemName: "translate")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -114,9 +114,9 @@ struct OnboardingPrismIllustration: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
                 .fill(translated
                       ? AnyShapeStyle(MeeshyColors.brandGradient)
-                      : AnyShapeStyle(isDark ? Color.white.opacity(0.10) : Color.white))
+                      : AnyShapeStyle(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
         )
-        .shadow(color: MeeshyColors.indigo700.opacity(0.2), radius: 12, y: 6)
+        .shadow(color: MeeshyColors.indigo700.opacity(MeeshyOpacity.light), radius: 12, y: 6)
     }
 }
 
@@ -142,7 +142,7 @@ struct OnboardingGlobalIllustration: View {
             Circle()
                 .fill(MeeshyColors.brandGradient)
                 .frame(width: 118, height: 118)
-                .shadow(color: MeeshyColors.indigo500.opacity(0.45), radius: 24, y: 10)
+                .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.strong), radius: 24, y: 10)
             Image(systemName: "globe.europe.africa.fill")
                 .resizable()
                 .scaledToFit()
@@ -173,9 +173,9 @@ struct OnboardingGlobalIllustration: View {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .background(Capsule().fill(isDark ? MeeshyColors.indigo950.opacity(0.9) : Color.white))
+        .background(Capsule().fill(isDark ? MeeshyColors.indigo950.opacity(MeeshyOpacity.intense) : Color.white))
         .overlay(Capsule().stroke(MeeshyColors.indigo200.opacity(isDark ? 0.2 : 0.8), lineWidth: 1))
-        .shadow(color: MeeshyColors.indigo700.opacity(0.15), radius: 8, y: 3)
+        .shadow(color: MeeshyColors.indigo700.opacity(MeeshyOpacity.light), radius: 8, y: 3)
     }
 }
 
@@ -190,7 +190,7 @@ struct OnboardingStoryIllustration: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(isDark ? Color.white.opacity(0.10) : MeeshyColors.indigo100, lineWidth: 7)
+                .stroke(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo100, lineWidth: 7)
                 .frame(width: 140, height: 140)
             Circle()
                 .trim(from: 0, to: ring)
@@ -289,9 +289,9 @@ struct OnboardingNotificationIllustration: View {
                     .offset(x: 6, y: -4)
             }
             HStack(spacing: MeeshySpacing.md) {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
                     .fill(MeeshyColors.brandGradient)
-                    .frame(width: 34, height: 34)
+                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                     .overlay(Image(systemName: "bubble.left.and.bubble.right.fill").foregroundStyle(.white).font(.caption))
                 Text(String(localized: "onboarding.notifications.sample", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
@@ -301,7 +301,7 @@ struct OnboardingNotificationIllustration: View {
             }
             .padding(MeeshySpacing.md)
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(.regularMaterial))
-            .shadow(color: MeeshyColors.indigo700.opacity(0.15), radius: 10, y: 4)
+            .shadow(color: MeeshyColors.indigo700.opacity(MeeshyOpacity.light), radius: 10, y: 4)
         }
         .onboardingMotion { reduce in
             guard !reduce else { return }
@@ -322,7 +322,7 @@ struct OnboardingTrophyIllustration: View {
             Circle()
                 .fill(MeeshyColors.brandGradient)
                 .frame(width: 124, height: 124)
-                .shadow(color: MeeshyColors.indigo500.opacity(0.5), radius: 28, y: 12)
+                .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.strong), radius: 28, y: 12)
             Image(systemName: "trophy.fill")
                 .resizable()
                 .scaledToFit()

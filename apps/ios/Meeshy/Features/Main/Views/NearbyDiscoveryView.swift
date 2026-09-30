@@ -659,7 +659,7 @@ struct NearbyPostRow: View {
                 )
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
                         Text(post.author)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))

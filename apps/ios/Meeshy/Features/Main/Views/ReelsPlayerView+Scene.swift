@@ -36,7 +36,7 @@ extension ReelPageView {
         } label: {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: sceneSoundMuted))
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }

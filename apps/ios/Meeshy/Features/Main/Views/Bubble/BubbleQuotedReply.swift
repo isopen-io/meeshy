@@ -242,7 +242,7 @@ struct BubbleQuotedReply: View, Equatable {
         if let details = quotedDetails {
             Text(details)
                 .font(.caption2)
-                .foregroundColor(previewColor.opacity(0.8))
+                .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
         }
     }
@@ -255,7 +255,7 @@ struct BubbleQuotedReply: View, Equatable {
         if reply.moodEmoji != nil, let date = reply.storyPublishedAt {
             Text(date, style: .relative)
                 .font(.caption2)
-                .foregroundColor(previewColor.opacity(0.8))
+                .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 .layoutPriority(-1)
         }
@@ -340,7 +340,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// La teinte des textes secondaires de la citation — celle de l'aperçu,
     /// que l'aperçu d'un vocal cité reprend.
     private var quotePreviewColor: Color {
-        parentIsMe ? .white.opacity(0.65) : theme.textMuted
+        parentIsMe ? .white.opacity(MeeshyOpacity.heavy) : theme.textMuted
     }
 
     /// ZONE 1 — l'avatar de l'auteur cite, seule porte vers son profil. Le NOM
@@ -444,7 +444,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// L'aplat d'attente d'une miniature citée — vignette ou poster —, à la
     /// couleur de l'auteur cité. Une seule résolution pour les deux faces.
     private var mediaPlaceholder: Color {
-        Color(hex: reply.authorColor).opacity(0.3)
+        Color(hex: reply.authorColor).opacity(MeeshyOpacity.medium)
     }
 
     @ViewBuilder
@@ -552,21 +552,21 @@ struct BubbleQuotedReply: View, Equatable {
     var body: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
-            ? .white.opacity(0.9)
+            ? .white.opacity(MeeshyOpacity.intense)
             : Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let previewColor = quotePreviewColor
         let bgColor: Color = parentIsMe
-            ? Color.white.opacity(0.15)
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+            ? Color.white.opacity(MeeshyOpacity.light)
+            : MeeshyColors.surfaceFill(isDark: isDark)
 
         let contentBody = HStack(spacing: 0) {
             // Left accent bar
             RoundedRectangle(cornerRadius: 2)
-                .fill(parentIsMe ? Color.white.opacity(0.7) : accentBarColor)
+                .fill(parentIsMe ? Color.white.opacity(MeeshyOpacity.heavy) : accentBarColor)
                 .frame(width: 4)
 
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     // **Le texte part du deux-points de l'auteur** (#5103,
                     // directive porteur du 2026-09-04). Le nom occupait sa
                     // propre rangée et le texte commençait à la suivante :
@@ -612,7 +612,7 @@ struct BubbleQuotedReply: View, Equatable {
                         // ne l'abandonne pas — les trois peaux la suivent.
                         quotedThumbnail
 
-                        HStack(spacing: 5) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             // Le glyphe reste la SEULE affordance du média quand
                             // aucune miniature ne voyage : le retirer ici
                             // fermerait la zone 2 pour un audio ou un document.
@@ -699,7 +699,7 @@ struct BubbleMoodReplyPreview: View, Equatable {
     var body: some View {
         // La date est rendue par la ligne de titre de `BubbleQuotedReply` : ici
         // elle consommait la largeur du contenu, qui se coupait à mi-phrase.
-        HStack(alignment: .top, spacing: 5) {
+        HStack(alignment: .top, spacing: MeeshySpacing.xs) {
             if let emoji = reply.moodEmoji {
                 Text(emoji)
                     .font(.footnote)
@@ -771,7 +771,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
                     .foregroundColor(previewColor.opacity(0.6))
                 Text(date, style: .relative)
                     .font(.caption2)
-                    .foregroundColor(previewColor.opacity(0.8))
+                    .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
             }
 
             let reactions = reply.storyReactionCount ?? 0
@@ -810,12 +810,12 @@ struct BubbleStoryReplyPreview: View, Equatable {
             Text("\(value)")
                 .font(.caption2.weight(.medium))
         }
-        .foregroundColor(previewColor.opacity(0.8))
+        .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
     }
 
     private var storyMetricSeparator: some View {
         Text("\u{2022}")
             .font(.caption2)
-            .foregroundColor(previewColor.opacity(0.5))
+            .foregroundColor(previewColor.opacity(MeeshyOpacity.strong))
     }
 }

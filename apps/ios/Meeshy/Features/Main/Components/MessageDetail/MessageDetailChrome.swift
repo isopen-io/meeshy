@@ -41,10 +41,10 @@ struct MessageDetailTimelineBanner: View {
                     .font(.system(.caption, design: .monospaced).weight(.bold))
                     .foregroundColor(accent)
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
-                            .fill(accent.opacity(0.12))
+                            .fill(accent.opacity(MeeshyOpacity.light))
                     )
                     // Numeric badge duplicates the count already spelled out in
                     // `detail` ("3 versions précédentes") — hidden from VoiceOver.
@@ -57,7 +57,7 @@ struct MessageDetailTimelineBanner: View {
                 .fill(accent.opacity(colorScheme == .dark ? 0.06 : 0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .stroke(accent.opacity(0.12), lineWidth: MeeshyBorder.hairline)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
         // Header banner reads as one stop: title + detail sentence.
@@ -84,7 +84,7 @@ struct MessageDetailEmptyState: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .accessibilityElement(children: .combine)
     }
 }

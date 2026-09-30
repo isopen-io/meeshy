@@ -121,13 +121,13 @@ struct SceneScrubTrack: View {
         let thickness = state.isScrubbing ? Self.activeThickness : restThickness
         let filled = width * CGFloat(shown)
         ZStack(alignment: .leading) {
-            Capsule().fill(Color.white.opacity(0.3))
+            Capsule().fill(Color.white.opacity(MeeshyOpacity.medium))
                 .frame(height: thickness)
             Capsule().fill(fill)
                 .frame(width: max(0, filled), height: thickness)
             Circle().fill(Color.white)
                 .frame(width: Self.thumbSize, height: Self.thumbSize)
-                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3, y: 1)
                 .offset(x: min(max(filled - Self.thumbSize / 2, 0), max(0, width - Self.thumbSize)))
                 .opacity(state.isScrubbing ? 1 : 0)
                 .scaleEffect(state.isScrubbing ? 1 : 0.4)

@@ -29,7 +29,7 @@ struct InviteChoicesPanel: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, 18)
+        .padding(.top, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.md)
         .background(
             (isDark ? MeeshyColors.indigo950 : Color.white)
@@ -67,7 +67,7 @@ struct InviteChoicesPanel: View {
                     Text(verbatim: initials)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
                         .foregroundColor(MeeshyColors.indigo600)
-                        .frame(width: 30, height: 30)
+                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                         .background(Circle().fill(Color.white))
                         .accessibilityHidden(true)
                 }

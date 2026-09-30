@@ -160,7 +160,7 @@ struct ComposerHashtagSheet: View {
                                 .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
-                        .padding(.horizontal, 11)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .frame(minHeight: 36)
                         .background(Capsule().fill(Color.white.opacity(posees ? 0.10 : 0.05)))
                         .overlay(Capsule().strokeBorder(

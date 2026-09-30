@@ -49,7 +49,7 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .clock:
             Image(systemName: "clock")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                .foregroundColor(tint.opacity(0.7))
+                .foregroundColor(tint.opacity(MeeshyOpacity.heavy))
                 .accessibilityLabel(Self.label(.sending))
         case .slow:
             // Spec 2026-07-08 (message-send-failure-retry-flow, règle 2) : un

@@ -461,7 +461,7 @@ public struct MeeshyAvatar: View {
                 .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()
-                .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: context.ringWidth)
+                .stroke(Color(hex: resolvedAccent).opacity(MeeshyOpacity.medium), lineWidth: context.ringWidth)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .none:
             EmptyView()

@@ -126,8 +126,8 @@ struct InviteFriendsSheet: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 ZStack {
                     Circle()
-                        .fill(Color(hex: conversation.accentColor).opacity(0.2))
-                        .frame(width: 44, height: 44)
+                        .fill(Color(hex: conversation.accentColor).opacity(MeeshyOpacity.light))
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     Image(systemName: conversationIcon)
                         .font(.system(size: MeeshyIconSize.lg, weight: .semibold)) // glyph in fixed 44pt avatar circle — kept fixed to avoid clipping at large Dynamic Type
                         .foregroundColor(Color(hex: conversation.accentColor))
@@ -218,7 +218,7 @@ struct InviteFriendsSheet: View {
                 .padding(MeeshySpacing.smPlus)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: conversation.accentColor).opacity(0.08))
+                        .fill(Color(hex: conversation.accentColor).opacity(MeeshyOpacity.subtle))
                 )
             }
             .buttonStyle(.plain)
@@ -231,7 +231,7 @@ struct InviteFriendsSheet: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                        .stroke(Color(hex: conversation.accentColor).opacity(0.2), lineWidth: 1)
+                        .stroke(Color(hex: conversation.accentColor).opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
         )
     }
@@ -334,7 +334,7 @@ struct InviteFriendsSheet: View {
                             LinearGradient(
                                 colors: [
                                     Color(hex: conversation.accentColor),
-                                    Color(hex: conversation.accentColor).opacity(0.8)
+                                    Color(hex: conversation.accentColor).opacity(MeeshyOpacity.intense)
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -493,7 +493,7 @@ struct InviteFriendsSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.inputBorder.opacity(0.5), lineWidth: 1)
+                        .stroke(theme.inputBorder.opacity(MeeshyOpacity.strong), lineWidth: 1)
                 )
         }
     }
@@ -522,7 +522,7 @@ struct InviteFriendsSheet: View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                    .fill(iconColor.opacity(0.15))
+                    .fill(iconColor.opacity(MeeshyOpacity.light))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold)) // glyph in fixed 32pt tile — kept fixed to avoid clipping at large Dynamic Type
@@ -556,7 +556,7 @@ struct InviteFriendsSheet: View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                    .fill(iconColor.opacity(0.15))
+                    .fill(iconColor.opacity(MeeshyOpacity.light))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold)) // glyph in fixed 32pt tile — kept fixed to avoid clipping at large Dynamic Type
@@ -570,11 +570,11 @@ struct InviteFriendsSheet: View {
     }
 
     private var rowBackground: some View {
-        isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
+        MeeshyColors.surfaceFill(isDark: isDark)
     }
 
     private var sectionDivider: some View {
-        Divider().background(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
+        Divider().background(MeeshyColors.hairline(isDark: isDark))
     }
 
     private var conversationIcon: String {

@@ -68,7 +68,7 @@ struct ThemedActionButton: View {
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
                         .foregroundColor(Color(hex: color))
                         .lineLimit(1)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .frame(minWidth: 16, minHeight: 16)
                         .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
@@ -456,7 +456,7 @@ struct ThemedFeedOverlay: View {
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
@@ -473,9 +473,9 @@ struct ThemedFeedOverlay: View {
             router.push(.nearbyDiscovery())
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))

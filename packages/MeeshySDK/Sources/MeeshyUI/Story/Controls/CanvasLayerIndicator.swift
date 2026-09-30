@@ -19,7 +19,7 @@ struct CanvasLayerIndicator: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.55) }
+    private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(MeeshyOpacity.strong) }
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xsPlus) {

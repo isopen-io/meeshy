@@ -65,7 +65,7 @@ struct TrackingLinkDetailView: View {
     private var headerCard: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
             ZStack {
-                Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500).opacity(0.15))
+                Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
                     .frame(width: 60, height: 60)
                 Image(systemName: "chart.bar.fill").font(.title2)
                     .foregroundColor(link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500)
@@ -83,7 +83,7 @@ struct TrackingLinkDetailView: View {
         .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
             .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                .stroke(MeeshyColors.trackingAccent.opacity(0.2), lineWidth: 1)))
+                .stroke(MeeshyColors.trackingAccent.opacity(MeeshyOpacity.light), lineWidth: 1)))
         .accessibilityElement(children: .combine)
         .accessibilityValue(link.isActive
             ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
@@ -93,8 +93,8 @@ struct TrackingLinkDetailView: View {
     private func utmTag(_ value: String, color: Color) -> some View {
         Text(value).font(.caption2.weight(.medium))
             .foregroundColor(color)
-            .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, 3)
-            .background(Capsule().fill(color.opacity(0.12)))
+            .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, MeeshySpacing.xxs)
+            .background(Capsule().fill(color.opacity(MeeshyOpacity.light)))
     }
 
     // MARK: - Actions bar
@@ -144,9 +144,9 @@ struct TrackingLinkDetailView: View {
     }
 
     private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 5) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(0.15))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
                     .frame(width: 46, height: 46)
                 Image(systemName: icon).font(.body)
                     .foregroundColor(color)
@@ -190,7 +190,7 @@ struct TrackingLinkDetailView: View {
         }
         .padding(MeeshySpacing.mdPlus).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }
 
@@ -229,8 +229,8 @@ struct TrackingLinkDetailView: View {
         }
         .padding(MeeshySpacing.lg)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(Color.white.opacity(0.08), lineWidth: 1)))
+            .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)))
     }
 
     private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {
@@ -239,8 +239,8 @@ struct TrackingLinkDetailView: View {
             Text(label).font(.footnote).foregroundColor(theme.textPrimary).frame(width: 80, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(0.15)).frame(height: 8)
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(0.7))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(MeeshyOpacity.light)).frame(height: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(MeeshyOpacity.heavy))
                         .frame(width: geo.size.width * pct, height: 8)
                 }
             }
@@ -272,14 +272,14 @@ struct TrackingLinkDetailView: View {
                 }
             }
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint)))
         }
     }
 
     private func clickRow(_ click: TrackingLinkClick) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
-                Circle().fill(deviceColor(click.device).opacity(0.12)).frame(width: 36, height: 36)
+                Circle().fill(deviceColor(click.device).opacity(MeeshyOpacity.light)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 Image(systemName: deviceIcon(click.device)).font(.subheadline)
                     .foregroundColor(deviceColor(click.device))
             }
@@ -334,7 +334,7 @@ struct TrackingLinkDetailView: View {
                 infoRow(String(localized: "tracking.link.detail.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint)))
         }
     }
 

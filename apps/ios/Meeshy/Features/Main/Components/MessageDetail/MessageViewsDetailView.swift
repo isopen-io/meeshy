@@ -164,7 +164,7 @@ struct MessageViewsDetailView: View {
                     Text("\(count)")
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(isSelected ? accent : theme.textMuted)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, 1)
                         .background(
                             Capsule()
@@ -173,7 +173,7 @@ struct MessageViewsDetailView: View {
                 }
             }
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 7)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
                     .fill(isSelected ? accent.opacity(0.15) : isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
@@ -206,7 +206,7 @@ struct MessageViewsDetailView: View {
                     avatarURL: message.senderAvatarURL
                 )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -484,7 +484,7 @@ struct MessageViewsDetailView: View {
             Spacer()
         }
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 9)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     private var metaDivider: some View {
@@ -792,7 +792,7 @@ struct MessageViewsDetailView: View {
                                 Text("\(c)x")
                                     .font(.system(.caption2, design: .monospaced).weight(.bold))
                                     .foregroundColor(accent.opacity(0.8))
-                                    .padding(.horizontal, 5)
+                                    .padding(.horizontal, MeeshySpacing.xs)
                                     .padding(.vertical, MeeshySpacing.xxs)
                                     .background(
                                         Capsule().fill(accent.opacity(0.08))
@@ -804,7 +804,7 @@ struct MessageViewsDetailView: View {
                             // place que la progression laisse libre sur ce qui
                             // n'a pas de piste.
                             if let downloadedAt = reading.downloadedAt {
-                                HStack(spacing: 3) {
+                                HStack(spacing: MeeshySpacing.xxs) {
                                     Image(systemName: "arrow.down.circle.fill")
                                         .font(.caption2)
                                     Text(relativeDate(downloadedAt))
@@ -823,7 +823,7 @@ struct MessageViewsDetailView: View {
                             // Progression — seulement pour un média à piste.
                             if family.showsProgress {
                                 if reading.isComplete {
-                                    HStack(spacing: 3) {
+                                    HStack(spacing: MeeshySpacing.xxs) {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.caption2)
                                         Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
@@ -881,7 +881,7 @@ struct MessageViewsDetailView: View {
                 .tint(accent)
             Spacer()
         }
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
     }
 
     private func retryableErrorView(accent: Color) -> some View {
@@ -911,7 +911,7 @@ struct MessageViewsDetailView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
     }
 
     // MARK: - Network Actions

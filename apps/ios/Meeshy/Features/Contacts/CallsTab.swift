@@ -112,14 +112,14 @@ struct CallsTab: View {
                 Image(systemName: "xmark")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.leading, MeeshySpacing.md)
-        .background(MeeshyColors.error.opacity(0.12))
+        .background(MeeshyColors.error.opacity(MeeshyOpacity.light))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.xsPlus)
@@ -187,7 +187,7 @@ struct CallsTab: View {
                 .accessibilityLabel(String(localized: "calls.loadingMore", defaultValue: "Chargement des appels plus anciens", bundle: .main))
             Spacer()
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .onAppear {
             Task { await viewModel.loadMore() }
         }
@@ -234,7 +234,7 @@ private struct CallJournalRow: View, Equatable {
                             presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
                         )
 
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(name)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textPrimary)
@@ -247,7 +247,7 @@ private struct CallJournalRow: View, Equatable {
                                     .lineLimit(1)
                             }
 
-                            HStack(spacing: 5) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: directionIcon)
                                     .font(.caption2.weight(.bold))
                                     .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
@@ -295,7 +295,7 @@ private struct CallJournalRow: View, Equatable {
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.vertical, MeeshySpacing.md)
-            Divider().opacity(0.15).padding(.leading, 70)
+            Divider().opacity(MeeshyOpacity.light).padding(.leading, 70)
         }
     }
 
@@ -373,8 +373,8 @@ struct CallRowDialButton: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 // 44x44 — Apple HIG minimum tap target (was 40x40).
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                .background(Circle().fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
         }
         .accessibilityLabel(accessibilityLabel ?? String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
         .accessibilityHint(String(localized: "calls.redial.hint", defaultValue: "Ouvre le choix entre appel vocal et appel vidéo", bundle: .main))

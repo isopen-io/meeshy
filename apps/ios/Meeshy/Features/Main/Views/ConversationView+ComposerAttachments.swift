@@ -62,7 +62,7 @@ extension ConversationView {
                                 Image(systemName: "play.circle.fill")
                                     // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 20))
-                                    .foregroundStyle(.white, .black.opacity(0.4))
+                                    .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
                                     .accessibilityHidden(true)
                             } else if attachment.type == .image {
                                 Image(systemName: "eye.fill")
@@ -70,9 +70,9 @@ extension ConversationView {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(MeeshySpacing.xs)
-                                    .background(Circle().fill(.black.opacity(0.4)))
+                                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                                    .padding(3)
+                                    .padding(MeeshySpacing.xxs)
                                     .accessibilityHidden(true)
                             }
                         } else if attachment.type == .audio {
@@ -83,7 +83,7 @@ extension ConversationView {
                             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)],
+                                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(MeeshyOpacity.heavy)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -225,7 +225,7 @@ extension ConversationView {
             VStack(spacing: MeeshySpacing.lg) {
                 Image(systemName: "photo.badge.exclamationmark")
                     .font(.system(size: 40))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
                 Text(String(localized: "conversation.view.composer.attachmentUnavailable",
                             defaultValue: "Pièce jointe indisponible", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
@@ -236,7 +236,7 @@ extension ConversationView {
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.xxl)
                         .padding(.vertical, MeeshySpacing.smPlus)
-                        .background(Capsule().fill(.white.opacity(0.15)))
+                        .background(Capsule().fill(.white.opacity(MeeshyOpacity.light)))
                 }
             }
         }
@@ -260,10 +260,10 @@ extension ConversationView {
                 Image(systemName: "mappin.circle.fill")
                     // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 22))
-                    .foregroundStyle(.white, .white.opacity(0.3))
+                    .foregroundStyle(.white, .white.opacity(MeeshyOpacity.medium))
                     .accessibilityHidden(true)
                 Circle()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(Color.white.opacity(MeeshyOpacity.medium))
                     .frame(width: 8, height: 4)
                     .scaleEffect(x: 1.8, y: 1)
             }
@@ -343,14 +343,14 @@ struct PendingAudioTile: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(
                     LinearGradient(
-                        colors: [color, color.opacity(0.7)],
+                        colors: [color, color.opacity(MeeshyOpacity.heavy)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .frame(width: 56, height: 56)
 
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 HStack(spacing: 1.5) {
                     ForEach(0..<7, id: \.self) { i in
                         let h: CGFloat = [0.3, 0.8, 0.5, 1.0, 0.4, 0.9, 0.6][i]
@@ -364,7 +364,7 @@ struct PendingAudioTile: View {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .accessibilityHidden(true)
             }
         }

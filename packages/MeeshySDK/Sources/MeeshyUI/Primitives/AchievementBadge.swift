@@ -42,7 +42,7 @@ public struct AchievementBadge: View {
                     LinearGradient(
                         colors: [
                             Color(hex: achievement.color),
-                            Color(hex: achievement.color).opacity(0.7)
+                            Color(hex: achievement.color).opacity(MeeshyOpacity.heavy)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -53,7 +53,7 @@ public struct AchievementBadge: View {
 
             // Icon
             Image(systemName: achievement.icon)
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                 .foregroundColor(.white)
                 .opacity(achievement.isUnlocked ? 1.0 : 0.4)
 

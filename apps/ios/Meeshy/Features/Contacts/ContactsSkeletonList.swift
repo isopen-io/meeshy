@@ -22,15 +22,15 @@ private struct ContactsSkeletonRow: View {
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
-                .frame(width: 44, height: 44)
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
-                    .fill(theme.textMuted.opacity(0.12))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                     .frame(width: 120, height: 14)
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.textMuted.opacity(0.08))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 80, height: 11)
             }
 

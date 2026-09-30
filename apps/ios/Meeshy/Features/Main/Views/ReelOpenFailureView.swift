@@ -22,15 +22,15 @@ struct ReelOpenFailureView: View {
             VStack(spacing: MeeshySpacing.md) {
                 Image(systemName: failure.symbolName)
                     .font(MeeshyFont.relative(40))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .accessibilityHidden(true)
                 Text(failure.title)
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
                     .multilineTextAlignment(.center)
                 Text(failure.message)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .multilineTextAlignment(.center)
                 if failure.offersRetry {
                     retryButton
@@ -41,11 +41,11 @@ struct ReelOpenFailureView: View {
                 } label: {
                     Text(String(localized: "feed.post.detail.unavailable.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
             .padding(.horizontal, MeeshySpacing.xxxl)
             .accessibilityElement(children: .contain)

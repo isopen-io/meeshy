@@ -34,7 +34,7 @@ struct MediaAccessibilityPanel: View {
             .padding(MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.05) : MeeshyColors.indigo950.opacity(0.04))
+                    .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.faint) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
             )
     }
 }

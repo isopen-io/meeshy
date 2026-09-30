@@ -122,7 +122,7 @@ struct ShareLinksView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
+                    .stroke(MeeshyColors.shareAccent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
     }
@@ -195,8 +195,8 @@ struct ShareLinksView: View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()
-                    .fill((link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(0.15))
-                    .frame(width: 40, height: 40)
+                    .fill((link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 // Glyph centered in a fixed 40×40 circle badge — a scalable font
                 // would overflow the frame. Kept fixed + hidden (the link name
                 // carries the meaning; doctrine 86i).
@@ -206,7 +206,7 @@ struct ShareLinksView: View {
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(link.displayName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -253,7 +253,7 @@ struct ShareLinksView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(MeeshyColors.shareAccent.opacity(0.15), lineWidth: 1))
+                    .stroke(MeeshyColors.shareAccent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
     }
 }

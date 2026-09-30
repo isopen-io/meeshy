@@ -141,10 +141,10 @@ public struct MeeshyAudioEditorView: View {
                     Spacer(minLength: 6)
 
                     waveformSection
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, MeeshySpacing.lg)
 
                     transportControls
-                        .padding(.top, 18)
+                        .padding(.top, MeeshySpacing.lg)
 
                     Spacer(minLength: 6)
 
@@ -213,7 +213,7 @@ public struct MeeshyAudioEditorView: View {
             ZStack {
                 Circle()
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                    .frame(width: 38, height: 38)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
@@ -251,8 +251,8 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.mode = target
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: icon).font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(label).font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .padding(.horizontal, MeeshySpacing.md)
@@ -337,7 +337,7 @@ public struct MeeshyAudioEditorView: View {
                         .frame(width: 60, height: 60)
                         .shadow(color: accent.opacity(0.4), radius: 12)
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 23, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                         .foregroundColor(.white)
                         .offset(x: isPlaying ? 0 : 2)
                 }
@@ -379,7 +379,7 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.selectTool(isActive ? nil : tool)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
                         .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -517,7 +517,7 @@ public struct MeeshyAudioEditorView: View {
                         .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(isActive ? .white : theme.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(
                             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -567,7 +567,7 @@ public struct MeeshyAudioEditorView: View {
                         HapticFeedback.light()
                         controller.transcriptionLanguage = language.code
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(language.flag)
                             Text(language.nativeName)
                                 .font(.system(size: MeeshyFont.smallSize, weight: .medium))
@@ -680,7 +680,7 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.selectVersion(version.id)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: version.operation.displayIcon)
                     .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(version.operation.displayLabel)
@@ -746,7 +746,7 @@ public struct MeeshyAudioEditorView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 9)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(MeeshyColors.error.opacity(0.1))

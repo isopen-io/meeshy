@@ -132,7 +132,7 @@ extension UniversalComposerBar {
                 }
             }
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 Text(currentLangOption.flag)
                     .font(.caption)
                 Text(currentLangOption.code.uppercased())

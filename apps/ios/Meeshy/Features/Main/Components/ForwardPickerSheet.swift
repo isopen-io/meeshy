@@ -90,7 +90,7 @@ struct ForwardPickerSheet: View {
                 messagePreview
 
                 Divider()
-                    .overlay(theme.textMuted.opacity(0.2))
+                    .overlay(theme.textMuted.opacity(MeeshyOpacity.light))
 
                 if isColdStartLoading {
                     Spacer()
@@ -229,7 +229,7 @@ struct ForwardPickerSheet: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.sm)
-        .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .background(MeeshyColors.surfaceFill(isDark: isDark))
     }
 
     /// Aperçu digne d'un média : type localisé + compteur, plus jamais « [Media] ».
@@ -263,11 +263,11 @@ struct ForwardPickerSheet: View {
                 thumbnailUrl: thumbUrl,
                 fullUrl: fullUrl ?? thumbUrl
             ) {
-                Color(hex: accentColor).opacity(0.3)
+                Color(hex: accentColor).opacity(MeeshyOpacity.medium)
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: 28, height: 28)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         }
     }
 
@@ -384,7 +384,7 @@ struct ForwardPickerSheet: View {
                                     // vertical, pour que la pilule garde sa
                                     // hauteur quand le corps GRANDIT sous
                                     // Dynamic Type.
-                                    .frame(minHeight: 44)
+                                    .frame(minHeight: MeeshyControlSize.tapTarget)
                                     .background(
                                         Capsule().stroke(Color(hex: accentColor).opacity(0.4), lineWidth: 1)
                                     )
@@ -452,9 +452,9 @@ struct ForwardPickerSheet: View {
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             .foregroundColor(Color(hex: accentColor))
             .padding(.horizontal, MeeshySpacing.mdPlus)
-            .frame(minHeight: 44)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
             .background(
-                Capsule().fill(Color(hex: accentColor).opacity(0.12))
+                Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
             )
             .contentShape(Capsule())
         }
@@ -486,7 +486,7 @@ struct ForwardPickerSheet: View {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.lg)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                         .background(Capsule().fill(Color(hex: accentColor)))
                         .contentShape(Capsule())
                 }
@@ -498,7 +498,7 @@ struct ForwardPickerSheet: View {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.md)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())
                 }
             }
@@ -506,7 +506,7 @@ struct ForwardPickerSheet: View {
         .padding(MeeshySpacing.smPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+                .stroke(theme.textMuted.opacity(MeeshyOpacity.medium), lineWidth: 1)
         )
     }
 
@@ -819,7 +819,7 @@ struct ForwardPickerRow: View, Equatable {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
-        .background(state == .selected ? Color(hex: accentHex).opacity(0.10) : Color.clear)
+        .background(state == .selected ? Color(hex: accentHex).opacity(MeeshyOpacity.subtle) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         .accessibilityAddTraits(state == .selected ? .isSelected : [])

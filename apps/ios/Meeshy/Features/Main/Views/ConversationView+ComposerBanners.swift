@@ -130,7 +130,7 @@ extension ConversationView {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
-                    .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                    .background(Circle().fill(MeeshyColors.surfaceFill(isDark: isDark)))
             }
             .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
@@ -192,7 +192,7 @@ extension ConversationView {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
-                    .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                    .background(Circle().fill(MeeshyColors.surfaceFill(isDark: isDark)))
             }
             .accessibilityLabel(String(localized: "conversation.view.composer.cancel_edit", defaultValue: "Annuler la modification", bundle: .main))
         }
@@ -310,10 +310,10 @@ extension ConversationView {
             case .image:
                 if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
                     CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
-                        accent.opacity(0.3)
+                        accent.opacity(MeeshyOpacity.medium)
                     }
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
                     .onTapGesture {
                         if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
@@ -326,16 +326,16 @@ extension ConversationView {
                 if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
                     ZStack {
                         CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
-                            accent.opacity(0.3)
+                            accent.opacity(MeeshyOpacity.medium)
                         }
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 40, height: 40)
+                        .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
 
                         Image(systemName: "play.circle.fill")
                             // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
                             .font(.system(size: 18))
-                            .foregroundStyle(.white, .black.opacity(0.4))
+                            .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
                             .accessibilityHidden(true)
                     }
                     .onTapGesture {
@@ -359,7 +359,7 @@ extension ConversationView {
                         ForEach(0..<8, id: \.self) { i in
                             let h: CGFloat = [0.4, 0.7, 0.5, 1.0, 0.6, 0.9, 0.3, 0.5][i]
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(accent.opacity(0.35))
+                                .fill(accent.opacity(MeeshyOpacity.medium))
                                 .frame(width: 2, height: 4 + 16 * h)
                         }
                     }
@@ -369,10 +369,10 @@ extension ConversationView {
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                        .fill(accent.opacity(0.08))
+                        .fill(accent.opacity(MeeshyOpacity.subtle))
                         .overlay(
                             RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                                .stroke(accent.opacity(0.15), lineWidth: MeeshyBorder.hairline)
+                                .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .onTapGesture {
@@ -404,25 +404,25 @@ extension ConversationView {
             RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(
                     LinearGradient(
-                        colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.success.opacity(0.08)],
+                        colors: [MeeshyColors.success.opacity(MeeshyOpacity.light), MeeshyColors.success.opacity(MeeshyOpacity.subtle)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                        .stroke(MeeshyColors.success.opacity(0.2), lineWidth: MeeshyBorder.hairline)
+                        .stroke(MeeshyColors.success.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
 
             VStack(spacing: 1) {
                 Image(systemName: "mappin.circle.fill")
                     // Doctrine 86i : glyphe décoratif borné par la vignette fixe 40×40 → figé + masqué.
                     .font(.system(size: 18))
-                    .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
+                    .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(MeeshyOpacity.light))
                     .accessibilityHidden(true)
                 Circle()
-                    .fill(MeeshyColors.success.opacity(0.3))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.medium))
                     .frame(width: 6, height: 3)
                     .scaleEffect(x: 1.8, y: 1)
             }
@@ -432,16 +432,16 @@ extension ConversationView {
     private func replyAttachmentFallbackBadge(icon: String, color: Color) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                .fill(color.opacity(0.1))
-                .frame(width: 40, height: 40)
+                .fill(color.opacity(MeeshyOpacity.subtle))
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                        .stroke(color.opacity(0.2), lineWidth: MeeshyBorder.hairline)
+                        .stroke(color.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
             Image(systemName: icon)
                 // Doctrine 86i : glyphe décoratif borné par le badge fixe 40×40 → figé + masqué.
                 .font(.system(size: 16))
-                .foregroundColor(color.opacity(0.7))
+                .foregroundColor(color.opacity(MeeshyOpacity.heavy))
                 .accessibilityHidden(true)
         }
     }

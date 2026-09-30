@@ -472,7 +472,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     @ViewBuilder
     private var expandedBackdrop: some View {
         if dimsBackgroundWhenExpanded {
-            LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.6), .black.opacity(0.82)],
+            LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.6), .black.opacity(MeeshyOpacity.intense)],
                            startPoint: .top, endPoint: .bottom)
                 .contentShape(Rectangle())
                 .onTapGesture { onToggle() }
@@ -549,8 +549,8 @@ public extension View {
     func legibleOverCanvas(on scheme: ColorScheme) -> some View {
         let halo = CanvasChromeScheme.legibilityHalo(for: scheme)
         return self
-            .shadow(color: halo.opacity(0.75), radius: 2, x: 0, y: 1)
-            .shadow(color: halo.opacity(0.35), radius: 7, x: 0, y: 2)
+            .shadow(color: halo.opacity(MeeshyOpacity.heavy), radius: 2, x: 0, y: 1)
+            .shadow(color: halo.opacity(MeeshyOpacity.medium), radius: 7, x: 0, y: 2)
     }
 }
 

@@ -316,13 +316,13 @@ public struct FreeFloatingButton<Content: View>: View {
             .background(
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 5)
+                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 10, x: 0, y: 5)
             )
             .overlay(
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
+                            colors: [Color.white.opacity(MeeshyOpacity.medium), Color.white.opacity(MeeshyOpacity.subtle)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -615,13 +615,13 @@ public struct LegacyFloatingButton<Content: View>: View {
             .background(
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 5)
+                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 10, x: 0, y: 5)
             )
             .overlay(
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
+                            colors: [Color.white.opacity(MeeshyOpacity.medium), Color.white.opacity(MeeshyOpacity.subtle)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -742,7 +742,7 @@ public struct NotificationBadge: View {
                 .background(
                     Capsule()
                         .fill(MeeshyColors.error)
-                        .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
+                        .shadow(color: MeeshyColors.error.opacity(MeeshyOpacity.strong), radius: 3)
                 )
                 // Halo pulsant en capsule et non en cercle : à trois glyphes un
                 // cercle centré déborderait des extrémités. `scaleEffect`

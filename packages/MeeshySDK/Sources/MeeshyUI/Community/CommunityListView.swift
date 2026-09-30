@@ -249,13 +249,13 @@ private struct VibrantCommunityCard: View, Equatable {
             .padding(.trailing, MeeshySpacing.smPlus)
             .padding(.top, MeeshySpacing.smPlus)
 
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                     .font(.system(size: 8, weight: .semibold))
             }
             .foregroundColor(.white.opacity(0.85))
             .padding(.horizontal, MeeshySpacing.xsPlus)
-            .padding(.vertical, 3)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Color.black.opacity(0.25))
             .clipShape(Capsule())
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -283,16 +283,16 @@ private struct VibrantCommunityCard: View, Equatable {
                 }
 
                 HStack(spacing: MeeshySpacing.sm) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 9))
+                            .font(.system(size: MeeshyIconSize.xxs))
                         Text(CompactCountLabel.text(community.memberCount))
                             .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     }
 
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "bubble.left.fill")
-                            .font(.system(size: 9))
+                            .font(.system(size: MeeshyIconSize.xxs))
                         Text(CompactCountLabel.text(community.conversationCount))
                             .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     }

@@ -196,9 +196,9 @@ extension BubbleStandardLayout {
 
     @ViewBuilder
     private func mediaWithReplyContainerBody(reply: BubbleContent.Reply) -> some View {
-        let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
-        let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
-        let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+        let neutralBg = MeeshyColors.surfaceFill(isDark: isDark)
+        let strokeColor = MeeshyColors.hairline(isDark: isDark)
+        let dividerColor = MeeshyColors.hairline(isDark: isDark)
 
         VStack(spacing: 0) {
             BubbleQuotedReply(
@@ -410,7 +410,7 @@ fileprivate struct BubbleGridCell: View {
             summary: attachment.reactionSummary,
             currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: contactColor))
-                .padding(5)
+                .padding(MeeshySpacing.xs)
         }
     }
 
@@ -509,9 +509,9 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
             Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(24, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -540,7 +540,7 @@ fileprivate struct BubbleGridCell: View {
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.error.opacity(0.85))
+                                .fill(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                         )
                 }
                 .padding(MeeshySpacing.xsPlus)
@@ -660,7 +660,7 @@ fileprivate struct BubbleGridImageView: View {
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
         }
     }
 }
@@ -674,10 +674,10 @@ private struct AttachmentBlurOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
                 .background(.ultraThinMaterial)
 
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "eye.slash.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(.white)
@@ -688,7 +688,7 @@ private struct AttachmentBlurOverlayView: View {
 
                 Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.microSize))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
         .contentShape(Rectangle())
@@ -796,8 +796,8 @@ struct BubbleCarouselView: View {
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
-                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: MeeshyBorder.hairline))
+                    .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
+                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
@@ -818,10 +818,10 @@ struct BubbleCarouselView: View {
         let accent = Color(hex: contactColor)
 
         if items.count <= 7 {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 ForEach(0..<items.count, id: \.self) { i in
                     Circle()
-                        .fill(i == carouselIndex ? accent : Color.white.opacity(0.45))
+                        .fill(i == carouselIndex ? accent : Color.white.opacity(MeeshyOpacity.strong))
                         .frame(
                             width: i == carouselIndex ? 7 : 5,
                             height: i == carouselIndex ? 7 : 5
@@ -834,22 +834,22 @@ struct BubbleCarouselView: View {
                 }
             }
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 5)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(.ultraThinMaterial.opacity(0.7))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline))
+                    .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                    .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
             )
         } else {
             Text("\(carouselIndex + 1) / \(items.count)")
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .padding(.horizontal, MeeshySpacing.smPlus)
-                .padding(.vertical, 5)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
-                        .fill(.ultraThinMaterial.opacity(0.7))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline))
+                        .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                        .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
                 )
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)

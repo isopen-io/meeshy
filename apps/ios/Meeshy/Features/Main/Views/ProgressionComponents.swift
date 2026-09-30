@@ -19,7 +19,7 @@ struct ProgressionCard<Content: View>: View {
 
     var body: some View {
         content()
-            .padding(MeeshySpacing.md + 2)
+            .padding(MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: tint))
@@ -163,7 +163,7 @@ struct ProgressionAxisRow: View {
                 }
             }
         }
-        .padding(.vertical, MeeshySpacing.sm + 2)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
     }
 }
@@ -205,7 +205,7 @@ struct ProgressionAchievementRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MeeshySpacing.sm + 2)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
     }
 }

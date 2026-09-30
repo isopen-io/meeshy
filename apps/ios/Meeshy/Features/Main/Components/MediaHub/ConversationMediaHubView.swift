@@ -80,21 +80,21 @@ struct ConversationMediaHubView: View {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(mutedText)
-                        .frame(width: 44, height: 44)
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, MeeshySpacing.smPlus)
-        .frame(minHeight: 44)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .strokeBorder(mutedText.opacity(0.15), lineWidth: 1)
+                .strokeBorder(mutedText.opacity(MeeshyOpacity.light), lineWidth: 1)
         )
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.md)
@@ -224,7 +224,7 @@ struct ConversationMediaHubView: View {
                         Image(systemName: "arrow.turn.up.left")
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(Color(hex: accentColor))
-                            .frame(width: 44, height: 44)
+                            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ConversationMediaHubCopy.goToMessage)
@@ -278,7 +278,7 @@ struct ConversationMediaHubView: View {
     // MARK: - Aides
 
     private var mutedText: Color {
-        isDark ? .white.opacity(0.55) : MeeshyColors.indigo950.opacity(0.5)
+        MeeshyColors.textMuted(isDark: isDark)
     }
 
     private func senderName(_ item: ConversationMediaHubItem) -> String {

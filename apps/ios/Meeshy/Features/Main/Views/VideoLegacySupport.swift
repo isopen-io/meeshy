@@ -135,7 +135,7 @@ struct VideoFullscreenPlayer: View {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                             .padding()
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))

@@ -179,7 +179,7 @@ struct ShareLinkEditForm: View {
                 .padding(.vertical, MeeshySpacing.smPlus)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .fill(isDark ? MeeshyColors.indigo900.opacity(0.55) : MeeshyColors.indigo50)
+                        .fill(isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo50)
                 )
         }
     }

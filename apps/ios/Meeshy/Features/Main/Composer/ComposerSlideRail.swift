@@ -90,7 +90,7 @@ struct ComposerSlideRail: View {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(8, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(3)
+                    .padding(MeeshySpacing.xxs)
                     .background(Circle().fill(Color.black.opacity(0.55)))
             }
             .buttonStyle(.plain)

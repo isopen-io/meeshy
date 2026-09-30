@@ -44,8 +44,8 @@ struct ProfileProgressionEntry: View {
                     .foregroundColor(theme.textMuted)
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, MeeshySpacing.md + 2)
-            .padding(.vertical, MeeshySpacing.sm + 2)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: tint))

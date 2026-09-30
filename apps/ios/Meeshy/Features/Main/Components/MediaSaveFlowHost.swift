@@ -114,16 +114,16 @@ private struct MediaSavePreparingIndicator: View {
                 .tint(.white)
             Text(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: "Shown while the media is being resolved and watermarked before saving"))
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.mdPlus)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 18, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: ""))
     }

@@ -119,7 +119,7 @@ struct StoryLanguageDetailView: View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 // Scrim discret — tap pour fermer (la story reste visible derrière).
-                Color.black.opacity(0.35)
+                Color.black.opacity(MeeshyOpacity.medium)
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
 
@@ -160,7 +160,7 @@ struct StoryLanguageDetailView: View {
                 .stroke(Color.white.opacity(isDark ? 0.1 : 0.06), lineWidth: MeeshyBorder.hairline)
         )
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous))
-        .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 16, y: 6)
         .padding(.horizontal, MeeshySpacing.sm)
         .accessibilityElement(children: .contain)
     }
@@ -203,8 +203,8 @@ struct StoryLanguageDetailView: View {
                         Text(code.uppercased())
                             .font(.system(.caption2, design: .monospaced).weight(.bold))
                             .foregroundColor(langColor)
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(Capsule().fill(langColor.opacity(0.12)))
+                            .padding(.horizontal, MeeshySpacing.xsPlus).padding(.vertical, MeeshySpacing.xxs)
+                            .background(Capsule().fill(langColor.opacity(MeeshyOpacity.light)))
                     }
                 }
                 Text(content)
@@ -218,7 +218,7 @@ struct StoryLanguageDetailView: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .stroke(langColor.opacity(0.15), lineWidth: MeeshyBorder.hairline))
+                        .stroke(langColor.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
             )
         }
     }
@@ -262,7 +262,7 @@ struct StoryLanguageDetailView: View {
                         .foregroundColor(MeeshyColors.indigo400)
                 }
             }
-            .padding(.vertical, 9)
+            .padding(.vertical, MeeshySpacing.sm)
             .padding(.horizontal, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
@@ -330,7 +330,7 @@ struct StoryLanguageDetailView: View {
                                     .font(.caption2.weight(.medium))
                             }
                         }
-                        .foregroundColor(langColor.opacity(0.7))
+                        .foregroundColor(langColor.opacity(MeeshyOpacity.heavy))
                         .tint(langColor)
                         .frame(width: 26, height: 26)
                         .contentShape(Circle())
@@ -341,17 +341,17 @@ struct StoryLanguageDetailView: View {
                                                     defaultValue: "Retraduire", bundle: .main)))
                     Image(systemName: isActive ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isActive ? langColor : theme.textMuted.opacity(0.5))
+                        .foregroundColor(isActive ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else {
                     Text(String(localized: "story.language.detail.translate",
                                 defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
                         .foregroundColor(langColor)
-                        .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, 3)
-                        .background(Capsule().fill(langColor.opacity(0.12)))
+                        .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(langColor.opacity(MeeshyOpacity.light)))
                 }
             }
-            .padding(.vertical, 9)
+            .padding(.vertical, MeeshySpacing.sm)
             .padding(.horizontal, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)

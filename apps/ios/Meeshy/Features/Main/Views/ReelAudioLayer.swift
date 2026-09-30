@@ -44,9 +44,9 @@ struct ReelAudioView: View {
             // video/image reels' dark aesthetic rather than a bright gradient.
             LinearGradient(
                 colors: [
-                    Color(hex: accentColor).opacity(0.55),
+                    Color(hex: accentColor).opacity(MeeshyOpacity.strong),
                     .black,
-                    Color(hex: accentColor).opacity(0.35)
+                    Color(hex: accentColor).opacity(MeeshyOpacity.medium)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -57,7 +57,7 @@ struct ReelAudioView: View {
             // Glyphe décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 220, weight: .semibold))
-                .foregroundColor(.white.opacity(0.05))
+                .foregroundColor(.white.opacity(MeeshyOpacity.faint))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
 
@@ -74,7 +74,7 @@ struct ReelAudioView: View {
             Image(systemName: "waveform")
                 .font(.system(size: 84, weight: .semibold))
                 .foregroundColor(.white.opacity(0.92))
-                .shadow(color: .black.opacity(0.35), radius: 10)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 10)
                 .accessibilityHidden(true)
         } else {
             // Karaoke transcript: the active segment ([startTime, endTime) of the

@@ -305,7 +305,7 @@ struct MessageMoreSheet: View {
         return Button {
             handleMoreItemTap(item)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
                         .fill(
@@ -430,7 +430,7 @@ struct MessageMoreSheet: View {
 
             destination(for: item)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     /// Contenu détaillé rendu INLINE sous la grille. La feuille est présentée

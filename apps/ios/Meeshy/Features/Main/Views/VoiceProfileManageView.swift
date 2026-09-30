@@ -295,7 +295,7 @@ struct VoiceProfileManageView: View {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, 9)
+                .padding(.vertical, MeeshySpacing.sm)
                 .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.14), interactive: true)
                 .foregroundColor(accent)
             }
@@ -328,7 +328,7 @@ struct VoiceProfileManageView: View {
             .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(MeeshyColors.error.opacity(0.1))
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
             )
         }
         .padding(.horizontal, MeeshySpacing.lg)

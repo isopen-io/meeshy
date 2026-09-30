@@ -95,7 +95,7 @@ struct CameraView: View {
 
             if camera.isTakingPhoto {
                 Color.white.ignoresSafeArea()
-                    .opacity(0.3)
+                    .opacity(MeeshyOpacity.medium)
                     .animation(.easeOut(duration: 0.15), value: camera.isTakingPhoto)
             }
         }
@@ -144,9 +144,9 @@ struct CameraView: View {
                 Image(systemName: "xmark")
                     // doctrine 82i — glyphe borné par le cadre tap fixe 44×44
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(.black.opacity(0.3)))
+                    .foregroundColor(MeeshyColors.mediaChromeForeground)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
             }
             .accessibilityLabel(String(localized: "camera.close", defaultValue: "Fermer", bundle: .main))
 
@@ -156,9 +156,9 @@ struct CameraView: View {
                 Image(systemName: flashIcon)
                     // doctrine 82i — glyphe borné par le cadre tap fixe 44×44
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(flashMode == .off ? .white.opacity(0.6) : .yellow)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(.black.opacity(0.3)))
+                    .foregroundColor(flashMode == .off ? MeeshyColors.mediaChromeTertiary : .yellow)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
             }
             .accessibilityLabel(flashAccessibilityLabel)
         }
@@ -198,16 +198,16 @@ struct CameraView: View {
                     Image(systemName: "camera.rotate.fill")
                         // doctrine 82i — glyphe borné par le cadre tap fixe 50×50
                         .font(.system(size: 22))
-                        .foregroundColor(.white)
+                        .foregroundColor(MeeshyColors.mediaChromeForeground)
                         .frame(width: 50, height: 50)
-                        .background(Circle().fill(.white.opacity(0.15)))
+                        .background(Circle().fill(.white.opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityLabel(String(localized: "camera.switch", defaultValue: "Changer de caméra", bundle: .main))
 
                 Spacer()
             }
         }
-        .padding(.bottom, 30)
+        .padding(.bottom, MeeshySpacing.xxxl)
     }
 
     private var modeSwitcher: some View {
@@ -230,7 +230,7 @@ struct CameraView: View {
         Button(action: action) {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: selected ? .bold : .medium))
-                .foregroundColor(selected ? .white : .white.opacity(0.5))
+                .foregroundColor(selected ? .white : .white.opacity(MeeshyOpacity.strong))
         }
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
@@ -281,7 +281,7 @@ struct CameraView: View {
                     .stroke(.white, lineWidth: 4)
                     .frame(width: 72, height: 72)
                 if camera.isRecordingVideo {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.error)
                         .frame(width: 30, height: 30)
                 } else {
@@ -303,11 +303,11 @@ struct CameraView: View {
                 .frame(width: 10, height: 10)
             Text(LocalizedNumber.duration(seconds: camera.recordingDuration))
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.sm)
-        .background(Capsule().fill(.black.opacity(0.5)))
+        .background(Capsule().fill(MeeshyColors.mediaScrim))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))
         .accessibilityValue(LocalizedNumber.spokenDuration(seconds: camera.recordingDuration))

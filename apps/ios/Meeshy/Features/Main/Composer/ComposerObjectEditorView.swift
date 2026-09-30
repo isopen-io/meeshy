@@ -300,7 +300,7 @@ struct ComposerObjectEditorView: View {
             // (`spokenLabel`) — une chaîne pour l'œil, une pour l'oreille, parce
             // qu'un « 4 » annoncé seul ne dit pas ce qu'il compte.
             Button(action: onClose) {
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     // `chevron.backward`, jamais `chevron.left` : le second nomme
                     // un côté PHYSIQUE et ne se retourne pas en arabe, où le
                     // retour est à droite. `RightToLeftLayoutGuardTests` l'a
@@ -375,7 +375,7 @@ struct ComposerObjectEditorView: View {
                 set: { viewModel.currentSlide = $0 }
             ),
             aspectRatio: aspectRatio,
-            cornerRadius: 20,
+            cornerRadius: MeeshyRadius.xl,
             // **Taper un autre texte l'OUVRE** — le même geste que sur une barre
             // du plan 2D, et la même raison : sur un écran dont le sujet EST
             // l'objet sélectionné, un tap qui ne sélectionne rien est un
@@ -759,7 +759,7 @@ struct ComposerObjectEditorView: View {
     /// demande pas de réapprendre.
     @ViewBuilder
     private func textOptions(_ binding: Binding<StoryTextObject>) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             // **POLICE n'est plus un cas particulier** (directive porteur
             // 2026-09-05 : « aligne correctement les éléments Effets et
             // Polices », « assure-toi que tout entre bien dans les viewport »).

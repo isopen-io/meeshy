@@ -19,7 +19,7 @@ struct MessageDaySeparator: View, Equatable {
                 .font(.caption.weight(.semibold))
                 .foregroundColor(textColor)
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 5)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
                         .fill(.ultraThinMaterial)

@@ -81,7 +81,7 @@ struct ProgressionMeeshEntry: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .stroke(tint.opacity(0.30), lineWidth: 1)
+                        .stroke(tint.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
                 .presentationCompactAdaptationPopoverIfAvailable()
         }

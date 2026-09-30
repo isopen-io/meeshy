@@ -59,7 +59,7 @@ struct CallPillButtonLabel: View {
             if let caption {
                 Text(caption)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

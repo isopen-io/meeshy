@@ -26,8 +26,8 @@ struct CallPanelHeader: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.footnote.weight(.bold))
-                .foregroundColor(.white.opacity(0.9))
-                .frame(width: 28, height: 28)
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(Circle().fill(CallButtonFill.color(for: .normal)))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -124,7 +124,7 @@ struct CallPillChip: View {
             Text(emoji)
                 .font(.title2)
                 .frame(width: Self.artDiameter, height: Self.artDiameter)
-                .background(Circle().fill(isSelected ? Color.white.opacity(0.9) : CallButtonFill.color(for: .normal)))
+                .background(Circle().fill(isSelected ? Color.white.opacity(MeeshyOpacity.intense) : CallButtonFill.color(for: .normal)))
                 .accessibilityHidden(true)
         case .image(let image):
             Image(decorative: image, scale: 1)
@@ -134,7 +134,7 @@ struct CallPillChip: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
-                        .stroke(isSelected ? Color.white : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 0.5)
+                        .stroke(isSelected ? Color.white : Color.white.opacity(MeeshyOpacity.light), lineWidth: isSelected ? 2 : 0.5)
                 )
                 .accessibilityHidden(true)
         }

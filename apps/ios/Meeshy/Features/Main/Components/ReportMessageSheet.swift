@@ -24,7 +24,7 @@ enum ReportSheetPalette {
     /// Reprend mot pour mot `ThemeManager.inputBackground` — seul jeton de la
     /// vue que `MeeshyColors` n'expose pas déjà sous forme de `(isDark:)`.
     static func inputBackground(isDark: Bool) -> Color {
-        isDark ? Color(hex: "16142A") : Color(hex: "F5F3FF")
+        isDark ? MeeshyColors.surfaceDarkInput : MeeshyColors.surfaceLightInput
     }
 }
 

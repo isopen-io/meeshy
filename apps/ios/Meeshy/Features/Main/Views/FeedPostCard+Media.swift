@@ -87,8 +87,8 @@ extension FeedPostCard {
                 Text("+\(model.count - 1)")
                     .font(.caption2.weight(.bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
                     .padding(MeeshySpacing.sm)
             }

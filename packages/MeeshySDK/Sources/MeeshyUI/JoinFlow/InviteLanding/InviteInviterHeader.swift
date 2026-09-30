@@ -73,9 +73,9 @@ struct InviteInviterHeader: View {
             enablePulse: false,
             isDark: isDark
         )
-        .padding(3)
+        .padding(MeeshySpacing.xxs)
         .background(Circle().fill(isDark ? MeeshyColors.indigo950 : Color.white))
-        .padding(3)
+        .padding(MeeshySpacing.xxs)
         .background(Circle().fill(MeeshyColors.brandGradient))
         .accessibilityHidden(true)
     }

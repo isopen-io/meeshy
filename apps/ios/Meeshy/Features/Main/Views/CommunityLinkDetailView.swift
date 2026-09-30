@@ -31,9 +31,9 @@ struct CommunityLinkDetailView: View {
     private var headerCard: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
             ZStack {
-                Circle().fill(MeeshyColors.communityAccent.opacity(0.15)).frame(width: 60, height: 60)
+                Circle().fill(MeeshyColors.communityAccent.opacity(MeeshyOpacity.light)).frame(width: 60, height: 60)
                 // Glyphe héros dans un cercle de dimension fixe 60×60 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(.system(size: 26))
+                Image(systemName: "person.3.fill").font(.system(size: MeeshyIconSize.xxxl))
                     .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
             }
@@ -44,7 +44,7 @@ struct CommunityLinkDetailView: View {
         .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
             .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
+                .stroke(MeeshyColors.communityAccent.opacity(MeeshyOpacity.light), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }
 
@@ -94,7 +94,7 @@ struct CommunityLinkDetailView: View {
     private func communityActionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(0.15))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
                     .frame(width: 52, height: 52)
                 // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
                 Image(systemName: icon).font(.system(size: MeeshyIconSize.xxl)).foregroundColor(color)
@@ -131,7 +131,7 @@ struct CommunityLinkDetailView: View {
         }
         .padding(MeeshySpacing.mdPlus).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }
 
@@ -149,7 +149,7 @@ struct CommunityLinkDetailView: View {
                 infoRow(String(localized: "communityLink.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark)))
         }
     }
 

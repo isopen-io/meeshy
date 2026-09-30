@@ -66,7 +66,7 @@ public struct LanguageSelector: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -94,7 +94,7 @@ public struct LanguageSelector: View {
                                 .padding(.vertical, MeeshySpacing.smPlus)
                                 .background(
                                     lang.id == selectedId ?
-                                        MeeshyColors.brandPrimary.opacity(0.15) :
+                                        MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light) :
                                         Color.clear
                                 )
                             }
@@ -105,7 +105,7 @@ public struct LanguageSelector: View {
                 .frame(maxHeight: 250)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(Color(hex: "2D2D40").opacity(0.8))
+                        .fill(Color(hex: "2D2D40").opacity(MeeshyOpacity.intense))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                 .transition(.opacity.combined(with: .move(edge: .top)))

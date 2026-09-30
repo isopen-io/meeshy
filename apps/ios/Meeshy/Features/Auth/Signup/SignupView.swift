@@ -336,7 +336,7 @@ struct SignupView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(MeeshyColors.error.opacity(0.12))
+                        .fill(MeeshyColors.error.opacity(MeeshyOpacity.light))
                 )
                 .accessibilityElement(children: .combine)
             }
@@ -345,7 +345,7 @@ struct SignupView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(MeeshyColors.brandGradient)
-                        .frame(minHeight: 52)
+                        .frame(minHeight: MeeshyControlSize.buttonHeight)
 
                     if viewModel.isSubmitting {
                         ProgressView().tint(.white)
@@ -399,7 +399,7 @@ struct SignupView: View {
                     Text(String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                 }
                 Button {
                     isShowingPrivacy = true
@@ -407,7 +407,7 @@ struct SignupView: View {
                     Text(String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                 }
             }
         }
@@ -551,7 +551,7 @@ struct SignupView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(
-                        isFocused ? MeeshyColors.indigo500.opacity(0.6) : theme.inputBorder.opacity(0.3),
+                        isFocused ? MeeshyColors.indigo500.opacity(0.6) : theme.inputBorder.opacity(MeeshyOpacity.medium),
                         lineWidth: 1
                     )
             )

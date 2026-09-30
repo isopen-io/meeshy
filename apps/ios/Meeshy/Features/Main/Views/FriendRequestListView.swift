@@ -147,7 +147,7 @@ struct FriendRequestListView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)

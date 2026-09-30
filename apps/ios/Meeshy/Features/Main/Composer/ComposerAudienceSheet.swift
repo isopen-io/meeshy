@@ -178,7 +178,7 @@ struct ComposerAudienceSheet: View {
         let reach = ComposerAudienceReach.resolve(mentionUserId: reference.userId,
                                                   visibility: selection,
                                                   audienceUserIds: selectedUserIds)
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.sm) {
                 Text("@\(reference.username)")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
@@ -187,7 +187,7 @@ struct ComposerAudienceSheet: View {
                     .font(MeeshyFont.relative(10.5, weight: .regular))
                     .foregroundStyle(.white.opacity(0.55))
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.white.opacity(0.08)))
                 Spacer(minLength: 0)
                 if reach.warns {
@@ -233,7 +233,7 @@ struct ComposerAudienceSheet: View {
                             .font(MeeshyFont.relative(9, weight: .bold))
                             .foregroundStyle(.white.opacity(0.5))
                     }
-                    .padding(.horizontal, 11)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .frame(minHeight: 32)
                     .background(Capsule().fill(Color.white.opacity(0.07)))
                     .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
@@ -271,7 +271,7 @@ struct ComposerAudienceSheet: View {
             .overlay(alignment: .leading) {
                 Rectangle().fill(tint).frame(width: 2)
             }
-            .padding(.top, 22)
+            .padding(.top, MeeshySpacing.xl)
     }
 
     /// **Le bouton NOMME ce qu'il applique** — la planche l'écrit

@@ -1787,7 +1787,7 @@ private struct PendingSettingsBannerInline: View {
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1869,7 +1869,7 @@ private struct PendingStoryBannerInline: View {
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .gesture(

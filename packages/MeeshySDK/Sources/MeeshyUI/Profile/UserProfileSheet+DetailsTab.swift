@@ -189,7 +189,7 @@ extension UserProfileSheet {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.md)
-                .background(MeeshyColors.success.opacity(0.1))
+                .background(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             }
 
@@ -306,18 +306,18 @@ extension UserProfileSheet {
         } label: {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 Text(label)
                     .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
             }
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.md)
-            .background(color.opacity(0.1))
+            .background(color.opacity(MeeshyOpacity.subtle))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .stroke(color.opacity(0.3), lineWidth: MeeshyBorder.emphasis)
+                    .stroke(color.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.emphasis)
             )
         }
         .pressable()
@@ -367,7 +367,7 @@ extension UserProfileSheet {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(Color(hex: resolvedAccent))
                     Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
                         .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))

@@ -121,13 +121,13 @@ struct AttachmentLoadingTile: View {
                 .progressViewStyle(.circular)
                 .tint(.white)
                 .scaleEffect(0.7)
-                .padding(5)
+                .padding(MeeshySpacing.xs)
                 .background(Circle().fill(Color.black.opacity(0.4)))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .padding(MeeshySpacing.xs)
         } else {
             // No preview yet (bytes still loading) — full placeholder + label.
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
@@ -136,7 +136,7 @@ struct AttachmentLoadingTile: View {
                     // Doctrine 86i : label d'étape borné par la tuile de dimension fixe
                     // `size`×`size` (≈56) → figé (déjà `minimumScaleFactor` pour rétrécir).
                     .font(.system(size: 8, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .padding(.horizontal, MeeshySpacing.xs)
@@ -161,7 +161,7 @@ struct AttachmentLoadingTile: View {
         .padding(MeeshySpacing.xsPlus)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(MeeshyColors.error.opacity(0.65))
+                .fill(MeeshyColors.error.opacity(MeeshyOpacity.heavy))
         )
     }
 

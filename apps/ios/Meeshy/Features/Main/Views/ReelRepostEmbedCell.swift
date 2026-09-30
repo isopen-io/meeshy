@@ -133,8 +133,8 @@ struct ReelRepostEmbedCell: View {
                 ReelFeedSoundIntent.shared.toggleSound()
                 HapticFeedback.light()
             }
-            .padding(.leading, 22)
-            .padding(.top, 22)
+            .padding(.leading, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.xl)
         }
     }
 
@@ -193,10 +193,10 @@ struct ReelRepostEmbedCell: View {
         .padding(MeeshySpacing.md)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                .fill(theme.mode.isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
+                        .stroke(theme.accentText(repost.authorColor).opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
         )
     }
@@ -244,11 +244,11 @@ struct ReelRepostEmbedCell: View {
         } else {
             // Audio-only or media-less reel: brand-tinted backdrop + music glyph.
             ZStack {
-                Color(hex: repost.authorColor).opacity(0.45)
+                Color(hex: repost.authorColor).opacity(MeeshyOpacity.strong)
                 Image(systemName: "music.note")
                     // doctrine 86i — glyphe décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 30, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
         }
     }
@@ -261,10 +261,10 @@ struct ReelRepostEmbedCell: View {
                 // doctrine 86i — affordance décorative bornée par la bande média de hauteur fixe (stripHeight)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
-                .padding(13)
+                .padding(MeeshySpacing.md)
                 .background(Circle().fill(.ultraThinMaterial))
-                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 1)
+                .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 1)
         }
     }
 
@@ -280,8 +280,8 @@ struct ReelRepostEmbedCell: View {
                     .foregroundColor(.white)
                     .padding(MeeshySpacing.xsPlus)
                     .background(Circle().fill(.ultraThinMaterial))
-                    .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3, y: 1)
                     .padding(MeeshySpacing.sm)
             }
             Spacer()
@@ -300,7 +300,7 @@ struct ReelRepostEmbedCell: View {
                 Text("\(repost.likes)")
                     .font(.caption.weight(.medium))
             }
-            .foregroundColor(theme.accentText(repost.authorColor).opacity(0.8))
+            .foregroundColor(theme.accentText(repost.authorColor).opacity(MeeshyOpacity.intense))
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(localized: "feed.reel.repost.likes", defaultValue: "\(repost.likes) j'aime", bundle: .main))
         }

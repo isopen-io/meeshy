@@ -72,7 +72,7 @@ struct KeypadTab: View {
         }
         .padding(.horizontal, MeeshySpacing.xxl)
         .frame(height: 64)
-        .overlay(alignment: .bottom) { Divider().opacity(0.2) }
+        .overlay(alignment: .bottom) { Divider().opacity(MeeshyOpacity.light) }
     }
 
     // MARK: - Results
@@ -149,7 +149,7 @@ struct KeypadTab: View {
                         avatarURL: user.avatar,
                         presenceState: presence
                     )
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(name)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
@@ -205,8 +205,8 @@ struct KeypadTab: View {
                 }
             }
         }
-        .padding(.vertical, 18)
-        .overlay(alignment: .top) { Divider().opacity(0.2) }
+        .padding(.vertical, MeeshySpacing.lg)
+        .overlay(alignment: .top) { Divider().opacity(MeeshyOpacity.light) }
     }
 
     private func keyButton(_ key: KeypadKey) -> some View {

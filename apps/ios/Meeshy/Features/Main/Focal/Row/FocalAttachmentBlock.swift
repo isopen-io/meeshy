@@ -325,7 +325,7 @@ struct FocalGridCell: View {
                 summary: attachment.reactionSummary,
                 currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: accentHex))
-                .padding(5)
+                .padding(MeeshySpacing.xs)
         }
     }
 
@@ -393,7 +393,7 @@ struct FocalGridCell: View {
         if case .blurred(let isViewOnce) = protectionState {
             ZStack {
                 Color.black.opacity(0.5)
-                VStack(spacing: 5) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "eye.slash.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                         .foregroundStyle(.white)

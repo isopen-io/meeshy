@@ -57,7 +57,7 @@ extension ComposerObjectEditorView {
     @ViewBuilder
     var mediaOptions: some View {
         if let media = mediaObject {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                 // **La grille du SDK, telle quelle** (#5041). `StoryFilterGridView`
                 // est autonome — aucun rappel, aucune dépendance à la coquille
                 // plein écran — et c'est ce qui la rend montable ici sans rien
@@ -120,7 +120,7 @@ extension ComposerObjectEditorView {
     @ViewBuilder
     var audioOptions: some View {
         if let source = viewModel.sourceTrim(id: objectId) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                 section(ComposerObjectEditorCopy.trim, .media(.trim)) {
                     trimBand(source)
                 }

@@ -225,7 +225,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                         HapticFeedback.light()
                         selectedLanguage = language.code
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(language.flag)
                             Text(language.nativeName)
                                 .font(.system(size: MeeshyFont.smallSize, weight: .medium))
@@ -251,7 +251,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     // MARK: - Waveform
 
     private var waveformView: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<15, id: \.self) { i in
                 let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
                 RoundedRectangle(cornerRadius: 2.5)
@@ -273,7 +273,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
 
             Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                .font(.system(size: 26, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
                 .foregroundColor(recorder.isRecording ? .white : controlIcon)
         }
         .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)

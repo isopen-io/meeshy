@@ -104,7 +104,7 @@ struct ComposerSceneDescriptionEditor: View {
         // glass comme pour les captions »). Il était un aplat opaque de bord à
         // bord, qui coupait l'écran sous la scène ; il flotte désormais sur
         // elle, teinté du plateau comme le reste du chrome.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
                        tint: plateauTint.opacity(0.55))
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.bottom, MeeshySpacing.xs)

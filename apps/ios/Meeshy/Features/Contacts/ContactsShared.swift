@@ -295,9 +295,9 @@ struct ContactsFilterChip: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, 7)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
+                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(MeeshyOpacity.medium), lineWidth: 1))
                 .frame(minHeight: hitTarget ? 44 : nil)
                 .contentShape(Rectangle())
         }
@@ -417,7 +417,7 @@ struct DirectoryPersonRow: View, Equatable {
                 avatarURL: avatarURL
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -434,18 +434,18 @@ struct DirectoryPersonRow: View, Equatable {
             Spacer(minLength: 8)
 
             Button(action: onAction) {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: action.icon).font(.caption2.weight(.bold))
                     Text(action.title).font(.caption.weight(.semibold))
                 }
                 .foregroundColor(action.isFilled ? .white : MeeshyColors.indigo500)
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 7)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule().fill(action.isFilled ? MeeshyColors.indigo500 : Color.clear)
                 )
                 .overlay(
-                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(0.5), lineWidth: 1)
+                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(MeeshyOpacity.strong), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)

@@ -30,12 +30,12 @@ extension CallView {
                 Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
                     // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                    .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
                 Text(String(localized: "call.filters", defaultValue: "Filtres", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
             }
         }
         .buttonStyle(CallPressButtonStyle())
@@ -63,7 +63,7 @@ extension CallView {
 
                 Text(String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

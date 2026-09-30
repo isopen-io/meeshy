@@ -43,7 +43,7 @@ struct CallEffectsOverlay: View {
 
                     ZStack(alignment: .bottom) {
                         // Backdrop
-                        Color.black.opacity(0.25)
+                        Color.black.opacity(MeeshyOpacity.medium)
                             .ignoresSafeArea()
                             .onTapGesture { dismiss() }
                             .accessibilityAddTraits(.isButton)
@@ -127,16 +127,16 @@ struct CallEffectsOverlay: View {
             VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
-                        .fill(isActive ? MeeshyColors.indigo500.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(isActive ? MeeshyColors.indigo500.opacity(MeeshyOpacity.light) : Color.white.opacity(MeeshyOpacity.subtle))
                         .frame(width: 48, height: 48)
                         .overlay(
                             Circle()
-                                .stroke(isActive ? MeeshyColors.indigo500.opacity(0.5) : Color.white.opacity(0.2), lineWidth: 1)
+                                .stroke(isActive ? MeeshyColors.indigo500.opacity(MeeshyOpacity.strong) : Color.white.opacity(MeeshyOpacity.light), lineWidth: 1)
                         )
 
                     Image(systemName: icon)
                         .font(.system(size: MeeshyIconSize.lg, weight: .medium))
-                        .foregroundColor(isActive ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                        .foregroundColor(isActive ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
                 }
 
                 Text(label)

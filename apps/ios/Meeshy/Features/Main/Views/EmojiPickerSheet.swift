@@ -263,7 +263,7 @@ struct EmojiPickerView: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                             sectionHeader(icon: "face.smiling", title: String(localized: "emoji.quickReactions", defaultValue: "Réactions rapides"))
 
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: MeeshySpacing.md) {
                                 ForEach(recentEmojis.prefix(9), id: \.self) { emoji in
                                     emojiButton(emoji, size: 44)
                                 }

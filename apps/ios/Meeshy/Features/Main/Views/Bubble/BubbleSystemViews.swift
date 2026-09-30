@@ -29,10 +29,10 @@ struct BubbleDeletedView: View, Equatable {
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
-                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
                     .overlay(
                         Capsule()
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
+                            .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .accessibilityElement(children: .combine)
@@ -65,25 +65,25 @@ struct BubbleSystemNoticeView: View, Equatable {
         HStack(spacing: 0) {
             Spacer(minLength: 24)
 
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 if let timeString, !timeString.isEmpty {
                     Text(timeString)
-                        .font(MeeshyFont.relative(9.5, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
+                        .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-system-notice-time")
                 }
                 Text(text)
-                    .font(MeeshyFont.relative(12.5, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.md)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
-                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                            .fill(MeeshyColors.surfaceFill(isDark: isDark))
                             .overlay(
                                 Capsule()
-                                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
+                                    .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                             )
                     )
             }
@@ -93,7 +93,7 @@ struct BubbleSystemNoticeView: View, Equatable {
             Spacer(minLength: 24)
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 3)
+        .padding(.vertical, MeeshySpacing.xxs)
     }
 }
 
@@ -168,20 +168,20 @@ struct BubbleJoinNoticeView: View, Equatable {
         return HStack(spacing: 0) {
             Spacer(minLength: 24)
 
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 if let timeString, !timeString.isEmpty {
                     Text(timeString)
-                        .font(MeeshyFont.relative(9.5, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
+                        .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-join-notice-time")
                 }
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
-                        .foregroundColor(notice.isAnonymous ? .purple : ThemeManager.shared.textMuted)
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                        .foregroundColor(notice.isAnonymous ? MeeshyColors.purple700 : ThemeManager.shared.textMuted)
 
                     Text(label(for: presentation))
-                        .font(MeeshyFont.relative(12.5, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundColor(ThemeManager.shared.textMuted)
                         .multilineTextAlignment(.center)
 
@@ -191,11 +191,11 @@ struct BubbleJoinNoticeView: View, Equatable {
                             defaultValue: "sans compte",
                             bundle: .main
                         ))
-                        .font(MeeshyFont.relative(10.5, weight: .semibold))
-                        .foregroundColor(.purple)
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                        .foregroundColor(MeeshyColors.purple700)
                         .padding(.horizontal, MeeshySpacing.xsPlus)
                         .padding(.vertical, MeeshySpacing.xxs)
-                        .background(Capsule().fill(Color.purple.opacity(isDark ? 0.22 : 0.12)))
+                        .background(Capsule().fill(MeeshyColors.purple700.opacity(isDark ? 0.22 : 0.12)))
                         .accessibilityIdentifier("bubble-join-notice-no-account")
                     }
                 }
@@ -204,15 +204,15 @@ struct BubbleJoinNoticeView: View, Equatable {
                     HStack(spacing: MeeshySpacing.sm) {
                         if let handle = presentation.handle {
                             Text(handle)
-                                .font(MeeshyFont.relative(10.5, weight: .medium))
-                                .foregroundColor(ThemeManager.shared.textMuted.opacity(0.85))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                                .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.intense))
                                 .accessibilityIdentifier("bubble-join-notice-handle")
                         }
                         if let rules = presentation.rules {
                             if presentation.handle != nil {
                                 MetaSeparator()
-                                    .font(MeeshyFont.relative(10.5))
-                                    .foregroundColor(ThemeManager.shared.textMuted.opacity(0.5))
+                                    .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                                    .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.strong))
                             }
                             JoinNoticeRulesStrip(rules: rules)
                         }
@@ -223,10 +223,10 @@ struct BubbleJoinNoticeView: View, Equatable {
             .padding(.vertical, hasDetailRow ? 8 : 7)
             .background(
                 RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
                     .overlay(
                         RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
+                            .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous))
@@ -289,7 +289,7 @@ struct JoinNoticeRulesStrip: View, Equatable {
     let rules: JoinNoticeMetadata.LinkRules
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ruleGlyph(
                 "bubble.left.fill",
                 allowed: rules.canSendMessages,
@@ -318,7 +318,7 @@ struct JoinNoticeRulesStrip: View, Equatable {
     private func ruleGlyph(_ systemName: String, allowed: Bool, label: String) -> some View {
         Image(systemName: systemName)
             .font(MeeshyFont.relative(9.5, weight: .semibold))
-            .foregroundColor(allowed ? .purple : ThemeManager.shared.textMuted.opacity(0.35))
+            .foregroundColor(allowed ? MeeshyColors.purple700 : ThemeManager.shared.textMuted.opacity(MeeshyOpacity.medium))
             .accessibilityLabel(label)
     }
 }

@@ -116,7 +116,7 @@ struct GalleryImagePage: View, Equatable {
     private var emptyStateGlyph: some View {
         Image(systemName: "photo")
             .font(.system(size: MeeshyIconSize.hero))
-            .foregroundColor(.white.opacity(0.3))
+            .foregroundColor(.white.opacity(MeeshyOpacity.medium))
             .accessibilityHidden(true)
     }
 
@@ -796,7 +796,7 @@ struct GalleryVideoPage: View, Equatable {
         } label: {
             buttonContent
                 .frame(width: 64, height: 64)
-                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.intense))
         }
         .disabled({
             if case .downloading = availability { return true }
@@ -827,17 +827,17 @@ struct GalleryVideoPage: View, Equatable {
         case .ready:
             Image(systemName: "play.fill")
                 .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
                 .offset(x: 2)
         case .needsDownload:
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: MeeshyIconSize.xl, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(MeeshyColors.mediaChromeForeground)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 }
             }
         case .downloading(let progress):

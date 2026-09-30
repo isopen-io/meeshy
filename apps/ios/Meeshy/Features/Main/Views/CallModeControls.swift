@@ -83,7 +83,7 @@ struct CallEffectsModeControls: View {
                 if item != CallEffectsCategory.allCases.first {
                     Text(verbatim: "·")
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.white.opacity(MeeshyOpacity.strong))
                         .accessibilityHidden(true)
                 }
                 Button {
@@ -101,7 +101,7 @@ struct CallEffectsModeControls: View {
                 .accessibilityAddTraits(category == item ? [.isButton, .isSelected] : [.isButton])
             }
         }
-        .shadow(color: .black.opacity(0.5), radius: 3)
+        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
     }
 
     @ViewBuilder
@@ -180,7 +180,7 @@ struct CallEffectsModeControls: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "sun.min")
                     .font(.footnote)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
                 Slider(value: brightnessBinding, in: -limit ... limit)
                     .tint(.white)
@@ -188,7 +188,7 @@ struct CallEffectsModeControls: View {
                     .accessibilityValue(percent)
                 Image(systemName: "sun.max")
                     .font(.footnote)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)

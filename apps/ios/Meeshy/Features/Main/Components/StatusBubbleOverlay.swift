@@ -185,7 +185,7 @@ struct StatusBubbleOverlay: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 9)
+        .padding(.vertical, MeeshySpacing.sm)
         // iOS 26 Liquid Glass — floating mood bubble. The SDK Compatibility wrapper
         // owns the gating + the .ultraThinMaterial fallback. The avatar-tinted
         // gradient hairline + elevation shadow stay as overlays ON the glass

@@ -84,7 +84,7 @@ public struct SoundDetailView: View {
                              context: .userListItem,
                              avatarURL: uploader.avatar)
             } else {
-                Circle().fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08))
+                Circle().fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.subtle))
             }
         }
         .frame(width: 96, height: 96)
@@ -113,12 +113,12 @@ public struct SoundDetailView: View {
         } else if model.isEmpty {
             emptyState
         } else {
-            LazyVGrid(columns: columns, spacing: 3) {
+            LazyVGrid(columns: columns, spacing: MeeshySpacing.xxs) {
                 ForEach(model.posts) { post in
                     SoundPostTile(post: post)
                 }
             }
-            .padding(.horizontal, 3)
+            .padding(.horizontal, MeeshySpacing.xxs)
             if model.canLoadMore {
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -162,7 +162,7 @@ struct SoundPostTile: View {
                                  thumbHash: media.thumbHash)
             } else {
                 Rectangle()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                    .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
                     .overlay(
                         Image(systemName: "text.alignleft")
                             .foregroundStyle(.secondary)

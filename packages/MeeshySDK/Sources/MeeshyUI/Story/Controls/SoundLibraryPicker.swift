@@ -130,10 +130,10 @@ public struct SoundLibraryPicker: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 9)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
         )
         .padding(.horizontal, MeeshySpacing.lg)
     }
@@ -241,7 +241,7 @@ struct SoundLibraryRow: View {
             Spacer(minLength: 8)
             if canRename {
                 Button(action: onRename) {
-                    Image(systemName: "pencil").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "pencil").font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -336,7 +336,7 @@ struct SoundLibraryRow: View {
                     .frame(width: 48, height: 48)
             } else {
                 Circle()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08))
+                    .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.subtle))
                     .frame(width: 48, height: 48)
             }
 

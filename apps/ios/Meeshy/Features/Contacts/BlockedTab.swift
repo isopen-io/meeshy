@@ -68,7 +68,7 @@ struct BlockedTab: View {
             )
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -91,7 +91,7 @@ struct BlockedTab: View {
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
-                        Capsule().stroke(MeeshyColors.warning.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(MeeshyColors.warning.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             }
             .accessibilityLabel(String(format: String(localized: "contacts.blocked.unblock-a11y", defaultValue: "Débloquer %@", bundle: .main), user.name))

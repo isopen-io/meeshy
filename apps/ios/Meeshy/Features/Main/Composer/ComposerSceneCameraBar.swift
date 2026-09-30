@@ -219,7 +219,7 @@ struct ComposerSceneCameraBar: View {
             .frame(height: 3)
 
             HStack(spacing: MeeshySpacing.sm) {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // **Le témoin d'enregistrement BAT.** Un point rouge fixe
                     // ne distingue pas « ça tourne » de « il y a des segments »
                     // — et c'est précisément la confusion que le chrono figé
@@ -241,7 +241,7 @@ struct ComposerSceneCameraBar: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
                 }
-                .padding(.horizontal, 9)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: 24)
                 .adaptiveGlass(in: Capsule())
 
@@ -340,7 +340,7 @@ struct ComposerSceneCameraBar: View {
                 .stroke(isLocked ? MeeshyColors.error : .white, lineWidth: 4)
                 .frame(width: 76, height: 76)
             if stage == .recording {
-                RoundedRectangle(cornerRadius: 7)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(MeeshyColors.error)
                     .frame(width: 30, height: 30)
             } else {

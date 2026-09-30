@@ -187,7 +187,7 @@ struct LinksHubView: View {
                 .accessibilityHidden(true)
 
                 // Texte
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -223,7 +223,7 @@ struct LinksHubView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(MeeshySpacing.md + 2)
+            .padding(MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: accentHex))

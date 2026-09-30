@@ -109,7 +109,7 @@ struct SettingsView: View {
             // pendant le quiesce et provoque une navigation orpheline.
             if isLoggingOut {
                 ZStack {
-                    Color.black.opacity(0.45).ignoresSafeArea()
+                    Color.black.opacity(MeeshyOpacity.strong).ignoresSafeArea()
                     VStack(spacing: MeeshySpacing.md + 2) {
                         ProgressView()
                             .progressViewStyle(.circular)
@@ -337,7 +337,7 @@ struct SettingsView: View {
                             .padding(.vertical, MeeshySpacing.xs + 2)
                             .background(
                                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                                    .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
+                                    .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(MeeshyOpacity.light) : Color.clear)
                             )
                         }
                         .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(themeLabel(for: pref))")
@@ -833,7 +833,7 @@ struct SettingsView: View {
                     .fill(theme.inputBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+                            .stroke(theme.textMuted.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             )
         }
@@ -864,10 +864,10 @@ struct SettingsView: View {
             .padding(.vertical, MeeshySpacing.md + 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(MeeshyColors.error.opacity(0.1))
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             )
         }
@@ -939,10 +939,10 @@ struct SettingsView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: color))
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(0.12))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
                 )
                 .accessibilityHidden(true)
 

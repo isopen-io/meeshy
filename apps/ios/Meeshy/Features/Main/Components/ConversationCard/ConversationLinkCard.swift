@@ -74,7 +74,7 @@ struct ConversationLinkCard: View {
             .padding(MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                    .fill(isDark ? MeeshyColors.indigo950.opacity(0.55) : Color.white.opacity(0.85))
+                    .fill(isDark ? MeeshyColors.indigo950.opacity(MeeshyOpacity.strong) : Color.white.opacity(MeeshyOpacity.intense))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
@@ -94,7 +94,7 @@ struct ConversationLinkCardSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                .fill(Color(hex: accentHex).opacity(0.25))
+                .fill(Color(hex: accentHex).opacity(MeeshyOpacity.medium))
                 .frame(height: 72)
             RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(placeholder).frame(width: 140, height: 14)
             RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(placeholder).frame(height: 10)
@@ -104,7 +104,7 @@ struct ConversationLinkCardSkeleton: View {
         .padding(MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .fill(isDark ? MeeshyColors.indigo950.opacity(0.55) : Color.white.opacity(0.85))
+                .fill(isDark ? MeeshyColors.indigo950.opacity(MeeshyOpacity.strong) : Color.white.opacity(MeeshyOpacity.intense))
         )
         .redacted(reason: .placeholder)
         .accessibilityElement(children: .ignore)
@@ -147,7 +147,7 @@ struct ConversationLinkCardNotice: View, Equatable {
         .frame(minHeight: 64)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .fill(isDark ? MeeshyColors.indigo950.opacity(0.55) : Color.white.opacity(0.85))
+                .fill(isDark ? MeeshyColors.indigo950.opacity(MeeshyOpacity.strong) : Color.white.opacity(MeeshyOpacity.intense))
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)

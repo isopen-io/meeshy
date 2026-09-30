@@ -124,7 +124,7 @@ struct ThreadView: View {
     private var repliesDivider: some View {
         HStack {
             Rectangle()
-                .fill(Color(hex: accentColor).opacity(0.3))
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
 
             Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
@@ -133,7 +133,7 @@ struct ThreadView: View {
                 .padding(.horizontal, MeeshySpacing.sm)
 
             Rectangle()
-                .fill(Color(hex: accentColor).opacity(0.3))
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
         }
         .accessibilityElement(children: .combine)
@@ -158,7 +158,7 @@ struct ThreadView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.caption.weight(.semibold))
@@ -238,7 +238,7 @@ struct ThreadView: View {
             .padding(.horizontal, MeeshySpacing.lg)
         }
         .padding(.vertical, MeeshySpacing.smPlus)
-        .background(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+        .background(isDark ? Color.black.opacity(MeeshyOpacity.medium) : Color.white.opacity(MeeshyOpacity.intense))
     }
 
     // MARK: - Actions

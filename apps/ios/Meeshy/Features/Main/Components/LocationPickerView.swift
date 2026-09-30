@@ -196,7 +196,7 @@ struct LocationPickerView: View {
             .padding(.vertical, MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(MeeshyColors.warning.opacity(0.15))
+                    .fill(MeeshyColors.warning.opacity(MeeshyOpacity.light))
             )
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -266,8 +266,8 @@ struct LocationPickerView: View {
                 // le mettre à l'échelle du Dynamic Type le décrocherait du
                 // point qu'il marque (doctrine 74i/86i).
                 .font(.system(size: 36))
-                .foregroundStyle(Color(hex: onMap.primary), Color(hex: onMap.accent).opacity(0.35))
-                .shadow(color: Color(hex: onMap.accent).opacity(0.45), radius: 6, y: 3)
+                .foregroundStyle(Color(hex: onMap.primary), Color(hex: onMap.accent).opacity(MeeshyOpacity.medium))
+                .shadow(color: Color(hex: onMap.accent).opacity(MeeshyOpacity.strong), radius: 6, y: 3)
                 .scaleEffect(lift.scale)
                 .offset(y: lift.yOffset)
         }
@@ -331,12 +331,12 @@ struct LocationPickerView: View {
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle())
                 .clipShape(Circle())
-                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 6, y: 2)
                 // Cible tactile Apple HIG (44 pt) sans grossir le disque
                 // visible (40 pt). L'ORDRE compte : `frame` d'abord, puis
                 // `contentShape` — l'inverse découperait la zone tactile sur
                 // le disque de 40 et la cible resterait sous-dimensionnée.
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .contentShape(Circle())
         }
         .accessibilityLabel(label)
@@ -384,7 +384,7 @@ struct LocationPickerView: View {
                         .foregroundColor(Color(hex: accentColor))
                         .padding(.horizontal, MeeshySpacing.smPlus)
                         .frame(minHeight: 30)
-                        .background(Capsule().fill(Color(hex: accentColor).opacity(0.12)))
+                        .background(Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityHint(String(localized: "location.nearby.hint",
                                           defaultValue: "Liste les lieux nommés autour de vous",
@@ -408,7 +408,7 @@ struct LocationPickerView: View {
         // Neutral (no tint): a search bar reads as OS chrome, not conversation content.
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 2)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
         .overlay(alignment: .top) {
@@ -490,7 +490,7 @@ struct LocationPickerView: View {
         // is suggestion chrome, not content — kept neutral for the same reason
         // as the @mention autocomplete bar (no accent tint on chrome surfaces).
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 10, y: 4)
         .padding(.horizontal, MeeshySpacing.lg)
     }
 
@@ -596,7 +596,7 @@ struct LocationPickerView: View {
                                 startPoint: .leading, endPoint: .trailing
                             )
                         )
-                        .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 6, y: 3)
+                        .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 6, y: 3)
                 )
             }
             .disabled(displayedPlace == nil)
@@ -607,7 +607,7 @@ struct LocationPickerView: View {
         // glass; the inner accent CTA + secondary button stay as fills ON the glass.
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
-        .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 12, y: -4)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.bottom, MeeshySpacing.sm)
     }

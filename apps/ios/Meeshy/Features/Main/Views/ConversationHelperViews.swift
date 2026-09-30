@@ -39,7 +39,7 @@ struct ThemedBackButton: View {
 
     private var gradientStroke: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: color).opacity(0.5), MeeshyColors.indigo300.opacity(0.5)],
+            colors: [Color(hex: color).opacity(MeeshyOpacity.strong), MeeshyColors.indigo300.opacity(MeeshyOpacity.strong)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -73,7 +73,7 @@ struct ThemedBackButton: View {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                     .foregroundStyle(gradientFill)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
                 if showsPill {
                     // Vertical separator between chevron and red pill —
@@ -81,7 +81,7 @@ struct ThemedBackButton: View {
                     // the surrounding glass-capsule mood instead of
                     // looking like a hardcoded grey divider.
                     Rectangle()
-                        .fill(Color(hex: color).opacity(0.35))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.medium))
                         .frame(width: 1, height: 22)
                         .padding(.trailing, MeeshySpacing.xsPlus)
 
@@ -118,7 +118,7 @@ struct ThemedBackButton: View {
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .overlay(Capsule().stroke(gradientStroke, lineWidth: 1))
-                    .shadow(color: Color(hex: color).opacity(0.3), radius: 6, y: 3)
+                    .shadow(color: Color(hex: color).opacity(MeeshyOpacity.medium), radius: 6, y: 3)
                     .opacity(compactMode ? 0 : 1)
                     .scaleEffect(compactMode ? 0.4 : 1, anchor: .leading)
             )

@@ -64,9 +64,9 @@ struct MyStoryActionBar: View, Equatable {
     }
 
     private func label(_ glyph: MyStoryGlyph) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: glyph.systemImage)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
             // Jamais de « 0 » décoratif sous la vignette (directive 2026-07-29).
             if let count = counts[glyph], count > 0 {
                 Text("\(count)")

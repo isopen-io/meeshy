@@ -287,7 +287,7 @@ public struct MeeshyImageEditorView: View {
 
     private var doneButton: some View {
         Button(action: finish) {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "checkmark")
                     .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                 Text(String(localized: "media.editor.done", defaultValue: "Termin\u{00E9}", bundle: .module))
@@ -394,10 +394,10 @@ public struct MeeshyImageEditorView: View {
         .padding(.bottom, MeeshySpacing.mdPlus)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
                         .strokeBorder(accent.opacity(0.18), lineWidth: MeeshyBorder.hairline)
                 )
                 .shadow(color: .black.opacity(isDark ? 0.45 : 0.16), radius: 16, y: -4)
@@ -473,7 +473,7 @@ public struct MeeshyImageEditorView: View {
             Image(systemName: icon)
                 .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                 .foregroundColor(enabled ? theme.textPrimary : theme.textMuted)
-                .frame(width: 32, height: 32)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(Circle().fill(theme.inputBackground.opacity(enabled ? 1 : 0.5)))
         }
         .buttonStyle(.plain)
@@ -551,7 +551,7 @@ public struct MeeshyImageEditorView: View {
                 .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? .white : theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.vertical, 9)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     Capsule().fill(isSelected
                                    ? AnyShapeStyle(theme.buttonGradient(color: accentColor))
@@ -564,11 +564,11 @@ public struct MeeshyImageEditorView: View {
     private func geometryButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 42)
-                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(theme.inputBackground))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous).fill(theme.inputBackground))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
@@ -598,7 +598,7 @@ public struct MeeshyImageEditorView: View {
             HapticFeedback.light()
             viewModel.perform(filter.displayName) { $0.filter = filter }
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Group {
                     if let thumb = viewModel.filterThumbnails[filter] {
                         Image(uiImage: thumb)
@@ -614,7 +614,7 @@ public struct MeeshyImageEditorView: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .strokeBorder(isSelected ? accent : .clear, lineWidth: 2.5)
+                        .strokeBorder(isSelected ? accent : .clear, lineWidth: MeeshyBorder.strong)
                 )
 
                 Text(filter.displayName)
@@ -723,7 +723,7 @@ public struct MeeshyImageEditorView: View {
         } label: {
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: effect.iconName)
-                    .font(.system(size: 17))
+                    .font(.system(size: MeeshyIconSize.md))
                 Text(effect.displayName)
                     .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
             }
@@ -764,7 +764,7 @@ public struct MeeshyImageEditorView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                             .foregroundColor(theme.textSecondary)
-                            .frame(width: 30, height: 30)
+                            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                             .background(Circle().fill(theme.inputBackground))
                     }
                     .buttonStyle(.plain)
@@ -802,7 +802,7 @@ public struct MeeshyImageEditorView: View {
                 ZStack {
                     Circle()
                         .fill(isCurrent ? AnyShapeStyle(theme.buttonGradient(color: accentColor)) : AnyShapeStyle(theme.inputBackground))
-                        .frame(width: 30, height: 30)
+                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     Text("\(index)")
                         .font(.system(size: MeeshyFont.smallSize, weight: .bold))
                         .foregroundColor(isCurrent ? .white : theme.textSecondary)
@@ -813,7 +813,7 @@ public struct MeeshyImageEditorView: View {
                 Spacer()
                 if isCurrent {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                         .foregroundColor(accent)
                 }
             }
@@ -832,9 +832,9 @@ public struct MeeshyImageEditorView: View {
     private func glassCircleButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .background(Circle().fill(.ultraThinMaterial))
                 .overlay(Circle().strokeBorder(accent.opacity(0.3), lineWidth: 1))
                 .shadow(color: .black.opacity(0.16), radius: 5, y: 2)

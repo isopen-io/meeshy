@@ -78,11 +78,11 @@ struct MemberManagementSection: View {
         }
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.backgroundSecondary.opacity(0.5))
+                .fill(theme.backgroundSecondary.opacity(MeeshyOpacity.strong))
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .strokeBorder(sectionColor.opacity(0.2), lineWidth: 1)
+                .strokeBorder(sectionColor.opacity(MeeshyOpacity.light), lineWidth: 1)
         )
     }
 
@@ -116,7 +116,7 @@ struct MemberManagementSection: View {
         .padding(.vertical, MeeshySpacing.smPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                .fill(theme.textMuted.opacity(0.06))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
         )
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.top, MeeshySpacing.md)
@@ -202,7 +202,7 @@ struct MemberManagementSection: View {
         Group {
             switch role {
             case .creator:
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Image(systemName: "crown.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
@@ -212,7 +212,7 @@ struct MemberManagementSection: View {
                 .foregroundColor(MeeshyColors.tileSaffron)
 
             case .admin:
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Image(systemName: "shield.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
@@ -222,7 +222,7 @@ struct MemberManagementSection: View {
                 .foregroundColor(MeeshyColors.info)
 
             case .moderator:
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
@@ -257,7 +257,7 @@ struct MemberManagementSection: View {
             .padding(.vertical, MeeshySpacing.md)
             .overlay(
                 Rectangle()
-                    .fill(sectionColor.opacity(0.15))
+                    .fill(sectionColor.opacity(MeeshyOpacity.light))
                     .frame(height: 0.5),
                 alignment: .top
             )
@@ -279,16 +279,16 @@ struct MemberManagementSection: View {
     private var skeletonRow: some View {
         HStack(spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.1))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                 .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
-                    .fill(theme.textMuted.opacity(0.1))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 100, height: 12)
 
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.textMuted.opacity(0.07))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 60, height: 9)
             }
 

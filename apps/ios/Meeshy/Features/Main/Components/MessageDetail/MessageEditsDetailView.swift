@@ -92,7 +92,7 @@ struct MessageEditsDetailView: View {
         .padding(MeeshySpacing.smPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
         )
         // Single VoiceOver stop per revision: "Actuel, 14:30, <contenu>".
         // The colored rail is decorative (state is carried by the header text,

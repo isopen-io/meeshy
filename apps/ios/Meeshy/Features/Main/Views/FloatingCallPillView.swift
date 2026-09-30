@@ -249,7 +249,7 @@ struct FloatingCallPillView: View {
     /// est établi ; sinon le glyphe d'état pré-connexion (sonnerie/connexion en
     /// ambre, rupture réseau en rouge). Le libellé texte survit pour VoiceOver.
     private var statusLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             if pillStatus.isConnected {
                 TransientCallSignalGlyph(strength: signalStrength, errorTint: CallBannerContrast.errorStateTint)
                 // Blanc, pas success : #34D399 ne tient que 3.3:1 contre

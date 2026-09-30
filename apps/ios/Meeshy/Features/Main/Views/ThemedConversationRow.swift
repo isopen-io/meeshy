@@ -165,7 +165,7 @@ struct ThemedConversationRow: View {
                     if conversation.userState.hasPendingSync {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                            .foregroundColor(accent.opacity(0.7))
+                            .foregroundColor(accent.opacity(MeeshyOpacity.heavy))
                             .padding(.top, MeeshySpacing.xxs)
                             .accessibilityHidden(true)
                     }
@@ -205,7 +205,7 @@ struct ThemedConversationRow: View {
                     accent.opacity(isDark ? 0.28 : 0.18)
                 }
                 if isDragging {
-                    accent.opacity(0.05)
+                    accent.opacity(MeeshyOpacity.faint)
                 }
             }
         )
@@ -300,7 +300,7 @@ struct ThemedConversationRow: View {
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
-                            .fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
+                            .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.subtle))
                     )
             }
         }
@@ -324,7 +324,7 @@ struct ThemedConversationRow: View {
 
     // MARK: - Type Badge
     private var typeBadge: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: typeBadgeIcon)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
                 .imageScale(.small)
@@ -359,13 +359,13 @@ struct ThemedConversationRow: View {
         return Text(NotificationBadge.displayed(conversation.userState.unreadCount))
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
             .foregroundColor(.white)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .frame(minWidth: 24, minHeight: 24)
             .background(
                 Capsule()
                     .fill(badgeColor)
-                    .shadow(color: badgeColor.opacity(0.25), radius: 3)
+                    .shadow(color: badgeColor.opacity(MeeshyOpacity.medium), radius: 3)
             )
     }
 
@@ -423,7 +423,7 @@ struct ThemedConversationRow: View {
         @State private var isAnimating = false
 
         var body: some View {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(Color(hex: accentColor))
@@ -450,7 +450,7 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private var typingIndicatorView: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(typingUsername.map { name in
                 String(format: String(localized: "typing.named", bundle: .main), name)
             } ?? String(localized: "typing.anonymous", bundle: .main))
@@ -638,7 +638,7 @@ private struct ConversationAvatarView: View {
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
-                            .fill(Color.black.opacity(0.75))
+                            .fill(Color.black.opacity(MeeshyOpacity.heavy))
                     )
                     .offset(x: 0, y: -34)
                     .transition(.scale.combined(with: .opacity))

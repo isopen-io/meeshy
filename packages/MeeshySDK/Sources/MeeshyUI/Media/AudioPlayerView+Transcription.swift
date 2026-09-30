@@ -218,7 +218,7 @@ extension AudioPlayerView {
                     seeMoreButton
                 } else {
                     Text(Self.flatTranscriptionQuote(fullTranscriptionText))
-                        .font(.system(size: 12.5))
+                        .font(.system(size: MeeshyFont.smallSize))
                         .italic()
                         .foregroundColor(isDark ? .white.opacity(0.55) : .black.opacity(0.5))
                         .lineLimit(chromePlan.flatTranscriptionLineLimit)
@@ -306,7 +306,7 @@ extension AudioPlayerView {
             HapticFeedback.light()
         } label: {
             Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
                 .frame(maxWidth: .infinity)
                 .frame(height: 20)
@@ -354,7 +354,7 @@ extension AudioPlayerView {
                                 defaultValue: "Voir plus", bundle: .module))
                         .font(.system(size: 10, weight: .semibold))
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 }
                 .foregroundColor(accent)
                 .frame(maxWidth: .infinity)

@@ -71,8 +71,8 @@ struct MessageTranscriptionDetailView: View {
                     Text(LocalizedNumber.percent(Int((conf * 100).rounded())))
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(langColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, MeeshySpacing.xsPlus)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(langColor.opacity(0.12)))
                 }
 
@@ -213,7 +213,7 @@ struct MessageTranscriptionDetailView: View {
                                 .font(.footnote.weight(.bold))
                         }
                         .foregroundColor(accent)
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.smPlus)
                         .background(Capsule().fill(accent.opacity(0.15)))
                         .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: MeeshyBorder.hairline))
@@ -263,7 +263,7 @@ struct MessageTranscriptionDetailView: View {
                         Spacer()
 
                         if audio.cloned {
-                            HStack(spacing: 3) {
+                            HStack(spacing: MeeshySpacing.xxs) {
                                 Image(systemName: "person.wave.2")
                                     .font(.caption2.weight(.medium))
                                     .accessibilityHidden(true)

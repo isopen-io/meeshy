@@ -132,7 +132,7 @@ public struct JoinFlowSheet: View {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(theme.textMuted)
-                    .frame(width: 28, height: 28)
+                    .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
             .accessibilityLabel(String(localized: "joinFlow.close.accessibilityLabel", defaultValue: "Fermer", bundle: .module))
@@ -179,7 +179,7 @@ public struct JoinFlowSheet: View {
             }
 
             Text(String(localized: "joinFlow.success.title", defaultValue: "Bienvenue !", bundle: .module))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let result = viewModel.joinResult {

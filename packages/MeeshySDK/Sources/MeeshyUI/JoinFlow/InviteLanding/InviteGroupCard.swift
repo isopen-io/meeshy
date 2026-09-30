@@ -64,9 +64,9 @@ struct InviteGroupCard: View {
     private var identity: some View {
         HStack(alignment: .bottom, spacing: MeeshySpacing.mdPlus) {
             logo
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
-                    .font(MeeshyFont.relative(24, weight: .heavy, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
                     .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)

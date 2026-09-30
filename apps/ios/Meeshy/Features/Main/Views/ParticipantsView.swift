@@ -358,7 +358,7 @@ struct ParticipantsView: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.vertical, MeeshySpacing.sm + 2)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .contentShape(Rectangle())
         // Ouvrir la fiche : c'est la SEULE surface de profil d'un visiteur sans
         // compte. Réservée à eux — un inscrit a déjà sa page `/u/{pseudo}`, et
@@ -470,7 +470,7 @@ struct ParticipantsView: View {
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))

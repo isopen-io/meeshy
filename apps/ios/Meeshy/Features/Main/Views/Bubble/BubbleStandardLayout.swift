@@ -1130,7 +1130,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Expandable text
 
     private var linkTint: Color {
-        content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
+        content.isMe ? .white.opacity(MeeshyOpacity.intense) : Color(hex: contactColor)
     }
 
     /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
@@ -1366,7 +1366,7 @@ struct BubbleStandardLayout: View {
             RadialGradient(
                 gradient: Gradient(colors: [
                     Color.white.opacity(0.35),
-                    Color.white.opacity(0.12),
+                    Color.white.opacity(MeeshyOpacity.light),
                     Color.clear
                 ]),
                 center: .center,
@@ -1377,13 +1377,13 @@ struct BubbleStandardLayout: View {
             .scaleEffect(1.3)
 
             Circle()
-                .fill(Color.white.opacity(0.18))
+                .fill(Color.white.opacity(MeeshyOpacity.light))
                 .blur(radius: 25)
                 .frame(width: 70, height: 70)
                 .offset(x: -25, y: -18)
 
             Circle()
-                .fill(Color.white.opacity(0.12))
+                .fill(Color.white.opacity(MeeshyOpacity.light))
                 .blur(radius: 30)
                 .frame(width: 55, height: 55)
                 .offset(x: 20, y: 12)

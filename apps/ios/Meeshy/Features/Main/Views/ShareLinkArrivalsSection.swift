@@ -121,7 +121,7 @@ struct ShareLinkArrivalRow: View, Equatable {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(isDark ? MeeshyColors.indigo900 : MeeshyColors.indigo50))
             }
             Spacer(minLength: 0)

@@ -86,9 +86,9 @@ struct MessageLanguageDetailView: View {
                 Text(originalLang.uppercased())
                     .font(.system(.caption2, design: .monospaced).weight(.bold))
                     .foregroundColor(originalColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(originalColor.opacity(0.12)))
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(originalColor.opacity(MeeshyOpacity.light)))
             }
             .padding(MeeshySpacing.smPlus)
             .background(
@@ -96,7 +96,7 @@ struct MessageLanguageDetailView: View {
                     .fill(originalColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .stroke(originalColor.opacity(0.15), lineWidth: MeeshyBorder.hairline)
+                            .stroke(originalColor.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                     )
             )
 
@@ -111,7 +111,7 @@ struct MessageLanguageDetailView: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(originalColor.opacity(0.7))
+                        .foregroundColor(originalColor.opacity(MeeshyOpacity.heavy))
                     Text(transcription.text)
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
@@ -160,7 +160,7 @@ struct MessageLanguageDetailView: View {
                         .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                         .overlay(
                             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                                .stroke(langColor.opacity(0.2), lineWidth: MeeshyBorder.hairline)
+                                .stroke(langColor.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -168,7 +168,7 @@ struct MessageLanguageDetailView: View {
 
             // Divider
             Rectangle()
-                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .frame(height: 0.5)
 
             // Language list
@@ -296,9 +296,9 @@ struct MessageLanguageDetailView: View {
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "waveform")
                             .font(.caption2.weight(.medium))
                             .minimumScaleFactor(0.8)
@@ -312,17 +312,17 @@ struct MessageLanguageDetailView: View {
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
                         .foregroundColor(langColor)
                         .padding(.horizontal, MeeshySpacing.sm)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(langColor.opacity(0.12)))
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(langColor.opacity(MeeshyOpacity.light)))
                 }
             }
-            .padding(.vertical, 9)
+            .padding(.vertical, MeeshySpacing.sm)
             .padding(.horizontal, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)

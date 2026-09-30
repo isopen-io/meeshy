@@ -192,7 +192,7 @@ struct AffiliateView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
@@ -205,7 +205,7 @@ struct AffiliateView: View {
 
     private func tokenRow(_ token: AffiliateToken) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(token.name)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)

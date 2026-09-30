@@ -62,8 +62,8 @@ struct NotificationListSkeleton: View {
     private func row(index: Int) -> some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
-                .frame(width: 44, height: 44)
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .skeletonShimmer()
 
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
@@ -119,7 +119,7 @@ struct NotificationListErrorState: View {
             Spacer()
 
             Image(systemName: "wifi.exclamationmark")
-                .font(.system(size: 44))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(MeeshyColors.error.opacity(0.6))
                 .accessibilityHidden(true)
 

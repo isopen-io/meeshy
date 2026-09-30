@@ -25,7 +25,7 @@ public struct LiveLocationBadge: View {
                 .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
 
             Image(systemName: "location.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 1) {

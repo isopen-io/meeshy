@@ -109,9 +109,9 @@ struct AttachmentReactionBadge: View {
                     .foregroundColor(.white)
             }
         }
-        .padding(.horizontal, 5).padding(.vertical, MeeshySpacing.xxs)
+        .padding(.horizontal, MeeshySpacing.xs).padding(.vertical, MeeshySpacing.xxs)
         .background(
-            Capsule().fill(model.mine ? accent.opacity(0.55) : Color.black.opacity(0.55))
+            Capsule().fill(model.mine ? accent.opacity(MeeshyOpacity.strong) : MeeshyColors.mediaScrim)
         )
         .overlay(
             Capsule().strokeBorder(model.mine ? accent : .clear, lineWidth: model.mine ? 2 : 0)

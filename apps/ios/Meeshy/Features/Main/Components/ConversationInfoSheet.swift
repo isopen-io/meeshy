@@ -202,7 +202,7 @@ struct ConversationInfoSheet: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                        .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Réglages de la conversation", bundle: .main))
             }
@@ -215,7 +215,7 @@ struct ConversationInfoSheet: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
@@ -342,8 +342,8 @@ struct ConversationInfoSheet: View {
         LinearGradient(
             colors: [
                 accent.opacity(0.4),
-                accent.opacity(0.15),
-                accent.opacity(0.3)
+                accent.opacity(MeeshyOpacity.light),
+                accent.opacity(MeeshyOpacity.medium)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -387,7 +387,7 @@ struct ConversationInfoSheet: View {
             .foregroundColor(theme.textMuted)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(theme.textMuted.opacity(0.1)))
+            .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
         }
     }
 
@@ -416,10 +416,10 @@ struct ConversationInfoSheet: View {
                                     // hors Dynamic Type pour que la pill reste « tight » (cf. 53i).
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(isSelected ? .white : theme.textMuted)
-                                    .padding(.horizontal, 5)
+                                    .padding(.horizontal, MeeshySpacing.xs)
                                     .padding(.vertical, 1)
                                     .background(
-                                        Capsule().fill(isSelected ? accent : theme.textMuted.opacity(0.15))
+                                        Capsule().fill(isSelected ? accent : theme.textMuted.opacity(MeeshyOpacity.light))
                                     )
                             }
                         }
@@ -522,11 +522,11 @@ struct ConversationInfoSheet: View {
             .padding(MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: 1)
             )
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.bottom, MeeshySpacing.sm)
@@ -615,7 +615,7 @@ struct ConversationInfoSheet: View {
                         Text(roleBadgeLabel(role))
                             .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, MeeshySpacing.xs)
                             .padding(.vertical, 1)
                             .background(
                                 Capsule().fill(roleBadgeColor(role))
@@ -651,15 +651,15 @@ struct ConversationInfoSheet: View {
     private var memberSkeletonRow: some View {
         HStack(spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
-                    .fill(theme.textMuted.opacity(0.12))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                     .frame(width: 120, height: 12)
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.textMuted.opacity(0.08))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 80, height: 10)
             }
 
@@ -756,7 +756,7 @@ struct ConversationInfoSheet: View {
                 .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                        .fill(isDark ? theme.textPrimary.opacity(MeeshyOpacity.faint) : theme.textPrimary.opacity(MeeshyOpacity.faint))
                 )
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -806,7 +806,7 @@ struct ConversationInfoSheet: View {
                 .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                        .fill(isDark ? theme.textPrimary.opacity(MeeshyOpacity.faint) : theme.textPrimary.opacity(MeeshyOpacity.faint))
                 )
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -845,7 +845,7 @@ struct ConversationInfoSheet: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .strokeBorder(Color(hex: color).opacity(0.2), lineWidth: 1)
+                    .strokeBorder(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)
             )
         }
         .disabled(isLoading)
@@ -987,7 +987,7 @@ struct ConversationInfoSheet: View {
                     .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                            .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
                     )
             )
         }

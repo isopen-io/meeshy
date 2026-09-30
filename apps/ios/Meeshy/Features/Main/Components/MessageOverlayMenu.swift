@@ -1132,7 +1132,7 @@ private struct PreviewVideoPlayer: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(accent)
                 .padding(.horizontal, 6)
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
                 .background(Capsule().fill(accent.opacity(0.12)))
         }
     }

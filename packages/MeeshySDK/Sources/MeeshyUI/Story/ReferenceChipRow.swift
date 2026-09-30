@@ -44,7 +44,7 @@ public struct ReferenceChipRow: View, Equatable {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 7)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(accentColor.opacity(0.12)))
             }
             .buttonStyle(.plain)

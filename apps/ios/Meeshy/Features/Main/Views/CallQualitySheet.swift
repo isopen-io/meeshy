@@ -51,8 +51,8 @@ struct CallQualitySheet: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(overall.tint)
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(overall.tint.opacity(0.15)))
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(overall.tint.opacity(MeeshyOpacity.light)))
             }
             Spacer()
             Button {

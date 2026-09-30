@@ -353,7 +353,7 @@ public struct ConversationSettingsView: View {
             VStack(spacing: 0) {
                 HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     TextField(String(localized: "conversation.settings.members.search.placeholder", defaultValue: "Rechercher un membre...", bundle: .module), text: $viewModel.memberSearchText)
                         .font(.system(size: MeeshyFont.labelSize, design: .rounded))
@@ -413,7 +413,7 @@ public struct ConversationSettingsView: View {
                 accentColor: DynamicColorGenerator.colorForName(displayName),
                 avatarURL: participant.resolvedAvatar
             )
-            .frame(width: 36, height: 36)
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -431,9 +431,9 @@ public struct ConversationSettingsView: View {
                     memberActions(for: participant, targetRole: role)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 32, height: 32)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
                 }
             }
@@ -446,18 +446,18 @@ public struct ConversationSettingsView: View {
     private func memberRoleBadge(_ role: MemberRole) -> some View {
         switch role {
         case .creator:
-            HStack(spacing: 3) {
-                Image(systemName: "crown.fill").font(.system(size: 9))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "crown.fill").font(.system(size: MeeshyIconSize.xxs))
                 Text(String(localized: "conversation.role.creator", defaultValue: "Createur", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.tileSaffron)
         case .admin:
-            HStack(spacing: 3) {
-                Image(systemName: "shield.fill").font(.system(size: 9))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "shield.fill").font(.system(size: MeeshyIconSize.xxs))
                 Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.blue500)
         case .moderator:
-            HStack(spacing: 3) {
-                Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "checkmark.shield.fill").font(.system(size: MeeshyIconSize.xxs))
                 Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.success)
         case .member:

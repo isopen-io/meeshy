@@ -178,8 +178,8 @@ extension StoryCardView {
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.sm)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.black.opacity(0.55))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                            .fill(MeeshyColors.mediaScrim)
                     )
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.bottom, captionBottomInset(geometry: geometry))
@@ -245,7 +245,7 @@ extension StoryCardView {
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
+                .overlay(Capsule().fill(MeeshyColors.mediaChromeFill))
         )
     }
 

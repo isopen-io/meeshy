@@ -25,7 +25,7 @@ struct MessageActionsMenu: View {
             ForEach(Array(actions.enumerated()), id: \.element) { index, action in
                 row(action)
                 if index < actions.count - 1 {
-                    Divider().overlay(accent.opacity(0.08)).padding(.leading, 52)
+                    Divider().overlay(accent.opacity(MeeshyOpacity.subtle)).padding(.leading, 52)
                 }
             }
         }

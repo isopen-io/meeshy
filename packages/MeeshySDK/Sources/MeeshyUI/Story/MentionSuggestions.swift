@@ -424,7 +424,7 @@ public struct StoryMentionPickerSheet: View {
         }
         .padding(.leading, MeeshySpacing.md)
         .padding(.trailing, MeeshySpacing.smPlus)
-        .padding(.vertical, 7)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(minHeight: 36)
         .background(Capsule().fill(Color(.secondarySystemBackground)))
     }

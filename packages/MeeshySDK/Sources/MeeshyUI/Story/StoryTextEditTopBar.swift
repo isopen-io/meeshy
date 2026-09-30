@@ -43,7 +43,7 @@ struct StoryTextEditTopBar: View {
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(Color.white)
             .lineLimit(1)
-            .padding(.horizontal, 18)
+            .padding(.horizontal, MeeshySpacing.lg)
             .frame(height: TextEditToolbarMetrics.bubbleSize)
             .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
             .contentShape(Capsule())

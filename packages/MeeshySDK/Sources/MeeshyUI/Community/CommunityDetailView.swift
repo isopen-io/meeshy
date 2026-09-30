@@ -159,7 +159,7 @@ public struct CommunityDetailView: View {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(Color.black.opacity(0.35))
                     .clipShape(Circle())
             }
@@ -187,7 +187,7 @@ public struct CommunityDetailView: View {
                     Image(systemName: "ellipsis")
                         .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
+                        .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
                 }
@@ -199,7 +199,7 @@ public struct CommunityDetailView: View {
                     Image(systemName: "heart.fill")
                         .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
+                        .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
                 }
@@ -256,13 +256,13 @@ public struct CommunityDetailView: View {
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: community.isPrivate ? "lock.fill" : "globe")
-                        .font(.system(size: 11))
+                        .font(.system(size: MeeshyIconSize.xxs))
                     Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
                         .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 5)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(theme.backgroundSecondary)
                 .clipShape(Capsule())
                 .padding(.top, 44)
@@ -459,7 +459,7 @@ public struct CommunityDetailView: View {
             Image(systemName: "number")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.brandPrimary)
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
@@ -688,7 +688,7 @@ struct AddChannelSheet: View {
             Image(systemName: "number")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(MeeshyColors.brandPrimary)
-                .frame(width: 32, height: 32)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
 

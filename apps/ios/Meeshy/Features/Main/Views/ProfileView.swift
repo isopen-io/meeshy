@@ -64,7 +64,7 @@ struct ProfileView: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.vertical, MeeshySpacing.sm + 2)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
                         .padding(.bottom, MeeshySpacing.xxl)
                 }

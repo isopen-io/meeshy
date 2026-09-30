@@ -9,7 +9,7 @@ extension CallView {
         if let mode = layer.activeMode {
             ZStack(alignment: .bottom) {
                 modeStage(mode)
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(MeeshyOpacity.heavy)], startPoint: .center, endPoint: .bottom)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)

@@ -43,7 +43,7 @@ extension SignupView {
         .adaptiveLiquidGlass(in: Self.cardShape)
         .overlay(
             Self.cardShape
-                .stroke(theme.inputBorder.opacity(0.25), lineWidth: 1)
+                .stroke(theme.inputBorder.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 .allowsHitTesting(false)
         )
         .overlay {
@@ -56,7 +56,7 @@ extension SignupView {
         .accessibilityIdentifier("auth.signup.card")
     }
 
-    static var cardShape: RoundedRectangle { RoundedRectangle(cornerRadius: 26, style: .continuous) }
+    static var cardShape: RoundedRectangle { RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous) }
 
     /// Le feu d'artifice se tire quand le compte vient d'être validé — jamais
     /// sous « Réduire les animations », où la coche seule dit la réussite.
@@ -112,7 +112,7 @@ extension SignupView {
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                                 .padding(.horizontal, MeeshySpacing.md)
-                                .frame(minHeight: 44)
+                                .frame(minHeight: MeeshyControlSize.tapTarget)
                                 .background(inputSurface(isFocused: false))
                         }
                         .buttonStyle(.plain)
@@ -225,7 +225,7 @@ extension SignupView {
                 Text(String(localized: "auth.signup.email.notMe", defaultValue: "Ce n’est pas moi", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                    .frame(minHeight: 44)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
             }
             .disabled(viewModel.isSubmitting)
             .accessibilityHint(Self.claimNote)
@@ -260,7 +260,7 @@ extension SignupView {
             }
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             .foregroundColor(MeeshyColors.indigo500)
-            .frame(minHeight: 44)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
         }
         .disabled(viewModel.isRequestingSignInLink)
         .accessibilityHint(String(localized: "auth.signup.email.sendSignInLink.hint", defaultValue: "Envoie un code et un lien de connexion à cette adresse", bundle: .main))
@@ -275,7 +275,7 @@ extension SignupView {
             Text(String(localized: "auth.signup.email.forgotPassword", defaultValue: "Mot de passe oublié ?", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
-                .frame(minHeight: 44)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
         }
     }
 
@@ -333,7 +333,7 @@ extension SignupView {
                 }
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(minHeight: 44)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
             }
             .buttonStyle(.plain)
             .accessibilityHint(passwordWhyDetail)
@@ -376,8 +376,8 @@ extension SignupView {
             .frame(maxWidth: .infinity, minHeight: 48)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(MeeshyColors.indigo500.opacity(0.12))
-                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(MeeshyColors.indigo500.opacity(0.45), lineWidth: 1))
+                    .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(MeeshyColors.indigo500.opacity(MeeshyOpacity.strong), lineWidth: 1))
             )
         }
         .buttonStyle(.plain)

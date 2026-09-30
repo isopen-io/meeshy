@@ -196,7 +196,7 @@ public struct CountryPicker: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -215,7 +215,7 @@ public struct CountryPicker: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
                 )
         }
         .sheet(isPresented: $showPicker) {

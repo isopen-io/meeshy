@@ -182,14 +182,14 @@ public struct MeeshyAudioTranscriptPlayer: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .background(Circle().fill(tint))
                 // La pastille mesure 40 pt ; sa CIBLE en mesure 44, le plancher
                 // de la HIG. Peindre 44 aurait épaissi un rond que la carte ne
                 // demande pas — la cible et le dessin sont deux tailles.
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -214,7 +214,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             if onEdit != nil {
                 Image(systemName: "slider.horizontal.below.rectangle")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(tint)
             }
         }

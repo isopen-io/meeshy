@@ -75,7 +75,7 @@ struct ContactCardDetailSheet: View {
                                 }
                             }
                         }
-                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(0.05)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(MeeshyOpacity.faint)))
                     }
                     ForEach(model.accounts) { account in
                         meeshySection(account)
@@ -88,8 +88,8 @@ struct ContactCardDetailSheet: View {
         }
         .frame(maxWidth: 520)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(accent.opacity(0.25), lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: 1))
+        .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 24, y: 10)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
@@ -97,7 +97,7 @@ struct ContactCardDetailSheet: View {
     private var header: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             ZStack {
-                Circle().fill(LinearGradient(colors: [accent, accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Circle().fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Text(Self.initials(model.card?.displayName ?? ""))
                     .font(.title3.weight(.bold))
                     .foregroundColor(.white)
@@ -122,7 +122,7 @@ struct ContactCardDetailSheet: View {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
                     .foregroundColor(.primary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -145,7 +145,7 @@ struct ContactCardDetailSheet: View {
             ZStack(alignment: .bottomLeading) {
                 banner(account)
                 MeeshyAvatar(name: account.displayName, context: .storyViewer, accentColor: accentHex, avatarURL: account.avatarUrl, isDark: colorScheme == .dark)
-                    .padding(3)
+                    .padding(MeeshySpacing.xxs)
                     .background(Circle().fill(.ultraThinMaterial))
                     .offset(x: 12, y: 22)
                     .accessibilityHidden(true)
@@ -172,17 +172,17 @@ struct ContactCardDetailSheet: View {
                     .padding(.top, MeeshySpacing.xsPlus)
             }
             .padding(.horizontal, MeeshySpacing.md)
-            .padding(.top, 30)
+            .padding(.top, MeeshySpacing.xxxl)
             .padding(.bottom, MeeshySpacing.md)
             .accessibilityElement(children: .contain)
         }
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(MeeshyOpacity.faint)))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
     }
 
     @ViewBuilder
     private func banner(_ account: PublicContactAccount) -> some View {
-        let gradient = LinearGradient(colors: [accent.opacity(0.55), accent.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        let gradient = LinearGradient(colors: [accent.opacity(MeeshyOpacity.strong), accent.opacity(MeeshyOpacity.light)], startPoint: .topLeading, endPoint: .bottomTrailing)
         if let bannerUrl = account.bannerUrl {
             CachedAsyncImage(url: bannerUrl, targetSize: CGSize(width: 480, height: 96), thumbHash: nil, showsStatusOverlays: false) {
                 gradient
@@ -220,7 +220,7 @@ struct ContactCardDetailSheet: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Capsule().fill(accent.opacity(0.12)))
+                .background(Capsule().fill(accent.opacity(MeeshyOpacity.light)))
         }
         .buttonStyle(.plain)
     }
@@ -270,7 +270,7 @@ struct ContactCardFieldRow: View {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.smPlus)
-        .frame(minHeight: 44)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 0.4) { copy() }
         .accessibilityElement(children: .ignore)

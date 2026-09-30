@@ -49,7 +49,7 @@ extension ConversationInfoSheet {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .strokeBorder(accent.opacity(0.12), lineWidth: 1)
+                        .strokeBorder(accent.opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -77,7 +77,7 @@ extension ConversationInfoSheet {
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             } else if let att = msg.attachments.first {
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Image(systemName: attachmentIcon(att.type))
                         .font(MeeshyFont.relative(9))
                     Text(attachmentLabel(att.type))
@@ -88,7 +88,7 @@ extension ConversationInfoSheet {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, MeeshySpacing.xsPlus)
     }
 
     // MARK: - All Pinned Messages Sheet
@@ -119,7 +119,7 @@ extension ConversationInfoSheet {
                             .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                             .foregroundColor(theme.textMuted)
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                            .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
@@ -141,7 +141,7 @@ extension ConversationInfoSheet {
                     .rotationEffect(.degrees(45))
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(msg.senderName ?? "?")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))

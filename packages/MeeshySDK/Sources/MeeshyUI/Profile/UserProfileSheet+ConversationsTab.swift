@@ -89,7 +89,7 @@ extension UserProfileSheet {
                     if index < effectiveConversations.count - 1 {
                         Divider()
                             .padding(.leading, 64)
-                            .opacity(0.3)
+                            .opacity(MeeshyOpacity.medium)
                     }
                 }
             }

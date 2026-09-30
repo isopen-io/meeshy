@@ -53,7 +53,7 @@ struct ContactCardView: View, Equatable {
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .stroke(accent.opacity(0.25), lineWidth: 1)
+                .stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: 1)
         )
         .task { await model.load() }
         .fullScreenCover(isPresented: $isShowingDetail) {
@@ -92,7 +92,7 @@ struct ContactCardView: View, Equatable {
                     .foregroundColor(.secondary)
                     .opacity(model.card == nil ? 0 : 1)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -109,7 +109,7 @@ struct ContactCardView: View, Equatable {
                 .accessibilityHidden(true)
         } else {
             ZStack {
-                Circle().fill(LinearGradient(colors: [accent, accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Circle().fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: "person.crop.circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)

@@ -24,8 +24,8 @@ struct BubbleSecondaryContent: View, Equatable {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: langCode))
         let display = LanguageDisplay.from(code: langCode)
         let secondaryTextColor: Color = isMe
-            ? .white.opacity(0.85)
-            : textPrimary.opacity(0.8)
+            ? .white.opacity(MeeshyOpacity.intense)
+            : textPrimary.opacity(MeeshyOpacity.intense)
 
         VStack(spacing: 0) {
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -57,7 +57,7 @@ struct BubbleSecondaryContent: View, Equatable {
             }
             .padding(.vertical, MeeshySpacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(langColor.opacity(0.12))
+            .background(langColor.opacity(MeeshyOpacity.light))
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
     }

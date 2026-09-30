@@ -72,7 +72,7 @@ extension FeedPostCard {
                     // Elle serait sinon lue « @handle » sans dire pourquoi.
                     if post.repostAuthor != nil {
                         let handle = post.repost?.authorUsername ?? post.repostAuthor
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
                             if let handle {
@@ -140,7 +140,7 @@ extension FeedPostCard {
                     // post's author, after the meta row (private analytics).
                     if isAuthor {
                         MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             ReachMetricLabel(
                                 icon: "chart.bar.fill",
                                 count: post.impressionCount,

@@ -48,7 +48,7 @@ struct CallDeclineSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
+        .background(Color.primary.opacity(MeeshyOpacity.subtle), in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         .accessibilityHint(String(localized: "call.decline.reply.hint", defaultValue: "Refuse l'appel et envoie ce message", bundle: .main))
     }
 
@@ -66,7 +66,7 @@ struct CallDeclineSheet: View {
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
-            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
+            .background(Color.primary.opacity(MeeshyOpacity.subtle), in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
             .accessibilityLabel(String(localized: "call.decline.custom.label", defaultValue: "Votre message", bundle: .main))
 
             Button(action: sendDraft) {

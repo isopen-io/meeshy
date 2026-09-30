@@ -91,7 +91,7 @@ struct CommunityLinksView: View {
             Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xl))
                 .foregroundColor(accent)
                 .accessibilityHidden(true)
-            Text(value).font(MeeshyFont.relative(24, weight: .bold)).foregroundColor(theme.textPrimary)
+            Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundColor(theme.textPrimary)
             Text(label).font(MeeshyFont.relative(MeeshyFont.footnoteSize)).foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity).padding(MeeshySpacing.mdPlus)
@@ -99,7 +99,7 @@ struct CommunityLinksView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentHex))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(accent.opacity(0.2), lineWidth: 1))
+                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
     }
@@ -149,13 +149,13 @@ struct CommunityLinksView: View {
     private func communityLinkRow(_ link: CommunityLink) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
-                Circle().fill(accent.opacity(0.15)).frame(width: 40, height: 40)
+                Circle().fill(accent.opacity(MeeshyOpacity.light)).frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "person.3.fill").font(.system(size: MeeshyIconSize.sm))
                     .foregroundColor(accent)
                     .accessibilityHidden(true)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(link.name).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
                 Text(String(localized: "community.links.row.subtitle", defaultValue: "\(link.memberCount) membres · \(link.identifier)", bundle: .main))
@@ -181,7 +181,7 @@ struct CommunityLinksView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentHex))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(accent.opacity(0.15), lineWidth: 1))
+                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
         .accessibilityHint(String(localized: "community.links.row.open.a11y", defaultValue: "Ouvre les détails de la communauté", bundle: .main))

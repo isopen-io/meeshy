@@ -38,9 +38,9 @@ struct DrawingEditFloatingBubbles: View {
     /// Bulle d'action neutre (undo/redo), grisée + non-tappable quand désactivée.
     private func actionBubble(symbol: String, enabled: Bool, label: String, action: @escaping () -> Void) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
             .glassControlForeground()
-            .frame(width: 36, height: 36)
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .adaptiveGlass(in: Circle())
             .opacity(enabled ? 1 : 0.4)
             .contentShape(Circle())
@@ -57,13 +57,13 @@ struct DrawingEditFloatingBubbles: View {
                 Image(systemName: tool.sfSymbol)
                     .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundStyle(Color.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
             } else {
                 Image(systemName: tool.sfSymbol)
                     .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .glassControlForeground()
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .adaptiveGlass(in: Circle())
             }
         }
@@ -76,7 +76,7 @@ struct DrawingEditFloatingBubbles: View {
         Image(systemName: "xmark")
             .font(.system(size: MeeshyIconSize.xs, weight: .bold))
             .foregroundStyle(.white)
-            .frame(width: 36, height: 36)
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
             .contentShape(Circle())
             .onTapGesture {

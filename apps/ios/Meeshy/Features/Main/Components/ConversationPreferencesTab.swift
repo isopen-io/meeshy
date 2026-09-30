@@ -102,7 +102,7 @@ struct ConversationPreferencesTab: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(accent)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(accent.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(accent.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Nom personnalisé", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -133,17 +133,17 @@ struct ConversationPreferencesTab: View {
                 .padding(MeeshySpacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                        .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
+                        .strokeBorder(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
 
             Button {
                 showEmojiPicker = true
@@ -196,7 +196,7 @@ struct ConversationPreferencesTab: View {
                 )
             )
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
 
             // Catégorie
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -206,7 +206,7 @@ struct ConversationPreferencesTab: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -228,7 +228,7 @@ struct ConversationPreferencesTab: View {
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
 
             // Tags
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -238,7 +238,7 @@ struct ConversationPreferencesTab: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.tags", defaultValue: "Étiquettes", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -271,7 +271,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMuted(val) }
                 )
             )
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
             settingsToggleRow(
                 icon: "at",
                 iconColor: MeeshyColors.tileCoralHex,
@@ -301,7 +301,7 @@ struct ConversationPreferencesTab: View {
             .buttonStyle(.plain)
 
             if canLeave {
-                Divider().padding(.leading, 54).opacity(0.3)
+                Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
                 Button {
                     showLeaveConfirm = true
                 } label: {
@@ -313,7 +313,7 @@ struct ConversationPreferencesTab: View {
                 .buttonStyle(.plain)
             }
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
             Button {
                 showDeleteConfirm = true
             } label: {
@@ -395,7 +395,7 @@ struct ConversationPreferencesTab: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(Color(hex: iconColor))
                 .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color(hex: iconColor).opacity(0.12)))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color(hex: iconColor).opacity(MeeshyOpacity.light)))
                 .accessibilityHidden(true)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))

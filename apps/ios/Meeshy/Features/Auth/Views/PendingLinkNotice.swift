@@ -28,7 +28,7 @@ struct PendingLinkNotice: View {
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(MeeshyColors.indigo500.opacity(0.10), in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+            .background(MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle), in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.sm)
             .accessibilityElement(children: .combine)

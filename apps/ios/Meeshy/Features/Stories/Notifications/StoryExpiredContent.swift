@@ -98,7 +98,7 @@ public struct StoryExpiredContent: View {
                     .foregroundStyle(foreground)
                 Text(context.occurredAt.formatted(.relative(presentation: .named)))
                     .font(.caption)
-                    .foregroundStyle(foreground.opacity(0.7))
+                    .foregroundStyle(foreground.opacity(MeeshyOpacity.heavy))
             }
             Spacer(minLength: 0)
         }
@@ -123,7 +123,7 @@ public struct StoryExpiredContent: View {
             // VoiceOver. Hero glyph ≥40pt → kept fixed, same rationale as above.
             Image(systemName: "bubble.left.fill")
                 .font(.system(size: 56))
-                .foregroundStyle(Self.foregroundOnBackground(background).opacity(0.85))
+                .foregroundStyle(Self.foregroundOnBackground(background).opacity(MeeshyOpacity.intense))
                 .accessibilityHidden(true)
         }
     }
@@ -151,7 +151,7 @@ public struct StoryExpiredContent: View {
                 .multilineTextAlignment(.center)
             Text("notifications.story.expired.subtitle")
                 .font(.body)
-                .foregroundStyle(foreground.opacity(0.8))
+                .foregroundStyle(foreground.opacity(MeeshyOpacity.intense))
                 .multilineTextAlignment(.center)
         }
         // Read title + subtitle as one statement rather than two separate swipes.
@@ -191,7 +191,7 @@ public struct StoryExpiredContent: View {
             Text("notifications.story.expired.back")
                 .font(.subheadline)
                 .underline()
-                .foregroundStyle(foreground.opacity(0.85))
+                .foregroundStyle(foreground.opacity(MeeshyOpacity.intense))
         }
         .buttonStyle(.plain)
     }

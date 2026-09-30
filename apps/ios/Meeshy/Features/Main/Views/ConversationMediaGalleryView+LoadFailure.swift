@@ -36,20 +36,20 @@ struct GalleryMediaUnavailableView: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "photo.badge.exclamationmark")
-                .font(MeeshyFont.relative(44))
-                .foregroundColor(.white.opacity(0.55))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundColor(.white.opacity(MeeshyOpacity.strong))
                 .accessibilityHidden(true)
             Text(String(localized: "gallery.media.unavailable", defaultValue: "Ce média n'est plus disponible", bundle: .main))
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .multilineTextAlignment(.center)
             Button(action: onRetry) {
                 Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 44)
-                    .background(Capsule().fill(Color.white.opacity(0.18)))
+                    .foregroundColor(MeeshyColors.mediaChromeForeground)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
             }
             .buttonStyle(.plain)
         }

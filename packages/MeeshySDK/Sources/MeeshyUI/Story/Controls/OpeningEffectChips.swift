@@ -76,11 +76,11 @@ public struct OpeningEffectChips: View {
         // Non sélectionné : texte adaptatif sur remplissage subtil adaptatif.
         let textColor: Color = isSelected ? .white : (isDark ? .white : MeeshyColors.indigo950)
         let fillColor: Color = isSelected
-            ? MeeshyColors.brandPrimary.opacity(0.85)
-            : (isDark ? Color.white.opacity(0.10) : MeeshyColors.indigo950.opacity(0.06))
+            ? MeeshyColors.brandPrimary.opacity(MeeshyOpacity.intense)
+            : (isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
         let strokeColor: Color = isSelected
-            ? MeeshyColors.brandPrimary.opacity(0.35)
-            : (isDark ? Color.white.opacity(0.12) : MeeshyColors.indigo950.opacity(0.14))
+            ? MeeshyColors.brandPrimary.opacity(MeeshyOpacity.medium)
+            : (isDark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.indigo950.opacity(MeeshyOpacity.light))
         return Button {
             onSelect(effect)
             HapticFeedback.light()

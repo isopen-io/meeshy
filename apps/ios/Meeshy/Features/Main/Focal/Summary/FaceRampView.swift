@@ -85,7 +85,7 @@ private struct FaceRampEntryButton: View {
         Text("\(entry.awaitingCount)")
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
             .foregroundColor(.white)
-            .padding(.horizontal, 5)
+            .padding(.horizontal, MeeshySpacing.xs)
             .frame(minWidth: 16, minHeight: 16)
             .background(Capsule().fill(MeeshyColors.indigo500))
             .overlay(Capsule().strokeBorder(isDark ? Color.black : Color.white, lineWidth: MeeshyBorder.emphasis))

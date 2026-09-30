@@ -130,9 +130,9 @@ extension PostDetailView {
                             Circle().fill(langColor).frame(width: 3, height: 3)
                             Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                         }
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             if let display {
-                                HStack(spacing: 3) {
+                                HStack(spacing: MeeshySpacing.xxs) {
                                     Text(display.flag).font(.caption2)
                                     Text(display.name)
                                         .font(.caption2.weight(.semibold))

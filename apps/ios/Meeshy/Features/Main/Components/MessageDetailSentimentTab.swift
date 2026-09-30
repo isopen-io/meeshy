@@ -35,7 +35,7 @@ struct MessageDetailSentimentTab: View, Equatable {
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(
                             LinearGradient(
                                 colors: [MeeshyColors.error, MeeshyColors.warning, MeeshyColors.warning, MeeshyColors.success],

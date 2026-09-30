@@ -80,7 +80,7 @@ struct StarredMessagesView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(MeeshyFont.relative(17, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(MeeshyColors.brandPrimary)
                     .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -157,11 +157,11 @@ private struct StarredRow: View {
                 if let conversationName = snapshot.conversationName {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(MeeshyFont.relative(9, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                         Text(conversationName)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     }
-                    .foregroundStyle(accent.opacity(0.85))
+                    .foregroundStyle(accent.opacity(MeeshyOpacity.intense))
                 }
             }
         }
@@ -171,7 +171,7 @@ private struct StarredRow: View {
                 .fill(isDark ? MeeshyColors.indigo950.opacity(0.4) : MeeshyColors.indigo50)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                        .stroke(accent.opacity(0.2), lineWidth: MeeshyBorder.hairline)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }

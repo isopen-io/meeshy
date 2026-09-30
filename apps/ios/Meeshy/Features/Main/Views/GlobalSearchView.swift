@@ -723,7 +723,7 @@ struct GlobalSearchView: View {
                 onMoodTap: moodTapResolver?(result.id)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(result.displayName ?? result.username)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                     .foregroundColor(theme.textPrimary)

@@ -40,7 +40,7 @@ struct CommentAttachmentsTray: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundColor(theme.textMuted)
                                 .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                                .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                         }
                         .accessibilityHidden(true)
                     }
@@ -49,7 +49,7 @@ struct CommentAttachmentsTray: View {
                     .background(
                         Capsule()
                             .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: MeeshyBorder.hairline))
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
                     )
                     .foregroundColor(theme.textPrimary)
                     .accessibilityElement(children: .combine)
@@ -92,7 +92,7 @@ struct CommentAttachmentsTray: View {
                     .font(.caption2.weight(.bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 18, height: 18)
-                    .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityHidden(true)
         }
@@ -101,7 +101,7 @@ struct CommentAttachmentsTray: View {
         .background(
             Capsule()
                 .fill(theme.inputBackground)
-                .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: MeeshyBorder.hairline))
+                .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
         )
         .foregroundColor(theme.textPrimary)
         .accessibilityElement(children: .combine)

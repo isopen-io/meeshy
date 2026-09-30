@@ -63,7 +63,7 @@ public struct PasswordStrengthIndicator: View {
             HStack(spacing: MeeshySpacing.xs) {
                 ForEach(0..<5, id: \.self) { index in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(index < strength ? color : Color.white.opacity(0.1))
+                        .fill(index < strength ? color : Color.white.opacity(MeeshyOpacity.subtle))
                         .frame(height: 4)
                 }
             }

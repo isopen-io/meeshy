@@ -41,7 +41,7 @@ struct ComposerMentionStrip: View {
                     Text(ComposerDocumentCopy.mentionEmpty)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                        .frame(minHeight: 44, alignment: .leading)
+                        .frame(minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
                 }
                 ForEach(controller.suggestions) { candidate in
                     Button {
@@ -89,7 +89,7 @@ struct ComposerMentionStrip: View {
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .padding(.horizontal, MeeshySpacing.smPlus)
                         .background(
-                            Capsule().fill(MeeshyColors.textPrimary(isDark: true).opacity(0.06))
+                            Capsule().fill(MeeshyColors.textPrimary(isDark: true).opacity(MeeshyOpacity.subtle))
                         )
                     }
                     .accessibilityLabel(

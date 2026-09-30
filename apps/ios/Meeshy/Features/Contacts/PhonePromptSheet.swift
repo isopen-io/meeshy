@@ -171,7 +171,7 @@ struct PhonePromptSheet: View {
 
     private var fieldBackground: some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-            .fill(theme.textMuted.opacity(0.1))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
     }
 
     private func primaryButton(title: String, isBusy: Bool, isEnabled: Bool, action: @escaping () -> Void) -> some View {

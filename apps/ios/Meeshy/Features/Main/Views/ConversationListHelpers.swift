@@ -39,13 +39,13 @@ struct SectionHeaderView: View {
                     // Glow ring behind icon
                     Circle()
                         .fill(Color(hex: section.color).opacity(isExpanded ? 0.15 : 0))
-                        .frame(width: 40, height: 40)
+                        .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                         .blur(radius: 4)
                         .animation(.easeInOut(duration: 0.4), value: isExpanded)
 
                     Circle()
                         .fill(Color(hex: section.color).opacity(isDropTarget ? 0.5 : (isDark ? 0.25 : 0.18)))
-                        .frame(width: 32, height: 32)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .scaleEffect(isDropTarget ? 1.15 : (isTapped ? 1.2 : 1.0))
 
                     Image(systemName: section.icon)
@@ -64,7 +64,7 @@ struct SectionHeaderView: View {
                     .font(.caption.weight(.bold))
                     .foregroundColor(Color(hex: section.color))
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
                             .fill(Color(hex: section.color).opacity(isDropTarget ? 0.4 : (isDark ? 0.2 : 0.15)))
@@ -100,11 +100,11 @@ struct SectionHeaderView: View {
             .padding(.horizontal, MeeshySpacing.md)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(isDropTarget ? Color(hex: section.color).opacity(isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(0.04) : Color.clear))
+                    .fill(isDropTarget ? Color(hex: section.color).opacity(isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(MeeshyOpacity.faint) : Color.clear))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
-                                isDropTarget ? Color(hex: section.color).opacity(0.5) : Color.clear,
+                                isDropTarget ? Color(hex: section.color).opacity(MeeshyOpacity.strong) : Color.clear,
                                 lineWidth: 2
                             )
                             .animation(.easeInOut(duration: 0.3), value: isDropTarget)
@@ -176,7 +176,7 @@ struct ConversationPreviewView: View {
                         Text(conversation.displayName)
                             .font(.callout.weight(.bold))
                             .foregroundColor(headerContentColor)
-                            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3, y: 1)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -184,29 +184,29 @@ struct ConversationPreviewView: View {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
                                 .foregroundColor(MeeshyColors.error)
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                         }
 
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.caption2)
-                                .foregroundColor(headerContentColor.opacity(0.7))
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                                .foregroundColor(headerContentColor.opacity(MeeshyOpacity.heavy))
+                                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                         }
 
                         Spacer(minLength: 0)
                     }
 
                     if conversation.type != .direct {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
                                 .font(.caption2)
                             Text(MembersCountLabel.text(conversation.memberCount,
                                                         capped: conversation.memberCountCapped))
                                 .font(.caption2.weight(.medium))
                         }
-                        .foregroundColor(headerContentColor.opacity(0.9))
-                        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                        .foregroundColor(headerContentColor.opacity(MeeshyOpacity.intense))
+                        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                     }
 
                     // Boutons d'action SOUS le titre, alignés à droite.
@@ -264,14 +264,14 @@ struct ConversationPreviewView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: accentColor).opacity(0.5), Color(hex: secondaryColor).opacity(0.3)],
+                        colors: [Color(hex: accentColor).opacity(MeeshyOpacity.strong), Color(hex: secondaryColor).opacity(MeeshyOpacity.medium)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 20, y: 10)
+        .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
     }
 
     // MARK: - Header background (banner + dark gradient)
@@ -296,10 +296,10 @@ struct ConversationPreviewView: View {
 
                 // Dark gradient (top → bottom) + light global veil for title legibility
                 LinearGradient(
-                    colors: [Color.black.opacity(0.0), Color.black.opacity(0.55)],
+                    colors: [Color.black.opacity(0.0), Color.black.opacity(MeeshyOpacity.strong)],
                     startPoint: .top, endPoint: .bottom
                 )
-                Color.black.opacity(0.15)
+                Color.black.opacity(MeeshyOpacity.light)
             }
         } else {
             LinearGradient(
@@ -313,7 +313,7 @@ struct ConversationPreviewView: View {
                     Rectangle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: accentColor).opacity(0.1), Color.clear],
+                                colors: [Color(hex: accentColor).opacity(MeeshyOpacity.subtle), Color.clear],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -381,8 +381,8 @@ struct ConversationPreviewView: View {
         Image(systemName: icon)
             .font(.footnote.weight(.semibold))
             .foregroundColor(.white)
-            .frame(width: 34, height: 34)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
     }
 
     private var previewBackground: some View {
@@ -441,13 +441,13 @@ struct ThemedCommunityCard: View, Equatable {
 
             // Dark overlay for text readability over any banner
             LinearGradient(
-                colors: [.clear, .clear, Color.black.opacity(0.7)],
+                colors: [.clear, .clear, Color.black.opacity(MeeshyOpacity.heavy)],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
             // Content
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(community.name)
                     .font(.caption.weight(.bold))
                     .foregroundColor(.white)
@@ -469,7 +469,7 @@ struct ThemedCommunityCard: View, Equatable {
                             .font(.caption2.weight(.semibold))
                     }
                 }
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
             .padding(MeeshySpacing.sm)
         }
@@ -574,7 +574,7 @@ struct TagChip: View {
             .font(.caption2.weight(.semibold))
             .foregroundColor(Color(hex: tag.color))
             .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, 3)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(
                 Capsule()
                     .fill(Color(hex: tag.color).opacity(colorScheme == .dark ? 0.25 : 0.18))

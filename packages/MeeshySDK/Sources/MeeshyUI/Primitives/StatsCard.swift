@@ -30,8 +30,8 @@ public struct StatsCard: View {
             // Icon with circular background
             ZStack {
                 Circle()
-                    .fill(Color(hex: accentColor).opacity(0.15))
-                    .frame(width: 40, height: 40)
+                    .fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.md, weight: .medium))
@@ -67,21 +67,21 @@ struct StatsCard_Previews: PreviewProvider {
                 icon: "paperplane.fill",
                 label: "Messages envoyés",
                 value: "1,234",
-                accentColor: "FF2E63"
+                accentColor: MeeshyColors.tileRoseHex
             )
 
             StatsCard(
                 icon: "character.book.closed.fill",
                 label: "Traductions",
                 value: "567",
-                accentColor: "08D9D6"
+                accentColor: MeeshyColors.tileCyanHex
             )
 
             StatsCard(
                 icon: "globe",
                 label: "Langues utilisées",
                 value: "5",
-                accentColor: "A855F7"
+                accentColor: MeeshyColors.purple500Hex
             )
         }
         .padding()

@@ -26,7 +26,7 @@ struct CallFeedbackCard: View {
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: 420)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+        .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 16, y: 8)
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: viewModel.pendingRating)
@@ -131,7 +131,7 @@ struct CallFeedbackCard: View {
         }
         .buttonStyle(.plain)
         .background(
-            selected ? MeeshyColors.brandPrimary : Color.primary.opacity(0.08),
+            selected ? MeeshyColors.brandPrimary : Color.primary.opacity(MeeshyOpacity.subtle),
             in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
         )
         .accessibilityAddTraits(selected ? .isSelected : [])

@@ -227,7 +227,7 @@ struct BookmarksView: View {
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "bookmark")
-                .font(MeeshyFont.relative(52, weight: .light))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero, weight: .light))
                 .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
                 .accessibilityHidden(true)
 

@@ -39,12 +39,12 @@ extension ReelsPlayerView {
             // `FixedFontSizeGuardTests` ne connaît d'exception que pour la
             // dette gelée du 264i, jamais pour un arrivant.
             Image(systemName: "play.rectangle.on.rectangle")
-                .font(MeeshyFont.relative(44))
-                .foregroundColor(.white.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
-                .font(.headline)
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
         }
         .accessibilityElement(children: .combine)
     }
@@ -55,12 +55,12 @@ extension ReelsPlayerView {
     private func loadFailureState(message: String) -> some View {
         VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .font(MeeshyFont.relative(44))
-                .foregroundColor(.white.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(message)
-                .font(.headline)
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)
             Button {
@@ -68,7 +68,7 @@ extension ReelsPlayerView {
                 Task { await viewModel.retryLoad() }
             } label: {
                 Text(String(localized: "common.retry"))
-                    .font(.subheadline.weight(.semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(.black)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .padding(.vertical, MeeshySpacing.smPlus)
@@ -76,7 +76,7 @@ extension ReelsPlayerView {
             }
             // Cible 44 pt (HIG) : le libellé seul ne les atteint pas en
             // Dynamic Type minimal.
-            .frame(minHeight: 44)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
         }
         .accessibilityElement(children: .contain)
     }

@@ -305,7 +305,7 @@ struct CommentRowView: View, Equatable {
                             } label: {
                                 HStack(spacing: MeeshySpacing.xs) {
                                     Image(systemName: "arrowshape.turn.up.left")
-                                        .font(MeeshyFont.relative(13))
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
                                     if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
                                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
@@ -372,7 +372,7 @@ struct CommentRowView: View, Equatable {
             Group {
                 if !isReply {
                     Rectangle()
-                        .fill(theme.inputBorder.opacity(0.3))
+                        .fill(theme.inputBorder.opacity(MeeshyOpacity.medium))
                         .frame(height: 1)
                 }
             },

@@ -390,7 +390,7 @@ struct LentilleConversationRow: View {
     /// au rang plat du `tagsRow` historique (capsules de texte, en propre
     /// ligne) : ici de simples points colorés, inline, jamais une carte.
     private var tagPastilles: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(conversation.tags.prefix(LentilleMetrics.Tags.maxCount)) { tag in
                 Circle()
                     .fill(Color(hex: tag.color))
@@ -430,7 +430,7 @@ struct LentilleConversationRow: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
                 .background(Capsule(style: .continuous).fill(accent))
         }
         .buttonStyle(.plain)
@@ -473,7 +473,7 @@ struct LentilleConversationRow: View {
     }
 
     private var typingLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(typingUsername.map { name in
                 String(format: String(localized: "typing.named", bundle: .main), name)
             } ?? String(localized: "typing.anonymous", bundle: .main))
@@ -674,7 +674,7 @@ private struct LentilleTypingDots: View {
     @State private var isAnimating = false
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .fill(Color(hex: accentColorHex))
@@ -716,7 +716,7 @@ private struct LentilleLiveCallBadge: View {
     private var accent: Color { Color(hex: accentColorHex) }
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Circle()
                 .fill(accent)
                 .frame(width: LentilleMetrics.Tags.size, height: LentilleMetrics.Tags.size)

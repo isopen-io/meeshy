@@ -37,8 +37,8 @@ struct StoryAudioCell: View {
     private var secondaryText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.78) }
     private var rowBgFill: Color {
         isBackground
-            ? MeeshyColors.indigo400.opacity(0.18)
-            : (colorScheme == .dark ? Color.white.opacity(0.07) : MeeshyColors.indigo950.opacity(0.05))
+            ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light)
+            : (colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
     }
 
     var body: some View {
@@ -98,9 +98,9 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                .font(.system(size: 26, weight: .medium))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         }
         .buttonStyle(.plain)
         .disabled(url == nil)
@@ -181,7 +181,7 @@ struct StoryAudioCell: View {
             Image(systemName: isBackground ? "speaker.wave.2.circle.fill" : "speaker.wave.2.circle")
                 .font(.system(size: MeeshyIconSize.lg, weight: .medium))
                 .foregroundColor(isBackground ? MeeshyColors.indigo400 : secondaryText)
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isBackground
@@ -198,9 +198,9 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(muted ? .red.opacity(0.85) : secondaryText)
-                .frame(width: 28, height: 28)
+                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
+                .foregroundColor(muted ? MeeshyColors.error.opacity(MeeshyOpacity.intense) : secondaryText)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -238,7 +238,7 @@ struct StoryAudioCell: View {
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .medium))
-                .foregroundColor(.red.opacity(0.85))
+                .foregroundColor(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                 .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)

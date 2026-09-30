@@ -71,7 +71,7 @@ struct MentionSuggestionPanel: View {
                             }
                             .padding(.horizontal, MeeshySpacing.lg)
                             .padding(.vertical, MeeshySpacing.md)
-                            .frame(minHeight: 44)
+                            .frame(minHeight: MeeshyControlSize.tapTarget)
                         }
                         .accessibilityLabel("\(String(localized: "composer.mention.label", defaultValue: "Mention", bundle: .main)) \(candidate.displayName)")
 
@@ -117,7 +117,7 @@ struct MentionSuggestionPanel: View {
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.md)
-                .frame(minHeight: 44)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
             }
         }
         .accessibilityElement(children: .ignore)

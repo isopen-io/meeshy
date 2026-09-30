@@ -78,7 +78,7 @@ extension UserProfileSheet {
     var defaultBannerGradient: some View {
         LinearGradient(
             colors: isBlockedByTarget
-                ? [Color.gray.opacity(0.5), Color.gray.opacity(0.3)]
+                ? [Color.gray.opacity(MeeshyOpacity.strong), Color.gray.opacity(MeeshyOpacity.medium)]
                 : [Color(hex: resolvedAccent).opacity(0.6), Color(hex: resolvedAccent).opacity(0.2)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -87,11 +87,11 @@ extension UserProfileSheet {
         .overlay(
             ZStack {
                 Circle()
-                    .fill(Color(hex: resolvedAccent).opacity(0.15))
+                    .fill(Color(hex: resolvedAccent).opacity(MeeshyOpacity.light))
                     .frame(width: 200)
                     .offset(x: -80, y: -30)
                 Circle()
-                    .fill(Color(hex: resolvedAccent).opacity(0.1))
+                    .fill(Color(hex: resolvedAccent).opacity(MeeshyOpacity.subtle))
                     .frame(width: 150)
                     .offset(x: 100, y: 20)
             }
@@ -131,7 +131,7 @@ extension UserProfileSheet {
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Text("@\(displayUser.username)")
                     .foregroundColor(Color(hex: resolvedAccent))
                 // Présence datée après le pseudo — rendue seulement si le serveur
@@ -213,7 +213,7 @@ extension UserProfileSheet {
             .padding(.top, MeeshySpacing.md)
 
             Divider()
-                .opacity(0.3)
+                .opacity(MeeshyOpacity.medium)
         }
         // Le fond est posé AVANT le padding : posé après, il remplissait aussi
         // la bande de `collapsedBar` pt d'écart et la rendait hit-testable —
@@ -243,7 +243,7 @@ extension UserProfileSheet {
             Image(systemName: "xmark")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .adaptiveGlass(in: Circle())
         }
         .padding(.leading, MeeshySpacing.lg)
@@ -318,7 +318,7 @@ extension UserProfileSheet {
         .frame(height: ProfileHeaderMetrics.collapsedBar)
         .background(theme.backgroundPrimary)
         .overlay(alignment: .bottom) {
-            Divider().opacity(0.3)
+            Divider().opacity(MeeshyOpacity.medium)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: "\(displayUser.resolvedDisplayName), @\(displayUser.username)"))

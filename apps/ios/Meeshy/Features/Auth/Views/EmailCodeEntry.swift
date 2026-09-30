@@ -65,7 +65,7 @@ struct EmailCodeEntry: View {
             .padding(MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .fill(MeeshyColors.success.opacity(0.1))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
             .accessibilityElement(children: .combine)
@@ -135,7 +135,7 @@ struct EmailCodeEntry: View {
             .padding(.vertical, MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(MeeshyColors.error.opacity(0.1))
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
             // Glyphe d'alerte décoratif + message fusionnés en un seul élément :
@@ -167,7 +167,7 @@ struct EmailCodeEntry: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isCodeComplete && !viewModel.isVerifying
                           ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(MeeshyColors.indigo500.opacity(0.3)))
+                          : AnyShapeStyle(MeeshyColors.indigo500.opacity(MeeshyOpacity.medium)))
             )
         }
         .disabled(!isCodeComplete || viewModel.isVerifying || viewModel.verificationSuccess)

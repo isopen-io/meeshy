@@ -309,7 +309,7 @@ struct ConversationContextMenuView: View {
         } label: {
             HStack(spacing: MeeshySpacing.mdPlus) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(17, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)
                 Text(label)
@@ -318,11 +318,11 @@ struct ConversationContextMenuView: View {
                 Spacer(minLength: 0)
                 if showsCheckmark {
                     Image(systemName: "checkmark")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 }
                 if showsChevron {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .opacity(0.4)
                 }
             }
@@ -342,7 +342,7 @@ struct ConversationContextMenuView: View {
         } label: {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)
                 Text(title)
@@ -360,11 +360,11 @@ struct ConversationContextMenuView: View {
     }
 
     private var separator: some View {
-        Divider().overlay(accent.opacity(0.08)).padding(.leading, 52)
+        Divider().overlay(accent.opacity(MeeshyOpacity.subtle)).padding(.leading, 52)
     }
 
     private var divider: some View {
-        Divider().overlay(accent.opacity(0.12))
+        Divider().overlay(accent.opacity(MeeshyOpacity.light))
     }
 }
 
@@ -382,6 +382,6 @@ struct ConversationContextMenuView: View {
 struct MenuRowHighlightButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)
+            .background(configuration.isPressed ? Color.primary.opacity(MeeshyOpacity.subtle) : Color.clear)
     }
 }

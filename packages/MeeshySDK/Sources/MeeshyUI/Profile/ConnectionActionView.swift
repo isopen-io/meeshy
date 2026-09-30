@@ -108,8 +108,8 @@ public struct ConnectionActionView: View {
         }
         .foregroundColor(color)
         .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(color.opacity(0.15)))
+        .padding(.vertical, MeeshySpacing.xs)
+        .background(Capsule().fill(color.opacity(MeeshyOpacity.light)))
         .accessibilityLabel(text)
     }
 
@@ -121,10 +121,10 @@ public struct ConnectionActionView: View {
                 Task { await decline(requestId: requestId) }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.error.opacity(0.15)))
+                    .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+                    .background(Circle().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
             }
             .disabled(isBusy)
             .accessibilityLabel("\(declineLabel) — \(userName)")
@@ -133,9 +133,9 @@ public struct ConnectionActionView: View {
                 Task { await accept(requestId: requestId) }
             } label: {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
+                    .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(MeeshyColors.success))
             }
             .disabled(isBusy)
@@ -157,9 +157,9 @@ public struct ConnectionActionView: View {
             }
             .foregroundColor(MeeshyColors.warning)
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(MeeshyColors.warning.opacity(0.15)))
-            .overlay(Capsule().stroke(MeeshyColors.warning.opacity(0.5), lineWidth: 1))
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(MeeshyColors.warning.opacity(MeeshyOpacity.light)))
+            .overlay(Capsule().stroke(MeeshyColors.warning.opacity(MeeshyOpacity.strong), lineWidth: 1))
         }
         .disabled(isBusy)
         .accessibilityLabel("\(cancelLabel) — \(userName)")
@@ -178,7 +178,7 @@ public struct ConnectionActionView: View {
             }
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, 5)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(accentColor))
         }
         .disabled(isBusy)

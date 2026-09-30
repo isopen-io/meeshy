@@ -116,11 +116,11 @@ private struct ProfilePostsEmpty: View {
         VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "square.text.square")
                 .font(.system(size: MeeshyIconSize.xxxl))
-                .foregroundColor(theme.textMuted.opacity(0.5))
+                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
                 .accessibilityHidden(true)
             Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module))
                 .font(.system(size: MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textMuted.opacity(0.7))
+                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.heavy))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxl)

@@ -244,7 +244,7 @@ struct ChangePasswordView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                        .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
         )
         .transition(.scale.combined(with: .opacity))
@@ -280,10 +280,10 @@ struct ChangePasswordView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(Color(hex: color))
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                        .fill(Color(hex: color).opacity(0.12))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
                 )
                 // Glyphe décoratif : le sens du champ est porté par son
                 // accessibilityLabel ci-dessous → jamais relu par VoiceOver.

@@ -217,9 +217,9 @@ extension StoryCardView {
     private var composerUnfoldButton: some View {
         Button(action: unfoldComposer) {
             Image(systemName: StoryComposerFold.unfoldSymbol)
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .contentShape(Circle())
         }

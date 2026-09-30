@@ -1607,7 +1607,6 @@ struct StoryCardView: View {
                     isFullscreenStorySession: $isFullscreenStorySession,
                     chromeVisible: $chromeVisible
                 )
-                    .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, MeeshySpacing.smPlus)
 
                 // Les personnes que la story NOMME en mode NOTE, sous l'auteur.

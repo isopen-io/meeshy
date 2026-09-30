@@ -447,8 +447,8 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             .overlay(
                 LinearGradient(
                     stops: [
-                        .init(color: backgroundColor.opacity(0.75), location: 0),
-                        .init(color: backgroundColor.opacity(0.45), location: 0.5),
+                        .init(color: backgroundColor.opacity(MeeshyOpacity.heavy), location: 0),
+                        .init(color: backgroundColor.opacity(MeeshyOpacity.strong), location: 0.5),
                         .init(color: backgroundColor.opacity(0.0), location: 1.0),
                     ],
                     startPoint: .top,

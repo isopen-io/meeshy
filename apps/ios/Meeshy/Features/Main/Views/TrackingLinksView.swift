@@ -114,7 +114,7 @@ struct TrackingLinksView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentHex))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(accent.opacity(0.2), lineWidth: 1))
+                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
     }
@@ -161,8 +161,8 @@ struct TrackingLinksView: View {
     private func trackingLinkRow(_ link: TrackingLink) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
-                Circle().fill((link.isActive ? accent : MeeshyColors.neutral500).opacity(0.15))
-                    .frame(width: 40, height: 40)
+                Circle().fill((link.isActive ? accent : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: MeeshyIconSize.md))
@@ -170,7 +170,7 @@ struct TrackingLinksView: View {
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(link.displayName).font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
                 HStack(spacing: MeeshySpacing.xsPlus) {
@@ -203,7 +203,7 @@ struct TrackingLinksView: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentHex))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(accent.opacity(0.15), lineWidth: 1))
+                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
     }
 }

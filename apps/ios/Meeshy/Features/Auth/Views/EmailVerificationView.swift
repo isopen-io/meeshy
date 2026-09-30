@@ -81,7 +81,7 @@ struct EmailVerificationView: View {
     private var headerIcon: some View {
         ZStack {
             Circle()
-                .fill(MeeshyColors.indigo500.opacity(0.12))
+                .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 .frame(width: 96, height: 96)
 
             Image(systemName: "envelope.open.fill")
@@ -177,7 +177,7 @@ struct EmailVerificationView: View {
     private var successOverlay: some View {
         if viewModel.verificationSuccess {
             ZStack {
-                theme.backgroundPrimary.opacity(0.9)
+                theme.backgroundPrimary.opacity(MeeshyOpacity.intense)
                     .ignoresSafeArea()
 
                 VStack(spacing: MeeshySpacing.xl) {

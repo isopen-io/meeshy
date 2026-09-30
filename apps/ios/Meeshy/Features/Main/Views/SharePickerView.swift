@@ -68,7 +68,7 @@ struct SharePickerView: View {
                 contentPreviewBanner
 
                 Divider()
-                    .overlay(theme.textMuted.opacity(0.2))
+                    .overlay(theme.textMuted.opacity(MeeshyOpacity.light))
 
                 searchField
 
@@ -131,7 +131,7 @@ struct SharePickerView: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
-        .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .background(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(0.02))
         .accessibilityElement(children: .combine)
     }
 
@@ -150,8 +150,8 @@ struct SharePickerView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         case .message:
             Image(systemName: "arrowshape.turn.up.forward.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.md))
@@ -222,7 +222,7 @@ struct SharePickerView: View {
         .padding(.vertical, MeeshySpacing.smPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
         )
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.sm)
@@ -271,7 +271,7 @@ struct SharePickerView: View {
                 onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 ConversationTitleLabel(
                     name: conv.displayName,
                     favoriteEmoji: conv.userState.reaction,
@@ -324,7 +324,7 @@ struct SharePickerView: View {
             // Fixed control-sized status glyph (26pt): fills the row's trailing action
             // slot at a deliberate control size, not reading text (74i/86i doctrine).
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 26))
+                .font(.system(size: MeeshyIconSize.xxxl))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
                 .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoyé", bundle: .main))
@@ -339,7 +339,7 @@ struct SharePickerView: View {
             } label: {
                 // Fixed control-sized action glyph (26pt): control size, not reading text.
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 26))
+                    .font(.system(size: MeeshyIconSize.xxxl))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)

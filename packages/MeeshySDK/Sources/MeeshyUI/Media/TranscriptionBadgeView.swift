@@ -37,9 +37,9 @@ public struct TranscriptionBadgeView: View {
     }
 
     private var collapsedBadge: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: isOnDevice ? "waveform" : "text.quote")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor).opacity(0.8))
 
             Text(isExpanded ? String(localized: "media.transcription.title", defaultValue: "Transcription", bundle: .module) : previewText)
@@ -54,7 +54,7 @@ public struct TranscriptionBadgeView: View {
                 .foregroundColor(.secondary.opacity(0.6))
         }
         .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, 5)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
                 .fill(Color(hex: accentColor).opacity(0.06))
@@ -71,31 +71,31 @@ public struct TranscriptionBadgeView: View {
 
             HStack(spacing: MeeshySpacing.sm) {
                 if let lang = language {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "globe")
                             .font(.system(size: 8))
                         Text(lang.uppercased())
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(.system(size: MeeshyFont.microSize, weight: .bold, design: .monospaced))
                     }
                     .foregroundColor(.secondary.opacity(0.7))
                 }
 
                 if let conf = confidence {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 8))
                         Text("\(Int(conf * 100))%")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(.system(size: MeeshyFont.microSize, weight: .bold, design: .monospaced))
                     }
                     .foregroundColor(.secondary.opacity(0.7))
                 }
 
                 if isOnDevice {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "iphone")
                             .font(.system(size: 8))
                         Text(String(localized: "media.transcription.onDevice", defaultValue: "On-device", bundle: .module))
-                            .font(.system(size: 8, weight: .medium))
+                            .font(.system(size: MeeshyFont.microSize, weight: .medium))
                     }
                     .foregroundColor(Color(hex: accentColor).opacity(0.7))
                 }

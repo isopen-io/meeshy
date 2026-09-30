@@ -140,7 +140,7 @@ public struct VideoTransportControls: View {
                 .offset(x: manager.isPlaying ? 0 : 2)
                 .adaptiveSymbolReplace(id: manager.isPlaying)
                 .frame(width: 64, height: 64)
-                .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
+                .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(MeeshyOpacity.intense))
         }
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
@@ -179,7 +179,7 @@ public struct VideoTransportControls: View {
     private func timeLabel(_ seconds: Double) -> some View {
         Text(formatMediaDuration(seconds))
             .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             .lineLimit(1)
             .fixedSize()
     }
@@ -192,7 +192,7 @@ public struct VideoTransportControls: View {
             Image(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(manager.isMuted ? accent : .white)
-                .frame(width: 32, height: 32)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .contentShape(Circle())
         }
         .accessibilityLabel(manager.isMuted
@@ -202,7 +202,7 @@ public struct VideoTransportControls: View {
 
     private var airplayButton: some View {
         AirPlayRoutePicker(tintColor: .white)
-            .frame(width: 32, height: 32)
+            .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
     }
 
@@ -238,9 +238,9 @@ public struct VideoTransportControls: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 32, height: 32)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .contentShape(Circle())
         }
         .accessibilityLabel(String(localized: "media.video.more_options", defaultValue: "Plus d'options", bundle: .module))
@@ -255,10 +255,10 @@ public struct VideoTransportControls: View {
             let filledWidth = geo.size.width * progress
 
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.3)).frame(height: trackHeight)
+                Capsule().fill(Color.white.opacity(MeeshyOpacity.medium)).frame(height: trackHeight)
                 Capsule().fill(accent).frame(width: max(0, filledWidth), height: trackHeight)
                 Circle().fill(Color.white).frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 2, y: 1)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
             // Cible pleine hauteur + highPriorityGesture : le scrub gagne sur

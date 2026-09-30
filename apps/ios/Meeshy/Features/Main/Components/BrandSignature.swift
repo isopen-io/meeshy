@@ -23,13 +23,13 @@ struct BrandSignature: View {
         VStack(spacing: MeeshySpacing.xs) {
             Text("Meeshy \(appVersion) · \(buildNumber)")
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, design: .rounded))
-                .foregroundColor(theme.textMuted.opacity(0.9))
+                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.intense))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
             Text(String(localized: "brand.signature.credit", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textMuted.opacity(0.7))
+                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.heavy))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
@@ -39,7 +39,7 @@ struct BrandSignature: View {
                 .scaledToFit()
                 .frame(width: 28, height: 28)
                 .foregroundColor(MeeshyColors.error)
-                .opacity(0.9)
+                .opacity(MeeshyOpacity.intense)
                 .padding(.top, MeeshySpacing.xxs)
                 .accessibilityHidden(true)
         }

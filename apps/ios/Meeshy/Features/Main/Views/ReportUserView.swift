@@ -45,7 +45,7 @@ struct ReportUserView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(24))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
                     .foregroundColor(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
@@ -95,10 +95,10 @@ struct ReportUserView: View {
                             Image(systemName: reason.icon)
                                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                                 .foregroundColor(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
-                                .frame(width: 28, height: 28)
+                                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                                 .background(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                                        .fill((selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500).opacity(0.12))
+                                        .fill((selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
                                 )
 
                             Text(reason.label)
@@ -180,7 +180,7 @@ struct ReportUserView: View {
             .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(isSubmitting ? MeeshyColors.error.opacity(0.5) : MeeshyColors.error)
+                    .fill(isSubmitting ? MeeshyColors.error.opacity(MeeshyOpacity.strong) : MeeshyColors.error)
             )
         }
         .disabled(isSubmitting)

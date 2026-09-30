@@ -215,11 +215,11 @@ enum StoryExportSheetPalette {
 
     /// Fond du sélecteur de langue.
     static func pickerFill(isDark: Bool) -> Color {
-        isDark ? MeeshyColors.indigo900.opacity(0.35) : MeeshyColors.indigo50.opacity(0.6)
+        isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo50.opacity(0.6)
     }
 
     /// Bordure du sélecteur de langue.
     static func pickerStroke(isDark: Bool) -> Color {
-        isDark ? MeeshyColors.indigo700.opacity(0.5) : MeeshyColors.indigo200
+        isDark ? MeeshyColors.indigo700.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo200
     }
 }

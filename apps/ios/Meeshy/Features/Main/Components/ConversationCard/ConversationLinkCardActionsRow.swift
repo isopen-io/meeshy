@@ -111,7 +111,7 @@ struct ConversationLinkCardActionsRow: View {
             label(title, icon: icon, busy: busy, foreground: .white, truncates: truncates)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                        .fill(LinearGradient(colors: [accent, accent.opacity(0.8)],
+                        .fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.intense)],
                                              startPoint: .leading, endPoint: .trailing))
                 )
         }
@@ -128,7 +128,7 @@ struct ConversationLinkCardActionsRow: View {
             label(title, icon: icon, busy: busy, foreground: tint)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                        .stroke(tint.opacity(0.7), lineWidth: MeeshyBorder.emphasis)
+                        .stroke(tint.opacity(MeeshyOpacity.heavy), lineWidth: MeeshyBorder.emphasis)
                 )
         }
         .buttonStyle(.plain)

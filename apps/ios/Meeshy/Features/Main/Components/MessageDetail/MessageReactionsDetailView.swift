@@ -125,8 +125,8 @@ struct MessageReactionsDetailView: View {
             .background(
                 Capsule()
                     .fill(isSelected
-                          ? Color(hex: contactColor).opacity(0.15)
-                          : isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                          ? Color(hex: contactColor).opacity(MeeshyOpacity.light)
+                          : MeeshyColors.surfaceFill(isDark: isDark))
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
@@ -188,7 +188,7 @@ struct MessageReactionsDetailView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .accessibilityElement(children: .combine)
     }
 

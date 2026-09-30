@@ -116,7 +116,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         ZStack {
             theme.backgroundPrimary.ignoresSafeArea()
             LinearGradient(
-                colors: [Color(hex: accentColor).opacity(0.06), Color.clear],
+                colors: [Color(hex: accentColor).opacity(MeeshyOpacity.faint), Color.clear],
                 startPoint: .top, endPoint: .bottom
             ).ignoresSafeArea()
         }
@@ -133,10 +133,10 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 onCancel()
             } label: {
                 ZStack {
-                    Circle().fill(Color.white.opacity(0.07)).frame(width: 38, height: 38)
+                    Circle().fill(Color.white.opacity(MeeshyOpacity.subtle)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: "xmark")
                         .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.75))
+                        .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
                 }
             }
             .buttonStyle(.plain)
@@ -153,12 +153,12 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
-                Capsule().fill(Color(hex: accentColor).opacity(0.12))
+                Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
             )
 
             Spacer()
 
-            Circle().fill(Color.clear).frame(width: 38, height: 38)
+            Circle().fill(Color.clear).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
         }
         .padding(.horizontal, MeeshySpacing.lg)
     }
@@ -180,7 +180,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     private var liveWaveform: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<15, id: \.self) { i in
                 let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
                 RoundedRectangle(cornerRadius: 3)
@@ -220,11 +220,11 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         VStack(spacing: MeeshySpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: accentColor).opacity(0.08))
+                    .fill(Color(hex: accentColor).opacity(MeeshyOpacity.subtle))
                     .frame(width: 100, height: 100)
                 Image(systemName: "mic.fill")
                     .font(.system(size: 36, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor).opacity(0.5))
+                    .foregroundColor(Color(hex: accentColor).opacity(MeeshyOpacity.strong))
             }
 
             Text(String(localized: "audio.recorder.tapToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
@@ -254,7 +254,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color.white.opacity(MeeshyOpacity.subtle))
                         .frame(width: 56, height: 56)
                     Image(systemName: "trash.fill")
                         .font(.system(size: MeeshyIconSize.xl, weight: .medium))
@@ -278,9 +278,9 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .frame(width: 80, height: 80)
                         .shadow(color: MeeshyColors.errorStrong.opacity(0.4), radius: 16)
 
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(Color.white)
-                        .frame(width: 28, height: 28)
+                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 }
                 .scaleEffect(recorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.05 : 1.0)
                 .animation(.easeInOut(duration: 0.5), value: recorder.duration)

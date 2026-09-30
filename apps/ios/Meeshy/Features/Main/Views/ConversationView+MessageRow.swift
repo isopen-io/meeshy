@@ -128,7 +128,7 @@ extension ConversationView {
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
             )
 
             if viewModel.isSearching {
@@ -148,8 +148,8 @@ extension ConversationView {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(0.12))
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(MeeshyOpacity.light))
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 4, y: 2)
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.top, MeeshySpacing.xs)
     }
@@ -175,7 +175,7 @@ extension ConversationView {
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(.ultraThinMaterial))
-        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 3, y: 1)
         .padding(.top, MeeshySpacing.xsPlus)
     }
 
@@ -336,15 +336,15 @@ extension ConversationView {
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(0.15), lineWidth: MeeshyBorder.hairline))
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 4)
         )
         .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 // Doctrine 82i : icône + micro-label figés — bouton d'action compact
                 // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
                 // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.

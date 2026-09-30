@@ -79,8 +79,8 @@ public struct AuthTextField: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .strokeBorder(
                         isFocused ? MeeshyColors.brandPrimary.opacity(0.6) :
-                            validationError != nil ? Color.red.opacity(0.5) :
-                            theme.inputBorder.opacity(0.3),
+                            validationError != nil ? Color.red.opacity(MeeshyOpacity.strong) :
+                            theme.inputBorder.opacity(MeeshyOpacity.medium),
                         lineWidth: 1
                     )
             )
@@ -88,7 +88,7 @@ public struct AuthTextField: View {
             if let error = validationError {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red.opacity(0.8))
+                    .foregroundStyle(.red.opacity(MeeshyOpacity.intense))
                     .padding(.leading, MeeshySpacing.xs)
             }
         }

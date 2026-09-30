@@ -176,7 +176,7 @@ struct MyStoriesView: View {
                         onCreateStory()
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 32, height: 32)
                             .adaptiveGlassProminent(in: Circle(), tint: accentColor)
@@ -378,7 +378,7 @@ struct MyStoriesView: View {
     /// VoiceOver du balayage disparaîtrait sans remplaçant.
     private var publishedGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ForEach(activeStories) { story in
                     MyStoryCard(
                         model: publishedCardModel(for: story),
@@ -532,7 +532,7 @@ struct MyStoriesView: View {
 
     private var draftsContent: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ForEach(draftsViewModel.drafts) { draft in
                     MyStoryCard(
                         model: draftCardModel(for: draft),
@@ -580,7 +580,7 @@ struct MyStoriesView: View {
 
     private var archiveGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ForEach(archivedStories) { story in
                     MyStoryCard(
                         model: publishedCardModel(for: story),

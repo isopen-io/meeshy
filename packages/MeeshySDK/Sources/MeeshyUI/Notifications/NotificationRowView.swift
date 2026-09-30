@@ -138,7 +138,7 @@ public struct NotificationRowView: View, Equatable {
                 .foregroundColor(isPrimary ? .white : (isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600))
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minHeight: 44)
-                .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(0.14)))
+                .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -189,21 +189,21 @@ public struct NotificationRowView: View, Equatable {
                     endPoint: .bottomTrailing
                 )
             )
-            .overlay(Circle().strokeBorder(accentColor.opacity(0.45), lineWidth: 1))
+            .overlay(Circle().strokeBorder(accentColor.opacity(MeeshyOpacity.strong), lineWidth: 1))
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(isDark ? .white : accentColor)
             )
-            .frame(width: 44, height: 44)
-            .shadow(color: accentColor.opacity(0.35), radius: 6, y: 3)
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .shadow(color: accentColor.opacity(MeeshyOpacity.medium), radius: 6, y: 3)
             .accessibilityHidden(true)
     }
 
     // MARK: - Content
 
     private var contentView: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(presentation.title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: notification.isRead ? .medium : .semibold))
                 .foregroundColor(theme.textPrimary)
@@ -252,7 +252,7 @@ public struct NotificationRowView: View, Equatable {
     }
 
     private func footerLabel(_ text: String, symbol: String, tint: Color) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: symbol)
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .accessibilityHidden(true)
@@ -273,13 +273,13 @@ public struct NotificationRowView: View, Equatable {
         // deja fourni ; pas de bouton retry sur une vignette 44pt.
         CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44), showsStatusOverlays: false) {
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(accentColor.opacity(0.12))
+                .fill(accentColor.opacity(MeeshyOpacity.light))
         }
-        .frame(width: 44, height: 44)
+        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .stroke(theme.textMuted.opacity(0.15), lineWidth: MeeshyBorder.hairline)
+                .stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
         )
         .accessibilityHidden(true)
     }

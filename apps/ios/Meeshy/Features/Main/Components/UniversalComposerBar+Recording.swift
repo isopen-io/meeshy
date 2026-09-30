@@ -197,7 +197,7 @@ extension UniversalComposerBar {
                 .accessibilityHidden(true)
 
             // Recording indicator + timer — grouped for VoiceOver.
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.error)
                     .frame(width: 6, height: 6)
@@ -290,7 +290,7 @@ extension UniversalComposerBar {
                 : "Maintenez encore pour atteindre la duree minimum")
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)
-        .padding(.vertical, 5)
+        .padding(.vertical, MeeshySpacing.xs)
         .frame(minHeight: 44)
         .adaptiveLiquidGlass(in: Self.fieldShape, tint: MeeshyColors.error.opacity(0.12))
     }

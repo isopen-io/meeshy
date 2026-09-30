@@ -21,7 +21,7 @@ public struct ShimmerModifier: ViewModifier {
                 LinearGradient(
                     colors: [
                         Color.clear,
-                        theme.textMuted.opacity(0.3),
+                        theme.textMuted.opacity(MeeshyOpacity.medium),
                         Color.clear
                     ],
                     startPoint: .leading,
@@ -84,7 +84,7 @@ public struct SkeletonShape: View {
 
     public var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(theme.textMuted.opacity(0.12))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.light))
             .frame(width: width, height: height)
             .skeletonShimmer()
             .accessibilityHidden(true)
@@ -103,7 +103,7 @@ public struct SkeletonConversationRow: View {
         HStack(spacing: MeeshySpacing.mdPlus) {
             // Avatar placeholder
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 48, height: 48)
                 .skeletonShimmer()
 
@@ -128,10 +128,10 @@ public struct SkeletonConversationRow: View {
         .padding(MeeshySpacing.mdPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
-                .fill(theme.textMuted.opacity(0.04))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.faint))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
-                        .stroke(theme.textMuted.opacity(0.06), lineWidth: 1)
+                        .stroke(theme.textMuted.opacity(MeeshyOpacity.faint), lineWidth: 1)
                 )
         )
         .accessibilityHidden(true)
@@ -170,7 +170,7 @@ public struct SkeletonMessageBubble: View {
             if !isLeft { Spacer(minLength: 50) }
 
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: bubbleWidth, height: bubbleHeight)
                 .skeletonShimmer()
 

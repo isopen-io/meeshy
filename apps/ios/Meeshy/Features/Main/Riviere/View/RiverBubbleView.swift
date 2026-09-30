@@ -772,7 +772,7 @@ struct RiverBubbleView: View, Equatable {
     }
 
     private func identityRow(identity: RiverBubbleIdentity?) -> some View {
-        HStack(spacing: 7) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             avatar(identity: identity)
 
             // §7ter A.5 — borné à la moitié de la largeur de la bulle : la

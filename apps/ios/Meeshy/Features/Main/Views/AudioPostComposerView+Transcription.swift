@@ -274,7 +274,7 @@ extension AudioPostComposerView {
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(theme.surface(tint: MeeshyColors.indigo300Hex)))
             }
 
@@ -342,7 +342,7 @@ extension AudioPostComposerView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 9)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Un rectangle arrondi plutôt qu'une capsule : la forme doit tenir les
         // DEUX dispositions, et une capsule sur deux lignes dessine un stade.
@@ -350,7 +350,7 @@ extension AudioPostComposerView {
             RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                 .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
-                    .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1))
+                    .stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1))
         )
         // Le détail technique n'est pas montré, mais il n'est pas PERDU : il
         // part dans l'annonce, seul endroit où un diagnostic peut vivre sans
@@ -425,7 +425,7 @@ extension AudioPostComposerView {
                         .fill(pleine ? AnyShapeStyle(MeeshyColors.brandGradient)
                                      : AnyShapeStyle(Color.clear))
                         .overlay(Capsule().stroke(
-                            pleine ? Color.clear : MeeshyColors.indigo400.opacity(0.45),
+                            pleine ? Color.clear : MeeshyColors.indigo400.opacity(MeeshyOpacity.strong),
                             lineWidth: 1))
                 )
         }
@@ -495,7 +495,7 @@ struct ManualTranscriptionEditor: View {
                     .padding(MeeshySpacing.smPlus)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(Color.primary.opacity(0.06))
+                            .fill(Color.primary.opacity(MeeshyOpacity.subtle))
                     )
                     .frame(minHeight: 180)
 
@@ -514,8 +514,8 @@ struct ManualTranscriptionEditor: View {
                     Text(language)
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, MeeshySpacing.sm)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(Color.primary.opacity(MeeshyOpacity.subtle)))
                         .accessibilityHidden(true)
                 }
                 ToolbarItem(placement: .confirmationAction) {

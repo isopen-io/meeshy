@@ -78,10 +78,10 @@ struct CallCaptionRow: View {
                     if let tag = line.languageTag {
                         Text(tag)
                             .font(.caption2.weight(.semibold).monospaced())
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(.horizontal, 5)
+                            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                            .padding(.horizontal, MeeshySpacing.xs)
                             .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
                     }
                 }
                 Text(line.text)
@@ -140,7 +140,7 @@ struct CallCaptionsBand: View {
                 if lines.isEmpty {
                     Text(CallCaptionsCopy.waiting)
                         .font(.footnote)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(MeeshyColors.mediaChromeTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ForEach(lines) { line in
@@ -152,9 +152,9 @@ struct CallCaptionsBand: View {
             if let onOpenJournal {
                 Button(action: onOpenJournal) {
                     Image(systemName: "list.bullet.rectangle")
-                        .font(MeeshyFont.relative(17, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -188,7 +188,7 @@ struct CallJournalList: View {
                         if segments.isEmpty {
                             Text(CallCaptionsCopy.waiting)
                                 .font(.callout)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                         }
                         ForEach(segments) { segment in
                             CallCaptionRow(line: line(segment), showsTime: true) { onToggleOriginal(segment.id) }
@@ -271,8 +271,8 @@ struct CallJournalList: View {
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
-            .background(Capsule().fill(Color.black.opacity(0.7)))
-            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: MeeshyBorder.hairline))
+            .background(Capsule().fill(Color.black.opacity(MeeshyOpacity.heavy)))
+            .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             .contentShape(Capsule())
         }
         .buttonStyle(CallPressButtonStyle())

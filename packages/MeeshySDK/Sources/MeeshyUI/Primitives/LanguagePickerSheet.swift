@@ -173,7 +173,7 @@ public struct LanguagePickerSheet: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            (style == .dark ? Color.black.opacity(0.6) : Color.black.opacity(0.3))
+            (style == .dark ? Color.black.opacity(0.6) : Color.black.opacity(MeeshyOpacity.medium))
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
 
@@ -221,7 +221,7 @@ public struct LanguagePickerSheet: View {
     private var dragHandle: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
             Capsule()
-                .fill(style == .dark ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
+                .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.medium) : Color.gray.opacity(MeeshyOpacity.medium))
                 .frame(width: 36, height: 4)
                 .padding(.top, MeeshySpacing.md)
 
@@ -235,7 +235,7 @@ public struct LanguagePickerSheet: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: MeeshyIconSize.xxl))
-                        .foregroundColor(style == .dark ? .white.opacity(0.5) : Color.gray.opacity(0.5))
+                        .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
                 }
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -248,8 +248,8 @@ public struct LanguagePickerSheet: View {
     private var searchBar: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(style == .dark ? .white.opacity(0.5) : .gray)
-                .font(.system(size: 15))
+                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray)
+                .font(.system(size: MeeshyIconSize.sm))
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(.system(size: MeeshyFont.bodySize))
@@ -260,7 +260,7 @@ public struct LanguagePickerSheet: View {
         .padding(.vertical, MeeshySpacing.smPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                .fill(style == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
         )
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.md)
@@ -322,7 +322,7 @@ public struct LanguagePickerSheet: View {
                     .foregroundColor(
                         isSelected
                             ? accent
-                            : (style == .dark ? .white.opacity(0.75) : .primary.opacity(0.7))
+                            : (style == .dark ? .white.opacity(MeeshyOpacity.heavy) : .primary.opacity(MeeshyOpacity.heavy))
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -334,7 +334,7 @@ public struct LanguagePickerSheet: View {
                     .fill(
                         isSelected
                             ? accent.opacity(style == .dark ? 0.2 : 0.12)
-                            : (style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                            : (style == .dark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
@@ -356,18 +356,18 @@ public struct LanguagePickerSheet: View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(Color.black.opacity(0.5))
+                            .fill(Color.black.opacity(MeeshyOpacity.strong))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline)
+                            .stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline)
                     )
             } else {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(.regularMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: MeeshyBorder.hairline)
+                            .stroke(Color.gray.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline)
                     )
             }
         }

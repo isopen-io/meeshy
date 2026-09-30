@@ -89,7 +89,7 @@ struct AddParticipantSheet: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
@@ -133,7 +133,7 @@ struct AddParticipantSheet: View {
         .padding(.vertical, MeeshySpacing.smPlus)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                .fill(theme.textMuted.opacity(0.08))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
         )
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.bottom, MeeshySpacing.md)
@@ -219,8 +219,8 @@ struct AddParticipantSheet: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.smPlus)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(theme.textMuted.opacity(0.1)))
+                    .padding(.vertical, MeeshySpacing.xs)
+                    .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
             } else if isAdding {
                 ProgressView()
                     .scaleEffect(0.8)
@@ -276,14 +276,14 @@ struct AddParticipantSheet: View {
     private var searchSkeletonRow: some View {
         HStack(spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
-                    .fill(theme.textMuted.opacity(0.12))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                     .frame(width: 100, height: 12)
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.textMuted.opacity(0.08))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 70, height: 10)
             }
             Spacer()

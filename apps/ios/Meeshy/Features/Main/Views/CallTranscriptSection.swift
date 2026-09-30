@@ -94,7 +94,7 @@ struct CallTranscriptSection: View {
                 }
             }
             .padding(MeeshySpacing.md)
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(0.1))
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(MeeshyOpacity.subtle))
 
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "info.circle")

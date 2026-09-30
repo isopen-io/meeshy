@@ -89,7 +89,7 @@ struct ShareLinkDetailView: View {
                         .lineLimit(2)
                     Text(ShareLinkDetailCopy.createdOn(link.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .opacity(0.85)
+                        .opacity(MeeshyOpacity.intense)
                 }
                 Spacer(minLength: 0)
                 statusBadge
@@ -138,7 +138,7 @@ struct ShareLinkDetailView: View {
 
     private var groupLogo: some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-            .fill(Color.white.opacity(0.2))
+            .fill(Color.white.opacity(MeeshyOpacity.light))
             .overlay(
                 CachedAsyncImage(url: link.conversation?.avatar, targetSize: CGSize(width: 48, height: 48), showsStatusOverlays: false) {
                     Text(MeeshyAvatar.initials(for: groupName))
@@ -157,8 +157,8 @@ struct ShareLinkDetailView: View {
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
             .textCase(.uppercase)
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(link.isActive ? MeeshyColors.success.opacity(0.9) : Color.white.opacity(0.25)))
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(link.isActive ? MeeshyColors.success.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium)))
             .foregroundColor(link.isActive ? MeeshyColors.indigo950 : .white)
     }
 

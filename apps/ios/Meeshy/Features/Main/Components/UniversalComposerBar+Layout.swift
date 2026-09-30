@@ -90,7 +90,7 @@ extension UniversalComposerBar {
                     HapticFeedback.medium()
                     expandAndStartRecording()
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: MeeshySpacing.xxs) {
                         ZStack {
                             Circle()
                                 .fill(.ultraThinMaterial)
@@ -126,7 +126,7 @@ extension UniversalComposerBar {
                 HapticFeedback.medium()
                 expandComposer()
             } label: {
-                VStack(spacing: 3) {
+                VStack(spacing: MeeshySpacing.xxs) {
                     ZStack {
                         Circle()
                             .fill(
@@ -484,7 +484,7 @@ extension UniversalComposerBar {
     /// porteur 2026-09-25) — réel sur iOS 26, fait maison avant. Il remplace le
     /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
     /// enregistrement, pastille de langue) sont du verre aussi.
-    static let panelShape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+    static let panelShape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
     static let fieldShape = RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
 
     /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :

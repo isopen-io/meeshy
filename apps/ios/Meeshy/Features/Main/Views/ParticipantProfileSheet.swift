@@ -240,7 +240,7 @@ struct ParticipantProfileSheet: View {
             } else if capabilities.denied.isEmpty {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 13))
+                        .font(.system(size: MeeshyIconSize.xs))
                         .foregroundColor(MeeshyColors.success)
                         .frame(width: 18)
                     Text(noRestrictionLabel)
@@ -253,7 +253,7 @@ struct ParticipantProfileSheet: View {
                 ForEach(capabilities.denied, id: \.rawValue) { capability in
                     HStack(spacing: MeeshySpacing.sm) {
                         Image(systemName: "nosign")
-                            .font(.system(size: 13))
+                            .font(.system(size: MeeshyIconSize.xs))
                             .foregroundColor(MeeshyColors.warning)
                             .frame(width: 18)
                         Text(deniedLabel(capability))
@@ -283,7 +283,7 @@ struct ParticipantProfileSheet: View {
             if canGrantHistory {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 13))
+                        .font(.system(size: MeeshyIconSize.xs))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 18)
                     Text(seesHistorySinceLabel)
@@ -436,7 +436,7 @@ struct ParticipantProfileSheet: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(.purple)
                 .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
                 .background(Capsule().fill(Color.purple.opacity(theme.mode.isDark ? 0.22 : 0.12)))
                 .accessibilityIdentifier("participant-profile-no-account")
             }
@@ -446,7 +446,7 @@ struct ParticipantProfileSheet: View {
     private func row(icon: String, label: String, value: String?, withheld: Bool = false) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(theme.textMuted)
                 .frame(width: 18)
             Text(label)

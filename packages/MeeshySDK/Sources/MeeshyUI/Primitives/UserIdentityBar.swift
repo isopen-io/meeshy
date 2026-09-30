@@ -201,7 +201,7 @@ public struct UserIdentityBar: View {
                         .font(.system(size: MeeshyFont.footnoteSize))
                 } icon: {
                     Image(systemName: role.icon)
-                        .font(.system(size: 11))
+                        .font(.system(size: MeeshyIconSize.xxs))
                 }
                 .foregroundColor(roleBadgeColor(for: role))
             }
@@ -254,7 +254,7 @@ public struct UserIdentityBar: View {
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
-                            .fill(MeeshyColors.indigo500.opacity(0.15))
+                            .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                     )
             }
             .buttonStyle(.plain)
@@ -284,7 +284,7 @@ public struct UserIdentityBar: View {
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
-                        .fill(MeeshyColors.indigo500.opacity(0.15))
+                        .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 )
             }
 
@@ -331,7 +331,7 @@ public struct UserIdentityBar: View {
             // 200ms-5s without ACK: subtle clock glyph hinting "still sending".
             Image(systemName: "clock")
                 .font(.system(size: MeeshyIconSize.xxs))
-                .foregroundColor(secondaryColor.opacity(0.7))
+                .foregroundColor(secondaryColor.opacity(MeeshyOpacity.heavy))
         case .slow:
             // 5s-30s without ACK or auto-retry in flight: warmer "slow send"
             // indicator. Plain clock — spec 2026-07-08
@@ -357,9 +357,9 @@ public struct UserIdentityBar: View {
         case .read:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .black))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .black))
                     .offset(x: 4)
             }
             .foregroundColor(readColor)
@@ -658,7 +658,7 @@ extension UserIdentityBar {
         return UserIdentityBar(
             leadingPrimary: leading1,
             trailingPrimary: trailing1,
-            tintColor: isMe ? .white.opacity(0.7) : nil
+            tintColor: isMe ? .white.opacity(MeeshyOpacity.heavy) : nil
         )
     }
 }

@@ -259,7 +259,7 @@ public struct SelectiveCachePurgeView: View {
             HStack(alignment: .top, spacing: MeeshySpacing.md) {
                 Image(systemName: "minus.square")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                    .foregroundColor(theme.textMuted.opacity(0.5))
+                    .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(Self.label(for: domain))
@@ -267,7 +267,7 @@ public struct SelectiveCachePurgeView: View {
                         .foregroundColor(theme.textMuted)
                     Text(Self.explanation(for: limitation))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                        .foregroundColor(theme.textMuted.opacity(0.8))
+                        .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.intense))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
@@ -296,7 +296,7 @@ public struct SelectiveCachePurgeView: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                         .tracking(1.2)
                 }
-                .foregroundColor(Color(hex: MeeshyColors.neutral500Hex))
+                .foregroundColor(MeeshyColors.neutral500)
                 .padding(.leading, MeeshySpacing.xs)
 
                 Button {

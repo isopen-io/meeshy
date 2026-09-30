@@ -390,7 +390,7 @@ extension CallView {
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(durationColor.opacity(0.15))
+                    .fill(durationColor.opacity(MeeshyOpacity.light))
             )
             // Naked-readout fix (doctrine 206i/210i/211i): the combined element
             // previously announced a bare "0:34" with no context. Signal state is
@@ -415,7 +415,7 @@ extension CallView {
                     statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
                 }
                 if !callManager.isRemoteAudioEnabled {
-                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(0.7))
+                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
                 }
                 if callManager.isRemoteScreenCapturing {
                     statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
@@ -589,7 +589,7 @@ extension CallView {
             .overlay(
                 VStack(spacing: MeeshySpacing.md) {
                     ProgressView()
-                        .tint(.white.opacity(0.5))
+                        .tint(.white.opacity(MeeshyOpacity.strong))
                         .accessibilityHidden(true)
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
@@ -629,13 +629,13 @@ extension CallView {
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            Color.black.opacity(MeeshyOpacity.strong)
             VStack(spacing: MeeshySpacing.mdPlus) {
                 avatarCircle(size: 96)
                     .accessibilityHidden(true)
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "video.slash.fill")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))

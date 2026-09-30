@@ -54,12 +54,12 @@ struct VideoEditorCaptionsPanel: View {
                     Text(language?.nativeName ?? languageCode.uppercased())
                         .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 }
                 .foregroundStyle(theme.textPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(accent.opacity(0.14)))
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .background(Capsule().fill(accent.opacity(MeeshyOpacity.light)))
             }
         }
     }
@@ -119,7 +119,7 @@ struct VideoEditorCaptionsPanel: View {
             ScrollView(.vertical, showsIndicators: false) {
                 Text(viewModel.document.transcriptionText ?? "")
                     .font(.system(size: MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textPrimary.opacity(0.9))
+                    .foregroundStyle(theme.textPrimary.opacity(MeeshyOpacity.intense))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 96)
@@ -152,9 +152,9 @@ struct VideoEditorCaptionsPanel: View {
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(MeeshyColors.brandGradient)
             )
         }

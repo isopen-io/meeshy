@@ -29,7 +29,7 @@ struct VideoEditorFABColumn: View {
                     Circle().stroke(accent.opacity(0.4), lineWidth: 1)
                 }
                 Image(systemName: category.icon)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                     .foregroundStyle(isActive ? .white : accent)
             }
             .frame(width: 56, height: 56)

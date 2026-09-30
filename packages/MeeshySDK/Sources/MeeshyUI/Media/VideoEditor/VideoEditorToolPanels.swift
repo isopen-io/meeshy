@@ -43,7 +43,7 @@ struct VideoEditorBand: View {
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(theme.textMuted.opacity(0.5))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
                 .frame(width: 40, height: 5)
                 .padding(.top, MeeshySpacing.sm)
                 .padding(.bottom, MeeshySpacing.xs)
@@ -58,7 +58,7 @@ struct VideoEditorBand: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
-                .strokeBorder(accent.opacity(0.18), lineWidth: MeeshyBorder.hairline)
+                .strokeBorder(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
         )
         .gesture(
             DragGesture(minimumDistance: 24)
@@ -113,9 +113,9 @@ struct VideoEditorTileGrid: View {
         } label: {
             VStack(spacing: MeeshySpacing.xsPlus) {
                 ZStack {
-                    Circle().fill(accent.opacity(0.22)).frame(width: 38, height: 38)
+                    Circle().fill(accent.opacity(0.22)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: tool.icon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundStyle(accent)
                 }
                 Text(VideoEditorLabels.title(for: tool))
@@ -126,10 +126,10 @@ struct VideoEditorTileGrid: View {
             .frame(width: 78, height: 78)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                    .fill(accent.opacity(0.12))
+                    .fill(accent.opacity(MeeshyOpacity.light))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                            .strokeBorder(accent.opacity(0.3), lineWidth: 0.8)
+                            .strokeBorder(accent.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                     )
             )
         }
@@ -168,7 +168,7 @@ struct VideoEditorToolHeader: View {
                 viewModel.dismissPanel()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundStyle(theme.textMuted)
                     .frame(width: 26, height: 26)
                     .background(theme.glassMaterial, in: Circle())
@@ -216,26 +216,26 @@ struct EditorChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 }
                 Text(title)
                     .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundStyle(isActive ? Color.white : theme.textPrimary)
-            .padding(.horizontal, 13)
+            .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule().fill(
                     isActive
                         ? AnyShapeStyle(MeeshyColors.brandGradient)
-                        : AnyShapeStyle(accent.opacity(0.12))
+                        : AnyShapeStyle(accent.opacity(MeeshyOpacity.light))
                 )
             )
             .overlay(
-                Capsule().strokeBorder(accent.opacity(isActive ? 0 : 0.25), lineWidth: 0.8)
+                Capsule().strokeBorder(accent.opacity(isActive ? 0 : 0.25), lineWidth: MeeshyBorder.hairline)
             )
         }
         .buttonStyle(.plain)
@@ -370,15 +370,15 @@ struct TrimController: View {
 
     private var readoutDivider: some View {
         Rectangle()
-            .fill(theme.textMuted.opacity(0.25))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.medium))
             .frame(width: 1, height: 22)
     }
 
     private func anchorButton(title: String, systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(title)
                     .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
@@ -388,7 +388,7 @@ struct TrimController: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(enabled
                           ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(accent.opacity(0.15)))
+                          : AnyShapeStyle(accent.opacity(MeeshyOpacity.light)))
             )
             .foregroundStyle(enabled ? Color.white : theme.textMuted)
         }
@@ -410,11 +410,11 @@ struct TrimController: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 .frame(width: 42, height: 38)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .fill(accent.opacity(0.15))
+                        .fill(accent.opacity(MeeshyOpacity.light))
                 )
                 .foregroundStyle(theme.textPrimary)
         }
@@ -477,14 +477,14 @@ struct SplitController: View {
     private func segmentCard(index: Int, segment: VideoSegment) -> some View {
         let isSelected = viewModel.selectedSegmentID == segment.id
         let count = viewModel.document.segments.count
-        return VStack(spacing: 5) {
+        return VStack(spacing: MeeshySpacing.xs) {
             Text(String(localized: "videoEditor.split.segment", defaultValue: "Segment \(index + 1)", bundle: .module))
                 .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(format: "%.1fs", segment.playbackDuration))
                 .font(.system(size: MeeshyFont.captionSize, design: .monospaced))
                 .foregroundStyle(theme.textMuted)
-            HStack(spacing: 11) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 if index > 0 {
                     cardButton("arrow.left", tint: theme.textSecondary) {
                         viewModel.moveSegment(segment.id, to: index - 1)
@@ -524,7 +524,7 @@ struct SplitController: View {
     private func cardButton(_ icon: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundStyle(tint)
         }
         .buttonStyle(.plain)
@@ -689,7 +689,7 @@ struct RotateController: View {
             .frame(width: 84, height: 60)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                    .fill(accent.opacity(0.14))
+                    .fill(accent.opacity(MeeshyOpacity.light))
             )
         }
         .buttonStyle(.plain)
@@ -725,7 +725,7 @@ struct FilterController: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 9) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(VideoFilterPreset.allCases, id: \.self) { preset in
                     filterTile(preset)
                 }
@@ -750,7 +750,7 @@ struct FilterController: View {
         Button {
             viewModel.setFilter(preset)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 tileThumbnail(preset, isActive: isActive)
                     .frame(width: 56, height: 56)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
@@ -778,7 +778,7 @@ struct FilterController: View {
                 .overlay(
                     isActive
                         ? Color.clear
-                        : Color.black.opacity(0.15)
+                        : Color.black.opacity(MeeshyOpacity.light)
                 )
         } else {
             // Filmstrip pas encore prêt : on retombe sur l'icône SF pour ne
@@ -862,7 +862,7 @@ struct AudioController: View {
                 Button {
                     viewModel.toggleMute()
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: viewModel.document.audio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         Text(viewModel.document.audio.isMuted ? "Muet" : "Actif")
                     }

@@ -93,10 +93,10 @@ struct StorySaveProgressRing: View {
     var body: some View {
         let appearance = Self.appearance(isCancellable: isCancellable, reduceMotion: reduceMotion)
         ZStack {
-            Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
+            Circle().stroke(Color.secondary.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.strong)
             Circle()
                 .trim(from: 0, to: clamped)
-                .stroke(appearance.arcColor(accent: tint), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .stroke(appearance.arcColor(accent: tint), style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.2), value: clamped)
             if appearance.showsIndeterminateSweep {
@@ -105,7 +105,7 @@ struct StorySaveProgressRing: View {
                 // simplement plus interruptible.
                 Circle()
                     .trim(from: 0, to: 0.18)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(tint, style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                     .rotationEffect(.degrees(sweepPhase * 360 - 90))
                     .animation(.linear(duration: 1.1).repeatForever(autoreverses: false), value: sweepPhase)
                     .onAppear { sweepPhase += 1 }

@@ -195,7 +195,7 @@ struct ConversationListQuickActions: View, Equatable {
                 // avec (`RightToLeftLayoutGuardTests`).
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .opacity(0.8)
+                    .opacity(MeeshyOpacity.intense)
             }
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.lg)
@@ -210,7 +210,7 @@ struct ConversationListQuickActions: View, Equatable {
     private func gradientBox(_ gradient: [Color], radius: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-            .shadow(color: gradient.first?.opacity(0.3) ?? .clear, radius: 8, y: 4)
+            .shadow(color: gradient.first?.opacity(MeeshyOpacity.medium) ?? .clear, radius: 8, y: 4)
     }
 
     private func tile(_ action: Action) -> some View {

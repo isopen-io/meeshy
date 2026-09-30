@@ -57,7 +57,7 @@ struct UserStatsView: View {
                 .padding(MeeshySpacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(MeeshyColors.error.opacity(0.1))
+                        .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                 )
             }
             statsCards
@@ -97,10 +97,10 @@ struct UserStatsView: View {
             Image(systemName: icon)
                 .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                 .foregroundColor(Color(hex: color))
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(0.12))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
                 )
                 .accessibilityHidden(true)
 

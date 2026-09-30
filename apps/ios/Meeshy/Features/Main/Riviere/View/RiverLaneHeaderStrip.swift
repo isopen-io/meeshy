@@ -95,7 +95,7 @@ struct RiverLaneHeaderStrip: View {
         edge: HorizontalEdge
     ) -> some View {
         if !hidden.isEmpty {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 if edge == .trailing { dots(hidden) }
                 // `backward`/`forward`, jamais `left`/`right` : ces badges disent
                 // « en amont » et « en aval » du plan, pas « à main gauche » —
@@ -107,7 +107,7 @@ struct RiverLaneHeaderStrip: View {
                 if edge == .leading { dots(hidden) }
             }
             .padding(.horizontal, MeeshySpacing.xsPlus)
-            .padding(.vertical, 3)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(MeeshyColors.backgroundSecondary(isDark: isDark).opacity(0.92)))
             .accessibilityLabel(
                 String(

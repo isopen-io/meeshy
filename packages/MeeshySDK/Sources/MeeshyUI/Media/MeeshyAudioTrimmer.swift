@@ -130,9 +130,9 @@ public struct MeeshyAudioTrimmer: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: player.isPlaying ? "stop.fill" : "play.fill")
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .background(Circle().fill(tint))
         }
         .buttonStyle(.plain)
@@ -194,7 +194,7 @@ public struct MeeshyAudioTrimmer: View {
         let horsChamp = brut < 0 || brut > stripWidth
         let x = min(max(brut, Self.handleWidth / 2), max(Self.handleWidth / 2, stripWidth - Self.handleWidth / 2))
 
-        return RoundedRectangle(cornerRadius: 7)
+        return RoundedRectangle(cornerRadius: MeeshyRadius.xs)
             .fill(tint)
             .overlay(
                 Image(systemName: horsChamp

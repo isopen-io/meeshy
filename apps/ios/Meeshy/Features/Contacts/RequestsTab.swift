@@ -51,7 +51,7 @@ struct RequestsTab: View {
                         Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
                     )
                     .overlay(
-                        Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
                 }
                 .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filterTitle(filter), count))
@@ -136,7 +136,7 @@ struct RequestsTab: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -176,8 +176,8 @@ struct RequestsTab: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                        .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityLabel(String(format: String(localized: "contacts.requests.reject-a11y", defaultValue: "Refuser la demande de %@", bundle: .main), name))
 
@@ -187,11 +187,11 @@ struct RequestsTab: View {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
                         .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                         .background(
                             Circle().fill(
                                 LinearGradient(
-                                    colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                                    colors: [MeeshyColors.success, MeeshyColors.success.opacity(MeeshyOpacity.heavy)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -237,7 +237,7 @@ struct RequestsTab: View {
                 avatarURL: receiver?.avatar
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -262,7 +262,7 @@ struct RequestsTab: View {
                 .padding(.horizontal, MeeshySpacing.sm)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
-                    Capsule().fill(MeeshyColors.warning.opacity(0.15))
+                    Capsule().fill(MeeshyColors.warning.opacity(MeeshyOpacity.light))
                 )
 
             Button {
@@ -274,7 +274,7 @@ struct RequestsTab: View {
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
-                        Capsule().stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             }
             .accessibilityLabel(String(format: String(localized: "contacts.requests.cancel-a11y", defaultValue: "Annuler la demande envoyée à %@", bundle: .main), name))

@@ -55,17 +55,17 @@ enum NotificationCategory: String, CaseIterable {
     // Treated as one ladder (arbitrated separately) — do not migrate piecemeal.
     var color: String {
         switch self {
-        case .all: return "6366F1"
-        case .unread: return "FF6B6B"
-        case .messages: return "3498DB"
-        case .reactions: return "FF6B6B"
-        case .mentions: return "9B59B6"
-        case .social: return "F8B500"
-        case .contacts: return "4ECDC4"
-        case .groups: return "F8B500"
+        case .all: return MeeshyColors.brandPrimaryHex
+        case .unread: return MeeshyColors.tileCoralHex
+        case .messages: return MeeshyColors.tileBlueHex
+        case .reactions: return MeeshyColors.tileCoralHex
+        case .mentions: return MeeshyColors.tileAmethystHex
+        case .social: return MeeshyColors.tileSaffronHex
+        case .contacts: return MeeshyColors.tileTealHex
+        case .groups: return MeeshyColors.tileSaffronHex
         case .calls: return "E91E63"
-        case .translations: return "08D9D6"
-        case .system: return "6366F1"
+        case .translations: return MeeshyColors.tileCyanHex
+        case .system: return MeeshyColors.brandPrimaryHex
         }
     }
 
@@ -255,7 +255,7 @@ public struct NotificationListView: View {
             // redessiner.
             viewModel.selectedCategory = category
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: category.icon)
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(category.label)
@@ -266,7 +266,7 @@ public struct NotificationListView: View {
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color(hex: chipColor) : Color(hex: chipColor).opacity(0.12))
+                    .fill(isSelected ? Color(hex: chipColor) : Color(hex: chipColor).opacity(MeeshyOpacity.light))
             )
         }
         .buttonStyle(.plain)

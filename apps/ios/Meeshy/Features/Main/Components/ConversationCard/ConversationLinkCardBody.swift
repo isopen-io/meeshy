@@ -50,7 +50,7 @@ struct ConversationLinkCardBody: View, Equatable {
             if let description = card.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
                 Text(description)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(0.8))
+                    .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -63,7 +63,7 @@ struct ConversationLinkCardBody: View, Equatable {
         .padding(.bottom, MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                .fill(isDark ? MeeshyColors.indigo900.opacity(0.45) : MeeshyColors.indigo50.opacity(0.6))
+                .fill(isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo50.opacity(0.6))
         )
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         .accessibilityElement(children: .combine)
@@ -83,7 +83,7 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var gradient: LinearGradient {
-        LinearGradient(colors: [accent, accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.strong)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     private var identity: some View {
@@ -195,7 +195,7 @@ struct ConversationInviteQuote: View {
         HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
             Text(verbatim: "\u{201C}")
                 .font(MeeshyFont.relative(60, weight: .black, design: .serif))
-                .foregroundColor(accent.opacity(0.7))
+                .foregroundColor(accent.opacity(MeeshyOpacity.heavy))
                 .frame(height: 34, alignment: .top)
                 .padding(.top, -2)
                 .accessibilityHidden(true)
@@ -271,7 +271,7 @@ struct ConversationCardStatsRow: View {
     }
 
     private func metric(icon: String, value: Int) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(value.formatted(.number.notation(.compactName)))

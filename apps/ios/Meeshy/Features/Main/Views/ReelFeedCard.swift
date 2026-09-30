@@ -241,7 +241,7 @@ struct ReelFeedCard: View, Equatable {
                     .frame(width: width, height: height)
                     .clipped()
             } else {
-                Color(hex: accentHex).opacity(0.5)
+                Color(hex: accentHex).opacity(MeeshyOpacity.strong)
             }
         case .audio:
             // Un réel audio avec image de couverture montre sa couverture ; le
@@ -283,7 +283,7 @@ struct ReelFeedCard: View, Equatable {
                 .frame(width: width, height: height)
                 .clipped()
             } else {
-                Color(hex: accentHex).opacity(0.5)
+                Color(hex: accentHex).opacity(MeeshyOpacity.strong)
             }
         }
     }
@@ -306,12 +306,12 @@ struct ReelFeedCard: View, Equatable {
                     // mire cyan. Le schéma se pose sur le LIBELLÉ — posé sur le `Menu`, il
                     // habillerait aussi sa feuille.
                     Image(systemName: "ellipsis")
-                        .font(MeeshyFont.relative(15, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                         .glassControlForeground()
                         .padding(MeeshySpacing.sm)
                         .background(Circle().fill(.ultraThinMaterial))
-                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3, y: 1)
                         .contentShape(Circle())
                         .mediaChromeTinted()
                 }
@@ -356,7 +356,7 @@ struct ReelFeedCard: View, Equatable {
                 Label(String(localized: "feed.reel.republished.by", defaultValue: "Republié par \(post.author)", bundle: .main),
                       systemImage: "arrow.2.squarepath")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
             authorRow
@@ -391,7 +391,7 @@ struct ReelFeedCard: View, Equatable {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55)],
+                colors: [.clear, .black.opacity(MeeshyOpacity.strong)],
                 startPoint: .top, endPoint: .bottom
             )
         )
@@ -432,9 +432,9 @@ struct ReelFeedCard: View, Equatable {
     /// separated by middle dots: "@pseudo · 📊 1.2k · 👁 3.4k".
     @ViewBuilder
     private var authorMetaLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             if let u = displayUsername, !u.isEmpty {
-                Text("@\(u)").font(.caption).foregroundColor(.white.opacity(0.75))
+                Text("@\(u)").font(.caption).foregroundColor(.white.opacity(MeeshyOpacity.heavy))
             }
             if isAuthor {
                 if displayUsername?.isEmpty == false { metaDot }
@@ -448,7 +448,7 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(.caption).foregroundColor(.white.opacity(MeeshyOpacity.strong))
     }
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {
@@ -456,7 +456,7 @@ struct ReelFeedCard: View, Equatable {
             icon: icon,
             count: count,
             label: a11yLabel,
-            tint: .white.opacity(0.85),
+            tint: .white.opacity(MeeshyOpacity.intense),
             iconFont: MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
         )
     }
@@ -605,7 +605,7 @@ struct ReelFeedCard: View, Equatable {
             onLike(post.id)
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 actionGlyph(outline: "heart", filled: "heart.fill", tint: MeeshyColors.error, participated: isLiked)
                 if displayLikeCount > 0 {
                     Text("\(displayLikeCount)")
@@ -633,7 +633,7 @@ struct ReelFeedCard: View, Equatable {
             action()
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 actionGlyph(outline: outline, filled: filled, tint: tint, participated: participated)
                 if count > 0 {
                     Text("\(count)").font(.footnote.weight(.medium))

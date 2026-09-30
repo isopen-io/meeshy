@@ -314,7 +314,7 @@ struct PostSceneMosaic: View {
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 5)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(.black.opacity(0.5)))
             .padding(MeeshySpacing.smPlus)
             .contentTransition(.numericText())

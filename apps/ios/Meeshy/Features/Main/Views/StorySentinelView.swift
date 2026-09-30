@@ -57,7 +57,7 @@ struct StorySentinelView: View {
             explication
                 .padding(.bottom, MeeshySpacing.xxxl)
             boutonMettreAJour
-                .padding(.bottom, 18)
+                .padding(.bottom, MeeshySpacing.lg)
             boutonPasser
             Spacer(minLength: 0)
         }
@@ -75,7 +75,7 @@ struct StorySentinelView: View {
     private var marque: some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
             .strokeBorder(style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [6, 5]))
-            .foregroundStyle(MeeshyColors.indigo400.opacity(0.55))
+            .foregroundStyle(MeeshyColors.indigo400.opacity(MeeshyOpacity.strong))
             .frame(width: 132, height: 132)
             .overlay(
                 Image(systemName: "diamond")
@@ -112,7 +112,7 @@ struct StorySentinelView: View {
                 // geste qui répare (dimension 5).
                 .frame(height: 52)
                 .background(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
                         .fill(MeeshyColors.indigo400)
                 )
         }

@@ -144,7 +144,7 @@ struct StoryComposerBarView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(MeeshyFont.relative(9, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
                                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -152,7 +152,7 @@ struct StoryComposerBarView: View {
                             }
                             Text(reply.displayContent)
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                                 .lineLimit(1)
                         }
 
@@ -166,9 +166,9 @@ struct StoryComposerBarView: View {
                             Image(systemName: "xmark")
                                 // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                                 .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(0.12)))
+                                .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
                         }
                         .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
                     }
@@ -178,7 +178,7 @@ struct StoryComposerBarView: View {
                     .overlay(
                         Rectangle()
                             .fill(Color(hex: reply.authorColor).opacity(0.35))
-                            .frame(height: 0.5),
+                            .frame(height: MeeshyBorder.hairline),
                         alignment: .bottom
                     )
                 )

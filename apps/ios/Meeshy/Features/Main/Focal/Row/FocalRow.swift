@@ -888,7 +888,7 @@ struct FocalRow: View {
         @ViewBuilder _ content: () -> Content
     ) -> some View {
         content()
-            .padding(.horizontal, 7)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
             .frame(height: height)
             .background(

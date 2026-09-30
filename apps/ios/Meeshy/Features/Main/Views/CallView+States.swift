@@ -23,7 +23,7 @@ extension CallView {
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
                 .padding(.bottom, MeeshySpacing.sm)
 
             // §H2 — Status: "Appel en cours…" until 6s have elapsed, then the
@@ -35,7 +35,7 @@ extension CallView {
                     ? String(localized: "call.outgoing.waiting", defaultValue: "En attente du correspondant…", bundle: .main)
                     : String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
@@ -104,7 +104,7 @@ extension CallView {
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
                 .padding(.bottom, MeeshySpacing.sm)
 
             HStack(spacing: MeeshySpacing.sm) {
@@ -113,7 +113,7 @@ extension CallView {
                     .accessibilityHidden(true)
                 Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
             }
             .accessibilityElement(children: .combine)
             .padding(.bottom, 60)
@@ -145,16 +145,16 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             Text(endReasonText(reason))
                 .font(.callout.weight(.medium))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
-                    .foregroundColor(.white.opacity(0.45))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.strong))
                     // Final call-total duration: same naked-readout fix, static
                     // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
@@ -194,7 +194,7 @@ extension CallView {
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [MeeshyColors.indigo500.opacity(0.3), MeeshyColors.indigo400.opacity(0.1)],
+                            colors: [MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), MeeshyColors.indigo400.opacity(MeeshyOpacity.subtle)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -258,7 +258,7 @@ extension CallView {
                 .clipShape(Circle())
             }
         }
-        .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, y: 4)
+        .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 
     /// Duo d'avatars de l'appel : le correspondant en grand, l'utilisateur
@@ -333,7 +333,7 @@ extension CallView {
         .padding(.vertical, MeeshySpacing.xs)
         .background(
             Capsule()
-                .fill(color.opacity(0.12))
+                .fill(color.opacity(MeeshyOpacity.light))
         )
     }
 }

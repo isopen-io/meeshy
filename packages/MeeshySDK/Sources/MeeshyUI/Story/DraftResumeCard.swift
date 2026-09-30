@@ -86,7 +86,7 @@ public struct DraftResumeCard: View {
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "story.draft.resume.title",
                             defaultValue: "Reprendre votre story ?", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -101,7 +101,7 @@ public struct DraftResumeCard: View {
                     }
                 }
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 .lineLimit(1)
             }
 
@@ -120,13 +120,13 @@ public struct DraftResumeCard: View {
                     Text(String(localized: "story.draft.resume.discard",
                                 defaultValue: "Recommencer", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
-                        .background(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                        .background(Capsule().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
                 }
                 Button(action: onResume) {
                     Text(String(localized: "story.draft.resume.resume",

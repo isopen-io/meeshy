@@ -1749,11 +1749,11 @@ struct StoryCommentsOverlayView: View {
                 .lineLimit(1)
         } icon: {
             Image(systemName: "clock.badge.xmark")
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
         }
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(MeeshyColors.mediaChromeSecondary)
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 7)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
         .padding(.bottom, MeeshySpacing.xsPlus)
         .transition(.opacity)
@@ -1972,15 +1972,15 @@ struct StoryCommentsOverlayView: View {
                 // Doctrine 84i/86i : glyphe héros décoratif de l'état vide → taille
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
                 // le sens). Le texte, lui, scale avec le Dynamic Type.
-                .font(.system(size: 28))
-                .foregroundColor(.white.opacity(0.7))
+                .font(.system(size: MeeshyIconSize.xxxl))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(.white.opacity(0.65))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)

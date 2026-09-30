@@ -101,7 +101,7 @@ struct VoiceProfileWizardView: View {
                 Capsule()
                     .fill(step.rawValue <= viewModel.currentStep.rawValue
                           ? accent
-                          : theme.textMuted.opacity(0.3))
+                          : theme.textMuted.opacity(MeeshyOpacity.medium))
                     .frame(height: 3)
             }
         }
@@ -120,7 +120,7 @@ struct VoiceProfileWizardView: View {
                     .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [accent, accent.opacity(0.7)],
+                            colors: [accent, accent.opacity(MeeshyOpacity.heavy)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -128,7 +128,7 @@ struct VoiceProfileWizardView: View {
                     .accessibilityHidden(true)
 
                 Text(String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main))
-                    .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
                 Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle.", bundle: .main))
@@ -210,7 +210,7 @@ struct VoiceProfileWizardView: View {
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Vérification de l'âge", bundle: .main))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "voice.profile.wizard.ageVerification.description", defaultValue: "Le clonage vocal nécessite une vérification d'âge pour les mineurs.", bundle: .main))
@@ -349,7 +349,7 @@ struct VoiceProfileWizardView: View {
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal créé !", bundle: .main))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let profile = viewModel.profile {

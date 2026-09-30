@@ -89,10 +89,10 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                             VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrow.clockwise.circle.fill")
                                     .font(.system(size: MeeshyIconSize.xxl, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
+                                    .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                                 Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
                                     .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .foregroundStyle(.white.opacity(MeeshyOpacity.strong))
                             }
                         }
                     }
@@ -300,7 +300,7 @@ public struct CachedAvatarImage: View {
         let initials = name.components(separatedBy: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
         let color = Color(hex: accentColor)
         return ZStack {
-            LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [color, color.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Text(initials.isEmpty ? "?" : initials)
                 .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
@@ -360,7 +360,7 @@ public struct CachedBannerImage: View {
                 Image(uiImage: thumbHashImage).resizable().aspectRatio(contentMode: .fill)
             } else {
                 let color = Color(hex: fallbackColor)
-                LinearGradient(colors: [color.opacity(0.8), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [color.opacity(MeeshyOpacity.intense), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)
             }
         }
         .frame(height: height).clipped()

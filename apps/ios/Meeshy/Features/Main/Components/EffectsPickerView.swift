@@ -29,8 +29,8 @@ struct EffectChip: View {
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(isSelected ? accent : accent.opacity(0.1))
-                    .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: MeeshyBorder.hairline))
+                    .fill(isSelected ? accent : accent.opacity(MeeshyOpacity.subtle))
+                    .overlay(Capsule().stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
@@ -94,7 +94,7 @@ struct EffectsPickerView: View {
                     } label: {
                         Text(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main))
                             .font(.caption2).fontWeight(.semibold)
-                            .foregroundColor(MeeshyColors.error.opacity(0.8))
+                            .foregroundColor(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                     }
                     .transition(.opacity)
                 }
@@ -115,7 +115,7 @@ struct EffectsPickerView: View {
                 .fill(surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                        .stroke(accent.opacity(0.2), lineWidth: MeeshyBorder.hairline)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hasPanelEffect)

@@ -151,7 +151,7 @@ extension ConversationView {
                     // Lock icon (encryption only, no text)
                     if isEncrypted {
                         Image(systemName: "lock.fill")
-                            .font(MeeshyFont.relative(9, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                             .foregroundColor(theme.success)
                             .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
                     }
@@ -163,17 +163,17 @@ extension ConversationView {
                                 .font(MeeshyFont.relative(7, weight: .bold))
                                 .accessibilityHidden(true)
                             Text(section.name)
-                                .font(MeeshyFont.relative(8, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                         }
                         .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(
                             Capsule()
-                                .fill(Color(hex: section.color).opacity(0.2))
+                                .fill(Color(hex: section.color).opacity(MeeshyOpacity.light))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(hex: section.color).opacity(0.3), lineWidth: MeeshyBorder.hairline)
+                                        .stroke(Color(hex: section.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                                 )
                         )
                     }
@@ -181,16 +181,16 @@ extension ConversationView {
                     if let conv = liveConversation {
                         ForEach(conv.tags) { tag in
                             Text(tag.name)
-                                .font(MeeshyFont.relative(8, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                                 .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, MeeshySpacing.xs)
                                 .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
                                     Capsule()
-                                        .fill(Color(hex: tag.color).opacity(0.12))
+                                        .fill(Color(hex: tag.color).opacity(MeeshyOpacity.light))
                                         .overlay(
                                             Capsule()
-                                                .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: MeeshyBorder.hairline)
+                                                .stroke(Color(hex: tag.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                                         )
                                 )
                         }
@@ -319,7 +319,7 @@ private struct HeaderCallButtonsView: View {
             }
             HapticFeedback.medium()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
@@ -330,11 +330,11 @@ private struct HeaderCallButtonsView: View {
             }
             .foregroundColor(MeeshyColors.success)
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 5)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: MeeshyBorder.hairline))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
@@ -360,7 +360,7 @@ private struct HeaderCallButtonsView: View {
             )
             HapticFeedback.medium()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
@@ -371,11 +371,11 @@ private struct HeaderCallButtonsView: View {
             }
             .foregroundColor(MeeshyColors.success)
             .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, 5)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: MeeshyBorder.hairline))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
@@ -439,7 +439,7 @@ private struct HeaderCallButtonsView: View {
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
@@ -455,7 +455,7 @@ private struct HeaderCallButtonsView: View {
             // 44, minHeight: 44)` drew the visible circle at 44pt instead of
             // 28pt, even though both buttons declared identical numbers.
             // expandedHeaderSearchButton already has the correct order.
-            .frame(width: 28, height: 28)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
             .meeshyTapTarget()
     }
@@ -680,8 +680,8 @@ private struct HeaderOpenFullGlyph: View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
             .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(Color(hex: accentColor))
-            .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .meeshyTapTarget()
     }
 }

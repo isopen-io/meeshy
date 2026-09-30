@@ -1110,7 +1110,7 @@ struct PostDetailView: View {
                                     if reach.pseudo != nil {
                                         MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                                     }
-                                    HStack(spacing: 3) {
+                                    HStack(spacing: MeeshySpacing.xxs) {
                                         ReachMetricLabel(
                                             icon: "eye.fill",
                                             count: post.viewCount,
@@ -1260,7 +1260,7 @@ struct PostDetailView: View {
         let username = post.authorUsername ?? ""
         let hasUsername = !username.isEmpty
         if hasUsername || isPostAuthor {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if hasUsername {
                     Text("@\(username)")
                         .font(.caption)
@@ -1270,7 +1270,7 @@ struct PostDetailView: View {
                     if hasUsername {
                         MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                     }
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         ReachMetricLabel(
                             icon: "eye.fill",
                             count: post.viewCount,
@@ -1478,7 +1478,7 @@ struct PostDetailView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
 EngagementGlyph(
                         outline: "heart",
@@ -1535,7 +1535,7 @@ EngagementGlyph(
                 HapticFeedback.light()
                 withAnimation { scrollProxy.scrollTo("commentsSection", anchor: .top) }
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     let n = displayPost?.commentCount ?? 0
                     EngagementGlyph(
                         outline: "bubble.right",

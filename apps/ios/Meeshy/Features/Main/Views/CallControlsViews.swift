@@ -130,7 +130,7 @@ struct CallInviteStrip: View, Equatable {
                         .lineLimit(1)
                     Text(CallControlsCopy.ringing)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.75))
+                        .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .frame(minHeight: 44)
@@ -160,7 +160,7 @@ struct CallControlsNoticePill: View, Equatable {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }

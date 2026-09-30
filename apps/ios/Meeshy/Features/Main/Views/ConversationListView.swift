@@ -2087,7 +2087,7 @@ struct ShareLinkPickerSheet: View {
                                 Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
                                     .font(MeeshyFont.relative(MeeshyIconSize.md))
                                     .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 32, height: 32)
+                                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                     .accessibilityHidden(true)
 
                                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

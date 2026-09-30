@@ -18,9 +18,9 @@ struct BubbleEditedIndicator: View, Equatable {
         let theme = ThemeManager.shared
         let metaColor: Color = isMe
             ? Color.white.opacity(0.6)
-            : theme.textSecondary.opacity(0.5)
+            : theme.textSecondary.opacity(MeeshyOpacity.strong)
 
-        return HStack(spacing: 3) {
+        return HStack(spacing: MeeshySpacing.xxs) {
             if isSaving {
                 // Saving feedback: arrow-spin glyph instead of pencil so the
                 // user sees their edit is still propagating to the server.

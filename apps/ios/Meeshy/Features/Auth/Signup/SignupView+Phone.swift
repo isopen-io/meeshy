@@ -66,7 +66,7 @@ extension SignupView {
                 .accessibilityHint(String(localized: "auth.signup.phone.country.hint", defaultValue: "Changer de pays", bundle: .main))
 
                 Rectangle()
-                    .fill(theme.textMuted.opacity(0.3))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.medium))
                     .frame(width: 1, height: 24)
                     .accessibilityHidden(true)
 
@@ -89,7 +89,7 @@ extension SignupView {
             .overlay(
                 Self.phoneGlassShape
                     .stroke(
-                        focusedField == .phoneNumber ? MeeshyColors.indigo500.opacity(0.6) : theme.inputBorder.opacity(0.25),
+                        focusedField == .phoneNumber ? MeeshyColors.indigo500.opacity(0.6) : theme.inputBorder.opacity(MeeshyOpacity.medium),
                         lineWidth: focusedField == .phoneNumber ? 1.5 : 1
                     )
                     .allowsHitTesting(false)

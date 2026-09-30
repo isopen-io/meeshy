@@ -45,7 +45,7 @@ public struct CommunityCreateView: View {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(.ultraThinMaterial)
                     .clipShape(Circle())
             }
@@ -58,7 +58,7 @@ public struct CommunityCreateView: View {
 
             Spacer()
 
-            Color.clear.frame(width: 36, height: 36)
+            Color.clear.frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -214,7 +214,7 @@ public struct CommunityCreateView: View {
                         } label: {
                             Text(emoji)
                                 .font(.system(size: MeeshyFont.displaySize))
-                                .frame(width: 44, height: 44)
+                                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                                 .background(
                                     viewModel.selectedEmoji == emoji
                                         ? Color(hex: viewModel.accentColor).opacity(0.25)

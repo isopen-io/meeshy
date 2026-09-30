@@ -456,7 +456,7 @@ struct RecentMediaStrip: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, MeeshySpacing.md)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlass(in: Capsule(), interactive: true)
@@ -481,7 +481,7 @@ struct RecentMediaStrip: View {
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.mdPlus)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentColor))
@@ -707,8 +707,8 @@ private struct RecentMediaCell: View {
                             Spacer()
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .bottom, endPoint: .top))
                     }
                 }

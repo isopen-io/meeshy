@@ -49,7 +49,7 @@ struct SkeletonFeedPost: View {
         HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(placeholderColor)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .skeletonShimmer()
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -109,20 +109,20 @@ struct SkeletonFeedPost: View {
 
     private var placeholderColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.06)
-            : Color.black.opacity(0.05)
+            ? Color.white.opacity(MeeshyOpacity.subtle)
+            : Color.black.opacity(MeeshyOpacity.faint)
     }
 
     private var cardBackground: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.03)
+            ? Color.white.opacity(MeeshyOpacity.faint)
             : Color.black.opacity(0.02)
     }
 
     private var borderColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.05)
-            : Color.black.opacity(0.05)
+            ? Color.white.opacity(MeeshyOpacity.faint)
+            : Color.black.opacity(MeeshyOpacity.faint)
     }
 }
 

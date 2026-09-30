@@ -665,7 +665,7 @@ public struct AudioPlayerView: View {
     @ViewBuilder
     private var playButtonLabel: some View {
         let size: CGFloat = context.isCompact ? 34 : 40
-        VStack(spacing: 3) {
+        VStack(spacing: MeeshySpacing.xxs) {
             ZStack {
                 Circle()
                     .fill(
@@ -698,7 +698,7 @@ public struct AudioPlayerView: View {
                     if progress > 0 {
                         Circle()
                             .trim(from: 0, to: progress)
-                            .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .stroke(Color.white, style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                             .frame(width: size * 0.5, height: size * 0.5)
                             .animation(.linear(duration: 0.2), value: progress)
@@ -1009,7 +1009,7 @@ public struct AudioPlayerView: View {
                 if let onDelete = onDelete {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: MeeshyIconSize.sm))
                             .foregroundColor(MeeshyColors.error)
                     }
                 }
@@ -1044,7 +1044,7 @@ public struct AudioPlayerView: View {
             externalLanguage?.wrappedValue = code == "orig" ? nil : code
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 Text(flag).font(.system(size: MeeshyFont.smallSize))
                 Text(label).font(.system(size: MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
             }

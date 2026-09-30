@@ -53,7 +53,7 @@ struct CallWaitingBannerView: View {
                             .lineLimit(1)
                         Text(String(localized: "call.waiting.incoming", defaultValue: "Appel entrant...", bundle: .main))
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     }
 
                     Spacer()
@@ -95,8 +95,8 @@ struct CallWaitingBannerView: View {
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.md)
             }
-            .background(.ultraThinMaterial.opacity(0.9))
-            .background(Color.black.opacity(0.5))
+            .background(.ultraThinMaterial.opacity(MeeshyOpacity.intense))
+            .background(Color.black.opacity(MeeshyOpacity.strong))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.top, MeeshySpacing.sm)

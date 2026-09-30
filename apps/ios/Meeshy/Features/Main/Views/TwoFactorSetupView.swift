@@ -147,10 +147,10 @@ struct TwoFactorSetupView: View {
                 .padding(.vertical, MeeshySpacing.sm + 2)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(tfaColor.opacity(0.08))
+                        .fill(tfaColor.opacity(MeeshyOpacity.subtle))
                         .overlay(
                             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                                .stroke(tfaColor.opacity(0.2), lineWidth: 1)
+                                .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
                         )
                 )
             }
@@ -176,7 +176,7 @@ struct TwoFactorSetupView: View {
     private func codeEntryView(_ setup: TwoFactorSetup) -> some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "lock.shield.fill")
-                .font(MeeshyFont.relative(50))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
                 .foregroundColor(tfaColor)
                 .padding(.top, MeeshySpacing.xl)
                 .accessibilityHidden(true)
@@ -196,10 +196,10 @@ struct TwoFactorSetupView: View {
                 .padding(.vertical, MeeshySpacing.md + 2)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(tfaColor.opacity(0.06))
+                        .fill(tfaColor.opacity(MeeshyOpacity.subtle))
                         .overlay(
                             RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .stroke(tfaColor.opacity(0.2), lineWidth: 1)
+                                .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
                         )
                 )
                 .adaptiveOnChange(of: verificationCode) { _, newValue in
@@ -252,7 +252,7 @@ struct TwoFactorSetupView: View {
     private func backupCodesView(_ codes: [String]) -> some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "checkmark.shield.fill")
-                .font(MeeshyFont.relative(50))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
                 .foregroundColor(MeeshyColors.success)
                 .padding(.top, MeeshySpacing.xl)
                 .accessibilityHidden(true)
@@ -284,7 +284,7 @@ struct TwoFactorSetupView: View {
             } label: {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
-                        .font(MeeshyFont.relative(13))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
                     Text(copiedCodes
                         ? String(localized: "a11y_copied", defaultValue: "Copié")
                         : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
@@ -294,7 +294,7 @@ struct TwoFactorSetupView: View {
                 .padding(.horizontal, MeeshySpacing.xl)
                 .padding(.vertical, MeeshySpacing.smPlus)
                 .background(
-                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(0.12))
+                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(MeeshyOpacity.light))
                 )
             }
             .accessibilityLabel(copiedCodes ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
@@ -325,10 +325,10 @@ struct TwoFactorSetupView: View {
                     .padding(.vertical, MeeshySpacing.sm)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
-                            .fill(tfaColor.opacity(0.06))
+                            .fill(tfaColor.opacity(MeeshyOpacity.subtle))
                             .overlay(
                                 RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
-                                    .stroke(tfaColor.opacity(0.15), lineWidth: 1)
+                                    .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
                             )
                     )
             }
@@ -341,7 +341,7 @@ struct TwoFactorSetupView: View {
     private func errorView(_ message: String) -> some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(MeeshyFont.relative(50))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
                 .foregroundColor(MeeshyColors.error)
                 .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                 .accessibilityHidden(true)
@@ -419,7 +419,7 @@ struct TwoFactorDisableView: View {
 
                 VStack(spacing: MeeshySpacing.xl) {
                     Image(systemName: "shield.slash.fill")
-                        .font(MeeshyFont.relative(50))
+                        .font(MeeshyFont.relative(MeeshyIconSize.hero))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                         .accessibilityHidden(true)
@@ -447,10 +447,10 @@ struct TwoFactorDisableView: View {
                     .padding(.horizontal, MeeshySpacing.lg)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(MeeshyColors.error.opacity(0.06))
+                            .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                             .overlay(
                                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                    .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                                    .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
                             )
                     )
                     .padding(.horizontal, MeeshySpacing.lg)
@@ -464,10 +464,10 @@ struct TwoFactorDisableView: View {
                         .padding(.vertical, MeeshySpacing.md + 2)
                         .background(
                             RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .fill(MeeshyColors.error.opacity(0.06))
+                                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                        .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                                        .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
                                 )
                         )
                         .padding(.horizontal, MeeshySpacing.lg)
@@ -617,10 +617,10 @@ struct TwoFactorBackupCodesView: View {
                                         .padding(.vertical, MeeshySpacing.sm)
                                         .background(
                                             RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
-                                                .fill(tfaColor.opacity(0.06))
+                                                .fill(tfaColor.opacity(MeeshyOpacity.subtle))
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
-                                                        .stroke(tfaColor.opacity(0.15), lineWidth: 1)
+                                                        .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
                                                 )
                                         )
                                 }
@@ -641,7 +641,7 @@ struct TwoFactorBackupCodesView: View {
                             } label: {
                                 HStack(spacing: MeeshySpacing.sm) {
                                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
-                                        .font(MeeshyFont.relative(13))
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
                                     Text(copiedCodes
                                         ? String(localized: "a11y_copied", defaultValue: "Copié")
                                         : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
@@ -651,7 +651,7 @@ struct TwoFactorBackupCodesView: View {
                                 .padding(.horizontal, MeeshySpacing.xl)
                                 .padding(.vertical, MeeshySpacing.smPlus)
                                 .background(
-                                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(0.12))
+                                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(MeeshyOpacity.light))
                                 )
                             }
                             .accessibilityLabel(copiedCodes ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
@@ -678,7 +678,7 @@ struct TwoFactorBackupCodesView: View {
     private var codeEntryStep: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "lock.shield.fill")
-                .font(MeeshyFont.relative(50))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
                 .foregroundColor(tfaColor)
                 .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                 .accessibilityHidden(true)
@@ -698,10 +698,10 @@ struct TwoFactorBackupCodesView: View {
                 .padding(.vertical, MeeshySpacing.md + 2)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(tfaColor.opacity(0.06))
+                        .fill(tfaColor.opacity(MeeshyOpacity.subtle))
                         .overlay(
                             RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .stroke(tfaColor.opacity(0.2), lineWidth: 1)
+                                .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
                         )
                 )
                 .adaptiveOnChange(of: verificationCode) { _, newValue in

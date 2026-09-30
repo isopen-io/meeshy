@@ -43,7 +43,7 @@ public struct AnonymousJoinFormView: View {
                 Button(action: onBack) {
                     HStack(spacing: MeeshySpacing.xs + 2) {
                         Image(systemName: "chevron.backward")
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "joinFlow.form.back", defaultValue: "Retour", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     }

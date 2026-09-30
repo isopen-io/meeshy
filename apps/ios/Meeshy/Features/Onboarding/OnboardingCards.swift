@@ -87,7 +87,7 @@ struct OnboardingCardView: View {
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(minHeight: 54)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.white))
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                     .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
             }
@@ -225,7 +225,7 @@ struct OnboardingCardView: View {
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 .padding(MeeshySpacing.md)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.white))
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                     .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
                 .accessibilityLabel(String(localized: "onboarding.global.editor.a11y", bundle: .main))
@@ -434,7 +434,7 @@ struct OnboardingCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(tint.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(tint.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .combine)
     }
 
@@ -460,7 +460,7 @@ struct OnboardingCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(MeeshyColors.success.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(MeeshyColors.success.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .combine)
     }
 }
@@ -528,7 +528,7 @@ struct OnboardingSuggestionRow: View {
         }
         .padding(MeeshySpacing.sm)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
-            .fill(isDark ? Color.white.opacity(0.05) : Color.white.opacity(0.8)))
+            .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.white.opacity(MeeshyOpacity.intense)))
     }
 
     private var accessibilitySummary: String {
@@ -585,7 +585,7 @@ struct OnboardingRecapStats: View {
                 .frame(maxWidth: .infinity, minHeight: 96)
                 .padding(.vertical, MeeshySpacing.sm)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.06) : MeeshyColors.indigo50))
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo50))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(verbatim: "\(tile.label) \(tile.value)"))
             }

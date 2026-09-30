@@ -70,16 +70,16 @@ public struct FeedbackToastView: View {
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
             }
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.md)
         .background(
             Capsule()
-                .fill(toast.type.color.opacity(0.9))
+                .fill(toast.type.color.opacity(MeeshyOpacity.intense))
                 .shadow(
-                    color: toast.type.color.opacity(0.3),
+                    color: toast.type.color.opacity(MeeshyOpacity.medium),
                     radius: MeeshyShadow.medium.radius,
                     y: MeeshyShadow.medium.y
                 )

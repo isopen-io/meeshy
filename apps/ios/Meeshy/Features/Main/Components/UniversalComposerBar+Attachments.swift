@@ -98,7 +98,7 @@ extension UniversalComposerBar {
                         carouselTile(tile, index: index)
                     }
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.md)
             }
 
@@ -334,7 +334,7 @@ extension UniversalComposerBar {
             HapticFeedback.light()
             tile.action()
         } label: {
-            VStack(spacing: 7) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 ZStack {
                     Circle()
                         .fill(

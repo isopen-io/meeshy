@@ -660,7 +660,7 @@ extension MeeshyComposerHost {
                         Text(ComposerSoundRoleCopy.label(role))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .padding(.horizontal, MeeshySpacing.md)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
                                 Capsule().fill(role == effectif
                                                ? Color.accentColor.opacity(0.22)

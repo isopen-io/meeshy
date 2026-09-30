@@ -279,7 +279,7 @@ struct iPadLeftColumnHeader: View {
                                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, MeeshySpacing.xs)
                                 .frame(minWidth: 16, minHeight: 16)
                                 .background(Capsule().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
@@ -326,11 +326,11 @@ struct iPadResizableHandle: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.subtle))
                 .frame(width: 1)
 
             RoundedRectangle(cornerRadius: 2)
-                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)))
+                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.light)))
                 .frame(width: 4, height: 36)
                 .animation(.easeInOut(duration: 0.15), value: isDragging)
         }

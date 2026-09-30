@@ -398,7 +398,7 @@ struct ComposerDocumentSurface: View {
                 EmbeddedSceneCanvas(
                     slide: sceneSlide,
                     aspectRatio: sceneAspectRatio,
-                    cornerRadius: 22,
+                    cornerRadius: MeeshyRadius.xlPlus,
                     onItemTapped: onSceneItemTapped,
                     onBackgroundTapped: onSceneBackgroundTapped,
                     onBackgroundLongPressed: onSceneBackgroundLongPressed,

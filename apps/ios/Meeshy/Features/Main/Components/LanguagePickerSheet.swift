@@ -78,7 +78,7 @@ struct ProfileLanguagePickerSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(selectedCode.isEmpty
-                        ? MeeshyColors.indigo500.opacity(0.1)
+                        ? MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle)
                         : Color.clear)
             )
         }
@@ -119,7 +119,7 @@ struct ProfileLanguagePickerSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(isSelected
-                        ? Color(hex: lang.colorHex).opacity(0.1)
+                        ? Color(hex: lang.colorHex).opacity(MeeshyOpacity.subtle)
                         : Color.clear)
             )
         }

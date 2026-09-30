@@ -156,7 +156,7 @@ public struct MediaTrimStrip: View {
     /// composerait quadratiquement à chaque image.
     private func fenetre(x: CGFloat, largeur: CGFloat, pisteLargeur: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
-            .strokeBorder(accent, lineWidth: 2.5)
+            .strokeBorder(accent, lineWidth: MeeshyBorder.strong)
             .frame(width: largeur, height: Self.hauteur)
             .overlay {
                 ClipTrimHandles(

@@ -53,7 +53,7 @@ struct ConversationDashboardView: View {
         let activity = activityData
         let participants = participantStats
         let types = contentTypeStats
-        VStack(spacing: 22) {
+        VStack(spacing: MeeshySpacing.xl) {
             if let analysis = agentAnalysis {
                 heroHealthCard(analysis)
                     .staggerIn(sectionsAppeared, index: 0)
@@ -160,7 +160,7 @@ struct ConversationDashboardView: View {
                         Text("\u{201C}")
                             // Dynamic Type exception: decorative opening-quote glyph, absolute offset(y:) tuned to its point size
                             .font(.system(size: 48, weight: .bold, design: .serif))
-                            .foregroundColor(accent.opacity(0.3))
+                            .foregroundColor(accent.opacity(MeeshyOpacity.medium))
                             .offset(y: -12)
                         Text(summary.text)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular, design: .serif))
@@ -187,7 +187,7 @@ struct ConversationDashboardView: View {
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                 .foregroundColor(accent)
                                 .padding(.horizontal, MeeshySpacing.smPlus)
-                                .padding(.vertical, 5)
+                                .padding(.vertical, MeeshySpacing.xs)
                                 .background(
                                     Capsule().fill(accent.opacity(isDark ? 0.12 : 0.08))
                                 )
@@ -202,7 +202,7 @@ struct ConversationDashboardView: View {
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                                 .padding(.horizontal, MeeshySpacing.sm)
-                                .padding(.vertical, 3)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
                                     Capsule()
                                         .fill(accent.opacity(isDark ? 0.08 : 0.05))
@@ -233,7 +233,7 @@ struct ConversationDashboardView: View {
     }
 
     private func metricPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(color)
@@ -354,7 +354,7 @@ struct ConversationDashboardView: View {
                     )
                     .foregroundStyle(accent)
                     .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                    .lineStyle(StrokeStyle(lineWidth: MeeshyBorder.strong))
 
                     AreaMark(
                         x: .value("Date", point.label),
@@ -394,7 +394,7 @@ struct ConversationDashboardView: View {
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(theme.textMuted)
                     AxisGridLine()
-                        .foregroundStyle(theme.textMuted.opacity(0.12))
+                        .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.light))
                 }
             }
             .frame(height: 160)
@@ -416,7 +416,7 @@ struct ConversationDashboardView: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .medium))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.smPlus)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(
                             Capsule().fill(isSelected ? accent : Color.clear)
                         )
@@ -428,9 +428,9 @@ struct ConversationDashboardView: View {
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
-        .padding(3)
+        .padding(MeeshySpacing.xxs)
         .background(
-            Capsule().fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+            Capsule().fill(MeeshyColors.surfaceFill(isDark: isDark))
         )
     }
 
@@ -458,9 +458,9 @@ struct ConversationDashboardView: View {
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded))
                                 .foregroundColor(theme.textMuted)
                                 .padding(.horizontal, MeeshySpacing.sm)
-                                .padding(.vertical, 3)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
-                                    Capsule().fill(accent.opacity(0.1))
+                                    Capsule().fill(accent.opacity(MeeshyOpacity.subtle))
                                 )
                         }
                     }
@@ -490,7 +490,7 @@ struct ConversationDashboardView: View {
                         HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
                             Image(systemName: "quote.opening")
                                 .font(MeeshyFont.relative(9))
-                                .foregroundColor(accent.opacity(0.5))
+                                .foregroundColor(accent.opacity(MeeshyOpacity.strong))
                                 .offset(y: 2)
                             Text(profile.catchphrases.prefix(3).joined(separator: " \u{00B7} "))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .serif))
@@ -515,7 +515,7 @@ struct ConversationDashboardView: View {
                                     .padding(.horizontal, MeeshySpacing.xsPlus)
                                     .padding(.vertical, MeeshySpacing.xxs)
                                     .background(
-                                        Capsule().fill(theme.textMuted.opacity(0.08))
+                                        Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                                     )
                             }
                             if !profile.commonEmojis.isEmpty {
@@ -541,7 +541,7 @@ struct ConversationDashboardView: View {
     }
 
     private func profileTag(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(9, weight: .semibold))
             Text(text)
@@ -605,11 +605,11 @@ struct ConversationDashboardView: View {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(accent.opacity(0.08))
+                                .fill(accent.opacity(MeeshyOpacity.subtle))
                                 .frame(height: 4)
 
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(accent.opacity(0.7))
+                                .fill(accent.opacity(MeeshyOpacity.heavy))
                                 .frame(
                                     width: geo.size.width * CGFloat(trait.score) / 100.0,
                                     height: 4
@@ -674,7 +674,7 @@ struct ConversationDashboardView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [accent, accent.opacity(0.5)],
+                                    colors: [accent, accent.opacity(MeeshyOpacity.strong)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -688,7 +688,7 @@ struct ConversationDashboardView: View {
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -757,25 +757,25 @@ struct ConversationDashboardView: View {
         return GeometryReader { geo in
             HStack(spacing: MeeshySpacing.xxs) {
                 if posFrac > 0 {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.success)
                         .frame(width: max(geo.size.width * posFrac - 1, 2))
                 }
                 if neuFrac > 0 {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.warning)
                         .frame(width: max(geo.size.width * neuFrac - 1, 2))
                 }
                 if negFrac > 0 {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.error)
                         .frame(width: max(geo.size.width * negFrac - 1, 2))
                 }
             }
         }
         .frame(height: 12)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .shadow(color: dominantColor.opacity(0.3), radius: 4, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
+        .shadow(color: dominantColor.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
     }
 
     // MARK: - Content Types
@@ -802,7 +802,7 @@ struct ConversationDashboardView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [stat.color.opacity(0.7), stat.color.opacity(0.3)],
+                                    colors: [stat.color.opacity(MeeshyOpacity.heavy), stat.color.opacity(MeeshyOpacity.medium)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -819,7 +819,7 @@ struct ConversationDashboardView: View {
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -833,13 +833,13 @@ struct ConversationDashboardView: View {
         .padding(MeeshySpacing.lg)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
+                .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(MeeshyOpacity.intense))
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [accent.opacity(0.2), accent.opacity(0.05)],
+                        colors: [accent.opacity(MeeshyOpacity.light), accent.opacity(MeeshyOpacity.faint)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -1101,7 +1101,7 @@ private struct StatRing: View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             ZStack {
                 Circle()
-                    .stroke(accent.opacity(0.1), lineWidth: 5)
+                    .stroke(accent.opacity(MeeshyOpacity.subtle), lineWidth: 5)
 
                 Circle()
                     .trim(from: 0, to: animated ? progress : 0)
@@ -1156,7 +1156,7 @@ private struct ArcGauge: View {
 
             ZStack {
                 ArcShape(startAngle: .degrees(180), endAngle: .degrees(360))
-                    .stroke(accent.opacity(0.1), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(accent.opacity(MeeshyOpacity.subtle), style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .frame(width: radius * 2, height: radius)
                     .position(x: center.x, y: center.y)
 

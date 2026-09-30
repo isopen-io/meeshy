@@ -47,14 +47,14 @@ struct SkeletonStoryThumb: View {
 
     private var placeholderColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.06)
-            : Color.black.opacity(0.05)
+            ? Color.white.opacity(MeeshyOpacity.subtle)
+            : Color.black.opacity(MeeshyOpacity.faint)
     }
 
     private var ringColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.08)
-            : Color.black.opacity(0.07)
+            ? Color.white.opacity(MeeshyOpacity.subtle)
+            : Color.black.opacity(MeeshyOpacity.subtle)
     }
 }
 

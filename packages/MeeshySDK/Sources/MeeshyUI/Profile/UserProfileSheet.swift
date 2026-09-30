@@ -499,7 +499,7 @@ public struct UserProfileSheet: View {
             } else {
                 // SF Symbol
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                     .foregroundColor(Color(hex: resolvedAccent))
             }
             Text(text)
@@ -520,7 +520,7 @@ public struct UserProfileSheet: View {
     var e2eeBadge: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
@@ -529,11 +529,11 @@ public struct UserProfileSheet: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.sm)
-        .background(MeeshyColors.success.opacity(0.12))
+        .background(MeeshyColors.success.opacity(MeeshyOpacity.light))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                .stroke(MeeshyColors.success.opacity(0.3), lineWidth: MeeshyBorder.emphasis)
+                .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.emphasis)
         )
     }
 
@@ -616,7 +616,7 @@ public struct UserProfileSheet: View {
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
-            .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
+            .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
     }

@@ -23,10 +23,10 @@ struct CallTypeBadgeView: View {
         .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
-                .fill(MeeshyColors.indigo400.opacity(0.15))
+                .fill(MeeshyColors.indigo400.opacity(MeeshyOpacity.light))
                 .overlay(
                     Capsule()
-                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: MeeshyBorder.hairline)
+                        .stroke(MeeshyColors.indigo400.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }

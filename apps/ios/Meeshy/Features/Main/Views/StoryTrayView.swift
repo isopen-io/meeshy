@@ -300,16 +300,16 @@ struct StoryRingCell: View {
 
 @ViewBuilder
 fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
-    HStack(spacing: 3) {
+    HStack(spacing: MeeshySpacing.xxs) {
         ForEach(0..<min(count, 5), id: \.self) { _ in
             Circle()
-                .fill(unviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+                .fill(unviewed ? Color.white.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium))
                 .frame(width: 4, height: 4)
         }
         if count > 5 {
             Text("+")
-                .font(MeeshyFont.relative(8, weight: .bold))
-                .foregroundColor(.white.opacity(0.5))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
+                .foregroundColor(.white.opacity(MeeshyOpacity.strong))
         }
     }
     .accessibilityHidden(true)
@@ -375,7 +375,7 @@ private struct MyStoryButton: View {
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
 
-        VStack(spacing: 5) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
                 MeeshyAvatar(
                     name: userName,
@@ -471,7 +471,7 @@ private struct MyStoryButton: View {
                             // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
                                 .font(.system(size: MeeshyFont.title3Size))
-                                .frame(width: 32, height: 32)
+                                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
                         .buttonStyle(.plain)
@@ -512,13 +512,13 @@ private struct MyStoryButton: View {
                         // (déborderait s'il scalait, doctrine 86i) ; le
                         // bouton porte le libellé.
                         Image(systemName: "plus")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: MeeshyIconSize.lg, weight: .bold))
                             .foregroundStyle(Color.white)
-                            .frame(width: 34, height: 34)
+                            .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                             .background(
                                 Circle()
                                     .fill(MeeshyColors.brandGradient)
-                                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
+                                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
                             )
                     }
                     .buttonStyle(.plain)
@@ -528,16 +528,16 @@ private struct MyStoryButton: View {
 
                 // Story count dots (si plusieurs stories)
                 if let group = myGroup, group.stories.count > 1 {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         ForEach(0..<min(group.stories.count, 5), id: \.self) { _ in
                             Circle()
-                                .fill(group.hasUnviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+                                .fill(group.hasUnviewed ? Color.white.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium))
                                 .frame(width: 4, height: 4)
                         }
                         if group.stories.count > 5 {
                             Text("+")
-                                .font(MeeshyFont.relative(8, weight: .bold))
-                                .foregroundColor(.white.opacity(0.5))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
+                                .foregroundColor(.white.opacity(MeeshyOpacity.strong))
                         }
                     }
                     .offset(y: 28)
@@ -581,12 +581,12 @@ private struct StoryUploadOverlay: View {
             Image(uiImage: upload.thumbnailImage)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .clipShape(Circle())
-                .opacity(0.2)
+                .opacity(MeeshyOpacity.light)
 
             Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: 3)
+                .stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 3)
                 .frame(width: 50, height: 50)
 
             if isFailed {
@@ -627,7 +627,7 @@ private struct StoryUploadOverlay: View {
                     .background(
                         Circle()
                             .fill(MeeshyColors.indigo600)
-                            .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                            .overlay(Circle().stroke(Color.black.opacity(MeeshyOpacity.medium), lineWidth: 1))
                     )
                     .accessibilityHidden(true)
             }

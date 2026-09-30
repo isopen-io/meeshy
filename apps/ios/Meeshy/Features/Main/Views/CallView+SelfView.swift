@@ -75,10 +75,10 @@ extension CallView {
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            .stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
                     .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
-                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                     .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                     .gesture(
                         DragGesture()
@@ -166,9 +166,9 @@ extension CallView {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .stroke(MeeshyColors.warning.opacity(0.7), lineWidth: 1)
+                        .stroke(MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .position(x: base.x, y: base.y)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
@@ -183,7 +183,7 @@ extension CallView {
             ?? "?"
         let initial = String(localName.prefix(1)).uppercased()
         return ZStack {
-            Color.black.opacity(0.55)
+            Color.black.opacity(MeeshyOpacity.strong)
             // Avatar behind…
             ZStack {
                 Circle()
@@ -200,7 +200,7 @@ extension CallView {
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
-            .opacity(0.45)
+            .opacity(MeeshyOpacity.strong)
             // …"video paused" affordance on top.
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "video.slash.fill")
@@ -212,7 +212,7 @@ extension CallView {
                     .foregroundColor(.white)
                 Text(String(localized: "call.video.suspended.short", defaultValue: "Reprise auto", bundle: .main))
                     .font(.caption2)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
             }
         }
     }

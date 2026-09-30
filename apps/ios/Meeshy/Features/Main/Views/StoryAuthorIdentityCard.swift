@@ -117,7 +117,7 @@ struct StoryAuthorIdentityCard: View {
                 if intro.displayName != nil {
                     Text("@\(intro.username)")
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
             }
             if isFriend {
@@ -129,7 +129,7 @@ struct StoryAuthorIdentityCard: View {
                     if let message = intro.moodMessage, !message.isEmpty {
                         Text(message)
                             .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                             .lineLimit(2)
                     }
                 }
@@ -153,7 +153,7 @@ struct StoryAuthorIdentityCard: View {
                     .frame(width: 9, height: 9)
                 Text(Self.presenceLabel(state))
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             }
         }
     }

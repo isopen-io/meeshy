@@ -153,7 +153,7 @@ public struct MediaTranscriptionView: View {
                 .padding(.horizontal, isActive ? 3 : 0)
                 .padding(.vertical, isActive ? 1 : 0)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(Color(hex: accentColor).opacity(isActive ? 0.16 : 0))
                 )
                 .shadow(color: wave ? Color(hex: accentColor).opacity(0.55) : .clear,

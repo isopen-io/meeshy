@@ -145,10 +145,10 @@ struct CallRecordingOverlay: View, Equatable {
             }
             Text(CallRecordingCopy.askDetail(kind: kind))
                 .font(.footnote)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: MeeshySpacing.smPlus) {
-                answerButton(CallRecordingCopy.refuse, accepted: false, tint: .white.opacity(0.18))
+                answerButton(CallRecordingCopy.refuse, accepted: false, tint: .white.opacity(MeeshyOpacity.light))
                 answerButton(CallRecordingCopy.accept, accepted: true, tint: MeeshyColors.indigo500)
             }
         }
@@ -205,7 +205,7 @@ struct CallRecordingOverlay: View, Equatable {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }

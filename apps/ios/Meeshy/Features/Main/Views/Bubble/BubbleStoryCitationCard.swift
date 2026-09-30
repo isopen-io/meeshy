@@ -189,7 +189,7 @@ struct BubbleStoryCitationCard: View, Equatable {
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(4)
-                    .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+                    .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3, y: 1)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -240,7 +240,7 @@ struct BubbleStoryCitationCard: View, Equatable {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "arrowshape.turn.up.left.fill")
-                    .font(MeeshyFont.relative(9))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                     // Le libellé posé à côté DIT déjà « réponse » : le glyphe est
                     // redondant pour VoiceOver, et la carte se nomme d'un bloc.
                     .accessibilityHidden(true)
@@ -267,7 +267,7 @@ struct BubbleStoryCitationCard: View, Equatable {
                 // un compteur.
                 Text(RelativeTimeFormatter.shortString(for: date))
                     .font(MeeshyFont.relative(MeeshyFont.microSize))
-                    .foregroundStyle(stripTint.opacity(0.7))
+                    .foregroundStyle(stripTint.opacity(MeeshyOpacity.heavy))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

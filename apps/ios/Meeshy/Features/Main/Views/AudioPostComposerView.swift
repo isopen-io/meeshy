@@ -228,7 +228,7 @@ struct AudioPostComposerView: View {
                         .padding(.bottom, MeeshySpacing.lg)
                         .background(
                             LinearGradient(
-                                colors: [Color.clear, backgroundBaseColor.opacity(0.7), backgroundBaseColor],
+                                colors: [Color.clear, backgroundBaseColor.opacity(MeeshyOpacity.heavy), backgroundBaseColor],
                                 startPoint: .top, endPoint: .bottom
                             )
                             .ignoresSafeArea(edges: .bottom)
@@ -291,8 +291,8 @@ struct AudioPostComposerView: View {
     private var background: some View {
         LinearGradient(
             colors: isDark
-                ? [darkCanvasTop, darkCanvasBase, MeeshyColors.indigo950.opacity(0.85)]
-                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(0.55)],
+                ? [darkCanvasTop, darkCanvasBase, MeeshyColors.indigo950.opacity(MeeshyOpacity.intense)]
+                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(MeeshyOpacity.strong)],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
@@ -303,15 +303,15 @@ struct AudioPostComposerView: View {
     /// Carte d'état hors capture : la phase idle/recording est entièrement
     /// portée par la feuille unifiée (`AudioRecorderSheet`).
     private var statusCard: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: MeeshySpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(haloColor.opacity(0.12))
+                    .fill(haloColor.opacity(MeeshyOpacity.light))
                     .frame(width: 168, height: 168)
                     .blur(radius: 4)
 
                 Circle()
-                    .fill(haloColor.opacity(0.08))
+                    .fill(haloColor.opacity(MeeshyOpacity.subtle))
                     .frame(width: 132, height: 132)
 
                 centerContent
@@ -353,7 +353,7 @@ struct AudioPostComposerView: View {
                 .font(MeeshyFont.relative(56))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(MeeshyOpacity.heavy)],
                         startPoint: .top, endPoint: .bottom
                     )
                 )
@@ -520,7 +520,7 @@ struct AudioPostComposerView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(MeeshyColors.indigo400.opacity(0.25), lineWidth: 1)
+                        .stroke(MeeshyColors.indigo400.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
 
                 // La définition passe SOUS l'interrupteur, sur une ligne, pour
@@ -566,7 +566,7 @@ struct AudioPostComposerView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
@@ -612,7 +612,7 @@ struct AudioPostComposerView: View {
                     )
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(
                         Capsule()

@@ -25,12 +25,12 @@ public struct StoryNotificationOfflineContent: View {
 
     public var body: some View {
         ZStack {
-            Color.black.opacity(0.85).ignoresSafeArea()
+            Color.black.opacity(MeeshyOpacity.intense).ignoresSafeArea()
 
             VStack(spacing: MeeshySpacing.xl) {
                 Image(systemName: cause.symbolName)
                     .font(.system(size: 40))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .accessibilityHidden(true)
                 VStack(spacing: MeeshySpacing.sm) {
                     Text(cause.title)
@@ -38,7 +38,7 @@ public struct StoryNotificationOfflineContent: View {
                         .foregroundStyle(.white)
                     Text(cause.message)
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)
@@ -62,7 +62,7 @@ public struct StoryNotificationOfflineContent: View {
                     Text("notifications.story.expired.back")
                         .font(.subheadline)
                         .underline()
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
                 .buttonStyle(.plain)
             }

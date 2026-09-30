@@ -90,7 +90,7 @@ struct QuotedAudioPreview: View, Equatable {
         }
         .padding(.horizontal, MeeshySpacing.sm)
         .frame(height: QuotedReplyPresentation.quotedAudioHeight)
-        .background(Capsule().fill(tint.opacity(0.12)))
+        .background(Capsule().fill(tint.opacity(MeeshyOpacity.light)))
         .frame(minHeight: showsPlayGlyph ? Self.minimumTapHeight : nil)
         .contentShape(Rectangle())
         .onReceive(playback) { state = $0 }

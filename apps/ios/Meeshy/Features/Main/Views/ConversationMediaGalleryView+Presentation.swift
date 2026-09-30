@@ -180,14 +180,14 @@ struct MediaStagePausedBadge: View {
             // Type. Les deux montent ensemble. Il dit l'état, le texte le nomme,
             // et VoiceOver lit le second.
             Image(systemName: "pause.fill")
-                .font(MeeshyFont.relative(15, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .accessibilityHidden(true)
             Text(String(localized: "media.stage.paused",
                         defaultValue: "En pause",
                         bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
         }
-        .foregroundColor(.white)
+        .foregroundColor(MeeshyColors.mediaChromeForeground)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
         .adaptiveGlass(in: Capsule())

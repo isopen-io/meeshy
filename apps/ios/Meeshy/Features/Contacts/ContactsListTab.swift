@@ -169,7 +169,7 @@ private struct ContactRow: View, Equatable {
                     onMoodTap: onMoodTap
                 )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(name)
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -194,7 +194,7 @@ private struct ContactRow: View, Equatable {
 
                 Image(systemName: "chevron.forward")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted.opacity(0.5))
+                    .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.vertical, MeeshySpacing.md)

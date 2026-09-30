@@ -81,7 +81,7 @@ public struct DocumentViewerView: View {
                 if let onDelete = onDelete {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: MeeshyIconSize.sm))
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
@@ -121,13 +121,13 @@ public struct DocumentViewerView: View {
                     .foregroundColor(.white)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
                     .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
                     .foregroundColor(isDark ? .white : .black)
                     .lineLimit(1)
 
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(docType.label)
                         .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Color(hex: docType.color))
@@ -136,14 +136,14 @@ public struct DocumentViewerView: View {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(attachment.fileSizeFormatted)
                             .font(.system(size: MeeshyFont.captionSize, weight: .medium))
-                            .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
                             .font(.system(size: MeeshyFont.captionSize, weight: .medium))
-                            .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
                 }
             }
@@ -151,13 +151,13 @@ public struct DocumentViewerView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(isDark ? .white.opacity(0.25) : .black.opacity(0.18))
 
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: MeeshyIconSize.sm))
                         .foregroundColor(MeeshyColors.error)
                 }
                 .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
@@ -167,10 +167,10 @@ public struct DocumentViewerView: View {
         .padding(.vertical, context.isCompact ? 8 : 12)
         .background(
             RoundedRectangle(cornerRadius: context.cornerRadius)
-                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .overlay(
                     RoundedRectangle(cornerRadius: context.cornerRadius)
-                        .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
+                        .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }

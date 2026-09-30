@@ -565,7 +565,7 @@ struct ProgressionSectionPage: View {
                             .font(.body.weight(.bold))
                             .foregroundStyle(teinte)
                             .padding(.horizontal, MeeshySpacing.md)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
                     }
                 }

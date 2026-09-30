@@ -57,9 +57,9 @@ public struct ImageEditorModeSwitcher: View, Equatable {
             HapticFeedback.light()
             onSelect(target)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(label)
                     .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }

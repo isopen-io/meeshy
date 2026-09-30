@@ -27,7 +27,7 @@ public struct StoryNotificationLoadingView: View {
                     .tint(.white)
                 Text(loadingMessage)
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(loadingMessage)

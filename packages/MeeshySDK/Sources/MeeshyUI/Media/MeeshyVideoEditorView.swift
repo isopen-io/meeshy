@@ -108,9 +108,9 @@ public struct MeeshyVideoEditorView: View {
                 viewModel.cancelEditing()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
-                    .frame(width: 38, height: 38)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(theme.glassMaterial, in: Circle())
             }
             .buttonStyle(.plain)
@@ -129,7 +129,7 @@ public struct MeeshyVideoEditorView: View {
             Button {
                 viewModel.confirm()
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "checkmark")
                         .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                     Text(String(localized: "videoEditor.finish", defaultValue: "Terminer", bundle: .module))
@@ -137,7 +137,7 @@ public struct MeeshyVideoEditorView: View {
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.vertical, 9)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(MeeshyColors.brandGradient))
             }
             .buttonStyle(.plain)
@@ -172,16 +172,16 @@ public struct MeeshyVideoEditorView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.xs)
     }
 
     private func historyButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 .foregroundStyle(enabled ? theme.textPrimary : theme.textMuted.opacity(0.5))
-                .frame(width: 32, height: 32)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(theme.glassMaterial, in: Circle())
         }
         .buttonStyle(.plain)
@@ -313,8 +313,8 @@ public struct MeeshyVideoEditorView: View {
             Text(title)
                 .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundStyle(filled ? Color.white : theme.textPrimary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     Capsule().fill(filled
                         ? AnyShapeStyle(MeeshyColors.brandGradient)

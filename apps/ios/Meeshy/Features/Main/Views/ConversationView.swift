@@ -2197,10 +2197,10 @@ struct ConversationView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(11, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(theme.textMuted)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
         }
@@ -2440,7 +2440,7 @@ struct ConversationView: View {
             if viewModel.isRevalidating {
                 Image(systemName: "sparkles")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .adaptiveSymbolPulse()
                     .accessibilityLabel(String(localized: "conversation.view.refreshing_background", bundle: .main))
             }
@@ -2474,11 +2474,11 @@ struct ConversationView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
                         .stroke(
-                            LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
+                            LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(MeeshyOpacity.light)], startPoint: .leading, endPoint: .trailing),
                             lineWidth: 1
                         )
                 )
-                .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+                .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.light), radius: 8, y: 2)
                 .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
         )
     }
@@ -2584,10 +2584,10 @@ private struct HeaderSearchGlyph: View {
 
     var body: some View {
         Image(systemName: "magnifyingglass")
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .meeshyTapTarget()
     }
 }

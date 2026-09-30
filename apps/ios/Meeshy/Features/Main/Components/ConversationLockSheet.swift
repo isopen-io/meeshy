@@ -108,7 +108,7 @@ struct ConversationLockSheet: View {
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ))
-                            : AnyShapeStyle(theme.textMuted.opacity(0.25))
+                            : AnyShapeStyle(theme.textMuted.opacity(MeeshyOpacity.medium))
                     )
                     .frame(width: 18, height: 18)
                     .scaleEffect(index < currentPin.count ? 1.15 : 1.0)
@@ -178,7 +178,7 @@ struct ConversationLockSheet: View {
                     Circle()
                         .fill(theme.mode.isDark
                               ? Color.white.opacity(0.09)
-                              : Color.black.opacity(0.06))
+                              : Color.black.opacity(MeeshyOpacity.subtle))
                 )
         }
         .disabled(currentPin.count >= pinLength)

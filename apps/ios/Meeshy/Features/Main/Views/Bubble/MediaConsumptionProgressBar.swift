@@ -41,7 +41,7 @@ struct MediaConsumptionProgressBar: View {
                     Capsule(style: .continuous)
                         .fill(Color.black.opacity(0.28))
                     Capsule(style: .continuous)
-                        .fill(Color(hex: accentHex).opacity(0.85))
+                        .fill(Color(hex: accentHex).opacity(MeeshyOpacity.intense))
                         .frame(width: max(2, geo.size.width * CGFloat(f)))
                 }
             }

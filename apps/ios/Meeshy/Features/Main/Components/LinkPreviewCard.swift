@@ -127,7 +127,7 @@ struct LinkPreviewCard: View {
                 if let description = meta.description?.nilIfBlank {
                     Text(description)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.7))
+                        .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(MeeshyOpacity.heavy))
                         .lineLimit(2)
                 }
             }
@@ -219,7 +219,7 @@ struct LinkPreviewCard: View {
             targetSize: CGSize(width: 150, height: 150)
         ) {
             Rectangle()
-                .fill(accent.opacity(0.1))
+                .fill(accent.opacity(MeeshyOpacity.subtle))
                 .overlay(
                     Image(systemName: "link")
                         .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
@@ -233,12 +233,12 @@ struct LinkPreviewCard: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-            .fill(isDark ? MeeshyColors.indigo950.opacity(0.45) : MeeshyColors.indigo50)
+            .fill(isDark ? MeeshyColors.indigo950.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo50)
     }
 
     private var cardBorder: some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-            .stroke(accent.opacity(0.18), lineWidth: MeeshyBorder.hairline)
+            .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
     }
 }
 

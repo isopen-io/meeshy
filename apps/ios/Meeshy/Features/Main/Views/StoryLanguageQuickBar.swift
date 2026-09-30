@@ -152,11 +152,11 @@ struct StoryLanguageQuickBar: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.15))
-                    .frame(width: 32, height: 32)
+                    .fill(Color.white.opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 Image(systemName: "plus")
                     .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
             .scaleEffect(highlightedIndex == languages.count ? 1.35 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)

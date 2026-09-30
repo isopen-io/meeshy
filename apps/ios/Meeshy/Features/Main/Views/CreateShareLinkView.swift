@@ -144,7 +144,7 @@ struct CreateShareLinkView: View {
                     if !customSlug.isEmpty {
                         Text("meeshy.me/chat/\(customSlug.lowercased())")
                             .font(.caption2.weight(.medium))
-                            .foregroundColor(accent.opacity(0.8))
+                            .foregroundColor(accent.opacity(MeeshyOpacity.intense))
                             .padding(.horizontal, MeeshySpacing.mdPlus)
                             .padding(.bottom, MeeshySpacing.sm)
                     }
@@ -356,7 +356,7 @@ struct CreateShareLinkView: View {
 
                 .background {
                     if selectedConversation == nil {
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color.white.opacity(0.1))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color.white.opacity(MeeshyOpacity.subtle))
                     } else {
                         RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .fill(LinearGradient(
@@ -375,12 +375,12 @@ struct CreateShareLinkView: View {
     // MARK: - Helpers UI
 
     private var rowBackground: some View {
-        isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03)
+        MeeshyColors.surfaceFill(isDark: isDark)
     }
 
     private var divider: some View {
         Divider()
-            .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+            .background(MeeshyColors.hairline(isDark: isDark))
     }
 
     private func formSection<Content: View>(
@@ -417,7 +417,7 @@ struct CreateShareLinkView: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                        .stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
                 )
                 .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -467,8 +467,8 @@ struct CreateShareLinkView: View {
     private func iconBadge(_ icon: String, color: String) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                .fill(Color(hex: color).opacity(0.15))
-                .frame(width: 34, height: 34)
+                .fill(Color(hex: color).opacity(MeeshyOpacity.light))
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(Color(hex: color))

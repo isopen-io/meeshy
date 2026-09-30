@@ -60,7 +60,7 @@ public struct ProfileCompletionRing: View {
 #if DEBUG
 struct ProfileCompletionRing_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 30) {
+        VStack(spacing: MeeshySpacing.xxxl) {
             ProfileCompletionRing(progress: 0.25)
             ProfileCompletionRing(progress: 0.65)
             ProfileCompletionRing(progress: 1.0)

@@ -16,7 +16,7 @@ struct CallZoomIndicator: View, Equatable {
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: MeeshyBorder.hairline))
+            .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             .environment(\.colorScheme, .dark)
             .allowsHitTesting(false)
             .accessibilityHidden(true)

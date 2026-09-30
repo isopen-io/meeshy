@@ -250,10 +250,10 @@ struct AudioCarouselView: View {
 
         Group {
             if items.count <= 7 {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     ForEach(0..<items.count, id: \.self) { i in
                         Circle()
-                            .fill(i == currentIndex ? accent : Color.white.opacity(0.45))
+                            .fill(i == currentIndex ? accent : Color.white.opacity(MeeshyOpacity.strong))
                             .frame(
                                 width: i == currentIndex ? 7 : 5,
                                 height: i == currentIndex ? 7 : 5
@@ -266,11 +266,11 @@ struct AudioCarouselView: View {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.smPlus)
-                .padding(.vertical, 5)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
-                        .fill(.ultraThinMaterial.opacity(0.7))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline))
+                        .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                        .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
                 )
             } else {
                 Text("\(currentIndex + 1) / \(items.count)")
@@ -280,11 +280,11 @@ struct AudioCarouselView: View {
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.smPlus)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
-                            .fill(.ultraThinMaterial.opacity(0.7))
-                            .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline))
+                            .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                            .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
                     )
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)

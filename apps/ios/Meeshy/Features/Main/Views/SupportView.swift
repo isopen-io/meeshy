@@ -145,10 +145,10 @@ struct SupportView: View {
         Image(systemName: name)
             .font(.system(size: MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
-            .frame(width: 28, height: 28)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                    .fill(Color(hex: color).opacity(0.12))
+                    .fill(Color(hex: color).opacity(MeeshyOpacity.light))
             )
             .accessibilityHidden(true)
     }

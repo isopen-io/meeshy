@@ -703,7 +703,7 @@ struct ComposerSceneSurface: View {
         EmbeddedSceneCanvas(
             slide: $slide,
             aspectRatio: aspectRatio,
-            cornerRadius: 22,
+            cornerRadius: MeeshyRadius.xlPlus,
             // **Le dessin se pose DANS la carte, pas sur le cadre** (#4515) : un
             // trait hors du canvas est perdu à la publication.
             canvasOverlay: drawingSurface,

@@ -177,7 +177,7 @@ struct DiscoverTab: View {
             .padding(.vertical, MeeshySpacing.md)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
+                    .stroke(MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), lineWidth: 1)
             )
         }
         .disabled(viewModel.isImportingContacts)
@@ -294,7 +294,7 @@ struct DiscoverTab: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 30)
+                .padding(.top, MeeshySpacing.xxxl)
                 .accessibilityElement(children: .combine)
             }
         }

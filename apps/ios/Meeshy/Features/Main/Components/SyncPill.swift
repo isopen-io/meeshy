@@ -396,7 +396,7 @@ struct SyncPill: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.vertical, 5)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(
             Capsule()
                 .fill(capsuleBackground)

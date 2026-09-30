@@ -308,7 +308,7 @@ struct SecurityView: View {
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.sm)
-                        .background(Capsule().fill(theme.textMuted.opacity(0.12)))
+                        .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
 
                 Button {
@@ -481,7 +481,7 @@ struct SecurityView: View {
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.sm)
-                        .background(Capsule().fill(theme.textMuted.opacity(0.12)))
+                        .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
 
                 Button {
@@ -546,7 +546,7 @@ struct SecurityView: View {
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.sm)
-                        .background(Capsule().fill(theme.textMuted.opacity(0.12)))
+                        .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
 
                 Button {
@@ -612,8 +612,8 @@ struct SecurityView: View {
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(MeeshyColors.error)
                                     .padding(.horizontal, MeeshySpacing.sm)
-                                    .padding(.vertical, 3)
-                                    .background(Capsule().fill(MeeshyColors.error.opacity(0.15)))
+                                    .padding(.vertical, MeeshySpacing.xxs)
+                                    .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
                             }
                             Image(systemName: "checkmark.shield.fill")
                                 .font(.callout)
@@ -659,7 +659,7 @@ struct SecurityView: View {
                             .foregroundColor(MeeshyColors.error)
                             .padding(.horizontal, MeeshySpacing.mdPlus)
                             .padding(.vertical, MeeshySpacing.sm)
-                            .background(Capsule().fill(MeeshyColors.error.opacity(0.12)))
+                            .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
                         }
 
                         if lockedCount > 0 {
@@ -694,7 +694,7 @@ struct SecurityView: View {
                                 .foregroundColor(MeeshyColors.error)
                                 .padding(.horizontal, MeeshySpacing.mdPlus)
                                 .padding(.vertical, MeeshySpacing.sm)
-                                .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
+                                .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle)))
                             }
                         }
                     }
@@ -767,7 +767,7 @@ struct SecurityView: View {
                             .foregroundColor(MeeshyColors.indigo500)
                             .padding(.horizontal, MeeshySpacing.mdPlus)
                             .padding(.vertical, MeeshySpacing.sm)
-                            .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.12)))
+                            .background(Capsule().fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
                         }
 
                         Button {
@@ -783,7 +783,7 @@ struct SecurityView: View {
                             .foregroundColor(MeeshyColors.error)
                             .padding(.horizontal, MeeshySpacing.mdPlus)
                             .padding(.vertical, MeeshySpacing.sm)
-                            .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
+                            .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle)))
                         }
                     } else {
                         Button {
@@ -880,10 +880,10 @@ struct SecurityView: View {
         Image(systemName: name)
             .font(.subheadline.weight(.medium))
             .foregroundColor(Color(hex: color))
-            .frame(width: 28, height: 28)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                    .fill(Color(hex: color).opacity(0.12))
+                    .fill(Color(hex: color).opacity(MeeshyOpacity.light))
             )
     }
 

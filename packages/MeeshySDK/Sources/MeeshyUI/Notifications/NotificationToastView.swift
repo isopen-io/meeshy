@@ -104,7 +104,7 @@ public struct NotificationToastView: View {
             HStack(alignment: .center, spacing: MeeshySpacing.md) {
                 avatarWithTypeBadge
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                         Text(banner.headline)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
@@ -167,9 +167,9 @@ public struct NotificationToastView: View {
     /// La poignée : dit sans mot que la carte se balaie.
     private var grabber: some View {
         Capsule()
-            .fill(theme.textMuted.opacity(0.45))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
             .frame(width: 36, height: 4)
-            .padding(.bottom, 5)
+            .padding(.bottom, MeeshySpacing.xs)
             .accessibilityHidden(true)
     }
 
@@ -195,7 +195,7 @@ public struct NotificationToastView: View {
                 )
                 .overlay(
                     Image(systemName: notifType.systemIcon)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                         .foregroundColor(.white)
                 )
                 .frame(width: 20, height: 20)
@@ -249,7 +249,7 @@ public struct NotificationToastView: View {
             .fill(accentColor.opacity(isDark ? 0.24 : 0.13))
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(accentColor)
             )
             .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)

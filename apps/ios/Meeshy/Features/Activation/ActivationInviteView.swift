@@ -90,7 +90,7 @@ struct ActivationInviteView: View {
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .foregroundStyle(theme.textPrimary)
-                    .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(MeeshyColors.indigo400.opacity(0.5), lineWidth: MeeshyBorder.emphasis))
+                    .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(MeeshyColors.indigo400.opacity(MeeshyOpacity.strong), lineWidth: MeeshyBorder.emphasis))
             }
             .buttonStyle(.plain)
         }

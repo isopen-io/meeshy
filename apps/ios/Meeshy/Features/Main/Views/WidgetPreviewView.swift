@@ -113,7 +113,7 @@ struct WidgetPreviewView: View {
             HStack {
                 Image(systemName: totalUnread > 0 ? "message.badge.filled.fill" : "message.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                 Spacer()
                 Text(Date(), style: .time)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
@@ -129,10 +129,10 @@ struct WidgetPreviewView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
                     Text(String(localized: "widget.preview.messages", defaultValue: "Messages", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     Text(String(localized: "widget.preview.unread", defaultValue: "non lus", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                 }
                 .padding(.bottom, MeeshySpacing.sm + 2)
 
@@ -146,7 +146,7 @@ struct WidgetPreviewView: View {
                     Text(String(localized: "widget.preview.allRead", defaultValue: "Tout est lu", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, MeeshySpacing.xxs)
             }
@@ -164,7 +164,7 @@ struct WidgetPreviewView: View {
                     )
                 )
                 .shadow(
-                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(0.3),
+                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(MeeshyOpacity.medium),
                     radius: MeeshySpacing.lg,
                     y: MeeshySpacing.sm
                 )
@@ -197,7 +197,7 @@ struct WidgetPreviewView: View {
                     recentConversationRow(conv, index: index)
                     if index < recentConversations.count - 1 {
                         Divider()
-                            .overlay(theme.textMuted.opacity(0.1))
+                            .overlay(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     }
                 }
             }
@@ -213,7 +213,7 @@ struct WidgetPreviewView: View {
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -351,7 +351,7 @@ struct WidgetPreviewView: View {
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -374,7 +374,7 @@ struct WidgetPreviewView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .shadow(color: gradient.first?.opacity(0.3) ?? .clear, radius: 8, y: 4)
+                            .shadow(color: gradient.first?.opacity(MeeshyOpacity.medium) ?? .clear, radius: 8, y: 4)
                     )
 
                 Text(label)
@@ -393,7 +393,7 @@ struct WidgetPreviewView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: "link")
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
                 Text(String(localized: "widget.preview.myLinks", defaultValue: "MES LIENS", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
@@ -470,7 +470,7 @@ struct WidgetPreviewView: View {
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -484,8 +484,8 @@ struct WidgetPreviewView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 ZStack {
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(0.15))
-                        .frame(width: 36, height: 36)
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
+                        .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: icon)
                         .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(Color(hex: color))
@@ -508,10 +508,10 @@ struct WidgetPreviewView: View {
             .frame(width: 110)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(Color(hex: color).opacity(0.2), lineWidth: 1)
+                            .stroke(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)
                     )
             )
         }
@@ -523,7 +523,7 @@ struct WidgetPreviewView: View {
     private var widgetHintBanner: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "apps.iphone")
-                .font(MeeshyFont.relative(24, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .medium))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo400, MeeshyColors.indigo600],
@@ -547,7 +547,7 @@ struct WidgetPreviewView: View {
         .padding(MeeshySpacing.md + 2)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(
