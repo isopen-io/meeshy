@@ -49,7 +49,9 @@ nonisolated enum NSELocationSnapshot {
     private static func writePinned(snapshot: MKMapSnapshotter.Snapshot, center: CLLocationCoordinate2D) -> URL? {
         let base = snapshot.image
         let format = UIGraphicsImageRendererFormat()
-        format.scale = base.scale
+        // L'échelle est FIXÉE : le simulateur rend l'instantané à l'échelle de
+        // l'écran (@3x) malgré `options.scale`, et c'est la sortie qui compte.
+        format.scale = 2
         let image = UIGraphicsImageRenderer(size: base.size, format: format).image { _ in
             base.draw(at: .zero)
             drawPin(at: snapshot.point(for: center))
