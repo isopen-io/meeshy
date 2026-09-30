@@ -24,11 +24,11 @@ struct ConversationLinkCardActionsRow: View {
     private var accent: Color { Color(hex: accentHex) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             buttons
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.error)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("conversation-link-card-error")
@@ -52,7 +52,7 @@ struct ConversationLinkCardActionsRow: View {
                 // « Rejoindre ? » puis « Anonyme » | le compte, dans le gabarit
                 // arrondi de Quitter | Ouvrir (#8726, correction porteur
                 // 2026-09-29) : côte à côte quand ils tiennent, empilés sinon.
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     joinPrompt
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: MeeshySpacing.sm) { joinChoices(allowsAnonymous: allowsAnonymous) }
@@ -110,8 +110,8 @@ struct ConversationLinkCardActionsRow: View {
         Button(action: action) {
             label(title, icon: icon, busy: busy, foreground: .white, truncates: truncates)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(LinearGradient(colors: [accent, accent.opacity(0.8)],
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                        .fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.intense)],
                                              startPoint: .leading, endPoint: .trailing))
                 )
         }
@@ -127,8 +127,8 @@ struct ConversationLinkCardActionsRow: View {
         Button(action: action) {
             label(title, icon: icon, busy: busy, foreground: tint)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(tint.opacity(0.7), lineWidth: 1.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                        .stroke(tint.opacity(MeeshyOpacity.heavy), lineWidth: MeeshyBorder.emphasis)
                 )
         }
         .buttonStyle(.plain)
@@ -141,7 +141,7 @@ struct ConversationLinkCardActionsRow: View {
     /// ligne au lieu de déborder du bouton empilé.
     private func label(_ title: String, icon: String, busy: Bool, foreground: Color,
                        truncates: Bool = false) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             if busy {
                 ProgressView()
                     .tint(foreground)

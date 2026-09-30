@@ -28,7 +28,7 @@ export const MEDIA_GRID_VISIBLE_MAX = 4;
 /** `+Media.swift:533` — le voile de l'overflow. */
 export const OVERFLOW_VEIL_OPACITY = 0.5;
 /** `+Media.swift:535` — la taille du libellé `+N`. */
-export const OVERFLOW_LABEL_SIZE = 24;
+export const OVERFLOW_LABEL_SIZE = 22;
 /** `+Media.swift:492` — le diamètre du bouton de lecture inline, SEUL puis en grille. */
 export const PLAY_DIAMETER_SOLO = 64;
 export const PLAY_DIAMETER_MULTI = 44;

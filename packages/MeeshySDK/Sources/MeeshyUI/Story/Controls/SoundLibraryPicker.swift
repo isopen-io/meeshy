@@ -37,12 +37,12 @@ public struct SoundLibraryPicker: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 picker
                 searchField
                 content
             }
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
             .navigationTitle(String(localized: "story.sound.library.title",
                                     defaultValue: "Choisir un son", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
@@ -109,11 +109,11 @@ public struct SoundLibraryPicker: View {
                         defaultValue: "Tendances", bundle: .module)).tag(Tab.trending)
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField(String(localized: "story.sound.library.search",
                              defaultValue: "Rechercher un son ou un auteur", bundle: .module),
@@ -129,13 +129,13 @@ public struct SoundLibraryPicker: View {
                                            defaultValue: "Effacer la recherche", bundle: .module))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     @ViewBuilder
@@ -180,7 +180,7 @@ public struct SoundLibraryPicker: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "waveform")
                 .font(.system(size: 34, weight: .light))
                 .foregroundStyle(.secondary)
@@ -188,7 +188,7 @@ public struct SoundLibraryPicker: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
         }
     }
 }
@@ -211,22 +211,22 @@ struct SoundLibraryRow: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             cover
             // Le bloc texte ouvre la page du son. Bouton `.plain` et non un
             // `onTapGesture` : sans lui la zone n'est ni focalisable ni
             // annoncée comme actionnable par VoiceOver.
             Button(action: onOpenDetail) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(SoundLibraryPickerModel.displayTitle(for: sound))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                         .lineLimit(1)
                     metadataLine
                     // Gris discret, et seulement dans « Mes sons » sur un son
                     // NOMMÉ : ailleurs la date est déjà le libellé principal.
                     if let date = SoundLibraryPickerModel.secondaryDate(for: sound, isMine: canRename) {
                         Text(date)
-                            .font(.system(size: 11))
+                            .font(.system(size: MeeshyFont.footnoteSize))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
@@ -241,7 +241,7 @@ struct SoundLibraryRow: View {
             Spacer(minLength: 8)
             if canRename {
                 Button(action: onRename) {
-                    Image(systemName: "pencil").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "pencil").font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -280,7 +280,7 @@ struct SoundLibraryRow: View {
     /// ne déborde dans aucune des sept langues, et le libellé complet part en
     /// accessibilité — où il a sa place, contrairement à une ligne de liste.
     private var metadataLine: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if let author = sound.authorLabel {
                 Text(author).lineLimit(1).layoutPriority(1)
             }
@@ -336,7 +336,7 @@ struct SoundLibraryRow: View {
                     .frame(width: 48, height: 48)
             } else {
                 Circle()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08))
+                    .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.subtle))
                     .frame(width: 48, height: 48)
             }
 
@@ -352,7 +352,7 @@ struct SoundLibraryRow: View {
                             .tint(.white)
                     } else {
                         Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }

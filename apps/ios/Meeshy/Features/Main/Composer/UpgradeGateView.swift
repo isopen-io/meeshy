@@ -61,7 +61,7 @@ struct UpgradeGateView: View {
                 Text(String(localized: "upgradeGate.message",
                             defaultValue: "Cette version de Meeshy ne peut plus échanger avec le serveur. Installez la dernière version pour continuer.",
                             bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .regular))
                     .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, MeeshySpacing.lg)
@@ -71,7 +71,7 @@ struct UpgradeGateView: View {
                                                defaultValue: "Version minimale : %@",
                                                bundle: .main),
                                 requirement.minVersion))
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(.secondary)
                 }
 
@@ -84,7 +84,7 @@ struct UpgradeGateView: View {
                     Text(String(localized: "upgradeGate.action",
                                 defaultValue: "Mettre à jour",
                                 bundle: .main))
-                        .font(MeeshyFont.relative(17, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, MeeshySpacing.md)
@@ -95,7 +95,7 @@ struct UpgradeGateView: View {
                                 endPoint: .trailing
                             )
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.bottom, MeeshySpacing.xl)

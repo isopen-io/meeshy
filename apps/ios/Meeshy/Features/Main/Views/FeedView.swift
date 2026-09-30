@@ -597,7 +597,7 @@ struct FeedView: View {
     /// 2026-08-13) a fusionné dans « À proximité » le 2026-08-26 — mode
     /// Discover, réservé au staff de la plateforme.
     private var feedHeaderActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             reelsButton
             nearbyButton
         }
@@ -616,7 +616,7 @@ struct FeedView: View {
             ReelsPresenter.shared.presentFresh()
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
@@ -636,7 +636,7 @@ struct FeedView: View {
             router.push(.nearbyDiscovery())
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
@@ -649,7 +649,7 @@ struct FeedView: View {
 
     // MARK: - Composer Placeholder
     private var composerPlaceholder: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                 context: .custom(40),
@@ -670,13 +670,13 @@ struct FeedView: View {
                         .foregroundColor(theme.textMuted)
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .fill(theme.inputBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                 )
@@ -766,16 +766,16 @@ struct FeedView: View {
             }
             .accessibilityLabel(String(localized: "feed.compose.add-content", defaultValue: "Ajouter du contenu"))
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Feed Post Card
@@ -863,7 +863,7 @@ struct FeedView: View {
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
         // gardant une séparation nette des bords et des boutons flottants.
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
         // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
         // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
     }
@@ -998,7 +998,7 @@ struct FeedView: View {
                 },
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: MeeshySpacing.lg) {
                     // Anchor pour le banner "nouveaux posts" → scroll vers
                     // le haut. L'id est attache a un Color.clear de hauteur 0
                     // au sommet du contenu.
@@ -1024,11 +1024,11 @@ struct FeedView: View {
 
                     // Composer placeholder
                     composerPlaceholder
-                        .padding(.bottom, 8)
+                        .padding(.bottom, MeeshySpacing.sm)
 
                     // Error state
                     if let error = viewModel.error {
-                        VStack(spacing: 12) {
+                        VStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
@@ -1085,7 +1085,7 @@ struct FeedView: View {
                             .transition(.opacity)
                     }
                 }
-                .padding(.top, 12)
+                .padding(.top, MeeshySpacing.md)
                 .padding(.bottom, 100)
             }
             .overlay(alignment: .top) {
@@ -1098,7 +1098,7 @@ struct FeedView: View {
                         viewModel.acknowledgeNewPosts()
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             Image(systemName: "arrow.up")
                                 .font(.caption.weight(.bold))
 
@@ -1106,8 +1106,8 @@ struct FeedView: View {
                                 .font(.subheadline.weight(.semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(
                             Capsule()
                                 .fill(

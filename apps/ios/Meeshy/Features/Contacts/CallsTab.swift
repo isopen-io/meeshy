@@ -24,8 +24,8 @@ struct CallsTab: View {
                 placeholder: String(localized: "calls.search.placeholder", defaultValue: "Rechercher un appel", bundle: .main),
                 query: $viewModel.searchQuery
             )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
             filterChips
             if viewModel.eraseFailed {
                 eraseFailedBanner
@@ -60,7 +60,7 @@ struct CallsTab: View {
     // MARK: - Filter Chips
 
     private var filterChips: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             chip(.all, label: String(localized: "calls.filter.all", defaultValue: "Tous", bundle: .main))
             chip(.missed, label: String(localized: "calls.filter.missed", defaultValue: "Manqués", bundle: .main))
             Spacer()
@@ -68,8 +68,8 @@ struct CallsTab: View {
                 clearAllButton
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private func chip(_ filter: CallHistoryFilter, label: String) -> some View {
@@ -89,8 +89,8 @@ struct CallsTab: View {
             Text(String(localized: "calls.clearAll", defaultValue: "Tout effacer", bundle: .main))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.error)
-                .padding(.horizontal, 8)
-                .frame(minWidth: 44, minHeight: 44)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -98,7 +98,7 @@ struct CallsTab: View {
     }
 
     private var eraseFailedBanner: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(MeeshyColors.error)
                 .accessibilityHidden(true)
@@ -112,17 +112,17 @@ struct CallsTab: View {
                 Image(systemName: "xmark")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.leading, 12)
-        .background(MeeshyColors.error.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
+        .padding(.leading, MeeshySpacing.md)
+        .background(MeeshyColors.error.opacity(MeeshyOpacity.light))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xsPlus)
         .accessibilityElement(children: .contain)
     }
 
@@ -187,7 +187,7 @@ struct CallsTab: View {
                 .accessibilityLabel(String(localized: "calls.loadingMore", defaultValue: "Chargement des appels plus anciens", bundle: .main))
             Spacer()
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .onAppear {
             Task { await viewModel.loadMore() }
         }
@@ -223,9 +223,9 @@ private struct CallJournalRow: View, Equatable {
         let color = DynamicColorGenerator.colorForName(name)
 
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 Button(action: onTap) {
-                    HStack(spacing: 14) {
+                    HStack(spacing: MeeshySpacing.mdPlus) {
                         MeeshyAvatar(
                             name: name,
                             context: .userListItem,
@@ -234,7 +234,7 @@ private struct CallJournalRow: View, Equatable {
                             presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
                         )
 
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(name)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textPrimary)
@@ -247,7 +247,7 @@ private struct CallJournalRow: View, Equatable {
                                     .lineLimit(1)
                             }
 
-                            HStack(spacing: 5) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: directionIcon)
                                     .font(.caption2.weight(.bold))
                                     .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
@@ -293,9 +293,9 @@ private struct CallJournalRow: View, Equatable {
                     )
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            Divider().opacity(0.15).padding(.leading, 70)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.md)
+            Divider().opacity(MeeshyOpacity.light).padding(.leading, 70)
         }
     }
 
@@ -373,8 +373,8 @@ struct CallRowDialButton: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 // 44x44 — Apple HIG minimum tap target (was 40x40).
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                .background(Circle().fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
         }
         .accessibilityLabel(accessibilityLabel ?? String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
         .accessibilityHint(String(localized: "calls.redial.hint", defaultValue: "Ouvre le choix entre appel vocal et appel vidéo", bundle: .main))

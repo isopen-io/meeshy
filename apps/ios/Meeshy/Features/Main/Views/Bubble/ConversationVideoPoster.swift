@@ -52,7 +52,7 @@ struct ConversationVideoPoster: View {
                 .fill(.ultraThinMaterial)
                 .frame(width: playButtonDiameter, height: playButtonDiameter)
             Circle()
-                .fill(Color(hex: accentHex).opacity(0.85))
+                .fill(Color(hex: accentHex).opacity(MeeshyOpacity.intense))
                 .frame(width: inner, height: inner)
             // Doctrine 86i : le glyphe vit dans un cercle de dimension fixe — il
             // se dimensionne par ce cercle, pas par une police qui scalerait.
@@ -63,7 +63,7 @@ struct ConversationVideoPoster: View {
                 .foregroundColor(.white)
                 .offset(x: playButtonDiameter / 24)
         }
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 6, y: 3)
     }
 
     @ViewBuilder
@@ -74,14 +74,14 @@ struct ConversationVideoPoster: View {
                 HStack {
                     Spacer()
                     Text(formatted)
-                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.6)))
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
                 }
-                .padding(.trailing, 4)
-                .padding(.bottom, 4)
+                .padding(.trailing, MeeshySpacing.xs)
+                .padding(.bottom, MeeshySpacing.xs)
             }
         }
     }

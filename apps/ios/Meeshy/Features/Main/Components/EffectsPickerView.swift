@@ -18,19 +18,19 @@ struct EffectChip: View {
             HapticFeedback.light()
             if isSelected { flags.remove(flag) } else { flags.insert(flag) }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
                     .font(.caption2)
                 Text(label)
                     .font(.caption).fontWeight(.semibold)
             }
             .foregroundColor(isSelected ? .white : accent)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(isSelected ? accent : accent.opacity(0.1))
-                    .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: 0.5))
+                    .fill(isSelected ? accent : accent.opacity(MeeshyOpacity.subtle))
+                    .overlay(Capsule().stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
@@ -83,7 +83,7 @@ struct EffectsPickerView: View {
     private var hasPanelEffect: Bool { !flags.intersection(Self.panelFlags).isEmpty }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             HStack {
                 sectionTitle(String(localized: "effects.section.entry", defaultValue: "Animation d'entrée", bundle: .main))
                 Spacer()
@@ -94,28 +94,28 @@ struct EffectsPickerView: View {
                     } label: {
                         Text(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main))
                             .font(.caption2).fontWeight(.semibold)
-                            .foregroundColor(MeeshyColors.error.opacity(0.8))
+                            .foregroundColor(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                     }
                     .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
 
             chipRow(Self.entryItems)
 
             sectionTitle(String(localized: "effects.section.permanent", defaultValue: "Effet permanent", bundle: .main))
-                .padding(.horizontal, 12)
-                .padding(.top, 2)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.top, MeeshySpacing.xxs)
 
             chipRow(Self.permanentItems)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(surface)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(accent.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hasPanelEffect)
@@ -130,12 +130,12 @@ struct EffectsPickerView: View {
 
     private func chipRow(_ items: [Item]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(items, id: \.label) { item in
                     EffectChip(flag: item.flag, icon: item.icon, label: item.label, accent: accent, flags: $flags)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
         }
     }
 }

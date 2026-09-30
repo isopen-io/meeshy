@@ -45,6 +45,57 @@ public extension PresenceState {
     }
 }
 
+// MARK: - « Est dans la conversation » (#8892)
+
+/// Couleur du point d'un pair qui a l'écran de la conversation OUVERT.
+/// Miroir iOS de `PRESENCE_HERE_HEX` (`packages/shared/utils/user-presence.ts`),
+/// gardé par `presence-color-mirror-parity.test.ts`. Ne JAMAIS la redéclarer
+/// localement dans une vue.
+public enum PresenceStyle {
+    public static let hereDotColor = MeeshyColors.brandPrimary
+}
+
+/// Ce que le point d'un avatar rend dans un contexte de conversation — jumeau
+/// de `presenceDotHex(status, { here })` côté TS.
+///
+/// Être ICI prime sur la présence globale et se rend même quand celle-ci est
+/// masquée (`nil` / `.offline`) : c'est un signal d'ACTIVITÉ servi par la room,
+/// comme la frappe. `nil` = aucun point.
+public enum AvatarPresenceDot: Equatable, Sendable {
+    case presence(PresenceState)
+    case here
+
+    public static func resolve(presence: PresenceState?, isHere: Bool) -> AvatarPresenceDot? {
+        if isHere { return .here }
+        guard let presence, presence.showsIndicator else { return nil }
+        return .presence(presence)
+    }
+
+    public var color: Color {
+        switch self {
+        case .here: return PresenceStyle.hereDotColor
+        case .presence(let state): return state.dotColor
+        }
+    }
+
+    /// Être dans la conversation est une activité en cours : il pulse comme `online`.
+    public var pulses: Bool {
+        switch self {
+        case .here: return true
+        case .presence(let state): return state.pulses
+        }
+    }
+
+    public var localizedLabel: String {
+        switch self {
+        case .here:
+            return String(localized: "presence.here", defaultValue: "Dans la conversation", bundle: .module)
+        case .presence(let state):
+            return state.localizedLabel
+        }
+    }
+}
+
 // MARK: - Libelle « vu il y a … » (localise)
 
 public extension MeeshyConversation {

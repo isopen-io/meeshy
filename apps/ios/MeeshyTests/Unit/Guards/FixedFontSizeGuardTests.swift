@@ -216,14 +216,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // > Toutes les lignes existaient déjà ; c'est la liste qui les couvrait
         // > qui a cessé de les couvrir. Toute extraction hors d'un fichier de
         // > `bearingFiles` doit inscrire sa destination dans le MÊME commit.
-        "Features/Main/Views/ConversationMediaGalleryView.swift",
-        // #6145 — RELOCALISATION pure, même forme qu'au #4084 : le glyphe figé
-        // du couloir haut (18 pt dans un cercle glass de 40) quitte le fichier
-        // racine avec le contrôle qu'il décore — la flèche d'enregistrement
-        // devenue menu ⋯. La POPULATION ne bouge pas : ni `totalCeiling` ni
-        // `textCeiling`, seul le NOM change. Le racine en porte encore d'autres
-        // (la croix, le transport vidéo) : il reste dans la liste.
-        "Features/Main/Views/ConversationMediaGalleryView+Menu.swift",
+        // #8878 — `ConversationMediaGalleryView.swift` et son `+Menu` sortent de
+        // la liste (règle 4) : la croix, le menu ⋯ et les trois actions de la
+        // colonne montent les briques du chrome plein écran de MeeshyUI
+        // (`FullscreenCloseButton`, `FullscreenMoreMenu`, `FullscreenActionButton`),
+        // qui portent LEURS glyphes figés dans leur disque.
         "Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
         "Features/Main/Views/ConversationView+ComposerAttachments.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
@@ -280,8 +277,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // #6693 — RELOCALISATION pure : les glyphes figés du rail d'actions (26 pt dans
         // une colonne fixe de 48, doctrine 86i) quittent l'hôte avec le rail. La
         // POPULATION ne bouge pas ; l'hôte en garde d'autres et reste dans la liste.
+        // #8878 — le rail monte `FullscreenActionButton` (glyphe figé dans sa cellule) et
+        // le menu ⋯ `FullscreenMoreMenu` : il ne garde que le contour de participation,
+        // posé sur le glyphe de l'atome à la MÊME taille figée. `ReelsPlayerView.swift`
+        // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
-        "Features/Main/Views/ReelsPlayerView.swift",
         "Features/Main/Views/ShareLinksView.swift",
         "Features/Main/Views/SharePickerView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
@@ -289,12 +289,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
-        // #6704 — RELOCALISATION pure : `StoryActionButton` quitte
-        // `StoryViewerView+Content.swift` et emporte ses trois sites figés — le
-        // glyphe de 20 pt (deux passes) et le libellé de 10 pt d'une colonne fixe
-        // de 56, doctrine 82i. La POPULATION ne bouge pas ; l'hôte en garde deux
-        // autres et reste dans la liste.
-        "Features/Main/Views/StoryViewerView+ActionButton.swift",
+        // #8878 — `StoryViewerView+ActionButton.swift` sort de la liste (règle 4) :
+        // `StoryActionButton` monte `FullscreenActionButton` (MeeshyUI), qui porte
+        // SES glyphe et libellé figés dans sa cellule de 56.
         // 2026-09-02 — RELOCALISATION pure, même forme qu'au #4084 : le SEUL site
         // figé de `StoryViewerView+Canvas.swift` (la croix 22×22 de la bannière
         // « Réponse à ») vit dans `StoryComposerBarView`, qui a quitté le canvas
@@ -308,14 +305,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
         "Features/Main/Views/StoryCommentRowView.swift",
         "Features/Main/Views/StoryViewerView+Content.swift",
-        // #4084 — RELOCALISATION pure, même forme qu'au #4102 et au #4014 :
-        // l'en-tête du viewer story quitte `+Sidebar` (qui portait DEUX vues
-        // pour 1 369 lignes) et emporte AVEC LUI les quatre sites figés — des
-        // glyphes dans un cadre fixe, dont la raison d'exemption voyage avec
-        // eux. La POPULATION ne bouge pas : ni `totalCeiling` ni `textCeiling`
-        // ne changent, seul le NOM change. Le rail n'en porte plus aucun : il
-        // sort de la liste et n'y revient jamais.
-        "Features/Main/Views/StoryViewerView+Header.swift",
+        // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
+        // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
+        // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
@@ -335,7 +327,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// wizard d'inscription — la rangée de drapeaux de son décor de langue
     /// (`Text(flags[i])`, 20 pt) — est parti avec le fichier. Un cliquet qui ne
     /// descend pas quand la population descend cesse d'être un cliquet.
-    private static let textCeiling = 35
+    // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
+    private static let textCeiling = 34
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -424,7 +417,19 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // boutons de la vignette perso et le bouton Sous-titres flottant — onze
     // glyphes figés deviennent neuf. `CallView.swift` sort de `bearingFiles`
     // (règle 4), ses parties y entrent ; le texte figé ne bouge pas.
-    private static let totalCeiling = 208
+    // 208 → 200 (#8878) : la galerie de pièces jointes monte le chrome plein écran
+    // du SDK — cinq glyphes figés de la racine (croix, réagir + son « + »,
+    // répondre, composer) et celui du menu ⋯ partent, ainsi que la croix et
+    // l'enregistrement du plein écran audio. `ConversationMediaGalleryView.swift`
+    // et son `+Menu` sortent de `bearingFiles` (règle 4) ; le texte figé ne bouge pas.
+    // 200 → 194 (#8878) : le rail de la story monte `FullscreenActionButton` (trois
+    // sites figés, dont le libellé de 10 pt), l'en-tête monte la croix et le menu ⋯
+    // du SDK (deux glyphes), la croix de repli du conteneur monte `FullscreenTopBar`
+    // (un glyphe). `StoryViewerView+ActionButton.swift` et `+Header.swift` sortent de
+    // `bearingFiles` (règle 4) ; `StoryViewerContainer.swift` garde son glyphe d'erreur.
+    // 194 → 191 (#8878) : le rail des réels n'a plus que le contour de participation
+    // (trois sites → un) et sa croix monte `FullscreenTopBar` (un glyphe).
+    private static let totalCeiling = 191
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

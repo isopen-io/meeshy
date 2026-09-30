@@ -65,7 +65,7 @@ extension PostDetailView {
         let audioMedia = mediaList.filter { $0.type == .audio }
         let docMedia = mediaList.filter { $0.type == .document }
 
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
                 detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId, owner: owner)
@@ -118,7 +118,7 @@ extension PostDetailView {
             }
             .aspectRatio(aspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: 400)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .onTapGesture { openMediaFullscreen(media) }
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
@@ -152,7 +152,7 @@ extension PostDetailView {
                 )
             }
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
 
         case .audio:
             let audioAttachment = media.toMessageAttachment()
@@ -220,24 +220,24 @@ extension PostDetailView {
                     )
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
 
         case .document:
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 48, height: 56)
                     Image(systemName: "doc.fill")
                         .font(.title3)
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         if let size = media.fileSize {
                             Text(size).font(.caption).foregroundColor(theme.textMuted)
                         }
@@ -249,11 +249,11 @@ extension PostDetailView {
                 }
                 Spacer()
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
@@ -272,7 +272,7 @@ extension PostDetailView {
                 detailGridCell(visualMedia[1])
             }
             .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         } else if count == 3 {
             HStack(spacing: spacing) {
                 detailGridCell(visualMedia[0])
@@ -283,7 +283,7 @@ extension PostDetailView {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         } else {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
@@ -316,7 +316,7 @@ extension PostDetailView {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         }
     }
 

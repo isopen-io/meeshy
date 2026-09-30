@@ -27,6 +27,7 @@ const frComposerAttach = {
   'composer.location.denied': 'Position refusée — autorisez-la dans les réglages',
   'composer.location.unavailable': 'Position indisponible sur ce navigateur',
   'composer.location.failed': 'Position introuvable — réessayez',
+  'composer.openSettings': 'Réglages',
   'composer.location.chip': 'LIEU',
   'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',

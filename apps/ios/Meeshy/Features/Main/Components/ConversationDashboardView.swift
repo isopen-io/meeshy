@@ -53,7 +53,7 @@ struct ConversationDashboardView: View {
         let activity = activityData
         let participants = participantStats
         let types = contentTypeStats
-        VStack(spacing: 22) {
+        VStack(spacing: MeeshySpacing.xl) {
             if let analysis = agentAnalysis {
                 heroHealthCard(analysis)
                     .staggerIn(sectionsAppeared, index: 0)
@@ -81,9 +81,9 @@ struct ConversationDashboardView: View {
                     .staggerIn(sectionsAppeared, index: 6)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 32)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.xxxl)
         .task { await loadAgentAnalysis() }
         .task(id: messages.count) {
             let snapshot = messages
@@ -114,7 +114,7 @@ struct ConversationDashboardView: View {
                 sectionHeader(icon: "brain.head.profile.fill", title: String(localized: "dashboard.section.ai-analysis", defaultValue: "Analyse IA", bundle: .main))
 
                 if let health = summary.healthScore {
-                    VStack(spacing: 4) {
+                    VStack(spacing: MeeshySpacing.xs) {
                         ArcGauge(
                             score: health,
                             accent: accent,
@@ -123,12 +123,12 @@ struct ConversationDashboardView: View {
                         .frame(height: 100)
 
                         Text(String(localized: "dashboard.health", defaultValue: "Santé", bundle: .main))
-                            .font(MeeshyFont.relative(11, weight: .heavy, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy, design: .rounded))
                             .foregroundColor(theme.textMuted)
                             .tracking(1.0)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, MeeshySpacing.xs)
                     // VoiceOver : la jauge d'arc + son libellé « Santé » forment un seul
                     // score. Sans regroupement, VoiceOver lisait « 78 » nu (dans l'arc) puis
                     // « Santé » séparément. Un élément unique « Santé : 78 » (clé déjà
@@ -138,7 +138,7 @@ struct ConversationDashboardView: View {
                     .accessibilityValue(LocalizedNumber.exact(health))
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
-                        HStack(spacing: 10) {
+                        HStack(spacing: MeeshySpacing.smPlus) {
                             if let engagement = summary.engagementLevel, !engagement.isEmpty {
                                 metricPill(
                                     icon: "bolt.fill",
@@ -156,14 +156,14 @@ struct ConversationDashboardView: View {
                         }
                     }
                 } else if !summary.text.isEmpty {
-                    HStack(alignment: .top, spacing: 4) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.xs) {
                         Text("\u{201C}")
                             // Dynamic Type exception: decorative opening-quote glyph, absolute offset(y:) tuned to its point size
                             .font(.system(size: 48, weight: .bold, design: .serif))
-                            .foregroundColor(accent.opacity(0.3))
+                            .foregroundColor(accent.opacity(MeeshyOpacity.medium))
                             .offset(y: -12)
                         Text(summary.text)
-                            .font(MeeshyFont.relative(14, weight: .regular, design: .serif))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular, design: .serif))
                             .italic()
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(6)
@@ -173,7 +173,7 @@ struct ConversationDashboardView: View {
 
                 if summary.healthScore != nil, !summary.text.isEmpty {
                     Text(summary.text)
-                        .font(MeeshyFont.relative(13, weight: .regular, design: .serif))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .serif))
                         .italic()
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
@@ -184,10 +184,10 @@ struct ConversationDashboardView: View {
                     FlowLayout(spacing: 6) {
                         ForEach(summary.currentTopics, id: \.self) { topic in
                             Text(topic)
-                                .font(MeeshyFont.relative(11, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                 .foregroundColor(accent)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
+                                .padding(.horizontal, MeeshySpacing.smPlus)
+                                .padding(.vertical, MeeshySpacing.xs)
                                 .background(
                                     Capsule().fill(accent.opacity(isDark ? 0.12 : 0.08))
                                 )
@@ -199,10 +199,10 @@ struct ConversationDashboardView: View {
                     FlowLayout(spacing: 5) {
                         ForEach(summary.dominantEmotions, id: \.self) { emotion in
                             Text(emotion)
-                                .font(MeeshyFont.relative(10, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, MeeshySpacing.sm)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
                                     Capsule()
                                         .fill(accent.opacity(isDark ? 0.08 : 0.05))
@@ -212,19 +212,19 @@ struct ConversationDashboardView: View {
                 }
 
                 if !summary.overallTone.isEmpty {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "theatermasks.fill")
-                            .font(MeeshyFont.relative(10, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                             .foregroundColor(accent)
                         Text(String(format: String(localized: "dashboard.tone", defaultValue: "Ton : %@", bundle: .main), summary.overallTone))
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
                 }
 
                 if let dynamique = summary.dynamique, !dynamique.isEmpty {
                     Text(dynamique)
-                        .font(MeeshyFont.relative(12, weight: .regular, design: .serif))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular, design: .serif))
                         .italic()
                         .foregroundColor(theme.textMuted)
                 }
@@ -233,16 +233,16 @@ struct ConversationDashboardView: View {
     }
 
     private func metricPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(color)
             Text(text)
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule().fill(color.opacity(isDark ? 0.12 : 0.08))
         )
@@ -258,7 +258,7 @@ struct ConversationDashboardView: View {
             let maxWords = max(effectiveTotalWords, 1)
             let mediaMax = max(max(effectiveImageCount, max(effectiveAudioCount, max(effectiveVideoCount, max(effectiveLinkCount, effectiveDocCount)))), 1)
 
-            HStack(spacing: 16) {
+            HStack(spacing: MeeshySpacing.lg) {
                 StatRing(
                     value: effectiveTotalMessages,
                     maxValue: maxMsg,
@@ -288,7 +288,7 @@ struct ConversationDashboardView: View {
                 )
             }
 
-            HStack(spacing: 16) {
+            HStack(spacing: MeeshySpacing.lg) {
                 StatRing(
                     value: effectiveAudioCount,
                     maxValue: mediaMax,
@@ -319,7 +319,7 @@ struct ConversationDashboardView: View {
             }
 
             if effectiveDocCount > 0 {
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     StatRing(
                         value: effectiveDocCount,
                         maxValue: mediaMax,
@@ -354,7 +354,7 @@ struct ConversationDashboardView: View {
                     )
                     .foregroundStyle(accent)
                     .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                    .lineStyle(StrokeStyle(lineWidth: MeeshyBorder.strong))
 
                     AreaMark(
                         x: .value("Date", point.label),
@@ -394,7 +394,7 @@ struct ConversationDashboardView: View {
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(theme.textMuted)
                     AxisGridLine()
-                        .foregroundStyle(theme.textMuted.opacity(0.12))
+                        .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.light))
                 }
             }
             .frame(height: 160)
@@ -403,7 +403,7 @@ struct ConversationDashboardView: View {
     }
 
     private var periodPicker: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(ChartPeriod.allCases, id: \.self) { period in
                 let isSelected = chartPeriod == period
                 Button {
@@ -413,10 +413,10 @@ struct ConversationDashboardView: View {
                     HapticFeedback.light()
                 } label: {
                     Text(period.shortLabel)
-                        .font(MeeshyFont.relative(11, weight: isSelected ? .bold : .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .medium))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(
                             Capsule().fill(isSelected ? accent : Color.clear)
                         )
@@ -428,9 +428,9 @@ struct ConversationDashboardView: View {
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
-        .padding(3)
+        .padding(MeeshySpacing.xxs)
         .background(
-            Capsule().fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+            Capsule().fill(MeeshyColors.surfaceFill(isDark: isDark))
         )
     }
 
@@ -441,39 +441,39 @@ struct ConversationDashboardView: View {
             sectionHeader(icon: "brain.fill", title: String(localized: "dashboard.section.participant-profiles", defaultValue: "Profils des participants", bundle: .main))
 
             ForEach(profiles) { profile in
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         Circle()
                             .fill(Color(hex: DynamicColorGenerator.colorForName(profile.displayName ?? profile.username ?? profile.userId)))
                             .frame(width: 10, height: 10)
 
                         Text(profile.displayName ?? profile.username ?? "?")
-                            .font(MeeshyFont.relative(14, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                             .foregroundColor(theme.textPrimary)
 
                         Spacer()
 
                         if profile.confidence > 0 {
                             Text("\(Int(profile.confidence * 100))%")
-                                .font(MeeshyFont.relative(10, weight: .bold, design: .rounded))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded))
                                 .foregroundColor(theme.textMuted)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, MeeshySpacing.sm)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
-                                    Capsule().fill(accent.opacity(0.1))
+                                    Capsule().fill(accent.opacity(MeeshyOpacity.subtle))
                                 )
                         }
                     }
 
                     if !profile.personaSummary.isEmpty {
                         Text(profile.personaSummary)
-                            .font(MeeshyFont.relative(12, weight: .regular, design: .serif))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular, design: .serif))
                             .italic()
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(3)
                     }
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         if !profile.tone.isEmpty {
                             profileTag(icon: "waveform.path", text: profile.tone)
                         }
@@ -487,69 +487,69 @@ struct ConversationDashboardView: View {
                     }
 
                     if !profile.catchphrases.isEmpty {
-                        HStack(alignment: .top, spacing: 6) {
+                        HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
                             Image(systemName: "quote.opening")
                                 .font(MeeshyFont.relative(9))
-                                .foregroundColor(accent.opacity(0.5))
+                                .foregroundColor(accent.opacity(MeeshyOpacity.strong))
                                 .offset(y: 2)
                             Text(profile.catchphrases.prefix(3).joined(separator: " \u{00B7} "))
-                                .font(MeeshyFont.relative(11, weight: .medium, design: .serif))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .serif))
                                 .italic()
                                 .foregroundColor(theme.textMuted)
                                 .lineLimit(2)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                                 .fill(accent.opacity(isDark ? 0.04 : 0.02))
                         )
                     }
 
                     if !profile.topicsOfExpertise.isEmpty || !profile.commonEmojis.isEmpty {
-                        HStack(spacing: 8) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             ForEach(profile.topicsOfExpertise.prefix(3), id: \.self) { topic in
                                 Text(topic)
-                                    .font(MeeshyFont.relative(10, weight: .medium))
+                                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                                     .foregroundColor(theme.textMuted)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                                    .padding(.vertical, MeeshySpacing.xxs)
                                     .background(
-                                        Capsule().fill(theme.textMuted.opacity(0.08))
+                                        Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                                     )
                             }
                             if !profile.commonEmojis.isEmpty {
                                 Text(profile.commonEmojis.prefix(6).joined(separator: ""))
-                                    .font(MeeshyFont.relative(13))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                             }
                         }
                     }
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(isDark ? Color.white.opacity(0.02) : Color.black.opacity(0.01))
                 )
                 .overlay(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(Color(hex: DynamicColorGenerator.colorForName(profile.displayName ?? profile.username ?? profile.userId)))
                         .frame(width: 4)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                 }
             }
         }
     }
 
     private func profileTag(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(9, weight: .semibold))
             Text(text)
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         }
         .foregroundColor(theme.textSecondary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(
             Capsule().fill(accent.opacity(isDark ? 0.08 : 0.05))
         )
@@ -558,7 +558,7 @@ struct ConversationDashboardView: View {
     // MARK: - Trait Bars
 
     private func traitBarsView(_ traits: ParticipantTraits) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if let comm = traits.communication {
                 let scores = extractTraitScores(from: comm)
                 if !scores.isEmpty {
@@ -588,16 +588,16 @@ struct ConversationDashboardView: View {
 
     private func traitBarCategory(_ category: String, traits: [TraitScore]) -> some View {
         let sorted = traits.sorted { $0.score > $1.score }
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(category.uppercased())
-                .font(MeeshyFont.relative(9, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                 .foregroundColor(theme.textMuted)
                 .tracking(0.8)
 
             ForEach(sorted.prefix(4), id: \.label) { trait in
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Text(trait.label)
-                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 80, alignment: .leading)
                         .lineLimit(1)
@@ -605,11 +605,11 @@ struct ConversationDashboardView: View {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(accent.opacity(0.08))
+                                .fill(accent.opacity(MeeshyOpacity.subtle))
                                 .frame(height: 4)
 
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(accent.opacity(0.7))
+                                .fill(accent.opacity(MeeshyOpacity.heavy))
                                 .frame(
                                     width: geo.size.width * CGFloat(trait.score) / 100.0,
                                     height: 4
@@ -619,7 +619,7 @@ struct ConversationDashboardView: View {
                     .frame(height: 4)
 
                     Text("\(trait.score)")
-                        .font(MeeshyFont.relative(10, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded))
                         .foregroundColor(traitScoreColor(trait.score))
                         .frame(width: 24, alignment: .trailing)
                 }
@@ -645,10 +645,10 @@ struct ConversationDashboardView: View {
             let maxCount = stats.first?.messageCount ?? 1
 
             ForEach(Array(stats.enumerated()), id: \.element.name) { index, stat in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     if index < 3 {
                         Text("#\(index + 1)")
-                            .font(MeeshyFont.relative(11, weight: .black, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .black, design: .rounded))
                             .foregroundColor(accent)
                             .frame(width: 24)
                     } else {
@@ -660,11 +660,11 @@ struct ConversationDashboardView: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(stat.name)
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
                         Text(String(format: String(localized: "dashboard.words-count", defaultValue: "%@ mots", bundle: .main), formatNumber(stat.wordCount)))
-                            .font(MeeshyFont.relative(10, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
                     .frame(width: 80, alignment: .leading)
@@ -674,7 +674,7 @@ struct ConversationDashboardView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [accent, accent.opacity(0.5)],
+                                    colors: [accent, accent.opacity(MeeshyOpacity.strong)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -684,11 +684,11 @@ struct ConversationDashboardView: View {
                     .frame(height: 18)
 
                     Text("\(stat.messageCount)")
-                        .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -729,14 +729,14 @@ struct ConversationDashboardView: View {
 
     private func sentimentSegment(emoji: String, label: String, count: Int, total: Int, color: Color) -> some View {
         let pct = total > 0 ? Int(Double(count) / Double(total) * 100) : 0
-        return VStack(spacing: 4) {
+        return VStack(spacing: MeeshySpacing.xs) {
             Text(emoji)
-                .font(MeeshyFont.relative(22))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize))
             Text("\(pct)%")
-                .font(MeeshyFont.relative(15, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
                 .foregroundColor(color)
             Text(label)
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -755,27 +755,27 @@ struct ConversationDashboardView: View {
         }()
 
         return GeometryReader { geo in
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 if posFrac > 0 {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.success)
                         .frame(width: max(geo.size.width * posFrac - 1, 2))
                 }
                 if neuFrac > 0 {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.warning)
                         .frame(width: max(geo.size.width * neuFrac - 1, 2))
                 }
                 if negFrac > 0 {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(MeeshyColors.error)
                         .frame(width: max(geo.size.width * negFrac - 1, 2))
                 }
             }
         }
         .frame(height: 12)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .shadow(color: dominantColor.opacity(0.3), radius: 4, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
+        .shadow(color: dominantColor.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
     }
 
     // MARK: - Content Types
@@ -787,14 +787,14 @@ struct ConversationDashboardView: View {
             sectionHeader(icon: "square.grid.2x2.fill", title: String(localized: "dashboard.section.content-types", defaultValue: "Types de contenu", bundle: .main))
 
             ForEach(types, id: \.type) { stat in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: stat.icon)
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(stat.color)
                         .frame(width: 20)
 
                     Text(stat.type)
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .frame(width: 60, alignment: .leading)
 
@@ -802,7 +802,7 @@ struct ConversationDashboardView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [stat.color.opacity(0.7), stat.color.opacity(0.3)],
+                                    colors: [stat.color.opacity(MeeshyOpacity.heavy), stat.color.opacity(MeeshyOpacity.medium)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -815,11 +815,11 @@ struct ConversationDashboardView: View {
                     .frame(height: 10)
 
                     Text("\(stat.count)")
-                        .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -827,19 +827,19 @@ struct ConversationDashboardView: View {
     // MARK: - Section Container & Header
 
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             content()
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(MeeshyOpacity.intense))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [accent.opacity(0.2), accent.opacity(0.05)],
+                        colors: [accent.opacity(MeeshyOpacity.light), accent.opacity(MeeshyOpacity.faint)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -849,12 +849,12 @@ struct ConversationDashboardView: View {
     }
 
     private func sectionHeader(icon: String, title: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(accent)
             Text(title.uppercased())
-                .font(MeeshyFont.relative(12, weight: .heavy, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy, design: .rounded))
                 .foregroundColor(theme.textMuted)
                 .tracking(1.5)
         }
@@ -1098,10 +1098,10 @@ private struct StatRing: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             ZStack {
                 Circle()
-                    .stroke(accent.opacity(0.1), lineWidth: 5)
+                    .stroke(accent.opacity(MeeshyOpacity.subtle), lineWidth: 5)
 
                 Circle()
                     .trim(from: 0, to: animated ? progress : 0)
@@ -1156,7 +1156,7 @@ private struct ArcGauge: View {
 
             ZStack {
                 ArcShape(startAngle: .degrees(180), endAngle: .degrees(360))
-                    .stroke(accent.opacity(0.1), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(accent.opacity(MeeshyOpacity.subtle), style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .frame(width: radius * 2, height: radius)
                     .position(x: center.x, y: center.y)
 

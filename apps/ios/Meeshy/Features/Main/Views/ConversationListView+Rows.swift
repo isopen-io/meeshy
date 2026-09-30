@@ -32,6 +32,8 @@ struct ConversationRowItem: View {
     let rowWidth: CGFloat
     let isDragging: Bool
     let presenceState: PresenceState
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
+    let isPeerHere: Bool
     let isDark: Bool
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
@@ -283,6 +285,7 @@ struct ConversationRowItem: View {
                     availableWidth: rowWidth,
                     isDragging: isDragging,
                     presenceState: presenceState,
+                    isPeerHere: isPeerHere,
                     onViewStory: onViewStory,
                     onViewProfile: onViewProfile,
                     onViewConversationInfo: onViewConversationInfo,
@@ -306,6 +309,7 @@ struct ConversationRowItem: View {
                 availableWidth: rowWidth,
                 isDragging: isDragging,
                 presenceState: presenceState,
+                isPeerHere: isPeerHere,
                 onViewStory: onViewStory,
                 onViewProfile: onViewProfile,
                 onViewConversationInfo: onViewConversationInfo,
@@ -518,6 +522,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.rowWidth == rhs.rowWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.presenceState == rhs.presenceState &&
+        lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isDark == rhs.isDark &&
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&

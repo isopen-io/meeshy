@@ -24,6 +24,7 @@ const ptComposerAttach = {
   'composer.location.denied': 'Localização negada — permita nos ajustes',
   'composer.location.unavailable': 'Localização indisponível neste navegador',
   'composer.location.failed': 'Localização não encontrada — tente novamente',
+  'composer.openSettings': 'Ajustes',
   'composer.location.chip': 'LOCAL',
   'composer.location.unknown': 'Local desconhecido',
   'composer.location.remove': 'Remover a localização',

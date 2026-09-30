@@ -33,7 +33,7 @@ extension MeeshyComposerHost {
             Label(ComposerDescriptionCopy.doneShort, systemImage: "checkmark")
                 .font(.body.weight(.semibold))
                 .foregroundColor(.white)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
                 .frame(minHeight: 44)
                 .contentShape(Capsule())
                 .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)

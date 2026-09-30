@@ -248,7 +248,7 @@ struct AchievementRevealView: View {
     private var texte: some View {
         VStack(spacing: MeeshySpacing.sm) {
             Text(bandeau.uppercased())
-                .font(MeeshyFont.relative(12, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                 .tracking(1.2)
                 .foregroundColor(teinte)
 
@@ -258,7 +258,7 @@ struct AchievementRevealView: View {
                 .multilineTextAlignment(.center)
 
             Text(explication)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -276,7 +276,7 @@ struct AchievementRevealView: View {
                     onVoirProgression()
                 } label: {
                     Text(libelleProgression)
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 52)
                         .background(Capsule().fill(teinte))
@@ -292,7 +292,7 @@ struct AchievementRevealView: View {
                 onContinue()
             } label: {
                 Text(libelleSortie)
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     .foregroundColor(onVoirProgression == nil ? .white : teinte)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(

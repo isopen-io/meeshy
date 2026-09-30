@@ -18,9 +18,9 @@ struct BubbleEditedIndicator: View, Equatable {
         let theme = ThemeManager.shared
         let metaColor: Color = isMe
             ? Color.white.opacity(0.6)
-            : theme.textSecondary.opacity(0.5)
+            : theme.textSecondary.opacity(MeeshyOpacity.strong)
 
-        return HStack(spacing: 3) {
+        return HStack(spacing: MeeshySpacing.xxs) {
             if isSaving {
                 // Saving feedback: arrow-spin glyph instead of pencil so the
                 // user sees their edit is still propagating to the server.
@@ -71,15 +71,15 @@ struct BubbleEditedIndicator: View, Equatable {
 /// preserver le fast-path `.equatable()`.
 struct BubblePinnedIndicator: View, Equatable {
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             // #7599 — l'épingle SEULE, droite ; le libellé reste au lecteur
             // d'écran (ci-dessous).
             Image(systemName: "pin.fill")
                 .font(.caption2.weight(.bold))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Message épinglé", bundle: .main))
     }
@@ -101,7 +101,7 @@ struct BubbleForwardedIndicator: View, Equatable {
 
     var body: some View {
         let theme = ThemeManager.shared
-        return HStack(spacing: 4) {
+        return HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "arrowshape.turn.up.right.fill")
                 .font(.caption2.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -112,8 +112,8 @@ struct BubbleForwardedIndicator: View, Equatable {
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxs)
         .accessibilityElement(children: .combine)
     }
 
