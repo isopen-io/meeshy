@@ -6,6 +6,12 @@ import MeeshySDK
 /// `SecurityView` pour être partagé avec la proposition faite avant la
 /// recherche de contacts. Une seule source : envoi du code, saisie des six
 /// chiffres, vérification, rafraîchissement de l'utilisateur courant.
+///
+/// Tous les témoins sont `async`, même ceux qui n'attendent rien : sur le
+/// simulateur iOS 26.1, un témoin SYNCHRONE qui libère `MockAuthManager`
+/// (classe isolée au main actor) abat l'hôte de test (`pointer being freed
+/// was not allocated`) — mesuré le 2026-09-30, les mêmes corps passent en
+/// `async`. C'est la forme des autres suites qui construisent ce double.
 @MainActor
 final class PhoneChangeFlowModelTests: XCTestCase {
 
@@ -20,7 +26,7 @@ final class PhoneChangeFlowModelTests: XCTestCase {
         return (PhoneChangeFlowModel(userService: userService, authManager: auth), userService, auth)
     }
 
-    func test_init_startsIdleWithNothingTyped() {
+    func test_init_startsIdleWithNothingTyped() async {
         let (sut, _, _) = makeSUT()
         XCTAssertEqual(sut.step, .idle)
         XCTAssertEqual(sut.newPhone, "")
@@ -28,13 +34,13 @@ final class PhoneChangeFlowModelTests: XCTestCase {
         XCTAssertNil(sut.error)
     }
 
-    func test_beginEditing_movesToEditing() {
+    func test_beginEditing_movesToEditing() async {
         let (sut, _, _) = makeSUT()
         sut.beginEditing()
         XCTAssertEqual(sut.step, .editing)
     }
 
-    func test_canSend_shortNumber_isFalse() {
+    func test_canSend_shortNumber_isFalse() async {
         let (sut, _, _) = makeSUT()
         sut.newPhone = "12345"
         XCTAssertFalse(sut.canSend)
@@ -79,7 +85,7 @@ final class PhoneChangeFlowModelTests: XCTestCase {
         XCTAssertEqual(sut.step, .codeSent)
     }
 
-    func test_code_keepsOnlySixDigits() {
+    func test_code_keepsOnlySixDigits() async {
         let (sut, _, _) = makeSUT()
         sut.code = "12a3 45678"
         XCTAssertEqual(sut.code, "123456")
