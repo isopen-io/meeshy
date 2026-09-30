@@ -82,6 +82,17 @@ final class ConversationPreviewHeaderLayoutTests: XCTestCase {
         XCTAssertEqual(ConversationHeaderLayout.resolve(previewMode: false, showOptions: false).glassShape, .none)
     }
 
+    /// La forme résolue n'a d'effet que si l'hôte PEINT son verre depuis elle.
+    /// La fusion de #8903 a gardé l'ancien bloc arrondi dans `ConversationView`
+    /// pendant que la bande prenait ses marges bord à bord : l'aperçu dessinait
+    /// un rectangle arrondi collé aux bords, et aucun témoin de loi ne rougissait.
+    func test_conversationView_paintsTheHeaderGlassFromTheResolvedShape() throws {
+        let source = try String(contentsOf: Self.conversationViewSource(), encoding: .utf8)
+        XCTAssertTrue(source.contains("ConversationHeaderGlass(shape: headerLayout.glassShape"))
+        XCTAssertFalse(source.contains("RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)"),
+                       "le bloc arrondi vit dans `ConversationHeaderGlass`, jamais en double dans l'hôte")
+    }
+
     /// Le calque transparent qui interceptait tout toucher au-dessus du fil
     /// pour « ouvrir la conversation complète » empêchait le DÉFILEMENT : la
     /// liste UIKit ne recevait plus aucun geste. Il n'existe plus — ouvrir la

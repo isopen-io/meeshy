@@ -116,9 +116,13 @@ public struct NotificationToastView: View {
                             .foregroundColor(theme.textMuted)
                     }
 
-                    if banner.body != nil || banner.thumbnailURL != nil || banner.reactionBadge != nil {
+                    if banner.body != nil || banner.showsContentTile || banner.reactionBadge != nil {
                         HStack(alignment: .center, spacing: MeeshySpacing.sm) {
-                            contentPreview(banner)
+                            if banner.showsContentTile {
+                                contentPreview(banner)
+                            } else if let badge = banner.reactionBadge {
+                                Text(badge).font(.system(size: MeeshyFont.bodySize))
+                            }
                             if let body = banner.body {
                                 Text(body)
                                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
@@ -246,14 +250,18 @@ public struct NotificationToastView: View {
         .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
     }
 
-    private func symbolTile(_ symbol: String) -> some View {
+    /// La case teintée, avec l'icône du contenu social quand il y en a une —
+    /// vide pendant qu'une vraie vignette charge ou si elle échoue.
+    private func symbolTile(_ symbol: String?) -> some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
             .fill(accentColor.opacity(isDark ? 0.24 : 0.13))
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(accentColor)
-            )
+            .overlay {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundColor(accentColor)
+                }
+            }
             .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
     }
 
