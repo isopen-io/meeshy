@@ -34,12 +34,27 @@ function bannerTag(payload: AndroidPushSource): string {
   return payload.threadId || payload.data?.notificationId || '';
 }
 
+/**
+ * #8860 — la vignette d'une VIDÉO (`thumbnailUrl`, posée par
+ * `contentDetailPushFields` sous la retenue du média inline) devient l'image
+ * de la bannière système, comme l'`UNNotificationAttachment` iOS. Second
+ * verrou : aucune image sous `notificationLocKey`, la DÉCLARATION d'un contenu
+ * protégé — une garde de confidentialité échoue en montrant MOINS.
+ */
+function bannerImage(payload: AndroidPushSource): string | undefined {
+  const url = payload.data?.thumbnailUrl;
+  if (!url || payload.data?.notificationLocKey) return undefined;
+  return url.startsWith('https://') ? url : undefined;
+}
+
 export function androidNotificationConfig(payload: AndroidPushSource): AndroidNotification {
   const tag = bannerTag(payload);
+  const imageUrl = bannerImage(payload);
   return {
     ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
     channelId: payload.muted ? 'meeshy_notifications_silent' : 'meeshy_notifications',
     ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
     ...(tag ? { tag } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
   };
 }

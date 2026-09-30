@@ -16,7 +16,10 @@
  * servirait, pour un même message, un texte différent de celui qu'iOS montre
  * — le défaut qui a coûté trois cycles à la passerelle (cycles 121→123).
  *
- * **Il ne rend AUCUNE URL venue de la charge** — ni pièce jointe, ni avatar.
+ * **Il ne rend AUCUNE URL venue de la charge** — ni pièce jointe, ni avatar —,
+ * à UNE exception près, la vignette d'une vidéo (#8860, `offreContenu`) : une
+ * clé que la passerelle ne pose qu'hors protection, et que ce worker retient
+ * lui-même sous `notificationLocKey`.
  * La présence de `notificationLocKey` est une DÉCLARATION de contenu protégé
  * (éphémère, vue unique, flouté, chiffré) ; la passerelle vide déjà les champs
  * de média dans ce cas, mais une protection de contenu se mesure sur tout ce
@@ -433,15 +436,112 @@ function rappel(data) {
   };
 }
 
+/**
+ * LE DÉTAIL DU CONTENU (#8860, jumeau web de #8856) — le CORPS est composé par
+ * la passerelle (`detailedBannerBody` : « 📍 Tour Eiffel », « 👤 Mamadou »,
+ * « ✉️ Invitation · Équipe », « 🔗 domaine », « Réponse à votre story · … ») ;
+ * le worker n'en réécrit aucun mot. Il ajoute ce qu'un texte ne porte pas :
+ *
+ * - les ACTIONS, dans l'ordre d'iOS (`NotificationDetailCategories`) —
+ *   « Ouvrir la carte » (position) ou « Rejoindre » (invitation Meeshy), puis
+ *   « Répondre ». Leurs libellés sont LOCALISÉS par la passerelle
+ *   (`contentActionPushFields`) : ce worker ne charge aucun catalogue, et sans
+ *   libellé servi il n'offre rien ;
+ * - la VIGNETTE d'une vidéo (`thumbnailUrl`, adresse publique https).
+ *
+ * SECOND VERROU : sous `notificationLocKey` (contenu protégé), ni image, ni
+ * carte, ni invitation — la passerelle les retient déjà ; une garde de
+ * confidentialité ne dépend pas de la fidélité de l'autre.
+ *
+ * Aucune requête vers un tiers : la carte est un LIEN vers Plans, ouvert au
+ * toucher — JUMEAU de `mapsUrlOf` (`src/lib/view/message-body.ts`, branche
+ * navigateur). Une invitation ne mène qu'à l'écran d'invitation de CETTE
+ * application — JUMEAU de `inviteAppPath` (`src/lib/notifications/content-detail.ts`).
+ */
+const OPEN_MAP_ACTION = 'open-map';
+const JOIN_ACTION = 'join';
+const REPLY_ACTION = 'reply';
+/** JUMEAU de `COMPOSE_PARAM` (`src/lib/notifications/content-detail.ts`). */
+const COMPOSE_PARAM = 'ecrire';
+const MAPS_ORIGIN = 'https://maps.apple.com/';
+/** JUMEAU de `REPLYABLE_TYPES` (`src/lib/notifications/content-detail.ts`, `contentActionPushFields.ts`). */
+const REPLYABLE_TYPES = ['new_message', 'message_reply', 'reply', 'user_mentioned', 'message_forwarded'];
+const INVITE_FORMS = ['chat', 'join'];
+const SHARE_LINK_KEY = /^[A-Za-z0-9_-]{1,100}$/;
+
+function coordonnee(valeur, borne) {
+  const nombre = Number(texte(valeur));
+  return texte(valeur) !== '' && Number.isFinite(nombre) && Math.abs(nombre) <= borne ? nombre : null;
+}
+
+function adresseCarte(data) {
+  const lat = coordonnee(data.locationLat, 90);
+  const lon = coordonnee(data.locationLon, 180);
+  if (lat === null || lon === null) return null;
+  const nom = texte(data.locationName);
+  return MAPS_ORIGIN + '?ll=' + lat.toFixed(5) + ',' + lon.toFixed(5) + (nom === '' ? '' : '&q=' + encodeURIComponent(nom));
+}
+
+function hoteMeeshy(hote) {
+  return hote === 'meeshy.me' || hote.endsWith('.meeshy.me');
+}
+
+function cheminInvitation(brute) {
+  let url;
+  try {
+    url = new URL(texte(brute));
+  } catch {
+    return null;
+  }
+  const segments = url.pathname.split('/').filter(Boolean);
+  const schemaMeeshy = url.protocol === 'meeshy:';
+  const forme = schemaMeeshy ? url.host : segments[0];
+  const cle = schemaMeeshy ? segments[0] : segments[1];
+  const deMeeshy = schemaMeeshy || (url.protocol === 'https:' && hoteMeeshy(url.hostname.toLowerCase()));
+  if (!deMeeshy || !forme || INVITE_FORMS.indexOf(forme.toLowerCase()) < 0 || !cle || !SHARE_LINK_KEY.test(cle)) return null;
+  return '/chat/' + cle;
+}
+
+function vignette(data) {
+  const url = texte(data.thumbnailUrl);
+  return url.indexOf('https://') === 0 ? url : '';
+}
+
+function offreContenu(data) {
+  const protege = texte(data.notificationLocKey) !== '';
+  const libelle = texte(data.contentActionLabel);
+  const carte = protege || libelle === '' ? null : adresseCarte(data);
+  const invitation = protege || libelle === '' || carte !== null ? null : cheminInvitation(data.inviteUrl);
+  const repondre = texte(data.replyActionLabel);
+  const peutRepondre = repondre !== '' && texte(data.conversationId) !== '' && REPLYABLE_TYPES.indexOf(texte(data.type)) >= 0;
+  const actions = [
+    ...(carte === null ? [] : [{ action: OPEN_MAP_ACTION, title: libelle }]),
+    ...(invitation === null ? [] : [{ action: JOIN_ACTION, title: libelle }]),
+    ...(peutRepondre ? [{ action: REPLY_ACTION, title: repondre }] : []),
+  ];
+  const image = protege ? '' : vignette(data);
+  return {
+    actions: actions,
+    image: image,
+    data: {
+      ...(carte === null ? {} : { mapUrl: carte }),
+      ...(invitation === null ? {} : { invitePath: invitation }),
+    },
+  };
+}
+
 function montrer(banniere, notification, data) {
   const offre = rappel(data);
+  const contenu = offreContenu(data);
+  const actions = offre === null ? contenu.actions : [offre.action];
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
-    ...(offre === null ? {} : { actions: [offre.action] }),
-    data: offre === null ? donneesDuTap(data) : { ...donneesDuTap(data), callBack: offre.callBack },
+    ...(contenu.image === '' ? {} : { image: contenu.image }),
+    ...(actions.length === 0 ? {} : { actions: actions }),
+    data: offre === null ? { ...donneesDuTap(data), ...contenu.data } : { ...donneesDuTap(data), callBack: offre.callBack },
   });
 }
 
@@ -674,8 +774,43 @@ async function rappeler(data) {
   client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, callBack: callBack });
 }
 
-async function ouvrir(data) {
-  const url = pushTargetUrl(data);
+/**
+ * LES ACTIONS DU CONTENU (#8860). « Ouvrir la carte » n'ouvre QUE Plans (une
+ * `data` altérée ne fait pas de ce worker une redirection ouverte) ;
+ * « Rejoindre » et « Répondre » restent dans l'application — un onglet NEUF
+ * lit l'intention d'écrire dans son adresse (`?ecrire=1`), un onglet OUVERT la
+ * reçoit à côté du fil (`compose`, `composer-focus-intent.ts`).
+ */
+async function agirSurContenu(data, action) {
+  if (action === OPEN_MAP_ACTION) {
+    const carte = texte(data.mapUrl);
+    if (carte.indexOf(MAPS_ORIGIN) === 0) {
+      await self.clients.openWindow(carte);
+      return;
+    }
+    await ouvrir(data);
+    return;
+  }
+  if (action === JOIN_ACTION) {
+    const chemin = texte(data.invitePath);
+    await ouvrir(data, /^\/chat\/[A-Za-z0-9_-]{1,100}$/.test(chemin) ? chemin : undefined);
+    return;
+  }
+  const fil = pushTargetUrl({ conversationId: data.conversationId });
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(fil + '?' + COMPOSE_PARAM + '=1');
+    return;
+  }
+  await Promise.resolve()
+    .then(() => client.focus())
+    .catch(() => undefined);
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, compose: true });
+}
+
+async function ouvrir(data, adresse) {
+  const url = adresse === undefined ? pushTargetUrl(data) : adresse;
   const ouvertes = await fenetres();
   const client = ouvertes[0];
   if (client === undefined) {
@@ -704,7 +839,9 @@ self.addEventListener('notificationclick', (evenement) => {
       ? ouvrirAppel(data, action)
       : action === CALL_BACK_ACTION
         ? rappeler(data)
-        : ouvrir(data),
+        : action === OPEN_MAP_ACTION || action === JOIN_ACTION || (action === REPLY_ACTION && texte(data.conversationId) !== '')
+          ? agirSurContenu(data, action)
+          : ouvrir(data),
   );
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
@@ -7,6 +7,7 @@ import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { notificationAccent, notificationFamily } from '@/lib/notifications/categories';
 import { openConversationPreview } from '@/lib/notifications/conversation-preview';
+import { bannerActions, bannerAudio } from '@/lib/notifications/content-detail';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { BANNER_LIFETIME_MS, bannerPresentation, bannerSwipeOutcome, type BannerPresentation } from '@/lib/notifications/in-app-banner-view';
 import type { NotificationRecord } from '@/lib/notifications/record';
@@ -42,6 +43,9 @@ import { CONTENT_GLYPHS, MilestoneMedallion, TargetLink, type SurfaceProps } fro
  */
 
 const CARD_RADIUS = 22;
+
+/** Le pied des gestes et du vocal (#8860) — À LA DEMANDE : une bannière sans geste ne le télécharge pas (`budgets.json` › `notification_toast`). */
+const BannerDetailFooter = lazy(() => import('./notification-banner-detail').then((module) => ({ default: module.BannerDetailFooter })));
 const THUMB = 30;
 
 const timeFormat = (language: InterfaceLanguage) => new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' });
@@ -72,8 +76,12 @@ function Leading({ notification, banner, accent }: { readonly notification: Noti
 }
 
 /** La case du contenu visé : sa vignette, ou son icône teintée — la même case, jamais deux dispositions. */
+/** La vignette du contenu visé : celle du POST, ou celle d'une VIDÉO envoyée en message (#8860). */
+const thumbnailOf = (notification: NotificationRecord): string | undefined =>
+  notification.metadata.postThumbnailUrl ?? notification.context.contentDetail?.videoThumbnailUrl;
+
 function ContentTile({ notification, banner, accent }: { readonly notification: NotificationRecord; readonly banner: BannerPresentation; readonly accent: string }) {
-  const thumbnail = notification.metadata.postThumbnailUrl;
+  const thumbnail = thumbnailOf(notification);
   if (thumbnail === undefined && banner.content === null) return null;
   const box = { width: THUMB, height: THUMB, borderRadius: 8, flexShrink: 0 } as const;
   if (thumbnail !== undefined) {
@@ -112,16 +120,17 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
   const accent = notificationAccent(notification.type);
   const target = notificationTarget(notification);
   const [held, setHeld] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [dragY, setDragY] = useState(0);
   const dragFrom = useRef<number | null>(null);
   const dragged = useRef(false);
   const card = useEnterAnimation(notification.id);
 
   useEffect(() => {
-    if (held) return;
+    if (held || playing) return;
     const handle = setTimeout(onDismiss, BANNER_LIFETIME_MS);
     return () => clearTimeout(handle);
-  }, [held, notification.id, onDismiss]);
+  }, [held, playing, notification.id, onDismiss]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -191,8 +200,13 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
   };
 
   const time = timeFormat(language).format(receivedAt);
+  const hasFooter = bannerActions(notification).length > 0 || bannerAudio(notification) !== null;
+  const actionDone = () => {
+    void markNotificationReadAction(notification.id);
+    onDismiss();
+  };
   const surface: SurfaceProps = {
-    className: 'flex w-full items-center gap-3 pt-3 pb-4 ps-3.5 pe-12 text-start focus-visible:outline-2 focus-visible:-outline-offset-2',
+    className: `flex w-full items-center gap-3 pt-3 ${hasFooter ? 'pb-2.5' : 'pb-4'} ps-3.5 pe-12 text-start focus-visible:outline-2 focus-visible:-outline-offset-2`,
     style: { outlineColor: 'var(--color-ios-brand)', borderRadius: CARD_RADIUS },
     onClick: open,
     /* Un LIEN se glisse nativement à la souris : Chromium lance son
@@ -214,7 +228,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
               {time}
             </span>
           </span>
-          {banner.body === null && banner.content === null && notification.metadata.postThumbnailUrl === undefined ? null : (
+          {banner.body === null && banner.content === null && thumbnailOf(notification) === undefined ? null : (
             <span className="flex min-w-0 items-center gap-2">
               <ContentTile notification={notification} banner={banner} accent={accent} />
               {banner.body === null ? null : (
@@ -281,6 +295,11 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
         ) : (
           <TargetLink target={target} {...surface} />
         )}
+        {hasFooter ? (
+          <Suspense fallback={null}>
+            <BannerDetailFooter notification={notification} accent={accent} language={language} onDone={actionDone} onPlayingChange={setPlaying} />
+          </Suspense>
+        ) : null}
         <button
           type="button"
           data-banner-dismiss
