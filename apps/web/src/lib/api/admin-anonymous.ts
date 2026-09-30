@@ -2,6 +2,7 @@ import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
 import { adminPageOf, type AdminPage } from './admin-page';
+import { unwrap } from './client';
 import type { ApiResult } from './http';
 
 /**
@@ -151,4 +152,23 @@ export async function loadAdminAnonymousOne(
   });
   if (!result.ok) return result;
   return { ok: true, data: decodeAdminAnonymousOne(result.data) };
+}
+
+/**
+ * La requête de la FICHE d'un anonyme — `unwrap` garde le STATUT du refus (un 403 se
+ * dit comme un refus, un 404 comme un participant introuvable, jamais les deux comme
+ * « une panne »). Une charge illisible (aucun identifiant) n'invente pas de fiche : elle
+ * échoue. `retry: false` : rejouer un refus ne le fait pas céder.
+ */
+export function adminAnonymousOneQueryOptions(deps: AdminDeps, participantId: string) {
+  return {
+    queryKey: adminAnonymousOneQueryKey(participantId),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminAnonymousOne> => {
+      const fiche = unwrap(await loadAdminAnonymousOne({ ...deps, participantId, ...(signal === undefined ? {} : { signal }) }));
+      if (fiche === null) throw new Error('Fiche d’anonyme illisible');
+      return fiche;
+    },
+    staleTime: 30_000,
+    retry: false,
+  };
 }
