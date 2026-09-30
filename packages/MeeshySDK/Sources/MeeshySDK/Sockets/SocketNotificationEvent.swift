@@ -41,10 +41,35 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     /// la détection de gap EXACTE au reconnect.
     public let seq: Int64?
 
+    /// Le détail du message (#8858) : position, contact, invitation, lien,
+    /// vignette vidéo — les clés du contrat #8856, lues dans `context` puis,
+    /// à défaut, dans `metadata`. Décodées à part, en table tolérante, parce
+    /// que leurs nombres voyagent en nombre OU en chaîne selon l'émetteur.
+    public let detailFields: SocketNotificationDetailFields
+
     private enum CodingKeys: String, CodingKey {
         case id, userId, type, title, subtitle, content, priority, isRead
         case actor, context, metadata
         case seq = "_seq"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userId = try container.decode(String.self, forKey: .userId)
+        type = try container.decode(String.self, forKey: .type)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        content = try container.decode(String.self, forKey: .content)
+        priority = try container.decodeIfPresent(String.self, forKey: .priority)
+        isRead = try container.decodeIfPresent(Bool.self, forKey: .isRead)
+        actor = try container.decodeIfPresent(SocketNotificationActor.self, forKey: .actor)
+        context = try container.decodeIfPresent(SocketNotificationContext.self, forKey: .context)
+        metadata = try container.decodeIfPresent(SocketNotificationMetadata.self, forKey: .metadata)
+        seq = try container.decodeIfPresent(Int64.self, forKey: .seq)
+        let fromContext = (try? container.decodeIfPresent(SocketNotificationDetailFields.self, forKey: .context)) ?? nil
+        let fromMetadata = (try? container.decodeIfPresent(SocketNotificationDetailFields.self, forKey: .metadata)) ?? nil
+        detailFields = (fromContext ?? .empty).merging(fallback: fromMetadata ?? .empty)
     }
 
     // Computed accessors: resolve from nested structs (gateway format)
@@ -156,4 +181,46 @@ public struct SocketNotificationAttachments: Decodable, Sendable {
     public let count: Int?
     public let firstType: String?
     public let firstFilename: String?
+}
+
+/// Table tolérante des clés de DÉTAIL (#8858) — chaîne ou nombre, tout se lit
+/// en chaîne ; `NotificationMessageDetail(lookup:)` fait le reste.
+public struct SocketNotificationDetailFields: Decodable, Sendable, Equatable {
+    public let values: [String: String]
+
+    public static let empty = SocketNotificationDetailFields(values: [:])
+
+    /// Les clés du contrat, plus les deux qui QUALIFIENT le message : son type
+    /// (un sticker n'a pas d'autre signe) et la clé de protection.
+    static let decodedKeys = NotificationMessageDetail.wireKeys + ["messageType", "notificationLocKey"]
+
+    public init(values: [String: String]) {
+        self.values = values
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DetailKey.self)
+        let pairs: [(String, String)] = Self.decodedKeys.compactMap { name in
+            let key = DetailKey(name)
+            if let text = try? container.decode(String.self, forKey: key) { return (name, text) }
+            guard let number = try? container.decode(Double.self, forKey: key) else { return nil }
+            let isWhole = number.rounded() == number && abs(number) < 1e15
+            return (name, isWhole ? String(Int64(number)) : String(number))
+        }
+        values = Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+    }
+
+    public subscript(_ key: String) -> String? { values[key] }
+
+    func merging(fallback: SocketNotificationDetailFields) -> SocketNotificationDetailFields {
+        SocketNotificationDetailFields(values: values.merging(fallback.values) { primary, _ in primary })
+    }
+
+    private struct DetailKey: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(_ name: String) { stringValue = name }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
 }

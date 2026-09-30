@@ -195,6 +195,11 @@ targets:
       # `ForwardPickerModel.swift` pour l'extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #8858 — ce que la NSE et les ACTIONS de notification tirent du détail
+      # d'un message (catégorie, vignette vidéo, corps détaillé) : une seule
+      # lecture pour l'extension qui choisit la catégorie et l'app qui exécute
+      # l'action. Foundation + MeeshySDK ; garde : `NotificationDetailPolicyTests`.
+      - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
       # #8063 — le CONTRAT du partage d'écran (trames, en-tête, socket Unix de
       # l'App Group) : l'extension écrit, l'app lit. Compilé dans les DEUX
       # cibles pour qu'une seule définition tienne les deux bouts du fil, et
@@ -418,6 +423,10 @@ targets:
       # c'est la requête que la NSE envoie, et ce qu'elle dépose est ce que
       # l'app peint au tap (#7804).
       - path: MeeshyNotificationExtension/NSEAPIRequest.swift
+      # #8858 — l'instantané de carte d'une position partagée (MapKit + UIKit).
+      # `xcrun simctl push` n'exécute PAS la NSE : c'est le seul endroit d'où
+      # son rendu est photographiable (`NSELocationSnapshotCaptureTests`).
+      - path: MeeshyNotificationExtension/NSELocationSnapshot.swift
       # Helpers purs de l'extension de partage, compilés DANS le bundle de tests
       # pour la même raison que les helpers NSE ci-dessus : ils vivent dans une
       # cible app-extension, donc `@testable import Meeshy` ne les atteint pas.

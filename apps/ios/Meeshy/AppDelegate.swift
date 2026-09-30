@@ -466,7 +466,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories([
+        UNUserNotificationCenter.current().setNotificationCategories(Set([
             messageCategory,
             mentionCategory,
             friendRequestCategory,
@@ -475,7 +475,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             callIncomingCategory,
             callMissedCategory,
             legacyCallCategory
-        ])
+        ] + NotificationDetailCategories.categories(reply: replyAction)))
     }
 
     // MARK: - Crash Reporting Bootstrap
@@ -602,6 +602,11 @@ enum MeeshyNotificationCategory: String {
     /// Legacy single call category — superseded by the incoming/missed split,
     /// kept for pushes categorized by a stale NSE during rollout.
     case call = "MEESHY_CALL"
+    /// #8858 — les catégories du DÉTAIL d'un message, choisies par la NSE
+    /// (`NotificationDetailPolicy.refinedCategory`).
+    case location = "MEESHY_LOCATION"
+    case contact = "MEESHY_CONTACT"
+    case invite = "MEESHY_INVITE"
 }
 
 enum MeeshyNotificationAction: String {
@@ -614,6 +619,9 @@ enum MeeshyNotificationAction: String {
     case callback = "MEESHY_ACTION_CALLBACK"
     case answerCall = "MEESHY_ACTION_ANSWER_CALL"
     case declineCall = "MEESHY_ACTION_DECLINE_CALL"
+    case openInMaps = "MEESHY_ACTION_OPEN_IN_MAPS"
+    case addContact = "MEESHY_ACTION_ADD_CONTACT"
+    case joinInvite = "MEESHY_ACTION_JOIN_INVITE"
 }
 
 // MARK: - UNUserNotificationCenterDelegate
