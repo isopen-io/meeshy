@@ -44,6 +44,7 @@ import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
+import { useConversationViewing } from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
 import { useThreadReadingMode } from '@/lib/reading-mode/use-thread-reading-mode';
 import { readingModeStore } from '@/lib/reading-mode/store';
@@ -388,6 +389,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     readerLanguages,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
   });
+  /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
+  useConversationViewing(conversationId);
 
   /**
    * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
