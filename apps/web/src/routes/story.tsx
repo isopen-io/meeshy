@@ -48,6 +48,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
+import { StoryOptionsMenu } from './story-options-menu';
 import { CloseButton, ProgressBars, StoryMediaLayer } from './story-parts';
 import { useStoryScrub } from './use-story-scrub';
 import {
@@ -636,7 +637,8 @@ export default function StoryScreen() {
      l'auteur (ou d'un commentateur, d'un spectateur) ouvert par-dessus
      attend de même, et UNE seule condition les réunit : fermer le profil
      ouvert depuis une feuille ne doit pas relancer la story sous elle. */
-  useStoryPauseWhile(commentsOpen || viewersOpen || profilePeekOpen, pause, resume);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  useStoryPauseWhile(commentsOpen || viewersOpen || profilePeekOpen || optionsOpen, pause, resume);
 
   const railHandlers = useMemo<StoryActionRailHandlers>(() => {
     if (currentStory === undefined) return {};
@@ -929,6 +931,9 @@ export default function StoryScreen() {
                   état se lit en premier, une action s'atteint au pouce. »
                   Le bouton est le MÊME (`data-story-sound-toggle`, libellé
                   constant + `aria-pressed`) — seule sa place change. */}
+              {/* LE MENU (…) (#8823) — « Enregistrer » y appelle la MÊME
+                  sauvegarde que le rail auteur, pour tout lecteur. */}
+              <StoryOptionsMenu language={interfaceLanguage} onSave={ownerRail.handlers.save} onOpenChange={setOptionsOpen} />
               <CloseButton onClose={closeViewer} />
             </div>
           </div>
