@@ -58,6 +58,9 @@ export type StudioPageSnapshot = {
   readonly sound?: StudioDraftAssetRef & { readonly plane?: unknown };
   /** LA DURÉE d'une scène animée (#8415) — LÂCHE, normalisée à la relecture. */
   readonly duration?: unknown;
+  /** L'OUVERTURE et la FERMETURE (#8792) — LÂCHES, normalisées à la relecture. */
+  readonly opening?: unknown;
+  readonly closing?: unknown;
 };
 
 export type StudioDraftSnapshot = {

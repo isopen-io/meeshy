@@ -13,6 +13,7 @@ import { keyboardPose } from '@/lib/stories/studio-grip';
 import { STORY_PLAIN_BACKGROUND } from '@/lib/stories/story-document';
 import type { QuickCaptureHintLine } from '@/lib/stories/studio-quick-capture';
 import { StudioStageGestures, type StudioStageCapture, type StudioStageObject } from '@/routes/story-compose-stage';
+import { ViewfinderMark } from '@/routes/story-compose-scene-marks';
 import { StudioTextInput } from '@/routes/story-compose-text-input';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
@@ -65,7 +66,11 @@ function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLan
         >
           {capture.hintLines.map((line) => (
             <p key={line.key} data-story-quick-capture-line={line.glyph} className="flex items-center gap-2">
-              <GlyphSvg glyph={line.glyph === 'camera' ? COMPOSER_GLYPHS.camera : COMPOSER_GLYPHS.videoCamera} size={20} />
+              {line.glyph === 'viewfinder' ? (
+                <ViewfinderMark size={20} />
+              ) : (
+                <GlyphSvg glyph={line.glyph === 'camera' ? COMPOSER_GLYPHS.camera : COMPOSER_GLYPHS.videoCamera} size={20} />
+              )}
               {translate(lang, line.key)}
             </p>
           ))}
@@ -209,8 +214,24 @@ export function StudioScene({
               onWrite={objects.onWrite}
               editing={objects.editing ?? null}
               capture={capture}
+              {...(objects.onBackgroundMenu !== undefined ? { onBackgroundMenu: objects.onBackgroundMenu } : {})}
             />
             {capture !== null ? <StudioQuickCaptureHint lang={lang} capture={capture} /> : null}
+            {/* La voie du CLAVIER vers le menu du fond (#8716) — un clavier ne
+                tient pas un doigt : le menu s'ouvre au centre de la carte. */}
+            {objects.onBackgroundMenu !== undefined ? (
+              <button
+                type="button"
+                className="sr-only"
+                data-story-background-menu
+                onClick={(event) => {
+                  const box = event.currentTarget.parentElement?.getBoundingClientRect();
+                  objects.onBackgroundMenu?.({ x: box === undefined ? 0 : box.left + box.width / 2, y: box === undefined ? 0 : box.top + box.height / 2 });
+                }}
+              >
+                {translate(lang, 'story.studio.background.menu.title')}
+              </button>
+            ) : null}
             {/* La voie du CLAVIER et du lecteur d'écran : un bouton par objet. */}
             {objects.items.map((object) => (
               <button

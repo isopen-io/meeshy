@@ -120,6 +120,7 @@ export function StudioStageGestures({
   onWrite,
   editing = null,
   capture = null,
+  onBackgroundMenu,
 }: {
   readonly stageRef: { readonly current: HTMLElement | null };
   /** Les objets SAISISSABLES (textes écrits, calque), avec leur pose. */
@@ -138,6 +139,9 @@ export function StudioStageGestures({
    * caméra et prend la photo, l'appui long ouvre et filme tant qu'il dure.
    * `null` dès que la scène porte quelque chose. */
   readonly capture?: StudioStageCapture | null;
+  /** L'APPUI LONG SUR LE FOND (#8716) — sur une scène qui porte un fond, le
+   * vide sous le doigt ouvre le menu du fond ; absent sans fond. */
+  readonly onBackgroundMenu?: (point: { readonly x: number; readonly y: number }) => void;
 }) {
   const press = useRef<Press | null>(null);
   const pinch = useRef<Pinch | null>(null);
@@ -230,6 +234,12 @@ export function StudioStageGestures({
         onMenu(found.id, { x: current.x, y: current.y });
       }, LONG_PRESS_MS);
     }
+    if (found === null && capture === null && onBackgroundMenu !== undefined && !inField) {
+      current.timer = setTimeout(() => {
+        current.menu = true;
+        onBackgroundMenu({ x: current.x, y: current.y });
+      }, LONG_PRESS_MS);
+    }
     if (found === null && capture !== null && !inField) {
       current.timer = setTimeout(() => {
         current.filming = capture.onHoldEnd;
@@ -258,6 +268,11 @@ export function StudioStageGestures({
     if (current?.filmingMove !== undefined) {
       current.filmingMove(event.clientX - current.x, event.clientY - current.y);
       return;
+    }
+    // Un doigt qui GLISSE sur le fond ne demande pas son menu.
+    if (current !== null && current.hit === null && capture === null && current.timer !== null && Math.hypot(event.clientX - current.x, event.clientY - current.y) >= DRAG_THRESHOLD) {
+      clearTimeout(current.timer);
+      current.timer = null;
     }
     if (current === null || current.menu || current.hit?.kind !== 'object' || current.origin === null) return;
     if (!current.moved && Math.hypot(event.clientX - current.x, event.clientY - current.y) < DRAG_THRESHOLD) return;
@@ -376,7 +391,13 @@ export function StudioStageGestures({
   /** Le CLIC DROIT au bureau — le même menu que l'appui long. */
   const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
     const id = objectAt(event.clientX, event.clientY);
-    if (id === null || locked) return;
+    if (locked) return;
+    if (id === null) {
+      if (onBackgroundMenu === undefined || hit(event.clientX, event.clientY) !== null) return;
+      event.preventDefault();
+      onBackgroundMenu({ x: event.clientX, y: event.clientY });
+      return;
+    }
     event.preventDefault();
     onSelect(id);
     onMenu(id, { x: event.clientX, y: event.clientY });

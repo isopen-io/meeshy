@@ -58,7 +58,8 @@ describe('la scène vide dit ses gestes', () => {
     await flush(() => hint(el) !== null);
     const lines = [...el.querySelectorAll('[data-story-quick-capture-line]')];
     expect(lines.map((line) => [line.getAttribute('data-story-quick-capture-line'), line.textContent])).toEqual([
-      ['camera', 'Toucher : photo'],
+      ['viewfinder', 'Toucher : ouvrir l’objectif'],
+      ['camera', 'Toucher encore : photo'],
       ['video', 'Maintenir : filmer'],
     ]);
     // Aucun pictogramme au-dessus du titre : le bloc s'ouvre sur lui.
@@ -96,13 +97,16 @@ describe('la scène vide dit ses gestes', () => {
   });
 });
 
-describe('toucher = photo, appui long = vidéo', () => {
-  test('toucher le vide ouvre la caméra, prend la photo et la pose en fond', async () => {
+describe('toucher arme, toucher encore = photo, appui long = vidéo (#8711)', () => {
+  test('toucher le vide ARME le viseur sans rien prendre ; toucher le viseur prend la photo et la pose en fond', async () => {
     const { engine, journal } = camera();
     const el = mount({ ...harness({}).deps, camera: engine });
     await flush(() => hint(el) !== null);
     press(el, 'pointerdown');
     press(el, 'pointerup');
+    await flush(() => document.querySelector('[data-story-camera="live"]') !== null);
+    expect(journal).toEqual([]);
+    act(() => document.querySelector<HTMLElement>('[data-story-camera-preview]')?.click());
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     expect(journal).toEqual(['photo']);
     expect(document.querySelector('[data-story-camera]')).toBeNull();

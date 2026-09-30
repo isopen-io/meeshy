@@ -1,11 +1,27 @@
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 
-import { translate } from '@/lib/i18n-catalog';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { withTextDuplicated, withTextLayer, withTextMoved, withVisualPose, withoutText, type StudioDraft } from '@/lib/stories/studio';
 import type { StudioPage } from '@/lib/stories/studio-page';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
+import type { StudioObjectActionId } from '@/lib/stories/studio-scene-columns';
+import { studioOverlayBackgroundAction } from '@/lib/stories/studio-scene-menu';
 import type { StudioObjectAction } from '@/routes/story-compose-object-menu';
+import { ObjectActionMark } from '@/routes/story-compose-scene-marks';
+
+/** Une action d'objet NOMMÉE — la colonne droite la range par son `id`. */
+export type StudioSceneObjectAction = StudioObjectAction & { readonly id: StudioObjectActionId };
+
+const ACTION_LABELS = {
+  edit: 'story.studio.object.edit',
+  raise: 'story.studio.object.raise',
+  lower: 'story.studio.object.lower',
+  duplicate: 'story.studio.object.duplicate',
+  'set-background': 'story.studio.object.setBackground',
+  'replace-background': 'story.studio.object.replaceBackground',
+  remove: 'story.studio.object.remove',
+} as const satisfies Record<StudioObjectActionId, InterfaceCatalogKey>;
 
 /**
  * **LES OBJETS DE LA SCÈNE, CÔTÉ ÉCRAN** (lot 6, directive porteur 2026-09-27
@@ -19,6 +35,7 @@ export function useStudioObjects({
   edit,
   select,
   removeOverlay,
+  overlayToBackground,
   closeFrame,
 }: {
   readonly page: StudioPage;
@@ -26,6 +43,9 @@ export function useStudioObjects({
   readonly edit: (change: (current: StudioDraft) => StudioDraft, key?: string | null) => void;
   readonly select: (id: string) => void;
   readonly removeOverlay: () => void;
+  /** « Mettre en fond » / « Remplacer le fond » (#8716) — le calque devient le
+   * fond ; l'ancien part, et ses montées en vol avec lui. */
+  readonly overlayToBackground: () => void;
   readonly closeFrame: () => void;
 }) {
   /** L'OBJET EN ÉDITION (double-tap ou « Modifier ») — `null` : la scène se
@@ -57,20 +77,28 @@ export function useStudioObjects({
    * « Sortir de la scène » (#8515) : il SUPPRIMAIT le média, et iOS ne le sert
    * pas (`ComposerHostRules.swift`, `leaveScene` : ce que devient un objet
    * sorti n'est tranché nulle part) — retirer se dit « Retirer ». */
-  const objectActions = (id: string): readonly StudioObjectAction[] => {
+  const action = (id: StudioObjectActionId, onSelect: () => void): StudioSceneObjectAction => ({
+    id,
+    label: translate(lang, ACTION_LABELS[id]),
+    glyph: createElement(ObjectActionMark, { action: id }),
+    ...(id === 'remove' ? { destructive: true } : {}),
+    onSelect,
+  });
+  const objectActions = (id: string): readonly StudioSceneObjectAction[] => {
     if (id === 'overlay') {
       return [
-        { id: 'edit', label: translate(lang, 'story.studio.object.edit'), onSelect: () => startEditing('overlay') },
-        { id: 'remove', label: translate(lang, 'story.studio.object.remove'), destructive: true, onSelect: removeOverlay },
+        action('edit', () => startEditing('overlay')),
+        action(studioOverlayBackgroundAction({ hasBackground: page.background !== null }), overlayToBackground),
+        action('remove', removeOverlay),
       ];
     }
     const index = page.texts.findIndex((layer) => layer.id === id);
     return [
-      ...(index < page.texts.length - 1 ? [{ id: 'raise', label: translate(lang, 'story.studio.object.raise'), onSelect: () => edit((current) => withTextMoved(current, id, 1)) }] : []),
-      ...(index > 0 ? [{ id: 'lower', label: translate(lang, 'story.studio.object.lower'), onSelect: () => edit((current) => withTextMoved(current, id, -1)) }] : []),
-      { id: 'duplicate', label: translate(lang, 'story.studio.object.duplicate'), onSelect: () => edit((current) => withTextDuplicated(current, id)) },
-      { id: 'edit', label: translate(lang, 'story.studio.object.edit'), onSelect: () => startEditing(id) },
-      { id: 'remove', label: translate(lang, 'story.studio.object.remove'), destructive: true, onSelect: () => edit((current) => withoutText(current, id)) },
+      ...(index < page.texts.length - 1 ? [action('raise', () => edit((current) => withTextMoved(current, id, 1)))] : []),
+      ...(index > 0 ? [action('lower', () => edit((current) => withTextMoved(current, id, -1)))] : []),
+      action('duplicate', () => edit((current) => withTextDuplicated(current, id))),
+      action('edit', () => startEditing(id)),
+      action('remove', () => edit((current) => withoutText(current, id))),
     ];
   };
 

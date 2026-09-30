@@ -529,10 +529,19 @@ async function runScheme(colorScheme) {
       frise: document.querySelector('[data-story-timeline]') !== null,
       anime: document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') ?? null,
       rails: document.querySelectorAll('[data-story-studio-rail]').length,
+      ajoutEnHaut: document.querySelector('[data-story-studio-top] [data-story-option="add-page"]') !== null,
     }));
     const railRange = await railDroit();
     check(
-      !range.frise && range.anime === 'true' && range.rails === 2 && railRange.includes('time') && railRange.indexOf('time') < railRange.indexOf('add-page'),
+      // #8713 : « Temps » au pied de la colonne droite, AU-DESSUS d'annuler ; le
+      // (+) de scène a quitté les rails pour la barre haute.
+      !range.frise &&
+        range.anime === 'true' &&
+        range.rails === 2 &&
+        railRange.includes('time') &&
+        railRange.indexOf('time') < railRange.indexOf('undo') &&
+        !railRange.includes('add-page') &&
+        range.ajoutEnHaut,
       `${tag} : « Temps » range la frise d'une scène qui reste animée, rails rendus dans l'ordre d'iOS — ${JSON.stringify({ ...range, railRange })}`,
     );
     /* Éteindre Animé : la scène redevient STATIQUE — plus de « Temps ». */
