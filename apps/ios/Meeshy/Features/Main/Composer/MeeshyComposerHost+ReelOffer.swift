@@ -117,7 +117,7 @@ extension MeeshyComposerHost {
         guard let pending = pendingReelOffer else { return }
         pendingReelOffer = nil
         let choice = asReel ? ComposerPublishChoice(format: .reel, layout: nil) : pending
-        armedPublishChoice = choice
+        chooseArmedPublish(choice)
         performSoclePublish(choice)
     }
 

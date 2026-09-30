@@ -320,11 +320,13 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
     }
 
     /// Le meuble lit ET écrit le réglage — un choix qui n'atteint pas le modèle
-    /// est un contrôle inerte.
+    /// est un contrôle inerte. Depuis #8792 il le lit sur la SLIDE et l'écrit
+    /// par le chemin du carrousel d'effets, qui rejoue aussi l'entrée choisie.
     func test_leMeuble_litEtEcritLeReglage() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("bandOpeningEffect:viewModel.openingEffect"))
-        XCTAssertTrue(source.contains("viewModel.openingEffect=effect"))
+        XCTAssertTrue(source.contains("bandOpeningEffect:sceneTransitions.opening"))
+        XCTAssertTrue(source.contains("chooseSceneEffect(.opening(effect))"))
+        XCTAssertTrue(source.contains("viewModel.setSlideTransitions(opening:apres.opening,closing:apres.closing)"))
     }
 
     /// **La bande NE se referme PAS sur un effet d'ouverture**, à la différence
@@ -333,9 +335,9 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
     /// aucun retour sur ce qu'il vient de choisir.
     func test_choisirUnEffet_neRefermePasLaBande() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("onPickBandOpening:{effectinviewModel.openingEffect=effect"),
+        XCTAssertTrue(source.contains("onPickBandOpening:{effectinchooseSceneEffect(.opening(effect))"),
                       "Le rappel d'ouverture doit poser le réglage…")
-        XCTAssertFalse(source.contains("viewModel.openingEffect=effectrequestedSceneBand=nil"),
+        XCTAssertFalse(source.contains("chooseSceneEffect(.opening(effect))requestedSceneBand=nil"),
                        "…et NE PAS refermer la bande, contrairement à la couleur.")
     }
 }

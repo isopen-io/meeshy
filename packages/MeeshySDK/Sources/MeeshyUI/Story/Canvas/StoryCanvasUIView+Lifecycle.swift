@@ -176,6 +176,7 @@ extension StoryCanvasUIView {
     public override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil else { return }
+        endTransitionRehearsal()
         unregisterFromActive()
         // RC5 — `stopPlayback()` (pas seulement la pause des médias) : le
         // CADisplayLink de lecture cible `self` et le RETIENT. Détaché de la
