@@ -12,4 +12,11 @@ describe('institutionalHref — la page institutionnelle que chaque cible sait s
     expect(institutionalHref('terms', { shell: true })).toBe('https://meeshy.me/terms');
     expect(institutionalHref('privacy', { shell: true })).toBe('https://meeshy.me/privacy');
   });
+
+  test('les sept pages suivent la même règle — `/download` lie aussi l’aide, la FAQ et le contact (#8801)', () => {
+    for (const page of ['about', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'] as const) {
+      expect(institutionalHref(page, { shell: false })).toBe(`/${page}`);
+      expect(institutionalHref(page, { shell: true })).toBe(`https://meeshy.me/${page}`);
+    }
+  });
 });
