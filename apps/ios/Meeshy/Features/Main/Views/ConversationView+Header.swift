@@ -231,21 +231,6 @@ extension ConversationView {
     }
 }
 
-/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
-/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
-private struct HeaderOpenFullGlyph: View {
-    let accentColor: String
-
-    var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(MeeshyFont.relative(12, weight: .semibold))
-            .foregroundStyle(Color(hex: accentColor))
-            .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
-            .meeshyTapTarget()
-    }
-}
-
 // MARK: - Header Call Buttons (§7.6)
 // Owns the CallManager observation so the header reacts to call state without
 // the whole ConversationView subscribing. Idle → audio + video start buttons;
@@ -683,5 +668,20 @@ private struct ConversationHeaderAvatarView: View {
                 contextMenuItems: directContextMenu
             )
         }
+    }
+}
+
+/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
+/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
+private struct HeaderOpenFullGlyph: View {
+    let accentColor: String
+
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(MeeshyFont.relative(12, weight: .semibold))
+            .foregroundStyle(Color(hex: accentColor))
+            .frame(width: 28, height: 28)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .meeshyTapTarget()
     }
 }
