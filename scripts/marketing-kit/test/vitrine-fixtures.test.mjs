@@ -94,6 +94,23 @@ describe('fixtures de la vitrine (#8855)', () => {
     }
   })
 
+  test('l’élan suit la règle partagée : entier, 1 + (familles − 1) + l’assise, gagnée seulement par 10 succès ou 5 hauts badges', () => {
+    const { progression: p } = exporterVitrine({ lang: 'fr', maintenant: MAINTENANT })
+    const succes = p.milestones.filter((m) => m.milestoneType === 'achievement').length
+    const hautsBadges = p.milestones.filter((m) => m.milestoneType === 'badge' && Number(m.milestoneKey.split(':')[1]) >= 100).length
+    expect(p.elan.hasStanding).toBe(succes >= 10 || hautsBadges >= 5)
+    expect(p.elan.activeFamilyCount).toBe(p.elan.activeFamilies.length)
+    expect(p.elan.factor).toBe(1 + (p.elan.activeFamilyCount - 1) + (p.elan.hasStanding ? 1 : 0))
+  })
+
+  test('des Meesh déjà frappées portent leur première et leur dernière frappe', () => {
+    const { progression: p } = exporterVitrine({ lang: 'fr', maintenant: MAINTENANT })
+    expect(p.meesh.mintedLifetime).toBeGreaterThan(0)
+    expect(p.meesh.firstMintedAt).toMatch(ISO_MS)
+    expect(p.meesh.lastMintedAt).toMatch(ISO_MS)
+    expect(p.meesh.firstMintedAt < p.meesh.lastMintedAt).toBe(true)
+  })
+
   test('deux exports au même instant sont identiques', () => {
     expect(exporterVitrine({ lang: 'de', maintenant: MAINTENANT })).toEqual(exporterVitrine({ lang: 'de', maintenant: MAINTENANT }))
   })

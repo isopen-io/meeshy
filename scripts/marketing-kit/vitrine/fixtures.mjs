@@ -221,8 +221,19 @@ const progression = (maintenant) => {
     ],
     streak: { currentStreakDays: P.serie, longestStreakDays: P.record },
     level: { engagementScore: P.points },
-    meesh: { balance: P.meesh, mintedLifetime: P.meeshFrappees, debitablePoints: cout - P.meeshManquants, floorPoints: 0, missingPoints: P.meeshManquants, mintCost: cout },
-    elan: { factor: 1.5, activeFamilyCount: P.elan, hasStanding: true, windowDays: P.elanFenetre, activeFamilies: P.elanFamilles },
+    meesh: {
+      balance: P.meesh,
+      mintedLifetime: P.meeshFrappees,
+      debitablePoints: cout - P.meeshManquants,
+      floorPoints: 0,
+      missingPoints: P.meeshManquants,
+      mintCost: cout,
+      firstMintedAt: iso(maintenant, 60 * JOUR),
+      lastMintedAt: iso(maintenant, JOUR),
+    },
+    // `packages/shared/utils/engagement-elan.ts` : 1 + (familles actives − 1) + 1 si l'assise est acquise
+    // (10 succès ou 5 badges hauts), que ce profil n'a pas.
+    elan: { factor: 1 + (P.elanFamilles.length - 1), activeFamilyCount: P.elanFamilles.length, hasStanding: false, windowDays: P.elanFenetre, activeFamilies: P.elanFamilles },
   }
 }
 

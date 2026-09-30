@@ -3,6 +3,12 @@ import Foundation
 public final class MeeshyConfig: @unchecked Sendable {
     public static let shared = MeeshyConfig()
 
+    #if DEBUG
+    /// Vitrine App Store (#8855, DEBUG uniquement) : l'origine web PUBLIQUE à montrer alors que
+    /// l'app tourne face à un hôte injoignable. `nil` hors vitrine.
+    nonisolated(unsafe) public static var debugWebOriginOverride: String?
+    #endif
+
     private static let remoteOrigin = "https://gate.meeshy.me"
     private static let localOrigin = "http://localhost:3000"
     private static let defaultApiPath = "/api/v1"
@@ -80,6 +86,9 @@ public final class MeeshyConfig: @unchecked Sendable {
     /// `staging.meeshy.me`) and remaps the localhost dev port (API `:3000`
     /// → web `:3100`). Hosts without a `gate.` prefix are returned verbatim.
     public var webOrigin: String {
+        #if DEBUG
+        if let origine = Self.debugWebOriginOverride { return origine }
+        #endif
         guard let url = URL(string: serverOrigin),
               let scheme = url.scheme,
               let host = url.host else { return serverOrigin }

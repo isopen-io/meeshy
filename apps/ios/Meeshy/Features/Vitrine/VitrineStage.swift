@@ -8,6 +8,9 @@ import MeeshySDK
 /// marqueur « prêt » que le script de capture attend.
 @MainActor
 enum VitrineStage {
+    /// L'adresse que montrent les liens partagés : celle de la production, jamais l'hôte local.
+    static let originePublique = "https://meeshy.me"
+
     private static var fixtures: VitrineFixtures?
 
     /// Juste après `MeeshyConfig.shared.restoreEnvironment()`.
@@ -15,6 +18,7 @@ enum VitrineStage {
         guard let scene = VitrineLaunch.scene() else { return }
         do {
             try VitrineSession.verifierIsolement(origine: MeeshyConfig.shared.persistedServerOrigin)
+            MeeshyConfig.debugWebOriginOverride = originePublique
             let f = try VitrineFixtures.charger()
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)

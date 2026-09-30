@@ -1320,12 +1320,14 @@
    "debitablePoints": 62,
    "floorPoints": 0,
    "missingPoints": 38,
-   "mintCost": 100
+   "mintCost": 100,
+   "firstMintedAt": "2026-08-01T12:00:00.000Z",
+   "lastMintedAt": "2026-09-29T12:00:00.000Z"
   },
   "elan": {
-   "factor": 1.5,
+   "factor": 3,
    "activeFamilyCount": 3,
-   "hasStanding": true,
+   "hasStanding": false,
    "windowDays": 7,
    "activeFamilies": [
     "conversation",
