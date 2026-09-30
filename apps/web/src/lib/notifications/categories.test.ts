@@ -19,7 +19,7 @@ import {
  */
 
 describe('le rail suit iOS', () => {
-  test('onze catégories, dans l’ordre d’iOS', () => {
+  test('douze catégories, dans l’ordre d’iOS — « Engagements » après « Social » (#8960)', () => {
     expect(NOTIFICATION_CATEGORIES).toEqual([
       'all',
       'unread',
@@ -27,6 +27,7 @@ describe('le rail suit iOS', () => {
       'reactions',
       'mentions',
       'social',
+      'engagement',
       'contacts',
       'groups',
       'calls',
@@ -43,8 +44,13 @@ describe('le rail suit iOS', () => {
 });
 
 describe('une catégorie devient un filtre SERVEUR, jamais un tri local d’une page', () => {
-  test('« Toutes » ne filtre rien', () => {
-    expect(categoryQuery('all')).toEqual({});
+  test('« Toutes » ne filtre aucun type, mais retire les lignes CONSOMMÉES (#8960)', () => {
+    const query = categoryQuery('all');
+    expect(query.types).toBeUndefined();
+    const hidden = query.hideReadTypes?.split(',') ?? [];
+    for (const type of ['new_message', 'message_reaction', 'user_mentioned', 'post_comment']) expect(hidden).toContain(type);
+    expect(hidden).not.toContain('friend_request');
+    expect(hidden).not.toContain('badge_earned');
   });
 
   test('« Non lues » demande `unreadOnly`, sans liste de types', () => {
@@ -107,9 +113,15 @@ describe('une ligne reçue appartient-elle à une catégorie ?', () => {
     expect(categoryAccepts('unread', ligne('new_message', true))).toBe(false);
   });
 
-  test('une catégorie de famille accepte ses types, lue ou non', () => {
-    expect(categoryAccepts('mentions', ligne('user_mentioned', true))).toBe(true);
+  test('une catégorie de famille accepte ses types non lus', () => {
+    expect(categoryAccepts('mentions', ligne('user_mentioned', false))).toBe(true);
     expect(categoryAccepts('mentions', ligne('new_message', false))).toBe(false);
+  });
+
+  test('une ligne qui se RELIT reste une fois lue', () => {
+    expect(categoryAccepts('contacts', ligne('friend_request', true))).toBe(true);
+    expect(categoryAccepts('all', ligne('missed_call', true))).toBe(true);
+    expect(categoryAccepts('engagement', ligne('badge_earned', true))).toBe(true);
   });
 
   test('un type inconnu n’entre que sous « Toutes » (et « Non lues » s’il l’est)', () => {
@@ -127,5 +139,42 @@ describe('l’accent d’une ligne suit son TYPE, pas sa catégorie', () => {
   test('une alerte de sécurité porte le rouge, un type inconnu l’indigo du système', () => {
     expect(notificationAccent('login_new_device')).toBe('var(--ios-error-strong)');
     expect(notificationAccent('type_de_demain')).toBe('var(--ios-indigo-500)');
+  });
+});
+
+describe('une notification CONSOMMÉE quitte la cloche (#8960, miroir de #8958 iOS)', () => {
+  const lue = (type: string) => ({ type, state: { isRead: true } });
+
+  test('un message, une réaction, une mention ou un commentaire lus ne s’affichent sous AUCUNE catégorie', () => {
+    for (const category of NOTIFICATION_CATEGORIES) {
+      for (const type of ['new_message', 'message_reaction', 'user_mentioned', 'post_comment', 'story_new_comment']) {
+        expect(categoryAccepts(category, lue(type))).toBe(false);
+      }
+    }
+  });
+
+  test('une famille consommable demande à la passerelle de retirer ses lignes lues', () => {
+    const { types, hideReadTypes } = categoryQuery('messages');
+    expect(hideReadTypes).toBe(types);
+  });
+
+  test('une famille qui se relit ne retire rien', () => {
+    expect(categoryQuery('contacts').hideReadTypes).toBeUndefined();
+    expect(categoryQuery('unread')).toEqual({ unreadOnly: true });
+  });
+});
+
+describe('« Engagements » regroupe les paliers (#8960)', () => {
+  test('succès, badges, séries et niveaux quittent « Système »', () => {
+    const engagement = categoryQuery('engagement').types?.split(',') ?? [];
+    const system = categoryQuery('system').types?.split(',') ?? [];
+    for (const type of ['achievement_unlocked', 'ACHIEVEMENT_UNLOCKED', 'streak_milestone', 'level_up', 'badge_earned']) {
+      expect(engagement).toContain(type);
+      expect(system).not.toContain(type);
+    }
+  });
+
+  test('la puce porte l’ambre des paliers', () => {
+    expect(categoryHue('engagement')).toBe('var(--ios-warning)');
   });
 });

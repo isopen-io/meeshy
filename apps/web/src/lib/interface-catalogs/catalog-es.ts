@@ -285,6 +285,7 @@ const es = {
   'notifications.category.reactions': 'Reacciones',
   'notifications.category.mentions': 'Menciones',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Participación',
   'notifications.category.contacts': 'Contactos',
   'notifications.category.groups': 'Grupos',
   'notifications.category.calls': 'Llamadas',
