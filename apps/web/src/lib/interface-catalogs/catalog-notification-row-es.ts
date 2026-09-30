@@ -1,6 +1,6 @@
-import type { NotificationRowCatalogSlice } from './catalog-fr-notification-row';
+import type { NotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 
-/** Ce qu'une notification dit (#8727) — voir `catalog-fr-notification-row.ts`. */
+/** Ce qu'une notification dit (#8727) — voir `catalog-notification-row-fr.ts`. */
 const esNotificationRow = {
   'notifications.row.replyTo': 'En respuesta a «{text}»',
   'notifications.row.kind.story': 'Historia',
@@ -22,6 +22,6 @@ const esNotificationRow = {
   'notifications.quick.failed': 'No se pudo enviar la solicitud. Inténtalo de nuevo en un momento.',
   'notifications.banner.label': 'Nueva notificación',
   'notifications.banner.dismiss': 'Cerrar la notificación',
-} as const satisfies NotificationRowCatalogSlice;
+} as const satisfies NotificationRowCatalog;
 
 export default esNotificationRow;

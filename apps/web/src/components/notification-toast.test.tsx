@@ -4,6 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { NotificationRecord } from '@/lib/notifications/record';
 
 import { NotificationBanner } from './notification-toast';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+
+await loadNotificationRowCatalog('fr');
 
 /**
  * LA BANNIÈRE IN-APP DESSINÉE (#8727, jumelle de #8723) — la capture porteur

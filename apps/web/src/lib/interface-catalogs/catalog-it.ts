@@ -28,7 +28,6 @@ import itMentions from './catalog-it-mentions';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
-import itNotificationRow from './catalog-it-notification-row';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
@@ -1159,7 +1158,6 @@ const it = {
   ...itGallery,
   ...itMessageCard,
   ...itConversationCard,
-  ...itNotificationRow,
   ...itStoriesMine,
   ...itContactCard,
   ...itQuote,

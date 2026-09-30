@@ -3,6 +3,7 @@ import { memo, type CSSProperties, type ReactNode } from 'react';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
+import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { notificationCallBack, type NotificationCallBack } from '@/lib/notifications/call-back';
 import { notificationAccent } from '@/lib/notifications/categories';
@@ -189,7 +190,7 @@ function QuickActions({
       {actions.map((action) => {
         const sent = action.kind === 'connect' && connectRequested;
         const primary = action.kind === 'connect' && !sent;
-        const label = translate(
+        const label = translateNotificationRow(
           language,
           action.kind === 'write' ? 'notifications.quick.write' : sent ? 'notifications.quick.connect.sent' : 'notifications.quick.connect',
         );

@@ -3,6 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-banner';
 import { bannerPresentation, bannerSwipeOutcome } from './in-app-banner-view';
 import type { NotificationRecord } from './record';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+
+await loadNotificationRowCatalog('fr');
 
 /**
  * LA BANNIÈRE IN-APP (#8727, jumelle de `NotificationToastView` iOS, #8723) —

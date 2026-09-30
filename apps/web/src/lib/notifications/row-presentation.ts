@@ -1,7 +1,7 @@
 import { ENGAGEMENT_ACHIEVEMENT_KEYS, isEngagementAxisKey, type EngagementAchievementKey, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { engagementAchievementCondition, engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
-import { translate } from '@/lib/i18n-catalog';
+import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AXIS_GLYPHS, type ProgressionGlyph } from '@/lib/view/progression';
 
@@ -108,7 +108,7 @@ const MEDIA_KEYS = { image: 'notifications.row.media.photo', video: 'notificatio
 
 function mediaSummary(notification: NotificationRecord, language: InterfaceLanguage): string | null {
   const media = notification.metadata.mediaType?.toLowerCase();
-  return media === 'image' || media === 'video' || media === 'audio' ? translate(language, MEDIA_KEYS[media]) : null;
+  return media === 'image' || media === 'video' || media === 'audio' ? translateNotificationRow(language, MEDIA_KEYS[media]) : null;
 }
 
 const isPast = (iso: string | undefined, now: Date): boolean => iso !== undefined && new Date(iso).getTime() <= now.getTime();
@@ -128,9 +128,9 @@ function contentFooter(notification: NotificationRecord, shown: readonly string[
   const freshExcerpt = excerpt !== null && shown.some((text) => repeatsText(excerpt, text)) ? null : excerpt;
   const expired = isPast(notification.context.postExpiresAt, options.now);
   const text = [
-    freshExcerpt ?? translate(options.language, `notifications.row.kind.${content}`),
+    freshExcerpt ?? translateNotificationRow(options.language, `notifications.row.kind.${content}`),
     publishedLabel(notification.context.postCreatedAt, options),
-    expired ? translate(options.language, 'notifications.row.expired') : null,
+    expired ? translateNotificationRow(options.language, 'notifications.row.expired') : null,
   ]
     .filter((part): part is string => part !== null)
     .join(' · ');
@@ -154,7 +154,7 @@ function partsOf(notification: NotificationRecord, language: InterfaceLanguage):
     const parent = firstFilled(metadata.parentCommentPreview);
     return {
       body: firstFilled(metadata.commentPreview, content),
-      quote: parent === null ? null : translate(language, 'notifications.row.replyTo', { text: parent }),
+      quote: parent === null ? null : translateNotificationRow(language, 'notifications.row.replyTo', { text: parent }),
       social: true,
     };
   }
@@ -211,9 +211,9 @@ function milestoneName(milestone: Milestone, language: InterfaceLanguage): strin
     case 'achievement':
       return engagementAchievementTitle(language, milestone.key);
     case 'level':
-      return milestone.level === null ? null : translate(language, 'notifications.row.milestone.level', { level: String(milestone.level) });
+      return milestone.level === null ? null : translateNotificationRow(language, 'notifications.row.milestone.level', { level: String(milestone.level) });
     case 'streak':
-      return milestone.days === null ? null : translate(language, 'notifications.row.milestone.streak', { days: String(milestone.days) });
+      return milestone.days === null ? null : translateNotificationRow(language, 'notifications.row.milestone.streak', { days: String(milestone.days) });
   }
 }
 
@@ -222,9 +222,9 @@ function milestoneReason(notification: NotificationRecord, milestone: Milestone,
   if (milestone.kind !== 'badge') return null;
   const invitee = notification.actor?.displayName ?? notification.actor?.username;
   if (milestone.axis === 'social.invite_joined' && invitee !== undefined) {
-    return translate(language, 'notifications.row.milestone.inviteJoined', { name: invitee });
+    return translateNotificationRow(language, 'notifications.row.milestone.inviteJoined', { name: invitee });
   }
-  return milestone.threshold === null ? null : translate(language, 'notifications.row.milestone.badgeReason', { threshold: String(milestone.threshold) });
+  return milestone.threshold === null ? null : translateNotificationRow(language, 'notifications.row.milestone.badgeReason', { threshold: String(milestone.threshold) });
 }
 
 // --- La ligne -----------------------------------------------------------------

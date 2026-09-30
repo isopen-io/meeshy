@@ -5,6 +5,7 @@ import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
@@ -153,7 +154,11 @@ const EmailGateHost = lazy(chargerGardeEmail);
  * les libellés.
  */
 const chargerBanniereNotification = () =>
-  Promise.all([import('./notification-toast'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+  Promise.all([
+    import('./notification-toast'),
+    loadInterfaceCatalog(currentInterfaceLanguage()),
+    loadNotificationRowCatalog(currentInterfaceLanguage()),
+  ]).then(([m]) => ({
     default: m.NotificationToastHost,
   }));
 const NotificationToastHost = lazy(chargerBanniereNotification);

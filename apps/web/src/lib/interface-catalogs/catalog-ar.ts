@@ -28,7 +28,6 @@ import arMentions from './catalog-ar-mentions';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arConversationCard from './catalog-ar-conversation-card';
-import arNotificationRow from './catalog-ar-notification-row';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
@@ -1156,7 +1155,6 @@ const ar = {
   ...arGallery,
   ...arMessageCard,
   ...arConversationCard,
-  ...arNotificationRow,
   ...arStoriesMine,
   ...arContactCard,
   ...arQuote,

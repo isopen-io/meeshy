@@ -8,6 +8,7 @@ import { NotificationRow } from '@/components/notification-row';
 import { PullIndicator } from '@/components/pull-indicator';
 import { NOTIFICATIONS_PAGE_SIZE } from '@/lib/api/notifications';
 import { translate } from '@/lib/i18n-catalog';
+import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
@@ -315,7 +316,7 @@ export default function NotificationsScreen() {
       if (notification === undefined) return;
       void performQuickAction(action, notification).then((outcome) => {
         if (outcome === 'offline') setAnnouncement(translate(language, 'notifications.offline.title'));
-        if (outcome === 'failed') setAnnouncement(translate(language, action.kind === 'connect' ? 'notifications.quick.failed' : 'notifications.failure'));
+        if (outcome === 'failed') setAnnouncement(action.kind === 'connect' ? translateNotificationRow(language, 'notifications.quick.failed') : translate(language, 'notifications.failure'));
       });
     },
     [byId, language, performQuickAction],

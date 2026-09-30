@@ -14,6 +14,9 @@ import {
   NotificationsSkeleton,
 } from './notifications';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+
+await loadNotificationRowCatalog('fr');
 
 /**
  * LA CLOCHE DESSINÉE (#6288) — chaque état est un composant PUR, rendu sans

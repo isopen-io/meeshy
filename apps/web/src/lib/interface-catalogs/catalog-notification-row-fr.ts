@@ -1,7 +1,7 @@
 /**
- * CE QU'UNE NOTIFICATION DIT (#8727, jumelle web de #8723 / #8724) — tranche du
- * catalogue, extraite pour tenir le budget de taille (motif
- * `catalog-fr-conversation-card.ts`) : le pied de CONTEXTE d'une ligne (le
+ * CE QU'UNE NOTIFICATION DIT, FRANÇAIS (#8727, jumelle web de #8723 / #8724) —
+ * la SOURCE des clés du catalogue de la cloche et de la bannière in-app
+ * (`i18n-notification-row-catalog.ts`), chargé avec elles : le pied de CONTEXTE d'une ligne (le
  * contenu visé), le palier nommé, les gestes d'un ami parrainé et la bannière
  * in-app. Les mots sont ceux d'iOS (`Localizable.xcstrings`, clés
  * `content.kind.*`, `media.summary.*`, `notification.milestone.*`,
@@ -29,7 +29,5 @@ const frNotificationRow = {
   'notifications.banner.label': 'Nouvelle notification',
   'notifications.banner.dismiss': 'Fermer la notification',
 } as const;
-
-export type NotificationRowCatalogSlice = Readonly<Record<keyof typeof frNotificationRow, string>>;
 
 export default frNotificationRow;

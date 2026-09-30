@@ -28,6 +28,11 @@ const enConversationCard = {
   'conversation.card.join.error': 'Could not join. Try again.',
   'conversation.card.leave.error': 'Could not leave. Try again.',
   'conversation.card.a11y': 'Conversation: {title}',
+  'conversation.card.joinPrompt': 'Join?',
+  'conversation.card.joinChoice.anonymous': 'Anonymous',
+  'conversation.card.joinChoice.account': 'My account',
+  'conversation.card.a11y.joinWithAccount': 'Join with my account',
+  'conversation.card.a11y.joinWithNamedAccount': 'Join with the account {account}',
 } satisfies ConversationCardCatalogSlice;
 
 export default enConversationCard;

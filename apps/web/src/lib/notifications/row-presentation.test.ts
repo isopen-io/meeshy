@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import type { NotificationRecord } from './record';
 import { notificationQuickActions, notificationRowPresentation, repeatsText } from './row-presentation';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+
+await loadNotificationRowCatalog('fr');
 
 /**
  * CE QU'UNE LIGNE DE LA CLOCHE DIT (#8727, jumelle de `NotificationRowPresentationTests`

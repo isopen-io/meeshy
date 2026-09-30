@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
-import { translate } from '@/lib/i18n-catalog';
+import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { notificationAccent, notificationFamily } from '@/lib/notifications/categories';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
@@ -188,7 +188,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
     <div
       role="status"
       aria-live="polite"
-      aria-label={translate(language, 'notifications.banner.label')}
+      aria-label={translateNotificationRow(language, 'notifications.banner.label')}
       data-in-app-banner={notification.id}
       className="pointer-events-none fixed inset-x-0 flex justify-center px-2"
       style={{ top: 'calc(env(safe-area-inset-top) + 8px)', zIndex: 1050 }}
@@ -240,7 +240,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
         <button
           type="button"
           data-banner-dismiss
-          aria-label={translate(language, 'notifications.banner.dismiss')}
+          aria-label={translateNotificationRow(language, 'notifications.banner.dismiss')}
           onClick={onDismiss}
           className="absolute top-1 end-1 grid size-11 place-items-center rounded-full focus-visible:outline-2"
           style={{ color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}

@@ -1,6 +1,6 @@
-import type { NotificationRowCatalogSlice } from './catalog-fr-notification-row';
+import type { NotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 
-/** Ce qu'une notification dit (#8727) — voir `catalog-fr-notification-row.ts`. */
+/** Ce qu'une notification dit (#8727) — voir `catalog-notification-row-fr.ts`. */
 const arNotificationRow = {
   'notifications.row.replyTo': 'ردًا على «{text}»',
   'notifications.row.kind.story': 'قصة',
@@ -22,6 +22,6 @@ const arNotificationRow = {
   'notifications.quick.failed': 'تعذّر إرسال الطلب. أعد المحاولة بعد لحظات.',
   'notifications.banner.label': 'إشعار جديد',
   'notifications.banner.dismiss': 'إغلاق الإشعار',
-} as const satisfies NotificationRowCatalogSlice;
+} as const satisfies NotificationRowCatalog;
 
 export default arNotificationRow;
