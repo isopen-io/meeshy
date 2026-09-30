@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { registerAuditLogRoutes } from './audit-logs';
+import { registerCommunityOversightRoutes } from './communities-oversight';
 import { registerMonitoringRoutes } from './monitoring';
 import { registerTrackingLinkAdminRoutes } from './tracking-links';
 
@@ -14,5 +15,6 @@ import { registerTrackingLinkAdminRoutes } from './tracking-links';
 export async function adminOversightRoutes(fastify: FastifyInstance): Promise<void> {
   registerAuditLogRoutes(fastify);
   registerTrackingLinkAdminRoutes(fastify);
+  registerCommunityOversightRoutes(fastify);
   registerMonitoringRoutes(fastify);
 }
