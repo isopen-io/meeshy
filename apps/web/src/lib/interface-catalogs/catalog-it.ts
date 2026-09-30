@@ -34,6 +34,7 @@ import itQuote from './catalog-it-quote';
 import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
+import itPhonePrompt from './catalog-it-phone-prompt';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -1073,6 +1074,7 @@ const it = {
   'message-detail.retry': 'Riprova',
 
   ...itDownload,
+  ...itPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...itComposerAttach,

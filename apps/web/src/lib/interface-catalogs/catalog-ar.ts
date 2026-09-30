@@ -34,6 +34,7 @@ import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
+import arPhonePrompt from './catalog-ar-phone-prompt';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -1070,6 +1071,7 @@ const ar = {
   'message-detail.retry': 'إعادة المحاولة',
 
   ...arDownload,
+  ...arPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...arComposerAttach,

@@ -34,6 +34,7 @@ import esQuote from './catalog-es-quote';
 import esCommentRow from './catalog-es-comment-row';
 import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
+import esPhonePrompt from './catalog-es-phone-prompt';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1073,6 +1074,7 @@ const es = {
   'message-detail.retry': 'Reintentar',
 
   ...esDownload,
+  ...esPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...esComposerAttach,
