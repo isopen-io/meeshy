@@ -692,9 +692,13 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
       () =>
         fastify.prisma.message.findMany({
           where: { id: { in: messageIds } },
+          // #8876 — JAMAIS `content` : un classement de messages nomme un message par
+          // son auteur, sa conversation, sa date et son type ; il ne le LIT pas.
+          // Même classe que #6919 (`GET /admin/messages`) : le texte d'un message ne se
+          // lit que par la lecture souveraine d'une conversation, avec un motif écrit.
+          // Ce n'est pas un masquage : la colonne n'est même pas demandée à la base.
           select: {
             id: true,
-            content: true,
             messageType: true,
             createdAt: true,
             sender: {
@@ -711,8 +715,6 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
       const msg = msgMap.get(e.messageId);
       return {
         id: e.messageId,
-        content: msg?.content,
-        contentPreview: msg?.content ? msg.content.substring(0, 100) : '',
         messageType: msg?.messageType,
         createdAt: msg?.createdAt?.toISOString(),
         sender: msg?.sender ? { ...msg.sender, username: msg.sender.user?.username } : undefined,
@@ -836,12 +838,13 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
 
     case 'share_links_most_used':
     case 'uses': {
+      // #8876 — ni `linkId` ni `identifier` ne sont lus : ils OUVRENT la conversation
+      // (`SHARE_LINK_JOIN_KEY_COLUMNS`), et un classement d'administration n'a pas à
+      // les distribuer. Un lien sans nom est servi `name: null`, jamais sous son secret.
       const topShareLinks = await fastify.prisma.conversationShareLink.findMany({
         where: { isActive: true },
         select: {
           id: true,
-          linkId: true,
-          identifier: true,
           name: true,
           currentUses: true,
           maxUses: true,
@@ -858,8 +861,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       });
       return topShareLinks.map(l => ({
         id: l.id,
-        name: l.name || l.identifier || l.linkId,
-        identifier: l.identifier,
+        name: l.name?.trim() || null,
         currentUses: l.currentUses,
         maxUses: l.maxUses,
         createdAt: l.createdAt?.toISOString(),
@@ -874,8 +876,6 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
         where: { isActive: true, currentUniqueSessions: { gt: 0 } },
         select: {
           id: true,
-          linkId: true,
-          identifier: true,
           name: true,
           currentUses: true,
           currentUniqueSessions: true,
@@ -893,8 +893,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       });
       return topShareLinks.map(l => ({
         id: l.id,
-        name: l.name || l.identifier || l.linkId,
-        identifier: l.identifier,
+        name: l.name?.trim() || null,
         currentUses: l.currentUses,
         currentUniqueSessions: l.currentUniqueSessions,
         maxUses: l.maxUses,

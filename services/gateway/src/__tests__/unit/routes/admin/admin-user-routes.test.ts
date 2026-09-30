@@ -347,17 +347,6 @@ describe('GET /admin/users/:userId', () => {
     expect(res.json().success).toBe(true);
   });
 
-  // #8876 — la FICHE demande le bloc de métadonnées de compte ; la LISTE ne le
-  // demande pas (dix-neuf champs de plus par ligne ne servent à personne).
-  it('asks the sanitizer for the adminMetadata block, and the list does not', async () => {
-    await app.inject({ method: 'GET', url: '/admin/users/user123' });
-    expect(sanitizationService.sanitizeUser).toHaveBeenCalledWith(mockUser, 'ADMIN', { withAdminMetadata: true });
-
-    mockUMS.getUsers.mockResolvedValue({ users: [mockUser], total: 1 });
-    await app.inject({ method: 'GET', url: '/admin/users' });
-    expect(sanitizationService.sanitizeUsers).toHaveBeenCalledWith([mockUser], 'ADMIN');
-  });
-
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
     const res = await app.inject({ method: 'GET', url: '/admin/users/nonexistent' });

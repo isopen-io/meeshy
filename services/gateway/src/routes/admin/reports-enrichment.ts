@@ -24,6 +24,10 @@
  * texte ».
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import {
+  discoverConversationIdsByMessageIds,
+  withOrphanedSenderRepair,
+} from '../../services/messaging/withOrphanedSenderRepair';
 import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
 import {
   ADMIN_PERSON_SELECT,
@@ -140,26 +144,33 @@ export async function enrichReports<Row extends RawReport>(
       ...reports.map((report) => report.moderatorId),
       ...idsOfKind(reports, 'user'),
     ]),
+    // `Message.sender` est une relation REQUISE : un expéditeur disparu ferait
+    // rejeter TOUTE la page de signalements (#6516). Un signalement désigne un
+    // message par id seul — la portée de la réparation se DÉCOUVRE.
     lookup(messageIds, (ids) =>
-      prisma.message.findMany({
-        where: { id: { in: ids } },
-        select: {
-          id: true,
-          content: true,
-          conversationId: true,
-          deletedAt: true,
-          ...messageContentProtectionSelect,
-          sender: {
+      withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, ids) },
+        () =>
+          prisma.message.findMany({
+            where: { id: { in: ids } },
             select: {
               id: true,
-              displayName: true,
-              avatar: true,
-              user: { select: ADMIN_PERSON_SELECT },
+              content: true,
+              conversationId: true,
+              deletedAt: true,
+              ...messageContentProtectionSelect,
+              sender: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  avatar: true,
+                  user: { select: ADMIN_PERSON_SELECT },
+                },
+              },
             },
-          },
-        },
-        take: ids.length,
-      })
+            take: ids.length,
+          })
+      )
     ),
     lookup(conversationIds, (ids) =>
       prisma.conversation.findMany({

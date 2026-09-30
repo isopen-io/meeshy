@@ -5,7 +5,7 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
 import { sendSuccess, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
-import { requirePermission } from '../../middleware/authorize';
+import { requirePermission, withAudit } from '../../middleware/authorize';
 
 // Middleware pour vérifier les permissions admin
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
@@ -273,6 +273,16 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Statut invalide');
       }
 
+      // L'état d'AVANT est ce qui fait le « avant » du journal — et un identifiant
+      // inconnu est un 404 net plutôt qu'une erreur d'écriture opaque.
+      const before = await fastify.prisma.friendRequest.findUnique({
+        where: { id },
+        select: { id: true, status: true, senderId: true, receiverId: true }
+      });
+      if (!before) {
+        return sendNotFound(reply, 'Invitation non trouvée');
+      }
+
       const invitation = await fastify.prisma.friendRequest.update({
         where: { id },
         data: { status },
@@ -292,6 +302,14 @@ export async function invitationRoutes(fastify: FastifyInstance) {
             }
           }
         }
+      });
+
+      await withAudit(request, {
+        action: 'ADMIN_INVITATION_STATUS_SET',
+        entity: 'FriendRequest',
+        entityId: id,
+        userId: before.receiverId,
+        changes: { status: { before: before.status, after: invitation.status } },
       });
 
       // Note: Le modèle Friend n'existe pas dans le schéma Prisma actuel

@@ -437,9 +437,7 @@ describe('broadcastRoutes', () => {
 
     it('returns 200 with broadcast when found', async () => {
       const broadcast = fakeBroadcast();
-      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(broadcast);
-      // #8876 — la fiche nomme createdBy / sentBy / inAppSentBy en une lecture de comptes.
-      mockPrisma.user.findMany.mockResolvedValue([]);
+      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(broadcast); mockPrisma.user.findMany.mockResolvedValue([]); // #8876 : la fiche nomme ses acteurs
 
       const res = await app.inject({ method: 'GET', url: `/${VALID_ID}` });
       expect(res.statusCode).toBe(200);

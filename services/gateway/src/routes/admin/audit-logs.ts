@@ -58,6 +58,7 @@ const AUDIT_ENTITIES = [
   'Post',
   'Broadcast',
   'TrackingLink',
+  'FriendRequest',
   'AgentLlmConfig',
   'Agent',
 ] as const;

@@ -50,6 +50,24 @@ const updateReportSchema = z.object({
 });
 
 /**
+ * Ce qu'une décision de modération CHANGE, et que le journal d'audit consigne
+ * (#8876, § 6.10) : le statut, l'action retenue, les notes et le modérateur. Seuls
+ * les champs dont la valeur a bougé y figurent — une trace qui répète l'état
+ * inchangé noie la décision dans son propre bruit.
+ */
+const AUDITED_REPORT_FIELDS = ['status', 'actionTaken', 'moderatorNotes', 'moderatorId'] as const;
+
+type AuditedReportState = { readonly [Field in (typeof AUDITED_REPORT_FIELDS)[number]]?: string | null };
+
+const reportChanges = (before: AuditedReportState, after: AuditedReportState) =>
+  Object.fromEntries(
+    AUDITED_REPORT_FIELDS.filter((field) => (before[field] ?? null) !== (after[field] ?? null)).map((field) => [
+      field,
+      { before: before[field] ?? null, after: after[field] ?? null },
+    ])
+  );
+
+/**
  * Les clés de tri que `GET /admin/reports` SERT — la liste blanche que
  * `ReportFilters['sortBy']` (`packages/shared/types/report.ts`) déclare déjà et
  * que la lecture `request.query as any` faisait sauter : le compilateur ne
@@ -286,6 +304,16 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const report = await reportService.updateReport(id, moderatorId, body as UpdateReportDTO);
 
+      const changes = reportChanges(existingReport, report);
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_UPDATED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        reason: body.moderatorNotes,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      });
+
       if (isNewlyResolvedReportTransition(existingReport.status, report.status)) {
         await notifyReportResolved(fastify.prisma, {
           id: report.id,
@@ -405,7 +433,21 @@ export async function reportRoutes(fastify: FastifyInstance) {
       const moderatorId = authContext.registeredUser.id;
       const { id } = request.params as { id: string };
 
+      const existingReport = await reportService.getReportById(id);
+      if (!existingReport) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+
       const report = await reportService.assignModerator(id, moderatorId);
+
+      const changes = reportChanges(existingReport, report);
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_ASSIGNED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      });
 
       return sendSuccess(reply, report, { message: 'Moderateur assigne au signalement' });
     } catch (error) {

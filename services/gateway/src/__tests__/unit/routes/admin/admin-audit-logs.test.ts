@@ -39,6 +39,7 @@ const POST = '507f1f77bcf86cd799439034';
 const BROADCAST = '507f1f77bcf86cd799439035';
 const REPORT = '507f1f77bcf86cd799439036';
 const TRACKING_LINK = '507f1f77bcf86cd799439037';
+const FRIEND_REQUEST = '507f1f77bcf86cd799439038';
 
 const PEOPLE = [
   { id: AWA, username: 'awa', displayName: 'Awa Diop', avatar: 'https://cdn/awa.png' },
@@ -104,6 +105,15 @@ function makePrisma(rows: Row[] = [auditRow()], total: number = rows.length) {
     },
     trackingLink: {
       findMany: jest.fn<any>().mockResolvedValue([{ id: TRACKING_LINK, name: 'Affiche', campaign: 'rentree' }]),
+    },
+    friendRequest: {
+      findMany: jest.fn<any>().mockResolvedValue([
+        {
+          id: FRIEND_REQUEST,
+          sender: { displayName: 'Awa Diop', username: 'awa' },
+          receiver: { displayName: null, username: 'jean' },
+        },
+      ]),
     },
   } as any;
 }
@@ -285,6 +295,7 @@ describe('GET /admin/audit-logs — les vrais noms', () => {
     ['Broadcast', BROADCAST, { label: 'Rentrée', secondary: 'Bonne rentrée' }],
     ['Report', REPORT, { label: 'spam', secondary: 'message' }],
     ['TrackingLink', TRACKING_LINK, { label: 'Affiche', secondary: 'rentree' }],
+    ['FriendRequest', FRIEND_REQUEST, { label: 'Awa Diop → @jean', secondary: null }],
   ])('nomme une cible %s par son nom', async (entity, entityId, attendu) => {
     const row = await firstRow(makePrisma([auditRow({ entity, entityId })]));
     expect(row.target).toEqual({ type: entity, id: entityId, ...attendu });

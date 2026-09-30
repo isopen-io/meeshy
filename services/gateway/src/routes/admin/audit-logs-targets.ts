@@ -67,8 +67,9 @@ export async function resolveAuditTargets(
   const broadcastIds = idsOf(refs, 'Broadcast');
   const reportIds = idsOf(refs, 'Report');
   const trackingLinkIds = idsOf(refs, 'TrackingLink');
+  const friendRequestIds = idsOf(refs, 'FriendRequest');
 
-  const [conversations, communities, shareLinks, posts, broadcasts, reports, trackingLinks] = await Promise.all([
+  const [conversations, communities, shareLinks, posts, broadcasts, reports, trackingLinks, friendRequests] = await Promise.all([
     lookup(conversationIds, (ids) =>
       prisma.conversation.findMany({
         where: { id: { in: ids } },
@@ -118,6 +119,17 @@ export async function resolveAuditTargets(
         take: ids.length,
       })
     ),
+    lookup(friendRequestIds, (ids) =>
+      prisma.friendRequest.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          sender: { select: { username: true, displayName: true } },
+          receiver: { select: { username: true, displayName: true } },
+        },
+        take: ids.length,
+      })
+    ),
   ]);
 
   const nameFor = ({ entity, entityId }: TargetRef): Named => {
@@ -157,6 +169,11 @@ export async function resolveAuditTargets(
         return name
           ? { label: name, secondary: clean(row.campaign) }
           : { label: clean(row.campaign), secondary: null };
+      }
+      case 'FriendRequest': {
+        const row = friendRequests.get(entityId);
+        if (!row) return NAMELESS;
+        return { label: `${personLabel(row.sender).label} → ${personLabel(row.receiver).label}`, secondary: null };
       }
       default:
         return NAMELESS;
