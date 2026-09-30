@@ -278,7 +278,10 @@ function StoryStudio({
    * l'auteur l'a DIT. Aucune disposition tant qu'il n'en a choisi aucune.
    * Le chevron CHOISIT, il ne publie jamais : seul Publier envoie
    * (maquette plein écran, porteur 2026-09-27). */
-  const [choice, setChoice] = useState<PublishChoice>({ kind: initialKind, layout: null });
+  // La création ROUVERTE reprend son format (#8849) — l'entrée ne décide que
+  // d'une création neuve.
+  const [entryKind] = useState<PublicationKind>(() => (viewerId === null ? null : deps.drafts.get(viewerId)?.kind) ?? initialKind);
+  const [choice, setChoice] = useState<PublishChoice>({ kind: entryKind, layout: null });
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
@@ -333,8 +336,8 @@ function StoryStudio({
   const editPage = useCallback<StudioPageEdit>((change, key) => edit((current) => withPage(current, current.currentPage, change), key), [edit]);
 
   useEffect(() => {
-    if (viewerId !== null && !purgedRef.current) deps.drafts.set(viewerId, studioSnapshotOf(draft, language));
-  }, [draft, language, viewerId, deps.drafts]);
+    if (viewerId !== null && !purgedRef.current) deps.drafts.set(viewerId, studioSnapshotOf(draft, language, kind));
+  }, [draft, language, kind, viewerId, deps.drafts]);
 
   useEffect(
     () => () => {
@@ -460,7 +463,7 @@ function StoryStudio({
    * de l'auteur, et le magasin est écrit ICI, en plus de l'effet de
    * persistance, parce qu'un studio quitté pendant l'envoi ne rend plus rien
    * — sans cette écriture, le brouillon rouvert republierait la page 1. */
-  function dropPublishedPages(pageIds: readonly string[]) {
+  function dropPublishedPages(pageIds: readonly string[], publishedKind: PublicationKind) {
     latestDraft.current.pages.filter((p) => pageIds.includes(p.id)).forEach((p) => {
       ALL_DOORS.forEach((door) => forgetUpload(p.id, door));
       revokePageMedia(p);
@@ -469,7 +472,7 @@ function StoryStudio({
     latestDraft.current = reduced;
     // Une page PARTIE ne revient jamais par Annuler : elle repartirait.
     historyRef.current = emptyStudioHistory;
-    if (viewerId !== null) deps.drafts.set(viewerId, studioSnapshotOf(reduced, language));
+    if (viewerId !== null) deps.drafts.set(viewerId, studioSnapshotOf(reduced, language, publishedKind));
     setDraft((c) => withoutPages(c, pageIds));
   }
 
@@ -514,7 +517,7 @@ function StoryStudio({
       promotedFromPost: promoted || reelAuto.autoArmed,
       signal: send.signal,
       onPublished: ({ pageIds, published, total }) => {
-        dropPublishedPages(pageIds);
+        dropPublishedPages(pageIds, chosen.kind);
         setPublishProgress({ published, total });
       },
     });
@@ -557,7 +560,7 @@ function StoryStudio({
 
   const reelOffer = useStudioReelOffer({ lang, draft, choice, setChoice, publish: (chosen, promoted) => void publish(chosen, promoted) });
   /** LA BASCULE POST → RÉEL (#8794) — le chevron la verrouille (`authorChose`). */
-  const reelAuto = useStudioReelAutoSwitch({ lang, draft, entryKind: initialKind, enabled: !retouching, setChoice });
+  const reelAuto = useStudioReelAutoSwitch({ lang, draft, entryKind, enabled: !retouching, setChoice });
   const publishRef = useRef(publish);
   publishRef.current = publish;
   useEffect(() => {

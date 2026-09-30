@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import type { ReportReason } from '@/lib/api/reports';
+import type { DraftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postMenuEntries } from '@/lib/feed/publication-menu';
 import { translate } from '@/lib/i18n-catalog';
@@ -46,6 +47,9 @@ export type PostMenuHost = {
   readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onDelete: (postId: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
+  /** LE BROUILLON DE L'ÉDITION EN COURS (#8849, jumelle de #8848) — absent,
+   * la feuille ne sauvegarde rien. */
+  readonly editDrafts?: DraftStore;
 };
 
 const MENU_WIDTH = 240;
