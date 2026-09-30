@@ -112,6 +112,7 @@ describe('le périmètre', () => {
     expect(isInScope('bun-test.d.ts')).toBe(false);
     expect(isInScope('test-support/act-mount.ts')).toBe(false);
     expect(isInScope('components/story-compose-canvas.tsx')).toBe(false);
+    expect(isInScope('routes/story-compose.tsx')).toBe(false);
     expect(isInScope('lib/view/use-studio-sheet.ts')).toBe(false);
     expect(isInScope('routes/publication-compose.tsx')).toBe(false);
     expect(isInScope('components/composer-tray.tsx')).toBe(false);

@@ -44,7 +44,7 @@ const SRC = fileURLToPath(new URL('../src', import.meta.url));
  * d'une publication et le composeur. Ils bougent sous un autre pilotage ; le
  * gate ne les lit pas plutôt que de les exempter ligne à ligne.
  */
-const OUT_OF_SCOPE_BASENAME = /^(story-compose-|use-studio-|publication-compose|composer|status-compose)/;
+const OUT_OF_SCOPE_BASENAME = /^(story-compose[-.]|use-studio-|publication-compose|composer|status-compose)/;
 
 /**
  * LES CHEMINS DONT TOUTES LES COULEURS SONT CELLES D'UN TIERS. Un préfixe
