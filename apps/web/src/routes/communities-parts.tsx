@@ -44,15 +44,15 @@ const CARD_STYLE = SECTION_CARD_STYLE;
 const BRAND = 'var(--color-ios-brand)';
 const BRAND_BUTTON_STYLE = {
   backgroundColor: 'var(--ios-indigo-600)',
-  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, black))',
-  color: 'white',
+  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, var(--color-media-backdrop)))',
+  color: 'var(--color-ios-on-brand)',
   outlineColor: BRAND,
 } as const;
 const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
-const CARD_SCRIM = 'linear-gradient(to bottom, transparent 30%, rgb(0 0 0 / 0.72))';
+const CARD_SCRIM = 'linear-gradient(to bottom, transparent 30%, var(--color-scrim-strong))';
 
 export const bannerBackground = (accent: string): string =>
-  `linear-gradient(135deg, color-mix(in srgb, ${accent} 80%, black), color-mix(in srgb, ${accent} 40%, black))`;
+  `linear-gradient(135deg, color-mix(in srgb, ${accent} 80%, var(--color-media-backdrop)), color-mix(in srgb, ${accent} 40%, var(--color-media-backdrop)))`;
 
 export function ScreenGlyph({ name, size }: { readonly name: CommunitiesGlyphName; readonly size: number }) {
   return <GlyphSvg glyph={COMMUNITIES_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
@@ -85,12 +85,12 @@ export function BackLink({
       aria-label={label}
       data-community-back
       className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
-      style={{ color: overMedia ? 'white' : BRAND, outlineColor: BRAND }}
+      style={{ color: overMedia ? 'var(--color-on-media)' : BRAND, outlineColor: BRAND }}
     >
       {overMedia ? (
         <span
           className="grid place-items-center rounded-chip"
-          style={{ width: 'var(--size-header-circle)', height: 'var(--size-header-circle)', backgroundColor: 'rgb(0 0 0 / 0.45)' }}
+          style={{ width: 'var(--size-header-circle)', height: 'var(--size-header-circle)', backgroundColor: 'var(--color-scrim)' }}
         >
           <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </span>
@@ -174,7 +174,7 @@ export function CommunityCard({ language, community }: { readonly language: Inte
       <span
         data-community-privacy
         className="absolute start-2.5 top-2.5 flex items-center rounded-chip px-1.5 py-1"
-        style={{ backgroundColor: 'rgb(0 0 0 / 0.3)', color: 'rgb(255 255 255 / 0.9)' }}
+        style={{ backgroundColor: 'var(--color-scrim-soft)', color: 'var(--color-on-media-2)' }}
       >
         <PrivacyGlyph isPrivate={community.isPrivate} size={10} />
         <span className="sr-only">{translate(language, privacyKey(community.isPrivate))}</span>
@@ -182,20 +182,20 @@ export function CommunityCard({ language, community }: { readonly language: Inte
       <span
         aria-hidden="true"
         className="absolute end-2.5 top-2.5 block rounded-full"
-        style={{ boxShadow: '0 0 0 2px rgb(255 255 255 / 0.85), 0 2px 4px rgb(0 0 0 / 0.25)' }}
+        style={{ boxShadow: '0 0 0 2px var(--color-on-media-2), 0 2px 4px var(--color-scrim-soft)' }}
       >
         <Avatar initials={initialsOf(community.name)} color={accent} size={44} {...(community.avatar === null ? {} : { src: community.avatar })} />
       </span>
       <span className="absolute inset-x-0 bottom-0 grid gap-0.5 p-3">
-        <span data-community-name className="line-clamp-2 text-secondary leading-tight font-bold" style={{ color: 'white' }}>
+        <span data-community-name className="line-clamp-2 text-secondary leading-tight font-bold" style={{ color: 'var(--color-on-media)' }}>
           {community.name}
         </span>
         {community.description === null ? null : (
-          <span data-community-description className="line-clamp-2 text-chip leading-snug" style={{ color: 'rgb(255 255 255 / 0.88)' }}>
+          <span data-community-description className="line-clamp-2 text-chip leading-snug" style={{ color: 'var(--color-on-media-2)' }}>
             {community.description}
           </span>
         )}
-        <span data-community-counts className="flex items-center gap-2 text-chip font-semibold" style={{ color: 'rgb(255 255 255 / 0.94)' }}>
+        <span data-community-counts className="flex items-center gap-2 text-chip font-semibold" style={{ color: 'var(--color-on-media)' }}>
           <Count icon={<Glyph name="users" size={11} />} value={compactCount(community.memberCount, language)} label={membersLabel(language, community.memberCount)} />
           <Count
             icon={<ScreenGlyph name="chatCircle" size={11} />}
@@ -313,7 +313,7 @@ function EntityAvatar({ name, avatar, accent }: { readonly name: string; readonl
         height: 72,
         borderRadius: 18,
         background: bannerBackground(accent),
-        color: 'white',
+        color: 'var(--color-on-media)',
         fontSize: 27,
         boxShadow: '0 0 0 3px var(--color-ios-card)',
       }}
@@ -341,7 +341,7 @@ export function CommunityHero({ language, community }: { readonly language: Inte
     <div data-community-hero>
       <div className="relative overflow-hidden" style={{ height: COMMUNITY_BANNER_HEIGHT }}>
         <CommunityBanner accent={accent} banner={community.banner} />
-        <span aria-hidden="true" className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgb(0 0 0 / 0.25), transparent 40%, rgb(0 0 0 / 0.3))' }} />
+        <span aria-hidden="true" className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, var(--color-scrim-soft), transparent 40%, var(--color-scrim-soft))' }} />
       </div>
       <div className="mx-auto max-w-xl px-4">
         <div style={{ marginTop: -36 }}>
@@ -518,15 +518,15 @@ export function CommunityPreviewCard({ language, draft }: { readonly language: I
       <span className="absolute inset-0" style={{ background: bannerBackground(accent) }} />
       <span className="absolute inset-0" style={{ background: CARD_SCRIM }} />
       <span className="absolute inset-x-0 bottom-0 grid gap-1 p-4">
-        <span className="line-clamp-2 font-bold" style={{ color: 'white', fontSize: 'var(--text-lg)' }}>
+        <span className="line-clamp-2 font-bold" style={{ color: 'var(--color-on-media)', fontSize: 'var(--text-lg)' }}>
           {name === '' ? translate(language, 'community.create.preview.placeholder') : name}
         </span>
         {description === '' ? null : (
-          <span className="line-clamp-2 text-chip" style={{ color: 'rgb(255 255 255 / 0.88)' }}>
+          <span className="line-clamp-2 text-chip" style={{ color: 'var(--color-on-media-2)' }}>
             {description}
           </span>
         )}
-        <span className="flex items-center gap-1.5 text-chip font-semibold" style={{ color: 'rgb(255 255 255 / 0.94)' }}>
+        <span className="flex items-center gap-1.5 text-chip font-semibold" style={{ color: 'var(--color-on-media)' }}>
           <PrivacyGlyph isPrivate={draft.isPrivate} size={10} />
           {translate(language, privacyKey(draft.isPrivate))}
         </span>
@@ -554,8 +554,8 @@ function Switch({ checked }: { readonly checked: boolean }) {
           insetInlineStart: checked ? 22 : 2,
           width: 27,
           height: 27,
-          backgroundColor: 'white',
-          boxShadow: '0 1px 3px rgb(0 0 0 / 0.3)',
+          backgroundColor: 'var(--color-ios-on-brand)',
+          boxShadow: 'var(--shadow-sm)',
           transition: 'inset-inline-start 160ms ease',
         }}
       />
