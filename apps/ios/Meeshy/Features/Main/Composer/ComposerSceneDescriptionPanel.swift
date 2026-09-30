@@ -110,7 +110,7 @@ struct ComposerSceneDescriptionPanel: View {
     @State private var estEnFrappe = false
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             if !isCollapsed { legende }
             if !estEnFrappe { chevron }
         }
@@ -150,8 +150,8 @@ struct ComposerSceneDescriptionPanel: View {
             },
             editingRequest: editingRequest
         )
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
         .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 

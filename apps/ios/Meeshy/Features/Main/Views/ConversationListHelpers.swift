@@ -33,19 +33,19 @@ struct SectionHeaderView: View {
             }
             onToggle()
         }) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Section icon with glow
                 ZStack {
                     // Glow ring behind icon
                     Circle()
                         .fill(Color(hex: section.color).opacity(isExpanded ? 0.15 : 0))
-                        .frame(width: 40, height: 40)
+                        .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                         .blur(radius: 4)
                         .animation(.easeInOut(duration: 0.4), value: isExpanded)
 
                     Circle()
                         .fill(Color(hex: section.color).opacity(isDropTarget ? 0.5 : (isDark ? 0.25 : 0.18)))
-                        .frame(width: 32, height: 32)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .scaleEffect(isDropTarget ? 1.15 : (isTapped ? 1.2 : 1.0))
 
                     Image(systemName: section.icon)
@@ -63,8 +63,8 @@ struct SectionHeaderView: View {
                 Text("\(count)")
                     .font(.caption.weight(.bold))
                     .foregroundColor(Color(hex: section.color))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
                             .fill(Color(hex: section.color).opacity(isDropTarget ? 0.4 : (isDark ? 0.2 : 0.15)))
@@ -96,15 +96,15 @@ struct SectionHeaderView: View {
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .animation(.easeOut(duration: 0.2), value: isExpanded)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
+            .padding(.vertical, MeeshySpacing.smPlus)
+            .padding(.horizontal, MeeshySpacing.md)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(isDropTarget ? Color(hex: section.color).opacity(isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(0.04) : Color.clear))
+                    .fill(isDropTarget ? Color(hex: section.color).opacity(isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(MeeshyOpacity.faint) : Color.clear))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
-                                isDropTarget ? Color(hex: section.color).opacity(0.5) : Color.clear,
+                                isDropTarget ? Color(hex: section.color).opacity(MeeshyOpacity.strong) : Color.clear,
                                 lineWidth: 2
                             )
                             .animation(.easeInOut(duration: 0.3), value: isDropTarget)
@@ -154,7 +154,7 @@ struct ConversationPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header — banner background + dark overlay for legibility
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: MeeshySpacing.md) {
                 // Real avatar with story ring / mood / presence
                 MeeshyAvatar(
                     name: conversation.name,
@@ -167,16 +167,16 @@ struct ConversationPreviewView: View {
                     presenceState: presenceState
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     // Titre pleine largeur — peut aller à la ligne (2 lignes).
                     // displayName (customName prioritaire) : même convention
                     // que la ligne de liste (ThemedConversationRow) — l'avatar
                     // reste sur `name` (initiales/couleur du vrai nom).
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
                         Text(conversation.displayName)
                             .font(.callout.weight(.bold))
                             .foregroundColor(headerContentColor)
-                            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3, y: 1)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -184,39 +184,39 @@ struct ConversationPreviewView: View {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
                                 .foregroundColor(MeeshyColors.error)
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                         }
 
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.caption2)
-                                .foregroundColor(headerContentColor.opacity(0.7))
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                                .foregroundColor(headerContentColor.opacity(MeeshyOpacity.heavy))
+                                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                         }
 
                         Spacer(minLength: 0)
                     }
 
                     if conversation.type != .direct {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
                                 .font(.caption2)
                             Text(MembersCountLabel.text(conversation.memberCount,
                                                         capped: conversation.memberCountCapped))
                                 .font(.caption2.weight(.medium))
                         }
-                        .foregroundColor(headerContentColor.opacity(0.9))
-                        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                        .foregroundColor(headerContentColor.opacity(MeeshyOpacity.intense))
+                        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                     }
 
                     // Boutons d'action SOUS le titre, alignés à droite.
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         Spacer(minLength: 0)
                         headerActions
                     }
                 }
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .background(headerBackground)
 
             // Recent messages preview
@@ -229,7 +229,7 @@ struct ConversationPreviewView: View {
                         title: String(localized: "preview.no_messages", defaultValue: "Aucun message"),
                         subtitle: ""
                     )
-                    .padding(.bottom, 10)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
@@ -243,8 +243,8 @@ struct ConversationPreviewView: View {
                                     .allowsHitTesting(false)
                                 }
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                         }
                         .onAppear {
                             guard let lastID = cachedMessages.last?.id else { return }
@@ -259,19 +259,19 @@ struct ConversationPreviewView: View {
         // Largeur pilotée par le call site (overlay) — source de vérité unique.
         // La carte remplit la largeur proposée ; le conteneur la fixe à 340.
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: accentColor).opacity(0.5), Color(hex: secondaryColor).opacity(0.3)],
+                        colors: [Color(hex: accentColor).opacity(MeeshyOpacity.strong), Color(hex: secondaryColor).opacity(MeeshyOpacity.medium)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 20, y: 10)
+        .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
     }
 
     // MARK: - Header background (banner + dark gradient)
@@ -296,10 +296,10 @@ struct ConversationPreviewView: View {
 
                 // Dark gradient (top → bottom) + light global veil for title legibility
                 LinearGradient(
-                    colors: [Color.black.opacity(0.0), Color.black.opacity(0.55)],
+                    colors: [Color.black.opacity(0.0), Color.black.opacity(MeeshyOpacity.strong)],
                     startPoint: .top, endPoint: .bottom
                 )
-                Color.black.opacity(0.15)
+                Color.black.opacity(MeeshyOpacity.light)
             }
         } else {
             LinearGradient(
@@ -313,7 +313,7 @@ struct ConversationPreviewView: View {
                     Rectangle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: accentColor).opacity(0.1), Color.clear],
+                                colors: [Color(hex: accentColor).opacity(MeeshyOpacity.subtle), Color.clear],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -326,12 +326,12 @@ struct ConversationPreviewView: View {
 
     @ViewBuilder
     private var headerActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if conversation.userState.unreadCount > 0 {
                 Text(NotificationBadge.displayed(conversation.userState.unreadCount))
                     .font(.caption2.weight(NotificationBadge.fontWeight))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
                     .frame(minWidth: 20, minHeight: 20)
                     .background(
                         Capsule().fill(
@@ -381,16 +381,16 @@ struct ConversationPreviewView: View {
         Image(systemName: icon)
             .font(.footnote.weight(.semibold))
             .foregroundColor(.white)
-            .frame(width: 34, height: 34)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
     }
 
     private var previewBackground: some View {
         ZStack {
             LinearGradient(
                     colors: isDark
-                        ? [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")]
-                        : [Color(hex: "FFFFFF"), Color(hex: "FAFAFF"), Color(hex: "F8F7FF")],
+                        ? [MeeshyColors.surfaceDarkBase, MeeshyColors.surfaceDarkDeep, MeeshyColors.surfaceDarkRaised]
+                        : [Color(hex: "FFFFFF"), MeeshyColors.surfaceLightMist, MeeshyColors.surfaceLightRaised],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
 
@@ -441,13 +441,13 @@ struct ThemedCommunityCard: View, Equatable {
 
             // Dark overlay for text readability over any banner
             LinearGradient(
-                colors: [.clear, .clear, Color.black.opacity(0.7)],
+                colors: [.clear, .clear, Color.black.opacity(MeeshyOpacity.heavy)],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
             // Content
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(community.name)
                     .font(.caption.weight(.bold))
                     .foregroundColor(.white)
@@ -455,23 +455,23 @@ struct ThemedCommunityCard: View, Equatable {
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 6) {
-                    HStack(spacing: 2) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "person.2.fill")
                             .font(.caption2)
                         Text(CompactCountLabel.text(community.memberCount))
                             .font(.caption2.weight(.semibold))
                     }
-                    HStack(spacing: 2) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "bubble.left.fill")
                             .font(.caption2)
                         Text(CompactCountLabel.text(community.conversationCount))
                             .font(.caption2.weight(.semibold))
                     }
                 }
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
-            .padding(8)
+            .padding(MeeshySpacing.sm)
         }
         .frame(width: 130, height: 110)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
@@ -573,14 +573,14 @@ struct TagChip: View {
         Text(tag.name)
             .font(.caption2.weight(.semibold))
             .foregroundColor(Color(hex: tag.color))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(
                 Capsule()
                     .fill(Color(hex: tag.color).opacity(colorScheme == .dark ? 0.25 : 0.18))
                     .overlay(
                         Capsule()
-                            .stroke(Color(hex: tag.color).opacity(0.4), lineWidth: 0.5)
+                            .stroke(Color(hex: tag.color).opacity(0.4), lineWidth: MeeshyBorder.hairline)
                     )
             )
     }

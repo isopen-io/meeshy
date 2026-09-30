@@ -119,7 +119,7 @@ public extension View {
 
     /// Guarantee a ≥ `minSize` square hit region (Apple HIG minimum is 44pt)
     /// while keeping the visible glyph at its design size.
-    func meeshyTapTarget(_ minSize: CGFloat = 44) -> some View {
+    func meeshyTapTarget(_ minSize: CGFloat = MeeshyControlSize.tapTarget) -> some View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
     }

@@ -63,6 +63,25 @@ final class ConversationPreviewHeaderLayoutTests: XCTestCase {
         XCTAssertFalse(layout.measuresBandHeight)
     }
 
+    // MARK: - #8898 : l'aperçu épouse le haut de la feuille, comme le web
+
+    /// Directive porteur 2026-09-30 : « tout le bloc épouse l'entête arrondi
+    /// puis ligne droite sur la bordure basse ». Le verre de l'aperçu n'est
+    /// plus un rectangle arrondi flottant : il va d'un bord à l'autre, collé
+    /// en haut (l'arrondi est celui de la feuille), et finit par une arête
+    /// droite — `thread-header.tsx`, `inset-x-0 top-0`.
+    func test_resolve_previewMode_isAnEdgeToEdgeBandWithAStraightBottomEdge() {
+        let layout = ConversationHeaderLayout.resolve(previewMode: true, showOptions: false)
+        XCTAssertEqual(layout.glassShape, .edgeToEdgeBand)
+    }
+
+    /// Le fil normal garde son bloc arrondi flottant quand il est déplié —
+    /// #8898 ne touche que l'aperçu.
+    func test_resolve_fullConversationUnfolded_keepsTheFloatingRoundedBlock() {
+        XCTAssertEqual(ConversationHeaderLayout.resolve(previewMode: false, showOptions: true).glassShape, .floatingBlock)
+        XCTAssertEqual(ConversationHeaderLayout.resolve(previewMode: false, showOptions: false).glassShape, .none)
+    }
+
     /// Le calque transparent qui interceptait tout toucher au-dessus du fil
     /// pour « ouvrir la conversation complète » empêchait le DÉFILEMENT : la
     /// liste UIKit ne recevait plus aucun geste. Il n'existe plus — ouvrir la

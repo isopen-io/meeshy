@@ -19,11 +19,11 @@ struct VideoEditorCaptionsPanel: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             languageRow
             stateView
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
         .onAppear {
             if let saved = viewModel.document.captionLanguageCode {
                 languageCode = saved
@@ -36,7 +36,7 @@ struct VideoEditorCaptionsPanel: View {
     private var languageRow: some View {
         HStack {
             Text(String(localized: "videoEditor.captions.spoken_language", defaultValue: "Langue parlée", bundle: .module))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
             Menu {
@@ -49,17 +49,17 @@ struct VideoEditorCaptionsPanel: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(language?.flag ?? "🌐")
                     Text(language?.nativeName ?? languageCode.uppercased())
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 }
                 .foregroundStyle(theme.textPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(accent.opacity(0.14)))
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .background(Capsule().fill(accent.opacity(MeeshyOpacity.light)))
             }
         }
     }
@@ -81,45 +81,45 @@ struct VideoEditorCaptionsPanel: View {
     }
 
     private var runningView: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             ProgressView()
                 .tint(accent)
             Text(String(localized: "videoEditor.captions.analyzing", defaultValue: "Analyse de l'audio…", bundle: .module))
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyFont.smallSize))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
             Button {
                 viewModel.cancelTranscription()
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     .foregroundStyle(theme.error)
             }
             .buttonStyle(.plain)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private var doneView: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack {
                 Label(String(localized: "videoEditor.captions.count", defaultValue: "\(viewModel.document.captions.count) sous-titres", bundle: .module), systemImage: "captions.bubble.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundStyle(accent)
                 Spacer()
                 Button {
                     viewModel.clearCaptions()
                 } label: {
                     Text(String(localized: "videoEditor.captions.clear", defaultValue: "Effacer", bundle: .module))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundStyle(theme.error)
                 }
                 .buttonStyle(.plain)
             }
             ScrollView(.vertical, showsIndicators: false) {
                 Text(viewModel.document.transcriptionText ?? "")
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.textPrimary.opacity(0.9))
+                    .font(.system(size: MeeshyFont.subheadSize))
+                    .foregroundStyle(theme.textPrimary.opacity(MeeshyOpacity.intense))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 96)
@@ -128,12 +128,12 @@ struct VideoEditorCaptionsPanel: View {
     }
 
     private func failedView(_ message: String) -> some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(theme.warning)
                 Text(message)
-                    .font(.system(size: 11))
+                    .font(.system(size: MeeshyFont.footnoteSize))
                     .foregroundStyle(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -145,16 +145,16 @@ struct VideoEditorCaptionsPanel: View {
         Button {
             viewModel.transcribe(languageCode: languageCode)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
                 Text(title)
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(MeeshyColors.brandGradient)
             )
         }

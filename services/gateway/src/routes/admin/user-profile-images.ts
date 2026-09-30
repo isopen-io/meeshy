@@ -48,6 +48,7 @@ import { unsetOrNull } from '../../utils/prisma-unset';
 import { validatePagination } from '../../utils/pagination';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
+import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 import { evaluerLoiDesChamps } from './user-field-law';
 
 type Deps = { userAuditService: UserAuditService };
@@ -215,6 +216,10 @@ export function registerUserProfileImageRoutes(fastify: FastifyInstance, deps: D
           : { banner: url },
       });
 
+      if (kind === 'avatar') {
+        await releaseParticipantAvatarSnapshots(fastify.prisma, userId)
+          .catch((err: unknown) => logError(fastify.log, '[ADMIN_PROFILE_IMAGE] participant snapshot release failed', err));
+      }
       await oublierLeCache(userId);
       fastify.notificationService?.emitUserUpdated({ userId, changes: kind === 'avatar' ? { avatar: url } : { banner: url } })
         .catch((err: unknown) => logError(fastify.log, '[ADMIN_PROFILE_IMAGE] emitUserUpdated failed', err));

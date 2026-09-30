@@ -81,11 +81,11 @@ struct CallBubbleView: View {
             }
 
             CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
-                .shadow(color: Color.black.opacity(0.3), radius: 8, y: 4)
+                .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .overlay(alignment: .topTrailing) {
                     TransientCallSignalGlyph(strength: signalStrength)
-                        .padding(6)
-                        .background(Circle().fill(Color.black.opacity(0.55)))
+                        .padding(MeeshySpacing.xsPlus)
+                        .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
                         .offset(x: 16, y: -16)
                 }
                 .overlay(alignment: .top) {
@@ -146,12 +146,12 @@ struct CallBubbleView: View {
     }
 
     private var tierControlBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             muteButton
             speakerButton
             hangupButton
         }
-        .padding(.top, 10)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     private func accessibilityTierLabel(for tier: CallBubbleSizeTier) -> String {
@@ -290,7 +290,7 @@ struct CallBubbleView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(callManager.isMuted ? MeeshyColors.error : .white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(0.2) : Color.black.opacity(0.55)))
+                .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted
@@ -309,7 +309,7 @@ struct CallBubbleView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.black.opacity(0.55)))
+                .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
         }
         .pressable()
         .accessibilityLabel(callManager.isSpeaker
@@ -331,7 +331,7 @@ struct CallBubbleView: View {
                 .background(
                     Circle().fill(
                         LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
+                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(MeeshyOpacity.intense)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

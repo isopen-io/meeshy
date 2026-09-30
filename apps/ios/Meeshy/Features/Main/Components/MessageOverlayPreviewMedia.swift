@@ -92,7 +92,7 @@ struct OverlayPreviewMediaGrid: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     private static func flatIndex(rows: [[CGSize]], row: Int, cell: Int) -> Int {
@@ -125,7 +125,7 @@ private struct MaskedMediaTile: View {
         ZStack {
             Color.black.opacity(0.85)
             Image(systemName: MessageProtectionSymbols.blurredFilled)
-                .font(MeeshyFont.relative(18, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
         }
         .accessibilityHidden(true)
@@ -160,7 +160,7 @@ struct OverlayProtectedPreview: View {
     }
 
     private var blurred: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
+        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.sm) {
             if !visual.isEmpty {
                 OverlayPreviewMediaGrid(attachments: visual, masked: true)
             }
@@ -177,13 +177,13 @@ struct OverlayProtectedPreview: View {
     /// ligne de substitution de même longueur, floutée, que VoiceOver ignore.
     private var blurredBubble: some View {
         Text(verbatim: String(repeating: "▆ ", count: max(3, min(24, message.content.count / 3))))
-            .font(MeeshyFont.relative(15))
+            .font(MeeshyFont.relative(MeeshyFont.bodySize))
             .foregroundColor(message.isMe ? .white : (isDark ? .white : .black))
             .blur(radius: 6)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(BubbleBackground(isMe: message.isMe, accentHex: accentHex, isDark: isDark))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
             .overlay {
                 Image(systemName: MessageProtectionSymbols.blurredFilled)
                     .font(MeeshyFont.relative(15, weight: .semibold))

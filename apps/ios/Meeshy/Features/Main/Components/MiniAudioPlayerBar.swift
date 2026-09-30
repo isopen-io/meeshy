@@ -161,12 +161,12 @@ struct MiniAudioPlayerBar: View {
 
     @ViewBuilder
     private func content(for context: ActiveAudioContext) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             // Now-playing cluster (avatar + track meta + progress). Tapping it
             // opens the source conversation — so VoiceOver exposes it as a single
             // button rather than as disconnected monogram / name / percent
             // fragments, and the whole-card tap action stays reachable non-visually.
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar conv. Le fond de la barre étant lui-même indigo
                 // plein, le placeholder ne peut plus être un dégradé indigo —
                 // il s'y fondrait. Voile blanc translucide : il se détache du
@@ -247,13 +247,13 @@ struct MiniAudioPlayerBar: View {
                 .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         // Les 6 pt de respiration sont ABSORBÉS par le bandeau (#6579) : posés
         // APRÈS `.background`, ils laissaient une couture de 6 pt non teintés
         // entre la bande du haut et l'aplat de la barre. Posés avant, ils sont
         // peints de la même couleur — la respiration reste, la couture non.
-        .padding(.top, 6)
+        .padding(.top, MeeshySpacing.xsPlus)
         // Bandeau INDIGO PLEIN, à angles droits, pleine largeur (retour user
         // 2026-08-13). La capsule glass d'avant flottait au-dessus du contenu
         // et empruntait sa couleur au fond : à ce point de montage — le bloc

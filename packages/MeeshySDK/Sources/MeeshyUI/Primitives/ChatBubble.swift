@@ -75,7 +75,7 @@ public struct ChatBubble: View {
             .fill(
                 isMe ?
                 LinearGradient(
-                    colors: [accent, accent.opacity(0.8)],
+                    colors: [accent, accent.opacity(MeeshyOpacity.intense)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ) :

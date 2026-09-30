@@ -67,10 +67,10 @@ extension MeeshyComposerHost {
             HapticFeedback.light()
         } label: {
             Text(ComposerLanguageFlag.label(for: documentLanguage))
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule()
                         .fill(MeeshyColors.indigo400.opacity(0.15))

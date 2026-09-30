@@ -671,6 +671,7 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
+                        ConversationViewingReporter.shared.setForeground(true)
                         Task { await AuthManager.shared.refreshCurrentUserProfile() }
                         // Only rearm the socket + backfill if we ACTUALLY backgrounded.
                         // A transient .inactive→.active (Control Center, notification
@@ -693,6 +694,7 @@ struct MeeshyApp: App {
                         // coordinator may suspend it) so incoming calls fall back to
                         // a VoIP push (CallKit) — a suspended socket can't ring.
                         MessageSocketManager.shared.emitAppForeground(false)
+                        ConversationViewingReporter.shared.setForeground(false)
                         // Delegate the whole background entry to a single
                         // coordinator guarded by a beginBackgroundTask. The
                         // coordinator owns the order (stop players → flush

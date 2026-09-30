@@ -96,7 +96,7 @@ struct CallFrameMoodChips: View {
                             .id(chip)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                 }
             }
             .disabled(!isEnabled)
@@ -143,7 +143,7 @@ private struct CallFrameMoodChipLabel: View {
             .foregroundColor(isSelected ? MeeshyColors.indigo950 : .white)
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minWidth: Self.minimumTarget, minHeight: Self.capsuleHeight)
             .background(Capsule().fill(isSelected ? Color.white : Color.clear))
             .background(Capsule().fill(CallButtonFill.pressedHighlight(isPressed: isPressed)))

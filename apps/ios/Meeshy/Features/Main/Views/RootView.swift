@@ -1454,7 +1454,7 @@ struct RootView: View {
                             .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
                     } else {
                         Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(20, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
                             .foregroundColor(.white)
                     }
                 }
@@ -1766,7 +1766,7 @@ private struct PendingSettingsBannerInline: View {
                     // cf. PendingStoryBannerInline : la version FR est plus longue —
                     // shrink-avant-troncature pour rester lisible.
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
                         .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -1780,14 +1780,14 @@ private struct PendingSettingsBannerInline: View {
                     LinearGradient(
                         colors: [
                             MeeshyColors.warning,
-                            Color(hex: "F59E0B")
+                            MeeshyColors.amber500
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1846,7 +1846,7 @@ private struct PendingStoryBannerInline: View {
                     // la réduit avant de tronquer, pour qu'elle reste lisible en
                     // portrait étroit / Dynamic Type agrandi.
                     Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
                         .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -1862,14 +1862,14 @@ private struct PendingStoryBannerInline: View {
                     LinearGradient(
                         colors: [
                             MeeshyColors.warning,
-                            Color(hex: "F59E0B")
+                            MeeshyColors.amber500
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .gesture(

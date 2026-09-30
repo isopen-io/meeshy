@@ -50,7 +50,7 @@ struct BlockedTab: View {
                     blockedRow(user, index: index)
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         .refreshable { await viewModel.loadBlocked(forceNetwork: true) }
@@ -59,7 +59,7 @@ struct BlockedTab: View {
     private func blockedRow(_ user: BlockedUser, index: Int) -> some View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
@@ -68,7 +68,7 @@ struct BlockedTab: View {
             )
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -88,16 +88,16 @@ struct BlockedTab: View {
                 Text(String(localized: "contacts.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(MeeshyColors.warning)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
-                        Capsule().stroke(MeeshyColors.warning.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(MeeshyColors.warning.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             }
             .accessibilityLabel(String(format: String(localized: "contacts.blocked.unblock-a11y", defaultValue: "Débloquer %@", bundle: .main), user.name))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.blockedUsers.count)
     }
 

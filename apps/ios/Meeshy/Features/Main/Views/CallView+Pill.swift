@@ -146,9 +146,9 @@ extension CallView {
             }
             if isGroupStage && showTranscript {
                 captionsBand(hasOwnGlass: false)
-                    .padding(.leading, 14)
-                    .padding(.trailing, 4)
-                    .padding(.top, 6)
+                    .padding(.leading, MeeshySpacing.mdPlus)
+                    .padding(.trailing, MeeshySpacing.xs)
+                    .padding(.top, MeeshySpacing.xsPlus)
                 pillHairline
             }
             baseRow
@@ -163,7 +163,7 @@ extension CallView {
         Rectangle()
             .fill(Color.white.opacity(0.14))
             .frame(height: 0.5)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityHidden(true)
     }
 
@@ -207,8 +207,8 @@ extension CallView {
             }
             .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private func moreButton(captioned: Bool) -> some View {

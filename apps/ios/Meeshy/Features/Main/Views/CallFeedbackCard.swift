@@ -13,21 +13,21 @@ struct CallFeedbackCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let starColor = MeeshyColors.warning
-    private static let issueColumns = [GridItem(.adaptive(minimum: 132), spacing: 8)]
+    private static let issueColumns = [GridItem(.adaptive(minimum: 132), spacing: MeeshySpacing.sm)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             stars
             if viewModel.pendingRating != nil {
                 issues
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .frame(maxWidth: 420)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
-        .padding(.horizontal, 16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 16, y: 8)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: viewModel.pendingRating)
         .task(id: prompt.callId) {
@@ -38,7 +38,7 @@ struct CallFeedbackCard: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
             Text(title)
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -64,7 +64,7 @@ struct CallFeedbackCard: View {
     }
 
     private var stars: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             ForEach(Array(CallQualityFeedback.ratingRange), id: \.self) { value in
                 starButton(value)
             }
@@ -90,11 +90,11 @@ struct CallFeedbackCard: View {
     }
 
     private var issues: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "call.feedback.issues.title", defaultValue: "Qu'est-ce qui a gêné ?", bundle: .main))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: Self.issueColumns, alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: Self.issueColumns, alignment: .leading, spacing: MeeshySpacing.sm) {
                 ForEach(viewModel.availableIssues) { issue in
                     issueChip(issue)
                 }
@@ -105,7 +105,7 @@ struct CallFeedbackCard: View {
                     Text(String(localized: "call.feedback.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, MeeshySpacing.xl)
                         .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)
@@ -126,13 +126,13 @@ struct CallFeedbackCard: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(
-            selected ? MeeshyColors.brandPrimary : Color.primary.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            selected ? MeeshyColors.brandPrimary : Color.primary.opacity(MeeshyOpacity.subtle),
+            in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
         )
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

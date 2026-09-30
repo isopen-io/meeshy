@@ -449,7 +449,7 @@ public struct StoryTimelineView: View {
         if tracks.isEmpty {
             TimelineEmptyState(isDark: colorScheme == .dark)
                 .padding(.vertical, 28)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
         } else {
             let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
             VStack(spacing: 0) {
@@ -487,7 +487,7 @@ public struct StoryTimelineView: View {
     @ViewBuilder
     private func trackRows(tracks: [CompactTrack], laneWidth: CGFloat,
                            geometry: TimelineGeometry) -> some View {
-        let rows = VStack(spacing: 4) {
+        let rows = VStack(spacing: MeeshySpacing.xs) {
             ForEach(tracks, id: \.id) { track in
                 let clipDuration = Self.trackDurationSeconds(track: track, project: viewModel.project)
                 let index = Self.trackTypeIndex(for: track)
@@ -567,8 +567,8 @@ public struct StoryTimelineView: View {
                     let raw = String(localized: String.LocalizationValue(key), bundle: .module)
                     Text(isExpanded ? raw : String(format: raw, hidden))
                         .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(.ultraThinMaterial, in: Capsule())
                         .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.18)))
                         .foregroundStyle(MeeshyColors.indigo700)
@@ -576,8 +576,8 @@ public struct StoryTimelineView: View {
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .opacity(collapsedFooterOpacity)
         }
     }

@@ -93,7 +93,7 @@ extension StoryComposerView {
                     }
                 }
             }
-            .padding(.trailing, 16)
+            .padding(.trailing, MeeshySpacing.lg)
             .padding(.bottom, 88)
             .animation(.spring(response: 0.3, dampingFraction: 0.85),
                        value: showTopBar)
@@ -477,7 +477,7 @@ extension StoryComposerView {
                     defaultValue: "Touchez pour écrire", bundle: .module))
             .font(MeeshyFont.relative(15, weight: .semibold))
             .foregroundStyle(.primary.opacity(0.75))
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .onTapGesture { startTextCompositionOnBlankCanvas() }
@@ -504,7 +504,7 @@ extension StoryComposerView {
     /// un interstice réservé à une vue absente serait un trou.
     @ViewBuilder
     private var blankCanvasStarterRow: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             blankCanvasCaptureRow
             BlankCanvasPasteStarter(
                 canAddMedia: viewModel.canAddMedia,
@@ -515,7 +515,7 @@ extension StoryComposerView {
 
     @ViewBuilder
     private var blankCanvasCaptureRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             if offersCameraStarter {
                 blankCanvasStarterCapsule(
                     icon: "camera.fill",
@@ -743,9 +743,9 @@ extension StoryComposerView {
                         .resizable()
                         .scaledToFill()
                         .frame(width: 44, height: 44)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .padding(.leading, 6)
-                        .padding(.vertical, 6)
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
+                        .padding(.leading, MeeshySpacing.xsPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "story.composer.start.a11y.recent",
@@ -756,7 +756,7 @@ extension StoryComposerView {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(.primary.opacity(0.7))
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, MeeshySpacing.md)
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
                 }
@@ -937,7 +937,7 @@ extension StoryComposerView {
                             .fixedSize()
                             .rotationEffect(.degrees(-90))
                             .frame(width: 24, height: 44)
-                            .padding(.leading, 8)
+                            .padding(.leading, MeeshySpacing.sm)
                             .transition(.opacity)
                     }
                 }
@@ -1673,7 +1673,7 @@ extension StoryComposerView {
         if isLoadingMedia {
             Color.black.opacity(0.4)
                 .overlay {
-                    VStack(spacing: 12) {
+                    VStack(spacing: MeeshySpacing.md) {
                         ZStack {
                             Circle()
                                 .stroke(Color.white.opacity(0.2), lineWidth: 4)
@@ -1722,7 +1722,7 @@ extension StoryComposerView {
                     .composerHitTarget()
             }
             .padding(.top, showTopBar ? 70 : 16)
-            .padding(.trailing, 12)
+            .padding(.trailing, MeeshySpacing.md)
             .transition(.scale.combined(with: .opacity))
             .animation(.spring(response: 0.3), value: showTopBar)
         }
@@ -1786,7 +1786,7 @@ struct BlankCanvasStarterSurface<Content: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             Spacer(minLength: 0)
             content
             Spacer(minLength: 0)
@@ -1818,7 +1818,7 @@ struct BlankCanvasStarterLabel: View {
                 .font(MeeshyFont.relative(14, weight: .semibold))
         }
         .foregroundStyle(.primary)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .frame(minHeight: 44)
         .contentShape(Capsule())
         .adaptiveGlass(in: Capsule())

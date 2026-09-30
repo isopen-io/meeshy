@@ -5,7 +5,7 @@ import UIKit
 @testable import MeeshyUI
 
 /// Banc de CAPTURE (#8858) — la bannière in-app de chaque DÉTAIL de message
-/// (position, contact, sticker, invitation, lien, vidéo), sur des charges
+/// (texte, vocal, position, contact, sticker, invitation, lien, vidéo — #8897), sur des charges
 /// fabriquées au contrat #8856, sans compte ni réseau ni envoi. Inerte par
 /// défaut : ne s'exécute que si `MEESHY_CAPTURE_DIR` est posé
 /// (`TEST_RUNNER_MEESHY_CAPTURE_DIR=… xcodebuild test …`).
@@ -15,6 +15,9 @@ final class NotificationDetailCaptureTests: XCTestCase {
     private var captureDir: String? { ProcessInfo.processInfo.environment["MEESHY_CAPTURE_DIR"] }
 
     private let fixtures: [(name: String, context: String, metadata: String, content: String)] = [
+        ("texte", #"{"conversationType":"direct"}"#, "null", "On se retrouve à 19 h devant le cinéma ?"),
+        ("vocal", #"{"conversationType":"direct","firstAttachmentMimeType":"audio/m4a"}"#,
+         #"{"commentPreview":"🎵 Audio · 0:32 · 193 Ko","attachments":{"count":1,"firstType":"audio"}}"#, "🎵 Audio · 0:32 · 193 Ko"),
         ("position", #"{"conversationType":"direct","messageType":"text","locationLat":"48.8584","locationLon":"2.2945","locationName":"Tour Eiffel","locationAddress":"Champ de Mars, Paris"}"#,
          "null", ""),
         ("contact", #"{"conversationType":"direct","contactName":"Jean Dupont","contactPhone":"+33612345678"}"#,
@@ -46,7 +49,7 @@ final class NotificationDetailCaptureTests: XCTestCase {
                 }
                 .padding(.top, 60)
             }
-            try snapshot(scene, size: CGSize(width: 402, height: 820), dark: dark,
+            try snapshot(scene, size: CGSize(width: 402, height: 1000), dark: dark,
                          to: "\(dir)/banniere-detail-\(dark ? "sombre" : "clair").png")
         }
     }

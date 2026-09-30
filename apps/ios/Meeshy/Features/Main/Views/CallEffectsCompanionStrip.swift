@@ -85,7 +85,7 @@ struct CallEffectsCompanionStrip: View {
     private func block(_ arrangement: Arrangement) -> some View {
         if arrangement.isSingleTile, let only = arrangement.layout.companions.first {
             companionTile(only, size: arrangement.tileSize)
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
         } else {
             HStack(spacing: Self.spacing) {
                 ForEach(arrangement.layout.companions) { tile in

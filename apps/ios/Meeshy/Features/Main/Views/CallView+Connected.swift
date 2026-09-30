@@ -149,7 +149,7 @@ extension CallView {
                     .accessibilityHidden(!shouldAutoHideControls)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 if !callManager.isVideoUIActive {
                     if showTranscript {
                         // Captions active on an audio call: compact header at
@@ -159,13 +159,13 @@ extension CallView {
                         compactAudioCallHeader
                             .padding(.top, Self.chromeTopInset + 52)
                         transcriptPanel
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .frame(maxHeight: .infinity)
                     } else {
                         // #8435 — en audio aussi, glisser vers le bas quitte
                         // le plein écran. Pas sur le panneau de sous-titres :
                         // son défilement garde ses propres glissés.
-                        VStack(spacing: 12) {
+                        VStack(spacing: MeeshySpacing.md) {
                             Spacer()
                             audioCallLayout
                             Spacer()
@@ -177,13 +177,13 @@ extension CallView {
                     Spacer()
                 }
 
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     // #8396 — le bandeau de sous-titres, juste au-dessus de la
                     // pilule ; il RESTE quand les actions sont rangées, et
                     // quand le chrome se masque.
                     if callManager.isVideoUIActive && showTranscript {
                         captionsBand(hasOwnGlass: true)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .transition(.opacity)
                     }
 
@@ -191,7 +191,7 @@ extension CallView {
                     // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
                     // VoiceOver. Masquées, elles ne captent aucun toucher.
                     callControlsPill
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.bottom, Self.chromeBottomInset)
                         .callChromeVisibility(isChromeVisible)
                 }
@@ -256,11 +256,11 @@ extension CallView {
     /// de la mise en page : quand la pilule grandit (rangées, sous-titres), la
     /// grille rétrécit au lieu de passer dessous — en portrait comme en paysage.
     private var groupStageLayout: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
             GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
             if !isStageFullScreen {
                 ZStack(alignment: .bottom) {
                     callControlsPill
@@ -271,7 +271,7 @@ extension CallView {
                     }
                 }
                 .overlay(alignment: .top) { callControlsNoticesAbove }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .padding(.bottom, Self.chromeBottomInset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -354,7 +354,7 @@ extension CallView {
     }
 
     var audioCallLayout: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             // Duo d'avatars (no pulse) — correspondant + pastille locale.
             // Decorative: the remote user's name is shown as a Text element
             // directly below, mirroring pulsingAvatar's rationale — without
@@ -362,7 +362,7 @@ extension CallView {
             // "Vous", then the full name as three disjoint stops.
             callAvatarPair(size: 120)
                 .accessibilityHidden(true)
-                .padding(.bottom, 8)
+                .padding(.bottom, MeeshySpacing.sm)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
@@ -372,7 +372,7 @@ extension CallView {
             // invisible sur lien sain, apparaît à la dégradation, persiste en
             // vert `recoveryLingerSeconds` après récupération puis se retire
             // (cycle de vie dans TransientCallSignalGlyph).
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 TransientCallSignalGlyph(strength: signalStrength)
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
@@ -386,11 +386,11 @@ extension CallView {
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
                     .accessibilityValue(callManager.spokenDuration)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(durationColor.opacity(0.15))
+                    .fill(durationColor.opacity(MeeshyOpacity.light))
             )
             // Naked-readout fix (doctrine 206i/210i/211i): the combined element
             // previously announced a bare "0:34" with no context. Signal state is
@@ -404,7 +404,7 @@ extension CallView {
             .callQualityDetailTrigger(isPresented: $showQualityDetail)
 
             // Status indicators
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 // §4.3 — reconnexion ICE en cours : remplace l'ancien bandeau
                 // plein-écran (user-reported 2026-07-11) par une pill compacte,
                 // au même endroit que les autres indicateurs de statut.
@@ -415,7 +415,7 @@ extension CallView {
                     statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
                 }
                 if !callManager.isRemoteAudioEnabled {
-                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(0.7))
+                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
                 }
                 if callManager.isRemoteScreenCapturing {
                     statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
@@ -444,17 +444,17 @@ extension CallView {
     /// vertically centered (sits at the top) so `transcriptPanel` gets the
     /// freed vertical space. User-requested 2026-07-11.
     var compactAudioCallHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             callAvatarPair(size: 56)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                     .font(.system(.headline, design: .rounded).weight(.semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     TransientCallSignalGlyph(strength: signalStrength)
                     Text(callManager.formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
@@ -476,7 +476,7 @@ extension CallView {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
 
@@ -587,9 +587,9 @@ extension CallView {
     private var connectingVideoPlaceholder: some View {
         Color.black.opacity(0.4)
             .overlay(
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ProgressView()
-                        .tint(.white.opacity(0.5))
+                        .tint(.white.opacity(MeeshyOpacity.strong))
                         .accessibilityHidden(true)
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
@@ -604,7 +604,7 @@ extension CallView {
                             .multilineTextAlignment(.center)
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
                 .accessibilityElement(children: .combine)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -629,13 +629,13 @@ extension CallView {
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
         ZStack {
-            Color.black.opacity(0.5)
-            VStack(spacing: 14) {
+            Color.black.opacity(MeeshyOpacity.strong)
+            VStack(spacing: MeeshySpacing.mdPlus) {
                 avatarCircle(size: 96)
                     .accessibilityHidden(true)
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "video.slash.fill")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))

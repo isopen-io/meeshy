@@ -43,7 +43,7 @@ struct StarredMessagesView: View {
     }
 
     private var rows: some View {
-        LazyVStack(spacing: 10) {
+        LazyVStack(spacing: MeeshySpacing.smPlus) {
             ForEach(store.snapshots) { snapshot in
                 StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
                     .onTapGesture {
@@ -62,8 +62,8 @@ struct StarredMessagesView: View {
                     .accessibilityAction { navigate(to: snapshot) }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     /// Le menu « Tout retirer », en disque de verre du diamètre du retour. Le
@@ -80,11 +80,11 @@ struct StarredMessagesView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(MeeshyFont.relative(17, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(MeeshyColors.brandPrimary)
                     .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
                     .adaptiveGlass(in: Circle(), interactive: true)
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                     .contentShape(Circle())
             }
             .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
@@ -128,50 +128,50 @@ private struct StarredRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(accent)
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "star.fill")
-                        .font(MeeshyFont.relative(10, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                         .foregroundStyle(MeeshyColors.warning)
                     Text(snapshot.senderName ?? String(localized: "common.unknown_user", defaultValue: "Utilisateur", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(accent)
                     Spacer(minLength: 4)
                     Text(snapshot.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                 }
 
                 Text(snapshot.contentPreview)
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
 
                 if let conversationName = snapshot.conversationName {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(MeeshyFont.relative(9, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                         Text(conversationName)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     }
-                    .foregroundStyle(accent.opacity(0.85))
+                    .foregroundStyle(accent.opacity(MeeshyOpacity.intense))
                 }
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(isDark ? MeeshyColors.indigo950.opacity(0.4) : MeeshyColors.indigo50)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(accent.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }
