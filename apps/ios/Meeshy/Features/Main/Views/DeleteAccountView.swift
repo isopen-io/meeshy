@@ -77,23 +77,23 @@ struct DeleteAccountView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 warningCard
                 confirmationSection
                 deleteButton
 
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                 }
 
                 Spacer().frame(height: 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
@@ -103,23 +103,23 @@ struct DeleteAccountView: View {
     // MARK: - Warning Card
 
     private var warningCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(MeeshyColors.error)
 
                 Text(String(localized: "account.delete.warning.title", defaultValue: "Action irréversible", bundle: .main))
-                    .font(MeeshyFont.relative(17, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                     .foregroundColor(MeeshyColors.error)
             }
 
             Text(String(localized: "account.delete.warning.intro", defaultValue: "La suppression de votre compte entraînera la perte définitive de :", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .lineSpacing(2)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 warningBullet(String(localized: "account.delete.warning.conversations", defaultValue: "Toutes vos conversations", bundle: .main))
                 warningBullet(String(localized: "account.delete.warning.messages", defaultValue: "Tous vos messages", bundle: .main))
                 warningBullet(String(localized: "account.delete.warning.media", defaultValue: "Tous vos médias partagés", bundle: .main))
@@ -127,12 +127,12 @@ struct DeleteAccountView: View {
                 warningBullet(String(localized: "account.delete.warning.preferences", defaultValue: "Vos préférences et paramètres", bundle: .main))
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(MeeshyColors.error.opacity(0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                 )
         )
@@ -140,13 +140,13 @@ struct DeleteAccountView: View {
     }
 
     private func warningBullet(_ text: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "xmark.circle.fill")
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm))
                 .foregroundColor(MeeshyColors.error.opacity(0.7))
 
             Text(text)
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
         }
     }
@@ -154,16 +154,16 @@ struct DeleteAccountView: View {
     // MARK: - Confirmation Section
 
     private var confirmationSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "account.delete.section.confirmation", defaultValue: "Confirmation", bundle: .main), icon: "checkmark.shield.fill", color: "F59E0B")
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "account.delete.section.confirmation", defaultValue: "Confirmation", bundle: .main), icon: "checkmark.shield.fill", color: MeeshyColors.amber500Hex)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 confirmationPrompt
                     .foregroundColor(theme.textPrimary)
 
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     TextField(requiredPhrase, text: $confirmationText)
-                        .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(theme.textPrimary)
                         .textInputAutocapitalization(.characters)
                         .disableAutocorrection(true)
@@ -176,7 +176,7 @@ struct DeleteAccountView: View {
 
                     if confirmationText == requiredPhrase {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.success)
                             .transition(.scale.combined(with: .opacity))
                             // Decorative confirmation: its meaning is carried by the
@@ -185,19 +185,19 @@ struct DeleteAccountView: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.surfaceGradient(tint: "F59E0B"))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .fill(theme.surfaceGradient(tint: MeeshyColors.amber500Hex))
                 )
                 .overlay(
                     Group {
                         if confirmationText == requiredPhrase {
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                 .stroke(MeeshyColors.success.opacity(0.5), lineWidth: 1)
                         } else {
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(theme.border(tint: "F59E0B"), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                                .stroke(theme.border(tint: MeeshyColors.amber500Hex), lineWidth: 1)
                         }
                     }
                 )
@@ -206,9 +206,9 @@ struct DeleteAccountView: View {
                 // La preuve de PRÉSENCE, distincte de la phrase de confirmation :
                 // celle-ci prouve qu'on a compris, celui-là qu'on est bien là.
                 Text(String(localized: "account.delete.password.prompt", defaultValue: "Saisissez votre mot de passe pour confirmer votre identité", bundle: .main))
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textSecondary)
-                    .padding(.top, 6)
+                    .padding(.top, MeeshySpacing.xsPlus)
 
                 MeeshyPasswordField(
                     String(localized: "account.delete.password.placeholder", defaultValue: "Mot de passe actuel", bundle: .main),
@@ -217,20 +217,20 @@ struct DeleteAccountView: View {
                     accessibilityLabel: String(localized: "account.delete.password.label", defaultValue: "Mot de passe actuel", bundle: .main),
                     eyeColor: theme.textMuted
                 )
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textPrimary)
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.surfaceGradient(tint: "F59E0B"))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .fill(theme.surfaceGradient(tint: MeeshyColors.amber500Hex))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(theme.border(tint: "F59E0B"), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .stroke(theme.border(tint: MeeshyColors.amber500Hex), lineWidth: 1)
                 )
             }
-            .padding(14)
-            .background(sectionBackground(tint: "F59E0B"))
+            .padding(MeeshySpacing.mdPlus)
+            .background(sectionBackground(tint: MeeshyColors.amber500Hex))
         }
     }
 
@@ -241,22 +241,22 @@ struct DeleteAccountView: View {
             HapticFeedback.heavy()
             showFinalAlert = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if isDeleting {
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(.white)
                 }
                 Image(systemName: "trash.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 Text(String(localized: "account.delete.button", defaultValue: "Supprimer définitivement mon compte", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(
                         confirmationText == requiredPhrase && !currentPassword.isEmpty && !isDeleting
                             ? MeeshyColors.error
@@ -298,10 +298,10 @@ struct DeleteAccountView: View {
     // MARK: - Email Confirmation View
 
     private var emailConfirmationView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
                 Image(systemName: "envelope.circle.fill")
                     .font(.system(size: 64))
@@ -311,43 +311,43 @@ struct DeleteAccountView: View {
                     .accessibilityHidden(true)
 
                 Text(String(localized: "account.delete.email.title", defaultValue: "Un email de confirmation vous a été envoyé", bundle: .main))
-                    .font(MeeshyFont.relative(20, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(String(localized: "account.delete.email.body", defaultValue: "Vérifiez votre boîte de réception pour confirmer la suppression de votre compte.", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
             }
             .accessibilityElement(children: .combine)
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                             .stroke(MeeshyColors.indigo500.opacity(0.2), lineWidth: 1)
                     )
             )
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
             Button {
                 HapticFeedback.light()
                 dismiss()
             } label: {
                 Text(String(localized: "account.delete.email.ok", defaultValue: "Compris", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .fill(MeeshyColors.brandGradient)
                     )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
             .accessibilityLabel(String(localized: "account.delete.email.ok", defaultValue: "Compris", bundle: .main))
 
             Spacer()
@@ -366,9 +366,9 @@ struct DeleteAccountView: View {
     private var confirmationPrompt: Text {
         let format = String(localized: "account.delete.confirmation.prompt", defaultValue: "Tapez %@ pour confirmer", bundle: .main)
         var attributed = AttributedString(String(format: format, requiredPhrase))
-        attributed.font = MeeshyFont.relative(14, weight: .medium)
+        attributed.font = MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium)
         if let range = attributed.range(of: requiredPhrase) {
-            attributed[range].font = MeeshyFont.relative(14, weight: .bold, design: .monospaced)
+            attributed[range].font = MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold, design: .monospaced)
         }
         return Text(attributed)
     }
@@ -380,25 +380,25 @@ struct DeleteAccountView: View {
     }
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }

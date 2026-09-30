@@ -78,11 +78,11 @@ public struct SettingsSectionHeader: View {
     }
 
     public var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                 .tracking(1.1)
         }
         .foregroundColor(Color(hex: color))
@@ -136,7 +136,7 @@ public struct SettingsSeparator: View {
 
     public var body: some View {
         Rectangle()
-            .fill(Color(hex: tint).opacity(0.16))
+            .fill(Color(hex: tint).opacity(MeeshyOpacity.light))
             .frame(height: 0.5)
             .padding(.leading, SettingsRowMetrics.separatorInset)
             .accessibilityHidden(true)
@@ -181,10 +181,10 @@ public struct SettingsRow<Trailing: View>: View {
         HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
             iconTile
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(title)
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let info, let onInfo {
@@ -193,7 +193,7 @@ public struct SettingsRow<Trailing: View>: View {
                 }
                 if let subtitle {
                     Text(subtitle)
-                        .font(MeeshyFont.relative(13, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                         .foregroundColor(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -216,7 +216,7 @@ public struct SettingsRow<Trailing: View>: View {
             .frame(width: SettingsRowMetrics.iconSize, height: SettingsRowMetrics.iconSize)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                    .fill(Color(hex: color).opacity(0.14))
+                    .fill(Color(hex: color).opacity(MeeshyOpacity.light))
             )
             .accessibilityHidden(true)
     }
@@ -244,8 +244,8 @@ public struct SettingsInfoButton: View {
             action(info)
         } label: {
             Image(systemName: "info.circle")
-                .font(MeeshyFont.relative(14, weight: .regular))
-                .foregroundColor(Color(hex: color).opacity(0.85))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .regular))
+                .foregroundColor(Color(hex: color).opacity(MeeshyOpacity.intense))
                 // La cible tactile atteint 44 pt sans que l'icône grossisse.
                 .frame(width: SettingsRowMetrics.minimumHeight,
                        height: SettingsRowMetrics.minimumHeight)
@@ -290,7 +290,7 @@ private struct SettingsInfoOverlay: ViewModifier {
             .overlay {
                 if let presented = info {
                     ZStack {
-                        Color.black.opacity(0.45)
+                        Color.black.opacity(MeeshyOpacity.strong)
                             .ignoresSafeArea()
                             .contentShape(Rectangle())
                             .onTapGesture { dismiss() }
@@ -317,12 +317,12 @@ private struct SettingsInfoOverlay: ViewModifier {
     private func card(_ presented: SettingsInfo) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(presented.title)
-                .font(MeeshyFont.relative(18, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Text(presented.message)
-                .font(MeeshyFont.relative(15, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -330,8 +330,8 @@ private struct SettingsInfoOverlay: ViewModifier {
                 dismiss()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.md)
             }
@@ -347,7 +347,7 @@ private struct SettingsInfoOverlay: ViewModifier {
             RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
                 .stroke(MeeshyColors.glassBorderGradient(isDark: true), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 24, y: 12)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }

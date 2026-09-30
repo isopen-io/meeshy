@@ -23,7 +23,7 @@ extension MeeshyComposerHost {
                                plateauTint: tint.color,
                                onWindowEdited: { commitSceneFriseWindow() })
                 .padding(.horizontal, ComposerRailGeometry.outerMargin)
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
         )
     }
 

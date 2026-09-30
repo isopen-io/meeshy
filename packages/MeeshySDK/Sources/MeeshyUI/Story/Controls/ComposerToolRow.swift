@@ -143,7 +143,7 @@ struct ComposerToolRow: View, Equatable {
             // le `ScrollView`, il rognerait la zone tactile des icônes au lieu
             // de les aérer. C'est le raisonnement de la rangée canonique, repris
             // au mot.
-            .padding(.vertical, 2)
+            .padding(.vertical, MeeshySpacing.xxs)
             .padding(.horizontal, Self.margin)
         }
         // **La mesure porte sur le `ScrollView`, pas sur l'écran** — et c'est ce
@@ -227,7 +227,7 @@ struct ComposerToolRow: View, Equatable {
             .overlay(alignment: .topTrailing) {
                 if badge > 0 {
                     Text("\(badge)")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: MeeshyFont.microSize, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(minWidth: 15, minHeight: 15)
                         .background(accent)

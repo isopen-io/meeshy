@@ -108,22 +108,22 @@ struct MediaSaveFlowModifier: ViewModifier {
 /// bouton qui ne fait rien ment plus qu'il n'aide.
 private struct MediaSavePreparingIndicator: View {
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.white)
             Text(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: "Shown while the media is being resolved and watermarked before saving"))
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.mdPlus)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                .stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 18, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: ""))
     }

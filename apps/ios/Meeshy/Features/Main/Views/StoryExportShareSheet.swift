@@ -18,7 +18,7 @@ struct StoryExportShareSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            VStack(spacing: MeeshySpacing.xxl) {
                 header
                 if !viewModel.availableLanguages.isEmpty {
                     languagePicker
@@ -27,8 +27,8 @@ struct StoryExportShareSheet: View {
                 progressOrAction
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 24)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.xxl)
             .background(StoryExportSheetPalette.wash(isDark: isDark).ignoresSafeArea())
             .navigationTitle(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo"))
             .navigationBarTitleDisplayMode(.inline)
@@ -76,7 +76,7 @@ struct StoryExportShareSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "square.and.arrow.up.fill")
                 // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
                 // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
@@ -86,20 +86,20 @@ struct StoryExportShareSheet: View {
                 .accessibilityHidden(true)
             Text(String(localized: "story.export.share.subtitle",
                         defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."))
-            .font(MeeshyFont.relative(14))
+            .font(MeeshyFont.relative(MeeshyFont.labelSize))
             .multilineTextAlignment(.center)
             .foregroundColor(.secondary)
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Language Picker
 
     private var languagePicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "story.export.share.languageLabel",
                         defaultValue: "Langue à graver"))
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(.secondary)
 
             Menu {
@@ -120,17 +120,17 @@ struct StoryExportShareSheet: View {
                         .foregroundColor(.primary)
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(.secondary)
                         .accessibilityHidden(true)
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(StoryExportSheetPalette.pickerFill(isDark: isDark))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(StoryExportSheetPalette.pickerStroke(isDark: isDark), lineWidth: 1)
                 )
             }
@@ -149,7 +149,7 @@ struct StoryExportShareSheet: View {
     private var progressOrAction: some View {
         switch viewModel.phase {
         case .exporting:
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 ProgressView(value: viewModel.progress)
                     .progressViewStyle(.linear)
                     .tint(MeeshyColors.indigo500)
@@ -158,7 +158,7 @@ struct StoryExportShareSheet: View {
                                    defaultValue: "Export en cours… %lld%%"),
                     Int(viewModel.progress * 100)
                 ))
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.secondary)
             }
         case .idle, .failed:
@@ -167,12 +167,12 @@ struct StoryExportShareSheet: View {
                 Task { await viewModel.startExport(story: story) }
             } label: {
                 Text(String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo"))
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(MeeshyColors.brandGradient)
                     .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             }
         case .ready, .sharing:
             ProgressView()
@@ -215,11 +215,11 @@ enum StoryExportSheetPalette {
 
     /// Fond du sélecteur de langue.
     static func pickerFill(isDark: Bool) -> Color {
-        isDark ? MeeshyColors.indigo900.opacity(0.35) : MeeshyColors.indigo50.opacity(0.6)
+        isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo50.opacity(0.6)
     }
 
     /// Bordure du sélecteur de langue.
     static func pickerStroke(isDark: Bool) -> Color {
-        isDark ? MeeshyColors.indigo700.opacity(0.5) : MeeshyColors.indigo200
+        isDark ? MeeshyColors.indigo700.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo200
     }
 }

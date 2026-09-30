@@ -120,18 +120,18 @@ struct FeedComposerSheet: View {
             forcePlainPost.toggle()
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                    .font(MeeshyFont.relative(10))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                 Text(forcePlainPost
                     ? String(localized: "feed.composer.type.post", defaultValue: "Publier", bundle: .main)
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
             }
             .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
         }
         .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
-        .padding(.leading, 12)
+        .padding(.leading, MeeshySpacing.md)
     }
 
     var body: some View {
@@ -145,14 +145,14 @@ struct FeedComposerSheet: View {
                         cleanupAndDismiss()
                     } label: {
                         Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -166,25 +166,25 @@ struct FeedComposerSheet: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
-                                .font(MeeshyFont.relative(15, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
                     .disabled(!hasContent || isUploading || postAudienceIncomplete)
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(theme.backgroundSecondary)
 
                 Divider().background(theme.inputBorder)
 
                 // User row
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     MeeshyAvatar(
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                         context: .feedComposer,
                         avatarURL: authManager.currentUser?.avatar
                     )
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(getUserDisplayName(authManager.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
@@ -217,11 +217,11 @@ struct FeedComposerSheet: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: selectedPostVisibility.icon)
-                                    .font(MeeshyFont.relative(10))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                                 Text(selectedPostVisibility.label)
-                                    .font(MeeshyFont.relative(12))
+                                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             }
                             .foregroundColor(theme.textMuted)
                         }
@@ -245,26 +245,26 @@ struct FeedComposerSheet: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.md)
 
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
-                            .font(MeeshyFont.relative(17))
+                            .font(MeeshyFont.relative(MeeshyFont.headlineSize))
                             .foregroundColor(theme.textMuted)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.top, MeeshySpacing.md)
                     }
                     TextEditor(text: $composerText)
                         .focused($isFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(MeeshyFont.relative(17))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize))
                         .frame(minHeight: 120)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.top, MeeshySpacing.xs)
                 }
 
                 // Première porte : la frappe `@`. Posée SOUS le champ — la
@@ -274,13 +274,13 @@ struct FeedComposerSheet: View {
                     ReferenceMentionSuggestions(text: $composerText,
                                                 references: $references,
                                                 background: theme.inputBackground)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                 }
 
                 // Quoted post preview
                 if let quoted = quotePost {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             MeeshyAvatar(
                                 name: quoted.author,
                                 context: .postComment,
@@ -288,29 +288,29 @@ struct FeedComposerSheet: View {
                                 avatarURL: quoted.authorAvatarURL
                             )
                             Text(quoted.author)
-                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                                 .foregroundColor(theme.accentText(quoted.authorColor))
                             MetaSeparator().foregroundColor(theme.textMuted)
                             Text(quoted.timestamp, style: .relative)
-                                .font(MeeshyFont.relative(11))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
                         }
                         Text(quoted.displayContent)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(4)
                     }
-                    .padding(12)
+                    .padding(MeeshySpacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(theme.surfaceGradient(tint: quoted.authorColor))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .stroke(theme.border(tint: quoted.authorColor, intensity: 0.2), lineWidth: 1)
                             )
                     )
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                 }
 
                 // Pending attachments
@@ -326,15 +326,15 @@ struct FeedComposerSheet: View {
                         offersDiscoverability: true,
                         onRemovePlace: { pendingPlace = nil }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
                     UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.xs)
                 }
 
                 Spacer(minLength: 0)
@@ -345,45 +345,45 @@ struct FeedComposerSheet: View {
                 if declaresReferences {
                     ReferenceComposerBar(references: $references,
                                          accentColor: MeeshyColors.indigo500)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.xs)
                 }
 
                 // Toolbar
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.take-photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "F8B500"))
+                            .font(.system(size: MeeshyIconSize.xl))
+                            .foregroundColor(MeeshyColors.tileSaffron)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "9B59B6"))
+                            .font(.system(size: MeeshyIconSize.xl))
+                            .foregroundColor(MeeshyColors.tileAmethyst)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.file", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.location", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.record-audio", defaultValue: "Enregistrer un audio"))
@@ -395,10 +395,10 @@ struct FeedComposerSheet: View {
                         HapticFeedback.light()
                     } label: {
                         Text(ComposerLanguageFlag.label(for: composerLanguage))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo500)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
                                 Capsule()
                                     .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
@@ -411,7 +411,7 @@ struct FeedComposerSheet: View {
                     .accessibilityLabel(String(localized: "feed.post.language", defaultValue: "Langue du post"))
                     .accessibilityValue(composerLanguageDisplayName)
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(theme.backgroundSecondary)
             }
         }
@@ -586,7 +586,7 @@ struct FeedComposerSheet: View {
     // MARK: - Attachments Row
     private var sheetAttachmentsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 ForEach(preparingAttachments) { prep in
                     AttachmentLoadingTile(prep: prep, size: 72) {
                         cancelSheetPreparation(prep)
@@ -599,21 +599,21 @@ struct FeedComposerSheet: View {
                     sheetPlaceTile(place)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .frame(height: 116)
     }
 
     private func sheetAttachmentTile(_ attachment: MessageAttachment) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
                 if let thumb = pendingThumbnails[attachment.id] {
                     Image(uiImage: thumb)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 72, height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                         .onTapGesture {
                             if attachment.type == .image {
                                 editingAttachmentId = attachment.id
@@ -626,12 +626,12 @@ struct FeedComposerSheet: View {
 
                     if attachment.type == .video {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 22))
+                            .font(.system(size: MeeshyIconSize.xxl))
                             .foregroundStyle(.white, .black.opacity(0.4))
                             .accessibilityHidden(true)
                     }
                 } else {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(LinearGradient(colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                         .overlay(
@@ -671,7 +671,7 @@ struct FeedComposerSheet: View {
             }
 
             Text(MediaKindLabel.attachmentLabel(for: attachment))
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
@@ -682,9 +682,9 @@ struct FeedComposerSheet: View {
     /// — cette tuile dédiée (même gabarit 72×72 pin-drop) est ce qui évite que
     /// le choix d'un lieu ne produise plus aucun retour visuel ici.
     private func sheetPlaceTile(_ place: SharedPlace) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 72, height: 72)
                     .overlay(
@@ -717,7 +717,7 @@ struct FeedComposerSheet: View {
             }
 
             Text(MediaKindLabel.placeLabel(place.name))
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
@@ -805,7 +805,7 @@ struct FeedComposerSheet: View {
     private func appendSheetFileAttachment(tempURL: URL, fileName: String, mimeType: String) {
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
         let attachmentId = UUID().uuidString
-        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: "45B7D1")
+        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: MeeshyColors.tileSkyHex)
         pendingMediaFiles[attachmentId] = tempURL
         pendingAttachments.append(attachment)
     }

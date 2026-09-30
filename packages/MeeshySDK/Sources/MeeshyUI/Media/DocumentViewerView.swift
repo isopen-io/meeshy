@@ -61,9 +61,9 @@ public struct DocumentViewerView: View {
 
     // MARK: - Compact Card (composer attachment)
     private var compactCard: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(
                         LinearGradient(
                             colors: [Color(hex: docType.color), Color(hex: docType.color).opacity(0.7)],
@@ -74,14 +74,14 @@ public struct DocumentViewerView: View {
                     .frame(width: 52, height: 52)
 
                 Image(systemName: docType.icon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                     .foregroundColor(.white)
             }
             .overlay(alignment: .topTrailing) {
                 if let onDelete = onDelete {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: MeeshyIconSize.sm))
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
@@ -91,7 +91,7 @@ public struct DocumentViewerView: View {
             }
 
             Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
                 .lineLimit(1)
                 .frame(width: 60)
@@ -100,7 +100,7 @@ public struct DocumentViewerView: View {
 
     // MARK: - Rich Card (message, feed)
     private var richCard: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: context.isCompact ? 10 : 12)
                     .fill(
@@ -121,29 +121,29 @@ public struct DocumentViewerView: View {
                     .foregroundColor(.white)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
                     .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
                     .foregroundColor(isDark ? .white : .black)
                     .lineLimit(1)
 
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(docType.label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Color(hex: docType.color))
 
                     if attachment.fileSize > 0 {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(attachment.fileSizeFormatted)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
                 }
             }
@@ -151,13 +151,13 @@ public struct DocumentViewerView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(isDark ? .white.opacity(0.25) : .black.opacity(0.18))
 
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: MeeshyIconSize.sm))
                         .foregroundColor(MeeshyColors.error)
                 }
                 .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
@@ -167,10 +167,10 @@ public struct DocumentViewerView: View {
         .padding(.vertical, context.isCompact ? 8 : 12)
         .background(
             RoundedRectangle(cornerRadius: context.cornerRadius)
-                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .overlay(
                     RoundedRectangle(cornerRadius: context.cornerRadius)
-                        .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                        .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }
@@ -326,22 +326,22 @@ public struct DocumentFullSheet: View {
     }
 
     private var noPreviewView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: docType.icon)
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(Color(hex: docType.color))
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
-                .font(.system(size: 14))
+                .font(.system(size: MeeshyFont.labelSize))
                 .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             }
         }

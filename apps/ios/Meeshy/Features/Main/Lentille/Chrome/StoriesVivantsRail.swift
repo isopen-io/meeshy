@@ -323,7 +323,7 @@ private struct LentilleRailSelfEntryView: View {
             .background(
                 Circle()
                     .fill(MeeshyColors.brandGradient)
-                    .overlay(Circle().stroke(MeeshyColors.backgroundSecondary(isDark: isDark), lineWidth: 1.5))
+                    .overlay(Circle().stroke(MeeshyColors.backgroundSecondary(isDark: isDark), lineWidth: MeeshyBorder.emphasis))
             )
     }
 

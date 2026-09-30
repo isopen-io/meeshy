@@ -90,10 +90,11 @@ for (const [name, value] of constantes) {
 }
 
 /**
- * Les fonctions `nom(isDark:)`. Trois formes acceptées, et TROIS SEULEMENT :
+ * Les fonctions `nom(isDark:)`. Quatre formes acceptées, et QUATRE SEULEMENT :
  *   isDark ? Color(hex: "A") : Color(hex: "B")
  *   isDark ? constante        : constante
  *   isDark ? constante.opacity(x) : constante.opacity(y)
+ *   isDark ? Color.white.opacity(x) : Color.black.opacity(y)   (voiles, #8877)
  * Toute autre forme fait échouer — voir le doc-comment.
  */
 const terme = (expr, ou) => {
@@ -104,6 +105,12 @@ const terme = (expr, ou) => {
   if (m) {
     if (!constantes.has(m[1])) echoue(`${ou} référence une constante inconnue : ${m[1]}`);
     return constantes.get(m[1]);
+  }
+  m = /^Color\.(white|black)(?:\.opacity\(([\d.]+)\))?$/.exec(t);
+  if (m) {
+    return m[2] === undefined
+      ? m[1]
+      : `color-mix(in srgb, ${m[1]} ${Math.round(Number(m[2]) * 100)}%, transparent)`;
   }
   m = /^(\w+)\.opacity\(([\d.]+)\)$/.exec(t);
   if (m) {
@@ -155,7 +162,7 @@ if (manquantes.length) echoue(`fonctions attendues absentes ou de forme nouvelle
 
 const swiftJetons = readFileSync(JETONS, 'utf8');
 const block = (name) => {
-  const m = new RegExp(`public enum ${name} \\{([\\s\\S]*?)\\n\\}`).exec(swiftJetons);
+  const m = new RegExp(`public (?:nonisolated )?enum ${name} \\{([\\s\\S]*?)\\n\\}`).exec(swiftJetons);
   if (!m) echoue(`bloc ${name} introuvable dans DesignTokens.swift`);
   const valeurs = new Map();
   for (const v of m[1].matchAll(/public static let (\w+):\s*CGFloat\s*=\s*([\d.]+)/g)) {

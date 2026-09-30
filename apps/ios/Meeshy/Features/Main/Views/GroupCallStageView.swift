@@ -234,7 +234,7 @@ struct GroupCallStageView: View {
         // commandes) le délai d'un éventuel second toucher.
         .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
         .onTapGesture { onStageTap() }
-        .overlay(alignment: .topTrailing) { spotlightControls.padding(8) }
+        .overlay(alignment: .topTrailing) { spotlightControls.padding(MeeshySpacing.sm) }
     }
 
     private var zoomResetTap: some Gesture {
@@ -251,10 +251,10 @@ struct GroupCallStageView: View {
 
     /// Grille (revenir) et plein écran, dans UN verre.
     private var spotlightControls: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Button { choose(.grid) } label: {
                 Image(systemName: "square.grid.2x2")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -265,7 +265,7 @@ struct GroupCallStageView: View {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isFullScreen.toggle() }
             } label: {
                 Image(systemName: isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -331,7 +331,7 @@ struct GroupCallTileView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 nameplate
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay(
@@ -362,7 +362,7 @@ struct GroupCallTileView: View {
     }
 
     private var nameplate: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             if tile.isMicMuted {
                 Image(systemName: "mic.slash.fill")
                     .foregroundStyle(MeeshyColors.error)
@@ -379,8 +379,8 @@ struct GroupCallTileView: View {
         }
         .font(.caption.weight(.semibold))
         .foregroundColor(.white)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(.ultraThinMaterial, in: Capsule())
     }
 

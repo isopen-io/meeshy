@@ -1026,17 +1026,17 @@ extension MeeshyComposerHost {
         if let fraction = sceneExport.progress {
             ZStack {
                 Color.black.opacity(0.55).ignoresSafeArea()
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ProgressView(value: fraction)
                         .progressViewStyle(.linear)
                         .tint(MeeshyColors.brandPrimary)
                         .frame(width: 180)
                     Text(ComposerExportCopy.inProgress)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundStyle(.white)
                 }
-                .padding(24)
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(MeeshySpacing.xxl)
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             }
             .transition(.opacity)
             .accessibilityElement(children: .combine)

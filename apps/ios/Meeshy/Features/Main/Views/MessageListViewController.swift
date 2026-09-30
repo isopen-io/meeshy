@@ -3200,21 +3200,21 @@ struct TypingIndicatorBubble: View {
                             // scale via MeeshyFont.relative. La bulle est dimensionnée par
                             // padding (pas de frame figée), donc elle grandit proprement ;
                             // les 3 points restent des `Circle` décoratifs de 5pt.
-                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                             .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
                             .lineLimit(1)
                     }
                     pulsingDots(accent: accent)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
                 .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
         .onAppear { animating = true }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label)

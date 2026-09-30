@@ -17,7 +17,7 @@ struct InviteChoicesPanel: View {
     private var secondary: [InviteLandingChoice] { Array(choices.dropFirst()) }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             if let primary {
                 if requireAccount && !isSignedIn { notice(InviteLandingCopy.accountRequired) }
                 primaryButton(primary)
@@ -29,7 +29,7 @@ struct InviteChoicesPanel: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, 18)
+        .padding(.top, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.md)
         .background(
             (isDark ? MeeshyColors.indigo950 : Color.white)
@@ -47,7 +47,7 @@ struct InviteChoicesPanel: View {
     @ViewBuilder
     private var secondaryButtons: some View {
         if secondary.count == 2 {
-            HStack(spacing: 10) { ForEach(secondary, id: \.self) { secondaryButton($0) } }
+            HStack(spacing: MeeshySpacing.smPlus) { ForEach(secondary, id: \.self) { secondaryButton($0) } }
         } else {
             ForEach(secondary, id: \.self) { secondaryButton($0) }
         }
@@ -62,12 +62,12 @@ struct InviteChoicesPanel: View {
             HapticFeedback.medium()
             onChoice(choice)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 if choice == .joinWithAccount, let initials = accountInitials, !initials.isEmpty {
                     Text(verbatim: initials)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
                         .foregroundColor(MeeshyColors.indigo600)
-                        .frame(width: 30, height: 30)
+                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                         .background(Circle().fill(Color.white))
                         .accessibilityHidden(true)
                 }
@@ -82,7 +82,7 @@ struct InviteChoicesPanel: View {
             .background(
                 LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.purple600], startPoint: .topLeading, endPoint: .bottomTrailing)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             .shadow(color: MeeshyColors.indigo500.opacity(isDark ? 0.2 : 0.35), radius: 12, y: 8)
         }
         .buttonStyle(.plain)
@@ -108,7 +108,7 @@ struct InviteChoicesPanel: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .stroke(isDark ? MeeshyColors.indigo700 : MeeshyColors.indigo200, lineWidth: 1.5)
+                        .stroke(isDark ? MeeshyColors.indigo700 : MeeshyColors.indigo200, lineWidth: MeeshyBorder.emphasis)
                 )
                 .contentShape(Rectangle())
         }
@@ -134,7 +134,7 @@ struct InviteChoicesPanel: View {
                 .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .font(MeeshyFont.relative(14, weight: .medium))
+        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
         .background(

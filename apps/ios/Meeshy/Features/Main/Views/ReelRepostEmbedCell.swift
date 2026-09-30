@@ -84,7 +84,7 @@ struct ReelRepostEmbedCell: View {
     private let stripHeight: CGFloat = 116
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             attributionHeader
 
             // The re-poster's own added text (quote). The reel's caption is
@@ -133,8 +133,8 @@ struct ReelRepostEmbedCell: View {
                 ReelFeedSoundIntent.shared.toggleSound()
                 HapticFeedback.light()
             }
-            .padding(.leading, 22)
-            .padding(.top, 22)
+            .padding(.leading, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.xl)
         }
     }
 
@@ -147,7 +147,7 @@ struct ReelRepostEmbedCell: View {
             Text(String(localized: "story.repost.from", defaultValue: "Repartagé depuis", bundle: .main) + " @\(handle)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
         }
     }
 
@@ -155,11 +155,11 @@ struct ReelRepostEmbedCell: View {
 
     @ViewBuilder
     private func reelCard(_ repost: RepostContent) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             mediaStrip(repost)
 
             // Original author
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: repost.author,
                     context: .postComment,
@@ -190,13 +190,13 @@ struct ReelRepostEmbedCell: View {
             statsRow(repost)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(theme.mode.isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(theme.accentText(repost.authorColor).opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
         )
     }
@@ -215,7 +215,7 @@ struct ReelRepostEmbedCell: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: stripHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         // Publish this card's frame so the feed coordinator can elect it (keyed on
         // the containing post id — see `reelCellId`). Same `.global` aggregation as
         // the native `ReelFeedCard`, so native + repost cells compete in one election.
@@ -244,11 +244,11 @@ struct ReelRepostEmbedCell: View {
         } else {
             // Audio-only or media-less reel: brand-tinted backdrop + music glyph.
             ZStack {
-                Color(hex: repost.authorColor).opacity(0.45)
+                Color(hex: repost.authorColor).opacity(MeeshyOpacity.strong)
                 Image(systemName: "music.note")
                     // doctrine 86i — glyphe décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 30, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
         }
     }
@@ -261,10 +261,10 @@ struct ReelRepostEmbedCell: View {
                 // doctrine 86i — affordance décorative bornée par la bande média de hauteur fixe (stripHeight)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
-                .padding(13)
+                .padding(MeeshySpacing.md)
                 .background(Circle().fill(.ultraThinMaterial))
-                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 1)
+                .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 1)
         }
     }
 
@@ -278,11 +278,11 @@ struct ReelRepostEmbedCell: View {
                     // doctrine 86i — badge décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     .background(Circle().fill(.ultraThinMaterial))
-                    .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                    .padding(8)
+                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3, y: 1)
+                    .padding(MeeshySpacing.sm)
             }
             Spacer()
         }
@@ -292,15 +292,15 @@ struct ReelRepostEmbedCell: View {
     // MARK: - Stats (likes — shares count is not in the repost payload)
 
     private func statsRow(_ repost: RepostContent) -> some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.lg) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "heart.fill")
                     .font(.caption2)
                     .accessibilityHidden(true)
                 Text("\(repost.likes)")
                     .font(.caption.weight(.medium))
             }
-            .foregroundColor(theme.accentText(repost.authorColor).opacity(0.8))
+            .foregroundColor(theme.accentText(repost.authorColor).opacity(MeeshyOpacity.intense))
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(localized: "feed.reel.repost.likes", defaultValue: "\(repost.likes) j'aime", bundle: .main))
         }

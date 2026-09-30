@@ -152,7 +152,7 @@ struct MediaReplyComposerBar: View {
     /// est ce qui SORT de la conversation, et elle ne doit dépendre d'aucun
     /// appelant.
     private var citationBanner: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: accentColor))
                 .frame(width: 3, height: 38)
@@ -166,11 +166,11 @@ struct MediaReplyComposerBar: View {
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 38, height: 38)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
                 .overlay(alignment: .center) {
                     if citation.attachmentType == AttachmentKind.video.rawValue {
                         Image(systemName: "play.circle.fill")
-                            .font(MeeshyFont.relative(16))
+                            .font(MeeshyFont.relative(MeeshyIconSize.md))
                             .foregroundStyle(.white, .black.opacity(0.4))
                             .accessibilityHidden(true)
                     }
@@ -178,18 +178,18 @@ struct MediaReplyComposerBar: View {
                 .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "arrowshape.turn.up.left.fill")
                         .font(MeeshyFont.relative(9, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                     Text(QuotedReplyPresentation.title(author: bannerAuthor))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 }
                 Text(citation.previewText)
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(.white.opacity(0.7))
                     .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
             }
@@ -206,8 +206,8 @@ struct MediaReplyComposerBar: View {
             .accessibilityLabel(String(localized: "media.reply.cancel",
                                        defaultValue: "Annuler la réponse", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(Color(hex: accentColor).opacity(0.18))
         .overlay(
             Rectangle()

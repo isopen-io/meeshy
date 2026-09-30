@@ -19,6 +19,7 @@ import { refreshListAction, rowAction, useConversations } from '@/lib/api/query'
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
+import { peerHereIn, useHerePeers } from '@/lib/view/use-conversation-viewing';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
@@ -347,6 +348,8 @@ export default function ConversationsScreen() {
    * change se re-rend.
    */
   const typists = useTypistNames(viewer.id ?? '');
+  /** Les pairs qui ont leur conversation OUVERTE (#8892) — même distribution que `typists`. */
+  const herePeers = useHerePeers(viewer.id ?? '');
   /**
    * LE CORPUS DU RAIL — une seule prop, partagée par les DEUX géographies
    * (grande et épinglée) pour qu'elles ne puissent PAS diverger.
@@ -596,6 +599,7 @@ export default function ConversationsScreen() {
                 unreadCount={effectiveUnreadOf(c, overrides)}
                 onRowAction={rowAction}
                 typists={typists[c.id]}
+                peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —

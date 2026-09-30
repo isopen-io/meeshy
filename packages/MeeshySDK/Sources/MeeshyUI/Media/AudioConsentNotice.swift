@@ -21,10 +21,10 @@ public struct AudioConsentNotice: View, Equatable {
 
     public var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "mic.slash").font(.caption)
                     .foregroundStyle(.primary)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(message).font(.caption).multilineTextAlignment(.leading)
                         .foregroundStyle(.primary)
                     Text(actionTitle).font(.caption2.weight(.semibold))
@@ -34,10 +34,10 @@ public struct AudioConsentNotice: View, Equatable {
                 Image(systemName: "chevron.forward").font(.caption2)
                     .foregroundStyle(Color(hex: accentHex))
             }
-            .padding(.horizontal, 10).padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.smPlus)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(hex: accentHex).opacity(0.4), lineWidth: 1))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).strokeBorder(Color(hex: accentHex).opacity(0.4), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

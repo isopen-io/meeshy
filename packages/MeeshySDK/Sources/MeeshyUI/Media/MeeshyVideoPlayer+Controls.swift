@@ -56,9 +56,9 @@ internal struct _InlineOverlayControls: View {
                 Spacer()
                 bottomBar
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.top, MeeshySpacing.xsPlus)
+            .padding(.bottom, MeeshySpacing.sm)
         }
         .buttonStyle(BouncyControlButtonStyle())
         .allowsHitTesting(true)
@@ -98,14 +98,14 @@ internal struct _InlineOverlayControls: View {
 
     private var topBar: some View {
         AdaptiveGlassContainer(spacing: 10) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 if controls.contains(.expand), let onExpand {
                     Button {
                         onExpand()
                         HapticFeedback.light()
                     } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 28, height: 28)
                             .adaptiveGlass(in: Circle(), interactive: true)
@@ -121,7 +121,7 @@ internal struct _InlineOverlayControls: View {
                         HapticFeedback.light()
                     } label: {
                         Image(systemName: manager.isPipActive ? "pip.exit" : "pip.enter")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 28, height: 28)
                             .adaptiveGlass(in: Circle(), interactive: true)
@@ -149,7 +149,7 @@ internal struct _InlineOverlayControls: View {
                         HapticFeedback.light()
                     } label: {
                         Image(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 28, height: 28)
                             .adaptiveGlass(in: Circle(), interactive: true)
@@ -164,10 +164,10 @@ internal struct _InlineOverlayControls: View {
                         HapticFeedback.light()
                     } label: {
                         Text(manager.playbackSpeed.label)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.system(size: MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, MeeshySpacing.sm)
+                            .padding(.vertical, MeeshySpacing.xs)
                             .adaptiveGlass(in: Capsule())
                     }
                 }
@@ -189,7 +189,7 @@ internal struct _InlineOverlayControls: View {
 
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 24) {
-            HStack(spacing: 24) {
+            HStack(spacing: MeeshySpacing.xxl) {
                 if Self.showsSkipButtons(controls: controls) {
                     skipButton(systemName: "gobackward.10", seconds: -10)
                 }
@@ -207,7 +207,7 @@ internal struct _InlineOverlayControls: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle(), interactive: true)
@@ -232,7 +232,7 @@ internal struct _InlineOverlayControls: View {
     /// déléguée à `adaptiveSymbolReplace` (cf. `Compatibility/AdaptiveSymbolEffects`).
     private var playPauseIcon: some View {
         Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 22, weight: .bold))
+            .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
             .foregroundColor(.white)
             .offset(x: manager.isPlaying ? 0 : 2)
             .adaptiveSymbolReplace(id: manager.isPlaying)
@@ -241,21 +241,21 @@ internal struct _InlineOverlayControls: View {
     // MARK: - Bottom Bar (seek + time)
 
     private var bottomBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             if controls.contains(.scrubber) {
                 seekBar
             }
             if controls.contains(.duration) {
                 HStack {
                     Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
                     Spacer()
                     Text(formatMediaDuration(manager.duration))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, MeeshySpacing.xxs)
             }
         }
     }
@@ -329,90 +329,75 @@ internal struct _FullscreenOverlayControls: View {
 
     var body: some View {
         ZStack {
-            scrimGradients
+            FullscreenScrims(topInset: WindowMetrics.safeAreaInsets.top, chromeVisible: true)
             VStack(spacing: 0) {
                 topBar
-                    .padding(.top, 8)
-                    .padding(.horizontal, 16)
+                    .padding(.top, FullscreenChromeMetrics.topInset)
+                    .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
                 // Transport délégué au composant partagé `VideoTransportControls`
                 // (source unique, idem galerie média) — dédup des ~240 lignes qui
                 // dupliquaient center/seek/speed/mini-toolbar. La top bar fichier
                 // (close/save/share) reste propre au fullscreen.
                 VideoTransportControls(manager: manager, accentColor: accentColor, controls: controls)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, MeeshySpacing.lg)
             }
         }
         .buttonStyle(BouncyControlButtonStyle())
     }
 
-    private var scrimGradients: some View {
-        VStack(spacing: 0) {
-            LinearGradient(colors: [Color.black.opacity(0.7), Color.clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 80)
-            Spacer()
-            LinearGradient(colors: [Color.clear, Color.black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 180)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: FullscreenChromeMetrics.barSpacing) {
             if controls.contains(.close) {
-                Button {
-                    onClose?()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                }
+                FullscreenCloseButton { onClose?() }
             }
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             Spacer()
             if controls.contains(.share), onShare != nil {
-                Button {
+                FullscreenChromeButton(
+                    systemImage: FullscreenChromeSymbol.share,
+                    label: String(localized: "story.timeline.export.preview.share",
+                                  defaultValue: "Partager la vidéo", bundle: .module)
+                ) {
                     onShare?()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if controls.contains(.save) {
-                Button {
-                    onSave?()
-                } label: {
-                    Group {
-                        switch saveState {
-                        case .idle:   Image(systemName: "arrow.down.to.line")
-                        case .saving: ProgressView().tint(.white)
-                        case .saved:  Image(systemName: "checkmark")
-                        case .failed: Image(systemName: "xmark")
-                        }
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 36, height: 36)
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                }
-                .disabled(saveState == .saving || saveState == .saved)
+                saveButton
             }
         }
     }
 
+    @ViewBuilder
+    private var saveButton: some View {
+        if saveState == .saving {
+            ProgressView()
+                .tint(MeeshyColors.mediaChromeForeground)
+                .frame(width: FullscreenChromeMetrics.tapTarget,
+                       height: FullscreenChromeMetrics.tapTarget)
+        } else {
+            FullscreenChromeButton(
+                systemImage: saveGlyph,
+                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+            ) {
+                onSave?()
+            }
+            .disabled(saveState == .saved)
+        }
+    }
+
+    private var saveGlyph: String {
+        switch saveState {
+        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .saved: return FullscreenChromeSymbol.saved
+        case .failed: return FullscreenChromeSymbol.close
+        }
+    }
 }
 
 // MARK: - Bouncy press feedback (legacy parity)
