@@ -191,6 +191,11 @@ final class UpgradeGateTests: XCTestCase {
                        "Le bootstrap ne connaît pas de storeUrl : le bouton doit quand même mener quelque part.")
     }
 
+    func test_defaultStoreURL_estLaFicheQuiRepond() {
+        XCTAssertEqual(UpgradeGateView.defaultStoreURL.absoluteString, "https://apps.apple.com/app/id6760208591",
+                       "`apps.apple.com/app/meeshy` rendait 404 : un utilisateur bloqué par la porte tombait sur une erreur (#8802).")
+    }
+
     func test_storeURL_quandLeServeurEnDonneUne_laPrefere() {
         let avecUrl = UpgradeRequirement(minVersion: "1.2.0", storeUrl: "https://apps.apple.com/fr/app/meeshy/id123")
 

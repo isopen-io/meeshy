@@ -21,7 +21,7 @@ struct UpgradeGateView: View {
     /// Repli quand le serveur n'a pas servi d'URL — c'est le cas du bootstrap,
     /// qui compare un plancher sans jamais recevoir de corps 426. Miroir du
     /// défaut du gateway (`getAppStoreUrl`, `utils/appVersion.ts`).
-    static let defaultStoreURL = URL(string: "https://apps.apple.com/app/meeshy")!
+    static let defaultStoreURL = URL(string: "https://apps.apple.com/app/id6760208591")!
 
     /// L'URL servie par le SERVEUR l'emporte : c'est lui qui sait, via
     /// `X-App-Platform`, s'il parle à un App Store ou à un Play Store.
