@@ -7,7 +7,7 @@ import MeeshyUI
 /// Ce que l'atelier a chargé pour peindre les médias d'une carte : les pixels
 /// (photo, première image d'une vidéo), l'onde RÉELLE des sons et leur fichier
 /// local — la piste d'une carte animée.
-struct MessageCardLoadedMedia: Sendable {
+nonisolated struct MessageCardLoadedMedia: Sendable {
     let pictures: MessageCardPictures
     let media: [MessageCardMedia]
     let audioFile: URL?

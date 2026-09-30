@@ -34,13 +34,13 @@ const horsReseau = async (context, reseau) => {
 
 // Corps de la série : chaque légende est d'abord ajustée seule, puis la vitrine prend le plus
 // petit corps obtenu — une langue garde UNE taille de titre sur toutes ses captures.
-export const corpsDeSerie = async (browser, { appareil, lang }) => {
-  const a = APPAREILS[appareil]
+export const corpsDeSerie = async (browser, { appareil, lang, plan = APPAREILS }) => {
+  const a = plan[appareil]
   const page = await browser.newPage({ viewport: { width: a.width / a.scale, height: a.height / a.scale } })
   try {
     const tailles = []
     for (const [i] of a.captures.entries()) {
-      await page.setContent(pageCapture({ appareil, lang, rang: i + 1 }), { waitUntil: 'load' })
+      await page.setContent(pageCapture({ appareil, lang, rang: i + 1, plan }), { waitUntil: 'load' })
       await page.evaluate(() => document.fonts.ready)
       tailles.push(await page.evaluate(() => {
         window.asMiseEnPage()
@@ -61,7 +61,7 @@ const verifierPng = (png, { width, height }) => {
   return erreurs
 }
 
-const rendre = async (browser, { html, width, height, scale }) => {
+export const rendre = async (browser, { html, width, height, scale }) => {
   const reseau = []
   const context = await browser.newContext({ viewport: { width: width / scale, height: height / scale }, deviceScaleFactor: scale })
   await horsReseau(context, reseau)
