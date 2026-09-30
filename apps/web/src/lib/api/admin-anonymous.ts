@@ -1,10 +1,11 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { adminPageOf, type AdminPage } from './admin-page';
 import type { ApiResult } from './http';
 
 /**
- * **LES ANONYMES** (#7873) — les participants entrés par un lien sans compte.
+ * **LES ANONYMES** (#7873, #8876) — les participants entrés par un lien sans compte.
  *
  * - `GET admin.anonymousUsers` — la liste, pagination DANS `data`
  *   (`{ anonymousUsers, pagination }`), comme la liste des comptes.
@@ -16,8 +17,18 @@ import type { ApiResult } from './http';
  * Ce décodeur ne garde que ce que l'écran montre, champ par champ : la
  * passerelle a déjà servi, par le passé, le hash de session d'un anonyme et
  * son empreinte d'appareil (#4157). Un `...spread` les recopierait le jour où
- * ils reviendraient, et le cache des requêtes est persisté sur le disque.
+ * ils reviendraient. **Aucun libellé fabriqué** : un nom absent reste vide
+ * (`guestLabel` dit « Invité sans nom »), et le lien d'arrivée ne garde NI son
+ * identifiant public NI ses clés de jointure — son nom, son état, son échéance.
  */
+export type AdminAnonymousConversation = {
+  readonly id: string;
+  /** Le titre servi, vide quand la conversation n'en a pas — `conversationLabel` dit le repli. */
+  readonly title: string;
+  /** Le type, servi par la FICHE seulement (la liste ne le sert pas) — vide sinon. */
+  readonly type: string;
+};
+
 export type AdminAnonymousRow = {
   readonly id: string;
   readonly displayName: string;
@@ -28,7 +39,7 @@ export type AdminAnonymousRow = {
   readonly lastActiveAt: string | null;
   readonly joinedAt: string | null;
   readonly leftAt: string | null;
-  readonly conversation: { readonly id: string; readonly title: string; readonly identifier: string } | null;
+  readonly conversation: AdminAnonymousConversation | null;
   readonly messageCount: number;
 };
 
@@ -40,20 +51,20 @@ export type AdminAnonymousPage = {
 
 export type AdminAnonymousOne = AdminAnonymousRow & {
   readonly permissions: readonly { readonly key: string; readonly granted: boolean }[];
-  /** Le lien par lequel il est entré — son nom et son état, jamais ses clés de jointure. */
-  readonly shareLink: { readonly name: string; readonly isActive: boolean } | null;
+  /** Le lien par lequel il est entré — son nom, son état et son échéance, jamais ses clés de jointure. */
+  readonly shareLink: { readonly id: string; readonly name: string; readonly isActive: boolean; readonly expiresAt: string | null } | null;
 };
 
 const dateOuNull = (valeur: unknown): string | null => (typeof valeur === 'string' && valeur !== '' ? valeur : null);
 
-function decodeLigne(brut: unknown): AdminAnonymousRow | null {
+export function decodeAdminAnonymousRow(brut: unknown): AdminAnonymousRow | null {
   const ligne = asRecord(brut);
   if (ligne === null || typeof ligne.id !== 'string') return null;
   const conversation = asRecord(ligne.conversation);
   const compte = asRecord(ligne._count);
   return {
     id: ligne.id,
-    displayName: asText(ligne.displayName) || '—',
+    displayName: asText(ligne.displayName).trim(),
     avatar: asText(ligne.avatar),
     language: asText(ligne.language),
     isActive: ligne.isActive !== false,
@@ -64,31 +75,31 @@ function decodeLigne(brut: unknown): AdminAnonymousRow | null {
     conversation:
       conversation === null || typeof conversation.id !== 'string'
         ? null
-        : { id: conversation.id, title: asText(conversation.title), identifier: asText(conversation.identifier) },
+        : { id: conversation.id, title: asText(conversation.title), type: asText(conversation.type) },
     messageCount: asCount(compte?.sentMessages),
   };
 }
 
 export function decodeAdminAnonymousPage(raw: unknown, offset: number): AdminAnonymousPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.anonymousUsers) ? charge.anonymousUsers : [];
-  const rows = brut.map(decodeLigne).filter((ligne): ligne is AdminAnonymousRow => ligne !== null);
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total) || rows.length;
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + rows.length < total;
-  return { rows, total, hasMore };
+  const page = adminPageOf({ ok: true, data: raw }, decodeAdminAnonymousRow, { kind: 'nested', key: 'anonymousUsers' });
+  if (!page.ok) return { rows: [], total: 0, hasMore: false };
+  const hasMore = page.data.hasMore;
+  return { rows: page.data.rows, total: page.data.total, hasMore: typeof asRecord(asRecord(raw)?.pagination)?.hasMore === 'boolean' ? hasMore : offset + page.data.rows.length < page.data.total };
 }
 
 export function decodeAdminAnonymousOne(raw: unknown): AdminAnonymousOne | null {
   const charge = asRecord(raw) ?? {};
   const source = charge.participant ?? charge.anonymousUser ?? raw;
-  const ligne = decodeLigne(source);
+  const ligne = decodeAdminAnonymousRow(source);
   if (ligne === null) return null;
   const permissions = Object.entries(asRecord(asRecord(source)?.permissions) ?? {})
     .filter((entree): entree is [string, boolean] => typeof entree[1] === 'boolean')
     .map(([key, granted]) => ({ key, granted }));
   const lien = asRecord(asRecord(source)?.shareLink);
-  const shareLink = lien === null || typeof lien.id !== 'string' ? null : { name: asText(lien.name) || '—', isActive: lien.isActive !== false };
+  const shareLink =
+    lien === null || typeof lien.id !== 'string'
+      ? null
+      : { id: lien.id, name: asText(lien.name).trim(), isActive: lien.isActive !== false, expiresAt: dateOuNull(lien.expiresAt) };
   return { ...ligne, permissions, shareLink };
 }
 
@@ -121,6 +132,13 @@ export async function loadAdminAnonymous(
   });
   if (!result.ok) return result;
   return { ok: true, data: decodeAdminAnonymousPage(result.data, params.offset) };
+}
+
+/** La même lecture, sous la forme commune des listes d'administration que `useAdminList` consomme. */
+export async function loadAdminAnonymousListPage(params: Parameters<typeof loadAdminAnonymous>[0]): Promise<ApiResult<AdminPage<AdminAnonymousRow>>> {
+  const result = await loadAdminAnonymous(params);
+  if (!result.ok) return result;
+  return { ok: true, data: { rows: result.data.rows, total: result.data.total, hasMore: result.data.hasMore } };
 }
 
 export async function loadAdminAnonymousOne(

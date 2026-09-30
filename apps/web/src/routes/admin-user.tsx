@@ -112,7 +112,6 @@ export function AdminUserFiche({
   const state = accountStateOf({ ...membre, activeBan: (bans.data ?? []).some((ban) => ban.active) }, moment, language);
   const adm = reach.space === 'adm';
   const gererConversation = reach.opens('conversations') ? (adm ? ('admConversation' as const) : ('adminConversation' as const)) : null;
-  const cibleMembre = adm ? ('admUser' as const) : ('adminUser' as const);
 
   return (
     /* LE HALO DE L'INSCRIPTION (#8288), réutilisé : les cartes de verre de la fiche ne se
@@ -196,12 +195,12 @@ export function AdminUserFiche({
             <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} deps={deps} />
           ) : null}
           {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} deps={deps} /> : null}
-          {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} cible={cibleMembre} /> : null}
-          {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} /> : null}
-          {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} /> : null}
+          {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
+          {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} deps={deps} /> : null}
+          {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} deps={deps} /> : null}
           {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} /> : null}
-          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} /> : null}
-          {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} /> : null}
+          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
+          {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
         </div>
       </AdminFiche>
 

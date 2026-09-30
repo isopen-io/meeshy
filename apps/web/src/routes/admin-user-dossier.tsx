@@ -1,7 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
+import { AdminEntityChip } from '@/components/admin/entity-chip';
+import { AdminMomentText } from '@/components/admin/meta';
+import {
+  interpretAccountState,
+  interpretFriendStatus,
+  interpretParticipantRole,
+  interpretReportStatus,
+  interpretReportType,
+  interpretReportedEntity,
+  interpretSecurityStatus,
+  interpretSeverity,
+} from '@/lib/admin/interpret/enums';
+import { formatCount } from '@/lib/admin/interpret/numbers';
+import { adminDate, adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
+import { securityEventLabel } from '@/lib/admin/user-dossier-labels';
+import { userEntityOf } from '@/lib/admin/user-entity';
+import type { AdminDeps } from '@/lib/api/admin';
 import {
   ADMIN_DOSSIER_PAGE_SIZE,
   adminUserActivityQueryKey,
@@ -24,19 +41,15 @@ import {
 } from '@/lib/api/admin-user-dossier';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
-import { adminMoment } from '@/lib/admin/format';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 
 import { AdminLine, AdminSection, AdminSkeleton } from './admin-parts';
 import { AdminPager, AdminTable, PlainTh, Td } from './admin-table';
-import { Link } from './route-table';
-
 
 /**
- * **LE DOSSIER D'UN MEMBRE, ONGLET PAR ONGLET** (#7845, #7873) — contacts,
+ * **LE DOSSIER D'UN MEMBRE, ONGLET PAR ONGLET** (#7845, #7873, #8876) — contacts,
  * communautés, profil vocal, sécurité, signalements.
  *
  * Chaque onglet ne lit sa route qu'à son OUVERTURE : la fiche ne frappe pas
@@ -47,6 +60,13 @@ import { Link } from './route-table';
  * passerelle ; un 403 sur la sécurité dit que la section est réservée. Un
  * vide avalé se lirait comme « ce membre n'a rien », et l'administrateur
  * classerait le dossier.
+ *
+ * ## Tout se lit en mots (#8876)
+ *
+ * Une personne est un CHIP (avatar, vrai nom, `@pseudo`, lien vers sa fiche dans
+ * l'espace courant) ; un statut, un motif, une gravité, un rôle passent par la
+ * bibliothèque d'interprétation — jamais `accepted`, `hate_speech` ou
+ * `LOGIN_FAILED` bruts. Aucune couleur n'est écrite en dur : les tons sont ceux du kit.
  */
 
 const INK2 = 'var(--color-ios-ink-2)';
@@ -139,29 +159,21 @@ function Titre({ children }: { readonly children: ReactNode }) {
   );
 }
 
-function Statut({ ton, children }: { readonly ton: 'ok' | 'ko' | 'neutre'; readonly children: ReactNode }) {
-  const couleur = ton === 'ok' ? 'var(--color-success, #34D399)' : ton === 'ko' ? 'var(--color-danger)' : INK2;
-  return <span style={{ color: couleur }}>{children}</span>;
-}
+type TabProps = { readonly userId: string; readonly language: InterfaceLanguage; readonly deps?: AdminDeps; readonly now?: () => Date };
 
-export function AdminUserContactsTab({
-  userId,
-  language,
-  cible,
-}: {
-  readonly userId: string;
-  readonly language: InterfaceLanguage;
-  readonly cible: 'adminUser' | 'admUser';
-}) {
+const moment = (iso: string | null, now: Date, language: InterfaceLanguage) => <AdminMomentText moment={adminMomentOf(iso, now, language)} />;
+
+export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
   const activite = useQuery({
     queryKey: adminUserActivityQueryKey(userId),
-    queryFn: ({ signal }) => servi(loadAdminUserActivity({ ...apiDeps, userId, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserActivity({ ...deps, userId, signal })),
     retry: false,
   });
 
   if (activite.isPending) return <AdminSkeleton rows={4} />;
   if (activite.data === undefined) return <Etat language={language} error={activite.error} />;
   const { contacts, shareLinks, trackingLinks, affiliateTokens } = activite.data;
+  const instant = now();
 
   return (
     <div className="grid gap-3" data-admin-contacts>
@@ -181,41 +193,24 @@ export function AdminUserContactsTab({
               <PlainTh>{translateAdmin(language, 'admin.col.member')}</PlainTh>
               <PlainTh>{translateAdmin(language, 'admin.contacts.direction')}</PlainTh>
               <PlainTh>{translateAdmin(language, 'admin.col.status')}</PlainTh>
-              <PlainTh>{translateAdmin(language, 'admin.col.date')}</PlainTh>
+              <PlainTh>{translateAdmin(language, 'admin.people.dossier.contactDate')}</PlainTh>
             </tr>
           </thead>
           <tbody>
-            {contacts.map((contact) => {
-              const photo = participantAvatarOf({ avatar: contact.other.avatar });
-              return (
-                <tr key={contact.id} data-admin-contact={contact.id}>
-                  <Td>
-                    <Link to={cible} params={{ user: contact.other.id }} className="flex min-w-0 items-center gap-3" style={{ minHeight: 44 }}>
-                      <Avatar
-                        initials={initialsOf(contact.other.displayName)}
-                        color="var(--color-ios-brand)"
-                        size={32}
-                        name={contact.other.displayName}
-                        {...(photo === undefined ? {} : { src: photo })}
-                      />
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">{contact.other.displayName}</span>
-                        <span className="block truncate text-caption" style={{ color: INK2 }}>
-                          @{contact.other.username}
-                        </span>
-                      </span>
-                    </Link>
-                  </Td>
-                  <Td className="text-caption">
-                    {translateAdmin(language, contact.direction === 'sent' ? 'admin.contacts.sent' : 'admin.contacts.received')}
-                  </Td>
-                  <Td className="text-caption">
-                    <Statut ton={contact.status === 'accepted' ? 'ok' : contact.status === 'pending' ? 'neutre' : 'ko'}>{contact.status}</Statut>
-                  </Td>
-                  <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(contact.createdAt, language)}</Td>
-                </tr>
-              );
-            })}
+            {contacts.map((contact) => (
+              <tr key={contact.id} data-admin-contact={contact.id}>
+                <Td>
+                  <AdminEntityChip language={language} size="sm" entity={userEntityOf(contact.other, language, instant)} />
+                </Td>
+                <Td className="text-caption">
+                  {translateAdmin(language, contact.direction === 'sent' ? 'admin.contacts.sent' : 'admin.contacts.received')}
+                </Td>
+                <Td className="text-caption">
+                  <AdminInterpretedBadge value={interpretFriendStatus(contact.status, language)} />
+                </Td>
+                <Td className="whitespace-nowrap text-caption">{moment(contact.createdAt, instant, language)}</Td>
+              </tr>
+            ))}
           </tbody>
         </AdminTable>
       )}
@@ -223,11 +218,11 @@ export function AdminUserContactsTab({
   );
 }
 
-export function AdminUserCommunitiesTab({ userId, language }: { readonly userId: string; readonly language: InterfaceLanguage }) {
+export function AdminUserCommunitiesTab({ userId, language, deps = apiDeps }: TabProps) {
   const [offset, setOffset] = useState(0);
   const liste = useQuery({
     queryKey: adminUserCommunitiesQueryKey(userId, offset),
-    queryFn: ({ signal }) => servi(loadAdminUserCommunities({ ...apiDeps, userId, offset, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserCommunities({ ...deps, userId, offset, signal })),
     retry: false,
   });
 
@@ -252,60 +247,52 @@ export function AdminUserCommunitiesTab({ userId, language }: { readonly userId:
 }
 
 function LigneCommunaute({ communaute, language }: { readonly communaute: AdminCommunity; readonly language: InterfaceLanguage }) {
-  const photo = participantAvatarOf({ avatar: communaute.avatar });
   return (
     <tr data-admin-community={communaute.id}>
       <Td>
-        <span className="flex min-w-0 items-center gap-3">
-          <Avatar
-            initials={initialsOf(communaute.name)}
-            color="var(--color-ios-brand)"
-            size={32}
-            name={communaute.name}
-            {...(photo === undefined ? {} : { src: photo })}
-          />
-          <span className="min-w-0">
-            <span className="block truncate font-medium">{communaute.name}</span>
-            <span className="block truncate text-caption" style={{ color: INK2 }}>
-              {communaute.identifier}
-              {communaute.isPrivate ? ` · ${translateAdmin(language, 'admin.communities.private')}` : ''}
-            </span>
-          </span>
+        <AdminEntityChip
+          language={language}
+          size="sm"
+          entity={{
+            kind: 'community',
+            id: communaute.id,
+            label: communaute.name,
+            secondary: communaute.isPrivate ? `${communaute.identifier} · ${translateAdmin(language, 'admin.communities.private')}` : communaute.identifier,
+            avatarUrl: communaute.avatar === '' ? null : communaute.avatar,
+          }}
+        />
+      </Td>
+      <Td className="text-caption">
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <AdminInterpretedBadge value={interpretParticipantRole(communaute.role, language)} />
+          {communaute.isCreator ? <AdminBadge tone="brand">{translateAdmin(language, 'admin.communities.creator')}</AdminBadge> : null}
         </span>
       </Td>
-      <Td className="text-caption">
-        {communaute.role}
-        {communaute.isCreator ? ` · ${translateAdmin(language, 'admin.communities.creator')}` : ''}
-      </Td>
-      <Td className="text-caption tabular-nums">{communaute.memberCount}</Td>
+      <Td className="text-caption tabular-nums">{formatCount(communaute.memberCount, language)}</Td>
       <Td className="text-caption">
         {communaute.isActive ? (
-          <Statut ton="ok">{translateAdmin(language, 'admin.filter.active')}</Statut>
+          <AdminInterpretedBadge value={interpretAccountState('active', language)} />
         ) : (
-          <Statut ton="neutre">{translateAdmin(language, 'admin.anonymous.left')}</Statut>
+          <AdminBadge tone="neutral">{translateAdmin(language, 'admin.people.dossier.memberLeft')}</AdminBadge>
         )}
       </Td>
-      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(communaute.joinedAt, language)}</Td>
+      <Td className="whitespace-nowrap text-caption">{adminDate(communaute.joinedAt, language)}</Td>
     </tr>
   );
 }
 
-const duree = (ms: number): string => {
-  const secondes = Math.round(ms / 1000);
-  return `${Math.floor(secondes / 60)}:${String(secondes % 60).padStart(2, '0')}`;
-};
-
-export function AdminUserVoiceTab({ userId, language }: { readonly userId: string; readonly language: InterfaceLanguage }) {
+export function AdminUserVoiceTab({ userId, language, deps = apiDeps }: TabProps) {
   const voix = useQuery({
     queryKey: adminUserVoiceQueryKey(userId),
-    queryFn: ({ signal }) => servi(loadAdminUserVoice({ ...apiDeps, userId, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserVoice({ ...deps, userId, signal })),
     ...SOUVERAIN,
   });
 
   if (voix.isPending) return <AdminSkeleton rows={3} />;
   if (voix.data === undefined) return <Etat language={language} error={voix.error} />;
   const { profile, consents } = voix.data;
-  const consentement = (valeur: string | null) => (valeur === null ? translateAdmin(language, 'admin.voice.notGiven') : adminMoment(valeur, language));
+  const consentement = (valeur: string | null) =>
+    valeur === null ? translateAdmin(language, 'admin.people.consent.notGiven') : translateAdmin(language, 'admin.people.consent.givenOn', { date: adminDate(valeur, language) });
 
   return (
     <div className="grid gap-5 lg:grid-cols-2" data-admin-voice>
@@ -316,10 +303,10 @@ export function AdminUserVoiceTab({ userId, language }: { readonly userId: strin
           </p>
         ) : (
           <>
-            <AdminLine label={translateAdmin(language, 'admin.voice.samples')} valeur={String(profile.audioCount)} />
-            <AdminLine label={translateAdmin(language, 'admin.voice.duration')} valeur={duree(profile.totalDurationMs)} />
+            <AdminLine label={translateAdmin(language, 'admin.voice.samples')} valeur={formatCount(profile.audioCount, language)} />
+            <AdminLine label={translateAdmin(language, 'admin.voice.duration')} valeur={formatDuration(profile.totalDurationMs, 'ms', language)} />
             <AdminLine label={translateAdmin(language, 'admin.voice.model')} valeur={profile.model || '—'} />
-            <AdminLine label={translateAdmin(language, 'admin.col.createdOn')} valeur={adminMoment(profile.createdAt, language)} />
+            <AdminLine label={translateAdmin(language, 'admin.col.createdOn')} valeur={adminDate(profile.createdAt, language)} />
           </>
         )}
       </AdminSection>
@@ -335,17 +322,18 @@ export function AdminUserVoiceTab({ userId, language }: { readonly userId: strin
   );
 }
 
-export function AdminUserSecurityTab({ userId, language }: { readonly userId: string; readonly language: InterfaceLanguage }) {
+export function AdminUserSecurityTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
   const [offsetSessions, setOffsetSessions] = useState(0);
   const [offsetEvenements, setOffsetEvenements] = useState(0);
+  const instant = now();
   const sessions = useQuery({
     queryKey: adminUserSessionsQueryKey(userId, offsetSessions),
-    queryFn: ({ signal }) => servi(loadAdminUserSessions({ ...apiDeps, userId, offset: offsetSessions, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserSessions({ ...deps, userId, offset: offsetSessions, signal })),
     ...SOUVERAIN,
   });
   const evenements = useQuery({
     queryKey: adminUserSecurityQueryKey(userId, offsetEvenements),
-    queryFn: ({ signal }) => servi(loadAdminUserSecurityEvents({ ...apiDeps, userId, offset: offsetEvenements, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserSecurityEvents({ ...deps, userId, offset: offsetEvenements, signal })),
     ...SOUVERAIN,
   });
 
@@ -367,15 +355,17 @@ export function AdminUserSecurityTab({ userId, language }: { readonly userId: st
           ]}
           ligne={(session) => (
             <tr key={session.id}>
-              <Td className="max-w-[18rem] truncate text-caption">{session.device}</Td>
+              <Td className="max-w-[18rem] break-words text-caption">{session.device}</Td>
               <Td className="text-caption">{session.place || '—'}</Td>
               <Td className="text-caption tabular-nums">{session.ipAddress || '—'}</Td>
               <Td className="text-caption">
-                <Statut ton={session.isValid ? 'ok' : 'neutre'}>
-                  {translateAdmin(language, session.isValid ? 'admin.security.valid' : 'admin.security.closed')}
-                </Statut>
+                {session.isValid ? (
+                  <AdminBadge tone="success">{translateAdmin(language, 'admin.security.valid')}</AdminBadge>
+                ) : (
+                  <AdminBadge tone="neutral">{translateAdmin(language, 'admin.security.closed')}</AdminBadge>
+                )}
               </Td>
-              <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(session.lastActivityAt ?? session.createdAt, language)}</Td>
+              <Td className="whitespace-nowrap text-caption">{moment(session.lastActivityAt ?? session.createdAt, instant, language)}</Td>
             </tr>
           )}
         />
@@ -390,24 +380,28 @@ export function AdminUserSecurityTab({ userId, language }: { readonly userId: st
           entetes={[
             translateAdmin(language, 'admin.security.event'),
             translateAdmin(language, 'admin.security.severity'),
+            translateAdmin(language, 'admin.people.dossier.eventStatus'),
             translateAdmin(language, 'admin.security.ip'),
             translateAdmin(language, 'admin.col.date'),
           ]}
           ligne={(evenement) => (
             <tr key={evenement.id}>
               <Td>
-                <span className="block text-caption font-medium">{evenement.eventType}</span>
+                <span className="block text-caption font-medium">{securityEventLabel(evenement.eventType, language)}</span>
                 {evenement.description === '' ? null : (
-                  <span className="block max-w-[24rem] truncate text-caption" style={{ color: INK2 }}>
+                  <span className="block max-w-[24rem] break-words text-caption" style={{ color: INK2 }}>
                     {evenement.description}
                   </span>
                 )}
               </Td>
               <Td className="text-caption">
-                <Statut ton={/high|critical/i.test(evenement.severity) ? 'ko' : 'neutre'}>{evenement.severity || '—'}</Statut>
+                <AdminInterpretedBadge value={interpretSeverity(evenement.severity, language)} />
+              </Td>
+              <Td className="text-caption">
+                <AdminInterpretedBadge value={interpretSecurityStatus(evenement.status, language)} />
               </Td>
               <Td className="text-caption tabular-nums">{evenement.ipAddress || '—'}</Td>
-              <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(evenement.createdAt, language)}</Td>
+              <Td className="whitespace-nowrap text-caption">{moment(evenement.createdAt, instant, language)}</Td>
             </tr>
           )}
         />
@@ -416,34 +410,50 @@ export function AdminUserSecurityTab({ userId, language }: { readonly userId: st
   );
 }
 
-function LigneSignalement({ report, language, recu }: { readonly report: AdminReport; readonly language: InterfaceLanguage; readonly recu: boolean }) {
+function LigneSignalement({
+  report,
+  language,
+  recu,
+  now,
+}: {
+  readonly report: AdminReport;
+  readonly language: InterfaceLanguage;
+  readonly recu: boolean;
+  readonly now: Date;
+}) {
   return (
     <tr>
-      <Td className="text-caption">{report.subject || '—'}</Td>
-      <Td className="text-caption">{report.reportType || '—'}</Td>
-      <Td className="max-w-[18rem] truncate text-caption">{report.reason || '—'}</Td>
+      {/* Un signalement REÇU nomme son auteur (texte servi) ; un signalement FAIT dit le genre de ce qu'il vise. */}
+      <Td className="text-caption">
+        {recu ? report.subject || '—' : report.subject === '' ? '—' : interpretReportedEntity(report.subject, language).label}
+      </Td>
+      <Td className="text-caption">{interpretReportType(report.reportType, language).label}</Td>
+      <Td className="max-w-[18rem] break-words text-caption">{report.reason || '—'}</Td>
       {recu ? (
-        <Td className="max-w-[20rem] truncate text-caption">
+        <Td className="max-w-[20rem] break-words text-caption">
           {report.excerpt ?? <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.reports.withheld')}</span>}
         </Td>
       ) : null}
-      <Td className="text-caption">{report.status || '—'}</Td>
-      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(report.createdAt, language)}</Td>
+      <Td className="text-caption">
+        <AdminInterpretedBadge value={interpretReportStatus(report.status, language)} />
+      </Td>
+      <Td className="whitespace-nowrap text-caption">{moment(report.createdAt, now, language)}</Td>
     </tr>
   );
 }
 
-export function AdminUserReportsTab({ userId, language }: { readonly userId: string; readonly language: InterfaceLanguage }) {
+export function AdminUserReportsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
   const [offsetFaits, setOffsetFaits] = useState(0);
   const [offsetRecus, setOffsetRecus] = useState(0);
+  const instant = now();
   const faits = useQuery({
     queryKey: adminUserReportsFiledQueryKey(userId, offsetFaits),
-    queryFn: ({ signal }) => servi(loadAdminUserReportsFiled({ ...apiDeps, userId, offset: offsetFaits, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserReportsFiled({ ...deps, userId, offset: offsetFaits, signal })),
     retry: false,
   });
   const recus = useQuery({
     queryKey: adminUserReportsReceivedQueryKey(userId, offsetRecus),
-    queryFn: ({ signal }) => servi(loadAdminUserReportsReceived({ ...apiDeps, userId, offset: offsetRecus, signal })),
+    queryFn: ({ signal }) => servi(loadAdminUserReportsReceived({ ...deps, userId, offset: offsetRecus, signal })),
     ...SOUVERAIN,
   });
   const colonnes = (recu: boolean) => [
@@ -465,7 +475,7 @@ export function AdminUserReportsTab({ userId, language }: { readonly userId: str
           offset={offsetRecus}
           onOffset={setOffsetRecus}
           entetes={colonnes(true)}
-          ligne={(report) => <LigneSignalement key={report.id} report={report} language={language} recu />}
+          ligne={(report) => <LigneSignalement key={report.id} report={report} language={language} recu now={instant} />}
         />
       </section>
       <section>
@@ -476,7 +486,7 @@ export function AdminUserReportsTab({ userId, language }: { readonly userId: str
           offset={offsetFaits}
           onOffset={setOffsetFaits}
           entetes={colonnes(false)}
-          ligne={(report) => <LigneSignalement key={report.id} report={report} language={language} recu={false} />}
+          ligne={(report) => <LigneSignalement key={report.id} report={report} language={language} recu={false} now={instant} />}
         />
       </section>
     </div>
