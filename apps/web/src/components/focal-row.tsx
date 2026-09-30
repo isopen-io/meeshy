@@ -677,7 +677,7 @@ export const FocalRow = memo(function FocalRow({
                 height: AVATAR_SIZE,
                 border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
                 backgroundColor: selected ? 'var(--accent)' : 'transparent',
-                color: 'white',
+                color: 'var(--color-ios-on-brand)',
               }}
             >
               {selected ? '✓' : null}

@@ -22,13 +22,13 @@ export type RowWheel = (event: WheelEvent<HTMLElement>) => void;
 /** La rangée d'un panneau : comme celles du `(…)`, libre et sans élasticité (#8736). */
 export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
-export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
+export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
 
 /** Une pastille de choix dans une rangée : 44 de haut au moins, cochée en blanc. */
 export const CHIP = 'flex min-h-11 items-center gap-2 whitespace-nowrap rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
 
 export const chipStyle = (checked: boolean) =>
-  checked ? { background: 'white', color: 'var(--ios-indigo-950)' } : { background: 'rgb(255 255 255 / 0.08)', color: 'white', boxShadow: 'inset 0 0 0 1px rgb(255 255 255 / 0.28)' };
+  checked ? { background: 'var(--color-on-media)', color: 'var(--ios-indigo-950)' } : { background: 'var(--color-media-fill)', color: 'var(--color-on-media)', boxShadow: 'inset 0 0 0 1px var(--color-media-hairline)' };
 
 const FOCUS_ORDER = ['[data-panel-first]', '[aria-checked="true"]', 'input', '[data-row-item]', 'button:not([data-panel-close]):not([data-panel-back])'] as const;
 
@@ -73,8 +73,8 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
       role="group"
       aria-labelledby={titleId}
       onKeyDown={onKeyDown}
-      className="flex min-w-0 flex-col gap-1.5 rounded-[22px] pb-1.5 text-white"
-      style={{ background: 'rgb(255 255 255 / 0.07)' }}
+      className="flex min-w-0 flex-col gap-1.5 rounded-field-ios pb-1.5 text-on-media"
+      style={{ background: 'var(--color-media-fill)' }}
       {...data}
     >
       <div className={`flex items-center gap-1 ${back === undefined ? 'ps-3' : ''}`}>

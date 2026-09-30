@@ -117,8 +117,8 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
           {repost.moreCount !== undefined ? (
             <span
               data-feed-repost-embed-more
-              className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-check font-bold text-white"
-              style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+              className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-check font-bold text-on-media"
+              style={{ backgroundColor: 'var(--color-scrim-strong)' }}
             >
               +{repost.moreCount}
             </span>

@@ -208,7 +208,7 @@ function UploadVeil({
   return (
     <span
       className={`absolute inset-0 grid place-items-center ${round ? 'rounded-chip' : ''}`}
-      style={{ backgroundColor: 'rgb(0 0 0 / 0.45)' }}
+      style={{ backgroundColor: 'var(--color-scrim)' }}
     >
       <span className="sr-only">{translate(language, 'profile.image.uploading')}</span>
       <button
@@ -217,9 +217,9 @@ function UploadVeil({
         aria-label={translate(language, 'profile.image.cancel')}
         onClick={() => onCancel(kind)}
         className="grid place-items-center rounded-chip focus-visible:outline-2"
-        style={{ minWidth: 44, minHeight: 44, color: 'white', outlineColor: 'white' }}
+        style={{ minWidth: 44, minHeight: 44, color: 'var(--color-on-media)', outlineColor: 'var(--color-on-media)' }}
       >
-        <span className="grid place-items-center rounded-chip" style={{ width: 32, height: 32, backgroundColor: 'rgb(0 0 0 / 0.55)' }}>
+        <span className="grid place-items-center rounded-chip" style={{ width: 32, height: 32, backgroundColor: 'var(--color-scrim)' }}>
           <Glyph name="x" size={16} />
         </span>
       </button>
@@ -251,7 +251,7 @@ function PickButton({
     >
       <span
         className="grid place-items-center rounded-chip"
-        style={{ width: 32, height: 32, color: 'white', backgroundColor: 'color-mix(in srgb, var(--ios-indigo-700) 88%, black)' }}
+        style={{ width: 32, height: 32, color: 'var(--color-ios-on-brand)', backgroundColor: 'color-mix(in srgb, var(--ios-indigo-700) 88%, var(--color-media-backdrop))' }}
       >
         <GlyphSvg glyph={PROFILE_GLYPHS[glyph]} size={16} />
       </span>
@@ -659,7 +659,7 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
           <span
             data-pending-requests
             className="grid place-items-center rounded-chip px-1.5 text-chip font-bold"
-            style={{ minWidth: 22, height: 22, color: 'white', backgroundColor: 'var(--ios-indigo-600)' }}
+            style={{ minWidth: 22, height: 22, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--ios-indigo-600)' }}
           >
             {shown}
           </span>

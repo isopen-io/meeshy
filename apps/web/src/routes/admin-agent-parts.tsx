@@ -175,7 +175,7 @@ export function AgentRelaunchControl({
           onClick={() => {
             void relancer();
           }}
-          className={`${BOUTON_PLEIN} text-white`}
+          className={`${BOUTON_PLEIN} text-ios-on-brand`}
           style={{ minHeight: 44, backgroundColor: BRAND }}
         >
           {translateAdmin(language, 'admin.agent.relaunch')}

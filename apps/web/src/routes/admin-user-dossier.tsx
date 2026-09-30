@@ -140,7 +140,7 @@ function Titre({ children }: { readonly children: ReactNode }) {
 }
 
 function Statut({ ton, children }: { readonly ton: 'ok' | 'ko' | 'neutre'; readonly children: ReactNode }) {
-  const couleur = ton === 'ok' ? 'var(--color-success, #34D399)' : ton === 'ko' ? 'var(--color-danger)' : INK2;
+  const couleur = ton === 'ok' ? 'var(--color-success)' : ton === 'ko' ? 'var(--color-danger)' : INK2;
   return <span style={{ color: couleur }}>{children}</span>;
 }
 

@@ -253,8 +253,8 @@ function Switch({ checked }: { readonly checked: boolean }) {
           insetInlineStart: checked ? 22 : 2,
           width: 27,
           height: 27,
-          backgroundColor: 'white',
-          boxShadow: '0 1px 3px rgb(0 0 0 / 0.3)',
+          backgroundColor: 'var(--color-ios-on-brand)',
+          boxShadow: 'var(--shadow-sm)',
           transition: 'inset-inline-start 160ms ease',
         }}
       />
@@ -519,7 +519,7 @@ export function AppearanceSection({
                 style={{
                   minHeight: 44,
                   outlineColor: 'var(--color-ios-brand)',
-                  color: pressed ? 'white' : SECTION_INK,
+                  color: pressed ? 'var(--color-ios-on-brand)' : SECTION_INK,
                   backgroundColor: pressed ? 'var(--ios-indigo-600)' : 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)',
                 }}
               >

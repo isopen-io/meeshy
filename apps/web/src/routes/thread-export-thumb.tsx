@@ -91,7 +91,7 @@ export function CardThumb({
       aria-label={label}
       title={label}
       onClick={onPick}
-      className="relative block shrink-0 overflow-hidden rounded-[12px] transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+      className="relative block shrink-0 overflow-hidden rounded-quote transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
       style={{
         width,
         aspectRatio: '1 / 1.05',

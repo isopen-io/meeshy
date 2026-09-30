@@ -46,8 +46,8 @@ const STRETCHED = "before:absolute before:inset-0 before:rounded-card before:con
 export const SECTION_TITLE_CLASS = 'ps-1 text-check font-bold uppercase tracking-wide';
 export const BRAND_BUTTON_STYLE = {
   backgroundColor: 'var(--ios-indigo-600)',
-  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, black))',
-  color: 'white',
+  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, var(--color-media-backdrop)))',
+  color: 'var(--color-ios-on-brand)',
   outlineColor: BRAND,
 } as const;
 

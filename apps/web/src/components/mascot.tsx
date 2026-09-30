@@ -46,9 +46,9 @@ const GEOMETRY = {
 const HEAD = { cx: 74, cy: 39, r: 13 } as const;
 const EYE = { cx: 78.5, cy: 37 } as const;
 
-const INK = '#1e1b4b';
-const COIN = '#c3cad6';
-const GOLD = '#fbbf24';
+const INK = 'var(--ios-indigo-950)';
+const COIN = 'var(--ios-meesh-silver)';
+const GOLD = 'var(--ios-warning)';
 
 const CELEBRATES: ReadonlySet<MascotMood> = new Set(['cheer', 'minting']);
 
@@ -60,7 +60,7 @@ function Coin({ filter }: { readonly filter?: string }) {
   return (
     <g data-mascot-coin data-mascot-motion="coin" {...(filter !== undefined ? { filter } : {})}>
       <circle cx="112" cy="20" r="9" fill={COIN} />
-      <circle cx="112" cy="20" r="6" fill="none" stroke="white" strokeWidth="1.6" opacity="0.75" />
+      <circle cx="112" cy="20" r="6" fill="none" stroke="var(--ios-on-brand)" strokeWidth="1.6" opacity="0.75" />
       <text x="112" y="23.5" textAnchor="middle" fontSize="9" fontWeight="800" fill={INK}>
         M
       </text>
@@ -74,7 +74,7 @@ function PaintedEyes({ mood, stroke }: { readonly mood: MascotMood; readonly str
   ) : (
     <g data-mascot-eyes="open">
       <circle cx={EYE.cx} cy={EYE.cy} r="3.8" fill={INK} />
-      <circle cx={EYE.cx + 1.2} cy={EYE.cy - 1.3} r="1.2" fill="white" />
+      <circle cx={EYE.cx + 1.2} cy={EYE.cy - 1.3} r="1.2" fill="var(--ios-on-brand)" />
     </g>
   );
 }

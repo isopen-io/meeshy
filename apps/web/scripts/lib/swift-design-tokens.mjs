@@ -34,11 +34,21 @@ export function swiftDesignTokens({ designTokens, colors }) {
     return scales.get(raw) ?? null;
   };
 
+  const declaration = (name) => new RegExp(`static let ${name} = (.+?)\\s*$`, 'm').exec(colors)?.[1] ?? null;
+  const isBlack = (name) => /^Color\(hex: "000000"\)$/.test(declaration(name) ?? '');
+  const opacityOf = (name, seen) => {
+    const rhs = declaration(name);
+    if (rhs === null || seen.has(name)) return null;
+    const literal = new RegExp(`^Color\\.black\\.opacity\\(${SWIFT_VALUE}\\)$`).exec(rhs);
+    if (literal !== null) return value(literal[1]);
+    const scaled = new RegExp(`^(\\w+)\\.opacity\\(${SWIFT_VALUE}\\)$`).exec(rhs);
+    if (scaled !== null) return isBlack(scaled[1]) ? value(scaled[2]) : null;
+    const alias = /^(\w+)$/.exec(rhs);
+    return alias === null ? null : opacityOf(alias[1], new Set([...seen, name]));
+  };
   const veilOpacity = (raw) => {
     const name = /^MeeshyColors\.(\w+)$/.exec(raw)?.[1];
-    if (name === undefined) return null;
-    const declared = new RegExp(`static let ${name} = Color\\.black\\.opacity\\(${SWIFT_VALUE}\\)`).exec(colors);
-    return declared === null ? null : value(declared[1]);
+    return name === undefined ? null : opacityOf(name, new Set());
   };
 
   return { value, veilOpacity };

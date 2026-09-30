@@ -308,9 +308,9 @@ export default function ScenePlayer({
         <span
           data-scene-sound="muted"
           className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"
-          style={{ width: 26, height: 26, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={{ width: 26, height: 26, backgroundColor: 'var(--color-scrim)' }}
         >
-          <GlyphSvg glyph={FEED_GLYPHS.speakerSlash} size={14} title={translate(language, 'feed.scene.sound.muted')} style={{ color: 'white' }} />
+          <GlyphSvg glyph={FEED_GLYPHS.speakerSlash} size={14} title={translate(language, 'feed.scene.sound.muted')} style={{ color: 'var(--color-on-media)' }} />
         </span>
       ) : null}
     </span>

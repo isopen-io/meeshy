@@ -60,7 +60,7 @@ export function FaceRamp({
                 {entry.awaitingCount > 0 ? (
                   <span
                     aria-hidden
-                    className="absolute -top-1 -right-1 grid min-h-4 min-w-4 place-items-center rounded-chip px-[5px] text-[10px] font-black text-white"
+                    className="absolute -top-1 -right-1 grid min-h-4 min-w-4 place-items-center rounded-chip px-[5px] text-[10px] font-black text-ios-on-brand"
                     style={{
                       backgroundColor: 'var(--color-ios-brand)',
                       boxShadow: '0 0 0 1.5px var(--color-ios-surface)',

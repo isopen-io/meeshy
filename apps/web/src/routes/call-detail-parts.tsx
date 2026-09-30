@@ -93,7 +93,7 @@ function RedialButton({
       data-call-detail-redial={media}
       aria-label={translate(language, media === 'video' ? 'keypad.call.video.named' : 'keypad.call.audio.named', { name })}
       onClick={() => onCall(media)}
-      className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-card px-3 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-card px-3 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ backgroundColor: 'var(--ios-indigo-600)', outlineColor: BRAND }}
     >
       {media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={18} /> : <Glyph name="phone" size={18} />}
@@ -270,7 +270,7 @@ export function CallDetailState({
           type="button"
           data-call-detail-retry
           onClick={onRetry}
-          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ backgroundColor: 'var(--ios-indigo-600)', minHeight: 44, outlineColor: BRAND }}
         >
           {translate(language, 'calls.retry')}

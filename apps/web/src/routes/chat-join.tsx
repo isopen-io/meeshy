@@ -479,7 +479,7 @@ function JoinPanel({ language, title, children }: { readonly language: Interface
     <section
       aria-labelledby="invite-join-title"
       data-invite-join
-      className="grid gap-3 rounded-[20px] p-4 md:col-start-2 md:rounded-[26px] md:p-6"
+      className="grid gap-3 rounded-hero p-4 md:col-start-2 md:rounded-sheet md:p-6"
       style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)' }}
     >
       <h2 id="invite-join-title" className="text-thread font-extrabold" style={{ color: INK }}>
@@ -530,7 +530,7 @@ function JoinAction({
         onClick={onJoin}
         disabled={disabled}
         aria-busy={joining}
-        className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="grid w-full place-items-center rounded-bubble text-body font-extrabold text-ios-on-brand transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ minHeight: 54, backgroundColor: INVITE_ACTION_FLOOR, backgroundImage: INVITE_ACTION_BACKGROUND, opacity: disabled ? 0.6 : 1, outlineColor: 'var(--color-ios-brand)' }}
       >
         {translateInvite(language, joining ? 'invite.join.joining' : 'invite.join.account')}
@@ -607,7 +607,7 @@ function GuestExits({
           className={
             withSeparator
               ? INVITE_OUTLINE_BUTTON
-              : 'flex items-center justify-center rounded-[16px] px-3 text-body font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2'
+              : 'flex items-center justify-center rounded-card px-3 text-body font-extrabold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2'
           }
           style={withSeparator ? INVITE_OUTLINE_STYLE : { minHeight: 48, backgroundColor: INVITE_ACTION_FLOOR, backgroundImage: INVITE_ACTION_BACKGROUND, outlineColor: 'var(--color-ios-brand)' }}
         >

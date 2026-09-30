@@ -120,12 +120,12 @@ describe('une ligne reçue appartient-elle à une catégorie ?', () => {
 
 describe('l’accent d’une ligne suit son TYPE, pas sa catégorie', () => {
   test('un badge ne ressemble pas à une invitation', () => {
-    expect(notificationAccent('achievement_unlocked')).toBe('#FBBF24');
+    expect(notificationAccent('achievement_unlocked')).toBe('var(--ios-warning)');
     expect(notificationAccent('community_invite')).toBe('#F8B500');
   });
 
   test('une alerte de sécurité porte le rouge, un type inconnu l’indigo du système', () => {
-    expect(notificationAccent('login_new_device')).toBe('#EF4444');
-    expect(notificationAccent('type_de_demain')).toBe('#6366F1');
+    expect(notificationAccent('login_new_device')).toBe('var(--ios-error-strong)');
+    expect(notificationAccent('type_de_demain')).toBe('var(--ios-indigo-500)');
   });
 });

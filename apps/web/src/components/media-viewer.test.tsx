@@ -603,25 +603,31 @@ describe('MediaViewer — le pied porte le carrier, absent sans lui (#6169)', ()
     const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
     const body = mount({ items, startIndex: 0, onClose: () => {}, carrier });
 
-    const footer = body.querySelector('[data-viewer-footer]');
-    expect(footer).not.toBeNull();
-    expect(footer!.textContent).toContain('Kwame Mensah');
-    const time = footer!.querySelector('time[datetime]');
+    /* L'auteur et l'heure sont dans la BARRE HAUTE (chrome commun, #8879) ; le pied garde les cotes et la légende. */
+    const top = body.querySelector('[data-viewer-top-bar]');
+    expect(top).not.toBeNull();
+    expect(top!.textContent).toContain('Kwame Mensah');
+    const time = top!.querySelector('time[datetime]');
     expect(time).not.toBeNull();
     expect(time!.getAttribute('datetime')).toBe('2026-09-13T10:13:00.000Z');
+    const footer = body.querySelector('[data-viewer-meta]');
+    expect(footer).not.toBeNull();
+    expect(footer!.textContent).not.toContain('Kwame Mensah');
     expect(footer!.textContent).toContain('640 × 427');
     expect(footer!.textContent).toContain('1 Ko');
 
-    const caption = body.querySelector('[data-viewer-caption]');
+    const caption = body.querySelector('[data-viewer-caption-text]');
     expect(caption).not.toBeNull();
     expect(caption!.getAttribute('lang')).toBe('de');
     expect(caption!.textContent).toBe('Aufnahme vom Yachthafen');
   });
 
-  test('SANS carrier : aucun [data-viewer-footer] (loi 4, jamais un auteur inventé)', () => {
+  test('SANS carrier : ni pied ni identité (loi 4, jamais un auteur inventé)', () => {
     const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
     const body = mount({ items, startIndex: 0, onClose: () => {} });
-    expect(body.querySelector('[data-viewer-footer]')).toBeNull();
+    expect(body.querySelector('[data-viewer-meta]') === null).toBe(true);
+    expect(body.querySelector('[data-viewer-caption-text]') === null).toBe(true);
+    expect(body.querySelector('[data-viewer-identity]') === null).toBe(true);
   });
 });
 
@@ -675,10 +681,9 @@ describe('MediaViewer — la nature « scène » (#6902)', () => {
 
   test('le pied N’AFFICHE JAMAIS de cotes/poids sur une page scène (miroir iOS : « une scène n’a ni format, ni dimensions, ni poids »)', async () => {
     const body = await mountScenes({ startIndex: 0 });
-    const footer = body.querySelector('[data-viewer-footer]')!;
-    expect(footer).not.toBeNull();
-    expect(footer.textContent).toContain('Omar');
-    expect(footer.textContent).not.toContain('Ko');
+    expect(body.querySelector('[data-viewer-top-bar]')!.textContent).toContain('Omar');
+    expect(body.querySelector('[data-viewer-bottom-bar]')!.textContent).not.toContain('Ko');
+    expect(body.querySelector('[data-viewer-meta]')?.textContent ?? '').not.toContain('×');
   });
 
   test('un post à scène SANS AUCUN média (texte seul) s’ouvre aussi — la scène décide, pas le média', async () => {
@@ -845,7 +850,7 @@ describe('MediaViewer — la page scène : cadrage, nom, son et pause (revue-cor
  */
 describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', () => {
   const chromes = (body: HTMLElement): readonly HTMLElement[] =>
-    Array.from(body.querySelectorAll<HTMLElement>('[data-media-viewer] .media-viewer-chrome'));
+    Array.from(body.querySelectorAll<HTMLElement>('[data-media-viewer] [data-viewer-top-bar], [data-media-viewer] [data-viewer-bottom-bar]'));
 
   const enterFull = (body: HTMLElement): void => {
     act(() => {
@@ -857,8 +862,8 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
     const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
 
     expect(chromes(body).length).toBe(2);
-    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
-    expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
+    expect(chromes(body).map((c) => c.getAttribute('data-chrome-yields'))).toEqual(['shown', 'shown']);
+    expect(chromes(body).some((c) => c.hasAttribute('inert'))).toBe(false);
   });
 
   test('un tap entre en plein cadre : les DEUX couloirs deviennent invisibles ET intouchables, jamais l’un sans l’autre', () => {
@@ -866,8 +871,8 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
 
     enterFull(body);
 
-    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['0', '0']);
-    expect(chromes(body).map((c) => c.style.pointerEvents)).toEqual(['none', 'none']);
+    expect(chromes(body).map((c) => c.getAttribute('data-chrome-yields'))).toEqual(['hidden', 'hidden']);
+    expect(chromes(body).every((c) => c.hasAttribute('inert'))).toBe(true);
   });
 
   test('le couloir qui porte « Fermer » est bien celui qui devient intouchable — sinon un tap en haut à gauche fermerait', () => {
@@ -875,9 +880,9 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
 
     enterFull(body);
 
-    const close = body.querySelector<HTMLElement>('[data-media-viewer] .media-viewer-close')!;
-    const couloir = close.closest<HTMLElement>('.media-viewer-chrome')!;
-    expect(couloir.style.pointerEvents).toBe('none');
+    const close = body.querySelector<HTMLElement>('[data-media-viewer] [data-viewer-exit="close"]')!;
+    const couloir = close.closest<HTMLElement>('[data-viewer-top-bar]')!;
+    expect(couloir.hasAttribute('inert')).toBe(true);
   });
 
   test('le couloir BAS aussi — sa pellicule de vignettes ne se choisit pas à l’aveugle', () => {
@@ -886,7 +891,7 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
     enterFull(body);
 
     const vignette = body.querySelector<HTMLElement>('[data-filmstrip-item]')!;
-    expect(vignette.closest<HTMLElement>('.media-viewer-chrome')!.style.pointerEvents).toBe('none');
+    expect(vignette.closest<HTMLElement>('[data-viewer-bottom-bar]')!.hasAttribute('inert')).toBe(true);
   });
 
   test('repasser en mode carte les REND touchables — l’effacement n’est pas une porte à sens unique', () => {
@@ -895,8 +900,8 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
     enterFull(body);
     enterFull(body);
 
-    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
-    expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
+    expect(chromes(body).map((c) => c.getAttribute('data-chrome-yields'))).toEqual(['shown', 'shown']);
+    expect(chromes(body).some((c) => c.hasAttribute('inert'))).toBe(false);
   });
 });
 
@@ -910,7 +915,7 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
  */
 describe('zoomer une image fait céder le chrome de la visionneuse', () => {
   const chromes = (body: HTMLElement): readonly HTMLElement[] =>
-    Array.from(body.querySelectorAll<HTMLElement>('[data-media-viewer] .media-viewer-chrome'));
+    Array.from(body.querySelectorAll<HTMLElement>('[data-media-viewer] [data-viewer-top-bar], [data-media-viewer] [data-viewer-bottom-bar]'));
   const doubleTap = (body: HTMLElement): void => {
     act(() => {
       currentPage(body).querySelector('img')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 200 }));
@@ -920,16 +925,16 @@ describe('zoomer une image fait céder le chrome de la visionneuse', () => {
   test('zoomée : les deux couloirs s’effacent, intouchables', () => {
     const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
     doubleTap(body);
-    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['0', '0']);
-    expect(chromes(body).map((c) => c.style.pointerEvents)).toEqual(['none', 'none']);
+    expect(chromes(body).map((c) => c.getAttribute('data-chrome-yields'))).toEqual(['hidden', 'hidden']);
+    expect(chromes(body).every((c) => c.hasAttribute('inert'))).toBe(true);
   });
 
   test('dézoomée : le chrome revient', () => {
     const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
     doubleTap(body);
     doubleTap(body);
-    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
-    expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
+    expect(chromes(body).map((c) => c.getAttribute('data-chrome-yields'))).toEqual(['shown', 'shown']);
+    expect(chromes(body).some((c) => c.hasAttribute('inert'))).toBe(false);
   });
 });
 

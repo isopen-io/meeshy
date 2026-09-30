@@ -59,7 +59,7 @@ export function AppUpdateBanner({
   };
 
   const actionClass =
-    'grid min-h-11 shrink-0 place-items-center rounded-chip px-3.5 text-title font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2';
+    'grid min-h-11 shrink-0 place-items-center rounded-chip px-3.5 text-title font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2';
   const actionStyle = {
     background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
     outlineColor: 'var(--color-ios-brand)',
@@ -83,7 +83,7 @@ export function AppUpdateBanner({
         }}
       >
         <span
-          className="grid size-9 shrink-0 place-items-center rounded-chip text-white"
+          className="grid size-9 shrink-0 place-items-center rounded-chip text-ios-on-brand"
           style={{ background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))' }}
           aria-hidden
         >

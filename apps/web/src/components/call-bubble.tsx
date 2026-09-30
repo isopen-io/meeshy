@@ -42,7 +42,7 @@ import { initialsOf } from '@/lib/view/conversation';
    boutons d'appel) en haut, le champ d'écriture et le barreau en bas. La zone
    sûre du système s'y AJOUTE en CSS. */
 const INSETS = { top: 64, bottom: 96 };
-const BG = 'rgba(17,16,24,0.92)';
+const BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
 
 function useViewport(): Size {
   const read = (): Size => (typeof window === 'undefined' ? { width: 390, height: 844 } : { width: window.innerWidth, height: window.innerHeight });
@@ -128,7 +128,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
         left: origin.left + (drag?.x ?? 0),
         top: `calc(${origin.top + (drag?.y ?? 0)}px + env(safe-area-inset-top))`,
         background: BG,
-        color: '#fff',
+        color: 'var(--color-on-media)',
         transition: drag === null ? 'left 180ms ease-out, top 180ms ease-out' : 'none',
         touchAction: 'none',
       }}
@@ -155,7 +155,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
         ) : (
           <>
             <StreamVideo stream={source.stream} mirrored={source.mirrored} className="absolute inset-0 size-full" label={call.title} />
-            <span className="absolute bottom-1 left-1 rounded-full px-1.5 text-mini" style={{ background: 'rgba(0,0,0,0.55)' }}>
+            <span className="absolute bottom-1 left-1 rounded-full px-1.5 text-mini" style={{ background: 'var(--color-scrim)' }}>
               <BubbleClock call={call} />
             </span>
           </>
@@ -180,7 +180,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
             <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={20} />
           </button>
         ) : null}
-        <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: '#ef4444' }} data-call-bubble-control="hangup">
+        <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: 'var(--ios-error-strong)' }} data-call-bubble-control="hangup">
           <GlyphSvg glyph={CALL_SCREEN_GLYPHS.phoneDisconnect} size={20} />
         </button>
       </div>

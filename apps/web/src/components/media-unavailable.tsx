@@ -68,7 +68,7 @@ export function MediaUnavailable({
   readonly onRetry?: () => void;
 }) {
   const label = translate(language, 'media.unavailable');
-  const ink = tone === 'over-media' ? 'rgba(255,255,255,0.75)' : 'var(--color-ios-ink-3)';
+  const ink = tone === 'over-media' ? 'var(--color-on-media-3)' : 'var(--color-ios-ink-3)';
 
   return (
     /* `data-media-unavailable` PORTE le ton servi — c'est l'ancre des gates
@@ -101,7 +101,7 @@ export function MediaUnavailable({
           }}
           onPointerDown={(event) => event.stopPropagation()}
           className="rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ minHeight: 44, border: `1px solid ${ink}`, color: tone === 'over-media' ? '#fff' : 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
+          style={{ minHeight: 44, border: `1px solid ${ink}`, color: tone === 'over-media' ? 'var(--color-on-media)' : 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
         >
           {translate(language, 'media.retry')}
         </button>

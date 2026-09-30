@@ -216,7 +216,7 @@ function QuickActions({
             style={{
               minHeight: 44,
               outlineColor: 'var(--color-ios-brand)',
-              color: primary ? '#fff' : 'var(--color-ios-brand)',
+              color: primary ? 'var(--color-ios-on-brand)' : 'var(--color-ios-brand)',
               backgroundColor: primary ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)',
             }}
           >
