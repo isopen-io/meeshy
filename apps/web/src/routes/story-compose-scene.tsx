@@ -13,6 +13,7 @@ import { keyboardPose } from '@/lib/stories/studio-grip';
 import { STORY_PLAIN_BACKGROUND } from '@/lib/stories/story-document';
 import type { QuickCaptureHintLine } from '@/lib/stories/studio-quick-capture';
 import { StudioStageGestures, type StudioStageCapture, type StudioStageObject } from '@/routes/story-compose-stage';
+import { ViewfinderMark } from '@/routes/story-compose-scene-marks';
 import { StudioTextInput } from '@/routes/story-compose-text-input';
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
@@ -65,7 +66,11 @@ function StudioQuickCaptureHint({ lang, capture }: { readonly lang: InterfaceLan
         >
           {capture.hintLines.map((line) => (
             <p key={line.key} data-story-quick-capture-line={line.glyph} className="flex items-center gap-2">
-              <GlyphSvg glyph={line.glyph === 'camera' ? COMPOSER_GLYPHS.camera : COMPOSER_GLYPHS.videoCamera} size={20} />
+              {line.glyph === 'viewfinder' ? (
+                <ViewfinderMark size={20} />
+              ) : (
+                <GlyphSvg glyph={line.glyph === 'camera' ? COMPOSER_GLYPHS.camera : COMPOSER_GLYPHS.videoCamera} size={20} />
+              )}
               {translate(lang, line.key)}
             </p>
           ))}

@@ -129,7 +129,7 @@ describe('StudioCamera — le (X) est toujours là', () => {
     const { engine, journal } = fakeEngine({ available: false });
     const closed: string[] = [];
     const taken: File[] = [];
-    const host = await mounter.mount(camera({ engine, intent: 'photo', closed, taken }));
+    const host = await mounter.mount(camera({ engine, intent: 'arm', closed, taken }));
     await settle();
     expect(host.querySelector('[data-story-camera-unavailable]')).not.toBeNull();
     expect(closeButton(host)?.getAttribute('aria-label')).toBe('Revenir à la scène');
@@ -156,13 +156,40 @@ describe('StudioCamera — le (X) est toujours là', () => {
 });
 
 describe('StudioCamera — la capture rapide', () => {
-  test('toucher : la caméra s’ouvre ET prend la photo dès qu’elle voit', async () => {
+  test('premier toucher : le viseur s’ouvre ARMÉ, rien n’est pris ; un second toucher n’importe où sur le viseur prend la photo (#8711)', async () => {
     const { engine, journal } = fakeEngine();
     const taken: File[] = [];
-    await mounter.mount(camera({ engine, intent: 'photo', taken }));
+    const host = await mounter.mount(camera({ engine, intent: 'arm', taken }));
+    await settle();
+    expect(journal).toEqual(['open:environment', 'live']);
+    expect(taken).toEqual([]);
+    expect(host.querySelector('[data-story-camera-hint]')?.textContent).toBe('Toucher l’écran : photo · maintenir le déclencheur : vidéo');
+    await act(async () => host.querySelector<HTMLElement>('[data-story-camera-preview]')?.click());
     await settle();
     expect(journal).toEqual(['open:environment', 'live', 'photo:1', 'release']);
     expect(taken.map((file) => file.type)).toEqual(['image/jpeg']);
+  });
+
+  test('toucher un contrôle du viseur armé (flash, optique) ne prend rien', async () => {
+    const { engine, journal } = fakeEngine();
+    const taken: File[] = [];
+    const host = await mounter.mount(camera({ engine, intent: 'arm', taken }));
+    await settle();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-story-camera-flash]')?.click());
+    await settle();
+    expect(journal).not.toContain('photo:1');
+    expect(taken).toEqual([]);
+  });
+
+  test('un réel : toucher le viseur armé ne prend pas de photo', async () => {
+    const { engine, journal } = fakeEngine();
+    const taken: File[] = [];
+    const host = await mounter.mount(camera({ engine, intent: 'arm', kind: 'REEL', taken }));
+    await settle();
+    await act(async () => host.querySelector<HTMLElement>('[data-story-camera-preview]')?.click());
+    await settle();
+    expect(journal).toEqual(['open:environment', 'live']);
+    expect(taken).toEqual([]);
   });
 
   test('appui long : elle filme tant que l’appui dure, relâcher clôt et pose la vidéo', async () => {
@@ -276,7 +303,9 @@ describe('StudioCamera — le flash éclaire vraiment', () => {
         white = document.querySelector('[data-story-camera-screen-flash]') !== null;
       },
     });
-    await mounter.mount(camera({ engine, intent: 'photo', flash: true }));
+    const host = await mounter.mount(camera({ engine, intent: 'arm', flash: true }));
+    await settle();
+    await act(async () => host.querySelector<HTMLElement>('[data-story-camera-preview]')?.click());
     await settle();
     expect(journal).toEqual(['open:environment', 'live', 'torch:true', 'lit', 'photo:1', 'torch:false', 'release']);
     expect(white).toBe(false);
@@ -284,7 +313,9 @@ describe('StudioCamera — le flash éclaire vraiment', () => {
 
   test('caméra arrière sans torche : repli sur le sol blanc', async () => {
     const { engine, journal } = fakeEngine({ torch: false });
-    await mounter.mount(camera({ engine, intent: 'photo', flash: true }));
+    const host = await mounter.mount(camera({ engine, intent: 'arm', flash: true }));
+    await settle();
+    await act(async () => host.querySelector<HTMLElement>('[data-story-camera-preview]')?.click());
     await settle();
     expect(journal).not.toContain('torch:true');
     expect(journal).toContain('brightness:max');
