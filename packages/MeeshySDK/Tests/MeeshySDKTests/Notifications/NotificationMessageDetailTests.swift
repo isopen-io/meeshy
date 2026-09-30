@@ -230,7 +230,9 @@ final class NotificationMessageDetailTests: XCTestCase {
         let sticker = try makeEvent(context: """
         { "conversationType": "direct", "messageType": "text", "contentDetail": { "sticker": { "emoji": "🐱" } } }
         """, content: "🐱 Sticker")
-        XCTAssertEqual(sticker.bannerPresentation().contentSymbol, "face.smiling.inverse")
+        XCTAssertNotNil(sticker.detailFields["sticker"])
+        XCTAssertEqual(sticker.bannerPresentation().body, "🐱 Sticker")
+        XCTAssertFalse(sticker.bannerPresentation().showsContentTile, "« 🐱 » dans le corps suffit (#8897)")
 
         let video = try makeEvent(context: """
         { "conversationType": "direct", "firstAttachmentMimeType": "video/mp4",
