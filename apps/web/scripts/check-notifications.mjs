@@ -8,7 +8,9 @@
  * CÂBLAGE — débrancher la pastille du bouton flottant, laisser un disque
  * couvrir l'heure d'une rangée ou rendre « Tout lire » inerte les laisse tous
  * verts. Ce gate les mesure dans un navigateur réel, sur le `dist` construit
- * (source fixtures : douze notifications, trois non lues, « Appels » vide), dans
+ * (source fixtures : douze notifications dont quatre CONSOMMÉES — un commentaire,
+ * une réaction, un j'aime et une mention déjà lus, que la cloche ne montre plus
+ * (#8960) —, trois non lues, « Appels » vide), dans
  * les DEUX schémas et aux deux gabarits de la charte (390 × 844, 320 × 568) :
  *
  *  1. sur la liste, la pastille du bouton flottant porte le compte SERVI
@@ -17,7 +19,7 @@
  *     porte, blanche à l'encre de sa teinte (AA), au coin (±15,18), et l'annonce
  *     dans son nom (#6219) ; elle SUIT le disque qu'on déplace — à chaque image
  *     de la course, à l'accroche au bord et après rechargement — sans saut ;
- *  2. le barreau « Notifications » de l'échelle ouvre la cloche : douze
+ *  2. le barreau « Notifications » de l'échelle ouvre la cloche : huit
  *     rangées, trois non lues, « 3 non lues » dans l'en-tête ;
  *  3. AU REPOS, chaque texte de rangée et chaque contrôle du chrome retombe sur
  *     lui-même à son centre (`elementFromPoint`) — aucun disque flottant ne
@@ -25,12 +27,13 @@
  *  4. les textes tiennent AA dans les deux schémas : titre et corps d'une
  *     rangée non lue (sur son voile d'accent), heure, compte, « Tout lire »,
  *     libellé d'une puce sur sa teinte ;
- *  5. une catégorie FILTRE (« Mentions » : deux mentions et rien d'autre,
+ *  5. une catégorie FILTRE (« Mentions » : la mention non lue et rien d'autre,
  *     l'adresse porte `?categorie=mentions`) ; « Appels » dessine son état vide ;
  *     « Non lues » ne rend que les trois non lues ;
  *  6. ouvrir une rangée mène à sa CIBLE (le fil de la conversation) et, au
- *     retour, la rangée est lue, le compte et la pastille ont baissé ;
- *  7. le menu d'une rangée marque lu, puis supprime — chacun avec son effet ;
+ *     retour, le message ouvert a QUITTÉ la cloche (#8960), le compte et la pastille ont baissé ;
+ *  7. le menu d'une rangée marque lu (la réaction lue quitte la cloche), puis
+ *     supprime — chacun avec son effet ;
  *  8. « Tout lire » vide le compte : l'en-tête ne l'affiche plus et la pastille
  *     DISPARAÎT à zéro ;
  *  9. hors ligne, les rangées restent lisibles et la pastille de synchronisation
@@ -273,7 +276,7 @@ try {
       await page.waitForSelector('[data-notification]');
       await page.waitForTimeout(250);
       const all = await rowsOf(page);
-      check(all.length === 12, `${label} : la cloche rend douze rangées (${all.length})`);
+      check(all.length === 8, `${label} : la cloche rend huit rangées — les quatre consommées n'y sont plus (${all.length})`);
       check(all.filter((r) => r.read === 'false').length === 3, `${label} : dont trois non lues`);
       check((await countText(page)) === '3 non lues', `${label} : l'en-tête dit « 3 non lues » (« ${await countText(page)} »)`);
 
@@ -308,8 +311,8 @@ try {
       await page.waitForTimeout(250);
       const mentions = await rowsOf(page);
       check(
-        mentions.length === 2 && mentions.every((r) => MENTION_TYPES.includes(r.type)),
-        `${label} : « Mentions » ne rend que ses deux mentions (${JSON.stringify(mentions.map((r) => r.type))})`,
+        mentions.length === 1 && mentions.every((r) => MENTION_TYPES.includes(r.type)),
+        `${label} : « Mentions » ne rend que sa mention non lue (${JSON.stringify(mentions.map((r) => r.type))})`,
       );
       check(page.url().endsWith('/notifications?categorie=mentions'), `${label} : la catégorie vit dans l'adresse (${page.url()})`);
       check((await page.getAttribute('[data-category="mentions"]', 'aria-pressed')) === 'true', `${label} : la puce choisie s'annonce pressée`);
@@ -337,20 +340,19 @@ try {
       check(unreadRows.length === 3 && unreadRows.every((r) => r.read === 'false'), `${label} : « Non lues » ne rend que les trois non lues`);
 
       await page.click('[data-category="all"]');
-      await page.waitForFunction(() => document.querySelectorAll('[data-notification]').length === 12);
+      await page.waitForFunction(() => document.querySelectorAll('[data-notification]').length === 8);
 
       // ------------------------------------------------ 6. ouvrir mène à la cible
       await page.click('[data-notification="fx-notif-message"] a');
       await page.waitForFunction(() => location.pathname === '/c/c-deploiement');
       check(true, `${label} : ouvrir un message mène à sa conversation`);
       await page.goBack();
-      await page.waitForSelector('[data-notification="fx-notif-message"]');
-      await page.waitForFunction(
-        () => document.querySelector('[data-notification="fx-notif-message"]')?.getAttribute('data-read') === 'true',
-      ).catch(() => null);
+      await page.waitForFunction(() => location.pathname === '/notifications');
+      await page.waitForSelector('[data-notification]');
+      await page.waitForFunction(() => document.querySelector('[data-notification="fx-notif-message"]') === null).catch(() => null);
       check(
-        (await page.getAttribute('[data-notification="fx-notif-message"]', 'data-read')) === 'true',
-        `${label} : au retour, la rangée ouverte est lue`,
+        (await page.$('[data-notification="fx-notif-message"]')) === null,
+        `${label} : au retour, le message ouvert a quitté la cloche (#8960)`,
       );
       check((await countText(page)) === '2 non lues', `${label} : le compte a baissé (« ${await countText(page)} »)`);
       check((await badgeOf(page)) === '2', `${label} : la pastille a baissé (« ${await badgeOf(page)} »)`);
@@ -359,12 +361,10 @@ try {
       await page.hover('[data-notification="fx-notif-reaction"]');
       await page.click('[data-notification="fx-notif-reaction"] button[aria-label="Actions de la notification"]');
       await page.click('[data-notification-action="markRead"]');
-      await page.waitForFunction(
-        () => document.querySelector('[data-notification="fx-notif-reaction"]')?.getAttribute('data-read') === 'true',
-      ).catch(() => null);
+      await page.waitForFunction(() => document.querySelector('[data-notification="fx-notif-reaction"]') === null).catch(() => null);
       check(
-        (await page.getAttribute('[data-notification="fx-notif-reaction"]', 'data-read')) === 'true' && (await countText(page)) === '1 non lue',
-        `${label} : « Marquer comme lue » a un effet (« ${await countText(page)} »)`,
+        (await page.$('[data-notification="fx-notif-reaction"]')) === null && (await countText(page)) === '1 non lue',
+        `${label} : « Marquer comme lue » a un effet — la réaction lue quitte la cloche (« ${await countText(page)} »)`,
       );
       const afterRead = await rungState(page);
       check(
@@ -378,7 +378,7 @@ try {
       await page.click('[data-notification="fx-notif-login"] button[aria-label="Actions de la notification"]');
       await page.click('[data-notification-action="delete"]');
       await page.waitForFunction(() => document.querySelector('[data-notification="fx-notif-login"]') === null).catch(() => null);
-      check((await rowsOf(page)).length === 11, `${label} : « Supprimer » retire la rangée (${(await rowsOf(page)).length} rangées)`);
+      check((await rowsOf(page)).length === 5, `${label} : « Supprimer » retire la rangée (${(await rowsOf(page)).length} rangées)`);
 
       // ------------------------------------------------ 8. tout lire
       await page.click('[data-mark-all-read]');

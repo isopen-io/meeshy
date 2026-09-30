@@ -84,11 +84,9 @@ public struct NotificationRowView: View, Equatable {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Pas de `.swipeActions` ici : ce modifier n'a d'effet que dans une
-        // `List`, or la rangée vit dans la `LazyVStack` de
-        // `NotificationListView` — les actions étaient du code mort évalué à
-        // chaque render. `onMarkRead`/`onDelete` restent dans l'API pour un
-        // futur hôte `List`.
+        // Pas de `.swipeActions` ici : le glissement (#8958) est posé par
+        // l'hôte, `NotificationListView`, sur la ligne de SA `List` — le seul
+        // endroit où ce modifier a un effet.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
     }

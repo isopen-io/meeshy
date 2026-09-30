@@ -149,12 +149,12 @@ describe('notification:new', () => {
 });
 
 describe('notification:read et notification:read-bulk', () => {
-  test('une ligne lue ailleurs passe lue et quitte « Non lues » — le compte attend `notification:counts`', () => {
+  test('un message lu ailleurs est CONSOMMÉ : il quitte « Non lues » et « Toutes » (#8960) — le compte attend `notification:counts`', () => {
     const { socket, queryClient } = connect();
     socket.fire(SERVER_EVENTS.NOTIFICATION_READ, { notificationId: 'n1' });
 
     const all = queryClient.getQueryData<NotificationsInfiniteData>(notificationListKey('all'));
-    expect(all?.pages[0]?.notifications.find((n) => n.id === 'n1')?.state.isRead).toBe(true);
+    expect(all?.pages[0]?.notifications.some((n) => n.id === 'n1')).toBe(false);
     expect(ids(queryClient, 'unread')).toEqual([]);
     expect(counts(queryClient)?.unread).toBe(1);
   });
