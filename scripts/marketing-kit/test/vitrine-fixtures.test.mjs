@@ -204,3 +204,10 @@ describe('fixtures de la vitrine, lot 2 : les conversations (#8855)', () => {
     expect(piece.duration).toBe(MESURE_PAR_DEFAUT.dureeMs)
   })
 })
+
+describe('fixtures de la vitrine, lot 2 : ce que la capture montre (#8855)', () => {
+  test.each(KIT_LANGS)('%s : le message rouvert sur son original est parmi les quatre derniers du fil — visible sur l’écran de l’iPhone', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    expect(f.messages[ID_DEBAT].slice(-4).map((m) => m.id)).toContain(f.scenes.groupe.messageId)
+  })
+})

@@ -226,8 +226,9 @@ const messagesDebat = (lang, maintenant) => {
   return [...ecrits, ecrit({ conversationId: ID_DEBAT, graine: 'debat.mien', profil: lecteur, maintenant, minutes: 12, contenu: mien(DEMO.debat.mien, lang) })]
 }
 
-// Le message que la scène 2 rouvre sur son original : celui d'un AUTRE membre, dans une AUTRE langue.
-const CANDIDATS_ORIGINAL = ['debat.crime', 'debat.chocolat', 'debat.popcorn', 'debat.diner']
+// Le message que la scène 2 rouvre sur son original : celui d'un AUTRE membre, dans une AUTRE langue,
+// parmi les dernières répliques — celles que l'écran de l'iPhone montre.
+const CANDIDATS_ORIGINAL = ['debat.quitte', 'debat.popcorn', 'debat.patate-douce']
 
 const messageOriginal = (lang) => {
   const lecteur = lecteurDe(lang)
