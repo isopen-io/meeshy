@@ -138,6 +138,48 @@ describe('mesures en navigateur', () => {
     }
   }, LENT)
 
+  test('#8825 : aucune photo échangée n’est coupée sous l’en-tête, iPhone et iPad, sept langues', async () => {
+    const cibles = [
+      ['iphone', ['amour', 'amour-photos', 'drole', 'debat']],
+      ['ipad', ['ipad-amour', 'ipad-amour-photos', 'ipad-drole', 'ipad-debat']],
+    ]
+    for (const [appareil, ecrans] of cibles) {
+      const { width, height, scale } = APPAREILS[appareil]
+      for (const nom of ecrans) {
+        for (const lang of KIT_LANGS) {
+          const page = await ouvrir(pageCapture({ appareil, lang, rang: rangDe(appareil, nom) }), { width: width / scale, height: height / scale })
+          const coupees = await page.evaluate(() => {
+            window.asMiseEnPage()
+            const liste = document.querySelector('.messages')
+            const cadre = liste.getBoundingClientRect()
+            const echelle = cadre.height / liste.offsetHeight
+            const seuil = cadre.top + 30 * echelle
+            return [...liste.querySelectorAll('.media-grid')].filter((g) => g.getBoundingClientRect().top < seuil).length
+          })
+          await page.close()
+          expect({ appareil, nom, lang, coupees }).toEqual({ appareil, nom, lang, coupees: 0 })
+        }
+      }
+    }
+  }, LENT * 2)
+
+  test('#8825 : les conversations iPad remplissent la hauteur du portrait — moins d’un cinquième vide', async () => {
+    const { width, height, scale } = APPAREILS.ipad
+    for (const nom of ['ipad-amour', 'ipad-amour-photos', 'ipad-drole', 'ipad-debat']) {
+      for (const lang of KIT_LANGS) {
+        const page = await ouvrir(pageCapture({ appareil: 'ipad', lang, rang: rangDe('ipad', nom) }), { width: width / scale, height: height / scale })
+        const vide = await page.evaluate(() => {
+          const liste = document.querySelector('.messages')
+          const k = liste.getBoundingClientRect().height / liste.offsetHeight
+          const occupe = [...liste.children].reduce((n, c) => n + c.getBoundingClientRect().height, 0) / k
+          return Math.round((100 * (liste.offsetHeight - occupe)) / liste.offsetHeight)
+        })
+        await page.close()
+        expect({ nom, lang, rempli: vide <= 20 }).toEqual({ nom, lang, rempli: true })
+      }
+    }
+  }, LENT * 2)
+
   test('iPad 09 : le panneau Progression est rempli jusqu’au bas de l’image (grille des badges)', async () => {
     for (const lang of KIT_LANGS) {
       const page = await ouvrir(pageCapture({ appareil: 'ipad', lang, rang: rangDe('ipad', 'ipad-progression') }), { width: 1032, height: 1376 })

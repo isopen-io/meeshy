@@ -121,6 +121,16 @@ describe('capture 5 — l’appel amoureux sous-titré', () => {
   })
 })
 
+describe('iPad — la hauteur du portrait montre plus de photos échangées', () => {
+  test.each(KIT_LANGS)('%s : ramen et vue, café et hublot, chien, pizza au chocolat', (lang) => {
+    const vue = partenaireDe(lang).lang === 'ko' ? 'seoul-crepuscule' : 'osaka-nuit'
+    expect(photosDe(rendu('ipad-amour', lang)).sort()).toEqual(['bol-ramen', vue].sort())
+    expect(photosDe(rendu('ipad-amour-photos', lang, 'light')).sort()).toEqual(['bouquet-roses', 'cafe-coeur', 'diner-chandelle', 'hublot-rose'])
+    expect(photosDe(rendu('ipad-drole', lang)).sort()).toEqual(['chat-valise', 'chien-sac'])
+    expect(photosDe(rendu('ipad-debat', lang, 'light')).sort()).toEqual(['pizza-ananas', 'pizza-chocolat'])
+  })
+})
+
 describe('fil et story passent aux photos réelles', () => {
   test.each(KIT_LANGS)('%s : aucune illustration vectorielle dans le fil ni dans la story', (lang) => {
     for (const nom of ['fil', 'story', 'ipad-fil', 'ipad-story']) {

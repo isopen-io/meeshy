@@ -1,24 +1,19 @@
 import { html } from '../lib/html.mjs'
 import { icon, logo } from '../lib/icons.mjs'
-import { illustration } from '../lib/illustrations.mjs'
-import { avatar, homeIndicator, roundButton, statusBar } from '../lib/composants.mjs'
+import { photo } from '../lib/photos.mjs'
+import { avatar, homeIndicator, nomComplet, roundButton, statusBar } from '../lib/composants.mjs'
 import { serve } from '../lib/prism.mjs'
-import { DEMO, lecteurDe, profilDe } from '../textes/demo.mjs'
-import {
-  ACCENTS,
-  dmCorps,
-  dmHeader,
-  globalCorps,
-  globalHeader,
-  groupeCorps,
-  groupeHeader,
-  groupeVisuel,
-} from './conversations.mjs'
+import { DEMO, partenaireDe, profilDe } from '../textes/demo.mjs'
+import { globalCorps, globalHeader, groupeVisuel, ACCENTS } from './conversations.mjs'
 import { composer, conversationBackground, heure } from './conversation.mjs'
+import { ACCENT_AMOUR, amourCorps, amourHeader, amourPhotosCorps, appelAmour } from './amour.mjs'
+import { ACCENT_DEBAT, ACCENT_DROLE, debatCorps, debatHeader, droleCorps, droleHeader } from './groupes.mjs'
 import { filCorps } from './social.mjs'
 import { grilleBadges, meeshEntry, progressionCartes } from './progression.mjs'
-import { appelControles, appelSousTitres } from './appel.mjs'
 
+// iPadRootView en PORTRAIT (#8825 — le format par défaut d'App Store Connect, 2064 × 2752) :
+// la colonne des conversations prend 38 % de la largeur (`leftColumnRatio`), le panneau droit le
+// reste. L'appel et la story passent en plein écran, comme dans l'app.
 const P = DEMO.progression
 
 const compact = (lang, n) => new Intl.NumberFormat(lang === 'ar' ? 'ar-u-nu-latn' : lang, { notation: 'compact' }).format(n)
@@ -28,17 +23,30 @@ const apercu = (ctx, contenu, auteur) => {
   return auteur ? `${profilDe(auteur).prenom}${ctx.lang === 'fr' ? ' : ' : ': '}${s.text}` : s.text
 }
 
-// iPadRootView : colonne gauche ConversationListView (ThemedConversationRow), panneau droit.
+const empile = (pseudos) => html`<div class="stack-avatars">${pseudos.map((p) => avatar(profilDe(p), 26))}</div>`
+
+// ConversationListView (ThemedConversationRow) : les conversations de la vitrine d'abord, puis
+// assez de monde pour remplir la hauteur du portrait.
 const rangees = (ctx) => {
   const lecteur = DEMO.lecteurs[ctx.lang]
+  const partenaire = partenaireDe(ctx.lang)
+  const autre = partenaire.pseudo === 'minjun.p' ? profilDe('aiko.t') : profilDe('minjun.p')
+  const bonjourDe = (pseudo) => DEMO.global.find((l) => l.auteur === pseudo && l.id)
+  const dm = (profil, h, { presence = false } = {}) => ({ id: profil.pseudo, titre: nomComplet(profil), visuel: avatar(profil, 52, { presence }), texte: apercu(ctx, bonjourDe(profil.pseudo) ?? DEMO.bios[profil.pseudo]), h })
   const toutes = [
+    { id: 'amour', titre: nomComplet(partenaire), visuel: avatar(partenaire, 52, { presence: true }), texte: apercu(ctx, DEMO.amour.vocalReaction[partenaire.lang]), h: '21:07', nonLus: 1 },
+    { id: 'debat', titre: DEMO.debat.titre, visuel: empile(['kwame.m', 'giulia.r', 'jonas.wb']), texte: apercu(ctx, DEMO.debat.messages[0], 'kwame.m'), h: '20:34', nonLus: 9 },
+    { id: 'drole', titre: DEMO.drole.titre, visuel: empile(['aiko.t', 'lucas.olv', 'minjun.p']), texte: apercu(ctx, DEMO.drole.valise, 'aiko.t'), h: '19:05', nonLus: 4 },
     { id: 'nova', titre: DEMO.lienInvitation.groupe, visuel: groupeVisuel(), texte: apercu(ctx, DEMO.groupe.find((m) => m.id === 'nova.decalage'), 'aiko.t'), h: '18:05', nonLus: 3 },
-    { id: 'dm', titre: 'Min-jun Park', visuel: avatar(profilDe('minjun.p'), 52, { presence: true }), texte: apercu(ctx, DEMO.dm[3]), h: '9:33', nonLus: 1 },
     { id: 'global', titre: 'Meeshy Global', visuel: html`<div class="global-avatar big">${logo(52, { radius: 0.5 })}</div>`, texte: apercu(ctx, DEMO.global.at(-1), 'minjun.p'), h: '9:14', nonLus: 24 },
-    { id: 'aiko.t', titre: 'Aiko Tanaka', visuel: avatar(profilDe('aiko.t'), 52), texte: apercu(ctx, DEMO.global[4]), h: '8:40' },
+    dm(autre, '9:05'),
     { id: 'lucas.olv', titre: 'Lucas Oliveira', visuel: avatar(profilDe('lucas.olv'), 52, { presence: true }), texte: apercu(ctx, DEMO.story[0]), h: '8:12' },
+    { id: 'sofi.romero', titre: 'Sofía Romero', visuel: avatar(profilDe('sofi.romero'), 52), texte: apercu(ctx, DEMO.story[1]), h: '8:03' },
     { id: 'giulia.r', titre: 'Giulia Rossi', visuel: avatar(profilDe('giulia.r'), 52), texte: apercu(ctx, DEMO.posts[0].apercu[1]), h: '7:55' },
-    { id: 'kwame.m', titre: 'Kwame Mensah', visuel: avatar(profilDe('kwame.m'), 52), texte: apercu(ctx, DEMO.global[3]), h: '7:31' },
+    dm(profilDe('kwame.m'), '7:31'),
+    dm(profilDe('yusuf.h'), '7:02'),
+    dm(profilDe('priya.n'), 'Hier', { presence: true }),
+    dm(profilDe('amara.d'), 'Hier'),
   ]
   return toutes.filter((r) => r.id !== lecteur)
 }
@@ -54,7 +62,7 @@ const colonneGauche = (ctx, selection) =>
       ${rangees(ctx).map(
         (r) => html`<div class="ipad-row${r.id === selection ? ' on' : ''}">
           ${r.visuel}
-          <div class="ipad-row-text"><div class="t"><b>${r.titre}</b><span>${heure(ctx.lang, r.h)}</span></div><div class="p">${r.texte}</div></div>
+          <div class="ipad-row-text"><div class="t"><b>${r.titre}</b><span>${r.h === 'Hier' ? ctx.ui('date.yesterday') : heure(ctx.lang, r.h)}</span></div><div class="p">${r.texte}</div></div>
           ${r.nonLus ? html`<span class="badge">${r.nonLus}</span>` : ''}
         </div>`,
       )}
@@ -64,22 +72,29 @@ const colonneGauche = (ctx, selection) =>
 const panneauConversation = (ctx, { accent, header, corps }) =>
   html`<section class="ipad-panel conversation">${conversationBackground(accent, ctx.theme)}${header}<main class="messages">${corps}</main>${composer(ctx)}</section>`
 
-const coque = (ctx, gauche, droite, { plein = false } = {}) =>
-  html`<div class="ecran ipad ${ctx.theme}${plein ? ' plein' : ''}" dir="${ctx.dir}" lang="${ctx.lang}">
+const coque = (ctx, gauche, droite) =>
+  html`<div class="ecran ipad ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}">
     <div class="p-bg"></div>
-    ${statusBar({ onMedia: plein })}
+    ${statusBar()}
     <div class="ipad-split">${gauche}${droite}</div>
-    ${homeIndicator({ onMedia: plein })}
+    ${homeIndicator()}
   </div>`
 
-export const ipadDm = (ctx) =>
-  coque(ctx, colonneGauche(ctx, 'dm'), panneauConversation(ctx, { accent: ACCENTS.dm, header: dmHeader(ctx), corps: dmCorps(ctx) }))
+const conversation = (ctx, selection, panneau) => coque(ctx, colonneGauche(ctx, selection), panneauConversation(ctx, panneau))
 
-export const ipadGlobal = (ctx) =>
-  coque(ctx, colonneGauche(ctx, 'global'), panneauConversation(ctx, { accent: ACCENTS.global, header: globalHeader(ctx), corps: globalCorps(ctx) }))
+export const ipadAmour = (ctx) =>
+  conversation(ctx, 'amour', { accent: ACCENT_AMOUR, header: amourHeader(ctx), corps: amourCorps(ctx, { long: true }) })
 
-export const ipadGroupe = (ctx) =>
-  coque(ctx, colonneGauche(ctx, 'nova'), panneauConversation(ctx, { accent: ACCENTS.nova, header: groupeHeader(ctx), corps: groupeCorps(ctx) }))
+export const ipadAmourPhotos = (ctx) =>
+  conversation(ctx, 'amour', { accent: ACCENT_AMOUR, header: amourHeader(ctx), corps: amourPhotosCorps(ctx, { long: true }) })
+
+export const ipadDrole = (ctx) => conversation(ctx, 'drole', { accent: ACCENT_DROLE, header: droleHeader(ctx), corps: droleCorps(ctx, { long: true }) })
+
+export const ipadDebat = (ctx) => conversation(ctx, 'debat', { accent: ACCENT_DEBAT, header: debatHeader(ctx), corps: debatCorps(ctx, { long: true }) })
+
+export const ipadGlobal = (ctx) => conversation(ctx, 'global', { accent: ACCENTS.global, header: globalHeader(ctx), corps: globalCorps(ctx) })
+
+export const ipadAppelAmour = (ctx) => appelAmour(ctx, 'ipad')
 
 export const ipadFil = (ctx) =>
   coque(
@@ -104,29 +119,16 @@ export const ipadProgression = (ctx) =>
     </section>`,
   )
 
-// CallView à trois : deux correspondants en tuiles, le lecteur en vignette, sous-titres traduits.
-export const ipadAppel = (ctx) =>
-  html`<div class="ecran ipad appel dark plein" dir="${ctx.dir}" lang="${ctx.lang}">
-    <div class="ipad-call-grid">
-      <div class="tile">${illustration('appel-seoul', { className: 'call-illu' })}<div class="call-avatar">${avatar(profilDe('minjun.p'), 150)}</div><span class="tag">Min-jun 🇰🇷</span></div>
-      <div class="tile alt">${avatar(profilDe('sofi.romero'), 180)}<span class="tag">Sofía 🇪🇸</span></div>
-    </div>
-    ${statusBar({ onMedia: true })}
-    <div class="call-self">${avatar(lecteurDe(ctx.lang), 64)}</div>
-    ${appelSousTitres(ctx)}
-    ${appelControles(ctx)}
-    ${homeIndicator({ onMedia: true })}
-  </div>`
-
-// ReelsPlayerView en largeur régulière : le média au centre, l'auteur et la légende à côté.
+// ReelsPlayerView en largeur régulière : le média au centre sur son propre flou, l'auteur, la
+// pastille de traduction et les actions sous la scène.
 export const ipadStory = (ctx) => {
   const story = DEMO.story.find((s) => s.auteur !== DEMO.lecteurs[ctx.lang])
   const auteur = profilDe(story.auteur)
   const servi = serve(story, ctx.lang)
   return html`<div class="ecran ipad story-ipad dark plein" dir="${ctx.dir}" lang="${ctx.lang}">
-    <div class="reel-blur">${illustration(story.fond, { className: 'reel-bg' })}</div>
+    <div class="reel-blur">${photo(story.photo, { className: 'reel-bg' })}</div>
     ${statusBar({ onMedia: true })}
-    <div class="reel-stage">${illustration(story.fond, { className: 'reel-media' })}<div class="reel-caption"><span>${servi.text}</span></div></div>
+    <div class="reel-stage">${photo(story.photo, { className: 'reel-media' })}<div class="reel-caption"><span>${servi.text}</span></div></div>
     <div class="reel-side">
       <div class="reel-author">${avatar(auteur, 52, { storyRing: true })}<div><b>${auteur.prenom} ${auteur.drapeau}</b><span>@${auteur.pseudo}</span></div></div>
       <div class="tr-row">${icon('translate', { size: 14 })}<span>${ctx.ui('call.control.captions.state.translated')}</span></div>

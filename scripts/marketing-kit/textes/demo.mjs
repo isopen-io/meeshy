@@ -4,6 +4,8 @@
 // fan-club d'un groupe inventé (« Nova »). Chaque texte porte sa langue d'origine et sa
 // traduction dans les sept langues de lecture : le Prisme (lib/prism.mjs) sert au lecteur
 // sa langue, et un texte sans traduction fait échouer le rendu.
+import { AMOUR } from './amour.mjs'
+import { DEBAT, DROLE } from './groupes.mjs'
 
 const profils = [
   { pseudo: 'lea.mtn', genre: 'f', prenom: 'Léa', nom: 'Martin', ville: 'Lyon', drapeau: '🇫🇷', lang: 'fr', regional: 'en', age: 21, teinte: '6366F1' },
@@ -189,7 +191,7 @@ const global = [
 
 const posts = [
   {
-    auteur: 'aiko.t', photo: 'coucher-osaka', likes: 312, commentaires: 24,
+    auteur: 'aiko.t', photo: 'osaka-coucher', likes: 312, commentaires: 24,
     ...contenu('post.aiko', 'ja', '大阪の夕焼け、最高すぎる🌇 みんなの街の夕日も見せて！', {
       fr: 'Le coucher de soleil à Osaka, c’est trop beau 🌇 Montrez-moi celui de votre ville !',
       en: 'Osaka sunsets hit different 🌇 Show me the one in your city!',
@@ -226,12 +228,12 @@ const posts = [
 ]
 
 const story = [
-  { auteur: 'lucas.olv', fond: 'paulista', ...contenu('story.lucas', 'pt', 'Pôr do sol na Paulista 🧡 Quem vem no sábado?', {
+  { auteur: 'lucas.olv', photo: 'sao-paulo-coucher', ...contenu('story.lucas', 'pt', 'Pôr do sol na Paulista 🧡 Quem vem no sábado?', {
     fr: 'Coucher de soleil sur la Paulista 🧡 Qui vient samedi ?', en: 'Sunset on Paulista 🧡 Who’s coming Saturday?',
     es: 'Atardecer en la Paulista 🧡 ¿Quién viene el sábado?', de: 'Sonnenuntergang auf der Paulista 🧡 Wer kommt Samstag?',
     it: 'Tramonto sulla Paulista 🧡 Chi viene sabato?', ar: 'غروب الشمس في شارع باوليستا 🧡 مين جاي السبت؟',
   }) },
-  { auteur: 'sofi.romero', fond: 'madrid', ...contenu('story.sofia', 'es', 'Ensayo de la coreo para el sábado 💃', {
+  { auteur: 'sofi.romero', photo: 'madrid-coucher', ...contenu('story.sofia', 'es', 'Ensayo de la coreo para el sábado 💃', {
     fr: 'Répétition de la choré pour samedi 💃', en: 'Rehearsing the dance for Saturday 💃',
     de: 'Probe der Choreo für Samstag 💃', it: 'Prove della coreografia per sabato 💃',
     pt: 'Ensaio da coreografia pra sábado 💃', ar: 'تمرين الرقصة ليوم السبت 💃',
@@ -329,6 +331,14 @@ const contenus = () => [
   ...story,
   appel,
   ...Object.values(bios),
+  ...AMOUR.repliques.flatMap((r) => [r.ko, r.ja]),
+  DROLE.valise,
+  DROLE.bagage,
+  DROLE.hublot,
+  DROLE.chien,
+  DROLE.vocal,
+  ...DEBAT.messages,
+  DEBAT.patateDouce,
 ]
 
 export const DEMO = {
@@ -346,6 +356,9 @@ export const DEMO = {
   bios,
   progression,
   lienInvitation,
+  amour: AMOUR,
+  drole: DROLE,
+  debat: DEBAT,
   contenus,
 }
 
@@ -356,3 +369,6 @@ export const profilDe = (pseudo) => {
 }
 
 export const lecteurDe = (lang) => profilDe(lecteurs[lang])
+
+// Le partenaire de la conversation amoureuse (#8825) : Min-jun pour une lectrice, Aiko pour un lecteur.
+export const partenaireDe = (lang) => profilDe(lecteurDe(lang).genre === 'f' ? 'minjun.p' : 'aiko.t')

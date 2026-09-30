@@ -97,5 +97,41 @@
     "source": "https://www.pexels.com/photo/11355342/",
     "licence": "https://www.pexels.com/license/",
     "personnes": 0
+  },
+  "cafe-coeur": {
+    "fichier": "cafe-coeur.jpg",
+    "sujet": "Café au cœur de latte art — le matin du départ",
+    "titre": "Cozy Cafe Latte with Heart Art",
+    "auteur": "Sydney Sang",
+    "source": "https://www.pexels.com/photo/30133770/",
+    "licence": "https://www.pexels.com/license/",
+    "personnes": 0
+  },
+  "bol-ramen": {
+    "fichier": "bol-ramen.jpg",
+    "sujet": "Bol de ramen — la pause déjeuner du partenaire",
+    "titre": "Delicious Japanese Ramen Bowl with Toppings",
+    "auteur": "Tiya Nh",
+    "source": "https://www.pexels.com/photo/37105478/",
+    "licence": "https://www.pexels.com/license/",
+    "personnes": 0
+  },
+  "chien-sac": {
+    "fichier": "chien-sac.jpg",
+    "sujet": "Un petit chien qui sort d’un sac de voyage",
+    "titre": "Pomeranian Dog on a Brown Bag",
+    "auteur": "Cup of Couple",
+    "source": "https://www.pexels.com/photo/8473673/",
+    "licence": "https://www.pexels.com/license/",
+    "personnes": 0
+  },
+  "pizza-chocolat": {
+    "fichier": "pizza-chocolat.jpg",
+    "sujet": "Pizza au chocolat (brigadeiro) — la réplique brésilienne",
+    "titre": "Delicious Chocolate Pizza with Toppings",
+    "auteur": "pedro furtado",
+    "source": "https://www.pexels.com/photo/31094828/",
+    "licence": "https://www.pexels.com/license/",
+    "personnes": 0
   }
 }

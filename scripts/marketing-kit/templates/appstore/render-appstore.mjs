@@ -137,7 +137,7 @@ const controleDisque = (langs) =>
     })(),
   ])
 
-// Planche contact d'une locale : les dix iPhone, puis les sept iPad et l'affiche.
+// Planche contact d'une locale : les dix iPhone, puis les neuf iPad et l'affiche.
 const planche = async (browser, lang) => {
   const url = (chemin) => pathToFileURL(chemin).href
   const iphones = APPAREILS.iphone.captures.map((_, i) => cheminFastlane({ appareil: 'iphone', lang, rang: i + 1 }))
@@ -151,14 +151,14 @@ const planche = async (browser, lang) => {
     h1{margin:0;font-size:34px;color:#fff;letter-spacing:-.5px} header span{color:#a5b4fc;font-weight:500}
     h2{margin:26px 40px 12px;font-size:17px;color:#c7d2fe;letter-spacing:.3px;text-transform:uppercase}
     .rang{display:grid;gap:16px;padding:0 40px}
-    .iphone{grid-template-columns:repeat(10,1fr)} .ipad{grid-template-columns:repeat(4,1fr)}
+    .iphone{grid-template-columns:repeat(10,1fr)} .ipad{grid-template-columns:repeat(5,1fr)}
     figure{margin:0} img{display:block;width:100%;border-radius:12px;box-shadow:0 10px 28px #0009}
     figcaption{margin-top:8px;font-size:12px;color:#a5b4fc;font-weight:500}
     .poster{display:flex;flex-direction:column;align-items:center} .poster img{width:auto;height:420px}
     .vide{aspect-ratio:1320/2868;border:1px dashed #4338ca;border-radius:12px}
     footer{height:40px}
   </style>
-  <header><h1>Meeshy — App Store — ${locale}</h1><span>iPhone 6,9" 1320×2868 · iPad 13" 2752×2064 · affiche App Preview 886×1920</span></header>
+  <header><h1>Meeshy — App Store — ${locale}</h1><span>iPhone 6,9" 1320×2868 · iPad 13" 2064×2752 · affiche App Preview 886×1920</span></header>
   <h2>iPhone 6,9"</h2><div class="rang iphone">${iphones.map((c, i) => vignette(c, '', `iphone69_${String(i + 1).padStart(2, '0')}`)).join('')}</div>
   <h2>iPad 13" · affiche d’App Preview</h2><div class="rang ipad">${ipads.map((c, i) => vignette(c, '', `ipad13_${String(i + 1).padStart(2, '0')}`)).join('')}${vignette(cheminPoster(lang), 'poster', 'affiche App Preview (seconde 5)')}</div>
   <footer></footer>`
