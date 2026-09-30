@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
@@ -21,7 +21,6 @@ import { GlyphSvg } from './glyph';
 import { GLYPHS } from './glyphs';
 import { milestoneGlyph } from './milestone-glyph';
 import { preloadConversationPreview } from './conversation-preview-chunks';
-import { BannerDetailFooter } from './notification-banner-detail';
 import { CategoryGlyphView } from './notification-category-glyph';
 import { CONTENT_GLYPHS, MilestoneMedallion, TargetLink, type SurfaceProps } from './notification-row';
 
@@ -44,6 +43,9 @@ import { CONTENT_GLYPHS, MilestoneMedallion, TargetLink, type SurfaceProps } fro
  */
 
 const CARD_RADIUS = 22;
+
+/** Le pied des gestes et du vocal (#8860) — À LA DEMANDE : une bannière sans geste ne le télécharge pas (`budgets.json` › `notification_toast`). */
+const BannerDetailFooter = lazy(() => import('./notification-banner-detail').then((module) => ({ default: module.BannerDetailFooter })));
 const THUMB = 30;
 
 const timeFormat = (language: InterfaceLanguage) => new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' });
@@ -294,7 +296,9 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
           <TargetLink target={target} {...surface} />
         )}
         {hasFooter ? (
-          <BannerDetailFooter notification={notification} accent={accent} language={language} onDone={actionDone} onPlayingChange={setPlaying} />
+          <Suspense fallback={null}>
+            <BannerDetailFooter notification={notification} accent={accent} language={language} onDone={actionDone} onPlayingChange={setPlaying} />
+          </Suspense>
         ) : null}
         <button
           type="button"

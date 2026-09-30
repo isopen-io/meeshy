@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { decodeNotification, type NotificationRecord } from '@/lib/notifications/record';
 
+import { BannerDetailFooter } from './notification-banner-detail';
 import { NotificationBanner } from './notification-toast';
 
 await loadNotificationRowCatalog('fr');
@@ -34,7 +35,10 @@ const served = (context: Record<string, unknown>, content: string): Notification
   return record;
 };
 
-const render = (record: NotificationRecord) => renderToStaticMarkup(<NotificationBanner notification={record} onDismiss={noop} />);
+/* La carte et son pied (chargé à la demande, `lazy`) : rendus ensemble, comme l'écran les montre. */
+const render = (record: NotificationRecord) =>
+  renderToStaticMarkup(<NotificationBanner notification={record} onDismiss={noop} />) +
+  renderToStaticMarkup(<BannerDetailFooter notification={record} accent="#6366f1" language="fr" onDone={noop} onPlayingChange={noop} />);
 
 const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: 'Champ de Mars' };
 

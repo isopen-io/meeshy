@@ -4,7 +4,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { BannerAudio } from '@/lib/notifications/content-detail';
-import { formatMediaTime, keyboardSeekTarget, PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { formatMediaTime, keyboardSeekTarget, seekFraction } from '@/lib/view/seek-track';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -30,10 +30,19 @@ const KNOB = 12;
 
 const stop = (event: PointerEvent<HTMLElement>) => event.stopPropagation();
 
+/**
+ * Trois vitesses, pas cinq : un vocal écouté depuis une bannière se survole.
+ * `lib/view/media-transport.ts` (les cinq de la visionneuse) n'est pas importé :
+ * son chunk ne se charge qu'à la demande (`budgets.json` › `media_transport`).
+ */
+const BANNER_SPEEDS = [1, 1.5, 2] as const;
+
 function nextSpeed(rate: number): number {
-  const index = PLAYBACK_SPEEDS.findIndex((speed) => speed === rate);
-  return PLAYBACK_SPEEDS[(index + 1) % PLAYBACK_SPEEDS.length] ?? 1;
+  const index = BANNER_SPEEDS.findIndex((speed) => speed === rate);
+  return BANNER_SPEEDS[(index + 1) % BANNER_SPEEDS.length] ?? 1;
 }
+
+const speedLabel = (rate: number, language: string): string => `${new Intl.NumberFormat(language).format(rate)}×`;
 
 export function BannerAudioPlayer({
   audio,
