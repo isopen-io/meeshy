@@ -25,14 +25,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // Timestamp recorded at the very start of didReceive so that each download
     // can cap its URLRequest timeout to what's left in the OS budget.
-    private var extensionStartTime: Date = .distantPast
+    var extensionStartTime: Date = .distantPast
 
     // The OS grants the NSE ~30 s. We reserve 3 s at the end for INSendMessageIntent
     // construction + contentHandler invocation, giving downloads 27 s total.
-    private static let nseBudget: TimeInterval = 27
+    static let nseBudget: TimeInterval = 27
     // Never start a download with less than 2 s left — it would almost certainly
     // time out mid-transfer and leave the extension hung right up to the OS kill.
-    private static let minDownloadBudget: TimeInterval = 2
+    static let minDownloadBudget: TimeInterval = 2
 
     override func didReceive(
         _ request: UNNotificationRequest,
@@ -121,6 +121,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         ) {
             bestAttemptContent.body = fallback
         }
+        // #8858 — position, contact, invitation, lien : le corps DIT le détail
+        // quand la passerelle ne l'a pas composé (vide, ou URL brute).
+        applyDetailedBody(to: bestAttemptContent)
 
         // #7453 — L'ÉCHÉANCE, pas une durée figée.
         //
@@ -236,13 +239,20 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             }
         }
 
+        // #8858 — la carte d'une position ou la vignette d'une vidéo, quand le
+        // message n'a pas de média attachable (une vidéo ne l'est jamais).
+        let detailAttachment = DetailAttachmentBox()
+        enqueueDetailAttachment(userInfo: userInfo, apiBaseURL: apiBaseURL, group: group) {
+            detailAttachment.store($0)
+        }
+
         group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
             guard let self else {
                 contentHandler(bestAttemptContent)
                 return
             }
-            if let messageAttachment {
-                bestAttemptContent.attachments = [messageAttachment]
+            if let attachment = messageAttachment ?? detailAttachment.value {
+                bestAttemptContent.attachments = [attachment]
             }
             if isCommunicationType {
                 let finalContent = self.applyCommunicationIntent(
@@ -342,7 +352,11 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        content.categoryIdentifier = category
+        // #8858 — une position, une carte de visite ou une invitation appellent
+        // leurs propres actions (Plans, Contacts, Rejoindre).
+        content.categoryIdentifier = NotificationDetailPolicy.refinedCategory(
+            category, type: rawType, userInfo: content.userInfo
+        )
     }
 
     /// Respect the per-push badge override so the lock screen shows an accurate count.
@@ -877,7 +891,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// bannière sans enrichissement qu'on ne distingue pas d'un réseau lent.
     /// Écrire sur DISQUE rend la taille du fichier inoffensive pour la mémoire
     /// et MESURABLE avant tout usage — cf. `NSEAttachmentPolicy`.
-    private func downloadFile(
+    func downloadFile(
         from url: URL,
         completion: @escaping (URL?) -> Void
     ) {
@@ -914,7 +928,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// Taille d'un fichier local, `nil` s'il a disparu. C'est la mesure du
     /// SECOND étage de `NSEAttachmentPolicy` : un serveur n'est jamais tenu par
     /// la taille qu'il annonce sur le fil.
-    private nonisolated static func fileSize(at url: URL) -> Int? {
+    nonisolated static func fileSize(at url: URL) -> Int? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
             return nil
         }
@@ -932,7 +946,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// ensuite ce fichier dans son propre magasin ; s'il refuse, on efface —
     /// une extension qui laisse des temporaires derrière elle les paie au
     /// push suivant.
-    private func createMessageAttachment(
+    func createMessageAttachment(
         fromFile downloadedFile: URL,
         originalURL: URL,
         mimeType: String

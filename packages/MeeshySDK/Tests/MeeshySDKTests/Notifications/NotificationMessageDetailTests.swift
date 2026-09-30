@@ -179,6 +179,8 @@ final class NotificationMessageDetailTests: XCTestCase {
         let event = try makeEvent(context: """
         { "conversationId": "c1", "conversationType": "direct", "firstAttachmentUrl": "https://cdn/v.mp4",
           "firstAttachmentMimeType": "video/mp4", "thumbnailUrl": "https://cdn/v-thumb.jpg" }
+        """, metadata: """
+        { "attachments": { "count": 1, "firstType": "video" } }
         """, content: "🎥 Vidéo · 0:12")
         let banner = event.bannerPresentation()
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/v-thumb.jpg")

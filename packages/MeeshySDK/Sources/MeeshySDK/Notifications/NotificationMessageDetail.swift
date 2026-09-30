@@ -45,7 +45,7 @@ public enum NotificationMessageDetail: Equatable, Sendable {
     /// spécifique à la plus générique. Une invitation EST un lien ; la lire
     /// comme lien perdrait l'action « Rejoindre ».
     public init?(lookup: (String) -> Any?) {
-        let text: (String) -> String? = { Self.nonBlank(lookup($0)) }
+        func text(_ key: String) -> String? { Self.nonBlank(lookup(key)) }
 
         if let lat = Self.number(lookup("locationLat")),
            let lon = Self.number(lookup("locationLon")),
