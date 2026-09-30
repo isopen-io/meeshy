@@ -36,6 +36,9 @@ nonisolated enum VitrineLaunch {
 
     static var fichierFixtures: URL { dossier.appendingPathComponent("fixtures.json") }
 
+    /// Là où le script de capture dépose les photos et les vocaux.
+    static var dossierMedias: URL { dossier.appendingPathComponent("medias", isDirectory: true) }
+
     static var marqueurPret: URL { dossier.appendingPathComponent("pret.txt") }
 }
 #endif

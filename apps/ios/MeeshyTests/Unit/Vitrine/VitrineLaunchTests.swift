@@ -18,4 +18,9 @@ final class VitrineLaunchTests: XCTestCase {
         XCTAssertTrue(VitrineScene.progression.ouvreUneSession)
         XCTAssertFalse(VitrineScene.lien.ouvreUneSession)
     }
+
+    func test_dossierMedias_livesInTheVitrineFolder() {
+        XCTAssertEqual(VitrineLaunch.dossierMedias.lastPathComponent, "medias")
+        XCTAssertEqual(VitrineLaunch.dossierMedias.deletingLastPathComponent().standardizedFileURL, VitrineLaunch.dossier.standardizedFileURL)
+    }
 }

@@ -36,6 +36,18 @@ enum VitrineStage {
         }
     }
 
+    /// Juste après `CacheCoordinator.shared.start()`, AVANT la restauration de la session : le cache
+    /// est déjà lié au compte du lecteur (`activeUserId` relit le trousseau que `preparer` vient
+    /// d'écrire), et les racines lisent le fil et les médias dès leur montage (#8922).
+    static func remplirLesCaches() async {
+        guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
+        do {
+            try await VitrineSeeder.remplirLesCaches(f, medias: VitrineLaunch.dossierMedias, dans: VitrineSeedTargetsReels())
+        } catch {
+            fatalError("Vitrine « \(scene.rawValue) » : fil et médias impossibles à ranger — \(error)")
+        }
+    }
+
     /// Une fois la session restaurée, avant le préchargement de la liste.
     static func remplir() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
