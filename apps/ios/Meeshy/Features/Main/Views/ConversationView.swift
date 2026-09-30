@@ -1009,7 +1009,7 @@ struct ConversationView: View {
                     CallSummaryDetailSheet(
                         summary: summary,
                         isOutgoing: summary.initiatorId == viewModel.currentUserIdForView,
-                        accentColor: accentColor,
+                        accentHex: accentColor,
                         timestamp: msg.createdAt,
                         onCallBack: { s in viewModel.callBack(for: s) }
                     )
@@ -2346,7 +2346,7 @@ struct ConversationView: View {
     private var readingModeChipModel: ReadingModeChipModel {
         ReadingModeChipModel(
             label: ReadingModeLensCatalog.title(for: readingModeController.mode),
-            accentColor: accentColor,
+            accentHex: accentColor,
             isAuto: readingModeController.decision.reason != .sticky
                 && readingModeController.decision.reason != .flagDisabled
         )
