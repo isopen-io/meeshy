@@ -91,7 +91,7 @@ export function ScrollToBottomButton({
            (`lib/accent.ts::inkOnAccent`, posée par `withAccent` sur l'hôte).
            Le blanc en dur valait 1,98:1 en schéma clair sur le premier accent
            du jeu — mesuré en revue de #5774. */
-        color: 'var(--accent-ink, #FFFFFF)',
+        color: 'var(--accent-ink, var(--color-ios-on-brand))',
       }}
     >
       {rich ? (
