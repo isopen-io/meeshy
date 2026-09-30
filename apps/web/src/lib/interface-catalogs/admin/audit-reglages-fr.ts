@@ -9,7 +9,6 @@
 const f = {
   // ── Journal d’audit : l’écran ──────────────────────────────────────────────
   'admin.audit.subtitle': 'Qui a fait quoi, à qui et pourquoi : chaque geste d’administration et chaque lecture du privé laissent une trace ici.',
-  'admin.audit.loading': 'Chargement du journal d’audit…',
   'admin.audit.list.caption': 'Journal d’audit',
   'admin.audit.list.count': '{count} entrées',
   'admin.audit.list.empty': 'Aucune trace pour l’instant',

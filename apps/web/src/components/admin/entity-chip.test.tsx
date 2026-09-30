@@ -33,8 +33,11 @@ describe('AdminLink — vers une section ou la fiche d’une entité', () => {
     }
   });
 
-  test('une section pas encore prête n’est JAMAIS un lien : texte seul — loi 4', async () => {
-    const host = await mount(<AdminLink target={{ kind: 'section', section: 'broadcasts' }}>Diffusions</AdminLink>, BIGBOSS);
+  test('une section dont la permission manque n’est JAMAIS un lien : texte seul — loi 4', async () => {
+    const host = await mount(
+      <AdminLink target={{ kind: 'section', section: 'broadcasts' }}>Diffusions</AdminLink>,
+      adminIdentityFixture({ role: 'BIGBOSS', permissions: { canManageNotifications: false } }),
+    );
     expect(host.querySelector('a')).toBeNull();
     expect(host.textContent).toBe('Diffusions');
   });

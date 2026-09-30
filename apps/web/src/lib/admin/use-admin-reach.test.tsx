@@ -45,8 +45,9 @@ describe('useAdminReach — ce que le lecteur peut atteindre', () => {
     expect(reach.ids).toContain('dashboard');
   });
 
-  test('une section pas encore prête n’est pas « ouverte », même pour BIGBOSS', async () => {
-    expect((await read(adminIdentityFixture({ role: 'BIGBOSS' }))).broadcasts).toBe(false);
+  test('une section livrée s’ouvre à BIGBOSS, et la permission qui lui manque la ferme — le drapeau de disponibilité ne dit plus rien, tous sont levés', async () => {
+    expect((await read(adminIdentityFixture({ role: 'BIGBOSS' }))).broadcasts).toBe(true);
+    expect((await read(adminIdentityFixture({ role: 'BIGBOSS', permissions: { canManageNotifications: false } }))).broadcasts).toBe(false);
   });
 
   test('ADMIN a le rang sans être souverain', async () => {

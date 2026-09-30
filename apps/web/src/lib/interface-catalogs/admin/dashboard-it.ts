@@ -76,7 +76,6 @@ const f = {
   'admin.dash.moderation.recent': 'Reports from the last 24 hours',
   'admin.dash.moderation.empty': 'No reports in the last 24 hours.',
   'admin.dash.moderation.entityOf': '{kind} by {owner}',
-  'admin.dash.moderation.open': 'Open the report: {name}',
 
   'admin.dash.broadcasts.title': 'Broadcasts in progress',
   'admin.dash.broadcasts.empty': 'No broadcast is being sent.',

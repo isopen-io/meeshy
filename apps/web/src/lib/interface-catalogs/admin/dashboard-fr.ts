@@ -77,7 +77,6 @@ const f = {
   'admin.dash.moderation.recent': 'Signalements des dernières 24 heures',
   'admin.dash.moderation.empty': 'Aucun signalement ces dernières 24 heures.',
   'admin.dash.moderation.entityOf': '{kind} de {owner}',
-  'admin.dash.moderation.open': 'Ouvrir le signalement : {name}',
 
   'admin.dash.broadcasts.title': 'Diffusions en cours',
   'admin.dash.broadcasts.empty': 'Aucune diffusion en cours d’envoi.',

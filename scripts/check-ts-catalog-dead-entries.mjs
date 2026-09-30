@@ -361,7 +361,14 @@ export const callersIn = (contents, nsNames) => {
 // web qui les appelle par le module de groupe (`adminEndpoints`) est le lot
 // suivant du même chantier, qui ramène cette valeur à 331. Valeur MESURÉE le
 // 2026-09-30.
-const BASELINE_DEAD_ENTRIES = 337;
+// 337 → 286 (#8876, 2026-09-30) : l'intégration de la vue de Dieu. Les dix
+// lots d'écrans de l'administration appellent désormais par le module de groupe
+// (`adminEndpoints`) les six entrées nées mortes ci-dessus — et quarante-cinq
+// autres, servies de longue date par la passerelle sans qu'aucun écran v2 ne
+// les lise (statistiques, langues, signalements, liens, diffusions, anonymes,
+// communautés, publications, classement…). 45 sous la valeur d'avant le chantier
+// (331), là où la dette annoncée n'était que de 6. Valeur MESURÉE le 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 286;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

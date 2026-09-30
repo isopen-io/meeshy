@@ -62,10 +62,8 @@ const adminAnonymousOneScreen = () =>
 const adminAgentScreen = () =>
   Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
-/* LES VINGT ÉCRANS D'ATTENTE DE LA VUE DE DIEU (#8876) — chaque route neuve
-   charge AUSSI le catalogue d'administration (`admin-catalog-loading.test.ts`),
-   et pointe d'abord vers un écran d'attente (`AdminStubScreen`) que le lot de
-   sa section remplace sans jamais revenir ici. */
+/* LES ÉCRANS DE LA VUE DE DIEU (#8876) — chaque route neuve charge AUSSI le
+   catalogue d'administration (`admin-catalog-loading.test.ts`). */
 const adminInvitationsScreen = () =>
   Promise.all([import('@/routes/admin-invitations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminInvitationScreen = () =>

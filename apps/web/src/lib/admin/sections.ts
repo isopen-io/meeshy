@@ -7,19 +7,6 @@ import {
   type AdminRoute,
   type AdminSectionId,
 } from './admin-routes';
-import { READY as ANALYTICS_READY } from './ready/analytics';
-import { READY as AUDIT_READY } from './ready/audit';
-import { READY as BROADCASTS_READY } from './ready/broadcasts';
-import { READY as COMMUNITIES_READY } from './ready/communities';
-import { READY as INVITATIONS_READY } from './ready/invitations';
-import { READY as LANGUAGES_READY } from './ready/languages';
-import { READY as MONITORING_READY } from './ready/monitoring';
-import { READY as POSTS_READY } from './ready/posts';
-import { READY as RANKING_READY } from './ready/ranking';
-import { READY as REPORTS_READY } from './ready/reports';
-import { READY as SETTINGS_READY } from './ready/settings';
-import { READY as SHARE_LINKS_READY } from './ready/share-links';
-import { READY as TRACKING_LINKS_READY } from './ready/tracking-links';
 
 export type { AdminRoute };
 
@@ -40,10 +27,10 @@ export type { AdminRoute };
  * ## Une section que l'administration ne sert pas encore est MASQUÉE (#6702, #8876)
  *
  * Le legacy est décommissionné (directive porteur 2026-09-15) : la v2 sert tout
- * `meeshy.me`. Une section dont l'écran n'est qu'une attente (`ready: false`,
- * voir `lib/admin/ready/`) n'est ni au menu, ni au hub, ni en lien d'entité :
- * ce serait un contrôle qui ment (loi 4). Porter une section, c'est remplacer
- * son écran d'attente puis basculer SON drapeau dans le même commit.
+ * `meeshy.me`. Une section dont `ready` est faux n'est ni au menu, ni au hub,
+ * ni en lien d'entité : ce serait un contrôle qui ment (loi 4). Les dix-huit
+ * sections sont servies depuis l'intégration du chantier #8876 ; le drapeau
+ * reste la porte d'une section qu'on livrerait écran par écran.
  *
  * ## Pourquoi la permission décide, et jamais le rôle
  *
@@ -138,11 +125,8 @@ export type AdminSection = {
   readonly adminRankOnly?: boolean;
   /**
    * **LA SECTION EST-ELLE SERVIE ?** (#8876) — `false` tant que son écran n'est
-   * qu'une attente (`AdminStubScreen`) : ni menu, ni tuile, ni lien d'entité
-   * ne mènent alors à elle (loi 4). Le drapeau vient de
-   * `lib/admin/ready/<section>.ts`, que le lot de la section bascule dans le
-   * commit qui remplace son écran — `section-readiness.test.ts` garde
-   * l'accord.
+   * pas livré : ni menu, ni tuile, ni lien d'entité ne mènent alors à elle
+   * (loi 4). Toutes les sections du registre sont servies.
    */
   readonly ready: boolean;
   readonly glyph: AdminGlyphName;
@@ -194,24 +178,24 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   section('anonymous', { permission: 'canManageUsers', glyph: 'detective', ready: true }),
   /* LES DEMANDES DE CONTACT — ce que la passerelle sert sous « invitations »
      sont des demandes d'AMITIÉ entre membres, pas des invitations par e-mail. */
-  section('invitations', { permission: 'canManageUsers', glyph: 'handshake', ready: INVITATIONS_READY }),
+  section('invitations', { permission: 'canManageUsers', glyph: 'handshake', ready: true }),
   section('conversations', { permission: 'canManageConversations', glyph: 'chats', ready: true, adminRankOnly: true }),
-  section('communities', { permission: 'canManageGroups', glyph: 'usersThree', ready: COMMUNITIES_READY }),
-  section('shareLinks', { permission: 'canManageConversations', glyph: 'linkSimple', ready: SHARE_LINKS_READY }),
-  section('posts', { permission: 'canModerateContent', glyph: 'newspaper', ready: POSTS_READY }),
-  section('reports', { permission: 'canModerateContent', glyph: 'flag', ready: REPORTS_READY }),
-  section('audit', { permission: 'canViewAuditLogs', glyph: 'scroll', ready: AUDIT_READY }),
-  section('analytics', { permission: 'canViewAnalytics', glyph: 'chartLine', ready: ANALYTICS_READY }),
-  section('ranking', { permission: 'canViewAnalytics', glyph: 'trophy', ready: RANKING_READY }),
-  section('trackingLinks', { permission: 'canViewAnalytics', glyph: 'target', ready: TRACKING_LINKS_READY }),
-  section('broadcasts', { permission: 'canManageNotifications', glyph: 'megaphone', ready: BROADCASTS_READY }),
-  section('monitoring', { permission: 'canViewAnalytics', glyph: 'heartbeat', ready: MONITORING_READY, adminRankOnly: true }),
-  section('languages', { permission: 'canViewAnalytics', glyph: 'translate', ready: LANGUAGES_READY }),
+  section('communities', { permission: 'canManageGroups', glyph: 'usersThree', ready: true }),
+  section('shareLinks', { permission: 'canManageConversations', glyph: 'linkSimple', ready: true }),
+  section('posts', { permission: 'canModerateContent', glyph: 'newspaper', ready: true }),
+  section('reports', { permission: 'canModerateContent', glyph: 'flag', ready: true }),
+  section('audit', { permission: 'canViewAuditLogs', glyph: 'scroll', ready: true }),
+  section('analytics', { permission: 'canViewAnalytics', glyph: 'chartLine', ready: true }),
+  section('ranking', { permission: 'canViewAnalytics', glyph: 'trophy', ready: true }),
+  section('trackingLinks', { permission: 'canViewAnalytics', glyph: 'target', ready: true }),
+  section('broadcasts', { permission: 'canManageNotifications', glyph: 'megaphone', ready: true }),
+  section('monitoring', { permission: 'canViewAnalytics', glyph: 'heartbeat', ready: true, adminRankOnly: true }),
+  section('languages', { permission: 'canViewAnalytics', glyph: 'translate', ready: true }),
   /* LE PILOTAGE DE L'AGENT (#6733) — `canManageAgent`, jamais `canAccessAdmin` :
      la tuile porte le seuil de ce qu'elle OUVRE. Et aucun `adminRankOnly` —
      sa garde serveur est une permission, pas un rang. */
   section('agent', { permission: 'canManageAgent', glyph: 'robot', ready: true }),
-  section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: SETTINGS_READY }),
+  section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: true }),
 ];
 
 /**

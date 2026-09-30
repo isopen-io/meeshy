@@ -108,7 +108,6 @@ const f = {
   'admin.shareLink.guests.empty': 'Nobody has come in through this link yet.',
   'admin.shareLink.guest.present': 'Present',
   'admin.shareLink.guest.left': 'Gone',
-  'admin.shareLink.guest.joined': 'Joined {when}',
   'admin.shareLink.meta.state': 'State',
   'admin.shareLink.meta.expires': 'Expiry',
   'admin.shareLink.meta.expires.explain': 'After this date, nobody can come in through this link.',

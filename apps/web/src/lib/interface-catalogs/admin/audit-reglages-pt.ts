@@ -6,7 +6,6 @@ import type fr from './audit-reglages-fr';
 const f = {
   // ── Audit log: the screen ──────────────────────────────────────────────────
   'admin.audit.subtitle': 'Who did what, to whom and why: every administration gesture and every read of private content leaves a trace here.',
-  'admin.audit.loading': 'Loading the audit log…',
   'admin.audit.list.caption': 'Audit log',
   'admin.audit.list.count': '{count} entries',
   'admin.audit.list.empty': 'No trace yet',

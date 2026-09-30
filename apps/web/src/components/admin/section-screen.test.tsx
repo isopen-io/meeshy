@@ -3,9 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { appQueryClient } from '@/lib/api/query-client';
 import { createRouter, navigate } from '@/lib/router';
-import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/admin-assertions';
+import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
-import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
 
 import { AdminSectionScreen } from './section-screen';
 
@@ -36,12 +35,12 @@ describe('AdminSectionScreen — la garde de tout écran de section', () => {
     expect(host.querySelector('[data-contenu]')).toBeNull();
   });
 
-  test('section PAS PRÊTE : refusée, même pour BIGBOSS — rien ne mène à un écran d’attente', async () => {
+  test('section dont la permission manque : refusée, même à BIGBOSS — le rôle ne remplace pas la matrice', async () => {
     const host = await mount(
       <AdminSectionScreen section="broadcasts" language="fr" title="Diffusions">
         {() => <p data-contenu>contenu</p>}
       </AdminSectionScreen>,
-      BIGBOSS,
+      adminIdentityFixture({ role: 'BIGBOSS', permissions: { canManageNotifications: false } }),
     );
     expect(host.querySelector('[data-contenu]')).toBeNull();
     expect(host.textContent).toContain('Espace réservé');
@@ -118,45 +117,5 @@ describe('AdminSectionScreen — la garde de tout écran de section', () => {
 
     expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/adm/users');
     expect(host.querySelector('[data-admin-back-label]')?.textContent).toBe('Comptes');
-  });
-});
-
-describe('AdminStubScreen — l’écran d’attente, joignable par son adresse seulement', () => {
-  const stub = (url: string, identity: ReturnType<typeof adminIdentityFixture>) => mountAdminAt(mounter, url, identity, '[data-admin-shell]');
-
-  test('annonce « Cette section arrive », sous le seul h1 de la page, sans identifiant brut', async () => {
-    const host = await stub('/admin/broadcasts', BIGBOSS);
-    expect(host.querySelector('[data-admin-stub="broadcasts"]')).not.toBeNull();
-    expect(host.querySelectorAll('h1')).toHaveLength(1);
-    expect(host.querySelector('h1')?.textContent).toBe('Diffusions');
-    expect(host.textContent).toContain('Cette section arrive');
-    expectNoRawIdentifiers(host);
-    resetAdminRouter(mounter);
-  });
-
-  test('ses fiches aussi sont en attente, dans l’espace /adm', async () => {
-    const host = await stub('/adm/reports/64f1c2a9e8b7d6c5b4a39281', adminIdentityFixture({ role: 'MODERATOR' }));
-    expect(host.querySelector('[data-admin-stub="reports"]')).not.toBeNull();
-    expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/adm/reports');
-    resetAdminRouter(mounter);
-  });
-
-  test('sans la capacité de la section, le refus unique — l’existence de la section ne se révèle pas', async () => {
-    const host = await stub('/admin/broadcasts', adminIdentityFixture({ role: 'MODERATOR' }));
-    expect(host.querySelector('[data-admin-stub]')).toBeNull();
-    expect(host.textContent).toContain('Espace réservé');
-    resetAdminRouter(mounter);
-  });
-
-  test('ADMIN, qui porte canManageNotifications, entre sur l’attente des diffusions', async () => {
-    const host = await stub('/admin/broadcasts', adminIdentityFixture({ role: 'ADMIN' }));
-    expect(host.querySelector('[data-admin-stub="broadcasts"]')).not.toBeNull();
-    resetAdminRouter(mounter);
-  });
-
-  test('la section n’est ni au menu ni au hub tant que son drapeau est faux', async () => {
-    const host = await stub('/admin/broadcasts', BIGBOSS);
-    expect(host.querySelector('[data-admin-sidebar] [data-admin-nav="broadcasts"]')).toBeNull();
-    resetAdminRouter(mounter);
   });
 });
