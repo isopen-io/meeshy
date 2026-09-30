@@ -4,8 +4,8 @@ import MeeshyUI
 
 // MARK: - Phase 1 — le téléphone d'abord, en verre liquide (#8288)
 //
-// Jamais annoncé « facultatif », jamais d'astérisque : le lien discret
-// « Continuer avec l'e-mail seulement » le dit par le geste, et le NOMMER
+// Jamais annoncé « facultatif », jamais d'astérisque : « Plus tard → », posé
+// sur la ligne du libellé, le dit par le geste (#8842), et le NOMMER
 // facultatif ferait croire qu'il y a une décision à prendre. Vide ⇒ absent de
 // la charge (`SignupForm`).
 
@@ -14,29 +14,33 @@ extension SignupView {
     /// CE QUE LE NUMÉRO OUVRE — et rien d'autre (#6441). Les deux usages sont
     /// MESURÉS, pas promis : identifiant de connexion (`AuthService.ts:158`) et
     /// découverte par un contact qui l'a au carnet (`contacts-match.ts`).
-    var phoneHint: AuthInfoHint {
-        AuthInfoHint(
-            text: String(
-                localized: "auth.signup.phone.benefit",
-                defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
-                bundle: .main
-            ),
-            buttonLabel: String(
-                localized: "auth.signup.phone.hintLabel",
-                defaultValue: "À quoi sert le numéro",
-                bundle: .main
-            )
+    /// AFFICHÉ sous le champ, plus replié derrière un (i) (#8842) : une raison
+    /// qu'il faut aller chercher ne convainc personne.
+    var phoneBenefit: String {
+        String(
+            localized: "auth.signup.phone.benefit",
+            defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
+            bundle: .main
         )
     }
 
-    /// Le numéro, le pays et le (i) dans UNE barre de verre liquide qui ondule
-    /// à chaque frappe — l'effet de la barre du composeur universel
-    /// (`TypingWave`). Sous « Réduire les animations », rien ne bouge.
+    /// Le numéro et le pays dans UNE barre de verre liquide qui ondule à chaque
+    /// frappe — l'effet de la barre du composeur universel (`TypingWave`). Sous
+    /// « Réduire les animations », rien ne bouge.
     var phoneField: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+            HStack(alignment: .center, spacing: MeeshySpacing.sm) {
+                Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                Spacer(minLength: MeeshySpacing.sm)
+
+                if !viewModel.progress.emailShown {
+                    laterButton
+                        .transition(.opacity)
+                }
+            }
 
             HStack(spacing: MeeshySpacing.sm) {
                 Button {
@@ -75,10 +79,8 @@ extension SignupView {
                 .focused($focusedField, equals: .phoneNumber)
                 .foregroundColor(theme.textPrimary)
                 .accessibilityLabel(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
-                .accessibilityHint(phoneHint.text)
+                .accessibilityHint(phoneBenefit)
                 .accessibilityIdentifier("auth.signup.phone")
-
-                AuthInfoHintButton(hint: phoneHint, isExpanded: hintExpansion(for: .phoneNumber), tint: theme.textMuted)
             }
             .padding(.leading, MeeshySpacing.sm)
             .padding(.trailing, MeeshySpacing.md)
@@ -96,12 +98,14 @@ extension SignupView {
             .accessibilityElement(children: .contain)
 
             errorRow(for: .phoneNumber)
-            AuthInfoHintText(hint: phoneHint, isExpanded: expandedHint == .phoneNumber, color: theme.textSecondary)
 
-            if !viewModel.progress.emailShown {
-                skipPhoneButton
-                    .transition(.opacity)
-            }
+            // Le champ porte déjà la phrase en `accessibilityHint` : la lire une
+            // seconde fois au balayage n'apprendrait rien.
+            Text(phoneBenefit)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundColor(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(true)
         }
         .sheet(isPresented: $isShowingCountryPicker) {
             SignupCountrySheet(selection: $viewModel.form.country)
@@ -110,21 +114,28 @@ extension SignupView {
 
     static var phoneGlassShape: RoundedRectangle { RoundedRectangle(cornerRadius: 22, style: .continuous) }
 
-    /// « Continuer avec l'e-mail seulement » — discret, et il disparaît une fois
-    /// l'adresse parue : il n'y a plus rien à passer (décision porteur 2026-09-27).
-    private var skipPhoneButton: some View {
+    /// « Plus tard → » — sur la ligne du libellé, aligné en fin (#8842), et il
+    /// disparaît une fois l'adresse parue : il n'y a plus rien à passer
+    /// (décision porteur 2026-09-27). `arrow.right` se retourne seul en RTL.
+    private var laterButton: some View {
         Button {
             HapticFeedback.light()
             viewModel.skipPhone()
             focusedField = .email
         } label: {
-            Text(String(localized: "auth.signup.phone.skip", defaultValue: "Continuer avec l’e-mail seulement", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-                .underline()
-                .frame(maxWidth: .infinity, minHeight: 44)
+            HStack(spacing: MeeshySpacing.xs) {
+                Text(String(localized: "auth.signup.phone.later", defaultValue: "Plus tard", bundle: .main))
+                Image(systemName: "arrow.right")
+                    .accessibilityHidden(true)
+            }
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            .foregroundColor(theme.textSecondary)
+            .padding(.leading, MeeshySpacing.sm)
+            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "auth.signup.phone.later.a11y", defaultValue: "Plus tard, continuer sans numéro", bundle: .main))
         .accessibilityIdentifier("auth.signup.phone.skip")
     }
 }

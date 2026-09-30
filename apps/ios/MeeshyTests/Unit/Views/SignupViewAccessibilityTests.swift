@@ -300,8 +300,8 @@ final class SignupViewAccessibilityTests: XCTestCase {
         XCTAssertTrue(body.contains("auth.signup.phone.benefit"),
                       "l'écran DOIT dire ce que le numéro ouvre")
         let phone = try fieldBody("phoneField", in: body)
-        XCTAssertTrue(phone.contains("phoneHint"),
-                      "et le champ téléphone DOIT le porter — un texte défini mais jamais monté n'informe personne")
+        XCTAssertTrue(phone.contains("Text(phoneBenefit)"),
+                      "et le champ téléphone DOIT l'AFFICHER (#8842) — un texte défini mais jamais monté n'informe personne")
     }
 
     // MARK: - Un détail REPLIÉ n'est pas un détail PERDU
