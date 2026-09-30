@@ -40,10 +40,10 @@
             "value": "Scheda contatto"
           }
         },
-        "pt": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cartão de contacto"
+            "value": "Cartão de contato"
           }
         },
         "zh-Hans": {
@@ -93,7 +93,7 @@
             "value": "Apri in Mappe"
           }
         },
-        "pt": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Abrir no Mapas"
@@ -146,7 +146,7 @@
             "value": "Velocità di riproduzione"
           }
         },
-        "pt": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Velocidade de reprodução"
@@ -199,7 +199,7 @@
             "value": "Avanzamento della riproduzione"
           }
         },
-        "pt": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Progresso da reprodução"
@@ -252,10 +252,10 @@
             "value": "Posizione condivisa"
           }
         },
-        "pt": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Localização partilhada"
+            "value": "Localização compartilhada"
           }
         },
         "zh-Hans": {
