@@ -21,6 +21,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { languageName } from '@/lib/languages';
 import type { CardJoinAccount } from '@/lib/links/card-join-account';
+import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
 import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
@@ -49,11 +50,10 @@ import { GLYPHS } from './glyphs';
  * Référence : `ConversationLinkCard.swift` (iOS, même lot) — bannière de 76,
  * avatar de 52 à coins de 14, accent `colorForName(id ?? lien ?? titre)`.
  *
- * **« Anonyme » n'est offert qu'à un visiteur SANS compte** : le web ne tient
- * qu'UNE session, et un compte connecté qui ouvre `/chat/<lien>` n'y trouve
- * que la jonction par son compte (`joinChoicesOf`) — lui proposer l'anonyme
- * serait un contrôle qui ment (loi 4). iOS l'offre aussi au compte connecté :
- * l'écart est suivi par son issue (session invitée à côté du compte).
+ * **« Anonyme » est offert au visiteur ET au compte connecté (#8816)**, comme
+ * sur iOS : il mène à l'entrée anonyme de la jonction (`/chat/<lien>?mode=
+ * anonymous`), où l'identité anonyme est TENUE à côté du compte
+ * (`session.ts § adoptAnonymous`) — le compte n'est ni remplacé ni fermé.
  *
  * **Le message d'invitation** se lit sous « X vous invite à rejoindre… »,
  * derrière un grand guillemet ; absent, rien ne se dessine.
@@ -577,13 +577,13 @@ function Actions({
   if (!card.viewer.canJoin || identifier === undefined) return null;
 
   /* « Rejoindre ? » puis ses choix (#8727) : « Anonyme » quand le lien
-     l'accepte ET qu'aucun compte n'est connecté, puis le compte — nommé. */
+     l'accepte — compte connecté compris (#8816) —, puis le compte, nommé. */
   const accountTitle = account?.title ?? translate(language, 'conversation.card.joinChoice.account');
   const accountLabel =
     account === null
       ? translate(language, 'conversation.card.a11y.joinWithAccount')
       : translate(language, 'conversation.card.a11y.joinWithNamedAccount', { account: account.handle ?? account.title });
-  const anonymous = !signedIn && card.viewer.canJoinAnonymously;
+  const anonymous = card.viewer.canJoinAnonymously;
   const next = `/chat/${encodeURIComponent(identifier)}`;
 
   return (
@@ -596,6 +596,7 @@ function Actions({
           <Link
             to="chatJoin"
             params={{ link: identifier }}
+            search={{ mode: ANONYMOUS_MODE }}
             aria-label={translate(language, 'conversation.card.joinAnonymously')}
             className={BUTTON}
             style={secondaryStyle(INK)}

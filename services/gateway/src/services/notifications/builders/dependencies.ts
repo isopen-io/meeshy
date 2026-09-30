@@ -23,6 +23,15 @@ export type NotificationBuilderDependencies = {
   readonly createNotification: NotificationService['createNotification'];
   /** Langue de CADRAGE du destinataire (Prisme-first, repli 'fr'). */
   readonly resolveRecipientLang: (userId: string) => Promise<string>;
+  /**
+   * Le PRISME du destinataire sous ses deux formes, depuis UNE lecture : la
+   * langue de CADRAGE (`lang`) et la liste ORDONNÉE où un CONTENU se résout
+   * (`ordered`). Un bâtisseur qui sert un extrait l'emploie à la place de
+   * `resolveRecipientLang` — jamais la langue de cadrage comme clé de contenu.
+   */
+  readonly resolveRecipientPrism: (
+    userId: string
+  ) => Promise<{ readonly lang: string; readonly ordered: readonly string[] }>;
   /** Audience de CONSOMMATION d'un post — fail-closed : en panne, on REFUSE. */
   readonly canNotifyAboutPost: (postId: string, recipientId: string) => Promise<boolean>;
   /** Anti-spam par paire (émetteur → destinataire) sur les réactions. */

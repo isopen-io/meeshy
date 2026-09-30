@@ -34,7 +34,6 @@ import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 import { emitServerEvent } from '../serverEmit';
-import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -593,7 +592,7 @@ export class PostReactionHandler {
   ): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { authorId: true, type: true, content: true, createdAt: true, expiresAt: true },
+      select: { authorId: true, type: true, createdAt: true, expiresAt: true },
     });
 
     if (!post?.authorId) return;
@@ -610,7 +609,6 @@ export class PostReactionHandler {
         postAuthorId: post.authorId,
         emoji,
         postType: post.type,
-        postPreview: sliceCodePointsOrUndefined(post.content, 80),
         postCreatedAt: post.createdAt ?? undefined,
         postExpiresAt: post.expiresAt ?? undefined,
       })

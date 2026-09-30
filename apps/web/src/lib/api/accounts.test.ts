@@ -246,4 +246,15 @@ describe('les données locales d’un compte déconnecté', () => {
 
     expect([...storage.raw.keys()].sort()).toEqual(['meeshy.call-journal.u_b2', 'meeshy.draft.story.b2', 'meeshy.draft.u_b2.c1', 'meeshy.scheme']);
   });
+
+  test('ses identités anonymes tenues partent avec lui (#8816), jamais celles d’un autre compte', () => {
+    const storage = memoryStorage({
+      'meeshy.anonymous-sessions.u_a1': '[]',
+      'meeshy.anonymous-sessions.u_b2': '[]',
+    });
+
+    purgeAccountLocalData({ storage, userId: 'a1', keys: [...storage.raw.keys()] });
+
+    expect([...storage.raw.keys()]).toEqual(['meeshy.anonymous-sessions.u_b2']);
+  });
 });

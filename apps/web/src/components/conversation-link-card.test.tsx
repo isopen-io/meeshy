@@ -188,16 +188,29 @@ describe('ConversationLinkCard — états', () => {
 });
 
 describe('ConversationLinkCard — actions', () => {
-  test('non-membre connecté : « Join? » puis le compte NOMMÉ (#8727) — lu en phrase entière', async () => {
+  test('non-membre connecté : « Join? » Anonymous | le compte NOMMÉ (#8727, #8816) — lu en phrase entière', async () => {
     const { host } = await mount({ target: SHARE, seed: card() });
     expect(host.querySelector('[data-join-prompt]')?.textContent).toBe('Join?');
-    expect(buttons(host)).toEqual(['Bob Kouassi']);
+    expect(buttons(host)).toEqual(['Anonymous', 'Bob Kouassi']);
     expect(byText(host, 'Bob Kouassi')?.getAttribute('aria-label')).toBe('Join with the account @bob');
+  });
+
+  test('connecté : « Anonymous » ouvre l’entrée anonyme de la jonction, le compte reste (#8816)', async () => {
+    const { host, calls } = await mount({ target: SHARE, seed: card() });
+    expect(byText(host, 'Anonymous')?.getAttribute('href')).toBe('/chat/mshy_beta?mode=anonymous');
+    expect(byText(host, 'Anonymous')?.getAttribute('aria-label')).toBe('Join anonymously');
+    expect(calls().filter((call) => call.method === 'POST')).toEqual([]);
+  });
+
+  test('connecté, lien qui exige un compte : le compte seul, jamais un « Anonymous » qui mentirait', async () => {
+    const accountOnly = card({ viewer: { isMember: false, canJoin: true, requiresAccount: true, canJoinAnonymously: false } });
+    const { host } = await mount({ target: SHARE, seed: accountOnly });
+    expect(buttons(host)).toEqual(['Bob Kouassi']);
   });
 
   test('connecté sans nom connu : « My account »', async () => {
     const { host } = await mount({ target: SHARE, seed: card(), account: null });
-    expect(buttons(host)).toEqual(['My account']);
+    expect(buttons(host)).toEqual(['Anonymous', 'My account']);
     expect(byText(host, 'My account')?.getAttribute('aria-label')).toBe('Join with my account');
   });
 
@@ -205,7 +218,7 @@ describe('ConversationLinkCard — actions', () => {
     const { host } = await mount({ target: SHARE, seed: card(), signedIn: false });
     expect(host.querySelector('[data-join-prompt]')?.textContent).toBe('Join?');
     expect(buttons(host)).toEqual(['Anonymous', 'My account']);
-    expect(byText(host, 'Anonymous')?.getAttribute('href')).toBe('/chat/mshy_beta');
+    expect(byText(host, 'Anonymous')?.getAttribute('href')).toBe('/chat/mshy_beta?mode=anonymous');
     expect(byText(host, 'Anonymous')?.getAttribute('aria-label')).toBe('Join anonymously');
     expect(byText(host, 'My account')?.getAttribute('href')).toBe('/login?next=%2Fchat%2Fmshy_beta');
     expect(byText(host, 'Anonymous')?.className).toBe(byText(host, 'My account')?.className);
@@ -246,7 +259,7 @@ describe('ConversationLinkCard — actions', () => {
       replies: { 'POST /api/v1/links/mshy_beta/members': { ok: false, status: 500, error: 'boom' } },
     });
     await click(byText(host, 'Bob Kouassi'));
-    expect(buttons(host)).toEqual(['Bob Kouassi']);
+    expect(buttons(host)).toEqual(['Anonymous', 'Bob Kouassi']);
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('Could not join. Try again.');
   });
 
@@ -270,7 +283,7 @@ describe('ConversationLinkCard — actions', () => {
     const confirm = [...(dialog?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Leave');
     await click(confirm);
     expect(calls().some((call) => call.method === 'POST' && call.path === '/api/v1/conversations/c-beta/leave')).toBe(true);
-    expect(buttons(host)).toEqual(['Bob Kouassi']);
+    expect(buttons(host)).toEqual(['Anonymous', 'Bob Kouassi']);
   });
 });
 
@@ -413,7 +426,7 @@ describe('ConversationLinkCard — les cartes d’une même conversation suivent
     const confirm = [...(dialog?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Leave');
     await click(confirm);
     await settle();
-    expect(buttons(share())).toEqual(['My account']);
+    expect(buttons(share())).toEqual(['Anonymous', 'My account']);
     expect(share().textContent).toContain('7 members');
     expect(direct().querySelector('[data-conversation-card="private"]')).not.toBeNull();
   });

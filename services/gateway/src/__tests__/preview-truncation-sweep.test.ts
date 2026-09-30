@@ -42,7 +42,7 @@ describe('la troncature des aperçus (#8754)', () => {
     ).toEqual([]);
   });
 
-  it('les neuf porteurs tiennent leur import du découpage par point de code', () => {
+  it('les porteurs tiennent leur import du découpage par point de code', () => {
     const sans = PORTEURS.filter(
       (relatif) => !readFileSync(join(RACINE, relatif), 'utf8').includes(IMPORT_ATTENDU),
     );
