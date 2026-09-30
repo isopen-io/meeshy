@@ -14,6 +14,7 @@ import { DEFAULT_RANKING_STATE, withCriterion, withEntityType } from '@/lib/admi
 import { scriptedGateway } from '@/test-support/scripted-transport';
 
 import { ADMIN_RANKING_QUERY_KEY, adminRankingQueryKey, decodeAdminRanking, loadAdminRanking } from './admin-ranking';
+import { estClefNonPersistable } from './souverain';
 
 const USERS = { entityType: 'users', criterion: 'messages_sent', period: '30d' } as const;
 
@@ -225,5 +226,6 @@ describe('loadAdminRanking — la requête et la clé', () => {
   test('la clé est sous le préfixe `admin` (jamais persistée) et porte les quatre choix', () => {
     expect(ADMIN_RANKING_QUERY_KEY[0]).toBe('admin');
     expect(adminRankingQueryKey(DEFAULT_RANKING_STATE)).toEqual(['admin', 'ranking', 'users', 'messages_sent', '30d', 25]);
+    expect(estClefNonPersistable(adminRankingQueryKey(DEFAULT_RANKING_STATE))).toBe(true);
   });
 });

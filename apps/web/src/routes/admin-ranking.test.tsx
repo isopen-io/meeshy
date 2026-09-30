@@ -89,7 +89,7 @@ const podiumText = (host: ParentNode, rank: number) => host.querySelector(`[data
 const rowText = (host: ParentNode, id: string) => host.querySelector(`[data-admin-row="${id}"]`)?.textContent ?? '';
 const select = (host: ParentNode, id: string) => host.querySelector<HTMLSelectElement>(`[data-admin-filter="${id}"]`);
 const optionValues = (host: ParentNode, id: string) => [...(select(host, id)?.options ?? [])].map((choice) => choice.value);
-const normalized = (text: string) => text.replace(/[  ]/g, ' ');
+const normalized = (text: string) => text.replace(/[\u00a0\u202f]/g, ' ');
 
 describe('le podium et le tableau — des noms, jamais des identifiants', () => {
   test('le titre, le sous-titre, le podium des trois premiers et le tableau des suivants', async () => {
@@ -418,6 +418,7 @@ describe('les états dessinés', () => {
     expect(podium(host)).toEqual(['1', '2', '3']);
     expect(host.querySelector('[data-admin-ranking-skeleton]')).toBeNull();
     expect(host.querySelector('tbody')?.getAttribute('aria-busy')).toBe('true');
+    expect(host.querySelector('[data-admin-ranking-podium]')?.getAttribute('aria-busy')).toBe('true');
 
     release(served([servedUserRank(9)]));
     await mounter.settle();

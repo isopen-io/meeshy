@@ -60,14 +60,16 @@ export function RankingPodium({
   views,
   labels,
   showValue,
+  dimmed,
 }: {
   readonly language: InterfaceLanguage;
   readonly views: readonly RankingRowView[];
   readonly labels: RankingLabels;
   readonly showValue: boolean;
+  readonly dimmed: boolean;
 }) {
   return (
-    <section aria-labelledby="admin-ranking-podium" data-admin-ranking-podium className="grid gap-3">
+    <section aria-labelledby="admin-ranking-podium" data-admin-ranking-podium aria-busy={dimmed} className="grid gap-3" style={{ opacity: dimmed ? 0.6 : 1 }}>
       <h2 id="admin-ranking-podium" className="text-title font-semibold" style={{ color: INK }}>
         {translateAdmin(language, 'admin.ranking.podium.title')}
       </h2>

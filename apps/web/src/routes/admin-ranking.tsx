@@ -161,7 +161,7 @@ export function AdminRankingPanel({ language, deps = apiDeps, now = defaultNow }
 
     return (
       <div className="grid gap-6">
-        {podium.length === 0 ? null : <RankingPodium language={language} views={podium} labels={labels} showValue={showValue} />}
+        {podium.length === 0 ? null : <RankingPodium language={language} views={podium} labels={labels} showValue={showValue} dimmed={query.isPlaceholderData} />}
         {rest.length === 0 ? null : (
           <RankingTable
             language={language}
