@@ -254,6 +254,13 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:delete'
   },
+  // #8892 — `viewing:start` : une ouverture de conversation. Le geste est
+  // rare (naviguer d'un fil à l'autre) ; le budget n'arrête que le script.
+  CONVERSATION_VIEWING: {
+    maxRequests: 60,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing'
+  },
   TYPING_INDICATOR: {
     maxRequests: 60,
     windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate

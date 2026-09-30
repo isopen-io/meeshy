@@ -733,16 +733,6 @@ struct ConversationListView: View {
         }
     }
 
-    func storyRingState(for conversation: Conversation) -> StoryRingState {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
-        return storyViewModel.storyRingState(forUserId: userId)
-    }
-
-    func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
-        return statusViewModel.statusForUser(userId: userId)
-    }
-
     // Builds one conversation row. The heavy subtree (swipe actions +
     // context menu + preview) lives in the nominal `ConversationRowItem`
     // struct (ConversationListView+Rows.swift) so it no longer bloats the
@@ -763,6 +753,7 @@ struct ConversationListView: View {
             rowWidth: rowWidth,
             isDragging: draggingConversationId == conversation.id,
             presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
+            isPeerHere: peerIsHere(in: conversation),
             isDark: theme.mode.isDark,
             storyRingState: storyRingState(for: conversation),
             moodStatus: conversationMoodStatus(for: conversation),

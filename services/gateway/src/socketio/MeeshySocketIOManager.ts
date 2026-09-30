@@ -28,6 +28,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../services/location
 import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
+import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -260,6 +261,7 @@ export class MeeshySocketIOManager {
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
+  private conversationViewingHandler!: ConversationViewingHandler;
   private reactionHandler!: ReactionHandler;
   private attachmentReactionHandler!: AttachmentReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
@@ -501,6 +503,15 @@ export class MeeshySocketIOManager {
     this.statusHandler = new StatusHandler({
       prisma: this.prisma,
       statusService: this.statusService,
+      privacyPreferencesService: this.privacyPreferencesService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
+    });
+
+    this.conversationViewingHandler = new ConversationViewingHandler({
+      io: this.io,
+      prisma: this.prisma,
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -1805,6 +1816,22 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.CONVERSATION_LEAVE, async (data) => {
         try { await this.conversationHandler.handleConversationLeave(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] Error:', error); }
+        try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] viewing Error:', error); }
+      });
+
+      // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan.
+      socket.on(CLIENT_EVENTS.VIEWING_START, async (data) => {
+        try { await this.conversationViewingHandler.handleStart(socket, data); } catch (error) { logger.error('[VIEWING_START] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.VIEWING_STOP, async (data) => {
+        try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[VIEWING_STOP] Error:', error); }
+      });
+
+      // Une app passée en arrière-plan n'est plus dans aucune conversation.
+      // `CallEventsHandler` écoute le même événement pour la sonnerie.
+      socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, async (data) => {
+        try { await this.conversationViewingHandler.handleAppState(socket, data); } catch (error) { logger.error('[PRESENCE_APP_STATE] viewing Error:', error); }
       });
 
       this.callEventsHandler.setupCallEvents(
@@ -1954,6 +1981,11 @@ export class MeeshySocketIOManager {
         // partageur, il n'a pas besoin d'une table qui, elle, peut déjà avoir
         // été vidée.
         this.locationHandler.handleSocketDisconnecting(socket.id);
+        // Ici et pas dans `disconnect` pour la même raison : `viewing:stop`
+        // part dans la room de la conversation.
+        void this.conversationViewingHandler.handleSocketDisconnecting(socket.id).catch((error) => {
+          logger.error('viewing handleSocketDisconnecting failed', { error, socketId: socket.id });
+        });
 
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
