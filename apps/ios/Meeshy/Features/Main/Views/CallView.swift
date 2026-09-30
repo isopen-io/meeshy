@@ -184,63 +184,8 @@ struct CallView: View {
             // primary — the "double frame / overlapping layers" bug. After a PiP
             // swap the local feed becomes the primary, so this would duplicate it
             // again. Hence: self-preview background only when NOT connected.
-            if shouldShowSelfPreviewBackground {
-                // §7.7 — self-preview background mirrors only the front camera.
-                LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
-                    .ignoresSafeArea()
-                Color.black.opacity(0.25)
-                    .ignoresSafeArea()
-            } else {
-                callBackground
-            }
-
-            // Content based on state.
-            //
-            // §4.3 — `.reconnecting` keeps the connected layout (peer's last
-            // frame / tiles) instead of blanking to the full-screen connecting
-            // view — the FaceTime/WhatsApp recovery behaviour — gated on
-            // `hasEstablishedMedia` (`showsConnectedLayout`): un ICE restart
-            // PRÉ-établissement passe aussi par `.reconnecting`, et sans média
-            // négocié le layout connecté afficherait un chrono 00:00 mensonger.
-            //
-            // #8735 — `connectedView` est monté à UN SEUL endroit, hors du
-            // `switch` : deux branches en faisaient deux vues pour SwiftUI, et
-            // un simple creux réseau (`.connected` → `.reconnecting`) détruisait
-            // tout le sous-arbre — le (…) ou le mode ouvert se refermait, la
-            // rangée défilée disparaissait sous le doigt.
-            if showsConnectedLayout {
-                connectedView
-            } else {
-                switch callManager.callState {
-                case .ringing(let isOutgoing):
-                    if isOutgoing {
-                        outgoingRingingView
-                    } else {
-                        // Audit P1-16 — pass our own @ObservedObject down so
-                        // SwiftUI reuses the same subscription instead of
-                        // re-creating it on each parent body reval.
-                        IncomingCallView(callManager: callManager)
-                    }
-                case .offering:
-                    // `.offering` = SDP offer émis, en attente de l'answer du
-                    // peer = en attente que l'appelé tape "Accepter" sur CallKit.
-                    // L'utilisateur attend toujours une réponse humaine — afficher
-                    // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
-                    // La transition vers connectingView ne se fait qu'après que
-                    // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
-                    // que le peer a accepté.
-                    outgoingRingingView
-                case .connecting:
-                    connectingView
-                        .background { CallPreviewBackdrop(preview: .shared) }
-                case .connected, .reconnecting:
-                    connectingView
-                case .ended(let reason):
-                    endedView(reason: reason)
-                case .idle:
-                    EmptyView()
-                }
-            }
+            surfaceBackdrop
+            surfaceContent
 
             // Bandeau top — les bannières émergent de la Dynamic Island
             // (IslandEmergingBanner) et se posent SOUS elle, dans la safe area.
@@ -267,14 +212,7 @@ struct CallView: View {
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
             // est retiré (pipeline de capture audio inexistant — voir
             // CallEffectsOverlay), il ne reste que les filtres vidéo.
-            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
-                CallEffectsOverlay(
-                    isExpanded: $showEffectsToolbar,
-                    isVideoEnabled: callManager.isVideoEnabled,
-                    callManager: callManager
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            surfaceEffects
 
             // Minimize-to-PiP affordance. The drag-down gesture on the call
             // view already minimizes video calls (see audio/video layouts),
@@ -283,7 +221,7 @@ struct CallView: View {
             // top-leading chevron covers both modes and is reachable with one
             // hand on any device size.
             if callManager.callState.isActive {
-                topChrome
+                AnyView(topChrome)
             }
         }
         // BORD À BORD sur les quatre côtés. Le `clipShape` du morph PiP (plus
@@ -389,6 +327,95 @@ struct CallView: View {
                 argument: String(localized: "call.a11y.signaling.degraded",
                                 defaultValue: "Connexion au serveur perdue, l'appel continue",
                                 bundle: .main))
+        }
+    }
+
+    // Débordement de pile sur iPhone (2026-09-30, 5 `.ips` `___chkstk_darwin`
+    // dans `closure #1 in CallView.callSurface`) : la fermeture du `ZStack`
+    // réservait la trame de TOUTES ses branches à la fois, au-delà du 1 Mo de
+    // pile du fil principal d'un appareil (le simulateur en a 8 et ne le voit
+    // pas). Chaque bloc est effacé à sa DÉCLARATION : la fermeture ne porte
+    // plus que des `AnyView`, et chaque corps ne vit que le temps de sa
+    // propre évaluation.
+    private var surfaceBackdrop: AnyView { AnyView(surfaceBackdropBody) }
+
+    @ViewBuilder
+    private var surfaceBackdropBody: some View {
+        if shouldShowSelfPreviewBackground {
+            // §7.7 — self-preview background mirrors only the front camera.
+            LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
+                .ignoresSafeArea()
+            Color.black.opacity(0.25)
+                .ignoresSafeArea()
+        } else {
+            callBackground
+        }
+    }
+
+    private var surfaceContent: AnyView { AnyView(surfaceContentBody) }
+
+    @ViewBuilder
+    private var surfaceContentBody: some View {
+        // Content based on state.
+        //
+        // §4.3 — `.reconnecting` keeps the connected layout (peer's last
+        // frame / tiles) instead of blanking to the full-screen connecting
+        // view — the FaceTime/WhatsApp recovery behaviour — gated on
+        // `hasEstablishedMedia` (`showsConnectedLayout`): un ICE restart
+        // PRÉ-établissement passe aussi par `.reconnecting`, et sans média
+        // négocié le layout connecté afficherait un chrono 00:00 mensonger.
+        //
+        // #8735 — `connectedView` est monté à UN SEUL endroit, hors du
+        // `switch` : deux branches en faisaient deux vues pour SwiftUI, et
+        // un simple creux réseau (`.connected` → `.reconnecting`) détruisait
+        // tout le sous-arbre — le (…) ou le mode ouvert se refermait, la
+        // rangée défilée disparaissait sous le doigt.
+        if showsConnectedLayout {
+            connectedView
+        } else {
+            switch callManager.callState {
+            case .ringing(let isOutgoing):
+                if isOutgoing {
+                    outgoingRingingView
+                } else {
+                    // Audit P1-16 — pass our own @ObservedObject down so
+                    // SwiftUI reuses the same subscription instead of
+                    // re-creating it on each parent body reval.
+                    IncomingCallView(callManager: callManager)
+                }
+            case .offering:
+                // `.offering` = SDP offer émis, en attente de l'answer du
+                // peer = en attente que l'appelé tape "Accepter" sur CallKit.
+                // L'utilisateur attend toujours une réponse humaine — afficher
+                // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
+                // La transition vers connectingView ne se fait qu'après que
+                // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
+                // que le peer a accepté.
+                outgoingRingingView
+            case .connecting:
+                connectingView
+                    .background { CallPreviewBackdrop(preview: .shared) }
+            case .connected, .reconnecting:
+                connectingView
+            case .ended(let reason):
+                endedView(reason: reason)
+            case .idle:
+                EmptyView()
+            }
+        }
+    }
+
+    private var surfaceEffects: AnyView { AnyView(surfaceEffectsBody) }
+
+    @ViewBuilder
+    private var surfaceEffectsBody: some View {
+        if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
+            CallEffectsOverlay(
+                isExpanded: $showEffectsToolbar,
+                isVideoEnabled: callManager.isVideoEnabled,
+                callManager: callManager
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

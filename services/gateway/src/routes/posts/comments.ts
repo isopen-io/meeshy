@@ -26,6 +26,7 @@ import {
   resolveInteractionTarget,
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
+import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -334,7 +335,7 @@ export function registerCommentRoutes(
               postId: targetPostId,
               commenterId: authContext.registeredUser.id,
               mentionedUserIds,
-              commentExcerpt: parsed.data.content?.slice(0, 100),
+              commentExcerpt: sliceCodePointsOrUndefined(parsed.data.content, 100),
               // Discriminant d'entité → surface ouverte au tap côté client.
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               // Un commentaire n'a pas d'audience propre : il hérite de celle du
@@ -369,8 +370,8 @@ export function registerCommentRoutes(
               commentId: comment.id,
               parentCommentId: parsed.data.parentId,
               replyPreview: parsed.data.content,
-              parentCommentPreview: parentComment.content?.slice(0, 80),
-              postPreview: post?.content?.slice(0, 80),
+              parentCommentPreview: sliceCodePointsOrUndefined(parentComment.content, 80),
+              postPreview: sliceCodePointsOrUndefined(post?.content, 80),
               // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               postCreatedAt: post?.createdAt ?? undefined,
@@ -390,7 +391,7 @@ export function registerCommentRoutes(
             commentId: comment.id,
             commentPreview: parsed.data.content,
             postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-            postPreview: post.content?.slice(0, 80),
+            postPreview: sliceCodePointsOrUndefined(post.content, 80),
             postCreatedAt: post.createdAt ?? undefined,
             postExpiresAt: post.expiresAt ?? undefined,
           }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify post comment failed', { err }));
@@ -405,7 +406,7 @@ export function registerCommentRoutes(
           commentId: comment.id,
           storyAuthorId: post.authorId,
           commenterId: authContext.registeredUser.id,
-          commentExcerpt: parsed.data.content?.slice(0, 100),
+          commentExcerpt: sliceCodePointsOrUndefined(parsed.data.content, 100),
           postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL',
           postCreatedAt: post.createdAt ?? undefined,
           postExpiresAt: post.expiresAt ?? undefined,
@@ -752,8 +753,8 @@ export function registerCommentRoutes(
           commentId,
           commentAuthorId: result.authorId,
           emoji,
-          commentPreview: likedComment?.content?.slice(0, 80),
-          postPreview: likedPost?.content?.slice(0, 80) ?? undefined,
+          commentPreview: sliceCodePointsOrUndefined(likedComment?.content, 80),
+          postPreview: sliceCodePointsOrUndefined(likedPost?.content, 80),
           postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments/:commentId/like]: notify comment like failed', { err }));
       }
