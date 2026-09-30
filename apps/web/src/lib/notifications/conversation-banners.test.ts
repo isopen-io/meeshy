@@ -48,13 +48,13 @@ describe('clearConversationBanners — le fil lu quitte la barre de notification
   });
 
   test('sans barre accessible, ou une barre qui échoue, rien ne lève', async () => {
-    await expect(clearConversationBanners('conv-1', null)).resolves.toBeUndefined();
+    expect(await clearConversationBanners('conv-1', null)).toBeUndefined();
     const failing: BannerTray<Entry> = {
       list: () => Promise.reject(new Error('refused')),
       tagOf: (entry) => entry.tag,
       remove: () => Promise.reject(new Error('refused')),
     };
-    await expect(clearConversationBanners('conv-1', failing)).resolves.toBeUndefined();
+    expect(await clearConversationBanners('conv-1', failing)).toBeUndefined();
   });
 });
 
@@ -97,7 +97,7 @@ describe('workerTray — la barre du web passe par le service worker', () => {
   });
 
   test('sans service worker inscrit, rien ne se ferme', async () => {
-    await expect(clearConversationBanners('conv-1', workerTray(() => Promise.resolve(null)))).resolves.toBeUndefined();
+    expect(await clearConversationBanners('conv-1', workerTray(() => Promise.resolve(null)))).toBeUndefined();
   });
 });
 
