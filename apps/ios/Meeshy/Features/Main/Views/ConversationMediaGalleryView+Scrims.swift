@@ -27,15 +27,20 @@ import MeeshyUI
 //  légende, sur la story F7, se lisait sur un bas d'écran fondu au noir sur
 //  toute la largeur.
 //
-//  ## Ce qu'il a maintenant : le voile du SDK, partagé avec la story
+//  ## Ce qu'il a maintenant : le composant de la story, tel quel
 //
-//  `FullscreenScrims` (MeeshyUI, #8878) — le composant de la story (#6701) remonté
-//  au SDK avec les mêmes valeurs : deux dégradés pleine largeur ancrés au HAUT et
+//  `StoryReaderScrims` (#6701) — deux dégradés pleine largeur ancrés au HAUT et
 //  au BAS DE L'ÉCRAN, `.ignoresSafeArea()`, sourds au doigt, muets pour
 //  VoiceOver, et qui SUIVENT le chrome au même ressort. Rien n'est réécrit :
 //  « partir du fait que le composant est déjà fait » est la directive du
 //  2026-09-17, et elle vaut pour le voile comme elle a valu pour la carte
-//  (`SceneCard`) et pour le sol (`SceneFloorView`).
+//  (`SceneCard`) et pour le sol (`SceneFloorView`). Son dessin vit dans le SDK
+//  (`FullscreenScrims`, #8878), que les visionneuses sans scène montent aussi.
+//
+//  **Son nom garde « StoryReader », et c'est juste** : c'est le voile de la
+//  story qu'on réutilise, comme la CARTE de la story et le SOL de la story. Le
+//  renommer masquerait la seule information que ce montage porte — que la
+//  surface de RÉFÉRENCE est le lecteur de stories.
 
 extension ConversationMediaGalleryView {
 
@@ -65,7 +70,7 @@ extension ConversationMediaGalleryView {
     /// Elle se monte SOUS `overlayLayer` : les contrôles restent au-dessus du
     /// voile — il les détache, il ne les assombrit pas.
     var stageScrimsLayer: some View {
-        FullscreenScrims(
+        StoryReaderScrims(
             topInset: DeviceLayout.safeAreaTop,
             chromeVisible: MediaStageVeil.showsChrome(presentation: stagePresentation,
                                                       overlays: stageOverlays))
