@@ -22,7 +22,7 @@ export type CardMediaFetchDeps = {
   readonly credential: () => Credential | null;
   /** L'origine de la passerelle — `''` derrière le proxy de développement. */
   readonly apiBase: string;
-  readonly documentOrigin: string;
+  readonly documentBase: string;
   /** L'adresse d'une pièce résolue contre la bonne origine — `attachmentSrc`. */
   readonly resolve?: (url: string) => string;
 };
@@ -36,12 +36,12 @@ const originOf = (url: string, base: string): string | null => {
 };
 
 export function cardMediaBlobFetcher(deps: CardMediaFetchDeps): (url: string, id: string) => Promise<Blob | null> {
-  const gateway = originOf(deps.apiBase === '' ? deps.documentOrigin : deps.apiBase, deps.documentOrigin);
+  const gateway = originOf(deps.apiBase === '' ? deps.documentBase : deps.apiBase, deps.documentBase);
   const resolve = deps.resolve ?? attachmentSrc;
   return async (url, id) => {
     const resolved = resolve(url);
-    const absolute = originOf(resolved, deps.documentOrigin) === null ? resolved : new URL(resolved, deps.documentOrigin).href;
-    if (originOf(absolute, deps.documentOrigin) !== gateway) {
+    const absolute = originOf(resolved, deps.documentBase) === null ? resolved : new URL(resolved, deps.documentBase).href;
+    if (originOf(absolute, deps.documentBase) !== gateway) {
       const response = await deps.fetchImpl(absolute, { mode: 'cors', credentials: 'omit' }).catch(() => null);
       return response?.ok === true ? response.blob().catch(() => null) : null;
     }
@@ -61,6 +61,6 @@ export async function fetchCardMediaBlob(url: string, id: string): Promise<Blob 
     fetchImpl: (input, init) => fetch(input, init),
     credential: currentCredential,
     apiBase: apiConfig.base,
-    documentOrigin: window.location.origin,
+    documentBase: document.baseURI,
   })(url, id);
 }
