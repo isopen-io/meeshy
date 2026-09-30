@@ -2,6 +2,8 @@
 import Combine
 import Foundation
 import MeeshySDK
+import MeeshyUI
+import UIKit
 
 /// Déroule une scène de vitrine (#8855) : prépare la session AVANT `checkExistingSession()`,
 /// remplit les vraies bases APRÈS, ouvre l'écran une fois la racine découverte, puis dépose le
@@ -10,6 +12,11 @@ import MeeshySDK
 enum VitrineStage {
     /// L'adresse que montrent les liens partagés : celle de la production, jamais l'hôte local.
     static let originePublique = "https://meeshy.me"
+
+    /// Le temps qu'une transition ou un ressort se pose, une fois le rendu observé.
+    static let pose: Duration = .milliseconds(800)
+
+    static var appareil: VitrineAppareil { UIDevice.current.userInterfaceIdiom == .pad ? .ipad : .iphone }
 
     private static var fixtures: VitrineFixtures?
 
@@ -24,12 +31,17 @@ enum VitrineStage {
             MeeshyConfig.debugWebOriginOverride = originePublique
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
-            servir(f.lienInvitation, pour: scene)
+            servir(f.lienInvitation)
             if scene.ouvreUneSession {
                 try VitrineSession.poser(f.lecteur)
             } else {
                 VitrineSession.retirer()
+                JoinFlowViewModel.debugOnPreviewShown = { VitrineRendu.shared.signaler(.lien) }
                 DeepLinkRouter.shared.pendingDeepLink = .joinLink(identifier: f.lienInvitation.linkId)
+                Task {
+                    await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: nil, appareil: appareil))
+                    await annoncer(scene)
+                }
             }
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » impossible à préparer : \(error)")
@@ -59,13 +71,15 @@ enum VitrineStage {
     }
 
     /// Posté sous le voile du lancement, un ordre d'ouverture n'aurait encore aucun abonné :
-    /// l'écran de la scène s'ouvre une fois le voile parti.
+    /// l'écran de la scène s'ouvre une fois le voile parti, et « prêt » attend son rendu.
     static func ouvrir(apres voile: Published<LaunchSplashController.Phase>.Publisher) {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
         Task {
             guard await attendreLaRacine(voile.values) else { return }
-            montrer(scene, f)
-            marquerPret(scene, apres: .seconds(3))
+            let destination = f.destination(scene)
+            montrer(scene, destination, f)
+            await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: destination?.conversationId, appareil: appareil))
+            await annoncer(scene)
         }
     }
 
@@ -76,22 +90,17 @@ enum VitrineStage {
         return false
     }
 
-    /// Sur la scène « lien », l'accueil a demandé l'aperçu du lien : il est rendu deux secondes après.
-    private static func servir(_ lien: ShareLinkInfo, pour scene: VitrineScene) {
-        ShareLinkService.debugLinkInfoOverride = { identifiant in
-            guard identifiant == lien.linkId else { return nil }
-            if scene == .lien {
-                Task { @MainActor in marquerPret(scene, apres: .seconds(2)) }
-            }
-            return lien
-        }
+    private static func servir(_ lien: ShareLinkInfo) {
+        ShareLinkService.debugLinkInfoOverride = { identifiant in identifiant == lien.linkId ? lien : nil }
     }
 
-    private static func montrer(_ scene: VitrineScene, _ f: VitrineFixtures) {
+    private static func montrer(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) {
         switch scene {
         case .global:
-            guard let global = f.conversations.first(where: { $0.type == "global" }) else { return }
-            NotificationCenter.default.post(name: .navigateToConversation, object: global.toConversation(currentUserId: f.lecteur.id))
+            guard let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }) else {
+                fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
+            }
+            NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
         case .progression:
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
         case .lien:
@@ -99,12 +108,11 @@ enum VitrineStage {
         }
     }
 
-    private static func marquerPret(_ scene: VitrineScene, apres delai: Duration) {
-        Task {
-            try? await Task.sleep(for: delai)
-            try? FileManager.default.createDirectory(at: VitrineLaunch.dossier, withIntermediateDirectories: true)
-            try? Data(scene.rawValue.utf8).write(to: VitrineLaunch.marqueurPret)
-        }
+    /// Le rendu est observé ; « prêt » tombe une fois la pose passée.
+    private static func annoncer(_ scene: VitrineScene) async {
+        try? await Task.sleep(for: pose)
+        try? FileManager.default.createDirectory(at: VitrineLaunch.dossier, withIntermediateDirectories: true)
+        try? Data(scene.rawValue.utf8).write(to: VitrineLaunch.marqueurPret)
     }
 }
 #endif
