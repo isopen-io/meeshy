@@ -101,7 +101,7 @@ export default function CallResumeBanner() {
           backgroundColor: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-success)',
-          boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-success) 45%, transparent), 0 8px 24px rgb(0 0 0 / 0.18)',
+          boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-success) 45%, transparent), var(--shadow-lg)',
         }}
       >
         <span aria-hidden="true" style={{ color: 'var(--color-success)' }}>
@@ -119,7 +119,7 @@ export default function CallResumeBanner() {
         </span>
         <span
           aria-hidden="true"
-          className="ms-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-white"
+          className="ms-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand"
           style={{ height: 32, backgroundColor: 'var(--ios-indigo-600)' }}
         >
           {translate(language, 'callJoin.resume.action')}

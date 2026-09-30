@@ -32,12 +32,12 @@ import { initialsOf } from '@/lib/view/conversation';
  * une personne invitée sonne dans sa tuile, portrait pulsé (#8433).
  */
 
-const TILE = 'rgba(255,255,255,0.06)';
+const TILE = 'var(--color-media-fill)';
 
 export function Portrait({ name, avatar, size, pulse }: { readonly name: string; readonly avatar: string | null; readonly size: number; readonly pulse: boolean }) {
   return (
     <div className="relative grid place-items-center" style={{ width: size + 24, height: size + 24 }}>
-      {pulse ? <span aria-hidden className="absolute inset-0 animate-ping rounded-full motion-reduce:animate-none" style={{ background: 'rgba(255,255,255,0.10)' }} /> : null}
+      {pulse ? <span aria-hidden className="absolute inset-0 animate-ping rounded-full motion-reduce:animate-none" style={{ background: 'var(--color-media-fill)' }} /> : null}
       <Avatar initials={initialsOf(name)} color={colorForName(name)} size={size} {...(avatar === null ? {} : { src: avatar })} />
     </div>
   );

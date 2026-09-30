@@ -16,8 +16,8 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 type SheetCall = Parameters<typeof declineWithReply>[0]['call'];
 
-const INK_2 = 'rgba(255,255,255,0.72)';
-const ROW = 'rgba(255,255,255,0.10)';
+const INK_2 = 'var(--color-on-media-3)';
+const ROW = 'var(--color-media-fill)';
 
 export function CallDeclineSheet({
   call,
@@ -55,14 +55,14 @@ export function CallDeclineSheet({
 
   return (
     <div className="fixed inset-0 z-[220] flex items-end justify-center sm:items-center" data-call-decline="">
-      <button type="button" aria-label={translate(language, 'callDecline.cancel')} tabIndex={-1} onClick={onClose} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.5)' }} />
+      <button type="button" aria-label={translate(language, 'callDecline.cancel')} tabIndex={-1} onClick={onClose} className="absolute inset-0" style={{ background: 'var(--color-scrim)' }} />
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="call-decline-title"
         className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-3 overflow-y-auto rounded-t-card p-4 pb-safe sm:rounded-card"
-        style={{ background: '#1c1a24', color: '#fff' }}
+        style={{ background: 'var(--ios-indigo-950)', color: 'var(--color-on-media)' }}
       >
         <h2 id="call-decline-title" className="text-body font-semibold">
           {translate(language, 'callDecline.title')}
@@ -76,7 +76,7 @@ export function CallDeclineSheet({
                   type="button"
                   onClick={() => reply(text)}
                   className="flex min-h-11 w-full items-center rounded-card px-3 text-start text-body"
-                  style={{ background: ROW, color: '#fff' }}
+                  style={{ background: ROW, color: 'var(--color-on-media)' }}
                   data-call-decline-reply={key}
                 >
                   {text}
@@ -104,7 +104,7 @@ export function CallDeclineSheet({
             maxLength={DECLINE_REPLY_MAX_LENGTH}
             enterKeyHint="send"
             className="min-h-11 w-full rounded-card px-3 text-body"
-            style={{ background: ROW, color: '#fff' }}
+            style={{ background: ROW, color: 'var(--color-on-media)' }}
             data-call-decline-custom=""
           />
           <div className="flex justify-end gap-2">
@@ -115,7 +115,7 @@ export function CallDeclineSheet({
               type="submit"
               disabled={draft.trim().length === 0}
               className="min-h-11 rounded-full px-4 text-body font-semibold disabled:opacity-40"
-              style={{ background: '#ef4444', color: '#fff' }}
+              style={{ background: 'var(--ios-error-strong)', color: 'var(--color-ios-on-brand)' }}
             >
               {translate(language, 'callDecline.custom.send')}
             </button>

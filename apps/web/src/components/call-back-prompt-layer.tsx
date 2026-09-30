@@ -14,8 +14,8 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
  * voix ; « Annuler » oublie le rappel.
  */
 
-const PILL_BG = 'rgba(17,16,24,0.92)';
-const ANSWER = '#22c55e';
+const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
+const ANSWER = 'var(--ios-success)';
 
 export type CallBackPromptPanelProps = {
   readonly request: StartCallRequest;
@@ -35,7 +35,7 @@ export function CallBackPromptPanel({ request, language, onCall, onCancel }: Cal
       role="alertdialog"
       aria-label={question}
       className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
-      style={{ background: PILL_BG, color: '#fff', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
+      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
       data-call-back-prompt={request.media}
     >
       <p className="min-w-0 flex-1 truncate text-body font-semibold">{question}</p>
