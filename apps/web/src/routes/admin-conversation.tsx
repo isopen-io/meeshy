@@ -1,122 +1,283 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { adminIdentityQueryOptions } from '@/lib/api/admin';
+import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
+import { AdminLink } from '@/components/admin/entity-chip';
+import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
+import { AdminPageHeader } from '@/components/admin/page-header';
+import { AdminSectionScreen } from '@/components/admin/section-screen';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { agentAccess } from '@/lib/admin/agent-access';
+import { conversationStateOf, ficheNameOf, sheetConversationOf } from '@/lib/admin/conversation-model';
+import { interpretConversationType, interpretEncryption } from '@/lib/admin/interpret/enums';
+import { personInitials } from '@/lib/admin/interpret/labels';
+import { formatCount } from '@/lib/admin/interpret/numbers';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import type { AdminDeps } from '@/lib/api/admin';
+import { adminConversationFicheKey, loadAdminConversationFiche } from '@/lib/api/admin-conversation-fiche';
+import { ADMIN_CONVERSATIONS_ROOT_KEY } from '@/lib/api/admin-conversations';
+import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { agentAccess } from '@/lib/admin/agent-access';
-import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { useRoute } from '@/lib/router';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { useOnline } from '@/lib/net/online';
+import { useParams } from '@/lib/router';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { AgentConversationControl } from '@/routes/admin-agent-parts';
+import { ConversationMembers } from '@/routes/admin-conversation-members';
+import { ConversationMeta } from '@/routes/admin-conversation-meta';
 import { AdminConversationReading } from '@/routes/admin-conversation-reading';
-import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminConversationSettingsSheet } from '@/routes/admin-conversation-settings-sheet';
+import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
 
 /**
- * **LA LECTURE D'UNE CONVERSATION DE L'INSTANCE** (#6862) — `/adm/conversations/$conversation`.
+ * **LA FICHE D'UNE CONVERSATION** (#6862, #8876) — `/admin/conversations/$conversation`.
  *
- * Directive porteur du 2026-09-16 : « lectures des messages, audio, images
- * associé lorsqu'on est au moins de rang bigboss » — étendue le même jour aux
- * ADMIN, « pour le moment ».
+ * De quoi comprendre la conversation sans quitter la page : qui elle est (son
+ * nom, son type, son état, son chiffrement), ses chiffres (membres, messages,
+ * liens de partage, agent), ses métadonnées INTERPRÉTÉES, ses membres nommés —
+ * puis de quoi agir : changer un rôle, retirer un membre, configurer la
+ * conversation, piloter son agent, et la LIRE.
  *
- * ## CET ÉCRAN N'A PLUS DE RENDU À LUI, ET C'EST LE LOT
+ * ## La lecture souveraine ne dépend pas de la fiche
  *
- * Il en portait un : `Piece()` et `Message()`, des `<li>` plats, sans bulle,
- * sans regroupement, sans citation, sans Prisme — cent lignes qui redisaient
- * de travers ce que le fil sait dire. Ce n'était pas une vue simplifiée : une
- * conversation lue SANS son Prisme n'est pas la même conversation, puisque
- * chaque message y apparaît dans la langue de son auteur plutôt que dans celle
- * du lecteur.
+ * `GET …/messages` n'a besoin que de l'identifiant de la conversation, et son
+ * motif écrit est le seul chemin vers le CONTENU. Si la fiche échoue (panne,
+ * charge illisible), la lecture reste offerte sous l'avis d'erreur : perdre les
+ * métadonnées ne doit pas fermer la seule porte qui montre ce qui s'est dit. Un
+ * 403 ou un 404, eux, ferment tout — rien à lire pour qui n'en a pas le droit,
+ * ou pour une conversation qui n'existe plus.
  *
- * Tout le rendu vit désormais dans `AdminConversationReading`, partagé avec la
- * modale de la fiche d'un membre : **un seul site de rendu, jamais deux**. Ce
- * qui reste ici est ce qui appartient à CET écran — la garde de droits, le
- * cadre, et la réponse à « le prisme de QUI ».
+ * ## Le prisme de QUI, sur cette page
  *
- * ## LE PRISME DE QUI, SUR CET ÉCRAN
+ * Celui de l'ADMINISTRATEUR, seule réponse honnête : cette adresse ouvre une
+ * conversation de la plateforme sans membre administré, donc personne dont on
+ * puisse emprunter la langue. La fenêtre de lecture de la fiche d'un membre, elle,
+ * sert SA langue (`lib/admin/prisme-membre.ts`). Le viewer suit la même logique :
+ * `resolveViewer` rend l'administrateur lui-même.
  *
- * Celui de l'ADMINISTRATEUR, et c'est la seule réponse honnête : cette adresse
- * ouvre une conversation de l'instance, sans membre administré. Il n'y a
- * personne dont on puisse emprunter la langue. La modale de la fiche d'un
- * membre, elle, en a un — et elle sert SA langue (`lib/admin/prisme-membre.ts`).
+ * ## Fail-closed comme l'inventaire
  *
- * Le VIEWER suit la même logique : `resolveViewer` rend l'administrateur
- * lui-même. S'il participe à cette conversation, ses messages restent les
- * siens ; sinon rien n'est « à lui », ce qui est exactement la vérité.
+ * `canManageConversations` ET le rang d'administration (`AdminSectionScreen`) ; un
+ * 403 malgré tout se rend comme un refus, un 404 comme « cette conversation
+ * n'existe plus » — jamais comme une panne.
  */
+const defaultNow = (): Date => new Date();
 
-export default function AdminConversationScreen() {
-  const language = currentInterfaceLanguage();
-  const route = useRoute();
-  const conversationId = String((route.params as Record<string, unknown>).conversation ?? '');
+type ConversationPanelProps = {
+  readonly language: InterfaceLanguage;
+  readonly conversationId: string;
+  readonly deps?: AdminDeps;
+  readonly now?: () => Date;
+};
 
-  const identite = useQuery(adminIdentityQueryOptions(apiDeps));
-  const autorise = visibleAdminSections(identite.data?.permissions ?? null, identite.data?.role).some(
-    (section) => section.id === 'conversations',
-  );
+export function AdminConversationPanel({ language, conversationId, deps = apiDeps, now = defaultNow }: ConversationPanelProps) {
+  const reach = useAdminReach();
+  const online = useOnline();
+  const announcer = useLiveAnnouncer();
+  const queryClient = useQueryClient();
+  const reader = useReaderLanguages();
+  const session = useStore(sessionStore, (state) => state.session);
+  const viewer = resolveViewer({ source: deps.source, session });
+  const [configuring, setConfiguring] = useState(false);
 
-  /**
-   * LE PILOTAGE DE L'AGENT SUR CETTE CONVERSATION (#6733) — un droit DISTINCT
-   * de celui qui ouvre cet écran. `canManageConversations` + rang mène ici ;
-   * `canManageAgent` seul autorise à relancer l'agent. Un administrateur qui
-   * lit sans porter ce droit ne voit donc pas le geste — plutôt qu'un bouton
-   * voué au 403.
-   */
-  const pilotageAgent =
-    agentAccess({
-      permissions: identite.data?.permissions ?? null,
-      role: identite.data?.role,
-      chargement: identite.isPending,
-    }) === 'ouvert';
+  const query = useQuery({
+    queryKey: adminConversationFicheKey(conversationId),
+    queryFn: async ({ signal }) => unwrap(await loadAdminConversationFiche({ ...deps, conversationId, signal })),
+    staleTime: 30_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const fiche = query.data;
 
-  const lecteur = useReaderLanguages();
-  const session = useStore(sessionStore, (etat) => etat.session);
-  const viewer = resolveViewer({ source: apiDeps.source, session });
+  const agentControl =
+    agentAccess({ permissions: reach.permissions, role: reach.role ?? undefined, chargement: reach.status === 'pending' }) === 'ouvert';
 
-  const titre = translateAdmin(language, 'admin.convDetail.title');
-
-  if (identite.isPending) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back="admin">
-        <AdminSkeleton rows={4} />
-      </AdminScreenFrame>
-    );
-  }
-
-  if (!autorise) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back="admin">
-        <AdminDenied language={language} />
-      </AdminScreenFrame>
-    );
-  }
-
-  return (
-    <AdminScreenFrame language={language} title={titre} back="admin" fills>
-      {/* LE MÊME LIBELLÉ HONNÊTE QUE LA SECTION AGENT — `AgentRelaunchControl`
-          est le site UNIQUE du geste et de sa phrase d'effet : deux rédactions
-          du même avertissement divergeraient au premier lot qui n'en relit
-          qu'une. Le bloc ne se peint pas si la conversation n'a pas d'agent
-          configuré (`GET /configs/:id/live` échoue) : il n'y aurait rien à
-          relancer. */}
-      {pilotageAgent ? (
-        <div className="shrink-0 pb-3">
-          <AgentConversationControl conversationId={conversationId} language={language} deps={apiDeps} />
-        </div>
-      ) : null}
+  const listTarget = { kind: 'section', section: 'conversations' } as const;
+  const status = query.error instanceof ApiError ? query.error.status : 0;
+  const reading = (
+    <AdminFicheSection id="reading" title={translateAdmin(language, 'admin.conversation.reading.title')}>
+      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translateAdmin(language, 'admin.conversation.reading.hint')}
+      </p>
       <AdminConversationReading
         conversationId={conversationId}
         language={language}
-        /* AUCUN membre administré ici : le prisme est celui du LECTEUR, et le
-           bandeau « prisme du membre » n'a donc rien à annoncer. */
+        /* AUCUN membre administré ici : le prisme est celui du LECTEUR, et le bandeau « prisme du membre » n'a donc rien à annoncer. */
         prisme="lecteur"
-        readerLanguages={lecteur.languages}
-        readerLocale={lecteur.locale}
+        readerLanguages={reader.languages}
+        readerLocale={reader.locale}
         viewer={viewer}
+        deps={deps}
+        layout="bounded"
       />
-    </AdminScreenFrame>
+    </AdminFicheSection>
+  );
+
+  if (fiche === undefined) {
+    const title = translateAdmin(language, 'admin.convDetail.title');
+    const crumbs = [
+      { label: translateAdmin(language, 'admin.group.exchanges') },
+      { label: translateAdmin(language, 'admin.nav.conversations'), target: listTarget },
+      { label: title },
+    ];
+
+    if (query.isPending) {
+      return (
+        <div className="grid gap-6" aria-busy="true" aria-label={translateAdmin(language, 'admin.conversation.fiche.loading')} data-admin-conversation-loading>
+          <AdminPageHeader language={language} title={title} crumbs={crumbs} />
+          <AdminSkeleton rows={4} />
+        </div>
+      );
+    }
+
+    if (status === 403) return <AdminDeniedInline language={language} />;
+
+    if (status === 404) {
+      return (
+        <AdminEmptyState
+          glyph="chats"
+          title={translateAdmin(language, 'admin.conversation.fiche.notFound')}
+          hint={translateAdmin(language, 'admin.conversation.fiche.notFoundHint')}
+          action={
+            <AdminLink
+              target={listTarget}
+              anchor="back-to-list"
+              className="inline-flex items-center rounded-chip px-5 text-body font-semibold text-white"
+              style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)' }}
+            >
+              {translateAdmin(language, 'admin.conversation.fiche.back')}
+            </AdminLink>
+          }
+        />
+      );
+    }
+
+    return (
+      <div className="grid gap-6" data-admin-conversation-fiche-error>
+        <AdminPageHeader language={language} title={title} crumbs={crumbs} />
+        <AdminErrorState language={language} onRetry={() => void query.refetch()} />
+        {reading}
+      </div>
+    );
+  }
+
+  const clock = now();
+  const name = ficheNameOf(fiche, language);
+  const state = conversationStateOf(fiche, language);
+  const encryption = interpretEncryption(fiche.settings.encryptionMode ?? 'none', language);
+  const typeLabel = interpretConversationType(fiche.type, language).label;
+
+  const stats = [
+    { id: 'members', label: translateAdmin(language, 'admin.conversation.stat.members'), value: formatCount(fiche.memberCount, language) },
+    { id: 'messages', label: translateAdmin(language, 'admin.conversation.stat.messages'), value: formatCount(fiche.messageCount, language) },
+    { id: 'shareLinks', label: translateAdmin(language, 'admin.conversation.stat.shareLinks'), value: formatCount(fiche.shareLinkCount, language) },
+    {
+      id: 'agent',
+      label: translateAdmin(language, 'admin.conversation.stat.agent'),
+      value: translateAdmin(language, fiche.agentEnabled ? 'admin.conversation.stat.agent.on' : 'admin.conversation.stat.agent.off'),
+    },
+  ];
+
+  const relire = () => {
+    void queryClient.invalidateQueries({ queryKey: adminConversationFicheKey(conversationId) });
+    void queryClient.invalidateQueries({ queryKey: ADMIN_CONVERSATIONS_ROOT_KEY });
+  };
+
+  return (
+    <div className="grid gap-6" data-admin-conversation-fiche>
+      <AdminPageHeader
+        language={language}
+        title={name}
+        crumbs={[
+          { label: translateAdmin(language, 'admin.group.exchanges') },
+          { label: translateAdmin(language, 'admin.nav.conversations'), target: listTarget },
+          { label: name },
+        ]}
+      />
+      <AdminOfflineNotice language={language} />
+      <AdminFiche
+        kind="conversation"
+        header={
+          <AdminIdentityHeader
+            language={language}
+            title={name}
+            secondary={fiche.community === null ? typeLabel : `${typeLabel} · ${fiche.community.name}`}
+            {...(fiche.avatar === null
+              ? { glyph: 'chats' as const }
+              : { avatar: { initials: personInitials(name), color: 'var(--color-ios-brand)', src: fiche.avatar } })}
+            badges={
+              <>
+                <AdminInterpretedBadge value={state} />
+                <AdminInterpretedBadge value={encryption} />
+                {fiche.agentEnabled ? <AdminBadge tone="info" glyph="robot">{translateAdmin(language, 'admin.conversation.badge.agent')}</AdminBadge> : null}
+              </>
+            }
+            actions={
+              <button
+                type="button"
+                data-admin-action="configure"
+                disabled={!online}
+                onClick={() => setConfiguring(true)}
+                className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+              >
+                {translateAdmin(language, 'admin.conversation.fiche.configure')}
+              </button>
+            }
+          />
+        }
+        stats={<AdminStatStrip items={stats} />}
+      >
+        {/* Les membres occupent TOUTE la largeur : leur tableau porte les gestes (rôle, retrait), et dans la colonne principale d'une fiche à deux colonnes il n'aurait laissé que 370 px dès 1024 px — les gestes hors de vue, derrière un défilement horizontal. */}
+        <AdminFicheSection id="members" title={translateAdmin(language, 'admin.conversation.members.title')}>
+          <ConversationMembers
+            language={language}
+            conversationId={conversationId}
+            conversationType={fiche.type}
+            deps={deps}
+            online={online}
+            now={clock}
+            announce={announcer.announce}
+          />
+        </AdminFicheSection>
+        {/* La proportion de la fiche du kit (colonne principale + 20 rem de métadonnées), reprise ici pour ce qui suit les membres. */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid min-w-0 content-start gap-6">
+            {reading}
+            {agentControl ? <AgentConversationControl conversationId={conversationId} language={language} deps={deps} onAnnounce={announcer.announce} now={now} /> : null}
+          </div>
+          <aside data-admin-fiche-aside className="grid min-w-0 content-start gap-6">
+            <ConversationMeta language={language} fiche={fiche} now={clock} onAnnounce={announcer.announce} />
+          </aside>
+        </div>
+      </AdminFiche>
+      {configuring ? (
+        <AdminConversationSettingsSheet
+          conversation={sheetConversationOf(fiche)}
+          language={language}
+          deps={deps}
+          onClose={() => setConfiguring(false)}
+          onAnnounce={announcer.announce}
+          onChanged={relire}
+        />
+      ) : null}
+      <AdminAnnouncement text={announcer.text} />
+    </div>
+  );
+}
+
+export default function AdminConversationScreen() {
+  const language = currentInterfaceLanguage();
+  const { conversation: conversationId } = useParams<'/admin/conversations/$conversation'>();
+
+  return (
+    <AdminSectionScreen section="conversations" language={language} title={translateAdmin(language, 'admin.nav.conversations')}>
+      {() => <AdminConversationPanel language={language} conversationId={conversationId} />}
+    </AdminSectionScreen>
   );
 }

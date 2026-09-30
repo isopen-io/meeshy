@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   ADMIN_AGENT_PAGE_SIZE,
+  AGENT_ROOT_KEY,
   agentLiveQueryKey,
   agentOverviewQueryKey,
   agentScanLogQueryKey,
@@ -68,19 +69,23 @@ describe('les clés de requête sont SOUVERAINES — rien ne part sur le disque'
   test('les cinq fabriques descendent du préfixe souverain', () => {
     for (const clef of [
       agentOverviewQueryKey(),
-      agentTrackedQueryKey(1, ''),
+      agentTrackedQueryKey(0, 20, ''),
       agentLiveQueryKey('c1'),
-      agentScanLogsQueryKey(1, ''),
+      agentScanLogsQueryKey(0, 20, '', ''),
       agentScanLogQueryKey('l1'),
     ]) {
       expect(estClefSouveraine(clef)).toBe(true);
+      expect(clef.slice(0, AGENT_ROOT_KEY.length)).toEqual([...AGENT_ROOT_KEY]);
     }
   });
 
-  test('deux pages, deux recherches, deux conversations font DEUX clés distinctes', () => {
-    expect(agentTrackedQueryKey(1, '')).not.toEqual(agentTrackedQueryKey(2, ''));
-    expect(agentTrackedQueryKey(1, 'a')).not.toEqual(agentTrackedQueryKey(1, 'b'));
-    expect(agentScanLogsQueryKey(1, 'c1')).not.toEqual(agentScanLogsQueryKey(1, 'c2'));
+  test('deux pages, deux tailles, deux recherches, deux filtres, deux conversations font DES clés distinctes', () => {
+    expect(agentTrackedQueryKey(0, 20, '')).not.toEqual(agentTrackedQueryKey(20, 20, ''));
+    expect(agentTrackedQueryKey(0, 20, '')).not.toEqual(agentTrackedQueryKey(0, 50, ''));
+    expect(agentTrackedQueryKey(0, 20, 'a')).not.toEqual(agentTrackedQueryKey(0, 20, 'b'));
+    expect(agentScanLogsQueryKey(0, 20, 'error', '')).not.toEqual(agentScanLogsQueryKey(0, 20, 'skipped', ''));
+    expect(agentScanLogsQueryKey(0, 20, '', 'auto')).not.toEqual(agentScanLogsQueryKey(0, 20, '', 'manual'));
+    expect(agentLiveQueryKey('c1')).not.toEqual(agentLiveQueryKey('c2'));
   });
 });
 
@@ -124,7 +129,7 @@ describe('GET /admin/agent/configs — les conversations suivies', () => {
   test('pagine par `page`, JAMAIS par `offset` — sinon la page 2 rend la page 1', async () => {
     const { transport, vues } = transportQui(() => ({ ok: true, data: [], pagination: servedPagination({ total: 0 }) }));
 
-    await loadAgentTracked({ ...deps(transport), page: 3, search: '' });
+    await loadAgentTracked({ ...deps(transport), offset: 2 * ADMIN_AGENT_PAGE_SIZE, limit: ADMIN_AGENT_PAGE_SIZE, search: '' });
 
     expect(vues[0]?.path).toContain('page=3');
     expect(vues[0]?.path).not.toContain('offset=');
@@ -134,7 +139,7 @@ describe('GET /admin/agent/configs — les conversations suivies', () => {
   test('une recherche VIDE n’est pas envoyée — elle ferait varier la clé pour rien', async () => {
     const { transport, vues } = transportQui(() => ({ ok: true, data: [], pagination: servedPagination({ total: 0 }) }));
 
-    await loadAgentTracked({ ...deps(transport), page: 1, search: '   ' });
+    await loadAgentTracked({ ...deps(transport), offset: 0, limit: 20, search: '   ' });
 
     expect(vues[0]?.path).not.toContain('search=');
   });
@@ -146,7 +151,7 @@ describe('GET /admin/agent/configs — les conversations suivies', () => {
       pagination: servedPagination({ total: 57, page: 1, limit: 20, hasMore: true }),
     }));
 
-    const resultat = await loadAgentTracked({ ...deps(transport), page: 1, search: '' });
+    const resultat = await loadAgentTracked({ ...deps(transport), offset: 0, limit: 20, search: '' });
 
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
@@ -174,13 +179,14 @@ describe('GET /admin/agent/configs — les conversations suivies', () => {
       pagination: servedPagination({ total: 1, page: 1, limit: 20, hasMore: false }),
     }));
 
-    const resultat = await loadAgentTracked({ ...deps(transport), page: 1, search: '' });
+    const resultat = await loadAgentTracked({ ...deps(transport), offset: 0, limit: 20, search: '' });
 
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
-    expect(resultat.data.conversations[0]).toEqual({
+    expect(resultat.data.rows[0]).toEqual({
       conversationId: 'c1',
       title: 'Atelier',
+      conversationType: 'group',
       enabled: true,
       isScanning: true,
       currentNode: 'strategist',
@@ -197,11 +203,11 @@ describe('GET /admin/agent/configs — les conversations suivies', () => {
       pagination: servedPagination({ total: 2 }),
     }));
 
-    const resultat = await loadAgentTracked({ ...deps(transport), page: 1, search: '' });
+    const resultat = await loadAgentTracked({ ...deps(transport), offset: 0, limit: 20, search: '' });
 
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
-    expect(resultat.data.conversations.map((c) => c.conversationId)).toEqual(['c2']);
+    expect(resultat.data.rows.map((c) => c.conversationId)).toEqual(['c2']);
   });
 });
 
@@ -213,8 +219,8 @@ describe('GET /admin/agent/configs/:id/live — l’état vivant', () => {
         conversationId: 'c1',
         isScanning: true,
         currentNode: 'generator',
-        analytics: { messagesSent: 4, totalWordsSent: 60, avgConfidence: 0.5, lastResponseAt: null },
-        controlledUsers: [{ userId: 'u1' }],
+        analytics: { messagesSent: 4, totalWordsSent: 60, avgConfidence: 0.5, lastResponseAt: '2026-09-17T10:00:00.000Z' },
+        controlledUsers: [{ userId: 'u1', displayName: 'Awa Diop', systemLanguage: 'fr', confidence: 0.9, locked: false }],
       },
     }));
 
@@ -225,7 +231,57 @@ describe('GET /admin/agent/configs/:id/live — l’état vivant', () => {
     if (!resultat.ok) return;
     expect(resultat.data.isScanning).toBe(true);
     expect(resultat.data.currentNode).toBe('generator');
-    expect(resultat.data.controlledUsersCount).toBe(1);
+    expect(resultat.data.messagesSent).toBe(4);
+    expect(resultat.data.lastResponseAt).toBe('2026-09-17T10:00:00.000Z');
+  });
+
+  test('seule cette lecture NOMME les membres pilotés — et ne garde que ce qu’elle affiche', async () => {
+    const { transport } = transportQui(() => ({
+      ok: true,
+      data: {
+        conversationId: 'c1',
+        controlledUsers: [
+          { userId: 'u1', displayName: 'Awa Diop', username: 'awa', systemLanguage: 'fr', confidence: 0.9, locked: true },
+          { userId: 'u2', displayName: 'jean', systemLanguage: 'en' },
+          { displayName: 'sans identifiant' },
+        ],
+      },
+    }));
+
+    const resultat = await loadAgentLive({ ...deps(transport), conversationId: 'c1' });
+
+    expect(resultat.ok).toBe(true);
+    if (!resultat.ok) return;
+    expect(resultat.data.controlledUsers).toEqual([
+      { userId: 'u1', displayName: 'Awa Diop', username: 'awa', language: 'fr' },
+      { userId: 'u2', displayName: 'jean', username: null, language: 'en' },
+    ]);
+  });
+
+  test('quand le compte n’existe plus, le handler sert l’IDENTIFIANT comme nom : il est jeté, jamais affiché', async () => {
+    const objectId = '0123456789abcdef01234567';
+    const { transport } = transportQui(() => ({
+      ok: true,
+      data: { conversationId: 'c1', controlledUsers: [{ userId: objectId, displayName: objectId, systemLanguage: 'fr' }] },
+    }));
+
+    const resultat = await loadAgentLive({ ...deps(transport), conversationId: 'c1' });
+
+    expect(resultat.ok).toBe(true);
+    if (!resultat.ok) return;
+    expect(resultat.data.controlledUsers[0]?.displayName).toBe(null);
+  });
+
+  test('sans statistiques, pas de chiffres inventés', async () => {
+    const { transport } = transportQui(() => ({ ok: true, data: { conversationId: 'c1', analytics: null } }));
+
+    const resultat = await loadAgentLive({ ...deps(transport), conversationId: 'c1' });
+
+    expect(resultat.ok).toBe(true);
+    if (!resultat.ok) return;
+    expect(resultat.data.messagesSent).toBe(null);
+    expect(resultat.data.lastResponseAt).toBe(null);
+    expect(resultat.data.controlledUsers).toEqual([]);
   });
 });
 
@@ -293,14 +349,19 @@ describe('POST /admin/agent/configs/:id/stop — L’ARRÊT', () => {
 });
 
 describe('GET /admin/agent/scan-logs — le journal des scans', () => {
-  test('pagine par `page` et sait se restreindre à une conversation', async () => {
+  test('pagine par `page` et sait se restreindre à une issue et à un déclencheur — jamais par un filtre vide', async () => {
     const { transport, vues } = transportQui(() => ({ ok: true, data: [], pagination: servedPagination({ total: 0 }) }));
 
-    await loadAgentScanLogs({ ...deps(transport), page: 2, conversationId: 'c1' });
+    await loadAgentScanLogs({ ...deps(transport), offset: 50, limit: 50, outcome: 'error', trigger: 'manual' });
+    await loadAgentScanLogs({ ...deps(transport), offset: 0, limit: 20, outcome: '', trigger: '' });
 
     expect(vues[0]?.path).toContain('page=2');
-    expect(vues[0]?.path).toContain('conversationId=c1');
+    expect(vues[0]?.path).toContain('limit=50');
+    expect(vues[0]?.path).toContain('outcome=error');
+    expect(vues[0]?.path).toContain('trigger=manual');
     expect(vues[0]?.path).not.toContain('offset=');
+    expect(vues[1]?.path).not.toContain('outcome=');
+    expect(vues[1]?.path).not.toContain('trigger=');
   });
 
   test('décode une ligne du journal', async () => {
@@ -324,19 +385,25 @@ describe('GET /admin/agent/scan-logs — le journal des scans', () => {
       pagination: servedPagination({ total: 1, page: 1, limit: 20, hasMore: false }),
     }));
 
-    const resultat = await loadAgentScanLogs({ ...deps(transport), page: 1, conversationId: '' });
+    const resultat = await loadAgentScanLogs({ ...deps(transport), offset: 0, limit: 20 });
 
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
-    expect(resultat.data.logs[0]).toEqual({
+    expect(resultat.data.rows[0]).toEqual({
       id: 'l1',
       conversationId: 'c1',
       title: 'Atelier',
+      conversationType: 'group',
       trigger: 'manual',
       startedAt: '2026-09-17T09:00:00.000Z',
       durationMs: 4200,
       outcome: 'sent',
       messagesSent: 2,
+      reactionsSent: 1,
+      messagesRejected: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      estimatedCostUsd: 0.0123,
     });
   });
 
@@ -347,11 +414,11 @@ describe('GET /admin/agent/scan-logs — le journal des scans', () => {
       pagination: servedPagination({ total: 2 }),
     }));
 
-    const resultat = await loadAgentScanLogs({ ...deps(transport), page: 1, conversationId: '' });
+    const resultat = await loadAgentScanLogs({ ...deps(transport), offset: 0, limit: 20 });
 
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
-    expect(resultat.data.logs.map((l) => l.id)).toEqual(['l2']);
+    expect(resultat.data.rows.map((l) => l.id)).toEqual(['l2']);
   });
 });
 
@@ -384,11 +451,21 @@ describe('GET /admin/agent/scan-logs/:logId — le détail d’un scan', () => {
     if (!resultat.ok) return;
     // Ce que la LIGNE du journal ne porte pas : qui l'agent a joué.
     expect(resultat.data.userIdsUsed).toEqual(['u1', 'u2']);
-    // Et ce que le handler sert EN PLUS n'entre pas : un champ décodé que
-    // personne ne rend est du poids déguisé en feature (voir le doc-comment du
-    // port). `totalInputTokens` et `estimatedCostUsd` sont dans la charge
-    // ci-dessus — ils ne doivent pas ressortir ici.
-    expect(Object.keys(resultat.data)).not.toContain('totalInputTokens');
-    expect(Object.keys(resultat.data)).not.toContain('estimatedCostUsd');
+    // Les jetons et le coût sont DÉCODÉS parce que le détail les rend (et le
+    // détail seul) : un champ décodé que personne ne rend est du poids
+    // déguisé en feature (voir le doc-comment du port).
+    expect(resultat.data.totalInputTokens).toBe(900);
+    expect(resultat.data.totalOutputTokens).toBe(120);
+    expect(resultat.data.estimatedCostUsd).toBe(0.0123);
+  });
+
+  test('un coût non estimé reste `null` — zéro dollar affirmerait un scan gratuit', async () => {
+    const { transport } = transportQui(() => ({ ok: true, data: { id: 'l1', conversationId: 'c1', estimatedCostUsd: null } }));
+
+    const resultat = await loadAgentScanLog({ ...deps(transport), logId: 'l1' });
+
+    expect(resultat.ok).toBe(true);
+    if (!resultat.ok) return;
+    expect(resultat.data.estimatedCostUsd).toBe(null);
   });
 });
