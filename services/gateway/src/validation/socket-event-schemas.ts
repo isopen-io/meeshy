@@ -216,6 +216,12 @@ export const SocketTypingSchema = z.object({
 
 export type SocketTypingData = z.infer<typeof SocketTypingSchema>;
 
+export const SocketViewingSchema = z.object({
+  conversationId: z.string().min(1).max(128),
+});
+
+export type SocketViewingData = z.infer<typeof SocketViewingSchema>;
+
 export const SocketReactionAddSchema = z.object({
   messageId: mongoId,
   emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),

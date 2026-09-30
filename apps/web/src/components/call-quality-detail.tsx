@@ -13,7 +13,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * premier geste.
  */
 
-const PANEL = 'rgba(17,16,24,0.94)';
+const PANEL = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
 
 const measure = (language: InterfaceLanguage, value: number, options: Intl.NumberFormatOptions): string => new Intl.NumberFormat(language, { maximumFractionDigits: 0, ...options }).format(value);
 
@@ -38,7 +38,7 @@ export function CallQualityDetail({ quality, language, onClose, profile = dataPr
     ['call.quality.videoCap', kbps(DATA_PROFILES[profile].videoBitrate)],
   ] as const;
   return (
-    <div role="dialog" aria-label={translate(language, 'call.quality.detail')} className="fixed inset-x-4 z-10 mx-auto max-w-xs rounded-card p-3 shadow-lg" style={{ background: PANEL, color: '#fff', top: 'calc(env(safe-area-inset-top) + 3.5rem)' }} data-call-quality-detail="" data-call-quality-profile={profile}>
+    <div role="dialog" aria-label={translate(language, 'call.quality.detail')} className="fixed inset-x-4 z-10 mx-auto max-w-xs rounded-card p-3 shadow-lg" style={{ background: PANEL, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.5rem)' }} data-call-quality-detail="" data-call-quality-profile={profile}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-body font-semibold">{translate(language, 'call.quality.detail')}</span>
         <button type="button" aria-label={translate(language, 'call.quality.close')} onClick={onClose} className="grid size-11 place-items-center rounded-full" data-call-quality-close="">
@@ -50,7 +50,7 @@ export function CallQualityDetail({ quality, language, onClose, profile = dataPr
       <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-mini">
         {rows.map(([key, value]) => (
           <div key={key} className="contents">
-            <dt style={{ color: 'rgba(255,255,255,0.72)' }}>{translate(language, key)}</dt>
+            <dt style={{ color: 'var(--color-on-media-3)' }}>{translate(language, key)}</dt>
             <dd className="text-end tabular-nums" data-call-quality-row={key}>
               {value}
             </dd>

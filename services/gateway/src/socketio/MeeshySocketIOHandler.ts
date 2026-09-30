@@ -10,6 +10,7 @@ import { MessageTranslationService } from '../services/message-translation/Messa
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { socketIOAdminRoutes } from './socketio-admin-routes';
+import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
@@ -31,6 +32,8 @@ export class MeeshySocketIOHandler {
     // Initialiser Socket.IO avec le serveur HTTP et translationService
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
+    // Les crédits d'engagement annoncent « N (M) 🔥 » au crédité (#8906).
+    setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
 
     // Les deux gestes d'administration vivent dans `socketio-admin-routes.ts`
     // et se MONTENT ici, plutôt que d'être déclarés en ligne. La raison n'est

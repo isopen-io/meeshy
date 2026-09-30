@@ -221,7 +221,7 @@ type RequestState =
   | { readonly phase: 'sending' }
   | { readonly phase: 'sent' };
 
-const FIELD_CLASS = 'w-full rounded-[14px] px-4 text-body focus-visible:outline-2';
+const FIELD_CLASS = 'w-full rounded-field px-4 text-body focus-visible:outline-2';
 
 const FIELD_STYLE = {
   minHeight: 52,

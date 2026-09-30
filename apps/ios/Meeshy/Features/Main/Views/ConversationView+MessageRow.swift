@@ -96,14 +96,14 @@ extension ConversationView {
     // MARK: - Search Bar (below header)
 
     var searchBar: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "magnifyingglass")
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
-                    .font(MeeshyFont.relative(15))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .foregroundColor(theme.textPrimary)
                     .focused($isSearchFocused)
                     .autocorrectionDisabled()
@@ -118,17 +118,17 @@ extension ConversationView {
                         Task { await viewModel.endSearch() }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(16))
+                            .font(MeeshyFont.relative(MeeshyIconSize.md))
                             .foregroundColor(theme.textMuted)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
             )
 
             if viewModel.isSearching {
@@ -141,17 +141,17 @@ extension ConversationView {
                 dismissSearch()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16), tint: Color(hex: accentColor).opacity(0.12))
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(MeeshyOpacity.light))
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 4, y: 2)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     // MARK: - Search Results Banner (filtered-conversation mode)
@@ -164,19 +164,19 @@ extension ConversationView {
     @ViewBuilder
     var searchResultsBanner: some View {
         let count = viewModel.searchResults.count
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: (count == 0 && !viewModel.isSearching) ? "magnifyingglass" : "text.magnifyingglass")
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             Text(searchBannerLabel(count: count, searching: viewModel.isSearching))
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundColor(theme.textSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(.ultraThinMaterial))
-        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-        .padding(.top, 6)
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 3, y: 1)
+        .padding(.top, MeeshySpacing.xsPlus)
     }
 
     private func searchBannerLabel(count: Int, searching: Bool) -> String {
@@ -255,7 +255,7 @@ extension ConversationView {
     func quickReactionBar(for messageId: String) -> some View {
         let topReactions = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultReactionEmojis)
 
-        return VStack(spacing: 6) {
+        return VStack(spacing: MeeshySpacing.xsPlus) {
             quickReactionEmojiStrip(messageId: messageId, emojis: topReactions)
 
             if !overlayState.emojiOnlyMode {
@@ -302,7 +302,7 @@ extension ConversationView {
     }
 
     private func quickReactionActionsRow(messageId: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Répondre"), color: MeeshyColors.indigo300Hex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                     triggerReply(for: msg)
@@ -331,25 +331,25 @@ extension ConversationView {
                 closeReactionBar()
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 4)
         )
         .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 // Doctrine 82i : icône + micro-label figés — bouton d'action compact
                 // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
                 // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: MeeshyIconSize.md, weight: .medium))
                     .foregroundColor(Color(hex: color))
                 Text(label)
                     .font(.system(size: 9, weight: .semibold))
@@ -395,7 +395,7 @@ extension ConversationView {
                     .onTapGesture { closeReactionBar() }
 
                 quickReactionBar(for: messageId)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, placement.inset)
                     .frame(maxWidth: .infinity, alignment: .center)
             }

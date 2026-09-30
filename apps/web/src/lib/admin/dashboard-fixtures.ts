@@ -72,18 +72,18 @@ export const SERVED = {
     { hour: '12h', activity: 7 },
   ],
   distribution: [
-    { name: 'Très actifs', value: 12, color: '#10b981' },
-    { name: 'Actifs', value: 30, color: '#3b82f6' },
-    { name: 'Occasionnels', value: 8, color: '#f59e0b' },
-    { name: 'Inactifs', value: 50, color: '#ef4444' },
+    { name: 'Très actifs', value: 12, color: '#10b981' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'Actifs', value: 30, color: '#3b82f6' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'Occasionnels', value: 8, color: '#f59e0b' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'Inactifs', value: 50, color: '#ef4444' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
   ],
   languages: [
-    { name: 'fr', value: 900, color: '#8b5cf6' },
-    { name: 'en', value: 400, color: '#3b82f6' },
-    { name: 'es', value: 120, color: '#10b981' },
-    { name: 'de', value: 60, color: '#f59e0b' },
-    { name: 'pt', value: 30, color: '#6b7280' },
-    { name: 'it', value: 10, color: '#6b7280' },
+    { name: 'fr', value: 900, color: '#8b5cf6' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'en', value: 400, color: '#3b82f6' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'es', value: 120, color: '#10b981' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'de', value: 60, color: '#f59e0b' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'pt', value: 30, color: '#6b7280' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'it', value: 10, color: '#6b7280' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
   ],
   types: [
     { type: 'text', count: 900, percentage: 90 },

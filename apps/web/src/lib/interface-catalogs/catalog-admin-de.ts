@@ -10,6 +10,7 @@ import classementSupervisionDe from './admin/classement-supervision-de';
 import auditReglagesDe from './admin/audit-reglages-de';
 import personnesDe from './admin/personnes-de';
 import conversationsAgentDe from './admin/conversations-agent-de';
+import engagementScaleDe from './admin/engagement-scale-de';
 
 const de = {
   'admin.role': 'Deine Rolle: {role}',
@@ -49,6 +50,8 @@ const de = {
   'admin.nav.languages.hint': 'Der Zustand des Prismas: Sprachen und übersetzte Paare',
   'admin.nav.agent.hint': 'Den Unterhaltungs-Agenten steuern',
   'admin.nav.settings.hint': 'Ihr Zugriff und die Einstellungen des Bereichs',
+  'admin.nav.engagementScale': 'Punkteskala',
+  'admin.nav.engagementScale.hint': 'Was jede Geste an Punkten einbringt',
   'admin.users.search': 'Konto suchen',
   'admin.users.count': '{count} Konto/Konten',
   'admin.users.unavailable': 'Liste derzeit nicht verfügbar.',
@@ -359,6 +362,7 @@ const de = {
   ...auditReglagesDe,
   ...personnesDe,
   ...conversationsAgentDe,
+  ...engagementScaleDe,
 } satisfies AdminInterfaceCatalog;
 
 export default de;

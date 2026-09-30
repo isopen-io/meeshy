@@ -196,7 +196,7 @@ public struct UnifiedPostComposer: View {
                 }
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "story.post.create", defaultValue: "Create", bundle: .module))
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -286,8 +286,8 @@ public struct UnifiedPostComposer: View {
     private var mentionSuggestions: some View {
         if let query = mentionQuery {
             mentionList(for: query)
-                .background(RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground))
-                .padding(.horizontal, 16)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(theme.inputBackground))
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.opacity)
         }
     }
@@ -310,12 +310,12 @@ public struct UnifiedPostComposer: View {
         // `ConversationSettingsView.visualSection`.
         let mediaPickerLabel = String(localized: "story.post.media", defaultValue: "Média", bundle: .module)
         let mediaPickerColor = theme.textSecondary
-        return VStack(spacing: 12) {
+        return VStack(spacing: MeeshySpacing.md) {
             TextField(String(localized: "story.post.whatOnYourMind", defaultValue: "What's on your mind?", bundle: .module), text: $content, axis: .vertical)
-                .font(.system(size: 16))
+                .font(.system(size: MeeshyFont.calloutSize))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...12)
-                .padding(16)
+                .padding(MeeshySpacing.lg)
 
             mentionSuggestions
 
@@ -326,19 +326,19 @@ public struct UnifiedPostComposer: View {
                 StoryReaderRepresentable(story: story, mute: false)
                     .aspectRatio(SceneShape.aspect, contentMode: .fit)
                     .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal, 16)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .onAppear {
                         autoImportFromRepostSource(story)
                     }
 
                 reprojectionBannerView
 
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     visibilityPicker
                     Spacer()
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             } else {
                 if let image = selectedImage {
                     imagePreview(image)
@@ -346,17 +346,17 @@ public struct UnifiedPostComposer: View {
                     videoPreview(videoURL)
                 }
 
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
                         Label(mediaPickerLabel, systemImage: "photo.on.rectangle")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(mediaPickerColor)
                     }
 
                     visibilityPicker
                     Spacer()
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
         }
     }
@@ -366,7 +366,7 @@ public struct UnifiedPostComposer: View {
     @ViewBuilder
     private var reprojectionBannerView: some View {
         if !reprojectionWarnings.isEmpty {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "rectangle.and.text.magnifyingglass")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(MeeshyColors.warning)
@@ -378,11 +378,11 @@ public struct UnifiedPostComposer: View {
                     .foregroundColor(theme.textSecondary)
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(MeeshyColors.warning.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal, 16)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
+            .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityElement(children: .combine)
         }
     }
@@ -403,31 +403,31 @@ public struct UnifiedPostComposer: View {
     }
 
     private var statusComposer: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             moodEmojiPicker
             TextField(String(localized: "story.post.howFeeling", defaultValue: "How are you feeling?", bundle: .module), text: $content, axis: .vertical)
-                .font(.system(size: 16))
+                .font(.system(size: MeeshyFont.calloutSize))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2...4)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
 
             mentionSuggestions
-            HStack(spacing: 16) {
+            HStack(spacing: MeeshySpacing.lg) {
                 visibilityPicker
                 Spacer()
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.top, 16)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     private var storyPlaceholder: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "camera.fill")
                 .font(.system(size: 40))
                 .foregroundColor(.white.opacity(0.3))
             Text(String(localized: "story.post.tapStoryEditor", defaultValue: "Tap to open Story Editor", bundle: .module))
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -445,8 +445,8 @@ public struct UnifiedPostComposer: View {
                 .resizable()
                 .scaledToFill()
                 .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal, 16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+                .padding(.horizontal, MeeshySpacing.lg)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     showImagePreview = true
@@ -457,12 +457,12 @@ public struct UnifiedPostComposer: View {
                 selectedPhotoItem = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: MeeshyIconSize.xxl))
                     .foregroundColor(.white)
                     .shadow(radius: 4)
             }
-            .padding(.trailing, 24)
-            .padding(.top, 8)
+            .padding(.trailing, MeeshySpacing.xxl)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -470,7 +470,7 @@ public struct UnifiedPostComposer: View {
 
     private var moodEmojiPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ForEach(moodEmojis, id: \.self) { emoji in
                     Button {
                         withAnimation(.spring(response: 0.2)) { moodEmoji = emoji }
@@ -481,13 +481,13 @@ public struct UnifiedPostComposer: View {
                             .scaleEffect(moodEmoji == emoji ? 1.2 : 1)
                             .background(
                                 Circle()
-                                    .fill(moodEmoji == emoji ? Color(hex: "6366F1").opacity(0.2) : Color.clear)
+                                    .fill(moodEmoji == emoji ? MeeshyColors.indigo500.opacity(0.2) : Color.clear)
                                     .frame(width: 50, height: 50)
                             )
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
     }
 
@@ -504,14 +504,14 @@ public struct UnifiedPostComposer: View {
             Button { visibility = "FRIENDS" } label: { Label(String(localized: "story.post.friends", defaultValue: "Friends", bundle: .module), systemImage: "person.2") }
             Button { visibility = "PRIVATE" } label: { Label(String(localized: "story.post.private", defaultValue: "Private", bundle: .module), systemImage: "lock") }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: visibilityIcon)
-                    .font(.system(size: 12))
+                    .font(.system(size: MeeshyIconSize.xs))
                 Text(visibility.capitalized)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
             }
             .foregroundColor(theme.textSecondary)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(Capsule().fill(Color.white.opacity(0.08)))
         }
@@ -565,13 +565,13 @@ public struct UnifiedPostComposer: View {
             }
         } label: {
             Text(String(localized: "story.post.publish", defaultValue: "Post", bundle: .module))
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: MeeshyFont.bodySize, weight: .bold))
                 .foregroundColor(canPublish ? .white : .white.opacity(0.5))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule().fill(canPublish
-                        ? LinearGradient(colors: [Color(hex: "6366F1"), Color(hex: "4338CA")], startPoint: .leading, endPoint: .trailing)
+                        ? LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                         : LinearGradient(colors: [Color.gray.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
                     )
                 )
@@ -600,14 +600,14 @@ public struct UnifiedPostComposer: View {
     private func videoPreview(_ url: URL) -> some View {
         ZStack(alignment: .topTrailing) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(Color.white.opacity(0.05))
                     .frame(height: 200)
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 48))
+                    .font(.system(size: MeeshyIconSize.hero))
                     .foregroundColor(.white.opacity(0.7))
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .contentShape(Rectangle())
             .onTapGesture {
                 showVideoPreview = true
@@ -618,12 +618,12 @@ public struct UnifiedPostComposer: View {
                 selectedPhotoItem = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: MeeshyIconSize.xxl))
                     .foregroundColor(.white)
                     .shadow(radius: 4)
             }
-            .padding(.trailing, 24)
-            .padding(.top, 8)
+            .padding(.trailing, MeeshySpacing.xxl)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 

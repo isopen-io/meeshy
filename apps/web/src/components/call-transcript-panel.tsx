@@ -70,7 +70,7 @@ export function CallTranscriptPanel({ callId, language }: { readonly callId: str
       <ol className="flex flex-col gap-2">
         {lines.map((line) => (
           <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
-            <span className="flex justify-between gap-3 text-[11px] font-semibold" style={muted}>
+            <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
               <span>{line.mine ? translate(language, 'message.author.self') : (line.speakerName ?? translate(language, 'callCaptions.participant'))}</span>
               <span className="tabular-nums">{formatCallClock(line.offsetSec)}</span>
             </span>

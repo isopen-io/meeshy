@@ -223,6 +223,9 @@ const PROGRESSION = [
   'share-network',
   'user-plus',
   'handshake',
+  // Les gestes COMPTÉS du barème (#8906) : une réaction, une pièce jointe.
+  'heart',
+  'paperclip',
 ];
 
 function extract(ids) {
@@ -1057,7 +1060,7 @@ emit({
  *
  * | usage | phosphor |
  * |---|---|
- * | sections du menu | `squares-four` (tableau de bord), `users`, `detective` (anonymes), `handshake` (demandes de contact), `chats`, `users-three` (communautés), `link-simple`, `newspaper`, `flag`, `scroll` (journal), `chart-line`, `trophy`, `target` (suivi), `megaphone`, `heartbeat`, `translate`, `robot`, `gear` |
+ * | sections du menu | `squares-four` (tableau de bord), `users`, `detective` (anonymes), `handshake` (demandes de contact), `chats`, `users-three` (communautés), `link-simple`, `newspaper`, `flag`, `scroll` (journal), `chart-line`, `trophy`, `target` (suivi), `megaphone`, `heartbeat`, `translate`, `robot`, `flame` (barème de points, #8906), `gear` |
  * | entités liées | `user`, `detective`, `handshake`, `chats`, `users-three`, `link-simple`, `newspaper`, `flag`, `target`, `megaphone` |
  * | états (ton) | `check-circle`, `warning`, `warning-circle`, `info`, `prohibit`, `lock`, `lock-open`, `shield-check`, `eye`, `eye-slash`, `hourglass` |
  * | gestes | `pencil-simple`, `trash`, `paper-plane-tilt`, `plus`, `copy`, `arrow-clockwise`, `arrow-square-out`, `download-simple`, `user-minus`, `link-break` |
@@ -1082,6 +1085,7 @@ const ADMIN = [
   'heartbeat',
   'translate',
   'robot',
+  'flame',
   'gear',
   'magnifying-glass',
   'funnel',

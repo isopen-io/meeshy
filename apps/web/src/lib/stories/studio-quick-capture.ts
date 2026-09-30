@@ -58,6 +58,26 @@ export function quickCaptureArmedTap({
 }
 
 /**
+ * **L'APPUI LONG SUR LE VISEUR ARMÉ FILME** (#8849, jumelle de
+ * `ComposerSceneQuickCapture.armedHold` iOS, #8846 — directive porteur
+ * 2026-09-30 : « le longpress à partir de la scène doit déclencher la capture
+ * vidéo après avoir armé l'objectif »). Toucher = photo, tenir = vidéo, sur
+ * la MÊME nappe ; les trois formats filment. Rien ne démarre d'un viseur qui
+ * ne voit pas encore, ni par-dessus une prise ou une photo en cours.
+ */
+export function quickCaptureArmedHold({
+  live,
+  recording,
+  busy,
+}: {
+  readonly live: boolean;
+  readonly recording: boolean;
+  readonly busy: boolean;
+}): 'start-filming' | 'ignore' {
+  return live && !recording && !busy ? 'start-filming' : 'ignore';
+}
+
+/**
  * **UN GESTE, UNE LIGNE, SON ICÔNE** (#8672) — la photo a DEUX lignes depuis
  * #8711 (toucher arme, toucher encore prend), la vidéo une. Un réel n'offre
  * que la vidéo.

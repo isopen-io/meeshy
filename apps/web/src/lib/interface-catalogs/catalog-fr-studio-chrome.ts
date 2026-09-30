@@ -88,7 +88,7 @@ const frStudioChrome = {
   'story.studio.camera.shutter.photo': 'Prendre une photo',
   'story.studio.camera.shutter.start': 'Démarrer l’enregistrement',
   'story.studio.camera.shutter.stop': 'Arrêter l’enregistrement',
-  'story.studio.camera.hint.photo': 'Toucher l’écran : photo · maintenir le déclencheur : vidéo',
+  'story.studio.camera.hint.photo': 'Toucher l’écran : photo · le maintenir : vidéo',
   'story.studio.camera.hint.video': 'Toucher pour filmer · toucher encore pour poser',
   'story.studio.camera.unavailable': 'La caméra n’est pas disponible. Autorisez-la dans les réglages du navigateur.',
   'story.studio.camera.recording': 'Enregistrement en cours',
@@ -120,6 +120,9 @@ const frStudioChrome = {
   'story.studio.background.menu.retake': 'Reprendre une photo',
   'story.studio.background.menu.forward': 'Passer au premier plan',
   'story.studio.background.menu.remove': 'Retirer le fond',
+  'story.studio.background.tools': 'Outils du fond',
+  'story.studio.background.tools.describe': 'Décrire',
+  'story.studio.background.tools.leave': 'Retour à la scène',
   'story.studio.reelSwitch.announcement': 'Publication passée en réel',
 } as const;
 

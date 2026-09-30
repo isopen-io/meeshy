@@ -29,13 +29,13 @@ struct AuthActionButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, MeeshySpacing.lg)
             .background(MeeshyColors.brandPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             .foregroundStyle(.white)
         }
         .disabled(isLoading)
         .accessibilityLabel(title)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
     }
 }

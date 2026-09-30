@@ -89,7 +89,7 @@ export function ContactAccountRow({
                 style={{
                   minHeight: 44,
                   backgroundColor: primary ? 'var(--color-ios-brand)' : 'transparent',
-                  color: primary ? 'white' : 'var(--color-ios-brand)',
+                  color: primary ? 'var(--color-ios-on-brand)' : 'var(--color-ios-brand)',
                   border: primary ? '1px solid transparent' : '1px solid var(--color-ios-brand)',
                 }}
               >

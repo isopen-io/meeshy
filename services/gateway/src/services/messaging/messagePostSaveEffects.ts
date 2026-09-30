@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import type { EngagementActivityOptions } from '../engagement/EngagementService';
+import { memberSignature } from '../engagement/memberSignature';
 import { conversationStatsService } from '../ConversationStatsService';
 import {
   conversationMessageStatsService,
@@ -72,7 +74,7 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement' | 'stickerEngagement';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement' | 'stickerEngagement' | 'attachmentEngagement';
 
 /**
  * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
@@ -86,15 +88,18 @@ export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translati
  *   déduplication par conversation ;
  * - `recordConversationActivity` pour l'axe « conversation distincte »
  *   (#5538, #5539, #5540) — dédupliqué par conversation, cf. son doc-comment.
+ *
+ * Chaque crédit porte la conversation du message (#8906) : c'est elle qui
+ * applique le plafond journalier par conversation et fait avancer « N (M) 🔥 ».
  */
 export interface PostSaveEngagementService {
-  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
+  recordActivity(userId: string, axisKey: EngagementAxisKey, options?: EngagementActivityOptions): Promise<void>;
   recordConversationActivity(
     userId: string,
     axisKey: EngagementAxisKey,
     conversationId: string,
+    options?: { readonly signature?: string },
   ): Promise<void>;
-  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
 }
 
 /**
@@ -323,11 +328,23 @@ export function runMessagePostSaveEffects(params: {
       .then(async () => {
         const conversation = await readConversation();
         if (!conversation) return;
-        await engagementService.recordConversationActivity(
-          senderUserId,
-          conversationEngagementAxis(conversation),
-          message.conversationId
-        );
+        const axisKey = conversationEngagementAxis(conversation);
+        if (axisKey !== 'conversation.private') {
+          await engagementService.recordConversationActivity(senderUserId, axisKey, message.conversationId);
+          return;
+        }
+        // Une conversation privée rapporte une fois par ENSEMBLE de personnes
+        // (#8906) : la même personne, ou le même groupe, ne rapporte plus.
+        const members = await prisma.conversation.findUnique({
+          where: { id: message.conversationId },
+          select: { participants: { where: { isActive: true }, select: { userId: true } } },
+        });
+        const peers = (members?.participants ?? [])
+          .map((participant) => participant.userId)
+          .filter((id): id is string => typeof id === 'string' && id !== senderUserId);
+        await engagementService.recordConversationActivity(senderUserId, axisKey, message.conversationId, {
+          signature: memberSignature(peers),
+        });
       })
       .catch(report('engagement'));
   }
@@ -352,7 +369,9 @@ export function runMessagePostSaveEffects(params: {
           const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
           if (repeated) return;
         }
-        await engagementService.recordActivity(senderUserId, contentAxisKey);
+        await engagementService.recordActivity(senderUserId, contentAxisKey, {
+          conversationId: message.conversationId,
+        });
       })
       .catch(report('contentEngagement'));
   }
@@ -366,8 +385,27 @@ export function runMessagePostSaveEffects(params: {
   if (engagementService && message.senderUserId && message.hasSticker) {
     const senderUserId = message.senderUserId;
     void Promise.resolve()
-      .then(() => engagementService.recordActivity(senderUserId, 'tool.sticker'))
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.sticker', { conversationId: message.conversationId })
+      )
       .catch(report('stickerEngagement'));
+  }
+
+  // Axe « pièce jointe » (#8906) — UNE fois par message portant au moins une
+  // pièce jointe qui n'est pas un audio : le vocal a déjà son axe de contenu
+  // (`content.audio_message`), le compter deux fois paierait le même geste
+  // deux fois. Un sticker n'est jamais une pièce jointe (`metadata.sticker`),
+  // donc un message sticker seul ne crédite pas cet axe.
+  const hasNonAudioAttachment = message.attachmentMimeTypes.some(
+    (mimeType) => resolveAttachmentType(mimeType) !== 'audio'
+  );
+  if (engagementService && message.senderUserId && hasNonAudioAttachment) {
+    const senderUserId = message.senderUserId;
+    void Promise.resolve()
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.attachment', { conversationId: message.conversationId })
+      )
+      .catch(report('attachmentEngagement'));
   }
 }
 

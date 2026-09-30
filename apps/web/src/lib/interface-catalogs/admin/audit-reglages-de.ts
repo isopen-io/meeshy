@@ -44,6 +44,7 @@ const f = {
   'admin.audit.family.agent': 'Agent',
   'admin.audit.family.reports': 'Reports',
   'admin.audit.family.communities': 'Communities',
+  'admin.audit.family.settings': 'Einstellungen',
 
   // ── Audit log: kinds of item ───────────────────────────────────────────────
   'admin.audit.target.User': 'Account',
@@ -162,6 +163,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'A report was removed from the moderation queue.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Report taken on',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'A report was handed to a moderator.',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Punkteskala geändert',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Ein Administrator hat die Punkteskala für Engagement geändert: Punkte pro Vorgang, Multiplikator und Obergrenzen.',
 
   // ── Audit log: the detail sheet ────────────────────────────────────────────
   'admin.audit.detail.action': 'Action',

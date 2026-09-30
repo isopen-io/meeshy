@@ -35,8 +35,8 @@ function MosaicTileMedia({
              et c'est ce que la recette doit pouvoir lire à l'écran plutôt que
              dans le modèle. */
           data-feed-mosaic-caption={item.captionOrigin ?? 'media'}
-          className="absolute inset-x-0 bottom-0 px-2 py-1.5 text-check text-white"
-          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+          className="absolute inset-x-0 bottom-0 px-2 py-1.5 text-check text-on-media"
+          style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' }}
           {...(item.captionLanguage !== undefined ? { lang: item.captionLanguage } : {})}
         >
           {caption}

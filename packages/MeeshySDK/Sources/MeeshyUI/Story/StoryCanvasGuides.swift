@@ -91,17 +91,17 @@ struct SafeZoneOverlay: View {
 
         ZStack {
             if isDragging {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .strokeBorder(style: .storyDashed)
                     .foregroundStyle(MeeshyColors.indigo300.opacity(0.7))
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
 
                 Text(String(localized: "story.canvas.safe_area", defaultValue: "Zone sûre", bundle: .module))
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .font(.system(size: MeeshyFont.microSize, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.85)))
                     .position(x: rect.midX, y: rect.minY - 10)
             }
@@ -159,7 +159,7 @@ struct OutOfBoundsWarningOverlay: View {
 
         ZStack {
             if isOutOfBounds {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .strokeBorder(
                         Color.red.opacity(pulse ? 0.9 : 0.5),
                         lineWidth: pulse ? 2.5 : 1.5
@@ -178,15 +178,15 @@ struct OutOfBoundsWarningOverlay: View {
                     )
                     .transition(.opacity)
 
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     Text(String(localized: "story.canvas.out_of_bounds", defaultValue: "Hors zone visible", bundle: .module))
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .rounded))
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
                         .fill(Color.red.opacity(0.9))

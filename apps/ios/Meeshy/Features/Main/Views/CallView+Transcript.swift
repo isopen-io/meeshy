@@ -19,8 +19,8 @@ extension CallView {
             onToggleOriginal: { toggleOriginal(of: $0) },
             contentPadding: 12
         )
-        .callChromeGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .callChromeGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
     }
 
     // MARK: - Caption lines (#8396)
@@ -207,7 +207,7 @@ extension CallView {
                     Circle()
                         .fill(MeeshyColors.indigo400)
                         .frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Color.black.opacity(0.6), lineWidth: 2))
+                        .overlay(Circle().stroke(Color.black.opacity(0.6), lineWidth: MeeshyBorder.strong))
                         .accessibilityHidden(true)
                 }
             }

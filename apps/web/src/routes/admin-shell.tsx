@@ -335,7 +335,7 @@ function AdminDrawer({
         tabIndex={-1}
         onClick={onClose}
         className="flex-1"
-        style={{ backgroundColor: 'color-mix(in srgb, black 40%, transparent)' }}
+        style={{ backgroundColor: 'var(--color-scrim-soft)' }}
       />
     </div>
   );

@@ -12,8 +12,16 @@
 /// sans quoi le geste s'exécuterait en arrière-plan sans rien montrer.
 enum NotificationDetailCategories {
 
-    static func categories(reply: UNNotificationAction) -> [UNNotificationCategory] {
+    static func categories(reply: UNNotificationAction, markRead: UNNotificationAction) -> [UNNotificationCategory] {
         [
+            // #8859 — un vocal garde les gestes d'un message : l'écoute vit
+            // dans la notification déployée, pas dans un bouton.
+            UNNotificationCategory(
+                identifier: MeeshyNotificationCategory.audio.rawValue,
+                actions: [reply, markRead],
+                intentIdentifiers: [],
+                options: [.customDismissAction]
+            ),
             UNNotificationCategory(
                 identifier: MeeshyNotificationCategory.location.rawValue,
                 actions: [

@@ -108,6 +108,7 @@ import { reportCreationRoutes } from './reports';
 import * as AdminInvitations from './admin/invitations';
 import { analyticsRoutes } from './admin/analytics';
 import { languagesRoutes } from './admin/languages';
+import { engagementScaleAdminRoutes } from './admin/engagement-scale';
 import * as AdminMessages from './admin/messages';
 import { registerContentRoutes } from './admin/content';
 import { registerAdminShareLinkRoutes } from './admin/share-links';
@@ -275,6 +276,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // `admin-rankings`. Une seule entrée : le module enregistre ses quatre
   // fichiers lui-même, pour que la table dise « une surface », pas quatre.
   { name: 'admin-oversight', prefix: `${API_PREFIX}/admin`, module: adminOversightRoutes },
+  // Le barème d'engagement (#8906) — ADMIN/BIGBOSS, lecture et réglage.
+  { name: 'admin-engagement-scale', prefix: `${API_PREFIX}/admin`, module: engagementScaleAdminRoutes },
 
   // ── Utilisateur, annuaire ────────────────────────────────────────────
   { name: 'users', prefix: API_PREFIX, module: userRoutes },

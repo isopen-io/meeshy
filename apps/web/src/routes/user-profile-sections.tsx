@@ -101,7 +101,7 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
               data-profile-signin-cta
               onClick={onSignIn}
               className={`mt-1 grid w-full place-items-center rounded-card px-4 text-body font-semibold ${FOCUS}`}
-              style={{ minHeight: 48, color: '#fff', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
+              style={{ minHeight: 48, color: 'var(--color-ios-on-brand)', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
             >
               {translate(language, 'userProfile.signin.cta')}
             </button>

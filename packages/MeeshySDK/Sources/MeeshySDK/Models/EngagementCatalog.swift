@@ -23,9 +23,14 @@ public enum EngagementAxisKey: String, CaseIterable, Codable, Sendable, Hashable
     case privateConversation = "conversation.private"
     case publicConversation = "conversation.public"
     case communityConversation = "conversation.community"
+    // Créer un groupe (#8906) — une fois par ENSEMBLE de membres.
+    case groupCreated = "conversation.group_created"
     case sticker = "tool.sticker"
     case inAppEdit = "tool.in_app_edit"
     case directPublish = "tool.direct_publish"
+    // Les gestes de CONVERSATION (#8906) — réagir, joindre un fichier.
+    case reaction = "tool.reaction"
+    case attachment = "tool.attachment"
     // Le LIEN SOCIAL (#5766) — ce que l'auteur TISSE, là où les treize
     // premiers axes ne mesuraient que ce qu'il PRODUIT.
     case trackedLink = "social.tracked_link"
@@ -79,7 +84,7 @@ public enum EngagementCatalog {
     /// La garde `progression-layout-mirror-parity` compare les cinq nombres.
     ///
     /// Par FAMILLE et non par axe : c'est ainsi que le TypeScript les décide
-    /// (cinq constantes, dix-sept axes), et un miroir plus fin inventerait une
+    /// (cinq constantes, dix-neuf axes), et un miroir plus fin inventerait une
     /// granularité que la source n'a pas.
     public static let familyWeights: [EngagementAxisFamily: Int] = [
         .content: 9,

@@ -44,7 +44,11 @@ import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
+import { HerePeersContext, useConversationViewing, useHereIn } from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
+import { useLivingMessages } from '@/lib/view/ephemeral-gone';
+import { isMineOf } from '@/lib/view/message';
+import type { Message } from '@/lib/api/types';
 import { useThreadReadingMode } from '@/lib/reading-mode/use-thread-reading-mode';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
@@ -58,6 +62,7 @@ import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
+import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
@@ -293,10 +298,15 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * revue-correction #5813, défaut majeur 5 (voir le doc-comment de
    * `mergeTimeline` pour le scénario qu'une concaténation inverse).
    */
-  const messages = useMemo(
+  const timeline = useMemo(
     () => mergeTimeline(threadData.messages, pending),
     [threadData.messages, pending],
   );
+  /* UN ÉPHÉMÈRE PARTI QUITTE LE FIL (#8900) — pas seulement sa peau : sa
+     rangée, son `aria-label`, sa hauteur virtualisée, et le Résumé qui lit
+     ce même `messages`. La rangée qui brûle reste le temps de l'effet. */
+  const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
+  const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
@@ -388,6 +398,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     readerLanguages,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
   });
+  /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
+  useConversationViewing(conversationId);
+  /* … et chaque avatar d'auteur du fil dit qui l'a ouvert. */
+  const herePeers = useHereIn(conversationId);
 
   /**
    * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
@@ -528,6 +542,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     queryClient,
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
+  /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
+  useEngagementRevalidation(conversationId);
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({
@@ -639,6 +655,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
        par cette racine, qui doit rester exactement haute de `100dvh` pour que
        le contenu puisse transiter sous la bande. */
     <ThreadMediaContext.Provider value={threadMedia}>
+    <HerePeersContext.Provider value={herePeers}>
     <div
       ref={chrome.host}
       className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
@@ -778,6 +795,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             selection={messageMenu.selection}
             onRowTap={messageMenu.onRowTap}
             longPress={messageMenu.longPress}
+            swipeActionsOf={messageMenu.swipeActionsOf}
+            onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
             onReact={messageMenu.onMenuReact}
             onOpenDetail={messageMenu.setDetailFor}
@@ -921,6 +940,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         announce={announcer.announce}
       />
     </div>
+    </HerePeersContext.Provider>
     </ThreadMediaContext.Provider>
   );
 }

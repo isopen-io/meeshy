@@ -48,9 +48,9 @@ export const INVITE_CARD_STYLE = {
 /** L'action primaire — assez sombre aux DEUX bouts pour tenir AA sous du blanc
  * (`#fff` sur violet 600 pur : 4,2:1). `backgroundColor` porte la teinte la plus
  * claire, celle que mesurent les gates (`contrast.mjs` ne lit que la couleur). */
-export const INVITE_ACTION_BACKGROUND = 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, black))';
+export const INVITE_ACTION_BACKGROUND = 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, var(--color-media-backdrop)))';
 export const INVITE_ACTION_FLOOR = 'var(--ios-indigo-600)';
-export const INVITE_OUTLINE_BUTTON = `flex items-center justify-center gap-2 rounded-[14px] px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${SECTION_BRAND_INK}`;
+export const INVITE_OUTLINE_BUTTON = `flex items-center justify-center gap-2 rounded-field px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${SECTION_BRAND_INK}`;
 export const INVITE_OUTLINE_STYLE = {
   minHeight: 46,
   backgroundColor: 'var(--color-ios-card)',
@@ -59,7 +59,7 @@ export const INVITE_OUTLINE_STYLE = {
 } as const;
 const SECTION_TITLE = 'text-check font-extrabold uppercase tracking-[0.1em]';
 const BANNER_GRADIENT =
-  'radial-gradient(circle at 18% 30%, color-mix(in srgb, var(--ios-purple-500) 55%, white) 0, transparent 45%), radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--ios-info) 70%, white) 0, transparent 40%), linear-gradient(135deg, var(--ios-indigo-600) 0%, var(--ios-purple-600) 55%, var(--ios-purple-500) 100%)';
+  'radial-gradient(circle at 18% 30%, color-mix(in srgb, var(--ios-purple-500) 55%, var(--color-on-media)) 0, transparent 45%), radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--ios-info) 70%, var(--color-on-media)) 0, transparent 40%), linear-gradient(135deg, var(--ios-indigo-600) 0%, var(--ios-purple-600) 55%, var(--ios-purple-500) 100%)';
 
 const KIND_KEY: Readonly<Record<InvitationKind, Extract<InviteCatalogKey, `invite.kind.${string}`>>> = {
   direct: 'invite.kind.direct',
@@ -111,7 +111,7 @@ export function InviteHeader({ language, next }: { readonly language: InterfaceL
   return (
     <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-12 md:py-6" lang={language}>
       <span className={`flex items-center gap-2 text-thread font-extrabold ${SECTION_BRAND_INK}`}>
-        <span aria-hidden="true" className="grid size-8 place-items-center rounded-[10px] text-white" style={{ background: 'linear-gradient(135deg, var(--ios-indigo-800), var(--ios-indigo-500))' }}>
+        <span aria-hidden="true" className="grid size-8 place-items-center rounded-tile text-ios-on-brand" style={{ background: 'linear-gradient(135deg, var(--ios-indigo-800), var(--ios-indigo-500))' }}>
           <BrandMark size={20} lineWidth={2.6} />
         </span>
         {translateInvite(language, 'invite.brand')}
@@ -120,7 +120,7 @@ export function InviteHeader({ language, next }: { readonly language: InterfaceL
         <Link
           to="login"
           search={{ next }}
-          className={`grid place-items-center rounded-[12px] px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          className={`grid place-items-center rounded-quote px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
           style={{ minHeight: 44, outlineColor: BRAND }}
         >
           {translateInvite(language, 'invite.exits.signIn')}
@@ -162,7 +162,7 @@ export function InviterBlock({ language, invitation }: { readonly language: Inte
             data-invite-message
             dir="auto"
             aria-label={inviter === null ? undefined : translateInvite(language, 'invite.inviter.message', { name: inviter.name })}
-            className="rounded-[20px] rounded-ss-[6px] px-4 py-3.5 text-body leading-relaxed"
+            className="rounded-hero rounded-ss-[6px] px-4 py-3.5 text-body leading-relaxed"
             style={{ backgroundColor: 'var(--color-ios-card)', color: INK, boxShadow: '0 6px 20px color-mix(in srgb, var(--ios-indigo-900) 10%, transparent)' }}
           >
             {message}
@@ -182,7 +182,7 @@ function GroupLogo({ language, title, avatar }: { readonly language: InterfaceLa
   return (
     <span
       data-invite-logo
-      className="relative -mt-[34px] grid size-[76px] shrink-0 place-items-center overflow-hidden rounded-[22px] md:-mt-10 md:size-[88px] md:rounded-[26px]"
+      className="relative -mt-[34px] grid size-[76px] shrink-0 place-items-center overflow-hidden rounded-field-ios md:-mt-10 md:size-[88px] md:rounded-sheet"
       style={{
         border: '4px solid var(--color-ios-card)',
         background: 'linear-gradient(135deg, var(--ios-indigo-800), var(--ios-indigo-500))',
@@ -190,7 +190,7 @@ function GroupLogo({ language, title, avatar }: { readonly language: InterfaceLa
       }}
     >
       {shown === null ? (
-        <span aria-hidden="true" className="text-section font-extrabold text-white">
+        <span aria-hidden="true" className="text-section font-extrabold text-ios-on-brand">
           {initialsOf(title)}
         </span>
       ) : (
@@ -260,7 +260,7 @@ export function GroupCard({
         <div className="grid gap-2.5 md:flex md:items-center">
           <p
             data-invite-url
-            className={`flex min-w-0 items-center gap-2.5 rounded-[14px] px-3.5 md:flex-1 ${SECTION_BRAND_INK}`}
+            className={`flex min-w-0 items-center gap-2.5 rounded-field px-3.5 md:flex-1 ${SECTION_BRAND_INK}`}
             style={{ minHeight: 48, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))' }}
           >
             <span aria-hidden="true" className="shrink-0">
@@ -291,7 +291,7 @@ export function GroupCard({
 
 function FigureTile({ figure, value, label }: { readonly figure: string; readonly value: string; readonly label: string }) {
   return (
-    <li data-invite-figure={figure} className="grid gap-0.5 rounded-[20px] p-4 md:p-5" style={INVITE_CARD_STYLE}>
+    <li data-invite-figure={figure} className="grid gap-0.5 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
       <strong className="text-screen font-extrabold tracking-tight" style={{ color: INK }}>
         {value}
       </strong>
@@ -323,7 +323,7 @@ export function InvitationFigures({ language, invitation }: { readonly language:
         )}
       </ul>
       {shares.length === 0 ? null : (
-        <div className="grid gap-3 rounded-[20px] p-4 md:p-5" style={INVITE_CARD_STYLE}>
+        <div className="grid gap-3 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
           <h2 className={`${SECTION_TITLE} ${SECTION_BRAND_INK}`}>
             {translateInvite(language, 'invite.stats.spoken')}
           </h2>
@@ -379,7 +379,7 @@ export function RightsCard({ language, invitation, now }: { readonly language: I
   const placesText =
     places === null ? translateInvite(language, 'invite.places.unlimited') : translateInvite(language, plural(places, 'invite.places.one', 'invite.places.other'), { count: format.format(places) });
   return (
-    <section aria-labelledby="invite-rights" data-invite-rights className="grid gap-2.5 rounded-[20px] p-4 md:p-5" style={INVITE_CARD_STYLE}>
+    <section aria-labelledby="invite-rights" data-invite-rights className="grid gap-2.5 rounded-hero p-4 md:p-5" style={INVITE_CARD_STYLE}>
       <h2 id="invite-rights" className={`${SECTION_TITLE} ${SECTION_BRAND_INK}`}>
         {translateInvite(language, 'invite.rights.title')}
       </h2>
@@ -407,7 +407,7 @@ export function RightsCard({ language, invitation, now }: { readonly language: I
 export function InvitationPending({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <div aria-busy="true" data-invite-pending className="grid w-full gap-4">
-      <span aria-hidden="true" className="block h-16 rounded-[20px]" style={{ backgroundColor: 'var(--color-ios-card)' }} />
+      <span aria-hidden="true" className="block h-16 rounded-hero" style={{ backgroundColor: 'var(--color-ios-card)' }} />
       <span aria-hidden="true" className="block h-72 rounded-[28px]" style={{ backgroundColor: 'var(--color-ios-card)' }} />
       <p className="text-center text-body" style={{ color: INK_2 }}>
         {translateInvite(language, 'invite.loading')}
@@ -418,7 +418,7 @@ export function InvitationPending({ language }: { readonly language: InterfaceLa
 
 export function RefusalBanner({ language, refusal, onRetry }: { readonly language: InterfaceLanguage; readonly refusal: LinkRefusal; readonly onRetry?: () => void }) {
   return (
-    <div role="alert" className="grid w-full gap-3 rounded-[20px] p-4 text-center" style={INVITE_CARD_STYLE}>
+    <div role="alert" className="grid w-full gap-3 rounded-hero p-4 text-center" style={INVITE_CARD_STYLE}>
       <p className="text-body font-semibold" style={{ color: INK }}>
         {refusalText(language, refusal)}
       </p>
@@ -428,7 +428,7 @@ export function RefusalBanner({ language, refusal, onRetry }: { readonly languag
             {translateInvite(language, 'invite.retry')}
           </button>
         )}
-        <Link to="list" className="grid w-full place-items-center rounded-[14px] px-6 font-semibold" style={{ minHeight: 44, color: INK_2 }}>
+        <Link to="list" className="grid w-full place-items-center rounded-field px-6 font-semibold" style={{ minHeight: 44, color: INK_2 }}>
           {translateInvite(language, 'invite.home')}
         </Link>
       </div>

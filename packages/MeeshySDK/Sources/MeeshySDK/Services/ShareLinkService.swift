@@ -22,6 +22,11 @@ public protocol ShareLinkManaging: Sendable {
 
 public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, @unchecked Sendable {
     public static let shared = ShareLinkService()
+    #if DEBUG
+    /// Vitrine App Store (#8855, DEBUG uniquement) : un aperçu de lien fixé, servi sans
+    /// passerelle, pour capturer le VRAI accueil d'un invité. `nil` hors vitrine.
+    nonisolated(unsafe) public static var debugLinkInfoOverride: (@Sendable (String) -> ShareLinkInfo?)?
+    #endif
     private let api: APIClientProviding
 
     init(api: APIClientProviding = APIClient.shared) {
@@ -70,6 +75,9 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
     // MARK: - Get Link Info (public, no auth required)
 
     public func getLinkInfo(identifier: String) async throws -> ShareLinkInfo {
+        #if DEBUG
+        if let info = Self.debugLinkInfoOverride?(identifier) { return info }
+        #endif
         let response: APIResponse<ShareLinkInfo> = try await api.request(
             AnonymousEndpoint.linkByIdentifier(identifier: identifier)
         )

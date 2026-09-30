@@ -10,6 +10,7 @@ import classementSupervisionAr from './admin/classement-supervision-ar';
 import auditReglagesAr from './admin/audit-reglages-ar';
 import personnesAr from './admin/personnes-ar';
 import conversationsAgentAr from './admin/conversations-agent-ar';
+import engagementScaleAr from './admin/engagement-scale-ar';
 
 const ar = {
   'admin.role': 'دورك: {role}',
@@ -49,6 +50,8 @@ const ar = {
   'admin.nav.languages.hint': 'صحة المنشور اللغوي: اللغات والأزواج المترجمة',
   'admin.nav.agent.hint': 'قيادة وكيل المحادثة',
   'admin.nav.settings.hint': 'وصولك وتفضيلات هذا الفضاء',
+  'admin.nav.engagementScale': 'سلّم النقاط',
+  'admin.nav.engagementScale.hint': 'كم نقطة يمنحها كل إجراء',
   'admin.users.search': 'ابحث عن حساب',
   'admin.users.count': '{count} حساب',
   'admin.users.unavailable': 'القائمة غير متاحة حاليًا.',
@@ -359,6 +362,7 @@ const ar = {
   ...auditReglagesAr,
   ...personnesAr,
   ...conversationsAgentAr,
+  ...engagementScaleAr,
 } satisfies AdminInterfaceCatalog;
 
 export default ar;

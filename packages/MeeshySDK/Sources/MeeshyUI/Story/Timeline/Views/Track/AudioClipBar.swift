@@ -133,7 +133,7 @@ public struct AudioClipBar: View, Equatable {
                 muteBadge
             }
             if isSelected {
-                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: MeeshyBorder.strong)
                     .allowsHitTesting(false)
             }
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
@@ -176,19 +176,19 @@ public struct AudioClipBar: View, Equatable {
         let width = geometry.width(for: duration)
         if width >= 44 && !title.isEmpty {
             VStack(spacing: 0) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "waveform")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.white)
                         .accessibilityHidden(true)
                     Text(title)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: VideoClipBar.titleBandHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
@@ -243,10 +243,10 @@ public struct AudioClipBar: View, Equatable {
         // `titleOverlay` (icône waveform + titre) sur les clips ≥ 44 pt.
         Image(systemName: "speaker.slash.fill")
             .font(.caption2)
-            .padding(4)
+            .padding(MeeshySpacing.xs)
             .background(Circle().fill(Color.black.opacity(0.6)))
             .foregroundStyle(Color.white)
-            .padding(4)
+            .padding(MeeshySpacing.xs)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .accessibilityHidden(true)
     }

@@ -18,7 +18,7 @@ import {
  *
  * Deux familles de témoins, et elles ne se mélangent pas :
  *
- * 1. **Le REGISTRE est épinglé** (dix-huit sections, sept groupes, leurs
+ * 1. **Le REGISTRE est épinglé** (dix-neuf sections, sept groupes, leurs
  *    permissions, leurs routes, leur ordre) — c'est la décision de la
  *    spécification, elle ne bouge que par un lot qui la révise.
  * 2. **La VISIBILITÉ se teste sur des registres SYNTHÉTIQUES** — jamais sur
@@ -58,7 +58,7 @@ const TOUTES: AdminPermissions = {
   canManageAgent: true,
 };
 
-describe('le registre des dix-huit sections (spécification § 1.2)', () => {
+describe('le registre des dix-neuf sections (spécification § 1.2)', () => {
   const ligne = (section: AdminSection) => [section.id, section.group, section.permission, section.adminRankOnly === true, section.route];
 
   test('les ids, leur groupe, leur permission, leur rang et leur route, dans l’ordre du menu', () => {
@@ -80,6 +80,7 @@ describe('le registre des dix-huit sections (spécification § 1.2)', () => {
       ['monitoring', 'platform', 'canViewAnalytics', true, 'adminMonitoring'],
       ['languages', 'platform', 'canViewAnalytics', false, 'adminLanguages'],
       ['agent', 'platform', 'canManageAgent', false, 'adminAgent'],
+      ['engagementScale', 'platform', 'canAccessAdmin', true, 'adminEngagementScale'],
       ['settings', 'platform', 'canAccessAdmin', false, 'adminSettings'],
     ]);
   });

@@ -44,6 +44,7 @@ const f = {
   'admin.audit.family.agent': 'Agent',
   'admin.audit.family.reports': 'Reports',
   'admin.audit.family.communities': 'Communities',
+  'admin.audit.family.settings': 'الإعدادات',
 
   // ── Audit log: kinds of item ───────────────────────────────────────────────
   'admin.audit.target.User': 'Account',
@@ -162,6 +163,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'A report was removed from the moderation queue.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Report taken on',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'A report was handed to a moderator.',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'تم تعديل سلّم النقاط',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'عدّل مسؤول سلّم نقاط التفاعل: النقاط لكل عملية والمضاعِف والحدود القصوى.',
 
   // ── Audit log: the detail sheet ────────────────────────────────────────────
   'admin.audit.detail.action': 'Action',

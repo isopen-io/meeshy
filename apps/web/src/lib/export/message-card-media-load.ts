@@ -12,7 +12,10 @@ import type { MessageCardMediaItem } from './message-card-subject';
  * pas de pixels : sa représentation est une loi (`message-card-media.ts`).
  *
  * Chargé à la demande avec le peintre ; chaque URL d'objet créée est rendue
- * par `dispose`, appelé à la fermeture de l'atelier.
+ * par `dispose`, appelé à la fermeture de l'atelier. Une pièce visuelle dont
+ * les pixels n'arrivent pas (refusée, introuvable, hors ligne, indécodable)
+ * est NOMMÉE dans `failed` : un cadre vide muet ressemblait à « pas de pièce »
+ * (#8901).
  */
 
 export type CardMediaDeps = {
@@ -27,6 +30,8 @@ export type CardMediaDeps = {
 
 export type LoadedCardSources = {
   readonly sources: readonly (CardSource | null)[];
+  /** Les pièces VISUELLES dont les pixels ne sont pas arrivés — l'atelier le dit et offre de réessayer (#8901). */
+  readonly failed: readonly string[];
   readonly dispose: () => void;
 };
 
@@ -95,8 +100,10 @@ export async function loadCardSources(items: readonly MessageCardMediaItem[], de
     return videoAt(toUrl(blob), deps.doc, 0, timeoutMs);
   };
   const sources = await Promise.all(items.map((item) => one(item).catch(() => null)));
+  const failed = items.filter((item, index) => item.card.kind !== 'audio' && sources[index] === null).map((item) => item.id);
   return {
     sources,
+    failed,
     dispose: () => {
       for (const url of urls.splice(0)) deps.revokeObjectURL(url);
     },

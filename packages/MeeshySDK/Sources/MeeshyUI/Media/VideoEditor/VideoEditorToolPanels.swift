@@ -43,22 +43,22 @@ struct VideoEditorBand: View {
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(theme.textMuted.opacity(0.5))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
                 .frame(width: 40, height: 5)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+                .padding(.top, MeeshySpacing.sm)
+                .padding(.bottom, MeeshySpacing.xs)
 
             content
-                .padding(.bottom, 12)
+                .padding(.bottom, MeeshySpacing.md)
         }
         .frame(maxWidth: .infinity)
         .background(
             theme.glassMaterial,
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(accent.opacity(0.18), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
+                .strokeBorder(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
         )
         .gesture(
             DragGesture(minimumDistance: 24)
@@ -77,7 +77,7 @@ struct VideoEditorBand: View {
             VideoEditorTileGrid(viewModel: viewModel, category: category)
                 .transition(.opacity)
         case .tool(let tool):
-            VStack(spacing: 10) {
+            VStack(spacing: MeeshySpacing.smPlus) {
                 VideoEditorToolHeader(viewModel: viewModel, tool: tool)
                 VideoEditorToolController(viewModel: viewModel, tool: tool)
             }
@@ -97,13 +97,13 @@ struct VideoEditorTileGrid: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ForEach(viewModel.tools(for: category)) { tool in
                     tile(tool)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.xsPlus)
         }
     }
 
@@ -111,25 +111,25 @@ struct VideoEditorTileGrid: View {
         Button {
             viewModel.selectTool(tool)
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 ZStack {
-                    Circle().fill(accent.opacity(0.22)).frame(width: 38, height: 38)
+                    Circle().fill(accent.opacity(0.22)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: tool.icon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundStyle(accent)
                 }
                 Text(VideoEditorLabels.title(for: tool))
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
             .frame(width: 78, height: 78)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(accent.opacity(0.12))
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                    .fill(accent.opacity(MeeshyOpacity.light))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(accent.opacity(0.3), lineWidth: 0.8)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                            .strokeBorder(accent.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                     )
             )
         }
@@ -149,15 +149,15 @@ struct VideoEditorToolHeader: View {
             Button {
                 viewModel.backToTiles()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "chevron.backward")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                     Text(VideoEditorLabels.title(for: tool))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .foregroundStyle(theme.textPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(theme.glassMaterial, in: Capsule())
             }
             .buttonStyle(.plain)
@@ -168,15 +168,15 @@ struct VideoEditorToolHeader: View {
                 viewModel.dismissPanel()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundStyle(theme.textMuted)
                     .frame(width: 26, height: 26)
                     .background(theme.glassMaterial, in: Circle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xxs)
     }
 }
 
@@ -200,7 +200,7 @@ struct VideoEditorToolController: View {
             case .captions: VideoEditorCaptionsPanel(viewModel: viewModel)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 }
 
@@ -216,26 +216,26 @@ struct EditorChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundStyle(isActive ? Color.white : theme.textPrimary)
-            .padding(.horizontal, 13)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule().fill(
                     isActive
                         ? AnyShapeStyle(MeeshyColors.brandGradient)
-                        : AnyShapeStyle(accent.opacity(0.12))
+                        : AnyShapeStyle(accent.opacity(MeeshyOpacity.light))
                 )
             )
             .overlay(
-                Capsule().strokeBorder(accent.opacity(isActive ? 0 : 0.25), lineWidth: 0.8)
+                Capsule().strokeBorder(accent.opacity(isActive ? 0 : 0.25), lineWidth: MeeshyBorder.hairline)
             )
         }
         .buttonStyle(.plain)
@@ -254,14 +254,14 @@ struct EditorSliderRow: View {
     @Environment(\.theme) private var theme
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: MeeshySpacing.xxs) {
             HStack {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundStyle(theme.textSecondary)
                 Spacer()
                 Text(valueText)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
                     .foregroundStyle(theme.textPrimary)
             }
             Slider(value: $value, in: range) { editing in
@@ -308,10 +308,10 @@ struct TrimController: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             readout
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 anchorButton(
                     title: "Début ici",
                     systemImage: "arrow.right.to.line",
@@ -337,16 +337,16 @@ struct TrimController: View {
 
             if !viewModel.mode.isPro {
                 Text(String(localized: "videoEditor.trim.handles_hint", defaultValue: "Astuce : poignées disponibles sur la timeline principale.", bundle: .module))
-                    .font(.system(size: 10))
+                    .font(.system(size: MeeshyFont.captionSize))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private var readout: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             readoutCell(label: "Début", value: doc.inPoint)
             readoutDivider
             readoutCell(label: "Durée", value: trimDuration, color: accent)
@@ -357,12 +357,12 @@ struct TrimController: View {
     }
 
     private func readoutCell(label: String, value: Double, color: Color? = nil) -> some View {
-        VStack(spacing: 2) {
+        VStack(spacing: MeeshySpacing.xxs) {
             Text(label)
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                 .foregroundStyle(theme.textMuted)
             Text(timeString(value))
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.system(size: MeeshyFont.subheadSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(color ?? theme.textPrimary)
         }
         .frame(maxWidth: .infinity)
@@ -370,25 +370,25 @@ struct TrimController: View {
 
     private var readoutDivider: some View {
         Rectangle()
-            .fill(theme.textMuted.opacity(0.25))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.medium))
             .frame(width: 1, height: 22)
     }
 
     private func anchorButton(title: String, systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(enabled
                           ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(accent.opacity(0.15)))
+                          : AnyShapeStyle(accent.opacity(MeeshyOpacity.light)))
             )
             .foregroundStyle(enabled ? Color.white : theme.textMuted)
         }
@@ -410,11 +410,11 @@ struct TrimController: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 .frame(width: 42, height: 38)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(accent.opacity(0.15))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                        .fill(accent.opacity(MeeshyOpacity.light))
                 )
                 .foregroundStyle(theme.textPrimary)
         }
@@ -437,20 +437,20 @@ struct SplitController: View {
     private var accent: Color { Color(hex: viewModel.accentColor) }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Button {
                 viewModel.splitAtPlayhead()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "scissors")
                     Text(String(localized: "videoEditor.split.at_playhead", defaultValue: "Diviser au point de lecture", bundle: .module))
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                         .fill(MeeshyColors.brandGradient)
                 )
             }
@@ -458,7 +458,7 @@ struct SplitController: View {
 
             if viewModel.document.segments.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         ForEach(Array(viewModel.document.segments.enumerated()), id: \.element.id) { index, segment in
                             segmentCard(index: index, segment: segment)
                         }
@@ -466,25 +466,25 @@ struct SplitController: View {
                 }
             } else {
                 Text(String(localized: "videoEditor.split.instructions", defaultValue: "Placez la tête de lecture puis divisez la vidéo en segments.", bundle: .module))
-                    .font(.system(size: 11))
+                    .font(.system(size: MeeshyFont.footnoteSize))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func segmentCard(index: Int, segment: VideoSegment) -> some View {
         let isSelected = viewModel.selectedSegmentID == segment.id
         let count = viewModel.document.segments.count
-        return VStack(spacing: 5) {
+        return VStack(spacing: MeeshySpacing.xs) {
             Text(String(localized: "videoEditor.split.segment", defaultValue: "Segment \(index + 1)", bundle: .module))
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(format: "%.1fs", segment.playbackDuration))
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(size: MeeshyFont.captionSize, design: .monospaced))
                 .foregroundStyle(theme.textMuted)
-            HStack(spacing: 11) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 if index > 0 {
                     cardButton("arrow.left", tint: theme.textSecondary) {
                         viewModel.moveSegment(segment.id, to: index - 1)
@@ -505,13 +505,13 @@ struct SplitController: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                 .fill(accent.opacity(isSelected ? 0.25 : 0.1))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                         .strokeBorder(accent.opacity(isSelected ? 0.7 : 0.2), lineWidth: 1)
                 )
         )
@@ -524,7 +524,7 @@ struct SplitController: View {
     private func cardButton(_ icon: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundStyle(tint)
         }
         .buttonStyle(.plain)
@@ -548,7 +548,7 @@ struct SpeedController: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             if viewModel.mode.isPro {
                 Text(viewModel.selectedSegment == nil
                      ? "Toute la vidéo"
@@ -558,7 +558,7 @@ struct SpeedController: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(presets, id: \.self) { speed in
                         EditorChip(
                             title: speedLabel(speed),
@@ -570,10 +570,10 @@ struct SpeedController: View {
                         }
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func applySpeed(_ speed: Double) {
@@ -600,9 +600,9 @@ struct CropController: View {
     private let ratios: [CropRatio] = [.free, .square, .ratio4x3, .ratio16x9, .ratio9x16]
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(ratios, id: \.self) { ratio in
                         EditorChip(
                             title: ratio == .free ? "Original" : ratio.label,
@@ -614,16 +614,16 @@ struct CropController: View {
                         }
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
             if let recommended = viewModel.context.preferredCropRatio {
                 Text(String(localized: "videoEditor.captions.recommended", defaultValue: "Recommandé pour \(viewModel.context.contextLabel) : \(recommended.label)", bundle: .module))
-                    .font(.system(size: 10))
+                    .font(.system(size: MeeshyFont.captionSize))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func isActive(_ ratio: CropRatio) -> Bool {
@@ -655,17 +655,17 @@ struct RotateController: View {
     private var accent: Color { Color(hex: viewModel.accentColor) }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             rotateButton(systemImage: "rotate.left", label: "Gauche") {
                 viewModel.apply(viewModel.document.rotatedCounterClockwise())
                 HapticFeedback.light()
             }
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 Text("\(viewModel.document.rotationQuarterTurns * 90)°")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                 Text(String(localized: "videoEditor.rotation", defaultValue: "Rotation", bundle: .module))
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
             }
             .frame(maxWidth: .infinity)
@@ -673,23 +673,23 @@ struct RotateController: View {
                 viewModel.rotate()
             }
         }
-        .padding(.vertical, 6)
-        .padding(.bottom, 4)
+        .padding(.vertical, MeeshySpacing.xsPlus)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func rotateButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
             }
             .foregroundStyle(accent)
             .frame(width: 84, height: 60)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(accent.opacity(0.14))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                    .fill(accent.opacity(MeeshyOpacity.light))
             )
         }
         .buttonStyle(.plain)
@@ -725,14 +725,14 @@ struct FilterController: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 9) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(VideoFilterPreset.allCases, id: \.self) { preset in
                     filterTile(preset)
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, MeeshySpacing.xxs)
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
         .onAppear { refreshPreviewsIfNeeded() }
         .adaptiveOnChange(of: viewModel.filmstrip.count) { _, _ in
             refreshPreviewsIfNeeded()
@@ -750,16 +750,16 @@ struct FilterController: View {
         Button {
             viewModel.setFilter(preset)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 tileThumbnail(preset, isActive: isActive)
                     .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                             .strokeBorder(accent, lineWidth: isActive ? 2 : 0)
                     )
                 Text(preset.displayName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                     .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
             }
         }
@@ -778,16 +778,16 @@ struct FilterController: View {
                 .overlay(
                     isActive
                         ? Color.clear
-                        : Color.black.opacity(0.15)
+                        : Color.black.opacity(MeeshyOpacity.light)
                 )
         } else {
             // Filmstrip pas encore prêt : on retombe sur l'icône SF pour ne
             // pas laisser un tile noir le temps de l'extraction des frames.
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(accent.opacity(isActive ? 0.3 : 0.12))
                 Image(systemName: preset.iconName)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .foregroundStyle(isActive ? accent : theme.textSecondary)
             }
         }
@@ -803,7 +803,7 @@ struct AdjustController: View {
     private var accent: Color { Color(hex: viewModel.accentColor) }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             EditorSliderRow(
                 label: "Luminosité",
                 valueText: String(format: "%+.0f", viewModel.document.color.brightness * 100),
@@ -829,7 +829,7 @@ struct AdjustController: View {
                 onCommit: { viewModel.commitPreview() }
             )
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func binding(_ keyPath: WritableKeyPath<VideoColorAdjustment, Double>) -> Binding<Double> {
@@ -853,16 +853,16 @@ struct AudioController: View {
     private var accent: Color { Color(hex: viewModel.accentColor) }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Text(String(localized: "videoEditor.audio.sound", defaultValue: "Son", bundle: .module))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundStyle(theme.textSecondary)
                 Spacer()
                 Button {
                     viewModel.toggleMute()
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: viewModel.document.audio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         Text(viewModel.document.audio.isMuted ? "Muet" : "Actif")
                     }
@@ -897,7 +897,7 @@ struct AudioController: View {
                 onCommit: { viewModel.commitPreview() }
             )
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func binding(_ keyPath: WritableKeyPath<VideoAudioSettings, Double>) -> Binding<Double> {

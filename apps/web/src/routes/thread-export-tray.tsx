@@ -123,11 +123,11 @@ function Tile({
       type="button"
       aria-pressed={pressed}
       onClick={onClick}
-      className="grid shrink-0 place-items-center gap-1 rounded-[16px] px-2 py-2 transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+      className="grid shrink-0 place-items-center gap-1 rounded-card px-2 py-2 transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
       style={{ minWidth: wide ? 80 : 72, minHeight: 72, ...(pressed ? PRESSED : REST) }}
     >
       {children}
-      <span className="text-[11px] font-semibold leading-tight">{label}</span>
+      <span className="text-mini font-semibold leading-tight">{label}</span>
     </button>
   );
 }
@@ -193,7 +193,7 @@ export function ExportTray(props: ExportTrayProps) {
   const panelLayout = STACKED.includes(tab) ? 'max-h-[38dvh] flex-col items-stretch overflow-y-auto' : WRAPPED.includes(tab) ? 'flex-wrap' : 'overflow-x-auto';
 
   return (
-    <div className="glass mx-3 rounded-[28px] pt-3" style={{ boxShadow: '0 10px 30px color-mix(in srgb, black 18%, transparent)' }}>
+    <div className="glass mx-3 rounded-[28px] pt-3" style={{ boxShadow: '0 10px 30px color-mix(in srgb, var(--color-media-backdrop) 18%, transparent)' }}>
       <div className="flex min-h-[28px] items-center justify-between gap-3 px-4 pb-2">
         <p className="text-caption font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {tab === 'language' ? translateExportCard(language, 'export.card.language') : translateExportCard(language, TAB_LABEL[tab])}
@@ -219,11 +219,11 @@ export function ExportTray(props: ExportTrayProps) {
               type="button"
               data-export-gallery=""
               onClick={props.onGallery}
-              className="grid shrink-0 place-items-center rounded-[14px] px-3 text-center focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="grid shrink-0 place-items-center rounded-field px-3 text-center focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ minWidth: 76, minHeight: 72, ...REST }}
             >
               <span className="text-title font-bold leading-none">{ALL_TEMPLATE_IDS.length}</span>
-              <span className="text-[11px] font-semibold">{translateExportCard(language, 'export.card.gallery.open')}</span>
+              <span className="text-mini font-semibold">{translateExportCard(language, 'export.card.gallery.open')}</span>
             </button>
           </>
         ) : null}
@@ -303,7 +303,7 @@ export function ExportTray(props: ExportTrayProps) {
             data-export-tab={id}
             aria-selected={id === tab}
             onClick={() => props.onTab(id)}
-            className="grid min-w-[44px] flex-1 justify-items-center gap-0.5 rounded-[14px] py-1.5 text-[11px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="grid min-w-[44px] flex-1 justify-items-center gap-0.5 rounded-field py-1.5 text-mini font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 44,
               color: 'var(--color-ios-ink)',

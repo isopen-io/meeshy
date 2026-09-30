@@ -102,6 +102,7 @@ export function flashIntensityOf(value: unknown): number {
 /** Le blanc du sol : plein à 1, un gris lumineux plus bas. */
 export function flashFloorColor(intensity: number): string {
   const level = Math.round(255 * flashIntensityOf(intensity));
+  // harmony-exempt: lumière physique du sol de capture, un gris calculé par intensité
   return `rgb(${level}, ${level}, ${level})`;
 }
 

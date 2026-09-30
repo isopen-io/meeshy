@@ -101,27 +101,31 @@ public struct NotificationToastView: View {
     public var body: some View {
         let banner = presentation
         return Button { onTap?() } label: {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: MeeshySpacing.md) {
                 avatarWithTypeBadge
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                         Text(banner.headline)
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 4)
                         Text(receivedAt, style: .time)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
 
-                    if banner.body != nil || banner.thumbnailURL != nil || banner.reactionBadge != nil {
-                        HStack(alignment: .center, spacing: 8) {
-                            contentPreview(banner)
+                    if banner.body != nil || banner.showsContentTile || banner.reactionBadge != nil {
+                        HStack(alignment: .center, spacing: MeeshySpacing.sm) {
+                            if banner.showsContentTile {
+                                contentPreview(banner)
+                            } else if let badge = banner.reactionBadge {
+                                Text(badge).font(.system(size: MeeshyFont.bodySize))
+                            }
                             if let body = banner.body {
                                 Text(body)
-                                    .font(MeeshyFont.relative(13))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                                     .foregroundColor(theme.textSecondary)
                                     .lineLimit(2)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -130,9 +134,9 @@ public struct NotificationToastView: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .padding(.bottom, 16)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.top, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.lg)
             .overlay(alignment: .bottom) { grabber }
             .background(cardShape.fill(Self.backgroundColor(isDark: isDark).opacity(Self.scrimOpacity(isDark: isDark))))
             .adaptiveGlass(in: cardShape, tint: accentColor.opacity(isDark ? 0.16 : 0.10))
@@ -167,9 +171,9 @@ public struct NotificationToastView: View {
     /// La poignée : dit sans mot que la carte se balaie.
     private var grabber: some View {
         Capsule()
-            .fill(theme.textMuted.opacity(0.45))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
             .frame(width: 36, height: 4)
-            .padding(.bottom, 5)
+            .padding(.bottom, MeeshySpacing.xs)
             .accessibilityHidden(true)
     }
 
@@ -195,18 +199,20 @@ public struct NotificationToastView: View {
                 )
                 .overlay(
                     Image(systemName: notifType.systemIcon)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                         .foregroundColor(.white)
                 )
                 .frame(width: 20, height: 20)
-                .overlay(Circle().stroke(Self.backgroundColor(isDark: isDark), lineWidth: 2))
+                .overlay(Circle().stroke(Self.backgroundColor(isDark: isDark), lineWidth: MeeshyBorder.strong))
                 .offset(x: 3, y: 3)
         }
         .accessibilityHidden(true)
     }
 
-    /// La vignette du contenu visé, ou son icône typée quand il n'y a pas
-    /// d'image — c'est la même case, jamais deux dispositions différentes.
+    /// La vignette du contenu visé, ou l'icône du contenu SOCIAL visé quand sa
+    /// miniature manque — la même case, jamais deux dispositions. Elle n'est
+    /// posée que si `showsContentTile` (#8897) : pour un message, la pastille
+    /// de l'avatar dit déjà le type et le corps servi nomme le média.
     @ViewBuilder
     private func contentPreview(_ banner: NotificationBannerPresentation) -> some View {
         ZStack(alignment: .bottomTrailing) {
@@ -227,7 +233,7 @@ public struct NotificationToastView: View {
                         symbolTile(banner.contentSymbol)
                     }
                     .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
                 } else {
                     symbolTile(banner.contentSymbol)
                 }
@@ -235,8 +241,8 @@ public struct NotificationToastView: View {
 
             if let badge = banner.reactionBadge {
                 Text(badge)
-                    .font(.system(size: 11))
-                    .padding(2)
+                    .font(.system(size: MeeshyFont.footnoteSize))
+                    .padding(MeeshySpacing.xxs)
                     .background(Circle().fill(Self.backgroundColor(isDark: isDark)))
                     .offset(x: 5, y: 4)
             }
@@ -244,14 +250,18 @@ public struct NotificationToastView: View {
         .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
     }
 
-    private func symbolTile(_ symbol: String) -> some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+    /// La case teintée, avec l'icône du contenu social quand il y en a une —
+    /// vide pendant qu'une vraie vignette charge ou si elle échoue.
+    private func symbolTile(_ symbol: String?) -> some View {
+        RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
             .fill(accentColor.opacity(isDark ? 0.24 : 0.13))
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(accentColor)
-            )
+            .overlay {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundColor(accentColor)
+                }
+            }
             .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
     }
 

@@ -47,10 +47,10 @@ export const PAYLOADS: Readonly<Record<string, unknown>> = {
     { hour: '12h', activity: 7 },
   ],
   [adminEndpoints.analyticsUserDistribution]: [
-    { name: 'Très actifs', value: 5, color: '#10b981' },
-    { name: 'Actifs', value: 10, color: '#3b82f6' },
-    { name: 'Occasionnels', value: 20, color: '#f59e0b' },
-    { name: 'Inactifs', value: 65, color: '#ef4444' },
+    { name: 'Très actifs', value: 5, color: '#10b981' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'Actifs', value: 10, color: '#3b82f6' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'Occasionnels', value: 20, color: '#f59e0b' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
+    { name: 'Inactifs', value: 65, color: '#ef4444' }, // harmony-exempt: couleur servie par la passerelle, que le décodeur ignore
   ],
   [adminEndpoints.analyticsMessageTypes]: [
     { type: 'text', count: 82, percentage: 82 },

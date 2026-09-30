@@ -20,7 +20,7 @@ extension FeedPostCard {
 
     // MARK: - Author Header
     var authorHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Avatar
             MeeshyAvatar(
                 name: post.author,
@@ -41,9 +41,9 @@ extension FeedPostCard {
             .accessibilityLabel(String(format: String(localized: "a11y.feed.post.author_avatar", defaultValue: "Profil de %@", bundle: .main), post.author))
             .accessibilityHint(String(localized: "a11y.feed.post.author_avatar.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 // Author name with repost indicator
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(post.author)
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
@@ -72,7 +72,7 @@ extension FeedPostCard {
                     // Elle serait sinon lue « @handle » sans dire pourquoi.
                     if post.repostAuthor != nil {
                         let handle = post.repost?.authorUsername ?? post.repostAuthor
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
                             if let handle {
@@ -121,7 +121,7 @@ extension FeedPostCard {
                 // la ligne du nom (vue `1h`) : elle qualifie l'auteur, pas le
                 // post. Ce qui reste ici est masqué entièrement quand il n'y a
                 // rien à dire, au lieu de laisser une ligne à un seul séparateur.
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     let flags = buildAvailableFlags()
                     if !flags.isEmpty || post.translations?.isEmpty == false {
 
@@ -140,7 +140,7 @@ extension FeedPostCard {
                     // post's author, after the meta row (private analytics).
                     if isAuthor {
                         MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             ReachMetricLabel(
                                 icon: "chart.bar.fill",
                                 count: post.impressionCount,
@@ -233,9 +233,9 @@ extension FeedPostCard {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(MeeshyFont.relative(16))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md))
                     .foregroundColor(theme.textMuted)
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
             .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))

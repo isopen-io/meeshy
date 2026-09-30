@@ -475,7 +475,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             callIncomingCategory,
             callMissedCategory,
             legacyCallCategory
-        ] + NotificationDetailCategories.categories(reply: replyAction)))
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction)))
     }
 
     // MARK: - Crash Reporting Bootstrap
@@ -607,6 +607,9 @@ enum MeeshyNotificationCategory: String {
     case location = "MEESHY_LOCATION"
     case contact = "MEESHY_CONTACT"
     case invite = "MEESHY_INVITE"
+    /// #8859 — un vocal dont la piste voyage : la notification DÉPLOYÉE le
+    /// fait écouter (`MeeshyNotificationContentExtension`).
+    case audio = "MEESHY_AUDIO"
 }
 
 enum MeeshyNotificationAction: String {

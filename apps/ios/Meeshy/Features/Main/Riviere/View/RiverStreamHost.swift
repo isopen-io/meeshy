@@ -484,8 +484,8 @@ struct RiverStreamHost: View {
                     isDark: colorScheme == .dark,
                     isFlat: true
                 )
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(.ultraThinMaterial, in: Capsule())
                 .padding(.bottom, bottomInset)
                 // Décoration : elle ne prend jamais un doigt destiné à la

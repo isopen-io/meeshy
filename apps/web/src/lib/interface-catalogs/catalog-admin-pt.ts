@@ -10,6 +10,7 @@ import classementSupervisionPt from './admin/classement-supervision-pt';
 import auditReglagesPt from './admin/audit-reglages-pt';
 import personnesPt from './admin/personnes-pt';
 import conversationsAgentPt from './admin/conversations-agent-pt';
+import engagementScalePt from './admin/engagement-scale-pt';
 
 const pt = {
   'admin.role': 'O seu papel: {role}',
@@ -49,6 +50,8 @@ const pt = {
   'admin.nav.languages.hint': 'A saúde do Prisma: idiomas e pares traduzidos',
   'admin.nav.agent.hint': 'Conduzir o agente de conversa',
   'admin.nav.settings.hint': 'Seu acesso e as preferências do espaço',
+  'admin.nav.engagementScale': 'Tabela de pontos',
+  'admin.nav.engagementScale.hint': 'O que cada gesto rende em pontos',
   'admin.users.search': 'Procurar uma conta',
   'admin.users.count': '{count} conta(s)',
   'admin.users.unavailable': 'Lista indisponível de momento.',
@@ -359,6 +362,7 @@ const pt = {
   ...auditReglagesPt,
   ...personnesPt,
   ...conversationsAgentPt,
+  ...engagementScalePt,
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

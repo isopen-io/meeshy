@@ -148,10 +148,10 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
     act(() => {
       container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
     });
-    await until(() => viewer()?.querySelector('[data-viewer-action="reply"]') !== null && viewer() !== null);
+    await until(() => viewer()?.querySelector('[data-viewer-reply]') !== null && viewer() !== null);
 
     act(() => {
-      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="reply"]')!.click();
+      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-reply]')!.click();
     });
     expect(replies).toEqual([[M2, A3]]);
     await until(() => viewer() === null);

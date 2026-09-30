@@ -8,9 +8,12 @@ type Emitted = { readonly event: string; readonly payload: unknown };
 function fakeSocket(connected: boolean) {
   const handlers = new Map<string, Set<SocketHandler>>();
   const emitted: Emitted[] = [];
+  let connects = 0;
   const socket: SocketClient = {
     connected,
-    connect: () => undefined,
+    connect: () => {
+      connects += 1;
+    },
     disconnect: () => undefined,
     on: (event, handler) => {
       const set = handlers.get(event) ?? new Set<SocketHandler>();
@@ -28,7 +31,7 @@ function fakeSocket(connected: boolean) {
     for (const handler of handlers.get(event) ?? []) handler(undefined);
   };
   const listeners = (event: string): number => handlers.get(event)?.size ?? 0;
-  return { socket, emitted, fire, listeners };
+  return { socket, emitted, fire, listeners, connects: () => connects };
 }
 
 function fakeVisibility(initial: 'visible' | 'hidden') {
@@ -102,5 +105,26 @@ describe('presence:app-state — la passerelle sait si l’onglet est au premier
     unbind();
     expect(listeners('authenticated')).toBe(0);
     expect(visibility.count()).toBe(0);
+  });
+});
+
+describe('le retour au premier plan rebranche le temps réel (#8839)', () => {
+  test('la page redevenue visible avec un socket coupé relance la connexion', () => {
+    const { socket, connects } = fakeSocket(false);
+    const visibility = fakeVisibility('visible');
+    bindAppStatePresence({ socket, visibility: visibility.source });
+    visibility.set('hidden');
+    expect(connects()).toBe(0);
+    visibility.set('visible');
+    expect(connects()).toBe(1);
+  });
+
+  test('un socket resté connecté n’est pas touché', () => {
+    const { socket, connects } = fakeSocket(true);
+    const visibility = fakeVisibility('visible');
+    bindAppStatePresence({ socket, visibility: visibility.source });
+    visibility.set('hidden');
+    visibility.set('visible');
+    expect(connects()).toBe(0);
   });
 });

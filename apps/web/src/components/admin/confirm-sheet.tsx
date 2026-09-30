@@ -117,7 +117,7 @@ export function AdminConfirmSheet({
             disabled={blocked}
             aria-busy={busy}
             onClick={() => onConfirm(motive === undefined ? null : trimmed)}
-            className={`rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40 ${FOCUS}`}
+            className={`rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
             style={{ minHeight: 44, backgroundColor: tone === 'danger' ? 'var(--color-danger)' : BRAND, outlineColor: BRAND }}
           >
             {busy ? translateAdmin(language, 'admin.kit.confirm.busy') : confirmLabel}

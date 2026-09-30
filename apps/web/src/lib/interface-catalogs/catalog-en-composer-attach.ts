@@ -24,6 +24,7 @@ const enComposerAttach = {
   'composer.location.denied': 'Location denied — allow it in settings',
   'composer.location.unavailable': 'Location unavailable in this browser',
   'composer.location.failed': 'Location not found — try again',
+  'composer.openSettings': 'Settings',
   'composer.location.chip': 'PLACE',
   'composer.location.unknown': 'Unknown place',
   'composer.location.remove': 'Remove the location',

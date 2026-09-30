@@ -242,7 +242,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// réclamer l'accès aux photos avant toute intention de l'utilisateur.
     func test_recentMediaStrip_doesNotPromptOnLoad() throws {
         let src = try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
-        let fn = try body(from: "func load(limit: Int = 40) {", to: "func requestAccess()", in: src)
+        let fn = try body(from: "func load(limit: Int", to: "func requestAccess()", in: src)
 
         XCTAssertFalse(
             fn.contains("requestAuthorization"),

@@ -83,7 +83,8 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'admAnonymousOne',
   /**
    * LA VUE DE DIEU (#8876) — QUARANTE adresses d'administration de plus, dans
-   * les deux espaces : treize listes et sept fiches. Chacune est PRIVÉE, et ce
+   * les deux espaces : treize listes et sept fiches, plus celles du barème de
+   * points (#8906), posé juste après. Chacune est PRIVÉE, et ce
    * témoin l'affirme trois fois (fixtures, visiteur anonyme, invité de lien).
    * `ADMIN_ROUTE_KEYS` en dérive la garde ; cette liste est écrite À LA MAIN,
    * pour qu'elle reste un témoin INDÉPENDANT de ce qu'il garde.
@@ -128,6 +129,8 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'admLanguages',
   'adminSettings',
   'admSettings',
+  'adminEngagementScale',
+  'admEngagementScale',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
@@ -391,9 +394,9 @@ describe("toute route d'administration déclarée dans ROUTES est PRIVÉE (#8876
     expect(publiques).toEqual([]);
   });
 
-  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant', () => {
+  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906)', () => {
     const adresses = Object.values(ROUTES).filter((route) => route.pattern.startsWith('/adm')).length;
-    expect(adresses).toBe(56);
+    expect(adresses).toBe(58);
   });
 });
 

@@ -398,8 +398,10 @@ export type SendMessageBody = {
    * `send/perform-send.ts`) — jamais `false`/`0` posé explicitement.
    */
   readonly isBlurred?: boolean;
-  /** Chaîne ISO — le serveur la revit en `Date` (`messages-send.ts:317`). */
+  /** Chaîne ISO — le serveur n'en garde que la DISTANCE (`normalizeEphemeralDuration`) ; un client à jour envoie `ephemeralDuration`. */
   readonly expiresAt?: string;
+  /** Secondes — le décompte part de la RÉCEPTION de chaque destinataire (#7451, #8905). */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   /**

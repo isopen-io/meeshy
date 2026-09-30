@@ -99,7 +99,7 @@ export default function HashtagScreen() {
             <button
               type="button"
               onClick={() => void page.refetch()}
-              className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+              className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
               Réessayer

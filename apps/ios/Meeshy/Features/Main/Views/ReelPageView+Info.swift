@@ -20,9 +20,9 @@ import MeeshyUI
 extension ReelPageView {
 
     var authorMetaLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             if let username = reel.authorUsername, !username.isEmpty {
-                Text("@\(username)").font(.caption).foregroundColor(.white.opacity(0.7))
+                Text("@\(username)").font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(MeeshyColors.mediaChromeTertiary)
             }
             if isAuthor {
                 if reel.authorUsername?.isEmpty == false { metaDot }
@@ -67,7 +67,7 @@ extension ReelPageView {
     }
 
     var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(.white.opacity(0.55))
     }
 
     func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
@@ -75,8 +75,8 @@ extension ReelPageView {
             icon: icon,
             count: count,
             label: a11yLabel,
-            tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
+            tint: MeeshyColors.mediaChromeSecondary,
+            iconFont: MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
         )
     }
 
@@ -86,8 +86,8 @@ extension ReelPageView {
     /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
     /// Les URLs restent blanches + soulignées (convention plein écran).
     var infoOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar tap → author's story (if active) else profile.
                 Button(action: onTapAvatar) {
                     MeeshyAvatar(
@@ -104,8 +104,8 @@ extension ReelPageView {
                 Button(action: onTapAuthorName) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(reel.author)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                            .foregroundColor(MeeshyColors.mediaChromeForeground)
                         authorMetaLine
                     }
                     // #6693 — sur un réel clair, le nom blanc passait sans voile sur les
@@ -235,8 +235,8 @@ struct ReelBorrowedSoundToggle: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }

@@ -184,7 +184,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // liens de suivi, fiche de communauté, supervision). Une seule entrée sous
     // `/api/v1/admin`, qui enregistre ses quatre modules elle-même ; aucun
     // alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(71);
+    // 72 : #8906 ajoute `admin-engagement-scale` — les adresses NEUVES
+    // `GET`/`PUT /api/v1/admin/engagement-scale` (le barème d'engagement).
+    // Aucun alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(72);
   });
 });
 

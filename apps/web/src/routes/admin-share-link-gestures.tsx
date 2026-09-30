@@ -141,7 +141,7 @@ function RevealedSecretSheet({ language, secret, onClose, onAnnounce }: {
             type="button"
             data-admin-action="close-secret"
             onClick={onClose}
-            className={`rounded-chip px-5 text-body font-semibold text-white ${FOCUS}`}
+            className={`rounded-chip px-5 text-body font-semibold text-ios-on-brand ${FOCUS}`}
             style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {translateAdmin(language, 'admin.shareLink.secret.close')}

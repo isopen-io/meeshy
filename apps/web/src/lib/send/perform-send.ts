@@ -52,7 +52,7 @@ export type Draft = {
    * décoratifs, composée en champs `Message` par `localMessageOf`
    * (`protectionFieldsOf`, `compose-protection.ts`) UNE seule fois, à la
    * création : `retrySend` relit le MÊME `LocalMessage`, jamais recalculée
-   * (`expiresAt` ne doit JAMAIS reculer d'un renvoi à l'autre). `undefined`
+   * (la durée ne change JAMAIS d’un renvoi à l’autre). `undefined`
    * ⇒ aucune protection (comportement INCHANGÉ, tous les témoins historiques
    * de ce module continuent de passer sans cette clé).
    */
@@ -90,17 +90,17 @@ export type Draft = {
 /**
  * LA PROTECTION, RELUE depuis le message local plutôt que RECOMPOSÉE
  * (#6175) — `localMessageOf` a déjà posé `isBlurred`/`isViewOnce`/
- * `effectFlags`/`expiresAt` par `protectionFieldsOf` : ce corps relit ces
+ * `effectFlags`/`ephemeralDuration` par `protectionFieldsOf` : ce corps relit ces
  * MÊMES champs, jamais une seconde composition depuis `ComposeProtection` (un
  * seul site de vérité entre ce qui s'affiche et ce qui part). Chaque clé est
  * OMISE à sa valeur par défaut (`false`/`0`/absente) — même discipline que
  * `content`/`replyToId` ci-dessous, miroir `ConversationViewModel+Send.swift:428-437`
  * (« aucune clé à sa valeur par défaut »).
  */
-function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurred' | 'expiresAt' | 'effectFlags' | 'isViewOnce'> {
+function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurred' | 'ephemeralDuration' | 'effectFlags' | 'isViewOnce'> {
   return {
     ...(message.isBlurred ? { isBlurred: true } : {}),
-    ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt.toISOString() }),
+    ...(message.ephemeralDuration === undefined ? {} : { ephemeralDuration: message.ephemeralDuration }),
     ...(message.effectFlags ? { effectFlags: message.effectFlags } : {}),
     ...(message.isViewOnce ? { isViewOnce: true } : {}),
   };

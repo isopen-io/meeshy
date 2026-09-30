@@ -5,21 +5,19 @@ import { studioChrome, studioOpenTool } from './studio-focus';
 /** UN OUTIL OUVERT PREND TOUTE LA PLACE (#8654, jumelle de #8652). */
 describe('studioOpenTool — quel outil est ouvert', () => {
   test('un objet en édition ouvre l’outil de l’objet (texte, calque)', () => {
-    expect(studioOpenTool({ editing: 'text-1', frameOpen: false, hasBackground: false, timelineOpen: false })).toBe('object');
+    expect(studioOpenTool({ editing: 'text-1', editsBackground: false })).toBe('object');
   });
 
-  test('l’édition d’un objet passe devant le Cadre', () => {
-    expect(studioOpenTool({ editing: 'overlay', frameOpen: true, hasBackground: true, timelineOpen: false })).toBe('object');
+  test('l’édition d’un objet passe devant les outils du fond', () => {
+    expect(studioOpenTool({ editing: 'overlay', editsBackground: true })).toBe('object');
   });
 
-  test('le Cadre ne s’ouvre que sur un média de fond, frise fermée', () => {
-    expect(studioOpenTool({ editing: null, frameOpen: true, hasBackground: true, timelineOpen: false })).toBe('frame');
-    expect(studioOpenTool({ editing: null, frameOpen: true, hasBackground: false, timelineOpen: false })).toBeNull();
-    expect(studioOpenTool({ editing: null, frameOpen: true, hasBackground: true, timelineOpen: true })).toBeNull();
+  test('éditer le fond est un outil ouvert (#8849, jumelle de #8847)', () => {
+    expect(studioOpenTool({ editing: null, editsBackground: true })).toBe('background');
   });
 
   test('rien d’ouvert : aucun outil', () => {
-    expect(studioOpenTool({ editing: null, frameOpen: false, hasBackground: true, timelineOpen: false })).toBeNull();
+    expect(studioOpenTool({ editing: null, editsBackground: false })).toBeNull();
   });
 });
 
@@ -34,21 +32,32 @@ describe('studioChrome — ce qui reste à l’écran', () => {
     });
   });
 
-  test('un outil ouvert efface l’en-tête, les deux rails (et leurs +), le socle', () => {
-    for (const tool of ['object', 'frame'] as const) {
-      expect(studioChrome({ tool, timelineOpen: false })).toEqual({
-        header: false,
-        leadingRail: false,
-        trailingRail: false,
-        socleRow: false,
-        socleCard: false,
-      });
-    }
+  test('l’édition d’un objet efface l’en-tête, les deux rails (et leurs +), le socle', () => {
+    expect(studioChrome({ tool: 'object', timelineOpen: false })).toEqual({
+      header: false,
+      leadingRail: false,
+      trailingRail: false,
+      socleRow: false,
+      socleCard: false,
+    });
+  });
+
+  /** « Quand on a les outils de droite ouverts on n'a pas besoin d'afficher
+   * l'audience ou la publication étant dans un outil ! […] On pourrait même
+   * enlever le header, les scènes et commandes autres » — porteur 2026-09-30. */
+  test('les outils du fond : seul le rail droit reste — audience, Publier, en-tête, scènes et portes cèdent', () => {
+    expect(studioChrome({ tool: 'background', timelineOpen: false })).toEqual({
+      header: false,
+      leadingRail: false,
+      trailingRail: true,
+      socleRow: false,
+      socleCard: false,
+    });
   });
 
   test('refermer l’outil rend EXACTEMENT le chrome d’avant', () => {
     const before = studioChrome({ tool: null, timelineOpen: false });
-    studioChrome({ tool: 'object', timelineOpen: false });
+    studioChrome({ tool: 'background', timelineOpen: false });
     expect(studioChrome({ tool: null, timelineOpen: false })).toEqual(before);
   });
 

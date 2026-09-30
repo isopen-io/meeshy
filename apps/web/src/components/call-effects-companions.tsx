@@ -82,12 +82,12 @@ function CompanionView({ companion, width, height }: { readonly companion: Compa
   return (
     <div
       className="relative grid shrink-0 place-items-center overflow-hidden rounded-card"
-      style={{ width, height, background: 'rgb(0 0 0 / 0.35)', borderStyle: 'solid', borderColor: companion.color, borderWidth: companion.isSpeaking ? '4px' : '2px' }}
+      style={{ width, height, background: 'var(--color-scrim-soft)', borderStyle: 'solid', borderColor: companion.color, borderWidth: companion.isSpeaking ? '4px' : '2px' }}
       data-call-effects-companion={companion.id}
       {...(companion.isSpeaking ? { 'data-call-effects-companion-speaking': '' } : {})}
     >
       {companion.render(width)}
-      <span className="glass-call absolute bottom-1 left-1 max-w-[85%] truncate rounded-full px-1.5 text-[0.625rem] leading-4 text-white">{companion.name}</span>
+      <span className="glass-call absolute bottom-1 left-1 max-w-[85%] truncate rounded-full px-1.5 text-[0.625rem] leading-4 text-on-media">{companion.name}</span>
     </div>
   );
 }
@@ -135,18 +135,18 @@ export function CallEffectsCompanions({ language, companions, captions, floor }:
         onPointerMove={follow}
         onPointerUp={release}
         onPointerCancel={release}
-        className={`pointer-events-auto absolute top-0 flex cursor-grab touch-none select-none items-center ${single ? 'shadow-lg' : 'glass-call rounded-[22px]'} ${drag === null ? 'transition-[left,transform] duration-300 ease-out motion-reduce:transition-none' : 'cursor-grabbing'}`}
+        className={`pointer-events-auto absolute top-0 flex cursor-grab touch-none select-none items-center ${single ? 'shadow-lg' : 'glass-call rounded-field-ios'} ${drag === null ? 'transition-[left,transform] duration-300 ease-out motion-reduce:transition-none' : 'cursor-grabbing'}`}
         style={{ left, gap: SPACING, padding: single ? 0 : INSET, transform: drag === null ? undefined : `translate(${drag.dx}px, ${drag.dy}px)` }}
         data-call-effects-companions=""
         data-call-effects-companions-corner={corner}
       >
         {size === null ? null : layout.companions.map((companion) => <CompanionView key={companion.id} companion={companion} width={size.width} height={size.height} />)}
         {layout.overflow > 0 ? (
-          <span role="img" aria-label={t(language, 'callStudio.companions.more', { count: String(layout.overflow) })} className="grid shrink-0 place-items-center rounded-full bg-white/15 text-sm font-semibold text-white" style={{ width: CHIP, height: CHIP }} data-call-effects-companions-more="">
+          <span role="img" aria-label={t(language, 'callStudio.companions.more', { count: String(layout.overflow) })} className="grid shrink-0 place-items-center rounded-full bg-media-fill text-sm font-semibold text-on-media" style={{ width: CHIP, height: CHIP }} data-call-effects-companions-more="">
             {`+${layout.overflow}`}
           </span>
         ) : null}
-        <button type="button" onClick={() => setCorner(otherCorner)} className="sr-only min-h-11 rounded-full px-3 text-mini font-semibold text-white focus:not-sr-only focus:bg-black/60" data-call-effects-companions-move="">
+        <button type="button" onClick={() => setCorner(otherCorner)} className="sr-only min-h-11 rounded-full px-3 text-mini font-semibold text-on-media focus:not-sr-only focus:bg-scrim-strong" data-call-effects-companions-move="">
           {t(language, 'callStudio.companions.move')}
         </button>
       </div>

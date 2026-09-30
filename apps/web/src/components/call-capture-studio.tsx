@@ -169,7 +169,7 @@ export function CaptureHint({ language }: { readonly language: InterfaceLanguage
     return () => clearTimeout(timer);
   }, []);
   return shown ? (
-    <p aria-hidden className="glass-call rounded-full px-3 py-1 text-mini font-semibold text-white" data-call-capture-hint="">
+    <p aria-hidden className="glass-call rounded-full px-3 py-1 text-mini font-semibold text-on-media" data-call-capture-hint="">
       {t(language, 'callStudio.capture.hint')}
     </p>
   ) : null;
@@ -181,7 +181,7 @@ export function CaptureStatus({ status }: { readonly status: StudioStatus | null
     <p
       role="status"
       aria-live="polite"
-      className={`glass-call min-h-8 rounded-full px-4 py-1.5 text-mini font-semibold transition-opacity motion-reduce:transition-none ${status === null ? 'opacity-0' : 'opacity-100'} ${status?.tone === 'error' ? 'text-[var(--ios-error,#ff6b6b)]' : 'text-white'}`}
+      className={`glass-call min-h-8 rounded-full px-4 py-1.5 text-mini font-semibold transition-opacity motion-reduce:transition-none ${status === null ? 'opacity-0' : 'opacity-100'} ${status?.tone === 'error' ? 'text-[var(--ios-error,var(--color-error))]' : 'text-on-media'}`}
       data-call-capture-status={status?.tone ?? ''}
     >
       {status?.text ?? ''}
@@ -195,19 +195,19 @@ export function RecordingStop({ language, elapsedMs, onStop }: { readonly langua
   return (
     <div className="pointer-events-none fixed inset-0 z-10 grid place-items-center" data-call-recording="">
       <div className="flex flex-col items-center gap-3">
-        <span className="glass-call flex items-center gap-2 rounded-full px-3 py-1 text-mini font-semibold tabular-nums text-white" data-call-record-clock="">
-          <span aria-hidden className="size-2 rounded-full motion-safe:animate-pulse" style={{ background: 'var(--ios-error-strong, #ef4444)' }} />
+        <span className="glass-call flex items-center gap-2 rounded-full px-3 py-1 text-mini font-semibold tabular-nums text-on-media" data-call-record-clock="">
+          <span aria-hidden className="size-2 rounded-full motion-safe:animate-pulse" style={{ background: 'var(--ios-error-strong)' }} />
           {clock}
         </span>
         <button
           type="button"
           aria-label={`${t(language, 'callStudio.record.stop')} — ${t(language, 'callStudio.record.clock', { time: clock })}`}
           onClick={onStop}
-          className="pointer-events-auto grid size-[72px] place-items-center rounded-full border-4 border-white transition-transform active:scale-95 motion-reduce:transition-none"
-          style={{ background: 'rgb(0 0 0 / 0.35)', boxShadow: '0 4px 20px rgb(0 0 0 / 0.45)' }}
+          className="pointer-events-auto grid size-[72px] place-items-center rounded-full border-4 border-on-media transition-transform active:scale-95 motion-reduce:transition-none"
+          style={{ background: 'var(--color-scrim-soft)', boxShadow: 'var(--shadow-lg)' }}
           data-call-record-stop=""
         >
-          <span aria-hidden className="size-7 rounded-md" style={{ background: 'var(--ios-error-strong, #ef4444)' }} />
+          <span aria-hidden className="size-7 rounded-md" style={{ background: 'var(--ios-error-strong)' }} />
         </button>
       </div>
     </div>
@@ -217,7 +217,7 @@ export function RecordingStop({ language, elapsedMs, onStop }: { readonly langua
 /** La vidéo au clavier : invisible, elle se montre au focus (Tab), et arrête ce qu'elle a lancé. */
 export function KeyboardRecord({ language, recording, onPress }: { readonly language: InterfaceLanguage; readonly recording: boolean; readonly onPress: () => void }) {
   return (
-    <button type="button" onClick={onPress} className="sr-only rounded-full px-4 py-2 text-mini font-semibold text-white focus:not-sr-only focus:bg-black/60" data-call-record-key="">
+    <button type="button" onClick={onPress} className="sr-only rounded-full px-4 py-2 text-mini font-semibold text-on-media focus:not-sr-only focus:bg-scrim-strong" data-call-record-key="">
       {t(language, recording ? 'callStudio.record.stop' : 'callStudio.record.start')}
     </button>
   );
@@ -237,5 +237,5 @@ export function CaptureFlash({ onDone }: { readonly onDone: () => void }) {
     };
   }, []);
   const host = typeof document === 'undefined' ? null : (document.querySelector('[data-call-screen]') ?? document.body);
-  return host === null ? null : createPortal(<div ref={flash} aria-hidden className="pointer-events-none fixed inset-0 z-[260] bg-white opacity-0" data-call-capture-flash="" />, host);
+  return host === null ? null : createPortal(<div ref={flash} aria-hidden className="pointer-events-none fixed inset-0 z-[260] bg-on-media opacity-0" data-call-capture-flash="" />, host);
 }

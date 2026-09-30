@@ -216,7 +216,7 @@ struct MagicLinkView: View {
                     .accessibilityHint(howItWorksHint.text)
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -292,7 +292,7 @@ struct MagicLinkView: View {
 
                 // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
                 Image(systemName: "envelope.open.fill")
-                    .font(.system(size: 48, weight: .light))
+                    .font(.system(size: MeeshyIconSize.hero, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],

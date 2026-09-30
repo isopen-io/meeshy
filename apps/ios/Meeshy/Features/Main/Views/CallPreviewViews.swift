@@ -15,7 +15,7 @@ struct CallPreviewBackdrop: View {
             if let track = preview.previewVideoTrack {
                 ZStack {
                     CallVideoView(track: track, contentMode: .scaleAspectFill)
-                    Color.black.opacity(0.35)
+                    Color.black.opacity(MeeshyOpacity.medium)
                 }
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
@@ -47,7 +47,7 @@ struct CallPreviewSoundButton: View {
                     )
                     .font(.body.weight(.semibold))
                     .foregroundColor(audible ? .white : .black)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
                     .frame(minHeight: 50)
                     .background(Capsule().fill(audible ? Color.clear : Color.white))
                     .adaptiveGlass(in: Capsule())
@@ -75,9 +75,9 @@ struct CallPreviewSeenLabel: View {
             if let text = Self.text(peerName: peerName, exposure: exposure) {
                 Label(text, systemImage: exposure == .seen ? "eye.fill" : "ear.fill")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(.white.opacity(0.85))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .adaptiveGlass(in: Capsule())
                     .accessibilityElement(children: .combine)
                     .transition(.opacity)
@@ -147,18 +147,18 @@ struct CallPreviewOutgoingControls: View {
             HapticFeedback.light()
             action()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: isOn ? on : off)
                     // Le glyphe suit Dynamic Type, borné pour tenir dans son
                     // cercle de 64 pt (règle du 264i : aucune taille figée neuve).
-                    .font(MeeshyFont.relative(24, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(isOn ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                    .foregroundColor(isOn ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
                     .callControlGlass(diameter: 64, isActive: isOn, tint: MeeshyColors.indigo500)
 
                 Text(caption)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

@@ -9,11 +9,11 @@
  * elle a besoin des valeurs iOS. Elle les recopiait à la main — une seconde
  * table, que la charte interdit. Elles sont désormais DÉRIVÉES.
  *
- * CE FICHIER NE REMPLACE PAS tokens.css, qui reste la table de la v3 : les deux
- * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
- * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
- * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
- * web-v2, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ * LES RÔLES DU SDK GAGNENT (#8879, directive porteur 2026-09-30) : là où
+ * tokens.css, dark.css et light.css donnaient à un rôle une autre valeur que
+ * celle-ci, ils POINTENT désormais vers la variable --ios-* correspondante.
+ * Seuls restent des valeurs les rôles qu'iOS n'a pas, ou dont la valeur iOS
+ * tombe sous AA dans l'usage de la table — voir docs/product/charte-visuelle-web.md.
  */
 
 :root,
@@ -53,6 +53,18 @@
   --ios-state-concealed: #6b7280;
   --ios-state-failed: #ef4444;
 
+  /* Le chrome posé sur un média, et l'encre d'un aplat de marque — hors schéma. */
+  --ios-on-media: #ffffff;
+  --ios-on-media-2: color-mix(in srgb, #ffffff 85%, transparent);
+  --ios-on-media-3: color-mix(in srgb, #ffffff 70%, transparent);
+  --ios-media-fill: color-mix(in srgb, #ffffff 15%, transparent);
+  --ios-media-hairline: color-mix(in srgb, #ffffff 20%, transparent);
+  --ios-media-backdrop: #000000;
+  --ios-scrim-soft: color-mix(in srgb, #000000 30%, transparent);
+  --ios-scrim: color-mix(in srgb, #000000 50%, transparent);
+  --ios-scrim-strong: color-mix(in srgb, #000000 70%, transparent);
+  --ios-on-brand: #ffffff;
+
   /* Les plans et les encres, schéma SOMBRE. */
   --ios-surface: #09090b;
   --ios-surface-card: #13111c;
@@ -61,29 +73,45 @@
   --ios-ink-3: color-mix(in srgb, #a5b4fc 70%, transparent);
 
   /* L'échelle d'espace (MeeshySpacing). */
+  --ios-space-xxs: 2px;
   --ios-space-xs: 4px;
+  --ios-space-xsPlus: 6px;
   --ios-space-sm: 8px;
+  --ios-space-smPlus: 10px;
   --ios-space-md: 12px;
+  --ios-space-mdPlus: 14px;
   --ios-space-lg: 16px;
   --ios-space-xl: 20px;
   --ios-space-xxl: 24px;
   --ios-space-xxxl: 32px;
 
   /* Les rayons déclarés (MeeshyRadius). « full » est une capsule côté CSS. */
+  --ios-radius-xxs: 4px;
+  --ios-radius-xs: 8px;
   --ios-radius-sm: 10px;
+  --ios-radius-smPlus: 12px;
   --ios-radius-md: 14px;
   --ios-radius-lg: 16px;
+  --ios-radius-lgPlus: 18px;
   --ios-radius-xl: 20px;
+  --ios-radius-xlPlus: 22px;
   --ios-radius-xxl: 24px;
   --ios-radius-full: 9999px;
 
   /* Les tailles de police déclarées (MeeshyFont). */
+  --ios-font-micro: 9px;
   --ios-font-caption: 10px;
   --ios-font-footnote: 11px;
+  --ios-font-small: 12px;
   --ios-font-subhead: 13px;
+  --ios-font-label: 14px;
   --ios-font-body: 15px;
+  --ios-font-callout: 16px;
   --ios-font-headline: 17px;
+  --ios-font-subtitle: 18px;
+  --ios-font-title3: 20px;
   --ios-font-title: 22px;
+  --ios-font-display: 28px;
   --ios-font-largeTitle: 34px;
 
   /* Ce que Swift porte en LITTÉRAL dans ses vues, hors de ses tables — voir

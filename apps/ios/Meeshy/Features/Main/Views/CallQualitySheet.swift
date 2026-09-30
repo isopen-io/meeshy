@@ -12,7 +12,7 @@ struct CallQualitySheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             if model.isWaitingForFirstReading {
                 Text(String(localized: "call.quality.waiting", defaultValue: "Mesure en cours…", bundle: .main))
@@ -34,7 +34,7 @@ struct CallQualitySheet: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(20)
+        .padding(MeeshySpacing.xl)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onAppear { model.start() }
@@ -42,7 +42,7 @@ struct CallQualitySheet: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "call.quality.detail", defaultValue: "Qualité de l’appel", bundle: .main))
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
@@ -50,9 +50,9 @@ struct CallQualitySheet: View {
                 Text(overall.label)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(overall.tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(overall.tint.opacity(0.15)))
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(overall.tint.opacity(MeeshyOpacity.light)))
             }
             Spacer()
             Button {
@@ -73,7 +73,7 @@ struct CallQualityRowView: View {
     let row: CallQualityRow
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Text(row.metric.title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -113,7 +113,7 @@ struct CallQualityLabelRow: View {
     let value: String
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

@@ -41,7 +41,7 @@ export function AdminDenied({ language }: { readonly language: InterfaceLanguage
         </p>
         <Link
           to="list"
-          className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+          className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
           style={{ backgroundColor: BRAND, minHeight: 44 }}
         >
           {translate(language, 'pending.back')}

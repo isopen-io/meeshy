@@ -34,6 +34,7 @@ import {
 } from '../../utils/auto-translate-preference';
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
+import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 
 /**
  * Update authenticated user profile
@@ -351,6 +352,9 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
           }),
         },
       });
+
+      await releaseParticipantAvatarSnapshots(fastify.prisma, userId!)
+        .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] participant snapshot release failed', err));
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 

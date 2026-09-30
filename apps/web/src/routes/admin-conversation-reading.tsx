@@ -297,7 +297,7 @@ export function AdminConversationReading({
           data-admin-reason-submit
           disabled={!motifSuffisant}
           onClick={() => setMotif(saisie.trim())}
-          className={`w-fit rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40 ${FOCUS}`}
+          className={`w-fit rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
           style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
         >
           {translateAdmin(language, 'admin.convDetail.read')}

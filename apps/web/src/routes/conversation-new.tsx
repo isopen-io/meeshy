@@ -333,7 +333,7 @@ function ModeSwitch({ mode, onChange }: { readonly mode: Mode; readonly onChange
           minHeight: 44,
           outlineColor: 'var(--color-ios-brand)',
           backgroundColor: active ? 'var(--color-ios-brand)' : 'transparent',
-          color: active ? 'white' : 'var(--color-ios-ink-2)',
+          color: active ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink-2)',
         }}
       >
         {label}
@@ -534,7 +534,7 @@ function PersonRow(props: {
             style={{
               border: props.selected === true ? 'none' : '1px solid color-mix(in srgb, var(--color-ios-ink-3) 50%, transparent)',
               backgroundColor: props.selected === true ? 'var(--color-ios-brand)' : 'transparent',
-              color: 'white',
+              color: 'var(--color-ios-on-brand)',
             }}
           >
             {props.selected === true ? <Glyph name="check" size={12} /> : null}
@@ -550,7 +550,7 @@ function RetryButton(props: { readonly onRetry: () => void }) {
     <button
       type="button"
       onClick={props.onRetry}
-      className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+      className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
       style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
     >
       Réessayer

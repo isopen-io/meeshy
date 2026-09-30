@@ -355,7 +355,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // #8858 — une position, une carte de visite ou une invitation appellent
         // leurs propres actions (Plans, Contacts, Rejoindre).
         content.categoryIdentifier = NotificationDetailPolicy.refinedCategory(
-            category, type: rawType, userInfo: content.userInfo
+            category, type: rawType, userInfo: content.userInfo,
+            declared: content.categoryIdentifier
         )
     }
 

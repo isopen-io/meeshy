@@ -157,7 +157,7 @@ export function AgentRelaunchControl({
           {...(anchored ? { 'data-agent-relaunch': conversationId } : {})}
           disabled={!idle || !online}
           onClick={() => setConfirming(true)}
-          className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-semibold text-white disabled:opacity-40 ${FOCUS}`}
+          className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
           style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
         >
           <AdminGlyph name="arrowClockwise" size={16} />

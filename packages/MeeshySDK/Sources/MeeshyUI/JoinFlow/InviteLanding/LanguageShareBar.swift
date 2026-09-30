@@ -60,7 +60,7 @@ public struct LanguageShareBar: View {
                 // Le nom et le pourcentage sont DEUX textes : une autonyme écrite
                 // de droite à gauche (« العربية ») dans la même chaîne que « 7 % »
                 // réordonnait les deux et affichait « % 7 العربية ».
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Circle().fill(color(for: share)).frame(width: 8, height: 8)
                     Text(verbatim: name(for: share))
                         .lineLimit(1)
@@ -71,7 +71,7 @@ public struct LanguageShareBar: View {
                             .fixedSize()
                     }
                 }
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             }
         }

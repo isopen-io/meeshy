@@ -56,7 +56,7 @@ struct CallParticipantVisual: View {
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            .stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
                     .accessibilityHidden(true)
             } else {
@@ -79,7 +79,7 @@ struct CallParticipantVisual: View {
         ZStack {
             if width != height {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.black.opacity(0.55))
+                    .fill(Color.black.opacity(MeeshyOpacity.strong))
             }
             CachedAvatarImage(
                 urlString: remoteProfile?.avatar,

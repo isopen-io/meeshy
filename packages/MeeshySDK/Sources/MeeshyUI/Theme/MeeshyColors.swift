@@ -135,6 +135,107 @@ public nonisolated struct MeeshyColors {
     public static let meeshSilver = Color(hex: "A8B1BF")
     public static let meeshSilverHex = "A8B1BF"
 
+    // MARK: - Teintes franches hors marque (#8877)
+
+    public static let blue500 = Color(hex: "3B82F6")
+    public static let orange500 = Color(hex: "F97316")
+    public static let amber500 = Color(hex: "F59E0B")
+
+    public static let blue500Hex = "3B82F6"
+    public static let orange500Hex = "F97316"
+    public static let amber500Hex = "F59E0B"
+
+    // MARK: - Teintes de tuile (#8877)
+
+    public static let tileCoral = Color(hex: "FF6B6B")
+    public static let tileSaffron = Color(hex: "F8B500")
+    public static let tileBlue = Color(hex: "3498DB")
+    public static let tileAmethyst = Color(hex: "9B59B6")
+    public static let tileSky = Color(hex: "45B7D1")
+    public static let tileEmerald = Color(hex: "2ECC71")
+    public static let tileTeal = Color(hex: "4ECDC4")
+    public static let tileCyan = Color(hex: "08D9D6")
+    public static let tileRose = Color(hex: "FF2E63")
+
+    public static let tileCoralHex = "FF6B6B"
+    public static let tileSaffronHex = "F8B500"
+    public static let tileBlueHex = "3498DB"
+    public static let tileAmethystHex = "9B59B6"
+    public static let tileSkyHex = "45B7D1"
+    public static let tileEmeraldHex = "2ECC71"
+    public static let tileTealHex = "4ECDC4"
+    public static let tileCyanHex = "08D9D6"
+    public static let tileRoseHex = "FF2E63"
+
+    // MARK: - Plans nommés (#8877)
+
+    public static let surfaceDarkBase = Color(hex: "09090B")
+    public static let surfaceDarkDeep = Color(hex: "0F0D19")
+    public static let surfaceDarkRaised = Color(hex: "13111C")
+    public static let surfaceDarkInput = Color(hex: "16142A")
+    public static let surfaceLightRaised = Color(hex: "F8F7FF")
+    public static let surfaceLightMist = Color(hex: "FAFAFF")
+    public static let surfaceLightInput = Color(hex: "F5F3FF")
+
+    // MARK: - Accent neutre d'un profil bloqué (#8877)
+
+    public static let blockedNeutral = Color(hex: "888888")
+    public static let blockedNeutralHex = "888888"
+
+    // MARK: - Chrome posé sur un média plein écran (#8878)
+    //
+    // Les noms des vues iOS, ALIAS de l'échelle `onMedia` / `scrim` ci-dessus
+    // (#8879) : une seule valeur par couleur, dérivée vers le web.
+
+    public static let mediaChromeForeground = onMedia
+    public static let mediaChromeSecondary = onMediaSecondary
+    public static let mediaChromeTertiary = onMediaMuted
+    public static let mediaChromeFill = mediaBackdrop.opacity(0.35)
+    public static let mediaScrim = scrim
+
+    public static let mediaScrimTop = LinearGradient(
+        colors: [Color.black.opacity(0.55), Color.black.opacity(0)],
+        startPoint: .top, endPoint: .bottom
+    )
+
+    public static let mediaScrimBottom = LinearGradient(
+        colors: [Color.black.opacity(0), Color.black.opacity(0.55)],
+        startPoint: .top, endPoint: .bottom
+    )
+
+    // MARK: - Chrome posé sur un média (#8879)
+    //
+    // Une visionneuse plein écran (image d'un commentaire, média d'une
+    // conversation, story, réel) est TOUJOURS sombre, quel que soit le schéma :
+    // ses contrôles s'écrivent en blanc sur un voile noir. Les vues les
+    // portaient en littéral (`.white.opacity(0.85)`, `Color.black.opacity(0.5)`
+    // — plus de trois cents sites) ; l'échelle est nommée ici, FERMÉE, et
+    // dérivée vers `packages/design-tokens/ios.css` (`--ios-on-media*`,
+    // `--ios-media-*`, `--ios-scrim*`) pour que le web lise la même.
+
+    /// L'encre d'un contrôle ou d'un texte posé sur un média.
+    public static let onMedia = Color(hex: "FFFFFF")
+    /// Texte secondaire sur un média (horodatage, sous-titre).
+    public static let onMediaSecondary = onMedia.opacity(0.85)
+    /// Texte discret sur un média (compteur, méta).
+    public static let onMediaMuted = onMedia.opacity(0.7)
+    /// Remplissage d'un bouton ou d'une puce posé sur un média.
+    public static let mediaFill = onMedia.opacity(0.15)
+    /// Filet d'un contrôle posé sur un média.
+    public static let mediaHairline = onMedia.opacity(0.2)
+    /// Le fond d'une visionneuse plein écran.
+    public static let mediaBackdrop = Color(hex: "000000")
+    /// Voile léger : dégradé sous le chrome, disque derrière une icône.
+    public static let scrimSoft = mediaBackdrop.opacity(0.3)
+    /// Voile régulier : sous un texte posé sur un média.
+    public static let scrim = mediaBackdrop.opacity(0.5)
+    /// Voile appuyé : ce qui assombrit un média derrière une feuille.
+    public static let scrimStrong = mediaBackdrop.opacity(0.7)
+
+    /// L'encre posée sur un APLAT de couleur — marque, accent de
+    /// conversation — : le blanc des boutons pleins.
+    public static let onBrand = Color(hex: "FFFFFF")
+
     /// Fond du badge de compteur de messages non lus, thématisé.
     /// Light : rouge vif (`error`). Dark : rouge foncé (`errorDark`).
     public static func unreadBadgeBackground(isDark: Bool) -> Color {
@@ -230,6 +331,20 @@ public nonisolated struct MeeshyColors {
     /// Light : `indigo800` (9.9:1 sur `#FFFFFF`). Dark : `indigo400` (6.6:1 sur `#09090B`).
     public static func hashtagColor(isDark: Bool) -> Color {
         isDark ? indigo400 : indigo800
+    }
+
+    // MARK: - Voiles adaptatifs (#8877)
+
+    public static func surfaceFill(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04)
+    }
+
+    public static func controlFill(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)
+    }
+
+    public static func hairline(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
     }
 
     // MARK: - Brand Gradient (The Signature)

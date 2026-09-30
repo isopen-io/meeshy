@@ -325,7 +325,7 @@ struct FocalGridCell: View {
                 summary: attachment.reactionSummary,
                 currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: accentHex))
-                .padding(5)
+                .padding(MeeshySpacing.xs)
         }
     }
 
@@ -393,17 +393,17 @@ struct FocalGridCell: View {
         if case .blurred(let isViewOnce) = protectionState {
             ZStack {
                 Color.black.opacity(0.5)
-                VStack(spacing: 5) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "eye.slash.fill")
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                         .foregroundStyle(.white)
                     Text(isViewOnce
                         ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main)
                         : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundStyle(.white)
                     Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
-                        .font(MeeshyFont.relative(9))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize))
                         .foregroundStyle(.white.opacity(0.7))
                 }
             }
@@ -424,11 +424,11 @@ struct FocalGridCell: View {
     private var viewOnceBadge: some View {
         if FocalMediaProtection.showsViewOnceBadge(for: attachment) {
             Text("\(attachment.viewOnceCount)")
-                .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .frame(width: 18, height: 18)
                 .background(Circle().fill(MeeshyColors.error.opacity(0.85)))
-                .padding(6)
+                .padding(MeeshySpacing.xsPlus)
                 .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vues", bundle: .main)))
         }
     }

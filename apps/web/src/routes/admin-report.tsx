@@ -111,7 +111,7 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
             <AdminLink
               target={listTarget}
               anchor="back-to-list"
-              className="inline-flex items-center rounded-chip px-5 text-body font-semibold text-white"
+              className="inline-flex items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)' }}
             >
               {translateAdmin(language, 'admin.moderation.fiche.back')}

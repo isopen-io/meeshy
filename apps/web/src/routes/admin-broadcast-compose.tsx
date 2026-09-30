@@ -231,7 +231,7 @@ export function BroadcastComposerSheet({
                 data-admin-action="save"
                 disabled={busy}
                 aria-busy={busy}
-                className={`rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40 ${FOCUS}`}
+                className={`rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
                 style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
               >
                 {busy ? t('admin.broadcast.compose.save.busy') : translateAdmin(language, edit ? 'admin.broadcast.compose.save.edit' : 'admin.broadcast.compose.save.create')}

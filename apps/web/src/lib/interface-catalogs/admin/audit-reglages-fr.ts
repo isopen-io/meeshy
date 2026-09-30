@@ -47,6 +47,7 @@ const f = {
   'admin.audit.family.agent': 'Agent',
   'admin.audit.family.reports': 'Signalements',
   'admin.audit.family.communities': 'Communautés',
+  'admin.audit.family.settings': 'Réglages',
 
   // ── Journal d’audit : les genres d’éléments ────────────────────────────────
   'admin.audit.target.User': 'Compte',
@@ -165,6 +166,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'Un signalement a été supprimé de la file de modération.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Signalement pris en charge',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'Un signalement a été confié à un modérateur.',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Barème de points modifié',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Le barème des points d’engagement — points par opération, multiplicateur et plafonds — a été réglé par un administrateur.',
 
   // ── Journal d’audit : la feuille de détail ─────────────────────────────────
   'admin.audit.detail.action': 'Action',

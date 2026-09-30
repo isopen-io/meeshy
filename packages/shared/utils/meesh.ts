@@ -44,7 +44,7 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
   // son arrivée n'ait pas à renuméroter l'ordre décidé par le porteur.
   ['content.story'],
   ['content.post', 'content.reel'],
-  ['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish'],
+  ['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish', 'tool.reaction', 'tool.attachment'],
   // AVANT-DERNIER rang : le LIEN social (#5766). Il se reprend après tout ce
   // qu'on produit seul, parce qu'un lien partagé, un ami qui rejoint ou une
   // amitié nouée engagent quelqu'un d'AUTRE — mais il n'est pas le plancher :
@@ -52,7 +52,7 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
   ['social.tracked_link', 'social.share', 'social.invite_joined', 'social.friendship'],
   // DERNIER rang : on ne reprend les points d'une conversation que si rien
   // d'autre ne suffit — et jamais ses actions (voir `MEESH_POINTS_ONLY_AXES`).
-  ['conversation.private', 'conversation.public', 'conversation.community'],
+  ['conversation.private', 'conversation.public', 'conversation.community', 'conversation.group_created'],
 ];
 
 /**
@@ -115,6 +115,7 @@ export const MEESH_POINTS_ONLY_AXES: readonly EngagementAxisKey[] = [
   'conversation.private',
   'conversation.public',
   'conversation.community',
+  'conversation.group_created',
 ];
 
 /** `true` si la frappe reprend aussi des ACTIONS sur cet axe (donc si ses badges peuvent s'éteindre). */

@@ -91,7 +91,7 @@ final class StoryReactionStripGestureTests: XCTestCase {
     func test_leSite_estBienLaOuLesGardesRegardent() throws {
         let code = try sidebarSource()
         XCTAssertNotNil(pickerCallSite(in: code),
-                        "Le montage `EmojiReactionPicker(` sous le cœur est introuvable — "
+                        "Le montage `FullscreenReactionStrip(` sous le cœur est introuvable — "
                             + "les gardes suivantes ne mesureraient plus rien.")
     }
 
@@ -109,19 +109,31 @@ final class StoryReactionStripGestureTests: XCTestCase {
         guard let site = pickerCallSite(in: code) else { return XCTFail("site introuvable") }
         let plat = compact(site)
 
-        XCTAssertTrue(plat.contains("scale:1.5"),
-                      "Échelle 1,5 — « ×0,75 » sur le 2 de la directive du 2026-09-11 après-midi.")
-        XCTAssertFalse(plat.contains("scale:2,"),
-                       "L'échelle 2 a été explicitement RETIRÉE : la barre était trop grosse à l'écran.")
-        XCTAssertTrue(plat.contains("chrome:.none"),
-                      "Sans capsule ni fond — « pas de contour ».")
-        XCTAssertTrue(plat.contains("scrollable:true"),
-                      "Même à 1,5 la rangée dépasse la largeur du viewer : elle DÉFILE, elle ne déborde pas.")
+        XCTAssertTrue(plat.contains("FullscreenReactionStrip("),
+                      "La barre de la story est celle de l'atome plein écran (#8878), pas un picker réécrit.")
+        XCTAssertFalse(plat.contains("EmojiReactionPicker("),
+                       "Aucun picker monté au site : le défaut du composant EST l'échelle 1,5 "
+                           + "(`ReactionBarScaleParityTests`), et l'atome ne la surcharge jamais.")
         XCTAssertTrue(plat.contains("onExpandFullPicker:"),
                       "Le « + » reste — il ouvre le sélecteur complet.")
         XCTAssertFalse(plat.contains(".fixedSize()"),
                        "`.fixedSize()` force la rangée à sa largeur NATURELLE : le ScrollView ne défilerait "
                            + "jamais et la barre sortirait de l'écran. Sa largeur doit être bornée.")
+
+        let atom = try compact(Self.stripComments(String(
+            contentsOf: iosRoot()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenReactionStrip.swift"),
+            encoding: .utf8)))
+        XCTAssertTrue(atom.contains("EmojiReactionPicker("),
+                      "L'atome monte le picker partagé.")
+        XCTAssertTrue(atom.contains("chrome:.none"),
+                      "Sans capsule ni fond — « pas de contour ».")
+        XCTAssertTrue(atom.contains("scrollable:true"),
+                      "Même à l'échelle par défaut la rangée dépasse la largeur du viewer : elle DÉFILE, elle ne déborde pas.")
+        XCTAssertFalse(atom.contains("scale:"),
+                       "L'atome ne surcharge jamais l'échelle : le défaut du composant fait foi.")
     }
 
     func test_laBarreDeLaStory_porteBienUnGesteSimultane() throws {
@@ -211,14 +223,14 @@ final class StoryReactionStripGestureTests: XCTestCase {
         return Self.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
-    /// Le montage de la barre sous le cœur : du `icon: "heart.fill"` jusqu'à la
-    /// fin de son `.overlay(alignment: .trailing)`. Ancré sur le cœur pour ne
-    /// jamais confondre avec un autre `EmojiReactionPicker` du dépôt.
+    /// Le montage de la barre sous le bouton Réagir : du `FullscreenActionButton.react(`
+    /// jusqu'à la fin de son `.overlay(alignment: .trailing)`. Ancré sur ce bouton pour
+    /// ne jamais confondre avec une autre `FullscreenReactionStrip` du dépôt.
     private func pickerCallSite(in code: String) -> String? {
-        guard let coeur = code.range(of: "icon: \"heart.fill\""),
+        guard let coeur = code.range(of: "FullscreenActionButton.react("),
               let overlay = code.range(of: ".overlay(alignment: .trailing) {",
                                        range: coeur.upperBound..<code.endIndex),
-              code.range(of: "EmojiReactionPicker(", range: overlay.upperBound..<code.endIndex) != nil,
+              code.range(of: "FullscreenReactionStrip(", range: overlay.upperBound..<code.endIndex) != nil,
               let corps = corps(".overlay(alignment: .trailing) {",
                                 dans: String(code[coeur.upperBound...])) else { return nil }
         return corps
