@@ -344,7 +344,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 280 → 279 (#8438) : le retrait d'un participant d'appel appelle enfin
 // `DELETE /calls/:callId/participants/:participantId` depuis le catalogue.
 // Valeur MESURÉE le 2026-09-28.
-const BASELINE_DEAD_ENTRIES = 279;
+// 279 -> 285 (#8876, 2026-09-30) : six entrées `AdminEndpoint` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `.auditLogs`, `.trackingLinks`, `.trackingLinksByLinkId`, `.monitoring`,
+// `.communitiesByCommunityId` et `.communitiesByCommunityIdMembers`. Leur seul
+// appelant est la console d'administration WEB, comme leurs voisines
+// `AdminEndpoint` ; iOS n'a pas d'écran d'administration. Valeur MESURÉE le
+// 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 285;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
