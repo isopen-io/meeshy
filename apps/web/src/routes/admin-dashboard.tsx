@@ -1,60 +1,141 @@
-import { useQuery } from '@tanstack/react-query';
-
-import { ADMIN_DASHBOARD_QUERY_KEY, loadAdminDashboard } from '@/lib/api/admin-dashboard';
+import { AdminOfflineNotice } from '@/components/admin/states';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
-import { formatCount } from '@/lib/admin/interpret/numbers';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { AdminCounter, AdminSkeleton } from '@/routes/admin-parts';
+
+import { DashSection, DashZone, type DashContext } from './admin-dashboard-parts';
+import { AgentBlock, HealthBlock, NowBlock, PlatformBlock, UsageBlock } from './admin-dashboard-numbers';
+import { MembersBlock, RankedConversationsChart, RankedMembersChart } from './admin-dashboard-people';
+import { BroadcastsBlock, ModerationBlock } from './admin-dashboard-todo';
+import { EngagementChart, HourlyChart, LanguagesChart, MessageTypesChart, VolumeChart } from './admin-dashboard-trends';
 
 /**
- * **LE PANNEAU DU TABLEAU DE BORD** (#8876) — monté par le hub (`admin.tsx`).
+ * **LE TABLEAU DE BORD « VUE DE DIEU »** (#8876, spécification § 4) — monté par
+ * le hub (`admin.tsx`), qui ne le rend qu'après sa garde : un visiteur refusé
+ * ne lance aucune de ces requêtes.
  *
- * La fondation y range les six compteurs d'hier ; le lot « tableau de bord »
- * le remplacera par la vue de dieu (spécification § 4) EN GARDANT ce nom et
- * cette signature : `deps` est injectable pour les témoins, sans quoi le
- * panneau ne se montrerait qu'à travers un transport réel.
+ * Sept zones, chacune une question que le créateur se pose en ouvrant
+ * l'administration : qu'est-ce qui se passe EN CE MOMENT, où en est la
+ * PLATEFORME, l'usage est-il SAIN, vers où vont les TENDANCES, qu'y a-t-il À
+ * TRAITER, qui sont les PERSONNES actives, le SYSTÈME tient-il ?
  *
- * La requête ne part que monté sous le hub — lui-même ne rend le panneau
- * qu'après la garde — donc jamais pour un visiteur que la garde a refusé.
+ * ## Chaque bloc est gardé par la capacité de SA route
+ *
+ * Pas par celle de la section : le hub est ouvert à tout administrateur
+ * (`canAccessAdmin`), mais les statistiques exigent `canViewAnalytics`, la file
+ * de modération `canModerateContent`, les diffusions `canManageNotifications`,
+ * les derniers inscrits `canManageUsers`, la santé de la plateforme
+ * `canViewAnalytics` ET le rang d'administration, l'agent `canManageAgent`. Un
+ * bloc que le lecteur ne peut pas lire n'est PAS rendu — ni titre vide, ni
+ * requête qui rendrait 403 : la décision se lit dans la matrice SERVIE
+ * (`useAdminReach`), jamais dans la session. Une zone sans bloc visible
+ * disparaît.
+ *
+ * ## Chaque bloc se suffit
+ *
+ * Son squelette, son erreur avec « Réessayer », son refus (un 403 malgré la
+ * matrice se dessine comme un refus, pas comme une panne) — et il n'empêche
+ * jamais les autres de se rendre. Les clés de requête sont sous
+ * `['admin', 'dash', …]` : jamais persistées sur le disque, invalidées d'un
+ * coup par « Recalculer maintenant » (Réglages).
+ *
+ * `deps` et `now` sont injectables : sans eux, le panneau ne se montrerait qu'à
+ * travers un transport réel et l'horloge de la machine.
  */
-export function AdminDashboardPanel({ language, deps = apiDeps }: { readonly language: InterfaceLanguage; readonly deps?: AdminDeps }) {
-  const tableau = useQuery({
-    queryKey: ADMIN_DASHBOARD_QUERY_KEY,
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminDashboard({ ...deps, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    staleTime: 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
+export function AdminDashboardPanel({
+  language,
+  deps = apiDeps,
+  now = () => new Date(),
+}: {
+  readonly language: InterfaceLanguage;
+  readonly deps?: AdminDeps;
+  readonly now?: () => Date;
+}) {
+  const reach = useAdminReach();
+  if (reach.status !== 'ready') return null;
+
+  const context: DashContext = { language, deps, now: now() };
+  const analytics = reach.can('canViewAnalytics');
+  const platform = reach.can('canAccessAdmin');
+  const moderation = reach.can('canModerateContent');
+  const notifications = reach.can('canManageNotifications');
+  const members = reach.can('canManageUsers');
+  const agent = reach.can('canManageAgent');
+  const health = analytics && reach.hasAdminRank;
 
   return (
-    <section aria-labelledby="admin-counters" className="grid gap-3">
-      <h2 id="admin-counters" className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {translateAdmin(language, 'admin.counters.title')}
-      </h2>
-      {tableau.data === undefined ? (
-        tableau.isPending ? (
-          <AdminSkeleton rows={3} />
-        ) : (
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translateAdmin(language, 'admin.counters.unavailable')}
-          </p>
-        )
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <AdminCounter label={translateAdmin(language, 'admin.counters.users')} value={formatCount(tableau.data.totalUsers, language)} />
-          <AdminCounter label={translateAdmin(language, 'admin.counters.activeUsers')} value={formatCount(tableau.data.activeUsers, language)} />
-          <AdminCounter label={translateAdmin(language, 'admin.counters.messages')} value={formatCount(tableau.data.totalMessages, language)} />
-          <AdminCounter label={translateAdmin(language, 'admin.counters.communities')} value={formatCount(tableau.data.totalCommunities, language)} />
-          <AdminCounter label={translateAdmin(language, 'admin.counters.reports')} value={formatCount(tableau.data.totalReports, language)} />
-          <AdminCounter label={translateAdmin(language, 'admin.counters.newUsers')} value={formatCount(tableau.data.newUsers24h, language)} />
-        </div>
-      )}
-    </section>
+    <div data-admin-dashboard className="grid gap-8">
+      <AdminOfflineNotice language={language} />
+
+      {analytics ? (
+        <DashZone id="now" title={translateAdmin(language, 'admin.dash.zone.now')} hint={translateAdmin(language, 'admin.dash.zone.now.hint')}>
+          <NowBlock {...context} />
+        </DashZone>
+      ) : null}
+
+      {platform ? (
+        <DashZone id="platform" title={translateAdmin(language, 'admin.dash.zone.platform')} hint={translateAdmin(language, 'admin.dash.zone.platform.hint')}>
+          <PlatformBlock {...context} />
+        </DashZone>
+      ) : null}
+
+      {analytics ? (
+        <DashZone id="usage" title={translateAdmin(language, 'admin.dash.zone.usage')} hint={translateAdmin(language, 'admin.dash.zone.usage.hint')}>
+          <UsageBlock {...context} />
+        </DashZone>
+      ) : null}
+
+      {analytics ? (
+        <DashZone id="trends" title={translateAdmin(language, 'admin.dash.zone.trends')} hint={translateAdmin(language, 'admin.dash.zone.trends.hint')}>
+          <div className="grid gap-4">
+            <VolumeChart {...context} />
+            <div className="grid items-start gap-4 lg:grid-cols-2">
+              <HourlyChart {...context} />
+              <EngagementChart {...context} />
+              <LanguagesChart {...context} />
+              <MessageTypesChart {...context} />
+            </div>
+          </div>
+        </DashZone>
+      ) : null}
+
+      {moderation || notifications ? (
+        <DashZone id="todo" title={translateAdmin(language, 'admin.dash.zone.todo')}>
+          <div className="grid items-start gap-6 lg:grid-cols-2">
+            {moderation ? <ModerationBlock {...context} /> : null}
+            {notifications ? <BroadcastsBlock {...context} /> : null}
+          </div>
+        </DashZone>
+      ) : null}
+
+      {members || analytics ? (
+        <DashZone id="people" title={translateAdmin(language, 'admin.dash.zone.people')}>
+          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {members ? <MembersBlock {...context} /> : null}
+            {analytics ? <RankedConversationsChart {...context} /> : null}
+            {analytics ? <RankedMembersChart {...context} /> : null}
+          </div>
+        </DashZone>
+      ) : null}
+
+      {health || agent ? (
+        <DashZone id="system" title={translateAdmin(language, 'admin.dash.zone.system')}>
+          <div className="grid gap-6">
+            {health ? (
+              <DashSection id="system-health" title={translateAdmin(language, 'admin.dash.system.health')}>
+                <HealthBlock {...context} />
+              </DashSection>
+            ) : null}
+            {agent ? (
+              <DashSection id="system-agent" title={translateAdmin(language, 'admin.dash.agent.title')}>
+                <AgentBlock {...context} />
+              </DashSection>
+            ) : null}
+          </div>
+        </DashZone>
+      ) : null}
+    </div>
   );
 }
