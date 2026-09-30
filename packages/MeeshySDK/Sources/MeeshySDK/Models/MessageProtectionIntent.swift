@@ -17,10 +17,8 @@ import Foundation
 /// Une valeur saisie une fois au tap et transportée jusqu'au bout ne peut pas
 /// avoir cette forme de défaut — il n'y a plus de « moment » où la relire.
 ///
-/// L'intention ne porte AUCUNE date. `expiresAt` se calcule au moment où le
-/// message part, jamais au moment où l'utilisateur arme : entre les deux il y a
-/// la durée d'un upload, et une échéance figée au tap volerait ce temps-là au
-/// destinataire.
+/// L'intention ne porte AUCUNE date, et n'en calcule aucune : l'échéance d'un
+/// éphémère naît de la RÉCEPTION de chaque destinataire (#7451, #8905).
 public struct MessageProtectionIntent: Equatable, Sendable {
 
     /// Durée d'un éphémère, en SECONDES. `nil` ⇒ pas d'éphémère À DURÉE.
@@ -107,16 +105,12 @@ public struct MessageProtectionIntent: Equatable, Sendable {
         return flags
     }
 
-    /// L'échéance, calculée à l'instant où le message PART.
-    ///
-    /// Elle n'est qu'un repère optimiste côté expéditeur : l'échéance qui fait
-    /// foi est celle de la RÉCEPTION (#7452), servie par lecteur. Elle ne sert
-    /// donc qu'à ce que l'expéditeur voie sa propre bulle protégée sans
-    /// attendre un aller-retour.
-    public func expiresAt(from now: Date = Date()) -> Date? {
-        guard let seconds = ephemeralDurationSeconds else { return nil }
-        return now.addingTimeInterval(TimeInterval(seconds))
-    }
+    // Aucune ÉCHÉANCE ne naît ici (#8905). L'envoi n'est pas une réception :
+    // la ligne de l'expéditeur porte la DURÉE (`ephemeralDurationSeconds`) et
+    // lit « en attente de réception » jusqu'à ce que la passerelle serve
+    // `max D(u)` (`message:countdown-started`). Un `envoi + durée` calculé ici
+    // faisait décompter l'expéditeur dès l'envoi — et mourir sa bulle avant
+    // celle d'un destinataire qui avait reçu tard.
 
     /// Ce que le corps REST doit porter pour `isViewOnce` : `true` ou l'ABSENCE.
     /// Un `false` explicite écraserait un défaut de conversation côté serveur.
