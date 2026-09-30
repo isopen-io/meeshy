@@ -1,8 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useRef, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
 import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
+import { CALL_LAYER_Z } from '@/lib/calls/call-presentation';
 import { callRecordingStore } from '@/lib/calls/call-recording-live';
+import { useCallPresentation } from '@/lib/calls/use-call-presentation';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 import { callStore } from '@/lib/calls/call-store';
@@ -56,6 +59,44 @@ const CallBackPromptLayer = lazy(() =>
   Promise.all([import('./call-back-prompt-layer'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
 );
 
+/**
+ * **L'ÉTAGE DE L'APPEL** (#8727, jumelle de `CallWindowPresenter` iOS, #8725) —
+ * un `<dialog>` NON modal, ouvert par son attribut (aucun focus volé), qui
+ * n'occupe aucune surface : ses enfants sont `fixed`. Il porte l'appel
+ * au-dessus de tout ce qui vit dans la page (`CALL_LAYER_Z`, au-dessus de la
+ * visionneuse de médias), et `useCallPresentation` le rouvre en modale quand
+ * une feuille modale couvrirait l'écran d'appel.
+ */
+const LAYER_STYLE: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  width: 0,
+  height: 0,
+  maxWidth: 'none',
+  maxHeight: 'none',
+  margin: 0,
+  padding: 0,
+  border: 0,
+  overflow: 'visible',
+  background: 'transparent',
+  color: 'inherit',
+  zIndex: CALL_LAYER_Z,
+};
+
+/* HORS de `#root`, par un portail : la visionneuse de médias et le menu de
+   message rendent `#root` INERTE le temps de leur ouverture — un appel monté
+   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait. */
+function CallStage({ children }: { readonly children: ReactNode }) {
+  const layer = useRef<HTMLDialogElement | null>(null);
+  useCallPresentation(layer);
+  const stage = (
+    <dialog ref={layer} open data-call-stage="" className="backdrop:bg-transparent" style={LAYER_STYLE}>
+      {children}
+    </dialog>
+  );
+  return typeof document === 'undefined' ? stage : createPortal(stage, document.body);
+}
+
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
   const hasCall = useStore(callStore, (state) => state.call !== null);
@@ -63,6 +104,7 @@ export function CallLayer() {
   const rating = useStore(callStore, (state) => state.feedback !== null && state.call === null);
   const recording = useStore(callRecordingStore, (state) => state.view.kind !== 'idle' || state.notice !== null);
   const callingBack = useStore(callBackPromptStore, (state) => state.request !== null);
+  const staged = active || recording || rating || hasCall;
   return (
     <>
       {callingBack ? (
@@ -73,6 +115,30 @@ export function CallLayer() {
       <Suspense fallback={null}>
         <CallResumeBanner />
       </Suspense>
+      {staged ? (
+        <CallStage>
+          <StagedLayers active={active} recording={recording} rating={rating} hasCall={hasCall} bubble={bubble} />
+        </CallStage>
+      ) : null}
+    </>
+  );
+}
+
+function StagedLayers({
+  active,
+  recording,
+  rating,
+  hasCall,
+  bubble,
+}: {
+  readonly active: boolean;
+  readonly recording: boolean;
+  readonly rating: boolean;
+  readonly hasCall: boolean;
+  readonly bubble: boolean;
+}) {
+  return (
+    <>
       {active ? (
         <Suspense fallback={null}>
           <CallOverlay />

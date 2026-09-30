@@ -28,6 +28,11 @@ const esConversationCard = {
   'conversation.card.join.error': 'No se pudo unir. Inténtalo de nuevo.',
   'conversation.card.leave.error': 'No se pudo salir. Inténtalo de nuevo.',
   'conversation.card.a11y': 'Conversación: {title}',
+  'conversation.card.joinPrompt': '¿Unirse?',
+  'conversation.card.joinChoice.anonymous': 'Anónimo',
+  'conversation.card.joinChoice.account': 'Mi cuenta',
+  'conversation.card.a11y.joinWithAccount': 'Unirse con mi cuenta',
+  'conversation.card.a11y.joinWithNamedAccount': 'Unirse con la cuenta {account}',
 } satisfies ConversationCardCatalogSlice;
 
 export default esConversationCard;

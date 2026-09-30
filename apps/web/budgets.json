@@ -762,6 +762,24 @@
         "source": "Mesure du 2026-09-27 (`bun run build` puis gzip -9, zlib) : 3 015 o pour les SEPT catalogues de l'enregistrement d'appel (17 cles `callRecording.*`), de 0,38 Ko (en) a 0,46 Ko (ar). Charges avec la couche d'enregistrement seulement, en parallele de son chunk (`components/call-layer.tsx`) ; un lecteur n'en telecharge qu'UN. POURQUOI UN CATALOGUE A PART : les ajouter aux catalogues d'interface les portait a 141,83 Ko pour un plafond ARBITRE de 141 (mesure du meme arbre : 140,11 sans elles) -- seules les deux cles du bouton, visibles avant toute demande, y vivent (140,33 Ko). Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_notification_row": {
+      "pattern": "^assets/catalog-notification-row-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #8727, NON ARBITREE",
+        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9, zlib) : 3 362 o pour les SEPT catalogues de ce qu'une notification dit (20 cles `notifications.row.*` / `notifications.quick.*` / `notifications.banner.*`), de 0,43 Ko (en) a 0,53 Ko (ar). Charges avec l'ecran /notifications (`routes/route-table.tsx`) et avec la banniere in-app (`components/shell.tsx`) seulement ; un lecteur n'en telecharge qu'UN. POURQUOI UN CATALOGUE A PART : les ajouter aux catalogues d'interface les portait a 168,68 Ko pour un plafond de 168. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+      }
+    },
+    "notification_toast": {
+      "pattern": "^assets/notification-toast-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #8727, NON ARBITREE",
+        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 2,61 Ko -- la banniere in-app en relief (`components/notification-toast.tsx`). Montee A LA DEMANDE par `components/shell.tsx` a la premiere notification reseau recue devant un onglet visible. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+      }
+    },
     "interface_catalogs_call_controls": {
       "pattern": "^assets/catalog-call-controls-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,

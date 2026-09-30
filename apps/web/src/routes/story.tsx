@@ -69,6 +69,7 @@ import {
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
+import { useCallFreezesStory } from '@/lib/view/use-call-freezes-story';
 import { useStoryHiddenTabPause } from '@/lib/view/use-story-hidden-tab-pause';
 import { useStoryPauseWhile } from '@/lib/view/use-story-pause-while';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
@@ -534,6 +535,8 @@ export default function StoryScreen() {
      `use-story-hidden-tab-pause.ts` (§ budget de la spécification #7116),
      comportement INCHANGÉ. */
   useStoryHiddenTabPause({ paused, pause, resume });
+  /* UN APPEL GÈLE LA STORY (#8727) — elle reprend en place à la fin de l'appel. */
+  useCallFreezesStory({ paused, pause, resume });
 
   /**
    * **CE QUE LE GESTE DE RÉACTION APPREND DOIT S'ENTENDRE** (#7112, revue).

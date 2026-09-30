@@ -28,6 +28,11 @@ const ptConversationCard = {
   'conversation.card.join.error': 'Não foi possível entrar. Tente novamente.',
   'conversation.card.leave.error': 'Não foi possível sair. Tente novamente.',
   'conversation.card.a11y': 'Conversa: {title}',
+  'conversation.card.joinPrompt': 'Participar?',
+  'conversation.card.joinChoice.anonymous': 'Anônimo',
+  'conversation.card.joinChoice.account': 'Minha conta',
+  'conversation.card.a11y.joinWithAccount': 'Participar com minha conta',
+  'conversation.card.a11y.joinWithNamedAccount': 'Participar com a conta {account}',
 } satisfies ConversationCardCatalogSlice;
 
 export default ptConversationCard;

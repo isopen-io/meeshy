@@ -28,6 +28,11 @@ const deConversationCard = {
   'conversation.card.join.error': 'Beitritt fehlgeschlagen. Versuche es erneut.',
   'conversation.card.leave.error': 'Verlassen fehlgeschlagen. Versuche es erneut.',
   'conversation.card.a11y': 'Unterhaltung: {title}',
+  'conversation.card.joinPrompt': 'Beitreten?',
+  'conversation.card.joinChoice.anonymous': 'Anonym',
+  'conversation.card.joinChoice.account': 'Mein Konto',
+  'conversation.card.a11y.joinWithAccount': 'Mit meinem Konto beitreten',
+  'conversation.card.a11y.joinWithNamedAccount': 'Mit dem Konto {account} beitreten',
 } satisfies ConversationCardCatalogSlice;
 
 export default deConversationCard;

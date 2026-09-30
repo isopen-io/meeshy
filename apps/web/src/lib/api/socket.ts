@@ -13,6 +13,7 @@ import type { ConversationStoreState } from '@/lib/conversation-store';
 import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
+import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeNotification } from '@/lib/notifications/record';
 
 import { attachmentStatusDetailsQueryKey } from './attachments';
@@ -758,6 +759,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       if (oldest !== undefined) seenNotifications.delete(oldest);
     }
     applyNotificationNew(deps.queryClient, notification);
+    /* LA BANNIÈRE IN-APP (#8727) — seulement devant un onglet VISIBLE : un
+       onglet caché reçoit le push système, et une bannière posée pendant
+       l'absence surgirait, périmée, au retour. */
+    if (typeof document !== 'undefined' && !document.hidden) offerInAppBanner(notification, { pathname: window.location.pathname });
   };
   const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
   const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);

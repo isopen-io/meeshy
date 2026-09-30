@@ -1,25 +1,27 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import type { GlyphName } from '@/components/glyphs';
-import { NOTIFICATIONS_GLYPHS, type NotificationsGlyphName } from '@/components/glyphs-notifications';
+import { Glyph } from '@/components/glyph';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
+import { CategoryGlyphView } from '@/components/notification-category-glyph';
 import { NotificationRow } from '@/components/notification-row';
 import { PullIndicator } from '@/components/pull-indicator';
 import { NOTIFICATIONS_PAGE_SIZE } from '@/lib/api/notifications';
 import { translate } from '@/lib/i18n-catalog';
+import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
 import { NOTIFICATION_CATEGORIES, categoryHue, type NotificationCategory } from '@/lib/notifications/categories';
 import type { NotificationRecord } from '@/lib/notifications/record';
+import { notificationQuickActions, type NotificationQuickAction } from '@/lib/notifications/row-presentation';
 import { useSearch } from '@/lib/router';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
+import { useNotificationQuickActions } from '@/lib/view/use-notification-quick-actions';
 import {
   deleteNotificationAction,
   markAllNotificationsReadAction,
@@ -74,27 +76,6 @@ const EMPTY: readonly NotificationRecord[] = [];
  * tombe sous AA pour un texte de cette taille sur fond clair. */
 const BRAND_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
 
-type CategoryGlyph = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: NotificationsGlyphName };
-
-/** `NotificationCategory.icon` d'iOS, glyphe pour glyphe (`extract-glyphs.mjs` § NOTIFICATIONS). */
-const CATEGORY_GLYPHS: Readonly<Record<NotificationCategory, CategoryGlyph>> = {
-  all: { set: 'socle', name: 'bell' },
-  unread: { set: 'ecran', name: 'circle' },
-  messages: { set: 'ecran', name: 'chatCircle' },
-  reactions: { set: 'ecran', name: 'heart' },
-  mentions: { set: 'ecran', name: 'at' },
-  social: { set: 'ecran', name: 'thumbsUp' },
-  contacts: { set: 'ecran', name: 'userPlus' },
-  groups: { set: 'ecran', name: 'usersThree' },
-  calls: { set: 'socle', name: 'phone' },
-  translations: { set: 'ecran', name: 'globe' },
-  system: { set: 'ecran', name: 'gear' },
-};
-
-function CategoryGlyphView({ category, size }: { readonly category: NotificationCategory; readonly size: number }) {
-  const glyph = CATEGORY_GLYPHS[category];
-  return glyph.set === 'socle' ? <Glyph name={glyph.name} size={size} /> : <GlyphSvg glyph={NOTIFICATIONS_GLYPHS[glyph.name]} size={size} />;
-}
 
 const categoryLabel = (language: InterfaceLanguage, category: NotificationCategory): string =>
   translate(language, `notifications.category.${category}` as const);
@@ -324,6 +305,23 @@ export default function NotificationsScreen() {
   const onMarkAllRead = useCallback(() => void markAllNotificationsReadAction().then(announceFailure), [announceFailure]);
   const onRefresh = useCallback(() => refreshNotificationsAction(category), [category]);
 
+  /* Les paniers d'amitié ne sont lus que si une ligne propose un geste (#8727). */
+  const offersQuickActions = notifications.some((n) => notificationQuickActions(n, { isFriend: false }).length > 0);
+  const quick = useNotificationQuickActions({ enabled: offersQuickActions });
+  const performQuickAction = quick.perform;
+  const byId = useMemo(() => new Map(notifications.map((n) => [n.id, n])), [notifications]);
+  const onQuickAction = useCallback(
+    (id: string, action: NotificationQuickAction) => {
+      const notification = byId.get(id);
+      if (notification === undefined) return;
+      void performQuickAction(action, notification).then((outcome) => {
+        if (outcome === 'offline') setAnnouncement(translate(language, 'notifications.offline.title'));
+        if (outcome === 'failed') setAnnouncement(action.kind === 'connect' ? translateNotificationRow(language, 'notifications.quick.failed') : translate(language, 'notifications.failure'));
+      });
+    },
+    [byId, language, performQuickAction],
+  );
+
   const pull = usePullToRefresh({ root: frame, onRefresh, threshold: PULL_THRESHOLD });
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
@@ -352,6 +350,10 @@ export default function NotificationsScreen() {
             onOpen={onOpen}
             onMarkRead={onOpen}
             onDelete={onDelete}
+            onQuickAction={onQuickAction}
+            {...(notification.actor === null
+              ? {}
+              : { isFriend: quick.isFriend(notification.actor.id), connectRequested: quick.connectRequested(notification.actor.id) })}
           />
         ))}
         <LensPaginationFooter

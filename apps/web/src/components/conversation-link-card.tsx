@@ -20,6 +20,7 @@ import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { languageName } from '@/lib/languages';
+import type { CardJoinAccount } from '@/lib/links/card-join-account';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
 import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
@@ -34,9 +35,11 @@ import { GLYPHS } from './glyphs';
  * la carte du groupe (bannière, avatar en chevauchement, titre, description
  * courte, statistiques), puis les actions :
  *
- * - non-membre, lien actif : « Rejoindre » pleine largeur — ou, pour un
- *   visiteur SANS compte sur un lien qui l'accepte, « Rejoindre en anonyme »
- *   puis « Rejoindre » côte à côte ;
+ * - non-membre, lien actif : la question « Rejoindre ? » puis ses choix,
+ *   dans le gabarit ARRONDI de « Quitter | Ouvrir » (#8727, correction porteur
+ *   2026-09-29, jumelle de #8726) — « Anonyme » (quand le lien l'accepte) et
+ *   le COMPTE, nommé par son nom d'affichage ou son pseudo (« Mon compte »
+ *   faute de nom, ou pour un visiteur qui se connectera) ;
  * - membre : « Quitter » EN PREMIER (secondaire, destructif, confirmé), puis
  *   « Ouvrir » ;
  * - lien clos : carte grisée « Lien expiré », aucune action ;
@@ -46,10 +49,14 @@ import { GLYPHS } from './glyphs';
  * Référence : `ConversationLinkCard.swift` (iOS, même lot) — bannière de 76,
  * avatar de 52 à coins de 14, accent `colorForName(id ?? lien ?? titre)`.
  *
- * **« Rejoindre en anonyme » n'est offert qu'à un visiteur SANS compte** : un
- * compte connecté qui ouvre `/chat/<lien>` n'y trouve que la jonction par son
- * compte (`joinChoicesOf`) — lui proposer l'anonyme serait un contrôle qui
- * ment (loi 4).
+ * **« Anonyme » n'est offert qu'à un visiteur SANS compte** : le web ne tient
+ * qu'UNE session, et un compte connecté qui ouvre `/chat/<lien>` n'y trouve
+ * que la jonction par son compte (`joinChoicesOf`) — lui proposer l'anonyme
+ * serait un contrôle qui ment (loi 4). iOS l'offre aussi au compte connecté :
+ * l'écart est suivi par son issue (session invitée à côté du compte).
+ *
+ * **Le message d'invitation** se lit sous « X vous invite à rejoindre… »,
+ * derrière un grand guillemet ; absent, rien ne se dessine.
  *
  * **Optimiste** : Rejoindre et Quitter basculent la carte au geste, puis
  * reviennent en arrière et le disent si la passerelle refuse.
@@ -73,6 +80,8 @@ export type ConversationLinkCardProps = {
   readonly language: InterfaceLanguage;
   readonly signedIn: boolean;
   readonly accountLanguage: string | null;
+  /** Le compte connecté, tel que le bouton le NOMME — `null` : « Mon compte ». */
+  readonly account?: CardJoinAccount | null;
 };
 
 /** Un clic dans la carte ne remonte pas jusqu'aux gestes de la bulle. */
@@ -88,7 +97,7 @@ const cardShell: CSSProperties = {
   overflow: 'hidden',
 };
 
-export function ConversationLinkCard({ target, deps, language, signedIn, accountLanguage }: ConversationLinkCardProps) {
+export function ConversationLinkCard({ target, deps, language, signedIn, accountLanguage, account = null }: ConversationLinkCardProps) {
   const queryClient = useQueryClient();
   const query = useQuery(conversationCardQueryOptions(deps, target));
   const [pending, setPending] = useState<Pending>(null);
@@ -187,6 +196,7 @@ export function ConversationLinkCard({ target, deps, language, signedIn, account
         accent={accent}
         language={language}
         signedIn={signedIn}
+        account={account}
         expired={expired}
         pending={pending}
         onJoin={() => void join()}
@@ -283,13 +293,35 @@ function InviteQuote({
             {translate(language, 'conversation.card.invite.lead')}
           </span>
         </figcaption>
-        {message !== null ? (
-          <blockquote className="m-0 text-body italic" style={{ color: INK }}>
-            {message}
-          </blockquote>
-        ) : null}
+        {message !== null && message.trim() !== '' ? <InviteMessage message={message} accent={accent} /> : null}
       </span>
     </figure>
+  );
+}
+
+/** Le message d'invitation, derrière un GRAND guillemet décoratif (#8727, jumelle de #8726). */
+function InviteMessage({ message, accent }: { readonly message: string; readonly accent: string }) {
+  return (
+    <blockquote data-invite-message className="m-0 flex items-start gap-1.5">
+      <span
+        data-invite-quote-mark
+        aria-hidden="true"
+        className="shrink-0 font-black"
+        style={{
+          fontFamily: 'Georgia, "Times New Roman", serif',
+          fontSize: 60,
+          lineHeight: 1,
+          height: 34,
+          marginTop: -2,
+          color: `color-mix(in srgb, ${accent} 70%, transparent)`,
+        }}
+      >
+        {'\u201C'}
+      </span>
+      <span className="min-w-0 pt-1 text-body italic" style={{ color: INK, overflowWrap: 'anywhere' }}>
+        {message}
+      </span>
+    </blockquote>
   );
 }
 
@@ -493,6 +525,7 @@ function Actions({
   accent,
   language,
   signedIn,
+  account,
   expired,
   pending,
   onJoin,
@@ -502,6 +535,7 @@ function Actions({
   readonly accent: string;
   readonly language: InterfaceLanguage;
   readonly signedIn: boolean;
+  readonly account: CardJoinAccount | null;
   readonly expired: boolean;
   readonly pending: Pending;
   readonly onJoin: () => void;
@@ -542,41 +576,51 @@ function Actions({
   const identifier = card.link?.identifier;
   if (!card.viewer.canJoin || identifier === undefined) return null;
 
-  if (!signedIn) {
-    const next = `/chat/${encodeURIComponent(identifier)}`;
-    return (
-      <Row>
-        {card.viewer.canJoinAnonymously ? (
-          <Link to="chatJoin" params={{ link: identifier }} className={BUTTON} style={secondaryStyle(INK)}>
-            {translate(language, 'conversation.card.joinAnonymously')}
-          </Link>
-        ) : null}
-        <Link
-          to="login"
-          search={{ next }}
-          data-full-width={card.viewer.canJoinAnonymously ? undefined : 'true'}
-          className={BUTTON}
-          style={primaryStyle(accent)}
-        >
-          {translate(language, 'conversation.card.join')}
-        </Link>
-      </Row>
-    );
-  }
+  /* « Rejoindre ? » puis ses choix (#8727) : « Anonyme » quand le lien
+     l'accepte ET qu'aucun compte n'est connecté, puis le compte — nommé. */
+  const accountTitle = account?.title ?? translate(language, 'conversation.card.joinChoice.account');
+  const accountLabel =
+    account === null
+      ? translate(language, 'conversation.card.a11y.joinWithAccount')
+      : translate(language, 'conversation.card.a11y.joinWithNamedAccount', { account: account.handle ?? account.title });
+  const anonymous = !signedIn && card.viewer.canJoinAnonymously;
+  const next = `/chat/${encodeURIComponent(identifier)}`;
 
   return (
-    <Row>
-      <button
-        type="button"
-        onClick={onJoin}
-        disabled={pending !== null}
-        aria-busy={pending === 'join'}
-        data-full-width="true"
-        className={BUTTON}
-        style={primaryStyle(accent)}
-      >
-        {translate(language, 'conversation.card.join')}
-      </button>
-    </Row>
+    <div className="grid gap-1.5">
+      <p data-join-prompt className="m-0 text-body font-semibold" style={{ color: INK }}>
+        {translate(language, 'conversation.card.joinPrompt')}
+      </p>
+      <Row>
+        {anonymous ? (
+          <Link
+            to="chatJoin"
+            params={{ link: identifier }}
+            aria-label={translate(language, 'conversation.card.joinAnonymously')}
+            className={BUTTON}
+            style={secondaryStyle(INK)}
+          >
+            {translate(language, 'conversation.card.joinChoice.anonymous')}
+          </Link>
+        ) : null}
+        {signedIn ? (
+          <button
+            type="button"
+            onClick={onJoin}
+            disabled={pending !== null}
+            aria-busy={pending === 'join'}
+            aria-label={accountLabel}
+            className={BUTTON}
+            style={primaryStyle(accent)}
+          >
+            <span className="block max-w-full truncate">{accountTitle}</span>
+          </button>
+        ) : (
+          <Link to="login" search={{ next }} aria-label={accountLabel} className={BUTTON} style={primaryStyle(accent)}>
+            <span className="block max-w-full truncate">{accountTitle}</span>
+          </Link>
+        )}
+      </Row>
+    </div>
   );
 }
