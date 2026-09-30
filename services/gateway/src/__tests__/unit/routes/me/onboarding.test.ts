@@ -108,7 +108,7 @@ describe('GET /me/onboarding', () => {
       emailVerified: false,
       canPublishStory: true,
       pendingFriendRequests: 0,
-      stepRewards: { global: 14, story: 10, friendship: 7 },
+      stepRewards: { global: 8, story: 20, friendship: 7 },
     });
     expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: USER_ID } }));
     expect(res.headers['cache-control']).toBe('private, no-cache');

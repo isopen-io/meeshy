@@ -35,6 +35,56 @@ import {
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+
+/**
+ * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
+ * complétion (`calculateProfileCompletionRate`, plus de dix caractères), mesuré
+ * après `trim` — une bio d'espaces ou d'un seul mot ne complète pas un profil,
+ * et ne rapporte donc pas non plus `profile.bio`.
+ */
+const BIO_MIN_LENGTH = 11;
+
+type ProfileState = {
+  readonly bio: string | null;
+  readonly systemLanguage: string | null;
+  readonly regionalLanguage: string | null;
+};
+
+/**
+ * Les jalons de profil (#8959) qu'une écriture de `PATCH /users/me` rend VRAIS,
+ * lus sur la ligne ÉCRITE et seulement pour les champs que le corps a touchés :
+ * une mise à jour du nom ne recrédite pas une bio posée hier. Chacun paie une
+ * fois par compte — le moteur le tient ; ce filtre évite seulement d'appeler
+ * pour rien.
+ */
+function profileMilestonesReached(
+  touched: { readonly bio: boolean; readonly languages: boolean },
+  user: ProfileState,
+): readonly EngagementOperationKey[] {
+  const bio = touched.bio && (user.bio ?? '').trim().length >= BIO_MIN_LENGTH;
+  const secondLanguage = touched.languages
+    && !!user.regionalLanguage
+    && user.regionalLanguage !== user.systemLanguage;
+  return [
+    ...(bio ? ['profile.bio' as const] : []),
+    ...(secondLanguage ? ['profile.second_language' as const] : []),
+  ];
+}
+
+function creditProfileMilestones(
+  fastify: FastifyInstance,
+  userId: string,
+  operations: readonly EngagementOperationKey[],
+): void {
+  if (operations.length === 0) return;
+  const engagement = new EngagementService(fastify.prisma);
+  for (const operation of operations) {
+    engagement.recordActivity(userId, operation)
+      .catch((error: unknown) => logError(fastify.log, `[PROFILE_UPDATE] engagement ${operation} failed`, error));
+  }
+}
 
 /**
  * Update authenticated user profile
@@ -252,6 +302,14 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
+      creditProfileMilestones(fastify, userId!, profileMilestonesReached(
+        {
+          bio: body.bio !== undefined,
+          languages: body.regionalLanguage !== undefined || body.systemLanguage !== undefined,
+        },
+        updatedUser,
+      ));
+
       // La MATRICE, jamais une copie (#4152).
       //
       // Ces trois sites composaient les permissions à la main, sur le seul
@@ -362,6 +420,10 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
         .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
+
+      if ((updatedUser.avatar ?? '').trim().length > 0) {
+        creditProfileMilestones(fastify, userId!, ['profile.avatar']);
+      }
 
       // La MATRICE, jamais une copie (#4152).
       //

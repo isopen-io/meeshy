@@ -36,6 +36,8 @@ import { shareLinkPreviewConversationJsonSchema } from '@meeshy/shared/types/sha
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { deferAfterResponse, type AfterResponse } from '../utils/after-response';
 import { recordShareLinkVisit } from '../services/conversations/shareLinkVisits';
+import { EngagementService } from '../services/engagement/EngagementService';
+import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/link-visitor';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -46,6 +48,8 @@ import { recordShareLinkVisit } from '../services/conversations/shareLinkVisits'
 export type AnonymousRoutesOptions = {
   readonly afterResponse?: AfterResponse;
   readonly optionalAuth?: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+  /** Le crédit `social.link_visit` de l'auteur du lien (#8959) — un double en test. */
+  readonly linkVisits?: LinkVisitRecorder;
 };
 
 // #4165 — plafond de l'échantillon lu pour estimer les langues parlées d'un
@@ -68,6 +72,7 @@ const refreshSessionSchema = z.object({
 
 export async function anonymousRoutes(fastify: FastifyInstance, options: AnonymousRoutesOptions = {}) {
   const afterResponse = options.afterResponse ?? deferAfterResponse;
+  const linkVisits = options.linkVisits ?? new EngagementService(fastify.prisma);
   const optionalAuth = options.optionalAuth ?? createUnifiedAuthMiddleware(fastify.prisma, {
     requireAuth: false,
     allowAnonymous: true,
@@ -715,7 +720,13 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         : undefined;
       if (viewerUserId !== shareLink.creator.id) {
         const visitedLinkId = shareLink.id;
-        afterResponse(() => recordShareLinkVisit(fastify.prisma, visitedLinkId), 'share-link-visit');
+        const credit = {
+          engagement: linkVisits,
+          creatorId: shareLink.creator.id,
+          linkId: shareLink.linkId,
+          visitor: linkVisitorFromRequest(request as UnifiedAuthRequest),
+        };
+        afterResponse(() => recordShareLinkVisit(fastify.prisma, visitedLinkId, credit), 'share-link-visit');
       }
 
       const totalParticipants = memberCount + anonymousCount;

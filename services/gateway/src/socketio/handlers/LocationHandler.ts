@@ -108,6 +108,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { EngagementService } from '../../services/engagement/EngagementService';
 
 const logger = enhancedLogger.child({ module: 'LocationHandler' });
 
@@ -117,6 +118,11 @@ export interface LocationHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   normalizeConversationId: (conversationId: string) => Promise<string>;
+  /**
+   * Le moteur d'engagement (#8959 `tool.location`, variante `live`). Absent ⇒
+   * le moteur réel ; `null` ⇒ aucun crédit.
+   */
+  engagement?: Pick<EngagementService, 'recordActivity'> | null;
 }
 
 /** Un partage en cours, tel que le serveur le connaît. */
@@ -148,6 +154,7 @@ export class LocationHandler {
   private rateLimiter = getSocketRateLimiter();
   private sessions = new Map<string, LiveLocationSession>();
   private expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly engagement: Pick<EngagementService, 'recordActivity'> | null;
 
   constructor(deps: LocationHandlerDependencies) {
     this.io = deps.io;
@@ -155,6 +162,7 @@ export class LocationHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.normalizeConversationId = deps.normalizeConversationId;
+    this.engagement = deps.engagement === undefined ? new EngagementService(deps.prisma) : deps.engagement;
   }
 
   async handleLiveLocationStart(
@@ -236,6 +244,7 @@ export class LocationHandler {
       // (cf. StatusHandler typing + CallEventsHandler media-toggle). Un self-echo
       // ferait apparaître le partageur comme un partageur distant sur sa carte.
       socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
+      this._creditLiveLocation(context, normalizedId);
     } catch (error: unknown) {
       logger.error('Error handling location:live-start', error);
       this._sendError(callback, error instanceof Error ? error.message : 'Failed to start live location');
@@ -544,6 +553,19 @@ export class LocationHandler {
       SERVER_EVENTS.LOCATION_LIVE_STOPPED,
       eventData
     );
+  }
+
+  /**
+   * `tool.location`, variante `live` (#8959) — un partage en direct DÉMARRÉ.
+   * Le lieu fixe, lui, voyage dans un message et se crédite à son envoi. Un
+   * anonyme n'a pas de compteur. Hors du chemin de l'ACK.
+   */
+  private _creditLiveLocation(context: { userId: string; isAnonymous: boolean }, conversationId: string): void {
+    const engagement = this.engagement;
+    if (!engagement || context.isAnonymous) return;
+    void Promise.resolve()
+      .then(() => engagement.recordActivity(context.userId, 'tool.location', { conversationId, variant: 'live' }))
+      .catch((error: unknown) => logger.warn('tool.location live engagement credit failed', { conversationId, error }));
   }
 
   private _getUserContext(socket: Socket): { userId: string; isAnonymous: boolean; participantId?: string; displayName: string } | null {

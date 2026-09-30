@@ -3,6 +3,7 @@ import {
   isEngagementAxisKey,
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
+import { visibilityVariant } from '@meeshy/shared/types/engagement-operations';
 import {
   elanUnderScaleFromRows,
   pointsForOperation,
@@ -18,7 +19,9 @@ import type { OnboardingStepRewards } from '@meeshy/shared/types/onboarding';
  *   (`messagePostSaveEffects`) + `conversation.public` au premier message de
  *   la conversation (`recordConversationActivity`, Global est publique) ;
  * - la story — `content.story` + `tool.direct_publish` (`publication.ts` ;
- *   un montage in-app crédite `tool.in_app_edit`, même poids) ;
+ *   un montage in-app crédite `tool.in_app_edit`, même poids). Depuis #8959
+ *   la story vaut selon sa VISIBILITÉ : la part annoncée est celle de la
+ *   visibilité par défaut que l'étape propose (`storyVisibility`) ;
  * - l'amitié acceptée — `social.friendship`, à CHACUNE des deux parties, à
  *   son propre élan (`friend-requests-core.ts`) : la part servie est celle du
  *   lecteur.
@@ -40,11 +43,12 @@ export type OnboardingRewardRows = {
   readonly milestones: readonly { readonly milestoneType: string; readonly milestoneKey: string }[];
   readonly engagementScore: number;
   readonly now: Date;
+  readonly storyVisibility: 'public' | 'friends';
 };
 
 export function onboardingStepRewards(rows: OnboardingRewardRows): OnboardingStepRewards {
   const familyOf = (axisKey: string) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null);
-  const credit = (axes: readonly EngagementAxisKey[]): number =>
+  const credit = (axes: readonly EngagementAxisKey[], variant?: string): number =>
     axes.reduce(
       (sum, axis) =>
         sum +
@@ -60,12 +64,13 @@ export function onboardingStepRewards(rows: OnboardingRewardRows): OnboardingSte
             extraFamily: engagementAxisFamily(axis),
             now: rows.now,
           }).factor,
+          variant,
         ),
       0,
     );
   return {
     global: credit(STEP_AXES.global),
-    story: credit(STEP_AXES.story),
+    story: credit(STEP_AXES.story, visibilityVariant(rows.storyVisibility)),
     friendship: credit(STEP_AXES.friendship),
   };
 }

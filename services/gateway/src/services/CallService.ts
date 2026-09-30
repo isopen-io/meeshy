@@ -35,6 +35,7 @@ import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 import { commitCallEnd } from './calls/endCallRetry';
+import { callEngagementCrediter } from './calls/callEngagementCredits';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -279,7 +280,13 @@ export class CallService {
   ) {
     this.turnCredentialService = new TURNCredentialService();
     this.activeCallClaim = new ActiveCallClaim(prisma, ACTIVE_STATUSES);
+    this.creditCallEngagement = callEngagementCrediter(prisma, (callId, error) =>
+      logger.warn('Call engagement credit failed', { callId, error })
+    );
   }
+
+  /** #8959 — les points d'un appel terminé, crédités à l'écriture de son résumé terminal. */
+  private readonly creditCallEngagement: (callId: string) => void;
 
   /**
    * Register the callback notified with every callId force-ended by
@@ -2708,7 +2715,9 @@ export class CallService {
         // A concurrent terminal path already posted the final summary.
         return null;
       }
-      return applyUpdate(existing.id, summary.content, callMetadata);
+      const updated = await applyUpdate(existing.id, summary.content, callMetadata);
+      this.creditCallEngagement(call.id);
+      return updated;
     }
 
     // `Message.senderId` references a Participant (not a User); resolve the
@@ -2749,6 +2758,7 @@ export class CallService {
         outcome: summary.outcome,
         callType: summary.callType
       });
+      this.creditCallEngagement(call.id);
       return { kind: 'created', message };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -2758,7 +2768,9 @@ export class CallService {
         // was another terminal path, stay idempotent.
         const raced = await findExisting();
         if (raced && isLiveMessage(raced)) {
-          return applyUpdate(raced.id, summary.content, callMetadata);
+          const updated = await applyUpdate(raced.id, summary.content, callMetadata);
+          this.creditCallEngagement(call.id);
+          return updated;
         }
         return null;
       }
