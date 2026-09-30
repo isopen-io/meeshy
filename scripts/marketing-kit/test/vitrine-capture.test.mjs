@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { LEGENDES } from '../textes/legendes.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
-import { HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, sourceDuMedia } from '../vitrine/capturer.mjs'
+import { HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, veilleMontree } from '../vitrine/capturer.mjs'
 import { exporterVitrine } from '../vitrine/fixtures.mjs'
 
 describe('capture des vrais écrans (#8855)', () => {
@@ -24,6 +24,19 @@ describe('capture des vrais écrans (#8855)', () => {
     expect(piece.fileSize).toBe(999)
     expect(piece.translations.fr.durationMs).toBe(4321)
     expect(piece.translations.fr.segments.at(-1).endMs).toBe(4321)
+  })
+
+  test('un fil qui traverserait minuit est refusé : la liste et les bulles se couperaient en « Hier » et « Aujourd’hui »', () => {
+    const nuit = new Date(2026, 9, 1, 0, 21)
+    const veille = veilleMontree(exporterVitrine({ lang: 'fr', maintenant: nuit }), nuit)
+    expect(veille?.getDate()).toBe(30)
+    const journee = new Date(2026, 9, 1, 15, 0)
+    expect(veilleMontree(exporterVitrine({ lang: 'fr', maintenant: journee }), journee)).toBeNull()
+  })
+
+  test('seules les scènes de conversation montrent un fil daté', () => {
+    expect(['amour', 'groupe', 'global', 'imagine'].every(montreUnFil)).toBe(true)
+    expect(['lien', 'progression'].some(montreUnFil)).toBe(false)
   })
 
   test('chaque média a sa source sur le Mac : la photo du kit ou le vocal synthétisé', () => {

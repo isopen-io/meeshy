@@ -44,6 +44,23 @@ export const fixturesMesurees = ({ lang, maintenant, mesurer }) => {
   return exporterVitrine({ lang, maintenant, mesures })
 }
 
+// Les scènes qui montrent un fil daté : bulles, séparateurs de jour, liste de l'iPad.
+const SANS_FIL = new Set(['lien', 'progression'])
+export const montreUnFil = (scene) => !SANS_FIL.has(scene)
+
+// Un fil qui traverse minuit se coupe en « Hier » et « Aujourd'hui », liste de l'iPad comprise ; l'app
+// datant tout depuis son horloge, décaler les fixtures n'y peut rien. Rend le plus ancien instant
+// montré qui tombe la veille, ou `null`.
+export const veilleMontree = (f, maintenant) => {
+  const jour = maintenant.toDateString()
+  return [...f.conversations.map((c) => c.lastMessageAt), ...Object.values(f.messages).flat().map((m) => m.createdAt)]
+    .map((iso) => new Date(iso))
+    .filter((instant) => instant.toDateString() !== jour)
+    .sort((a, b) => a - b)[0] ?? null
+}
+
+const heure = (instant) => instant.toTimeString().slice(0, 5)
+
 // La source d'un média sur le Mac : la photo du kit, ou le vocal synthétisé.
 export const sourceDuMedia = (media) => (media.genre === 'image' ? resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier) : fichierVoix(media))
 
@@ -93,7 +110,15 @@ const capturer = async ({ udid, appareil, lang, capture, voix }) => {
   const dossier = resolve(simctl('get_app_container', udid, BUNDLE, 'data').trim(), 'Documents/vitrine')
   mkdirSync(dossier, { recursive: true })
   rmSync(resolve(dossier, 'pret.txt'), { force: true })
-  deposer(fixturesMesurees({ lang, maintenant: new Date(), mesurer: (media) => synthetiser(media, voix) }), dossier)
+  const maintenant = new Date()
+  const fixtures = fixturesMesurees({ lang, maintenant, mesurer: (media) => synthetiser(media, voix) })
+  const veille = montreUnFil(scene) ? veilleMontree(fixtures, maintenant) : null
+  if (veille) {
+    const minuit = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate())
+    const des = new Date(minuit.getTime() + (maintenant - veille) + 60_000)
+    throw new Error(`${etiquette} : le fil traverserait minuit (un message de la veille à ${heure(veille)}) et se couperait en « Hier » et « Aujourd’hui » — capturer après ${heure(des)}`)
+  }
+  deposer(fixtures, dossier)
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene, lang }))
   await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), etiquette })
   await pause(1500)
