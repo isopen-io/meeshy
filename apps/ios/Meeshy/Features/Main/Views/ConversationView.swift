@@ -2467,20 +2467,7 @@ struct ConversationView: View {
     }
 
     private var expandedHeaderBackground: AnyView {
-        // Le BLOC DE VERRE (#8822) : Liquid Glass sur iOS 26, matériau avant.
-        guard headerLayout.isGlassBlock else { return AnyView(Color.clear) }
-        return AnyView(
-            Color.clear.adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
-                        .stroke(
-                            LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
-                            lineWidth: 1
-                        )
-                )
-                .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
-                .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
-        )
+        AnyView(ConversationHeaderGlass(shape: headerLayout.glassShape, accentHex: accentColor, secondaryHex: secondaryColor))
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
