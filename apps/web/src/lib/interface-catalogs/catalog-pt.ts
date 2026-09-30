@@ -28,6 +28,7 @@ import ptMentions from './catalog-pt-mentions';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
+import ptNotificationRow from './catalog-pt-notification-row';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
@@ -1162,6 +1163,7 @@ const pt = {
   ...ptGallery,
   ...ptMessageCard,
   ...ptConversationCard,
+  ...ptNotificationRow,
   ...ptStoriesMine,
   ...ptContactCard,
   ...ptQuote,

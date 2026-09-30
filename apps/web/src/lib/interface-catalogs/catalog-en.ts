@@ -28,6 +28,7 @@ import enMentions from './catalog-en-mentions';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enConversationCard from './catalog-en-conversation-card';
+import enNotificationRow from './catalog-en-notification-row';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
@@ -1158,6 +1159,7 @@ const en = {
   ...enGallery,
   ...enMessageCard,
   ...enConversationCard,
+  ...enNotificationRow,
   ...enStoriesMine,
   ...enContactCard,
   ...enQuote,
