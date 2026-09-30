@@ -206,26 +206,27 @@ export function useStudioSceneColumns({
           },
         ];
   });
-  const exit: StudioColumnTile | null = entries.some((entry) => entry.kind === 'exit-tool')
-    ? {
-        key: 'exit.background',
-        label: translate(lang, 'story.studio.background.tools.leave'),
-        probe: 'background:exit',
-        glyph: <Glyph name="x" size={18} />,
-        onPress: backgroundTools.onExit,
-      }
-    : entries.some((entry) => entry.kind === 'exit-object')
-    ? {
-        key: 'exit.object',
-        label: translate(lang, 'story.studio.object.deselect'),
-        probe: 'deselect',
-        glyph: <Glyph name="x" size={18} />,
-        onPress: () => {
-          setTouched(null);
-          objects.onDeselect();
-        },
-      }
-    : null;
+  const exits: Record<'exit-tool' | 'exit-object', StudioColumnTile> = {
+    'exit-tool': {
+      key: 'exit.background',
+      label: translate(lang, 'story.studio.background.tools.leave'),
+      probe: 'background:exit',
+      glyph: <Glyph name="x" size={18} />,
+      onPress: backgroundTools.onExit,
+    },
+    'exit-object': {
+      key: 'exit.object',
+      label: translate(lang, 'story.studio.object.deselect'),
+      probe: 'deselect',
+      glyph: <Glyph name="x" size={18} />,
+      onPress: () => {
+        setTouched(null);
+        objects.onDeselect();
+      },
+    },
+  };
+  const exitEntry = entries.find((entry): entry is Extract<typeof entry, { kind: 'exit-tool' | 'exit-object' }> => entry.kind === 'exit-tool' || entry.kind === 'exit-object');
+  const exit: StudioColumnTile | null = exitEntry === undefined ? null : exits[exitEntry.kind];
 
   const footHandlers: Record<StudioTrailingFoot, (() => void) | null> = { time: timeline.onToggle, undo: history.onUndo, redo: history.onRedo };
   const footGlyphs: Record<StudioTrailingFoot, ReactNode> = { time: <TimeMark size={20} />, undo: <UndoMark size={20} />, redo: <RedoMark size={20} /> };
